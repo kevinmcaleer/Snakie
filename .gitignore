@@ -6,3 +6,7 @@ dist-electron/
 *.log
 .vite/
 .eslintcache
+
+# Claude Code worktrees / local agent state and the local preview helper
+.claude/
+vite.preview.config.mjs
