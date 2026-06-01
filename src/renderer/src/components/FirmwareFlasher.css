@@ -1,0 +1,198 @@
+/*
+ * Styles for the firmware-flashing modal (issue #14).
+ *
+ * A centered, focus-trapping dialog over a dimmed backdrop. Colours follow the
+ * dark app chrome used by the update notifier so the modal feels native without
+ * touching the shared `index.css`.
+ */
+
+.firmware-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.firmware-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(40rem, 100%);
+  max-height: min(90vh, 48rem);
+  border-radius: 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1f2430;
+  color: #e6e6e6;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.firmware-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.firmware-modal__title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.firmware-modal__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.firmware-modal__close:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.firmware-modal__close:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.firmware-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  padding: 1.1rem;
+  overflow-y: auto;
+}
+
+.firmware-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.firmware-field__label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.firmware-field__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.firmware-select,
+.firmware-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #161a22;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.firmware-input--grow {
+  flex: 1 1 auto;
+}
+
+.firmware-input:read-only {
+  opacity: 0.85;
+}
+
+.firmware-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  opacity: 0.7;
+}
+
+.firmware-banner {
+  margin: 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  border: 1px solid transparent;
+}
+
+.firmware-banner code {
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.2rem;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 0.78rem;
+}
+
+.firmware-banner--warn {
+  background: #3a2f1f;
+  border-color: rgba(255, 200, 120, 0.4);
+}
+
+.firmware-banner--error {
+  background: #3a2326;
+  border-color: rgba(255, 120, 120, 0.45);
+}
+
+.firmware-banner--success {
+  background: #1f3a2a;
+  border-color: rgba(120, 230, 160, 0.45);
+}
+
+.firmware-log {
+  max-height: 14rem;
+  overflow-y: auto;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #11141b;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.firmware-log--success {
+  border-color: rgba(120, 230, 160, 0.4);
+}
+
+.firmware-log--error {
+  border-color: rgba(255, 120, 120, 0.4);
+}
+
+.firmware-log__line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.firmware-log__line--error {
+  color: #ff9b9b;
+}
+
+.firmware-log__line--done {
+  font-weight: 600;
+}
+
+.firmware-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 0.85rem 1.1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}

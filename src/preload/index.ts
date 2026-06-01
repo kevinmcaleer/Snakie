@@ -10,6 +10,13 @@ import type {
   StatResult
 } from '../main/device/types'
 import type { FsEntry, FsStat } from '../main/fs/types'
+import type {
+  BoardCandidate,
+  EsptoolInfo,
+  FlashOptions,
+  FlashProgress,
+  FlashResult
+} from '../main/firmware/types'
 import type { UpdateStatus } from '../main/updater'
 
 /**
@@ -130,6 +137,32 @@ const updates = {
   }
 }
 
+/**
+ * Firmware-flashing API (issue #14). Mirrors the main-process `firmware:*` IPC
+ * handlers and unwraps their typed results. `flash` shells out to esptool (ESP)
+ * or copies a `.uf2` (RP2040) in the main process; `onProgress` subscribes to
+ * the live log/progress stream and returns an unsubscribe function.
+ */
+const firmware = {
+  /** Best-effort board detection from serial VID/PID and UF2 boot drives. */
+  detectBoards: (): Promise<BoardCandidate[]> =>
+    unwrap(ipcRenderer.invoke('firmware:detect')),
+  /** Probe for the external esptool prerequisite (presence + version). */
+  checkEsptool: (): Promise<EsptoolInfo> => unwrap(ipcRenderer.invoke('firmware:esptool')),
+  /** Show the native firmware (`.bin`/`.uf2`) file picker. Resolves path or null. */
+  pickFirmwareFile: (): Promise<string | null> =>
+    unwrap(ipcRenderer.invoke('firmware:pickFile')),
+  /** Flash the given firmware; progress streams via {@link firmware.onProgress}. */
+  flash: (opts: FlashOptions): Promise<FlashResult> =>
+    unwrap(ipcRenderer.invoke('firmware:flash', opts)),
+  /** Subscribe to flash progress/log lines. Returns an unsubscribe function. */
+  onProgress: (cb: (progress: FlashProgress) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, progress: FlashProgress): void => cb(progress)
+    ipcRenderer.on('firmware:progress', listener)
+    return () => ipcRenderer.removeListener('firmware:progress', listener)
+  }
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -141,6 +174,8 @@ const api = {
   device,
   /** Local host filesystem layer. */
   fs,
+  /** In-app MicroPython firmware flashing layer (ESP via esptool, RP2040 via UF2). */
+  firmware,
   /** Auto-update check + status + restart layer. */
   updates
 }
