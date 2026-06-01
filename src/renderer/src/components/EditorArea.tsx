@@ -1,21 +1,19 @@
 import { PanelHeader } from './PanelHeader'
-import { Placeholder } from './Placeholder'
+import { MonacoEditor } from './MonacoEditor'
 
 /**
- * CENTER — editor tabs region.
+ * CENTER — editor region.
  *
- * Later this hosts the tabbed code editor. Note the feedback request for a
- * `+` tab affordance for creating new files; the tab strip will live in this
- * region's header/body.
- *
- * Replace the <Placeholder> body with the real editor + tab strip.
+ * Hosts the Monaco-backed code editor bound to the workspace's active file
+ * (issue #3). The tabbed tab strip is a separate issue (#4); this region simply
+ * renders the active document.
  */
 export function EditorArea(): JSX.Element {
   return (
     <section className="region region--editor" aria-label="Editor">
       <PanelHeader title="Editor" />
-      <div className="region__body">
-        <Placeholder label="Editor" hint="Tabbed code editor goes here." />
+      <div className="region__body region__body--editor">
+        <MonacoEditor />
       </div>
     </section>
   )
