@@ -1,6 +1,6 @@
 import { PanelHeader } from './PanelHeader'
-import { Placeholder } from './Placeholder'
 import { LocalFileTree } from './LocalFileTree'
+import { DeviceFileTree } from './DeviceFileTree'
 
 /**
  * LEFT SIDEBAR — file panels region.
@@ -19,8 +19,7 @@ export function FilePanel(): JSX.Element {
           <LocalFileTree />
         </section>
         <section className="filepanel__device">
-          {/* #7 device file browser mounts <DeviceFileTree/> here */}
-          <Placeholder label="Device files" hint="Connect a board to browse its filesystem." />
+          <DeviceFileTree />
         </section>
       </div>
     </section>

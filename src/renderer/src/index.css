@@ -400,6 +400,61 @@ body {
   word-break: break-word;
 }
 
+/* Device filesystem browser (issue #7) — mirrors the local tree styling. */
+.devicetree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.devicetree__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  flex: 0 0 auto;
+}
+
+.devicetree__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.devicetree__header .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+  flex: 0 0 auto;
+}
+
+.devicetree__tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 0.5rem;
+}
+
+.devicetree__error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  word-break: break-word;
+}
+
+.devicetree__empty-hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  padding: 0.4rem 0.6rem;
+}
+
 .tree-row {
   display: flex;
   align-items: center;
