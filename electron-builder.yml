@@ -19,18 +19,38 @@ files:
 npmRebuild: true
 
 # Linux
+# Build x64 and arm64 (arm64 is valuable for Raspberry Pi). The native dep
+# (serialport / @serialport/bindings-cpp) ships prebuilt N-API binaries for
+# both linux-x64 and linux-arm64, so no cross-compilation is required — only
+# the prebuilt binary for the target arch is bundled. In CI we still build each
+# arch on a matching native runner (ubuntu-latest for x64, ubuntu-24.04-arm for
+# arm64) so the AppImage/deb packaging tools run on their native arch and there
+# are zero QEMU/emulation surprises. See .github/workflows/release.yml.
 linux:
   target:
-    - AppImage
-    - deb
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+      arch:
+        - x64
+        - arm64
   category: Development
   maintainer: Kevin McAleer <kevinmcaleer@gmail.com>
   icon: build/icon.png
 
 # Windows
+# x64 only. arm64 is intentionally NOT built: while @serialport/bindings-cpp
+# ships a win32-arm64 prebuild, GitHub-hosted Windows runners are x64 and
+# producing a reliable arm64 nsis installer there is not straightforward
+# (no native arm64 Windows runner in the hosted pool). Revisit if/when an
+# arm64 Windows runner is available. Trade-off documented in README.
 win:
   target:
-    - nsis
+    - target: nsis
+      arch:
+        - x64
 
 nsis:
   oneClick: false
@@ -38,9 +58,18 @@ nsis:
   allowToChangeInstallationDirectory: true
 
 # macOS
+# Build BOTH Apple Silicon (arm64) and Intel (x64) as two separate dmgs.
+# Chosen over a single `universal` build because universal merging of native
+# modules (serialport) is more fragile; two per-arch dmgs are smaller and the
+# more reliable option. Both archs build fine on the macos-latest (arm64)
+# hosted runner — @serialport/bindings-cpp ships a darwin universal prebuild
+# (darwin-x64+arm64), so no per-arch recompilation is needed.
 mac:
   target:
-    - dmg
+    - target: dmg
+      arch:
+        - arm64
+        - x64
   category: public.app-category.developer-tools
   # Code signing is intentionally disabled for now (see release.yml /
   # CSC_IDENTITY_AUTO_DISCOVERY=false). Future work: add real signing.
