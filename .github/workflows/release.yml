@@ -13,10 +13,35 @@ jobs:
   # just uploads its artifacts. This avoids the multi-job race where parallel
   # electron-builder --publish runs each create a duplicate draft release.
   build:
+    # One job per (runner, electron-builder flag) combination. Each entry maps
+    # to a specific OS/arch set of installers:
+    #   - windows-latest  -> Windows x64 nsis
+    #   - macos-latest     -> macOS arm64 + x64 dmgs (both archs build on the
+    #                         arm64 hosted runner; see electron-builder.yml)
+    #   - ubuntu-latest    -> Linux x64 AppImage + deb
+    #   - ubuntu-24.04-arm -> Linux arm64 AppImage + deb (native arm64 hosted
+    #                         runner — no QEMU/emulation; packaging tools run
+    #                         on their native arch). Falls back to needing a
+    #                         self-hosted arm64 runner if the hosted arm pool
+    #                         is ever unavailable.
+    # The per-arch arch lists live in electron-builder.yml; the platform flag
+    # below (--win/--mac/--linux) just selects which platform block applies.
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - os: windows-latest
+            platform_flag: --win
+            artifact: installers-windows
+          - os: macos-latest
+            platform_flag: --mac
+            artifact: installers-macos
+          - os: ubuntu-latest
+            platform_flag: --linux
+            artifact: installers-linux-x64
+          - os: ubuntu-24.04-arm
+            platform_flag: --linux
+            artifact: installers-linux-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
@@ -39,7 +64,10 @@ jobs:
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       - name: Build installers (no publish)
-        run: npm run dist -- --publish never
+        # The arch list per platform is defined in electron-builder.yml, so a
+        # single platform flag here builds every configured arch for that OS
+        # (e.g. --mac builds both the arm64 and x64 dmgs).
+        run: npm run dist -- ${{ matrix.platform_flag }} --publish never
         env:
           # Code signing intentionally disabled (future work); without this,
           # macOS builds would try to discover a signing identity and fail.
@@ -48,7 +76,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: installers-${{ matrix.os }}
+          name: ${{ matrix.artifact }}
           path: |
             dist/*.exe
             dist/*.dmg
