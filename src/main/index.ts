@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
+import { registerPackagesIpc } from './packages/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -68,6 +69,11 @@ app.whenReady().then(() => {
   // Register the local filesystem layer. The folder dialog is parented to the
   // live window when one exists.
   registerFsIpc(() => mainWindow ?? undefined)
+
+  // Register the MicroPython package installer layer (issue #20). PyPI search
+  // runs here (main) to satisfy the renderer CSP; installs run `mip` on the
+  // device via the renderer's existing device.exec channel.
+  registerPackagesIpc()
 
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.

@@ -3,6 +3,7 @@ import { RightPanelTabs, RightPanelTab } from './RightPanelTabs'
 import { HelpPanel } from './HelpPanel'
 import { OutlinePanel } from './OutlinePanel'
 import { VariablesPanel } from './VariablesPanel'
+import { PackagesPanel } from './PackagesPanel'
 
 /**
  * RIGHT PANE — optional/collapsible region (collapsed by default).
@@ -26,10 +27,11 @@ export function RightPanel(): JSX.Element {
     // Code outline of the active file (issue #16):
     { id: 'outline', title: 'Outline', icon: '☰', content: <OutlinePanel /> },
     // Connected board's variables (issue #16):
-    { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> }
+    { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> },
+    // MicroPython package installer (mip/PyPI) with discovery (issue #20):
+    { id: 'packages', title: 'Packages', icon: '📦', content: <PackagesPanel /> }
     // Future tabs register here, e.g.:
     // { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
-    // { id: 'packages', title: 'Packages', icon: '📦', content: <PackagePanel /> },
   ]
 
   return (

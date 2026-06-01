@@ -22,6 +22,15 @@ export type { FsEntry, FsStat } from '../main/fs/types'
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type { UpdateStatus } from '../main/updater'
 
+// Re-export the package-installer types (issue #20) so the Packages panel can
+// import them from this single UI-facing module.
+export type {
+  PackageInfo,
+  InstallOptions,
+  InstallProgress,
+  InstallResult
+} from '../main/packages/types'
+
 declare global {
   interface Window {
     electron: ElectronAPI
