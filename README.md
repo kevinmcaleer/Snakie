@@ -30,6 +30,22 @@ macOS and Linux, and updates easily.
 - **node-serialport** — device communication (MicroPython raw-REPL protocol)
 - **electron-builder** — packaging for Windows / macOS / Linux
 
+## Development
+
+Snakie uses [electron-vite](https://electron-vite.org/) with the standard
+`src/main`, `src/preload`, `src/renderer` three-process layout.
+
+```bash
+npm install       # install dependencies
+npm run dev       # start the app with hot reload
+npm run build     # build main, preload and renderer into out/
+npm run lint      # lint with ESLint
+npm run typecheck # type-check main/preload and renderer
+npm run format    # format with Prettier
+```
+
+> Note: `npm run dev` opens an Electron window and requires a display.
+
 ## Status
 
 🚧 Early development — see [docs/build-plan.md](docs/build-plan.md) for the
