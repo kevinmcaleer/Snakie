@@ -1,0 +1,52 @@
+appId: com.kevinmcaleer.snakie
+productName: Snakie
+copyright: Copyright © 2026 Kevin McAleer
+
+# Directories
+directories:
+  output: dist
+  buildResources: build
+
+# Files included in the packaged app. electron-vite emits everything to out/.
+# package.json is needed for the runtime metadata / main entry.
+files:
+  - out/**
+  - package.json
+
+# Rebuild native modules (e.g. serialport) for the Electron ABI.
+# npmRebuild defaults to true; nodeGypRebuild stays false so install-app-deps
+# (run via the postinstall script / electron-builder) handles serialport.
+npmRebuild: true
+
+# Linux
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  maintainer: Kevin McAleer <kevinmcaleer@gmail.com>
+  icon: build/icon.png
+
+# Windows
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+
+# macOS
+mac:
+  target:
+    - dmg
+  category: public.app-category.developer-tools
+  # Code signing is intentionally disabled for now (see release.yml /
+  # CSC_IDENTITY_AUTO_DISCOVERY=false). Future work: add real signing.
+
+# Publish installers to a GitHub Release for the pushed tag.
+publish:
+  provider: github
+  owner: kevinmcaleer
+  repo: Snakie

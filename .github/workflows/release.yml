@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (electron-vite)
+        run: npm run build
+
+      - name: Build & publish installers
+        # electron-builder reads the OS it runs on and builds the matching
+        # targets configured in electron-builder.yml, then publishes them to
+        # the GitHub Release for this tag.
+        run: npx electron-builder --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Code signing is intentionally disabled (future work). Without this,
+          # macOS builds would attempt to discover a signing identity and fail.
+          CSC_IDENTITY_AUTO_DISCOVERY: false

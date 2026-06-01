@@ -46,6 +46,31 @@ npm run format    # format with Prettier
 
 > Note: `npm run dev` opens an Electron window and requires a display.
 
+## Building installers
+
+Snakie is packaged with [electron-builder](https://www.electron.build/).
+
+```bash
+npm run pack   # build an unpacked app in dist/ (quick local sanity check)
+npm run dist   # build installers for the current OS into dist/
+```
+
+Per-OS targets (run on the matching OS):
+
+```bash
+npm run dist:win    # Windows NSIS installer
+npm run dist:mac    # macOS dmg
+npm run dist:linux  # Linux AppImage + deb
+```
+
+Each platform's installers are produced on that platform — cross-building is
+not supported here. On a tag push (`v*`) the
+[release workflow](.github/workflows/release.yml) builds all three on a
+CI matrix and publishes the installers to a GitHub Release.
+
+> The app icon in `build/icon.png` is a generated placeholder — TODO: replace
+> with real artwork. Code signing is not yet configured (future work).
+
 ## Status
 
 🚧 Early development — see [docs/build-plan.md](docs/build-plan.md) for the
