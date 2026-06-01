@@ -1,0 +1,75 @@
+/*
+ * UploadControls — the transfer bridge between the computer (above) and
+ * board (below) file panes. Direction maps to layout: download points up,
+ * upload points down.
+ */
+.upload-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+  border-bottom: 1px solid var(--border, rgba(127, 127, 127, 0.25));
+}
+
+.upload-controls__buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.upload-controls__btn {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.upload-controls__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.upload-controls__glyph {
+  font-weight: 700;
+  line-height: 1;
+}
+
+.upload-controls__feedback {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  word-break: break-word;
+}
+
+.upload-controls__feedback--success {
+  color: var(--success, #2e8b57);
+}
+
+.upload-controls__feedback--error {
+  color: var(--danger, #c0392b);
+}
+
+.upload-controls__feedback--info {
+  color: var(--muted, #888);
+}
+
+.upload-controls__spinner {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: upload-controls-spin 0.7s linear infinite;
+}
+
+@keyframes upload-controls-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

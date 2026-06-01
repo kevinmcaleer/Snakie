@@ -1,6 +1,7 @@
 import { PanelHeader } from './PanelHeader'
 import { LocalFileTree } from './LocalFileTree'
 import { DeviceFileTree } from './DeviceFileTree'
+import { UploadControls } from './UploadControls'
 
 /**
  * LEFT SIDEBAR — file panels region.
@@ -18,6 +19,9 @@ export function FilePanel(): JSX.Element {
         <section className="filepanel__local">
           <LocalFileTree />
         </section>
+        {/* Transfer bridge: sits BETWEEN the computer (above) and board (below)
+            panes so the up/down direction matches the layout (issue #9). */}
+        <UploadControls />
         <section className="filepanel__device">
           <DeviceFileTree />
         </section>
