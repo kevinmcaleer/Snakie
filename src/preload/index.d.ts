@@ -33,6 +33,14 @@ export type {
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type { UpdateStatus } from '../main/updater'
 
+// Re-export the package-installer types (issue #20) so the Packages panel can
+// import them from this single UI-facing module.
+export type {
+  PackageInfo,
+  InstallOptions,
+  InstallProgress,
+  InstallResult
+} from '../main/packages/types'
 // Re-export the LLM chat types so the renderer's chat panel can import them
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type { LlmKeyStatus, LlmMessage, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'

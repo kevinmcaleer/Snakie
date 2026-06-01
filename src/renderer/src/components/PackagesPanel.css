@@ -1,0 +1,233 @@
+/*
+ * Styles co-located with PackagesPanel (issue #20).
+ *
+ * In-app MicroPython package installer: a prominent search box, a discovery
+ * list of popular libraries, per-package install controls, and a collapsible
+ * Advanced section. Uses the shared design tokens from index.css so it tracks
+ * the active theme.
+ */
+
+.pkgs {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.pkgs__hint {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* --- Search ---------------------------------------------------------------- */
+
+.pkgs__search {
+  display: flex;
+  gap: 6px;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pkgs__search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.85rem;
+}
+
+.pkgs__search-btn,
+.pkgs__search-clear {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.pkgs__search-btn:hover:not(:disabled),
+.pkgs__search-clear:hover {
+  background: var(--bg-elevated);
+}
+
+.pkgs__search-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Advanced -------------------------------------------------------------- */
+
+.pkgs__advanced {
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pkgs__advanced-summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  user-select: none;
+}
+
+.pkgs__opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.pkgs__opt--field {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.pkgs__index-input {
+  padding: 0.3rem 0.5rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+}
+
+/* --- List ------------------------------------------------------------------ */
+
+.pkgs__list-head {
+  padding: 0.45rem 0.85rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pkgs__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pkgs__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0.55rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pkgs__item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pkgs__item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pkgs__name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.pkgs__version {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.pkgs__src {
+  padding: 0.02rem 0.3rem;
+  border-radius: 4px;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+}
+
+.pkgs__src--pypi {
+  color: var(--text);
+}
+
+.pkgs__desc {
+  margin: 0.2rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.pkgs__install-btn {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.pkgs__install-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.pkgs__install-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Result / notes / log -------------------------------------------------- */
+
+.pkgs__result {
+  margin-top: 0.4rem;
+}
+
+.pkgs__note {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.pkgs__log {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  max-height: 9rem;
+  overflow: auto;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.pkgs__log--error {
+  color: var(--danger, #c0392b);
+}
+
+.pkgs__error {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  color: var(--danger, #c0392b);
+  background: var(--bg-sunken);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

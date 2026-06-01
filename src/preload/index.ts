@@ -18,6 +18,13 @@ import type {
   FlashResult
 } from '../main/firmware/types'
 import type { UpdateStatus } from '../main/updater'
+import type { InstallPlan } from '../main/packages/ipc'
+import type {
+  InstallOptions,
+  InstallProgress,
+  InstallResult,
+  PackageInfo
+} from '../main/packages/types'
 import type { LlmKeyStatus, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
 
 /**
@@ -138,6 +145,79 @@ const updates = {
   }
 }
 
+// Sentinel markers emitted by the device install snippet (kept in sync with
+// src/main/packages/install.ts). Used to classify success vs device traceback.
+const INSTALL_START = '<<SNAKIE_MIP_START>>'
+const INSTALL_OK = '<<SNAKIE_MIP_OK>>'
+const INSTALL_ERR = '<<SNAKIE_MIP_ERR>>'
+
+/**
+ * MicroPython package installer API (issue #20).
+ *
+ * `search` / `topPackages` are pure main-process calls (PyPI lives past the
+ * CSP). `install` is orchestrated here in the preload: it asks main to build
+ * the `mip` snippet + notes, then runs the snippet on the connected device via
+ * the SAME serialized `device:exec` channel the rest of the app uses, parsing
+ * the sentinel markers to decide success. Progress is reported through an
+ * optional callback (purely renderer-side; no main push channel needed).
+ */
+const packages = {
+  /** Curated discovery list of popular MicroPython libraries (offline-safe). */
+  topPackages: (): Promise<PackageInfo[]> =>
+    unwrap(ipcRenderer.invoke('packages:topPackages')),
+  /** Search PyPI + the curated set for `query`. Degrades to curated offline. */
+  search: (query: string): Promise<PackageInfo[]> =>
+    unwrap(ipcRenderer.invoke('packages:search', query)),
+  /**
+   * Install `name` onto the connected device by running `mip`. Requires an
+   * active connection (the device.exec call rejects otherwise). `onProgress`
+   * receives lifecycle events; the resolved {@link InstallResult} also carries
+   * the full log + any non-fatal notes.
+   */
+  install: async (
+    name: string,
+    options?: InstallOptions,
+    onProgress?: (p: InstallProgress) => void
+  ): Promise<InstallResult> => {
+    const emit = (p: InstallProgress): void => onProgress?.(p)
+    emit({ name, state: 'started' })
+
+    const plan = await unwrap<InstallPlan>(
+      ipcRenderer.invoke('packages:install', name, options ?? {})
+    )
+    for (const note of plan.notes) emit({ name, state: 'note', message: note })
+
+    emit({ name, state: 'running', message: `Installing ${name} with mip…` })
+    const exec = await unwrap<{ stdout: string; stderr: string }>(
+      ipcRenderer.invoke('device:exec', plan.snippet)
+    )
+
+    const out = `${exec.stdout ?? ''}\n${exec.stderr ?? ''}`.trim()
+    const failed =
+      out.includes(INSTALL_ERR) ||
+      (exec.stderr != null && exec.stderr.includes('Traceback'))
+    const ok = out.includes(INSTALL_OK) && !failed
+
+    // Strip our sentinel markers from the log shown to the user, keeping any
+    // human-readable text (e.g. the error repr printed after INSTALL_ERR).
+    const log = out
+      .split(/\r?\n/)
+      .filter((l) => !l.includes(INSTALL_START) && !l.includes(INSTALL_OK))
+      .map((l) => l.replace(INSTALL_ERR, '').trim())
+      .filter((l) => l.length > 0)
+      .join('\n')
+      .trim()
+
+    emit({
+      name,
+      state: ok ? 'done' : 'error',
+      message: ok ? `Installed ${name}` : `Failed to install ${name}`
+    })
+
+    return { name, ok, log: log || out, notes: plan.notes }
+  }
+}
+
 /**
  * LLM (Claude) chat API. Mirrors the main-process `llm:*` IPC handlers and
  * unwraps their typed results. All Anthropic API calls run in the main process
@@ -201,6 +281,8 @@ const api = {
   device,
   /** Local host filesystem layer. */
   fs,
+  /** MicroPython package installer (mip/PyPI) + discovery layer. */
+  packages,
   /** In-app MicroPython firmware flashing layer (ESP via esptool, RP2040 via UF2). */
   firmware,
   /** Auto-update check + status + restart layer. */

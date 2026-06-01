@@ -4,6 +4,7 @@ import { HelpPanel } from './HelpPanel'
 import { OutlinePanel } from './OutlinePanel'
 import { VariablesPanel } from './VariablesPanel'
 import { ChatPanel } from './ChatPanel'
+import { PackagesPanel } from './PackagesPanel'
 
 /**
  * RIGHT PANE — optional/collapsible region (collapsed by default).
@@ -29,9 +30,9 @@ export function RightPanel(): JSX.Element {
     // Connected board's variables (issue #16):
     { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> },
     // Claude chat assistant (issue #18):
-    { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> }
-    // Future tabs register here, e.g.:
-    // { id: 'packages', title: 'Packages', icon: '📦', content: <PackagePanel /> },
+    { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
+    // MicroPython package installer (mip/PyPI) with discovery (issue #20):
+    { id: 'packages', title: 'Packages', icon: '📦', content: <PackagesPanel /> }
   ]
 
   return (

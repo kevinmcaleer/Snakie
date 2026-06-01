@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
+import { registerPackagesIpc } from './packages/ipc'
 import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
 import { registerUpdater } from './updater'
@@ -71,6 +72,10 @@ app.whenReady().then(() => {
   // live window when one exists.
   registerFsIpc(() => mainWindow ?? undefined)
 
+  // Register the MicroPython package installer layer (issue #20). PyPI search
+  // runs here (main) to satisfy the renderer CSP; installs run `mip` on the
+  // device via the renderer's existing device.exec channel.
+  registerPackagesIpc()
   // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
   // The file dialog is parented to the live window and progress is routed to it.
   registerFirmwareIpc(() => mainWindow ?? undefined)
