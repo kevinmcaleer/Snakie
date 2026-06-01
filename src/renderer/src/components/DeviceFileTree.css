@@ -1,0 +1,22 @@
+/*
+ * Styles co-located with DeviceFileTree (issue #8).
+ *
+ * The base `.devicetree*` rules live in `src/renderer/src/index.css` (added by
+ * issue #7). Only the NEW action-bar rules introduced for device file
+ * operations live here, mirroring the `.localtree__actions` layout so the two
+ * file trees feel consistent.
+ */
+
+.devicetree__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0 0.6rem 0.4rem;
+  flex: 0 0 auto;
+}
+
+.devicetree__actions .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
