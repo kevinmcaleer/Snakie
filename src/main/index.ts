@@ -1,10 +1,14 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import { registerDeviceIpc, disposeDevice } from './device/ipc'
+
+/** The single application window, used to route device push-events. */
+let mainWindow: BrowserWindow | null = null
 
 function createWindow(): void {
   // Create the browser window with secure defaults.
-  const mainWindow = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1200,
     height: 800,
     show: false,
@@ -17,12 +21,17 @@ function createWindow(): void {
       nodeIntegration: false
     }
   })
+  mainWindow = window
 
-  mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+  window.on('ready-to-show', () => {
+    window.show()
   })
 
-  mainWindow.webContents.setWindowOpenHandler((details) => {
+  window.on('closed', () => {
+    if (mainWindow === window) mainWindow = null
+  })
+
+  window.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url)
     return { action: 'deny' }
   })
@@ -30,9 +39,9 @@ function createWindow(): void {
   // HMR for renderer base on electron-vite cli.
   // Load the remote URL for development or the local html file for production.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    void mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
+    void window.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
-    void mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+    void window.loadFile(join(__dirname, '../renderer/index.html'))
   }
 }
 
@@ -50,6 +59,10 @@ app.whenReady().then(() => {
   // Example IPC handler establishing the pattern later agents will extend.
   ipcMain.handle('ping', () => 'pong')
 
+  // Register the serial device layer. Push events are routed to whichever
+  // window is currently live.
+  registerDeviceIpc(() => mainWindow?.webContents)
+
   createWindow()
 
   app.on('activate', () => {
@@ -64,4 +77,9 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// Ensure the serial port is released before the process exits.
+app.on('before-quit', () => {
+  void disposeDevice()
 })
