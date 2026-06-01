@@ -22,6 +22,10 @@ export type { FsEntry, FsStat } from '../main/fs/types'
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type { UpdateStatus } from '../main/updater'
 
+// Re-export the LLM chat types so the renderer's chat panel can import them
+// from the UI-facing preload module rather than reaching into `src/main`.
+export type { LlmKeyStatus, LlmMessage, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
+
 declare global {
   interface Window {
     electron: ElectronAPI

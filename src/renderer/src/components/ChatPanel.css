@@ -1,0 +1,267 @@
+/*
+ * Styles co-located with ChatPanel (issue #18).
+ *
+ * An in-app Claude chat assistant for the right pane. Uses the shared design
+ * tokens from index.css so it tracks the active light/dark theme.
+ */
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* Toolbar -------------------------------------------------------------- */
+.chat__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.chat__status {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.chat__toolbar-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.chat__btn {
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chat__btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.chat__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.chat__btn--primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: var(--accent);
+}
+
+/* Settings (API key) --------------------------------------------------- */
+.chat__settings {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-sunken);
+  flex: 0 0 auto;
+}
+
+.chat__settings-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.chat__input-key {
+  padding: 0.35rem 0.5rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.chat__settings-row {
+  display: flex;
+  gap: 6px;
+}
+
+.chat__settings-hint,
+.chat__settings-warn {
+  margin: 0;
+  font-size: 0.74rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.chat__settings-warn {
+  color: var(--danger, #c0392b);
+}
+
+/* Message thread ------------------------------------------------------- */
+.chat__thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.chat__empty {
+  margin: 0.5rem 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.chat__bubble {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.6rem;
+  background: var(--bg-elevated);
+}
+
+.chat__bubble--user {
+  background: var(--bg-sunken);
+}
+
+.chat__bubble-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.25rem;
+}
+
+.chat__bubble-role {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+.chat__bubble-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.chat__text {
+  margin: 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.chat__caret {
+  opacity: 0.6;
+  animation: chat-blink 1s steps(2, start) infinite;
+}
+
+@keyframes chat-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Code blocks ---------------------------------------------------------- */
+.chat__code {
+  position: relative;
+}
+
+.chat__code-pre {
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.chat__copy {
+  padding: 0.05rem 0.4rem;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chat__copy:hover {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.chat__code-copy {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  background: var(--bg-elevated);
+}
+
+/* Error + composer ----------------------------------------------------- */
+.chat__error {
+  margin: 0;
+  padding: 0.45rem 0.85rem;
+  color: var(--danger, #c0392b);
+  background: var(--bg-sunken);
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  flex: 0 0 auto;
+}
+
+.chat__composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.55rem 0.7rem 0.7rem;
+  border-top: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.chat__include {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.chat__composer-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.chat__input {
+  flex: 1 1 auto;
+  resize: vertical;
+  min-height: 2.2rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1.4;
+}
+
+.chat__send {
+  flex: 0 0 auto;
+  align-self: stretch;
+}

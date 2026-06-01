@@ -11,6 +11,7 @@ import type {
 } from '../main/device/types'
 import type { FsEntry, FsStat } from '../main/fs/types'
 import type { UpdateStatus } from '../main/updater'
+import type { LlmKeyStatus, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -130,6 +131,32 @@ const updates = {
   }
 }
 
+/**
+ * LLM (Claude) chat API. Mirrors the main-process `llm:*` IPC handlers and
+ * unwraps their typed results. All Anthropic API calls run in the main process
+ * (the renderer CSP blocks external requests), so the renderer never sees the
+ * API key. `onStream` subscribes to streamed completion chunks and returns an
+ * unsubscribe function.
+ */
+const llm = {
+  /** Whether an API key is stored, and whether storage is OS-encrypted. */
+  getKeyStatus: (): Promise<LlmKeyStatus> => unwrap(ipcRenderer.invoke('llm:getKeyStatus')),
+  /** Store (or, with an empty string, clear) the Anthropic API key. */
+  setKey: (key: string): Promise<void> => unwrap(ipcRenderer.invoke('llm:setKey', key)),
+  /**
+   * Run a streaming chat completion. Deltas arrive via `onStream`; this resolves
+   * with the full assembled assistant reply once the stream ends.
+   */
+  sendMessage: (req: LlmSendRequest): Promise<string> =>
+    unwrap(ipcRenderer.invoke('llm:sendMessage', req)),
+  /** Subscribe to streamed completion chunks. Returns an unsubscribe function. */
+  onStream: (cb: (event: LlmStreamEvent) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, event: LlmStreamEvent): void => cb(event)
+    ipcRenderer.on('llm:stream', listener)
+    return () => ipcRenderer.removeListener('llm:stream', listener)
+  }
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -142,7 +169,9 @@ const api = {
   /** Local host filesystem layer. */
   fs,
   /** Auto-update check + status + restart layer. */
-  updates
+  updates,
+  /** LLM (Claude) chat layer. */
+  llm
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

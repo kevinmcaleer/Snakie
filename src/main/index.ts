@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
+import { registerLlmIpc } from './llm/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -72,6 +73,10 @@ app.whenReady().then(() => {
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.
   registerUpdater(() => mainWindow?.webContents)
+
+  // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
+  // main process; deltas stream back to whichever window is currently live.
+  registerLlmIpc(() => mainWindow?.webContents)
 
   createWindow()
 
