@@ -5,6 +5,7 @@ import { OutlinePanel } from './OutlinePanel'
 import { VariablesPanel } from './VariablesPanel'
 import { ChatPanel } from './ChatPanel'
 import { PackagesPanel } from './PackagesPanel'
+import { GitPanel } from './GitPanel'
 
 /**
  * RIGHT PANE — optional/collapsible region (collapsed by default).
@@ -32,7 +33,9 @@ export function RightPanel(): JSX.Element {
     // Claude chat assistant (issue #18):
     { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
     // MicroPython package installer (mip/PyPI) with discovery (issue #20):
-    { id: 'packages', title: 'Packages', icon: '📦', content: <PackagesPanel /> }
+    { id: 'packages', title: 'Packages', icon: '📦', content: <PackagesPanel /> },
+    // Built-in version control / Source Control (Git, issue #15):
+    { id: 'git', title: 'Source Control', icon: '⎇', content: <GitPanel /> }
   ]
 
   return (

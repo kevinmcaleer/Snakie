@@ -26,6 +26,12 @@ import type {
   PackageInfo
 } from '../main/packages/types'
 import type { LlmKeyStatus, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
+import type {
+  GitBranchList,
+  GitDiff,
+  GitRemoteResult,
+  GitStatus
+} from '../main/git/types'
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -270,6 +276,45 @@ const firmware = {
   }
 }
 
+/**
+ * Built-in version-control (Git) API (issue #15). Mirrors the main-process
+ * `git:*` IPC handlers and unwraps their typed results. All git work runs in
+ * the main process via simple-git, scoped to a folder the renderer picks with
+ * `fs.openFolderDialog`. The not-a-repo case is reported via `status().isRepo`
+ * rather than thrown, so the panel can show a clear empty state.
+ */
+const git = {
+  /** Point git at `path`. Resolves to the repo root, or null if not a repo. */
+  openRepo: (path: string): Promise<string | null> =>
+    unwrap(ipcRenderer.invoke('git:openRepo', path)),
+  /** Working-tree status: branch, ahead/behind, staged/changed/untracked. */
+  status: (): Promise<GitStatus> => unwrap(ipcRenderer.invoke('git:status')),
+  /** Stage a single file. */
+  stage: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:stage', file)),
+  /** Unstage a single file. */
+  unstage: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:unstage', file)),
+  /** Discard working-tree changes for a file (or delete it, if untracked). */
+  discard: (file: string): Promise<void> => unwrap(ipcRenderer.invoke('git:discard', file)),
+  /** Commit; stages all tracked changes first unless `stageAll` is false. */
+  commit: (message: string, stageAll?: boolean): Promise<void> =>
+    unwrap(ipcRenderer.invoke('git:commit', message, stageAll)),
+  /** Unified diff for a file; `staged` selects index-vs-HEAD over working-vs-index. */
+  diff: (file: string, staged?: boolean): Promise<GitDiff> =>
+    unwrap(ipcRenderer.invoke('git:diff', file, staged)),
+  /** Current branch name (undefined when detached / no commits). */
+  currentBranch: (): Promise<string | undefined> =>
+    unwrap(ipcRenderer.invoke('git:currentBranch')),
+  /** List local branches plus the current one. */
+  listBranches: (): Promise<GitBranchList> => unwrap(ipcRenderer.invoke('git:listBranches')),
+  /** Check out an existing branch. */
+  checkout: (branch: string): Promise<void> =>
+    unwrap(ipcRenderer.invoke('git:checkout', branch)),
+  /** Push the current branch to its upstream. */
+  push: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:push')),
+  /** Pull from the upstream of the current branch. */
+  pull: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:pull'))
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -288,7 +333,9 @@ const api = {
   /** Auto-update check + status + restart layer. */
   updates,
   /** LLM (Claude) chat layer. */
-  llm
+  llm,
+  /** Built-in version-control (Git) layer. */
+  git
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if
