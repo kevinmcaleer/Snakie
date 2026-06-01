@@ -19,23 +19,20 @@ files:
 npmRebuild: true
 
 # Linux
-# Build x64 and arm64 (arm64 is valuable for Raspberry Pi). The native dep
-# (serialport / @serialport/bindings-cpp) ships prebuilt N-API binaries for
-# both linux-x64 and linux-arm64, so no cross-compilation is required — only
-# the prebuilt binary for the target arch is bundled. In CI we still build each
-# arch on a matching native runner (ubuntu-latest for x64, ubuntu-24.04-arm for
-# arm64) so the AppImage/deb packaging tools run on their native arch and there
-# are zero QEMU/emulation surprises. See .github/workflows/release.yml.
+# x64 only for now. Linux arm64 packaging is deferred (tracked separately):
+# even on a native ubuntu-24.04-arm runner, electron-builder's bundled `fpm`
+# (used for .deb) is an x86 binary ("Exec format error" on arm64), and the
+# serialport native rebuild emits the x86-only `-m64` flag that arm64 g++
+# rejects. Making arm64 work needs more than a runner swap (e.g. AppImage-only
+# + an arm64 fpm/appimagetool + a clean serialport rebuild).
 linux:
   target:
     - target: AppImage
       arch:
         - x64
-        - arm64
     - target: deb
       arch:
         - x64
-        - arm64
   category: Development
   maintainer: Kevin McAleer <kevinmcaleer@gmail.com>
   icon: build/icon.png

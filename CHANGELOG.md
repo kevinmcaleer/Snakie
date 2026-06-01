@@ -11,9 +11,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - Drafted a placeholder Snakie app logo — a snake coiled into an "S" on a green
   squircle (`build/icon.png`, editable source `build/icon.svg`). (#46)
-- Build targets broadened: macOS Intel (x64) dmg and Linux arm64
-  (AppImage + deb, for Raspberry Pi) alongside the existing macOS arm64,
-  Linux x64 and Windows x64 installers. (#49)
+- Build target added: macOS Intel (x64) dmg, alongside the existing macOS
+  arm64, Linux x64 and Windows x64 installers. (#49) (Linux arm64 was attempted
+  but deferred — see #53 — due to electron-builder's x86 `fpm`/`-m64` issues.)
 - Unit tests (vitest) for the pure parsing logic — code outline, device
   variables, and serial-plotter line parsing (39 tests); `npm test` and a CI
   test step. Plus `docs/hardware-test-plan.md`, a manual on-device checklist.

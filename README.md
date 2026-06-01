@@ -15,11 +15,9 @@ Grab the latest installer for your platform from the
 - 🍎 macOS (Apple Silicon) — `Snakie-<version>-arm64.dmg`
 - 🍎 macOS (Intel) — `Snakie-<version>.dmg`
 - 🐧 Linux (x64) — `Snakie-<version>.AppImage` or `snakie_<version>_amd64.deb`
-- 🐧 Linux (arm64, e.g. Raspberry Pi) — `Snakie-<version>-arm64.AppImage` or
-  `snakie_<version>_arm64.deb`
 
-> Windows is x64 only for now (no arm64 build — see "Building installers"
-> below for why).
+> Windows and Linux are x64 only for now; Linux arm64 (Raspberry Pi) and
+> Windows arm64 are not yet built — see "Building installers" below for why.
 
 ## Features
 
@@ -92,7 +90,6 @@ matrix and collects them into a single draft GitHub Release.
 | macOS    | arm64 | `Snakie-<v>-arm64.dmg`             | `macos-latest`     |
 | macOS    | x64   | `Snakie-<v>.dmg`                   | `macos-latest`     |
 | Linux    | x64   | `.AppImage` + `_amd64.deb`         | `ubuntu-latest`    |
-| Linux    | arm64 | `-arm64.AppImage` + `_arm64.deb`   | `ubuntu-24.04-arm` |
 | Windows  | x64   | `Snakie.Setup.<v>.exe`             | `windows-latest`   |
 
 Notes on arch coverage:
@@ -102,12 +99,12 @@ Notes on arch coverage:
   fragile, and two per-arch dmgs are smaller. Both build on the arm64
   `macos-latest` runner because `@serialport/bindings-cpp` provides a universal
   (`darwin-x64+arm64`) prebuilt binary, so no per-arch recompilation is needed.
-- **Linux arm64** is built on GitHub's native `ubuntu-24.04-arm` hosted runner
-  (not via QEMU/emulation). `serialport` ships a `linux-arm64` prebuilt binary,
-  and the AppImage/deb packaging tools run on their native arch. If the hosted
-  arm64 runner pool is ever unavailable, this job needs a self-hosted arm64
-  runner instead — it cannot be reliably produced on the x64 `ubuntu-latest`
-  runner.
+- **Linux arm64 (Raspberry Pi) is not yet built** — deferred. Even on a native
+  `ubuntu-24.04-arm` runner, electron-builder's bundled `fpm` (for `.deb`) is an
+  x86 binary that won't execute on arm64, and the `serialport` native rebuild
+  emits the x86-only `-m64` flag that arm64 g++ rejects. Producing arm64 Linux
+  packages needs dedicated work (AppImage-only + arm64 fpm/appimagetool + a
+  clean serialport rebuild).
 - **Windows is x64 only.** GitHub's hosted Windows runners are x64 and there is
   no native arm64 Windows runner in the hosted pool, so a reliable arm64 nsis
   installer can't be produced here yet. (`serialport` does ship a `win32-arm64`

@@ -24,10 +24,10 @@ jobs:
     #                         on their native arch). Falls back to needing a
     #                         self-hosted arm64 runner if the hosted arm pool
     #                         is ever unavailable.
-    # Each Linux runner builds ONLY its native arch (--linux --x64 / --arm64):
-    # cross-arch native rebuilds of serialport fail (e.g. -m64 passed to arm64
-    # g++). macOS builds both arm64+x64 on the arm64 runner because serialport
-    # ships a universal darwin prebuild, so no cross-compilation is needed.
+    # macOS builds both arm64+x64 on the arm64 runner (serialport ships a
+    # universal darwin prebuild). Linux is x64-only for now — arm64 packaging is
+    # deferred (electron-builder's bundled fpm is x86 and the serialport rebuild
+    # emits -m64); see electron-builder.yml.
     strategy:
       fail-fast: false
       matrix:
@@ -41,9 +41,6 @@ jobs:
           - os: ubuntu-latest
             platform_flag: --linux --x64
             artifact: installers-linux-x64
-          - os: ubuntu-24.04-arm
-            platform_flag: --linux --arm64
-            artifact: installers-linux-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
