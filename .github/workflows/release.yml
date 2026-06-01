@@ -9,13 +9,15 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  # Build installers on each OS in parallel. NOTHING publishes here — each job
+  # just uploads its artifacts. This avoids the multi-job race where parallel
+  # electron-builder --publish runs each create a duplicate draft release.
+  build:
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, macos-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,17 +31,52 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build (electron-vite)
-        run: npm run build
+      - name: Set version from tag
+        # Derive the app version from the git tag (e.g. v0.1.0 -> 0.1.0) so the
+        # installers and update metadata are named correctly, independent of the
+        # committed package.json version.
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
-      - name: Build & publish installers
-        # electron-builder reads the OS it runs on and builds the matching
-        # targets configured in electron-builder.yml, then publishes them to
-        # the GitHub Release for this tag.
-        run: npx electron-builder --publish always
+      - name: Build installers (no publish)
+        run: npm run dist -- --publish never
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Code signing is intentionally disabled (future work). Without this,
-          # macOS builds would attempt to discover a signing identity and fail.
+          # Code signing intentionally disabled (future work); without this,
+          # macOS builds would try to discover a signing identity and fail.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.os }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.blockmap
+            dist/latest*.yml
+          if-no-files-found: warn
+
+  # Collect every OS's artifacts and publish ONE draft GitHub Release for the
+  # tag. Draft so a human reviews before it goes public.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          tag_name: ${{ github.ref_name }}
+          name: Snakie ${{ github.ref_name }}
+          files: dist/**
+          fail_on_unmatched_files: false
