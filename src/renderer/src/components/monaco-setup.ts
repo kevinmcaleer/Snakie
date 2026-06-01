@@ -6,23 +6,22 @@
  * worker as a same-origin chunk under `assets/`, which `'self'` permits — the
  * worker is constructed from an app-served URL, not a blob or remote script.
  *
- * Python needs no language-specific worker; the base `editor.worker` is enough
- * to drive the editor (tokenisation for `python` is synchronous/built-in).
+ * Python/Markdown are basic (synchronous) languages and need no language-
+ * specific worker; the base `editor.worker` is enough to drive the editor
+ * (tokenisation is built-in). We deliberately do NOT ship the JSON language
+ * service (its worker + mode add ~900 kB) — this is a MicroPython editor, so
+ * `.json` files just open as plaintext.
  *
  * This module sets `self.MonacoEnvironment` exactly once, the first time it is
  * imported, before any editor is instantiated.
  */
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
 import { registerMicropythonCompletions } from './micropython-completions'
 
 self.MonacoEnvironment = {
-  getWorker(_workerId: string, label: string): Worker {
-    // Python/Markdown are basic (synchronous) languages and need no dedicated
-    // worker — the base editor worker covers them. JSON ships a language worker
-    // for validation/formatting.
-    if (label === 'json') return new JsonWorker()
+  getWorker(): Worker {
+    // Only the base editor worker is needed; no language services are bundled.
     return new EditorWorker()
   }
 }
