@@ -1,7 +1,16 @@
-import { useEffect, useRef } from 'react'
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+
+/**
+ * Imperative handle exposed by {@link Terminal}, letting parents drive the
+ * underlying xterm instance without owning it. Currently this is just `clear`,
+ * used by the ShellPanel "Clear" (trashcan) control.
+ */
+export interface TerminalHandle {
+  clear: () => void
+}
 
 /**
  * Dark terminal theme used by the REPL. ANSI colours are kept vivid so device
@@ -44,8 +53,21 @@ const decoder = new TextDecoder()
  *
  * The terminal is created once and resized to its container via the fit addon.
  */
-export function Terminal(): JSX.Element {
+export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  const termRef = useRef<XTerm | null>(null)
+
+  // Expose an imperative `clear` so the ShellPanel header trashcan can wipe the
+  // scrollback without lifting ownership of the xterm instance out of here.
+  useImperativeHandle(
+    ref,
+    () => ({
+      clear: () => {
+        termRef.current?.clear()
+      }
+    }),
+    []
+  )
 
   useEffect(() => {
     const container = containerRef.current
@@ -65,6 +87,7 @@ export function Terminal(): JSX.Element {
     term.loadAddon(fitAddon)
     term.open(container)
     fitAddon.fit()
+    termRef.current = term
 
     // Device -> terminal.
     const unsubscribeData = window.api.device.onData((chunk) => {
@@ -91,8 +114,9 @@ export function Terminal(): JSX.Element {
       inputDisposable.dispose()
       resizeObserver.disconnect()
       term.dispose()
+      termRef.current = null
     }
   }, [])
 
   return <div className="terminal" ref={containerRef} />
-}
+})

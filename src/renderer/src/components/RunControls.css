@@ -1,0 +1,19 @@
+/*
+ * Styles for the Run / Stop / Clear shell controls (issue #11).
+ *
+ * The Run/Stop buttons and the Clear button reuse the shared `.btn` family
+ * defined in index.css; this file only adds the small layout wrapper that
+ * groups the Shell header's Clear button next to the connection control.
+ */
+
+.shell-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Keep the trashcan glyph readable against the ghost button background. */
+.shell-actions__clear .btn__glyph {
+  font-size: 1rem;
+  line-height: 1;
+}

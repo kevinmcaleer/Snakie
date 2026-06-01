@@ -1,5 +1,8 @@
+import { useCallback } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import './RunControls.css'
 
 interface ToolbarProps {
   theme: Theme
@@ -16,9 +19,10 @@ interface ToolbarProps {
  * TOP TOOLBAR.
  *
  * Big, easy-to-click action buttons (Run / Stop) plus a connection-status
- * indicator. The Run / Stop buttons remain VISUAL PLACEHOLDERS (wired in a
- * later issue). The connection-status indicator IS live: it reflects the
- * device layer's status via {@link useDeviceStatus}.
+ * indicator. Run executes the active editor file on the device via MicroPython
+ * paste mode (output streams to the existing Shell terminal); Stop sends an
+ * interrupt (Ctrl-C). The connection-status indicator reflects the device
+ * layer's status via {@link useDeviceStatus}.
  *
  * Also hosts layout controls (panel show/hide toggles) and the theme toggle,
  * following progressive disclosure: complexity stays tucked away by default.
@@ -34,7 +38,28 @@ export function Toolbar({
   onToggleRight
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
+  const { openFiles, activeId } = useWorkspace()
   const connected = status.state === 'connected'
+  const activeFile = openFiles.find((f) => f.id === activeId)
+  const canRun = connected && activeFile != null
+
+  /**
+   * Execute the active file on the device using MicroPython paste mode:
+   *   Ctrl-E (\x05) enters paste mode, the file content is streamed verbatim,
+   *   then Ctrl-D (\x04) executes it. Device output flows back to the Shell
+   *   terminal automatically via its existing `onData` subscription — so we
+   *   never need a handle to the terminal here.
+   */
+  const handleRun = useCallback(() => {
+    if (!connected || !activeFile) return
+    const payload = `\x05${activeFile.content}\x04`
+    window.api.device.sendData(payload).catch(() => undefined)
+  }, [connected, activeFile])
+
+  const handleStop = useCallback(() => {
+    window.api.device.interrupt().catch(() => undefined)
+  }, [])
+
   const label =
     status.state === 'connecting'
       ? 'Connecting…'
@@ -47,13 +72,36 @@ export function Toolbar({
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
       <div className="toolbar__group">
-        {/* Placeholder: not wired to a device. */}
-        <button type="button" className="btn btn--primary btn--lg" aria-label="Run (placeholder)">
-          <span className="btn__glyph">▶</span>
+        <button
+          type="button"
+          className="btn btn--primary btn--lg"
+          onClick={handleRun}
+          disabled={!canRun}
+          title={
+            !connected
+              ? 'Connect to a device to run'
+              : !activeFile
+                ? 'Open a file to run'
+                : `Run ${activeFile.name} on the device`
+          }
+          aria-label="Run active file on device"
+        >
+          <span className="btn__glyph" aria-hidden="true">
+            ▶
+          </span>
           <span>Run</span>
         </button>
-        <button type="button" className="btn btn--danger btn--lg" aria-label="Stop (placeholder)">
-          <span className="btn__glyph">■</span>
+        <button
+          type="button"
+          className="btn btn--danger btn--lg"
+          onClick={handleStop}
+          disabled={!connected}
+          title={connected ? 'Interrupt the running program (Ctrl-C)' : 'Connect to a device to stop'}
+          aria-label="Stop / interrupt running program"
+        >
+          <span className="btn__glyph" aria-hidden="true">
+            ■
+          </span>
           <span>Stop</span>
         </button>
       </div>
