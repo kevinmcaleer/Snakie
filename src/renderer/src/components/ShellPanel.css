@@ -1,0 +1,52 @@
+/*
+ * Styles co-located with ShellPanel (issue #21).
+ *
+ * Adds the Console / Plotter segmented toggle in the Shell header and the
+ * stacked view containers that let both the xterm terminal and the Plotter stay
+ * mounted while only one is visible. The shared `.btn` family and panel layout
+ * live in index.css; this file only adds what is specific to the toggle.
+ */
+
+.shell-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.shell-toggle__btn {
+  appearance: none;
+  border: none;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.shell-toggle__btn + .shell-toggle__btn {
+  border-left: 1px solid var(--border);
+}
+
+.shell-toggle__btn:hover {
+  background: var(--bg);
+  color: var(--text);
+}
+
+.shell-toggle__btn--active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Both views fill the panel body; the inactive one is removed from layout so it
+ * keeps its state (terminal scrollback / plotted data) without painting. */
+.shell-view {
+  width: 100%;
+  height: 100%;
+}
+
+.shell-view--hidden {
+  display: none;
+}
