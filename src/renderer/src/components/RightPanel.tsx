@@ -3,6 +3,7 @@ import { RightPanelTabs, RightPanelTab } from './RightPanelTabs'
 import { HelpPanel } from './HelpPanel'
 import { OutlinePanel } from './OutlinePanel'
 import { VariablesPanel } from './VariablesPanel'
+import { ChatPanel } from './ChatPanel'
 import { PackagesPanel } from './PackagesPanel'
 
 /**
@@ -28,10 +29,10 @@ export function RightPanel(): JSX.Element {
     { id: 'outline', title: 'Outline', icon: '☰', content: <OutlinePanel /> },
     // Connected board's variables (issue #16):
     { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> },
+    // Claude chat assistant (issue #18):
+    { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
     // MicroPython package installer (mip/PyPI) with discovery (issue #20):
     { id: 'packages', title: 'Packages', icon: '📦', content: <PackagesPanel /> }
-    // Future tabs register here, e.g.:
-    // { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
   ]
 
   return (

@@ -4,6 +4,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
 import { registerPackagesIpc } from './packages/ipc'
+import { registerLlmIpc } from './llm/ipc'
+import { registerFirmwareIpc } from './firmware/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -74,10 +76,17 @@ app.whenReady().then(() => {
   // runs here (main) to satisfy the renderer CSP; installs run `mip` on the
   // device via the renderer's existing device.exec channel.
   registerPackagesIpc()
+  // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
+  // The file dialog is parented to the live window and progress is routed to it.
+  registerFirmwareIpc(() => mainWindow ?? undefined)
 
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.
   registerUpdater(() => mainWindow?.webContents)
+
+  // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
+  // main process; deltas stream back to whichever window is currently live.
+  registerLlmIpc(() => mainWindow?.webContents)
 
   createWindow()
 

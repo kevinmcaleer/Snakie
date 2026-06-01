@@ -18,6 +18,17 @@ export type {
 // single, UI-facing module without reaching into `src/main`.
 export type { FsEntry, FsStat } from '../main/fs/types'
 
+// Re-export the firmware-flashing types so the renderer's flasher UI can import
+// them from this UI-facing module rather than reaching into `src/main`.
+export type {
+  BoardType,
+  BoardCandidate,
+  FlashProgress,
+  FlashOptions,
+  FlashResult,
+  EsptoolInfo
+} from '../main/firmware/types'
+
 // Re-export the update-status type so the renderer's notifier can import it
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type { UpdateStatus } from '../main/updater'
@@ -30,6 +41,9 @@ export type {
   InstallProgress,
   InstallResult
 } from '../main/packages/types'
+// Re-export the LLM chat types so the renderer's chat panel can import them
+// from the UI-facing preload module rather than reaching into `src/main`.
+export type { LlmKeyStatus, LlmMessage, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
 
 declare global {
   interface Window {

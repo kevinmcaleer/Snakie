@@ -25,6 +25,7 @@
     "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@xterm/addon-fit": "^0.11.0",
