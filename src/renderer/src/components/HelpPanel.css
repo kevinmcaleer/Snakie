@@ -1,0 +1,120 @@
+/*
+ * Styles co-located with HelpPanel (issue #22).
+ *
+ * In-app help content for the right pane. Uses the shared design tokens from
+ * index.css (colours, radius) so it tracks light/dark themes automatically.
+ */
+
+.help {
+  padding: 0 0 1.5rem;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* Welcoming hero so Help feels prominent (the "big Help" the feedback asked
+ * for). Accent band across the top of the pane. */
+.help__hero {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1rem 1.1rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, var(--accent), var(--bg-elevated));
+  color: var(--accent-contrast);
+}
+
+.help__hero-mark {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.help__hero-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.help__hero-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.85rem;
+  opacity: 0.92;
+}
+
+.help__section {
+  padding: 0.25rem 1rem;
+}
+
+.help__h2 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.help__h3 {
+  margin: 0.9rem 0 0.35rem;
+  font-size: 0.83rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.help__steps {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.help__steps li {
+  margin-bottom: 0.5rem;
+}
+
+.help__list,
+.help__kbds {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.help__list li,
+.help__kbds li {
+  margin-bottom: 0.4rem;
+}
+
+.help__muted {
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.help__link {
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.help kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.75rem;
+  font-family: inherit;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.help code {
+  padding: 0.05rem 0.3rem;
+  font-size: 0.8rem;
+  background: var(--bg-sunken);
+  border-radius: 4px;
+}
+
+.help__snippet {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  overflow-x: auto;
+  white-space: pre;
+  color: var(--text);
+}

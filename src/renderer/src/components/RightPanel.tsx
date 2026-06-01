@@ -1,19 +1,37 @@
 import { PanelHeader } from './PanelHeader'
-import { Placeholder } from './Placeholder'
+import { RightPanelTabs, RightPanelTab } from './RightPanelTabs'
+import { HelpPanel } from './HelpPanel'
 
 /**
  * RIGHT PANE — optional/collapsible region (collapsed by default).
  *
- * Reserved for progressively-disclosed tooling (e.g. package installer,
- * help/docs, serial plotter, AI assistant) so the default layout stays
- * uncluttered. Replace the <Placeholder> body when a feature claims it.
+ * Now a TABBED HOST (issue #22) for progressively-disclosed tooling. The pane
+ * is just a thin wrapper: it owns the list of `tabs` and hands it to
+ * <RightPanelTabs>, which renders the strip and active panel.
+ *
+ * ADDING A TAB (for future tools — LLM chat #18, package installer #20,
+ * variables #16, serial plotter, …):
+ *   1. Build your tool as its own component under `components/` (co-locate a
+ *      `.css` you import, like HelpPanel does).
+ *   2. Append a `RightPanelTab` to the `tabs` array below:
+ *        { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> }
+ *      `id` must be unique + stable; array order = strip order.
+ * See RightPanelTabs.tsx for the full contract.
  */
 export function RightPanel(): JSX.Element {
+  const tabs: RightPanelTab[] = [
+    { id: 'help', title: 'Help', icon: '?', content: <HelpPanel /> }
+    // Future tabs register here, e.g.:
+    // { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
+    // { id: 'packages', title: 'Packages', icon: '📦', content: <PackagePanel /> },
+    // { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> },
+  ]
+
   return (
     <section className="region region--right" aria-label="Side panel">
       <PanelHeader title="Panel" />
       <div className="region__body">
-        <Placeholder label="Panel" hint="Optional tools (package installer, help, AI)." />
+        <RightPanelTabs tabs={tabs} defaultTabId="help" />
       </div>
     </section>
   )
