@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Build targets broadened: macOS Intel (x64) dmg and Linux arm64
+  (AppImage + deb, for Raspberry Pi) alongside the existing macOS arm64,
+  Linux x64 and Windows x64 installers. (#49)
+- Unit tests (vitest) for the pure parsing logic — code outline, device
+  variables, and serial-plotter line parsing (39 tests); `npm test` and a CI
+  test step. Plus `docs/hardware-test-plan.md`, a manual on-device checklist.
+  (toward #45)
+
+### Changed
+- Renderer startup payload cut ~88% (~7.4 MB → ~0.9 MB): Monaco is now
+  code-split and lazy-loaded only when a file is opened, and the unused JSON
+  language service was dropped (`.json` opens as plain text). (#48)
+
 ### Fixed
 - Renderer no longer blank-screens when the Electron preload bridge
   (`window.api` / `window.electron`) is unavailable — e.g. a browser preview or
