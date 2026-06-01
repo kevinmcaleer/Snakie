@@ -14,6 +14,10 @@ export type {
   IpcResult
 } from '../main/device/types'
 
+// Re-export the local filesystem types so the renderer can import them from a
+// single, UI-facing module without reaching into `src/main`.
+export type { FsEntry, FsStat } from '../main/fs/types'
+
 declare global {
   interface Window {
     electron: ElectronAPI

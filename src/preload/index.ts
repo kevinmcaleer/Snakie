@@ -9,6 +9,7 @@ import type {
   PortInfo,
   StatResult
 } from '../main/device/types'
+import type { FsEntry, FsStat } from '../main/fs/types'
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -79,6 +80,33 @@ const device = {
   }
 }
 
+/**
+ * Local (host) filesystem API. Mirrors the main-process `fs:*` IPC handlers
+ * and unwraps their typed results. Used by the local file browser and the
+ * workspace store for `source: 'local'` documents.
+ */
+const fs = {
+  /** Show the native "open folder" dialog. Resolves to the path or null. */
+  openFolderDialog: (): Promise<string | null> =>
+    unwrap(ipcRenderer.invoke('fs:openFolderDialog')),
+  /** List a directory's entries (directories first, then alphabetical). */
+  readDir: (path: string): Promise<FsEntry[]> => unwrap(ipcRenderer.invoke('fs:readDir', path)),
+  /** Read a file's contents (UTF-8). */
+  readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('fs:readFile', path)),
+  /** Write contents to a file (created/overwritten). */
+  writeFile: (path: string, contents: string): Promise<void> =>
+    unwrap(ipcRenderer.invoke('fs:writeFile', path, contents)),
+  /** Create a directory (recursive). */
+  mkdir: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('fs:mkdir', path)),
+  /** Rename / move a path. */
+  rename: (from: string, to: string): Promise<void> =>
+    unwrap(ipcRenderer.invoke('fs:rename', from, to)),
+  /** Remove a file or directory (recursive). */
+  remove: (path: string): Promise<void> => unwrap(ipcRenderer.invoke('fs:remove', path)),
+  /** Stat a path. */
+  stat: (path: string): Promise<FsStat> => unwrap(ipcRenderer.invoke('fs:stat', path))
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -87,7 +115,9 @@ const api = {
   /** Snapshot of the runtime versions for display in the UI. */
   versions: process.versions,
   /** Serial device connection + MicroPython REPL/filesystem layer. */
-  device
+  device,
+  /** Local host filesystem layer. */
+  fs
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if
