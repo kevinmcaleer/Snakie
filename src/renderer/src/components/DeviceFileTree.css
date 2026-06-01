@@ -20,3 +20,9 @@
   font-size: 0.78rem;
   font-weight: 500;
 }
+
+/* Give the tree some height so right-clicks in the empty area below the
+ * entries still land on the container (opening the New File / Folder menu). */
+.devicetree__tree {
+  min-height: 4rem;
+}
