@@ -1,53 +1,278 @@
-:root {
-  color-scheme: light dark;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+/* ---------------------------------------------------------------------------
+ * Theme tokens
+ * Light/dark theming via CSS custom properties. `data-theme` is set on
+ * <html> by useTheme(). Keep all colour decisions referencing these tokens so
+ * later feature work themes for free.
+ * ------------------------------------------------------------------------- */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f5f6f8;
+  --bg-elevated: #ffffff;
+  --bg-sunken: #eceef1;
+  --border: #d8dbe0;
+  --text: #1c1f23;
+  --text-muted: #6b7280;
+
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+  --danger: #dc2626;
+  --success: #16a34a;
+  --disconnected: #9ca3af;
+
+  --handle: #d8dbe0;
+  --handle-hover: var(--accent);
+
+  --radius: 6px;
+  --toolbar-h: 52px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #16181d;
+  --bg-elevated: #1e2128;
+  --bg-sunken: #101216;
+  --border: #2c3038;
+  --text: #e6e8eb;
+  --text-muted: #9099a6;
+
+  --accent: #3b82f6;
+  --accent-contrast: #ffffff;
+  --danger: #ef4444;
+  --success: #22c55e;
+  --disconnected: #6b7280;
+
+  --handle: #2c3038;
+  --handle-hover: var(--accent);
 }
 
 * {
   box-sizing: border-box;
 }
 
-body {
-  margin: 0;
+html,
+body,
+#root {
+  height: 100%;
 }
 
-.app {
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* --------------------------------------------------------------------------
+ * Shell layout
+ * ------------------------------------------------------------------------ */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.shell__body {
+  flex: 1;
+  min-height: 0;
+}
+
+/* --------------------------------------------------------------------------
+ * Toolbar
+ * ------------------------------------------------------------------------ */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: var(--toolbar-h);
+  padding: 0 0.75rem;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+
+.toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.toolbar__spacer {
+  flex: 1;
+}
+
+/* Buttons — big and easy to click per feedback. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  line-height: 1;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    color 0.12s ease;
+}
+
+.btn:hover {
+  border-color: var(--accent);
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.btn--lg {
+  padding: 0.6rem 1.1rem;
+  font-size: 1rem;
+}
+
+.btn__glyph {
+  font-size: 0.85em;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.btn--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
+.btn--ghost.is-active {
+  background: var(--bg-sunken);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Connection status indicator — placeholder, purely visual. */
+.conn-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  padding: 0.3rem 0.5rem;
+}
+
+.conn-status__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--disconnected);
+}
+
+.conn-status--connected .conn-status__dot {
+  background: var(--success);
+}
+
+/* --------------------------------------------------------------------------
+ * Regions
+ * ------------------------------------------------------------------------ */
+.region {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+}
+
+.panel-header__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.region__body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* --------------------------------------------------------------------------
+ * Placeholders (removed as real content lands)
+ * ------------------------------------------------------------------------ */
+.placeholder {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 2rem;
+  gap: 0.4rem;
+  height: 100%;
+  padding: 1rem;
   text-align: center;
+  color: var(--text-muted);
 }
 
-.title {
-  margin: 0;
-  font-size: 3rem;
-}
-
-.subtitle {
-  margin: 0.5rem 0 2rem;
-  opacity: 0.7;
-}
-
-.versions {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  gap: 1.5rem;
-}
-
-.versions span {
+.placeholder__label {
+  font-size: 1.1rem;
   font-weight: 600;
+  color: var(--text);
 }
 
-.ipc {
-  margin-top: 2rem;
+.placeholder__hint {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+/* --------------------------------------------------------------------------
+ * Resize handles
+ * ------------------------------------------------------------------------ */
+.resize-handle {
+  background: var(--handle);
+  transition: background 0.12s ease;
+}
+
+.resize-handle--vertical {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.resize-handle--horizontal {
+  height: 4px;
+  cursor: row-resize;
+}
+
+.resize-handle:hover,
+.resize-handle[data-resize-handle-active] {
+  background: var(--handle-hover);
 }
