@@ -1,0 +1,13 @@
+/*
+ * Styles co-located with LocalFileTree (issue #19).
+ *
+ * The base `.localtree*` and `.tree-*` rules live in
+ * `src/renderer/src/index.css` (added by earlier issues). This file only adds
+ * what the right-click context-menu work needs: making the tree area fill the
+ * available height so right-clicks in the empty space below the entries still
+ * land on the tree container (and thus open the "New File / New Folder" menu).
+ */
+
+.localtree__tree {
+  min-height: 4rem;
+}

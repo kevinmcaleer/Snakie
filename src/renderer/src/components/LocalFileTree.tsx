@@ -1,26 +1,32 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
+import './LocalFileTree.css'
 
 /**
  * Local (host) filesystem browser for issue #5.
  *
  * Offers an "Open Folder" action, an expandable tree of the chosen folder, and
- * opens files into the workspace store on click. Basic create/rename/delete
- * actions are exposed inline; a full right-click context menu is deferred to
- * issue #19.
+ * opens files into the workspace store on click. Create/rename/delete actions
+ * are available inline AND via a right-click context menu (issue #19), which
+ * also exposes "Upload to board" — reading the local file via `fs.readFile`
+ * and writing it to the connected device via `device.writeFile` (disabled when
+ * no board is connected).
  *
  * Per the feedback UX cues a computer icon marks the local section and file
- * actions are revealed contextually (on row hover / selection).
+ * actions are revealed contextually (on row hover / selection / right-click).
  */
 
 interface TreeNodeProps {
   entry: FsEntry
   depth: number
   selectedPath: string | null
-  onSelect: (path: string) => void
+  onSelect: (path: string, isDir: boolean) => void
   onOpenFile: (path: string) => void
   onChanged: () => void
+  onContextMenu: (e: React.MouseEvent, entry: FsEntry) => void
 }
 
 /** Recursively renders a directory entry and (when expanded) its children. */
@@ -30,7 +36,8 @@ function TreeNode({
   selectedPath,
   onSelect,
   onOpenFile,
-  onChanged
+  onChanged,
+  onContextMenu
 }: TreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsEntry[] | null>(null)
@@ -51,7 +58,7 @@ function TreeNode({
   }, [expanded, children, loadChildren])
 
   const handleClick = useCallback((): void => {
-    onSelect(entry.path)
+    onSelect(entry.path, entry.isDir)
     if (entry.isDir) void toggle()
     else onOpenFile(entry.path)
   }, [entry.isDir, entry.path, onOpenFile, onSelect, toggle])
@@ -64,6 +71,7 @@ function TreeNode({
         className={`tree-row${isSelected ? ' is-selected' : ''}`}
         style={{ paddingLeft: `${depth * 14 + 8}px` }}
         onClick={handleClick}
+        onContextMenu={(e) => onContextMenu(e, entry)}
         role="treeitem"
         aria-expanded={entry.isDir ? expanded : undefined}
         tabIndex={0}
@@ -95,18 +103,30 @@ function TreeNode({
             onSelect={onSelect}
             onOpenFile={onOpenFile}
             onChanged={onChanged}
+            onContextMenu={onContextMenu}
           />
         ))}
     </div>
   )
 }
 
+/** State backing an open context menu: where it is and what it targets. */
+interface MenuState {
+  position: ContextMenuPosition
+  /** The right-clicked entry, or null when the empty tree area was clicked. */
+  entry: FsEntry | null
+}
+
 export function LocalFileTree(): JSX.Element {
   const { openFile } = useWorkspace()
+  const deviceStatus = useDeviceStatus()
+  const connected = deviceStatus.state === 'connected'
   const [root, setRoot] = useState<string | null>(null)
   const [entries, setEntries] = useState<FsEntry[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
+  const [selectedIsDir, setSelectedIsDir] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [menu, setMenu] = useState<MenuState | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
     if (!root) return
@@ -128,10 +148,16 @@ export function LocalFileTree(): JSX.Element {
       if (folder) {
         setRoot(folder)
         setSelectedPath(folder)
+        setSelectedIsDir(true)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
+  }, [])
+
+  const handleSelect = useCallback((path: string, isDir: boolean): void => {
+    setSelectedPath(path)
+    setSelectedIsDir(isDir)
   }, [])
 
   const handleOpenFile = useCallback(
@@ -145,15 +171,20 @@ export function LocalFileTree(): JSX.Element {
 
   /**
    * Resolve the directory that a new file/folder should be created in: the
-   * selected directory, the parent of the selected file, or the root.
+   * given (or selected) directory, the parent of a file, or the root.
    */
-  const targetDir = useCallback((): string | null => {
-    if (!root) return null
-    if (!selectedPath || selectedPath === root) return root
-    // If a file is selected, create alongside it (use its parent dir).
-    const parent = selectedPath.replace(/[/\\][^/\\]+$/, '')
-    return parent || root
-  }, [root, selectedPath])
+  const dirFor = useCallback(
+    (target: FsEntry | null): string | null => {
+      if (!root) return null
+      const path = target ? target.path : selectedPath
+      const isDir = target ? target.isDir : selectedIsDir
+      if (!path || path === root) return root
+      if (isDir) return path
+      const parent = path.replace(/[/\\][^/\\]+$/, '')
+      return parent || root
+    },
+    [root, selectedIsDir, selectedPath]
+  )
 
   const join = (dir: string, name: string): string =>
     dir.includes('\\') ? `${dir}\\${name}` : `${dir}/${name}`
@@ -171,38 +202,123 @@ export function LocalFileTree(): JSX.Element {
     [refresh]
   )
 
-  const handleNewFile = useCallback((): void => {
-    const dir = targetDir()
-    if (!dir) return
-    const name = window.prompt('New file name', 'untitled.py')
-    if (!name) return
-    void run(() => window.api.fs.writeFile(join(dir, name), ''))
-  }, [run, targetDir])
+  const newFileIn = useCallback(
+    (target: FsEntry | null): void => {
+      const dir = dirFor(target)
+      if (!dir) return
+      const name = window.prompt('New file name', 'untitled.py')
+      if (!name) return
+      void run(() => window.api.fs.writeFile(join(dir, name), ''))
+    },
+    [dirFor, run]
+  )
 
-  const handleNewFolder = useCallback((): void => {
-    const dir = targetDir()
-    if (!dir) return
-    const name = window.prompt('New folder name', 'new-folder')
-    if (!name) return
-    void run(() => window.api.fs.mkdir(join(dir, name)))
-  }, [run, targetDir])
+  const newFolderIn = useCallback(
+    (target: FsEntry | null): void => {
+      const dir = dirFor(target)
+      if (!dir) return
+      const name = window.prompt('New folder name', 'new-folder')
+      if (!name) return
+      void run(() => window.api.fs.mkdir(join(dir, name)))
+    },
+    [dirFor, run]
+  )
 
-  const handleRename = useCallback((): void => {
-    if (!selectedPath || selectedPath === root) return
-    const current = selectedPath.split(/[/\\]/).pop() ?? ''
-    const name = window.prompt('Rename to', current)
-    if (!name || name === current) return
-    const parent = selectedPath.replace(/[/\\][^/\\]+$/, '')
-    void run(() => window.api.fs.rename(selectedPath, join(parent || root!, name)))
-  }, [root, run, selectedPath])
+  const renamePath = useCallback(
+    (path: string): void => {
+      if (!path || path === root) return
+      const current = path.split(/[/\\]/).pop() ?? ''
+      const name = window.prompt('Rename to', current)
+      if (!name || name === current) return
+      const parent = path.replace(/[/\\][^/\\]+$/, '')
+      void run(() => window.api.fs.rename(path, join(parent || root!, name)))
+    },
+    [root, run]
+  )
 
-  const handleDelete = useCallback((): void => {
-    if (!selectedPath || selectedPath === root) return
-    if (!window.confirm(`Delete "${selectedPath.split(/[/\\]/).pop()}"?`)) return
-    void run(() => window.api.fs.remove(selectedPath))
-  }, [root, run, selectedPath])
+  const deletePath = useCallback(
+    (path: string): void => {
+      if (!path || path === root) return
+      if (!window.confirm(`Delete "${path.split(/[/\\]/).pop()}"?`)) return
+      void run(() => window.api.fs.remove(path))
+    },
+    [root, run]
+  )
+
+  /**
+   * Upload a local file to the connected board: read it via `fs.readFile` and
+   * write it to `/<name>` on the device via `device.writeFile`.
+   */
+  const uploadToBoard = useCallback(
+    (entry: FsEntry): void => {
+      if (!connected || entry.isDir) return
+      const name = entry.path.split(/[/\\]/).pop() ?? entry.name
+      void (async (): Promise<void> => {
+        try {
+          const contents = await window.api.fs.readFile(entry.path)
+          await window.api.device.writeFile(`/${name}`, contents)
+          setError(null)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        }
+      })()
+    },
+    [connected]
+  )
+
+  // Inline-button handlers delegate to the shared, target-aware helpers using
+  // the current selection.
+  const selectedEntry = useCallback(
+    (): FsEntry | null =>
+      selectedPath && selectedPath !== root
+        ? { name: selectedPath.split(/[/\\]/).pop() ?? '', path: selectedPath, isDir: selectedIsDir }
+        : null,
+    [root, selectedIsDir, selectedPath]
+  )
+
+  const closeMenu = useCallback((): void => setMenu(null), [])
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, entry: FsEntry | null): void => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (entry) handleSelect(entry.path, entry.isDir)
+      setMenu({ position: { x: e.clientX, y: e.clientY }, entry })
+    },
+    [handleSelect]
+  )
+
+  const menuItems = useCallback(
+    (target: FsEntry | null): ContextMenuItem[] => {
+      const items: ContextMenuItem[] = [
+        { key: 'new-file', label: 'New File', onSelect: () => newFileIn(target) },
+        { key: 'new-folder', label: 'New Folder', onSelect: () => newFolderIn(target) }
+      ]
+      if (target) {
+        if (!target.isDir) {
+          items.push({ key: 'open', label: 'Open', onSelect: () => handleOpenFile(target.path) })
+          items.push({
+            key: 'upload',
+            label: connected ? 'Upload to board' : 'Upload to board (not connected)',
+            disabled: !connected,
+            onSelect: () => uploadToBoard(target)
+          })
+        }
+        items.push({ key: 'rename', label: 'Rename', onSelect: () => renamePath(target.path) })
+        items.push({
+          key: 'delete',
+          label: 'Delete',
+          danger: true,
+          onSelect: () => deletePath(target.path)
+        })
+      }
+      return items
+    },
+    [connected, deletePath, handleOpenFile, newFileIn, newFolderIn, renamePath, uploadToBoard]
+  )
 
   const hasSelection = !!selectedPath && selectedPath !== root
+  const current = selectedEntry()
 
   return (
     <div className="localtree">
@@ -215,21 +331,29 @@ export function LocalFileTree(): JSX.Element {
       {root ? (
         <>
           <div className="localtree__actions">
-            <button className="btn btn--ghost" onClick={handleNewFile} title="New file">
+            <button className="btn btn--ghost" onClick={() => newFileIn(null)} title="New file">
               + File
             </button>
-            <button className="btn btn--ghost" onClick={handleNewFolder} title="New folder">
+            <button
+              className="btn btn--ghost"
+              onClick={() => newFolderIn(null)}
+              title="New folder"
+            >
               + Folder
             </button>
             {/* File-specific actions revealed only when an entry is selected. */}
             {hasSelection && (
               <>
-                <button className="btn btn--ghost" onClick={handleRename} title="Rename">
+                <button
+                  className="btn btn--ghost"
+                  onClick={() => current && renamePath(current.path)}
+                  title="Rename"
+                >
                   Rename
                 </button>
                 <button
                   className="btn btn--ghost btn--danger"
-                  onClick={handleDelete}
+                  onClick={() => current && deletePath(current.path)}
                   title="Delete"
                 >
                   Delete
@@ -247,16 +371,22 @@ export function LocalFileTree(): JSX.Element {
 
           {error && <div className="localtree__error">{error}</div>}
 
-          <div className="localtree__tree" role="tree" aria-label="Local file tree">
+          <div
+            className="localtree__tree"
+            role="tree"
+            aria-label="Local file tree"
+            onContextMenu={(e) => handleContextMenu(e, null)}
+          >
             {entries.map((entry) => (
               <TreeNode
                 key={entry.path}
                 entry={entry}
                 depth={0}
                 selectedPath={selectedPath}
-                onSelect={setSelectedPath}
+                onSelect={handleSelect}
                 onOpenFile={handleOpenFile}
                 onChanged={refresh}
+                onContextMenu={handleContextMenu}
               />
             ))}
           </div>
@@ -268,6 +398,10 @@ export function LocalFileTree(): JSX.Element {
             <span aria-hidden>{'\u{1F4C2}'}</span> Open Folder
           </button>
         </div>
+      )}
+
+      {menu && (
+        <ContextMenu position={menu.position} items={menuItems(menu.entry)} onClose={closeMenu} />
       )}
     </div>
   )

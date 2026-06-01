@@ -1,0 +1,61 @@
+/*
+ * Styles co-located with ContextMenu (issue #19).
+ *
+ * A small, dependency-free popup menu shared by both file trees. Positioned via
+ * inline left/top by the component; rendered fixed so the coordinates map to
+ * the cursor's viewport position regardless of scroll containers.
+ */
+
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  min-width: 12rem;
+  padding: 0.25rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface, #1e1e1e);
+  border: 1px solid var(--color-border, #3a3a3a);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  outline: none;
+  font-size: 0.82rem;
+  user-select: none;
+}
+
+.context-menu__item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text, #e6e6e6);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.context-menu__item:hover:not(:disabled),
+.context-menu__item.is-active:not(:disabled) {
+  background: var(--color-accent, #0e639c);
+  color: #fff;
+}
+
+.context-menu__item:disabled,
+.context-menu__item[aria-disabled='true'] {
+  color: var(--color-text-muted, #777);
+  cursor: default;
+  opacity: 0.6;
+}
+
+.context-menu__item--danger {
+  color: var(--color-danger, #e06c75);
+}
+
+.context-menu__item--danger:hover:not(:disabled),
+.context-menu__item--danger.is-active:not(:disabled) {
+  background: var(--color-danger, #c0392b);
+  color: #fff;
+}
