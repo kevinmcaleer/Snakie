@@ -6,7 +6,18 @@ Snakie is a clean, uncluttered IDE for writing MicroPython code and working with
 connected MicroPython devices. It is built on Electron so it runs on Windows,
 macOS and Linux, and updates easily.
 
-## Vision
+## Download
+
+Grab the latest installer for your platform from the
+[**Releases**](https://github.com/kevinmcaleer/Snakie/releases/latest) page:
+
+- 🪟 Windows — `Snakie.Setup.<version>.exe`
+- 🍎 macOS (Apple Silicon) — `Snakie-<version>-arm64.dmg`
+- 🐧 Linux — `Snakie-<version>.AppImage` or `snakie_<version>_amd64.deb`
+
+## Features
+
+Everything below ships in **v0.1.0**:
 
 - ✏️ Edit MicroPython code with syntax highlighting and auto-complete
 - 🔌 Connect to a MicroPython device over serial
@@ -73,8 +84,15 @@ CI matrix and publishes the installers to a GitHub Release.
 
 ## Status
 
-🚧 Early development — see [docs/build-plan.md](docs/build-plan.md) for the
-first-build plan and the [issues](../../issues) for tracked work.
+🚀 **v0.1.0 released** — the full first build plus the post-v0.1.0 backlog
+(autocomplete, firmware flashing, Git, LLM chat, package installer, serial
+plotter, in-app help, update notifications) are all implemented. See
+[docs/build-plan.md](docs/build-plan.md) for the original plan.
+
+> ⚠️ Released features are build- and type-verified but have **not yet been
+> exercised against real MicroPython hardware** — first on-device shakedown is
+> the next priority (tracked in the v0.2.0 milestone). The LLM chat needs an
+> Anthropic API key; the package installer needs network access.
 
 ## License
 
