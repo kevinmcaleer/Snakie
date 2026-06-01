@@ -12,8 +12,10 @@
  * This module sets `self.MonacoEnvironment` exactly once, the first time it is
  * imported, before any editor is instantiated.
  */
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
 import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import { registerMicropythonCompletions } from './micropython-completions'
 
 self.MonacoEnvironment = {
   getWorker(_workerId: string, label: string): Worker {
@@ -24,3 +26,8 @@ self.MonacoEnvironment = {
     return new EditorWorker()
   }
 }
+
+// Register MicroPython-aware autocomplete for the `python` language. This is
+// idempotent (guarded against HMR double-registration inside the function), so
+// it is safe even though this module may be re-evaluated by Vite.
+registerMicropythonCompletions(monaco)
