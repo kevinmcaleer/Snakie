@@ -6,7 +6,6 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/editor/editor.all'
 import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
 import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
-import 'monaco-editor/esm/vs/language/json/monaco.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
 import { useTheme } from '../hooks/useTheme'
@@ -16,9 +15,10 @@ import { useTheme } from '../hooks/useTheme'
  * so `.py` (and unknown extensions) default to `python`.
  */
 function languageForName(name: string): string {
-  if (/\.(json)$/i.test(name)) return 'json'
+  // The JSON language service is intentionally not bundled (see monaco-setup),
+  // so `.json` opens as plaintext rather than registering an unbacked language.
   if (/\.(md|markdown)$/i.test(name)) return 'markdown'
-  if (/\.(txt)$/i.test(name)) return 'plaintext'
+  if (/\.(json|txt)$/i.test(name)) return 'plaintext'
   return 'python'
 }
 
@@ -155,8 +155,10 @@ export function MonacoEditor(): JSX.Element {
 
   return (
     <div className="editor-host">
-      {/* The Monaco mount point is always present so the editor instance can be
-          created on first mount regardless of whether a file is open yet. */}
+      {/* Monaco mount point. This component is lazily loaded by EditorArea only
+          once at least one file is open (the "Open a file to start editing"
+          empty state is rendered there, ahead of the lazy boundary), so the
+          host is always visible when this renders. */}
       <div className="monaco-host" ref={containerRef} hidden={!activeFile} />
       {!activeFile && (
         <div className="editor-empty">
@@ -166,3 +168,7 @@ export function MonacoEditor(): JSX.Element {
     </div>
   )
 }
+
+// Default export so EditorArea can `React.lazy(() => import('./MonacoEditor'))`,
+// pushing the multi-MB Monaco chunk out of the initial renderer bundle.
+export default MonacoEditor

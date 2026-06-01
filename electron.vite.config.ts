@@ -36,9 +36,24 @@ export default defineConfig({
       }
     },
     build: {
+      // Monaco is split into its own lazily-loaded, long-lived cacheable chunk
+      // (see EditorArea's React.lazy + the manualChunks below), so the genuine
+      // initial chunk is small. Raise the warning limit past Monaco's size so
+      // the remaining (expected, on-demand) monaco chunk doesn't trip a noisy
+      // warning on every build.
+      chunkSizeWarningLimit: 4000,
       rollupOptions: {
         input: {
           index: resolve(__dirname, 'src/renderer/index.html')
+        },
+        output: {
+          manualChunks(id: string) {
+            // Pull all of monaco-editor into a single dedicated chunk. It is
+            // only imported via the lazy MonacoEditor, so this chunk is fetched
+            // on demand and cached independently of app code.
+            if (id.includes('node_modules/monaco-editor')) return 'monaco'
+            return undefined
+          }
         }
       }
     },
