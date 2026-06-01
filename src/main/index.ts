@@ -6,6 +6,7 @@ import { registerFsIpc } from './fs/ipc'
 import { registerPackagesIpc } from './packages/ipc'
 import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
+import { registerGitIpc } from './git/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -79,6 +80,10 @@ app.whenReady().then(() => {
   // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
   // The file dialog is parented to the live window and progress is routed to it.
   registerFirmwareIpc(() => mainWindow ?? undefined)
+
+  // Register the built-in version-control (Git) layer (issue #15). All git
+  // operations run here via simple-git, scoped to a folder the renderer picks.
+  registerGitIpc()
 
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.
