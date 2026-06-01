@@ -1,7 +1,8 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { FirmwareFlasher } from './FirmwareFlasher'
 import './RunControls.css'
 
 interface ToolbarProps {
@@ -38,6 +39,7 @@ export function Toolbar({
   onToggleRight
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
+  const [flasherOpen, setFlasherOpen] = useState(false)
   const { openFiles, activeId } = useWorkspace()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
@@ -104,6 +106,18 @@ export function Toolbar({
           </span>
           <span>Stop</span>
         </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--lg"
+          onClick={() => setFlasherOpen(true)}
+          title="Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)"
+          aria-label="Flash MicroPython firmware"
+        >
+          <span className="btn__glyph" aria-hidden="true">
+            ⚡
+          </span>
+          <span>Flash firmware</span>
+        </button>
       </div>
 
       <div className="toolbar__group">
@@ -157,6 +171,8 @@ export function Toolbar({
           {theme === 'dark' ? '☀' : '☾'}
         </button>
       </div>
+
+      {flasherOpen && <FirmwareFlasher onClose={() => setFlasherOpen(false)} />}
     </header>
   )
 }

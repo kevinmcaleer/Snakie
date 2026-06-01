@@ -4,6 +4,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
 import { registerLlmIpc } from './llm/ipc'
+import { registerFirmwareIpc } from './firmware/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -69,6 +70,10 @@ app.whenReady().then(() => {
   // Register the local filesystem layer. The folder dialog is parented to the
   // live window when one exists.
   registerFsIpc(() => mainWindow ?? undefined)
+
+  // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
+  // The file dialog is parented to the live window and progress is routed to it.
+  registerFirmwareIpc(() => mainWindow ?? undefined)
 
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.
