@@ -40,6 +40,8 @@ const device = {
   exec: (code: string): Promise<ExecResult> => unwrap(ipcRenderer.invoke('device:exec', code)),
   /** Run code and return stdout, throwing on a device traceback. */
   eval: (code: string): Promise<string> => unwrap(ipcRenderer.invoke('device:eval', code)),
+  /** Send raw keystrokes to the friendly REPL (interactive terminal input). */
+  sendData: (data: string): Promise<void> => unwrap(ipcRenderer.invoke('device:sendData', data)),
   /** Send Ctrl-C to interrupt the running program. */
   interrupt: (): Promise<void> => unwrap(ipcRenderer.invoke('device:interrupt')),
   /** Send Ctrl-D to soft-reset the device. */

@@ -1,21 +1,23 @@
 import { PanelHeader } from './PanelHeader'
-import { Placeholder } from './Placeholder'
+import { Terminal } from './Terminal'
+import { ConnectionControl } from './ConnectionControl'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 
 /**
  * BOTTOM — shell / console (REPL) region.
  *
- * This is core to a MicroPython tool and is therefore OPEN by default. Later
- * this hosts the REPL with colour highlighting and a clear-console action
- * (the feedback specifically praised the trashcan clear button).
- *
- * Replace the <Placeholder> body with the real REPL/console.
+ * Hosts an interactive xterm.js terminal bound to the MicroPython device's
+ * friendly REPL, plus a compact connect/disconnect control in the header. This
+ * region is OPEN by default by design (the REPL is core to the tool).
  */
 export function ShellPanel(): JSX.Element {
+  const status = useDeviceStatus()
+
   return (
     <section className="region region--shell" aria-label="Shell">
-      <PanelHeader title="Shell" />
-      <div className="region__body">
-        <Placeholder label="Shell" hint="MicroPython REPL / console goes here." />
+      <PanelHeader title="Shell" actions={<ConnectionControl status={status} />} />
+      <div className="region__body region__body--terminal">
+        <Terminal />
       </div>
     </section>
   )

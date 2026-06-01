@@ -74,6 +74,8 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
 
   ipcMain.handle('device:eval', (_e, code: string) => wrap(() => dev.eval(code)))
 
+  ipcMain.handle('device:sendData', (_e, data: string) => wrap(() => dev.sendData(data)))
+
   ipcMain.handle('device:interrupt', () => wrap(() => dev.interrupt()))
 
   ipcMain.handle('device:softReset', () => wrap(() => dev.softReset()))
