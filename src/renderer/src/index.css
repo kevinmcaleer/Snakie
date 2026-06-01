@@ -143,6 +143,20 @@ body {
   font-size: 1rem;
 }
 
+.btn--sm {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.btn--sm.btn--ghost {
+  padding: 0.25rem 0.45rem;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn__glyph {
   font-size: 0.85em;
 }
@@ -226,6 +240,50 @@ body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+}
+
+/* The terminal owns its own scrolling; don't double up. */
+.region__body--terminal {
+  overflow: hidden;
+  background: #101216;
+}
+
+/* --------------------------------------------------------------------------
+ * Shell terminal (xterm) + connection control
+ * ------------------------------------------------------------------------ */
+.terminal {
+  width: 100%;
+  height: 100%;
+  padding: 0.35rem 0.45rem;
+  box-sizing: border-box;
+}
+
+.terminal .xterm {
+  height: 100%;
+}
+
+.conn-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.conn-control__select {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.4rem;
+  max-width: 14rem;
+}
+
+.conn-control__select:disabled {
+  opacity: 0.6;
 }
 
 /* --------------------------------------------------------------------------
