@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
+import { registerFsIpc } from './fs/ipc'
 
 /** The single application window, used to route device push-events. */
 let mainWindow: BrowserWindow | null = null
@@ -62,6 +63,10 @@ app.whenReady().then(() => {
   // Register the serial device layer. Push events are routed to whichever
   // window is currently live.
   registerDeviceIpc(() => mainWindow?.webContents)
+
+  // Register the local filesystem layer. The folder dialog is parented to the
+  // live window when one exists.
+  registerFsIpc(() => mainWindow ?? undefined)
 
   createWindow()
 

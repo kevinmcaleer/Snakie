@@ -313,6 +313,128 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+ * File panel — local + device browsers
+ * ------------------------------------------------------------------------ */
+.filepanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.filepanel__local {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.filepanel__device {
+  flex: 0 0 auto;
+  min-height: 120px;
+  max-height: 40%;
+  overflow: auto;
+}
+
+.localtree {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.localtree__header {
+  display: flex;
+  align-items: center;
+  padding: 0.4rem 0.6rem;
+  flex: 0 0 auto;
+}
+
+.localtree__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.localtree__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding: 0 0.6rem 0.4rem;
+  flex: 0 0 auto;
+}
+
+.localtree__actions .btn {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.localtree__tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding-bottom: 0.5rem;
+}
+
+.localtree__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  flex: 1;
+  padding: 1rem;
+}
+
+.localtree__error,
+.tree-error {
+  color: var(--danger);
+  font-size: 0.75rem;
+  padding: 0.25rem 0.6rem;
+  word-break: break-word;
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tree-row:hover {
+  background: var(--bg-sunken);
+}
+
+.tree-row.is-selected {
+  background: var(--bg-sunken);
+  color: var(--accent);
+}
+
+.tree-row__glyph {
+  flex: 0 0 auto;
+  width: 1em;
+  font-size: 0.7em;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.tree-row__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
  * Resize handles
  * ------------------------------------------------------------------------ */
 .resize-handle {
