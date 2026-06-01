@@ -249,6 +249,39 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+ * Monaco code editor (issue #3)
+ * ------------------------------------------------------------------------ */
+/* Monaco manages its own scrolling and layout; give it a clean fixed box. */
+.region__body--editor {
+  overflow: hidden;
+}
+
+.editor-host {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.monaco-host {
+  width: 100%;
+  height: 100%;
+}
+
+.editor-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 1rem;
+  text-align: center;
+}
+
+.editor-empty__text {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+/* --------------------------------------------------------------------------
  * Shell terminal (xterm) + connection control
  * ------------------------------------------------------------------------ */
 .terminal {
