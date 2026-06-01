@@ -1,4 +1,5 @@
 import { Theme } from '../hooks/useTheme'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 
 interface ToolbarProps {
   theme: Theme
@@ -15,9 +16,9 @@ interface ToolbarProps {
  * TOP TOOLBAR.
  *
  * Big, easy-to-click action buttons (Run / Stop) plus a connection-status
- * indicator. Per the issue #2 ownership boundary these are VISUAL PLACEHOLDERS
- * ONLY — they are intentionally not wired to any device API. A later agent
- * replaces the handlers/state.
+ * indicator. The Run / Stop buttons remain VISUAL PLACEHOLDERS (wired in a
+ * later issue). The connection-status indicator IS live: it reflects the
+ * device layer's status via {@link useDeviceStatus}.
  *
  * Also hosts layout controls (panel show/hide toggles) and the theme toggle,
  * following progressive disclosure: complexity stays tucked away by default.
@@ -32,6 +33,17 @@ export function Toolbar({
   rightCollapsed,
   onToggleRight
 }: ToolbarProps): JSX.Element {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const label =
+    status.state === 'connecting'
+      ? 'Connecting…'
+      : connected
+        ? `Connected${status.path ? ` · ${status.path}` : ''}`
+        : status.state === 'error'
+          ? 'Error'
+          : 'Disconnected'
+
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
       <div className="toolbar__group">
@@ -47,13 +59,13 @@ export function Toolbar({
       </div>
 
       <div className="toolbar__group">
-        {/* Placeholder connection-status indicator — purely visual. */}
+        {/* Live connection-status indicator, driven by the device layer. */}
         <span
-          className="conn-status conn-status--disconnected"
-          title="Connection status (placeholder)"
+          className={`conn-status ${connected ? 'conn-status--connected' : 'conn-status--disconnected'}`}
+          title={status.error ? `Connection error: ${status.error}` : 'Connection status'}
         >
           <span className="conn-status__dot" aria-hidden="true" />
-          <span>Disconnected</span>
+          <span>{label}</span>
         </span>
       </div>
 

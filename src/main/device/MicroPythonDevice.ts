@@ -269,6 +269,16 @@ export class MicroPythonDevice extends EventEmitter {
   // Raw REPL control
   // ---------------------------------------------------------------------------
 
+  /**
+   * Write raw user keystrokes to the friendly (`>>>`) REPL. Unlike {@link exec},
+   * this performs no raw-REPL handshake — the bytes are sent verbatim, which is
+   * exactly what an interactive terminal needs (including control bytes such as
+   * Ctrl-C `\x03` and Ctrl-D `\x04`).
+   */
+  async sendData(data: string): Promise<void> {
+    await this.write(data)
+  }
+
   /** Send Ctrl-C to interrupt any running program. */
   async interrupt(): Promise<void> {
     await this.write(CTRL_C)
