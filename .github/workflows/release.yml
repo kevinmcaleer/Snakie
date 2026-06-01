@@ -24,8 +24,10 @@ jobs:
     #                         on their native arch). Falls back to needing a
     #                         self-hosted arm64 runner if the hosted arm pool
     #                         is ever unavailable.
-    # The per-arch arch lists live in electron-builder.yml; the platform flag
-    # below (--win/--mac/--linux) just selects which platform block applies.
+    # Each Linux runner builds ONLY its native arch (--linux --x64 / --arm64):
+    # cross-arch native rebuilds of serialport fail (e.g. -m64 passed to arm64
+    # g++). macOS builds both arm64+x64 on the arm64 runner because serialport
+    # ships a universal darwin prebuild, so no cross-compilation is needed.
     strategy:
       fail-fast: false
       matrix:
@@ -37,10 +39,10 @@ jobs:
             platform_flag: --mac
             artifact: installers-macos
           - os: ubuntu-latest
-            platform_flag: --linux
+            platform_flag: --linux --x64
             artifact: installers-linux-x64
           - os: ubuntu-24.04-arm
-            platform_flag: --linux
+            platform_flag: --linux --arm64
             artifact: installers-linux-arm64
     runs-on: ${{ matrix.os }}
     steps:
@@ -64,9 +66,9 @@ jobs:
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
       - name: Build installers (no publish)
-        # The arch list per platform is defined in electron-builder.yml, so a
-        # single platform flag here builds every configured arch for that OS
-        # (e.g. --mac builds both the arm64 and x64 dmgs).
+        # platform_flag selects platform (+ arch for Linux). --mac builds both
+        # mac arches (universal serialport prebuild); each Linux job is pinned
+        # to its native arch to avoid cross-arch native rebuild failures.
         run: npm run dist -- ${{ matrix.platform_flag }} --publish never
         env:
           # Code signing intentionally disabled (future work); without this,
