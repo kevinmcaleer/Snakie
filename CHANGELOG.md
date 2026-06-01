@@ -6,7 +6,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-06-01
+
 ### Added
+- Drafted a placeholder Snakie app logo — a snake coiled into an "S" on a green
+  squircle (`build/icon.png`, editable source `build/icon.svg`). (#46)
 - Build targets broadened: macOS Intel (x64) dmg and Linux arm64
   (AppImage + deb, for Raspberry Pi) alongside the existing macOS arm64,
   Linux x64 and Windows x64 installers. (#49)
@@ -59,5 +63,6 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/kevinmcaleer/Snakie/releases/tag/v0.1.0
