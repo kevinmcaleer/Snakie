@@ -114,8 +114,9 @@ Notes on arch coverage:
   prebuild, so this is a CI-infrastructure limitation, not a code one — revisit
   if/when an arm64 Windows runner becomes available.)
 
-> The app icon in `build/icon.png` is a generated placeholder — TODO: replace
-> with real artwork. Code signing is not yet configured (future work).
+> The app icon (`build/icon.png`, source `build/icon.svg`) is a drafted
+> placeholder logo — fine to iterate on or replace with final artwork (#46).
+> Code signing is not yet configured (future work, #47).
 
 ## Status
 
