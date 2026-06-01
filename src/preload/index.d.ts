@@ -18,6 +18,10 @@ export type {
 // single, UI-facing module without reaching into `src/main`.
 export type { FsEntry, FsStat } from '../main/fs/types'
 
+// Re-export the update-status type so the renderer's notifier can import it
+// from the UI-facing preload module rather than reaching into `src/main`.
+export type { UpdateStatus } from '../main/updater'
+
 declare global {
   interface Window {
     electron: ElectronAPI

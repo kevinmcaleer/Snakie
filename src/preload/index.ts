@@ -10,6 +10,7 @@ import type {
   StatResult
 } from '../main/device/types'
 import type { FsEntry, FsStat } from '../main/fs/types'
+import type { UpdateStatus } from '../main/updater'
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -109,6 +110,26 @@ const fs = {
   stat: (path: string): Promise<FsStat> => unwrap(ipcRenderer.invoke('fs:stat', path))
 }
 
+/**
+ * Auto-update API. Mirrors the main-process `updates:*` IPC handlers. `check`
+ * triggers an update check, `quitAndInstall` restarts into a downloaded update,
+ * and `onStatus` subscribes to lifecycle push events (returns an unsubscribe
+ * function). In dev / unpackaged runs the main side no-ops, so nothing is ever
+ * pushed.
+ */
+const updates = {
+  /** Trigger an update check (no-op when unpackaged). */
+  check: (): Promise<void> => ipcRenderer.invoke('updates:check'),
+  /** Restart the app and install a downloaded update. */
+  quitAndInstall: (): Promise<void> => ipcRenderer.invoke('updates:quitAndInstall'),
+  /** Subscribe to update lifecycle status. Returns an unsubscribe function. */
+  onStatus: (cb: (status: UpdateStatus) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, status: UpdateStatus): void => cb(status)
+    ipcRenderer.on('updates:status', listener)
+    return () => ipcRenderer.removeListener('updates:status', listener)
+  }
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -119,7 +140,9 @@ const api = {
   /** Serial device connection + MicroPython REPL/filesystem layer. */
   device,
   /** Local host filesystem layer. */
-  fs
+  fs,
+  /** Auto-update check + status + restart layer. */
+  updates
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if
