@@ -1,6 +1,8 @@
 import { PanelHeader } from './PanelHeader'
 import { RightPanelTabs, RightPanelTab } from './RightPanelTabs'
 import { HelpPanel } from './HelpPanel'
+import { OutlinePanel } from './OutlinePanel'
+import { VariablesPanel } from './VariablesPanel'
 
 /**
  * RIGHT PANE — optional/collapsible region (collapsed by default).
@@ -20,11 +22,14 @@ import { HelpPanel } from './HelpPanel'
  */
 export function RightPanel(): JSX.Element {
   const tabs: RightPanelTab[] = [
-    { id: 'help', title: 'Help', icon: '?', content: <HelpPanel /> }
+    { id: 'help', title: 'Help', icon: '?', content: <HelpPanel /> },
+    // Code outline of the active file (issue #16):
+    { id: 'outline', title: 'Outline', icon: '☰', content: <OutlinePanel /> },
+    // Connected board's variables (issue #16):
+    { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> }
     // Future tabs register here, e.g.:
     // { id: 'chat', title: 'Chat', icon: '💬', content: <ChatPanel /> },
     // { id: 'packages', title: 'Packages', icon: '📦', content: <PackagePanel /> },
-    // { id: 'vars', title: 'Variables', icon: '{}', content: <VariablesPanel /> },
   ]
 
   return (

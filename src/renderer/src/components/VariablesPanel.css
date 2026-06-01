@@ -1,0 +1,103 @@
+/*
+ * Styles co-located with VariablesPanel (issue #16).
+ *
+ * A scrollable list of the connected board's globals, plus a refresh action.
+ * Uses the shared design tokens from index.css so it tracks the active theme.
+ */
+
+.vars {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.vars__hint {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.vars__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.vars__count {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.vars__refresh {
+  padding: 0.2rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 0.8rem;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.vars__refresh:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.vars__refresh:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.vars__error {
+  margin: 0;
+  padding: 0.6rem 0.85rem;
+  color: var(--danger, #c0392b);
+  background: var(--bg-sunken);
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.vars__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vars__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0.3rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.vars__name {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+
+.vars__type {
+  flex: 0 0 auto;
+  padding: 0.02rem 0.3rem;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+
+.vars__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}

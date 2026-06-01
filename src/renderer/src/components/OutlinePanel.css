@@ -1,0 +1,98 @@
+/*
+ * Styles co-located with OutlinePanel (issue #16).
+ *
+ * A scrollable, clickable list of top-level symbols in the active file. Uses
+ * the shared design tokens from index.css so it tracks the active theme.
+ */
+
+.outline {
+  padding: 0.4rem 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.outline__hint {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.outline__hint code {
+  padding: 0.05rem 0.3rem;
+  background: var(--bg-sunken);
+  border-radius: 4px;
+}
+
+.outline__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.outline__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0.3rem 0.85rem;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.outline__item:hover {
+  background: var(--bg-sunken);
+}
+
+.outline__glyph {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-contrast, var(--text));
+  background: var(--accent);
+}
+
+.outline__glyph--class {
+  background: #b07219;
+}
+
+.outline__glyph--variable {
+  background: var(--text-muted);
+}
+
+.outline__name {
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outline__detail {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.outline__line {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}

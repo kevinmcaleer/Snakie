@@ -56,20 +56,38 @@ export interface OpenFile {
   dirty: boolean
 }
 
+/**
+ * A request to reveal (scroll to + place the cursor on) a 1-based line in the
+ * active editor. `seq` bumps on every request so the editor re-reveals the same
+ * line on repeated clicks; consumers should react to `seq` changes, not just
+ * `line`. Used by the Outline panel to navigate without cross-component refs.
+ */
+export interface RevealRequest {
+  /** 1-based line number to reveal. */
+  line: number
+  /** Monotonic counter so identical lines still trigger a fresh reveal. */
+  seq: number
+}
+
 export interface WorkspaceStore {
   openFiles: OpenFile[]
   activeId: string | null
+  /** Latest editor reveal request, or null if none has been made yet. */
+  revealRequest: RevealRequest | null
   openFile: (source: FileSource, path: string) => Promise<void>
   setActive: (id: string) => void
   closeFile: (id: string) => void
   updateContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
   newFile: () => void
+  /** Ask the editor to scroll to and place the cursor on a 1-based `line`. */
+  revealLine: (line: number) => void
 }
 
 interface State {
   openFiles: OpenFile[]
   activeId: string | null
+  revealRequest: RevealRequest | null
 }
 
 type Action =
@@ -79,6 +97,7 @@ type Action =
   | { type: 'updateContent'; id: string; content: string }
   | { type: 'markSaved'; id: string }
   | { type: 'add'; file: OpenFile }
+  | { type: 'revealLine'; line: number }
 
 /** Derive a stable document id from its source and path. */
 function makeId(source: FileSource, path: string): string {
@@ -98,12 +117,14 @@ function reducer(state: State, action: Action): State {
       const existing = state.openFiles.find((f) => f.id === action.file.id)
       if (existing) return { ...state, activeId: existing.id }
       return {
+        ...state,
         openFiles: [...state.openFiles, action.file],
         activeId: action.file.id
       }
     }
     case 'add':
       return {
+        ...state,
         openFiles: [...state.openFiles, action.file],
         activeId: action.file.id
       }
@@ -119,7 +140,7 @@ function reducer(state: State, action: Action): State {
         const next = openFiles[idx] ?? openFiles[idx - 1]
         activeId = next ? next.id : null
       }
-      return { openFiles, activeId }
+      return { ...state, openFiles, activeId }
     }
     case 'updateContent':
       return {
@@ -135,6 +156,11 @@ function reducer(state: State, action: Action): State {
           f.id === action.id ? { ...f, dirty: false } : f
         )
       }
+    case 'revealLine':
+      return {
+        ...state,
+        revealRequest: { line: action.line, seq: (state.revealRequest?.seq ?? 0) + 1 }
+      }
     default:
       return state
   }
@@ -149,7 +175,11 @@ let untitledCounter = 0
  * root (e.g. in App.tsx).
  */
 export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.Element {
-  const [state, dispatch] = useReducer(reducer, { openFiles: [], activeId: null })
+  const [state, dispatch] = useReducer(reducer, {
+    openFiles: [],
+    activeId: null,
+    revealRequest: null
+  })
 
   const openFile = useCallback(
     async (source: FileSource, path: string): Promise<void> => {
@@ -197,6 +227,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     [state.openFiles]
   )
 
+  const revealLine = useCallback((line: number): void => {
+    dispatch({ type: 'revealLine', line })
+  }, [])
+
   const newFile = useCallback((): void => {
     untitledCounter += 1
     const id = `local:untitled-${untitledCounter}`
@@ -217,14 +251,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     () => ({
       openFiles: state.openFiles,
       activeId: state.activeId,
+      revealRequest: state.revealRequest,
       openFile,
       setActive,
       closeFile,
       updateContent,
       saveFile,
-      newFile
+      newFile,
+      revealLine
     }),
-    [state.openFiles, state.activeId, openFile, setActive, closeFile, updateContent, saveFile, newFile]
+    [
+      state.openFiles,
+      state.activeId,
+      state.revealRequest,
+      openFile,
+      setActive,
+      closeFile,
+      updateContent,
+      saveFile,
+      newFile,
+      revealLine
+    ]
   )
 
   return createElement(WorkspaceContext.Provider, { value: store }, children)

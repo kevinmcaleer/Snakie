@@ -36,7 +36,7 @@ function monacoTheme(theme: 'light' | 'dark'): string {
  *  - the editor auto-lays-out, so it tracks panel resizes
  */
 export function MonacoEditor(): JSX.Element {
-  const { openFiles, activeId, updateContent, saveFile } = useWorkspace()
+  const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
   const { theme } = useTheme()
 
   const containerRef = useRef<HTMLDivElement>(null)
@@ -130,6 +130,17 @@ export function MonacoEditor(): JSX.Element {
       editor.setModel(model)
     }
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
+
+  // Reveal/scroll to a line on request (e.g. clicking an Outline symbol).
+  // Keyed on `seq` so repeated clicks on the same symbol re-reveal it.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !revealRequest) return
+    const line = Math.max(1, Math.floor(revealRequest.line))
+    editor.revealLineInCenter(line)
+    editor.setPosition({ lineNumber: line, column: 1 })
+    editor.focus()
+  }, [revealRequest])
 
   // Dispose models whose files have been closed.
   useEffect(() => {
