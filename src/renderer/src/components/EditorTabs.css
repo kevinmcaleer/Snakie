@@ -1,0 +1,100 @@
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  min-height: 34px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.editor-tabs--empty {
+  align-items: center;
+  padding: 0 4px;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 12px;
+  max-width: 200px;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  border: none;
+  border-right: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.editor-tab:hover {
+  background: var(--bg);
+}
+
+.editor-tab--active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.editor-tab__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.editor-tab__dirty {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.editor-tab__close {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-tab__close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.editor-tabs__new {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: auto 4px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.editor-tabs__new:hover {
+  background: var(--border);
+  color: var(--text);
+}
