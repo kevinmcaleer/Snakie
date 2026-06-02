@@ -7,14 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
-- **Critical: `window.api` preload bridge was never loading in the packaged/dev
-  Electron app.** `sandbox: true` prevented the CommonJS preload from
-  `require()`-ing `@electron-toolkit/preload`, so the bridge silently failed and
-  the renderer fell back to no-op stubs — making Open Folder, the package
-  search, the serial port list and all device features do nothing. Set
-  `sandbox: false` (kept `contextIsolation` + `nodeIntegration: false`). The
-  renderer fallback now also logs a loud error if the bridge is missing inside
-  Electron instead of masking it.
+- **Critical: `window.api` preload bridge never loaded in the real Electron
+  app** (only the browser preview "worked"), so Open Folder, package search, the
+  serial port list and all device features did nothing. Two causes, both fixed:
+  the preload was emitted as `index.js` but `package.json` is `"type": "module"`,
+  so Electron's `require()` failed with `ERR_REQUIRE_ESM` — now emitted/loaded as
+  `index.cjs`; and `sandbox: true` blocked the CommonJS preload from
+  `require()`-ing `@electron-toolkit/preload` — now `sandbox: false`
+  (`contextIsolation` + `nodeIntegration: false` kept). The renderer fallback
+  also now logs a loud error if the bridge is missing inside Electron rather than
+  silently masking it.
+- **Editor matched the app theme:** the Monaco editor no longer shows a light
+  background in dark mode. It reads the app's `data-theme` (via a MutationObserver,
+  so it can't desync) and uses a custom dark theme whose background matches the
+  NES palette (`#14141f`).
 - Removed the duplicated "Device files" heading in the device panel's
   empty state (the section header already names it).
 
