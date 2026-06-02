@@ -43,10 +43,11 @@
   --border-w: 2px;
   --pixel-shadow: 3px 3px 0 #000;
   --pixel-shadow-active: 1px 1px 0 #000;
-  /* Retro chrome font (toolbar, headers, buttons). VT323 — a crisp, readable
-   * terminal/8-bit font, far less wide than Press Start 2P. */
-  --font-pixel: 'VT323', 'DejaVu Sans Mono', monospace;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  /* Single UI font: chrome uses the same readable JetBrains Mono as content.
+   * The 8-bit feel comes from the NES palette, chunky buttons and square
+   * borders — not the font. (Kept as a token so chrome refs resolve here.) */
+  --font-pixel: var(--font-mono);
   --toolbar-h: 52px;
 }
 
@@ -95,17 +96,14 @@ body {
   color: var(--text);
 }
 
-/* Retro pixel font for CHROME only: toolbar, activity bar, panel/section
- * headers, and buttons. Pixel fonts look best with anti-aliasing OFF. */
+/* One readable font everywhere (JetBrains Mono), anti-aliased for crispness. */
 .toolbar,
 .activitybar,
 .panel-header,
 .localtree__title,
 .devicetree__title,
 .btn {
-  font-family: var(--font-pixel);
-  -webkit-font-smoothing: none;
-  font-smooth: never;
+  font-family: var(--font-mono);
 }
 
 /* --------------------------------------------------------------------------
@@ -153,7 +151,7 @@ body {
   align-items: center;
   gap: 0.45rem;
   font-family: var(--font-pixel);
-  font-size: 0.7rem;
+  font-size: 0.8rem;
   color: var(--text);
   background: var(--bg-sunken);
   border: var(--border-w) solid var(--border);
@@ -682,7 +680,7 @@ body {
 }
 
 .activitybar__item-label {
-  font-size: 0.42rem;
+  font-size: 0.6rem;
   letter-spacing: 0.02em;
 }
 

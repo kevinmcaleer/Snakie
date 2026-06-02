@@ -27,10 +27,18 @@ const w = window as typeof window & {
 }
 
 if (!w.api) {
-  console.warn(
-    '[Snakie] window.api is missing — installing a no-op preload fallback. ' +
-      'Device, file, firmware, LLM, package and Git features are inert ' +
-      '(not running inside Electron?).'
+  // Inside Electron a missing bridge means the preload FAILED to load (a real
+  // bug) — log loudly so it isn't silently masked. In a plain browser it's
+  // expected (no preload), so a warning suffices. Either way we install the
+  // no-op stub to keep the UI from blank-screening.
+  const inElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent)
+  const log = inElectron ? console.error : console.warn
+  log(
+    `[Snakie] window.api is missing — installing a no-op fallback. Device, file, ` +
+      `firmware, LLM, package and Git features are inert. ` +
+      (inElectron
+        ? 'Running in Electron, so the PRELOAD FAILED TO LOAD — check the preload path / sandbox setting.'
+        : 'Not running inside Electron (e.g. a browser preview).')
   )
 
   const api = {

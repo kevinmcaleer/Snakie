@@ -6,19 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Critical: `window.api` preload bridge was never loading in the packaged/dev
+  Electron app.** `sandbox: true` prevented the CommonJS preload from
+  `require()`-ing `@electron-toolkit/preload`, so the bridge silently failed and
+  the renderer fell back to no-op stubs — making Open Folder, the package
+  search, the serial port list and all device features do nothing. Set
+  `sandbox: false` (kept `contextIsolation` + `nodeIntegration: false`). The
+  renderer fallback now also logs a loud error if the bridge is missing inside
+  Electron instead of masking it.
+- Removed the duplicated "Device files" heading in the device panel's
+  empty state (the section header already names it).
+
 ### Changed
 - **Retro 8-bit UI overhaul.** New look & feel: NES-inspired dark theme
-  (slate + blue/red/green/yellow accents), the **VT323** retro terminal font on
-  the UI chrome (toolbar, activity bar, headers, buttons) with a crisp readable
-  **JetBrains Mono** for content (editor, console, file trees, chat), square
-  corners and chunky pixel buttons. Dark is now the default theme.
+  (slate + blue/red/green/yellow accents), a single readable **JetBrains Mono**
+  font across the whole UI, square corners and chunky pixel buttons — the 8-bit
+  feel comes from the palette/buttons/borders, not the font. Dark is the default.
 - **Left activity bar + view switching.** A vertical icon strip on the far
   left switches the left sidebar between **Files**, **Source Control**,
   **Packages**, **Inspect** (Outline + Variables in a vertical split), and
   **Help**. Source Control / Packages / Outline / Variables / Help moved out of
   the right pane. The center editor is unchanged.
 - **Right pane is now Chat-only**; the toolbar toggle is relabelled
-  "Panel" → "Chat".
+  "Panel" → "Chat". Toolbar Run/Stop/Flash and the shell Clear button are
+  sized consistently with the other toolbar buttons.
 
 ## [0.2.0] - 2026-06-01
 

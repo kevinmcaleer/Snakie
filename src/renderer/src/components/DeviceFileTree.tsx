@@ -390,7 +390,7 @@ export function DeviceFileTree(): JSX.Element {
             <span aria-hidden>{'▦'}</span> Device files
           </span>
         </div>
-        <Placeholder label="Device files" hint="Connect a board to browse its filesystem." />
+        <Placeholder hint="Connect a board to browse its filesystem." />
       </div>
     )
   }

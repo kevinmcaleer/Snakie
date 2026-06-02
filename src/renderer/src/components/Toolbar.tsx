@@ -76,7 +76,7 @@ export function Toolbar({
       <div className="toolbar__group">
         <button
           type="button"
-          className="btn btn--primary btn--lg"
+          className="btn btn--primary"
           onClick={handleRun}
           disabled={!canRun}
           title={
@@ -95,7 +95,7 @@ export function Toolbar({
         </button>
         <button
           type="button"
-          className="btn btn--danger btn--lg"
+          className="btn btn--danger"
           onClick={handleStop}
           disabled={!connected}
           title={connected ? 'Interrupt the running program (Ctrl-C)' : 'Connect to a device to stop'}
@@ -108,7 +108,7 @@ export function Toolbar({
         </button>
         <button
           type="button"
-          className="btn btn--ghost btn--lg"
+          className="btn btn--ghost"
           onClick={() => setFlasherOpen(true)}
           title="Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)"
           aria-label="Flash MicroPython firmware"

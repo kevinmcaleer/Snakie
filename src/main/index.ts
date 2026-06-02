@@ -22,7 +22,11 @@ function createWindow(): void {
     title: 'Snakie',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: true,
+      // sandbox MUST be false: the preload uses CommonJS require() for
+      // @electron-toolkit/preload, which a sandboxed preload cannot load — that
+      // would silently break the entire window.api bridge. Security is kept via
+      // contextIsolation + nodeIntegration:false (the electron-vite default).
+      sandbox: false,
       contextIsolation: true,
       nodeIntegration: false
     }
