@@ -4,6 +4,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { Placeholder } from './Placeholder'
+import { usePrompt } from './PromptModal'
 import './DeviceFileTree.css'
 
 /**
@@ -163,6 +164,7 @@ export function DeviceFileTree(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
   const { openFile } = useWorkspace()
+  const prompt = usePrompt()
 
   const [entries, setEntries] = useState<DirEntry[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
@@ -264,38 +266,44 @@ export function DeviceFileTree(): JSX.Element {
   const newFileIn = useCallback(
     (target: { path: string; isDir: boolean } | null): void => {
       const dir = dirFor(target)
-      const name = window.prompt('New file name (on device)', 'untitled.py')
-      if (!name) return
-      const dest = joinDevicePath(dir, name)
-      void run(() => window.api.device.writeFile(dest, ''), dir)
+      void (async (): Promise<void> => {
+        const name = await prompt('New file name (on device)', 'untitled.py')
+        if (!name) return
+        const dest = joinDevicePath(dir, name)
+        await run(() => window.api.device.writeFile(dest, ''), dir)
+      })()
     },
-    [dirFor, run]
+    [dirFor, prompt, run]
   )
 
   const newFolderIn = useCallback(
     (target: { path: string; isDir: boolean } | null): void => {
       const dir = dirFor(target)
-      const name = window.prompt('New folder name (on device)', 'new-folder')
-      if (!name) return
-      const dest = joinDevicePath(dir, name)
-      void run(() => window.api.device.mkdir(dest), dir)
+      void (async (): Promise<void> => {
+        const name = await prompt('New folder name (on device)', 'new-folder')
+        if (!name) return
+        const dest = joinDevicePath(dir, name)
+        await run(() => window.api.device.mkdir(dest), dir)
+      })()
     },
-    [dirFor, run]
+    [dirFor, prompt, run]
   )
 
   const renamePath = useCallback(
     (path: string): void => {
       const current = path.split('/').pop() ?? ''
-      const name = window.prompt('Rename to', current)
-      if (!name || name === current) return
-      const parent = parentDevicePath(path)
-      const dest = joinDevicePath(parent, name)
-      void run(async () => {
-        await window.api.device.rename(path, dest)
-        setSelectedPath(dest)
-      }, parent)
+      void (async (): Promise<void> => {
+        const name = await prompt('Rename to', current)
+        if (!name || name === current) return
+        const parent = parentDevicePath(path)
+        const dest = joinDevicePath(parent, name)
+        await run(async () => {
+          await window.api.device.rename(path, dest)
+          setSelectedPath(dest)
+        }, parent)
+      })()
     },
-    [run]
+    [prompt, run]
   )
 
   /**

@@ -1,9 +1,47 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { FirmwareFlasher } from './FirmwareFlasher'
 import './RunControls.css'
+import './Toolbar.css'
+
+/**
+ * Inline pixel SVG wrapper for the file-action toolbar icons, matching the
+ * crisp-edges style used by the activity bar.
+ */
+const ToolIcon = (children: ReactNode): JSX.Element => (
+  <svg
+    viewBox="0 0 16 16"
+    width="16"
+    height="16"
+    shapeRendering="crispEdges"
+    aria-hidden="true"
+    focusable="false"
+  >
+    {children}
+  </svg>
+)
+
+// page with a `+` (new file)
+const NEW_FILE_ICON = ToolIcon(
+  <g fill="currentColor">
+    <path d="M3 1h6l4 4v10H3z M9 1v4h4" />
+    <rect x="7" y="8" width="2" height="6" />
+    <rect x="5" y="10" width="6" height="2" />
+  </g>
+)
+// folder (open folder)
+const OPEN_FOLDER_ICON = ToolIcon(<path d="M1 3h5l2 2h7v8H1z" fill="currentColor" />)
+// floppy disk (save)
+const SAVE_ICON = ToolIcon(
+  <g fill="currentColor">
+    <path d="M1 1h11l3 3v11H1z" />
+    <rect x="4" y="2" width="6" height="4" fill="var(--bg-elevated)" />
+    <rect x="8" y="2.5" width="1.5" height="3" fill="currentColor" />
+    <rect x="3.5" y="9" width="9" height="5" fill="var(--bg-elevated)" />
+  </g>
+)
 
 interface ToolbarProps {
   theme: Theme
@@ -40,7 +78,7 @@ export function Toolbar({
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
   const [flasherOpen, setFlasherOpen] = useState(false)
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
   const canRun = connected && activeFile != null
@@ -62,6 +100,14 @@ export function Toolbar({
     window.api.device.interrupt().catch(() => undefined)
   }, [])
 
+  const handleOpenFolder = useCallback(() => {
+    void openFolder().catch(() => undefined)
+  }, [openFolder])
+
+  const handleSave = useCallback(() => {
+    if (activeId) void saveFile(activeId).catch(() => undefined)
+  }, [activeId, saveFile])
+
   const label =
     status.state === 'connecting'
       ? 'Connecting…'
@@ -73,6 +119,39 @@ export function Toolbar({
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
+      <div className="toolbar__group">
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon"
+          onClick={newFile}
+          title="New file"
+          aria-label="New file"
+        >
+          {NEW_FILE_ICON}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon"
+          onClick={handleOpenFolder}
+          title="Open folder"
+          aria-label="Open folder"
+        >
+          {OPEN_FOLDER_ICON}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon"
+          onClick={handleSave}
+          disabled={!activeFile}
+          title={activeFile ? `Save ${activeFile.name}` : 'Open a file to save'}
+          aria-label="Save active file"
+        >
+          {SAVE_ICON}
+        </button>
+      </div>
+
+      <span className="toolbar__divider" aria-hidden="true" />
+
       <div className="toolbar__group">
         <button
           type="button"

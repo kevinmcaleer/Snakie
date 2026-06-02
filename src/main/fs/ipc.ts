@@ -55,6 +55,18 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
     })
   )
 
+  ipcMain.handle('fs:saveFileDialog', (_e, defaultPath?: string) =>
+    wrap(async () => {
+      const win = getWindow()
+      const options = defaultPath ? { defaultPath } : {}
+      const result = win
+        ? await dialog.showSaveDialog(win, options)
+        : await dialog.showSaveDialog(options)
+      if (result.canceled || !result.filePath) return null
+      return result.filePath
+    })
+  )
+
   ipcMain.handle('fs:readDir', (_e, path: string) => wrap(() => readDir(path)))
 
   ipcMain.handle('fs:readFile', (_e, path: string) => wrap(() => fs.readFile(path, 'utf-8')))
