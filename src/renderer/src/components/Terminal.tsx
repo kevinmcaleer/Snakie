@@ -76,8 +76,8 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     const term = new XTerm({
       cursorBlink: true,
       convertEol: true,
-      fontFamily: "'Press Start 2P', monospace",
-      fontSize: 12,
+      fontFamily: "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
+      fontSize: 13,
       scrollback: 5000,
       theme: TERMINAL_THEME,
       allowProposedApi: true

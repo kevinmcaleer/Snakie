@@ -68,9 +68,9 @@ export function MonacoEditor(): JSX.Element {
       tabSize: 4,
       insertSpaces: true,
       detectIndentation: false,
-      fontFamily: "'Press Start 2P', monospace",
-      fontSize: 11,
-      lineHeight: 22,
+      fontFamily: "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
+      fontSize: 13,
+      lineHeight: 20,
       letterSpacing: 0,
       scrollBeyondLastLine: false
     })
