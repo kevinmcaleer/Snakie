@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import './PluginsPanel.css'
 import { useWorkspace } from '../store/workspace'
+import { PLUGIN_STATUS_EVENT } from './StatusBar'
 import type {
   CommandInfo,
   PluginAction,
@@ -109,6 +110,21 @@ export function PluginsPanel(): JSX.Element {
             'info',
             `Diagnostic (line ${action.item.line}): ${action.item.message}`
           )
+          break
+        case 'status':
+          // Route status-bar messages to the StatusBar via a window event so we
+          // don't introduce shared state just for this hop (issue #71).
+          window.dispatchEvent(
+            new CustomEvent(PLUGIN_STATUS_EVENT, {
+              detail: {
+                text: action.text,
+                tooltip: action.tooltip,
+                href: action.href,
+                priority: action.priority
+              }
+            })
+          )
+          pushNotice('info', `Status: ${action.text}`)
           break
         default:
           break

@@ -259,6 +259,7 @@ def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     ctx = Context.from_dict(params.get("context"))
     diagnostics: List[Dict[str, Any]] = []
+    actions: List[Dict[str, Any]] = []
     for ln in plugin.linters:
         try:
             result = ln.handler(ctx)
@@ -272,10 +273,18 @@ def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
             continue
         items = result if isinstance(result, (list, tuple)) else [result]
         for raw in items:
+            # A linter may also return a `status` action; surface it alongside
+            # the diagnostics so the status bar can render it.
+            if isinstance(raw, dict) and raw.get("type") == "status":
+                actions.append(raw)
+                continue
             diag = _normalise_diagnostic(raw)
             if diag is not None:
                 diagnostics.append(diag)
-    return {"diagnostics": diagnostics}
+    out: Dict[str, Any] = {"diagnostics": diagnostics}
+    if actions:
+        out["actions"] = actions
+    return out
 
 
 # ---------------------------------------------------------------------------
