@@ -43,7 +43,9 @@
   --border-w: 2px;
   --pixel-shadow: 3px 3px 0 #000;
   --pixel-shadow-active: 1px 1px 0 #000;
-  --font-pixel: 'Press Start 2P', monospace;
+  /* Retro chrome font (toolbar, headers, buttons). VT323 — a crisp, readable
+   * terminal/8-bit font, far less wide than Press Start 2P. */
+  --font-pixel: 'VT323', 'DejaVu Sans Mono', monospace;
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
   --toolbar-h: 52px;
 }
@@ -149,14 +151,18 @@ body {
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.45rem;
   font-family: var(--font-pixel);
   font-size: 0.7rem;
   color: var(--text);
   background: var(--bg-sunken);
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
-  padding: 0.45rem 0.7rem;
+  /* Roomier horizontal padding so the wide pixel font isn't cramped against
+   * the button edges; never shrink/wrap a label below its content width. */
+  padding: 0.5rem 1rem;
+  white-space: nowrap;
+  flex: 0 0 auto;
   cursor: pointer;
   line-height: 1.4;
   box-shadow: var(--pixel-shadow);
