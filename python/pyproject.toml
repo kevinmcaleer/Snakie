@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snakie"
+version = "0.1.0"
+description = "SDK for writing Snakie editor plugins in Python"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Kevin McAleer", email = "kevinmcaleer@gmail.com" }]
+keywords = ["snakie", "micropython", "editor", "plugin"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/kevinmcaleer/Snakie"
+Documentation = "https://github.com/kevinmcaleer/Snakie/blob/master/docs/writing-plugins.md"
+
+[tool.setuptools]
+packages = ["snakie"]

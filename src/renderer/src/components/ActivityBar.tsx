@@ -14,7 +14,13 @@ import type { JSX, ReactNode } from 'react'
  */
 
 /** Stable, persisted view ids. Default is `files`. */
-export type ActivityView = 'files' | 'source-control' | 'packages' | 'inspect' | 'help'
+export type ActivityView =
+  | 'files'
+  | 'source-control'
+  | 'packages'
+  | 'plugins'
+  | 'inspect'
+  | 'help'
 
 const SVG = (children: ReactNode): JSX.Element => (
   <svg
@@ -48,6 +54,13 @@ const ICONS: Record<ActivityView, JSX.Element> = {
       <path d="M1.5 5 8 8.5 14.5 5M8 8.5V14.5" />
     </g>
   ),
+  // puzzle piece
+  plugins: SVG(
+    <path
+      fill="currentColor"
+      d="M6 1h4v2a1 1 0 0 0 2 0V2h3v3h-1a1 1 0 0 0 0 2h1v4h-2a1 1 0 0 1-1-1 1 1 0 0 0-2 0 1 1 0 0 1-1 1H6v-3a1 1 0 0 0-2 0v3H1V8h1a1 1 0 0 0 0-2H1V3h3a1 1 0 0 0 2 0z"
+    />
+  ),
   // magnifier
   inspect: SVG(
     <g fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -73,6 +86,7 @@ const TOP_ITEMS: ActivityItem[] = [
   { id: 'files', label: 'Files' },
   { id: 'source-control', label: 'Source' },
   { id: 'packages', label: 'Packages' },
+  { id: 'plugins', label: 'Plugins' },
   { id: 'inspect', label: 'Inspect' }
 ]
 

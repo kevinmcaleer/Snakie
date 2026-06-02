@@ -1,0 +1,244 @@
+/*
+ * Styles co-located with PluginsPanel (issue #61).
+ *
+ * The Plugins view lists discovered Python plugins + their commands with a Run
+ * button each, plus a notices area for messages / applied edits. Uses the
+ * shared design tokens from index.css so it tracks the active theme.
+ */
+
+.plugins {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* --- Empty / no-Python states --------------------------------------------- */
+
+.plugins--empty {
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.9rem 0.85rem;
+}
+
+.plugins__empty-note {
+  margin: 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.plugins__empty-detail {
+  font-size: 0.78rem;
+}
+
+.plugins__code {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--text);
+}
+
+/* --- Toolbar --------------------------------------------------------------- */
+
+.plugins__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.plugins__interpreter {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.plugins__toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+/* --- Trust notice ---------------------------------------------------------- */
+
+.plugins__trust {
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Buttons --------------------------------------------------------------- */
+
+.plugins__btn {
+  padding: 0.25rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.plugins__btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.plugins__btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.plugins__btn--run {
+  flex: 0 0 auto;
+}
+
+.plugins__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.plugins__icon-btn:hover:not(:disabled) {
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.plugins__icon-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* --- Plugin + command list ------------------------------------------------- */
+
+.plugins__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.plugins__list > .plugins__empty-note {
+  padding: 0.8rem 0.85rem;
+}
+
+.plugins__plugin {
+  border-bottom: 1px solid var(--border);
+}
+
+.plugins__plugin-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.5rem 0.7rem 0.3rem;
+}
+
+.plugins__plugin-name {
+  font-weight: 600;
+}
+
+.plugins__source {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 4px;
+}
+
+.plugins__plugin-error {
+  margin: 0;
+  padding: 0.3rem 0.7rem 0.5rem;
+  color: var(--danger, #c0392b);
+  font-size: 0.78rem;
+}
+
+.plugins__commands {
+  margin: 0;
+  padding: 0 0 0.4rem;
+  list-style: none;
+}
+
+.plugins__command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.25rem 0.7rem;
+}
+
+.plugins__command:hover {
+  background: var(--bg-elevated);
+}
+
+.plugins__command-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Notices --------------------------------------------------------------- */
+
+.plugins__error {
+  margin: 0;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--danger, #c0392b);
+  background: var(--bg-sunken);
+}
+
+.plugins__notices {
+  flex: 0 0 auto;
+  max-height: 40%;
+  overflow: auto;
+  border-top: 1px solid var(--border);
+  background: var(--bg-sunken);
+}
+
+.plugins__notice {
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border-bottom: 1px solid var(--border);
+}
+
+.plugins__notice:last-child {
+  border-bottom: none;
+}
+
+.plugins__notice--warning {
+  color: #d29922;
+}
+
+.plugins__notice--error {
+  color: var(--danger, #c0392b);
+}

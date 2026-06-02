@@ -10,3 +10,7 @@ dist-electron/
 # Claude Code worktrees / local agent state and the local preview helper
 .claude/
 vite.preview.config.mjs
+
+# Python bytecode (plugin SDK/host)
+__pycache__/
+*.pyc

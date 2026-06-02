@@ -13,6 +13,21 @@ files:
   - out/**
   - package.json
 
+# Ship the Python plugin SDK + host and the bundled example plugins (issue #61)
+# into the packaged app's resources/ dir. PluginHost resolves them from
+# process.resourcesPath when app.isPackaged, and from the repo root in dev.
+extraResources:
+  - from: python
+    to: python
+    filter:
+      - '**/*.py'
+      - 'pyproject.toml'
+      - 'README.md'
+  - from: examples/plugins
+    to: examples/plugins
+    filter:
+      - '**/*.py'
+
 # Rebuild native modules (e.g. serialport) for the Electron ABI.
 # npmRebuild defaults to true; nodeGypRebuild stays false so install-app-deps
 # (run via the postinstall script / electron-builder) handles serialport.
