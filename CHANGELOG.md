@@ -8,8 +8,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - **Retro 8-bit UI overhaul.** New look & feel: NES-inspired dark theme
-  (slate + blue/red/green/yellow accents), **Press Start 2P** pixel font on the
-  UI chrome (toolbar, activity bar, headers, buttons) with a crisp readable
+  (slate + blue/red/green/yellow accents), the **VT323** retro terminal font on
+  the UI chrome (toolbar, activity bar, headers, buttons) with a crisp readable
   **JetBrains Mono** for content (editor, console, file trees, chat), square
   corners and chunky pixel buttons. Dark is now the default theme.
 - **Left activity bar + view switching.** A vertical icon strip on the far
