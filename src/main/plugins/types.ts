@@ -101,13 +101,27 @@ export interface DiagnosticAction {
   item: Diagnostic
 }
 
+/**
+ * Show a message in the app's status bar. The latest status message(s) are
+ * rendered in the status bar's left group; a higher `priority` wins when more
+ * than one is present. When `href` is set the message is a clickable external
+ * link (opened via {@link window.api.openExternal}).
+ */
+export interface StatusAction {
+  type: 'status'
+  text: string
+  tooltip?: string
+  href?: string
+  priority?: number
+}
+
 /** Result of the `lint` RPC: all linters' diagnostics, concatenated. */
 export interface LintResult {
   diagnostics: Diagnostic[]
 }
 
 /** Any action a command can return. */
-export type PluginAction = MessageAction | EditAction | DiagnosticAction
+export type PluginAction = MessageAction | EditAction | DiagnosticAction | StatusAction
 
 /** Result of `runCommand`. */
 export interface RunCommandResult {

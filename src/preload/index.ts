@@ -363,6 +363,11 @@ const plugins = {
 const api = {
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
+  /** The application version (from package.json), shown in the status bar. */
+  appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  /** Open an http(s) URL externally in the default browser. */
+  openExternal: (url: string): Promise<void> =>
+    ipcRenderer.invoke('app:openExternal', url),
   /** Snapshot of the runtime versions for display in the UI. */
   versions: process.versions,
   /** Serial device connection + MicroPython REPL/filesystem layer. */

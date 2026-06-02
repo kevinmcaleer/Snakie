@@ -1,8 +1,7 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, type ReactNode } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
-import { FirmwareFlasher } from './FirmwareFlasher'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -57,11 +56,14 @@ interface ToolbarProps {
 /**
  * TOP TOOLBAR.
  *
- * Big, easy-to-click action buttons (Run / Stop) plus a connection-status
- * indicator. Run executes the active editor file on the device via MicroPython
- * paste mode (output streams to the existing Shell terminal); Stop sends an
- * interrupt (Ctrl-C). The connection-status indicator reflects the device
- * layer's status via {@link useDeviceStatus}.
+ * Big, easy-to-click action buttons (Run / Stop) plus the file actions
+ * (New / Open / Save). Run executes the active editor file on the device via
+ * MicroPython paste mode (output streams to the existing Shell terminal); Stop
+ * sends an interrupt (Ctrl-C).
+ *
+ * Connection state and the Flash-firmware action now live in the bottom
+ * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
+ * only to enable/disable the Run/Stop buttons.
  *
  * Also hosts layout controls (panel show/hide toggles) and the theme toggle,
  * following progressive disclosure: complexity stays tucked away by default.
@@ -77,7 +79,6 @@ export function Toolbar({
   onToggleRight
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
-  const [flasherOpen, setFlasherOpen] = useState(false)
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
@@ -107,15 +108,6 @@ export function Toolbar({
   const handleSave = useCallback(() => {
     if (activeId) void saveFile(activeId).catch(() => undefined)
   }, [activeId, saveFile])
-
-  const label =
-    status.state === 'connecting'
-      ? 'Connecting…'
-      : connected
-        ? `Connected${status.path ? ` · ${status.path}` : ''}`
-        : status.state === 'error'
-          ? 'Error'
-          : 'Disconnected'
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
@@ -185,29 +177,6 @@ export function Toolbar({
           </span>
           <span>Stop</span>
         </button>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => setFlasherOpen(true)}
-          title="Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)"
-          aria-label="Flash MicroPython firmware"
-        >
-          <span className="btn__glyph" aria-hidden="true">
-            ⚡
-          </span>
-          <span>Flash firmware</span>
-        </button>
-      </div>
-
-      <div className="toolbar__group">
-        {/* Live connection-status indicator, driven by the device layer. */}
-        <span
-          className={`conn-status ${connected ? 'conn-status--connected' : 'conn-status--disconnected'}`}
-          title={status.error ? `Connection error: ${status.error}` : 'Connection status'}
-        >
-          <span className="conn-status__dot" aria-hidden="true" />
-          <span>{label}</span>
-        </span>
       </div>
 
       <div className="toolbar__spacer" />
@@ -275,8 +244,6 @@ export function Toolbar({
           </svg>
         </button>
       </div>
-
-      {flasherOpen && <FirmwareFlasher onClose={() => setFlasherOpen(false)} />}
     </header>
   )
 }

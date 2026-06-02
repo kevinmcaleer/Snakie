@@ -14,6 +14,7 @@ import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
+import { StatusBar } from './StatusBar'
 
 /** Wrap a panel that lacks its own region chrome in a titled, scrollable region. */
 function LeftRegion({ title, children }: { title: string; children: JSX.Element }): JSX.Element {
@@ -190,6 +191,8 @@ export function AppShell(): JSX.Element {
           </Panel>
         </PanelGroup>
       </div>
+
+      <StatusBar />
     </div>
   )
 }

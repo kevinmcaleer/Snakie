@@ -67,6 +67,7 @@ export type {
   MessageAction,
   EditAction,
   DiagnosticAction,
+  StatusAction,
   Diagnostic,
   DiagnosticFix,
   LintResult,

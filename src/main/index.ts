@@ -70,6 +70,17 @@ app.whenReady().then(() => {
   // Example IPC handler establishing the pattern later agents will extend.
   ipcMain.handle('ping', () => 'pong')
 
+  // App version, surfaced in the status bar.
+  ipcMain.handle('app:version', () => app.getVersion())
+
+  // Open an external URL in the user's default browser (used by clickable
+  // plugin status-bar links). Only http(s) URLs are honoured.
+  ipcMain.handle('app:openExternal', (_e, url: string) => {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) {
+      void shell.openExternal(url)
+    }
+  })
+
   // Register the serial device layer. Push events are routed to whichever
   // window is currently live.
   registerDeviceIpc(() => mainWindow?.webContents)

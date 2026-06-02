@@ -1,0 +1,130 @@
+/* --------------------------------------------------------------------------
+ * Status bar (issue #71)
+ *
+ * Thin, persistent bar pinned at the very bottom of the shell. Matches the
+ * JetBrains-Mono / NES theme: small text, theme tokens, hard 1px-ish dividers.
+ * ------------------------------------------------------------------------ */
+.statusbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: 1.6rem;
+  padding: 0 0.5rem;
+  background: var(--bg-elevated);
+  border-top: var(--border-w) solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  flex: 0 0 auto;
+  user-select: none;
+  overflow: hidden;
+}
+
+.statusbar__group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.statusbar__group--left {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.statusbar__spacer {
+  flex: 0 0 auto;
+}
+
+.statusbar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0 0.4rem;
+  white-space: nowrap;
+  line-height: 1.6rem;
+  flex: 0 0 auto;
+}
+
+/* The plugin message can be long; let it shrink/ellipsize, not the right group. */
+.statusbar__plugin,
+.statusbar__link {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Connection indicator. */
+.statusbar__conn {
+  color: var(--text-muted);
+}
+
+.statusbar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--disconnected);
+  flex: 0 0 auto;
+}
+
+.statusbar__conn--connected .statusbar__dot {
+  background: var(--success);
+}
+
+.statusbar__conn--connected {
+  color: var(--text);
+}
+
+/* Clickable items (plugin links, update restart). */
+.statusbar__link {
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.statusbar__link:hover {
+  color: var(--text);
+}
+
+.statusbar__link:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
+}
+
+.statusbar__update {
+  color: var(--accent-2);
+}
+
+.statusbar__save--dirty {
+  color: var(--accent-2);
+}
+
+.statusbar__version {
+  color: var(--text-muted);
+}
+
+/* Flash-firmware action — compact, sits at the far right. */
+.statusbar__flash {
+  background: transparent;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  line-height: 1.3rem;
+}
+
+.statusbar__flash:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.statusbar__flash:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
+}

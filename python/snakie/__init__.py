@@ -19,7 +19,8 @@ registers commands against the shared :data:`plugin` registry::
 
 Command handlers receive a :class:`Context` describing the active editor file
 and (optionally) the current selection, and return one of the *action* helpers
-below (or a list of them): :func:`message`, :func:`edit`, :func:`diagnostic`.
+below (or a list of them): :func:`message`, :func:`edit`, :func:`diagnostic`,
+:func:`status`.
 The Snakie host serialises those actions back to the Electron app over
 JSON-RPC; the app shows messages, applies edits and renders diagnostics.
 """
@@ -40,6 +41,7 @@ __all__ = [
     "message",
     "edit",
     "diagnostic",
+    "status",
     "fix",
 ]
 
@@ -128,6 +130,34 @@ def message(level: str, text: str) -> Action:
 def edit(new_content: str) -> Action:
     """Replace the active file's full contents with ``new_content``."""
     return {"type": "edit", "content": new_content}
+
+
+def status(
+    text: str,
+    *,
+    tooltip: Optional[str] = None,
+    href: Optional[str] = None,
+    priority: int = 0,
+) -> Action:
+    """Show a message in Snakie's **status bar** (the thin bar at the bottom).
+
+    Unlike :func:`message` (which posts to the Plugins panel), a status message
+    lives persistently in the status bar's left group. When several plugins post
+    a status the one with the highest ``priority`` wins.
+
+    ``tooltip`` sets the hover title. When ``href`` is given the message becomes
+    a clickable link that opens externally in the user's browser.
+
+    Returned as an *action* (``{"type": "status", ...}``) so it can be returned
+    from a regular ``@plugin.command`` (or a linter — the host accepts it there
+    too).
+    """
+    action: Action = {"type": "status", "text": str(text), "priority": int(priority)}
+    if tooltip is not None:
+        action["tooltip"] = str(tooltip)
+    if href is not None:
+        action["href"] = str(href)
+    return action
 
 
 def fix(
