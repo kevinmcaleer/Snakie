@@ -20,6 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   quick-fixes** (a Monaco code-action provider applies the plugin's edit). Adds a
   `lint` RPC / `window.api.plugins.lint`, diagnostics with optional ranged
   `fixes`, and an example linter (flags trailing whitespace + TODOs).
+- **Python linter plugin (#65).** A bundled `python_linter` plugin runs **ruff**
+  (with autofix quick-fixes) or falls back to **pyflakes**, linting `.py` files
+  live via the reactive engine. New **Problems** tab in the shell panel (count
+  badge, click-to-jump) backed by a shared diagnostics store, and a persisted
+  **Lint on/off** toggle. Graceful when no linter is installed (`pip install ruff`).
 - **Toolbar file actions:** New File, Open Folder and Save icon buttons (left of
   Run). Save also works via Ctrl/Cmd-S, with a native **Save As** dialog for
   untitled buffers. The opened folder is now the app's shared working directory,

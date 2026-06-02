@@ -2,12 +2,15 @@ import { useCallback, useRef, useState } from 'react'
 import { PanelHeader } from './PanelHeader'
 import { Terminal, type TerminalHandle } from './Terminal'
 import { Plotter } from './Plotter'
+import { Problems } from './Problems'
 import { ConnectionControl } from './ConnectionControl'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useDiagnostics } from '../store/diagnostics'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import './RunControls.css'
 import './ShellPanel.css'
 
-type ShellView = 'console' | 'plotter'
+type ShellView = 'console' | 'plotter' | 'problems'
 
 /**
  * BOTTOM — shell / console (REPL) region.
@@ -27,10 +30,17 @@ export function ShellPanel(): JSX.Element {
   const status = useDeviceStatus()
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
+  const { diagnostics } = useDiagnostics()
+  const [lintingEnabled, setLintingEnabled] = useLocalStorage<boolean>(
+    'snakie.lintingEnabled',
+    true
+  )
 
   const handleClear = useCallback(() => {
     terminalRef.current?.clear()
   }, [])
+
+  const problemsLabel = diagnostics.length > 0 ? `Problems (${diagnostics.length})` : 'Problems'
 
   return (
     <section className="region region--shell" aria-label="Shell">
@@ -57,7 +67,26 @@ export function ShellPanel(): JSX.Element {
               >
                 Plotter
               </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === 'problems'}
+                className={`shell-toggle__btn${view === 'problems' ? ' shell-toggle__btn--active' : ''}`}
+                onClick={() => setView('problems')}
+              >
+                {problemsLabel}
+              </button>
             </div>
+            {view === 'problems' && (
+              <label className="shell-lint-toggle" title="Toggle Python linting">
+                <input
+                  type="checkbox"
+                  checked={lintingEnabled}
+                  onChange={(e) => setLintingEnabled(e.target.checked)}
+                />
+                <span>Lint</span>
+              </label>
+            )}
             {view === 'console' && (
               <button
                 type="button"
@@ -88,6 +117,12 @@ export function ShellPanel(): JSX.Element {
           role="tabpanel"
         >
           <Plotter />
+        </div>
+        <div
+          className={`shell-view shell-view--problems${view === 'problems' ? '' : ' shell-view--hidden'}`}
+          role="tabpanel"
+        >
+          <Problems />
         </div>
       </div>
     </section>
