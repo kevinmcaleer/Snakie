@@ -67,7 +67,7 @@ export function ShellPanel(): JSX.Element {
                 aria-label="Clear shell output"
               >
                 <span className="btn__glyph" aria-hidden="true">
-                  🗑
+                  ✕
                 </span>
                 <span>Clear</span>
               </button>

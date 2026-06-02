@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Retro 8-bit UI overhaul.** New look & feel: NES-inspired dark theme
+  (slate + blue/red/green/yellow accents), the **Press Start 2P** pixel font
+  throughout (UI, editor, and console), square corners and chunky pixel
+  buttons. Dark is now the default theme.
+- **Left activity bar + view switching.** A vertical icon strip on the far
+  left switches the left sidebar between **Files**, **Source Control**,
+  **Packages**, **Inspect** (Outline + Variables in a vertical split), and
+  **Help**. Source Control / Packages / Outline / Variables / Help moved out of
+  the right pane. The center editor is unchanged.
+- **Right pane is now Chat-only**; the toolbar toggle is relabelled
+  "Panel" → "Chat".
+
 ## [0.2.0] - 2026-06-01
 
 ### Added

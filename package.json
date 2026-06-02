@@ -30,6 +30,7 @@
     "@anthropic-ai/sdk": "^0.100.1",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
+    "@fontsource/press-start-2p": "^5.2.7",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "electron-updater": "^6.8.3",

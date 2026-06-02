@@ -68,9 +68,10 @@ export function MonacoEditor(): JSX.Element {
       tabSize: 4,
       insertSpaces: true,
       detectIndentation: false,
-      fontFamily:
-        'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-      fontSize: 13,
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: 11,
+      lineHeight: 22,
+      letterSpacing: 0,
       scrollBeyondLastLine: false
     })
     editorRef.current = editor
