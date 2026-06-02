@@ -99,6 +99,31 @@
   color: var(--accent-2);
 }
 
+/* Actionable update affordance in the version slot (issue #74) — styled as an
+ * accent button so it clearly reads as clickable, distinct from the plain
+ * version text it replaces. */
+.statusbar__update-btn {
+  background: var(--accent);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0 0.5rem;
+  line-height: 1.3rem;
+}
+
+.statusbar__update-btn:hover {
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+
+.statusbar__update-btn:focus-visible {
+  outline: var(--border-w) solid var(--text);
+  outline-offset: 1px;
+}
+
 .statusbar__save--dirty {
   color: var(--accent-2);
 }

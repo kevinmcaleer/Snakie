@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { FirmwareFlasher } from './FirmwareFlasher'
+import { updateButtonView } from './updateButton'
 import type { UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
 
@@ -13,10 +14,12 @@ import './StatusBar.css'
  * shell panel). It consolidates ambient state that previously lived in the
  * toolbar or had no home:
  *
- *   Left group  — device connection state, plugin status message(s), and a
- *                 compact "update available" notice (clickable to restart).
+ *   Left group  — device connection state and plugin status message(s).
  *   Right group — Git changed-file count, active-file line count, save status,
- *                 the app version, and a Flash-firmware button at the far right.
+ *                 the app version slot, and a Flash-firmware button at the far
+ *                 right. The version slot is update-aware (issue #74): it shows
+ *                 `v<version>` normally, but becomes an Update / Restart button
+ *                 (or a download-progress label) as an update progresses.
  *
  * Values are read from existing seams (never new global state):
  *   - connection: {@link useDeviceStatus}
@@ -137,29 +140,12 @@ export function StatusBar(): JSX.Element {
 
   const lines = activeFile ? activeFile.content.split('\n').length : null
 
-  // Compact update notice text (mirrors UpdateNotifier wording, terser).
-  let updateText: string | null = null
-  let updateAction: (() => void) | null = null
-  if (update) {
-    switch (update.state) {
-      case 'available':
-        updateText = update.version ? `Update v${update.version}…` : 'Update available…'
-        break
-      case 'downloading':
-        updateText =
-          typeof update.percent === 'number'
-            ? `Updating ${update.percent}%`
-            : 'Updating…'
-        break
-      case 'downloaded':
-        updateText = update.version ? `Restart for v${update.version}` : 'Restart to update'
-        updateAction = () => {
-          void window.api.updates.quitAndInstall()
-        }
-        break
-      default:
-        updateText = null
-    }
+  // Update-aware version slot (issue #74). The pure mapping lives in
+  // `updateButton.ts` so it can be unit-tested without rendering.
+  const updateView = updateButtonView(update, version)
+  const onUpdateClick = (): void => {
+    if (updateView.action === 'download') void window.api.updates.download()
+    else if (updateView.action === 'quitAndInstall') void window.api.updates.quitAndInstall()
   }
 
   return (
@@ -193,22 +179,6 @@ export function StatusBar(): JSX.Element {
               {pluginMsg.text}
             </span>
           ))}
-
-        {updateText &&
-          (updateAction ? (
-            <button
-              type="button"
-              className="statusbar__item statusbar__update statusbar__link"
-              title="Restart to install the downloaded update"
-              onClick={updateAction}
-            >
-              {updateText}
-            </button>
-          ) : (
-            <span className="statusbar__item statusbar__update" title="Software update">
-              {updateText}
-            </span>
-          ))}
       </div>
 
       <div className="statusbar__spacer" />
@@ -233,9 +203,24 @@ export function StatusBar(): JSX.Element {
         >
           {activeFile ? (activeFile.dirty ? 'Unsaved' : 'Saved') : '—'}
         </span>
-        <span className="statusbar__item statusbar__version" title="Snakie version">
-          {version ? `v${version}` : ''}
-        </span>
+        {updateView.label &&
+          (updateView.clickable ? (
+            <button
+              type="button"
+              className="statusbar__item statusbar__update-btn"
+              title={updateView.title}
+              onClick={onUpdateClick}
+            >
+              {updateView.label}
+            </button>
+          ) : (
+            <span
+              className={`statusbar__item ${updateView.isUpdate ? 'statusbar__update' : 'statusbar__version'}`}
+              title={updateView.title}
+            >
+              {updateView.label}
+            </span>
+          ))}
         <button
           type="button"
           className="statusbar__item statusbar__flash"
