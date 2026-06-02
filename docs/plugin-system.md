@@ -79,9 +79,10 @@ def upper(ctx: Context):
 
 - `plugin.command(id, title)` — register a command (shown in the Plugins view /
   command list).
-- `plugin.linter(name)` — register a linter (returns `Diagnostic`s); consumed by
-  the linter feature (separate issue).
-- Helpers: `message(level, text)`, `edit(new_content)`, `diagnostic(...)`.
+- `plugin.linter(name)` — register a linter `(ctx) -> list[Diagnostic]`, run
+  reactively by the editor (squiggles + lightbulb quick-fixes, issue #69).
+- Helpers: `message(level, text)`, `edit(new_content)`, `diagnostic(...)`,
+  `fix(title, new_text, ...)` (a quick-fix attached to a diagnostic).
 - A plugin declares itself either via the `snakie.plugins` entry point in its
   `pyproject.toml` **or** by living in `~/.snakie/plugins/`.
 

@@ -33,6 +33,7 @@ import type {
   GitStatus
 } from '../main/git/types'
 import type {
+  LintResult,
   PluginContext,
   PluginListing,
   PluginStatus,
@@ -346,6 +347,13 @@ const plugins = {
   /** Run a command against the active editor context; returns its actions. */
   runCommand: (commandId: string, context: PluginContext): Promise<RunCommandResult> =>
     unwrap(ipcRenderer.invoke('plugins:runCommand', commandId, context)),
+  /**
+   * Run all registered linters against the active editor context, returning
+   * the concatenated diagnostics (with optional quick-fixes). Used by the
+   * editor for reactive squiggles + lightbulbs.
+   */
+  lint: (context: PluginContext): Promise<LintResult> =>
+    unwrap(ipcRenderer.invoke('plugins:lint', context)),
   /** Kill + re-spawn the host, picking up newly added plugins. */
   reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload'))
 }

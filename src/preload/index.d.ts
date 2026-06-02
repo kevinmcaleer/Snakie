@@ -67,6 +67,9 @@ export type {
   MessageAction,
   EditAction,
   DiagnosticAction,
+  Diagnostic,
+  DiagnosticFix,
+  LintResult,
   RunCommandResult,
   PluginListing,
   PluginStatus

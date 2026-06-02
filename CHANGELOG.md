@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   examples and entry points). New **Plugins** activity-bar view lists plugins and
   runs their commands against the active file; graceful "Python not found" state.
   Ships an example plugin + `docs/writing-plugins.md` (design: `docs/plugin-system.md`).
+- **Reactive plugins + editor decorations (#69).** Plugins can register a
+  `@plugin.linter` that runs automatically as you type (debounced) and on open,
+  drawing **squiggle underlines** (Monaco markers) and offering **lightbulb
+  quick-fixes** (a Monaco code-action provider applies the plugin's edit). Adds a
+  `lint` RPC / `window.api.plugins.lint`, diagnostics with optional ranged
+  `fixes`, and an example linter (flags trailing whitespace + TODOs).
 - **Toolbar file actions:** New File, Open Folder and Save icon buttons (left of
   Run). Save also works via Ctrl/Cmd-S, with a native **Save As** dialog for
   untitled buffers. The opened folder is now the app's shared working directory,

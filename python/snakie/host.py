@@ -11,7 +11,7 @@ stdin/stdout**. The host:
 2. Imports each, running its ``@plugin.command`` decorators. A per-plugin import
    error is reported in the plugin list, not fatal.
 3. Serves the JSON-RPC loop: ``initialize``, ``listCommands``,
-   ``runCommand``, ``shutdown``.
+   ``runCommand``, ``lint``, ``shutdown``.
 
 Protocol
 --------
@@ -206,6 +206,78 @@ def _run_command(params: Dict[str, Any]) -> Dict[str, Any]:
     return {"actions": _normalise_actions(result)}
 
 
+def _normalise_diagnostic(item: Any) -> Optional[Dict[str, Any]]:
+    """Coerce a linter's diagnostic into a bare Diagnostic dict, or None.
+
+    Accepts either the bare ``{line, message, ...}`` shape or the action form
+    ``{"type": "diagnostic", "item": {...}}`` returned by ``snakie.diagnostic``.
+    """
+    if not isinstance(item, dict):
+        return None
+    if item.get("type") == "diagnostic" and isinstance(item.get("item"), dict):
+        item = item["item"]
+    if "line" not in item or "message" not in item:
+        return None
+    # Re-serialise to a plain JSON dict, preserving only known keys + fixes.
+    out: Dict[str, Any] = {
+        "line": int(item.get("line", 1)),
+        "severity": str(item.get("severity", "warning")),
+        "message": str(item.get("message", "")),
+        "source": str(item.get("source", "snakie")),
+    }
+    for key in ("column", "endLine", "endColumn"):
+        if item.get(key) is not None:
+            out[key] = int(item[key])
+    fixes = item.get("fixes")
+    if isinstance(fixes, (list, tuple)):
+        clean_fixes = [_normalise_fix(f) for f in fixes]
+        clean_fixes = [f for f in clean_fixes if f is not None]
+        if clean_fixes:
+            out["fixes"] = clean_fixes
+    return out
+
+
+def _normalise_fix(fx: Any) -> Optional[Dict[str, Any]]:
+    """Coerce a quick-fix into a plain ``{title, edit:{...}}`` JSON dict."""
+    if not isinstance(fx, dict):
+        return None
+    edit_in = fx.get("edit")
+    if not isinstance(edit_in, dict) or "newText" not in edit_in:
+        return None
+    edit_out: Dict[str, Any] = {"newText": str(edit_in["newText"])}
+    for key in ("line", "column", "endLine", "endColumn"):
+        if edit_in.get(key) is not None:
+            edit_out[key] = int(edit_in[key])
+    return {"title": str(fx.get("title", "Fix")), "edit": edit_out}
+
+
+def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Run every registered linter and concatenate their diagnostics.
+
+    A failure in one linter is captured (reported to stderr) and does not abort
+    the others or the whole lint.
+    """
+    ctx = Context.from_dict(params.get("context"))
+    diagnostics: List[Dict[str, Any]] = []
+    for ln in plugin.linters:
+        try:
+            result = ln.handler(ctx)
+        except Exception as exc:  # noqa: BLE001 - per-linter isolation
+            print(
+                f"snakie.host: linter {ln.name!r} failed: {exc}",
+                file=sys.stderr,
+            )
+            continue
+        if result is None:
+            continue
+        items = result if isinstance(result, (list, tuple)) else [result]
+        for raw in items:
+            diag = _normalise_diagnostic(raw)
+            if diag is not None:
+                diagnostics.append(diag)
+    return {"diagnostics": diagnostics}
+
+
 # ---------------------------------------------------------------------------
 # JSON-RPC loop
 # ---------------------------------------------------------------------------
@@ -232,6 +304,9 @@ class Host:
         if method == "runCommand":
             self._ensure_discovered()
             return _run_command(params)
+        if method == "lint":
+            self._ensure_discovered()
+            return _run_lint(params)
         if method == "shutdown":
             return {"ok": True}
         raise ValueError(f"unknown method: {method!r}")

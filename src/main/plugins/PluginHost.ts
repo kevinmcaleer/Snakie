@@ -4,6 +4,7 @@ import { join } from 'path'
 import { app } from 'electron'
 import type {
   CommandInfo,
+  LintResult,
   PluginContext,
   PluginInfo,
   PluginListing,
@@ -270,6 +271,18 @@ export class PluginHost {
       throw new Error(this.startError ?? 'Python plugin host is not available')
     }
     return this.request<RunCommandResult>('runCommand', { commandId, context })
+  }
+
+  /**
+   * Run all registered linters against the given editor context and return the
+   * concatenated diagnostics. A no-Python host yields an empty diagnostic set
+   * (the editor simply shows no squiggles) rather than throwing — reactive
+   * linting must never disrupt typing.
+   */
+  async lint(context: PluginContext): Promise<LintResult> {
+    await this.start()
+    if (!this.child) return { diagnostics: [] }
+    return this.request<LintResult>('lint', { context })
   }
 
   /** Kill and re-spawn the host (picks up newly added plugins). */
