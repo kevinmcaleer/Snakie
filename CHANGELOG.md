@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Update notifications + status-bar update button (#74).** When a newer
+  release is available the status bar shows an **Update to vX** button (in the
+  version slot) — click to **download**, watch progress, then **Restart to
+  update** (electron-updater, `autoDownload` off so it's user-initiated); a
+  dismissible banner also offers Download. Adds `window.api.updates.download()`
+  and an hourly re-check.
 - **Python plugin system (MVP, #61).** Snakie spawns the user's `python3` running
   a host that discovers and loads Python plugins and talks to the app over
   JSON-RPC. Plugins use a stdlib-only `snakie` SDK (`@plugin.command`, `Context`,
