@@ -7,8 +7,14 @@ import './UpdateNotifier.css'
  *
  * Subscribes to `window.api.updates.onStatus` and renders a small dismissible
  * banner describing the update lifecycle: available -> downloading -> ready.
- * When an update is downloaded it offers a Restart button that calls
- * `updates.quitAndInstall()`.
+ * Because downloads are opt-in (issue #74: `autoDownload = false`), the
+ * `available` banner offers a Download button (`updates.download()`); once
+ * downloaded it offers a Restart button (`updates.quitAndInstall()`).
+ *
+ * The status-bar version slot is the primary, persistent update control; this
+ * banner is a one-time, dismissible toast that mirrors the same actions so the
+ * user is notified the moment an update becomes available, not only when it has
+ * finished downloading.
  *
  * Nothing renders until a status arrives, so in development / unpackaged runs
  * (where the main process never pushes a status) the banner stays hidden.
@@ -36,8 +42,19 @@ export function UpdateNotifier(): JSX.Element | null {
   switch (status.state) {
     case 'available':
       message = status.version
-        ? `Update available (v${status.version}) — downloading…`
-        : 'Update available — downloading…'
+        ? `Update available (v${status.version})`
+        : 'Update available'
+      action = (
+        <button
+          type="button"
+          className="update-notifier__action"
+          onClick={() => {
+            void window.api.updates.download()
+          }}
+        >
+          Download
+        </button>
+      )
       break
     case 'downloading':
       message =

@@ -10,6 +10,7 @@ const { autoUpdater } = electronUpdater
 export const UPDATE_CHANNELS = {
   status: 'updates:status',
   check: 'updates:check',
+  download: 'updates:download',
   quitAndInstall: 'updates:quitAndInstall'
 } as const
 
@@ -55,13 +56,15 @@ export function registerUpdater(getWebContents: () => WebContents | undefined): 
   // so the renderer API exists, then bail before touching `autoUpdater`.
   if (!app.isPackaged) {
     ipcMain.handle(UPDATE_CHANNELS.check, () => undefined)
+    ipcMain.handle(UPDATE_CHANNELS.download, () => undefined)
     ipcMain.handle(UPDATE_CHANNELS.quitAndInstall, () => undefined)
     return
   }
 
-  // We surface our own restart affordance in the UI, so don't auto-install on
-  // quit or auto-download silently before telling the user.
-  autoUpdater.autoDownload = true
+  // The user explicitly pulls the update from the status bar (issue #74), so
+  // don't download silently. We also surface our own restart affordance, so
+  // don't auto-install on quit.
+  autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('update-available', (info) => {
@@ -85,15 +88,32 @@ export function registerUpdater(getWebContents: () => WebContents | undefined): 
     }
   })
 
+  ipcMain.handle(UPDATE_CHANNELS.download, async () => {
+    // The renderer's Update button calls this once the user opts in. With
+    // `autoDownload = false` nothing is fetched until this fires.
+    try {
+      await autoUpdater.downloadUpdate()
+    } catch (err) {
+      send({ state: 'error', message: err instanceof Error ? err.message : String(err) })
+    }
+  })
+
   ipcMain.handle(UPDATE_CHANNELS.quitAndInstall, () => {
     // `isSilent: false`, `isForceRunAfter: true` — show the installer UI where
     // applicable and relaunch the app after updating.
     autoUpdater.quitAndInstall(false, true)
   })
 
-  // Kick off an initial check shortly after startup. Swallow failures so a
+  // Kick off an initial check shortly after startup, then re-check hourly so a
+  // long-running session still learns about new releases. Swallow failures so a
   // transient network/feed error never crashes the main process.
-  void autoUpdater.checkForUpdates().catch((err) => {
-    send({ state: 'error', message: err instanceof Error ? err.message : String(err) })
-  })
+  const checkQuietly = (): void => {
+    void autoUpdater.checkForUpdates().catch((err) => {
+      send({ state: 'error', message: err instanceof Error ? err.message : String(err) })
+    })
+  }
+  checkQuietly()
+  const HOUR_MS = 60 * 60 * 1000
+  const timer = setInterval(checkQuietly, HOUR_MS)
+  app.on('before-quit', () => clearInterval(timer))
 }
