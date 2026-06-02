@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so both the toolbar and the Files panel drive it.
 
 ### Fixed
+- **Source Control now follows the open working folder.** It was always showing
+  "Open a folder to manage it with Git" even after a folder was chosen in Files;
+  it now points the Git service at the shared `currentFolder` (auto `openRepo` +
+  status) and its "Open Folder" buttons drive the same shared action.
 - **File operations did nothing in Electron.** New File / New Folder / Rename
   (in both file trees) and the "Upload to board" path used `window.prompt`,
   which Electron's renderer doesn't implement — replaced with an in-app prompt
