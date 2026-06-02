@@ -50,3 +50,125 @@
 .shell-view--hidden {
   display: none;
 }
+
+/* Problems view scrolls independently of the terminal/plotter. */
+.shell-view--problems {
+  overflow: auto;
+}
+
+/* Linting on/off toggle in the Shell header (shown on the Problems tab). */
+.shell-lint-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.shell-lint-toggle input {
+  cursor: pointer;
+}
+
+/* --- Problems panel ----------------------------------------------------- */
+
+.problems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.problems--empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 1rem;
+  color: var(--text-muted);
+}
+
+.problems__empty-text {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.problems__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  opacity: 0.8;
+}
+
+.problems__hint code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 0.74rem;
+}
+
+.problems__item {
+  margin: 0;
+}
+
+.problems__row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.problems__row:hover {
+  background: var(--bg-sunken);
+}
+
+.problems__sev {
+  flex: 0 0 auto;
+  width: 1em;
+  text-align: center;
+}
+
+.problems__sev--error {
+  color: var(--danger, #e06c75);
+}
+
+.problems__sev--warning {
+  color: var(--warning, #e5c07b);
+}
+
+.problems__sev--info {
+  color: var(--accent, #61afef);
+}
+
+.problems__sev--hint {
+  color: var(--text-muted);
+}
+
+.problems__loc {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.problems__msg {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problems__source {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  opacity: 0.7;
+  font-size: 0.72rem;
+}

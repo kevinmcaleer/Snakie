@@ -133,6 +133,9 @@ one linter are isolated (logged to stderr) and never abort the others.
 - If Python isn't found (or the plugin bridge is unavailable) linting is a
   silent no-op — the editor simply shows no plugin squiggles.
 
+Snakie ships a real Python linter built on this API (ruff / pyflakes) plus a
+**Problems** panel — see [`docs/linting.md`](./linting.md).
+
 ## Run a command
 
 1. Open the **Plugins** view from the activity bar (the puzzle-piece icon).

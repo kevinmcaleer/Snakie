@@ -8,6 +8,8 @@ import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
 import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
+import { useDiagnostics } from '../store/diagnostics'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { Diagnostic, PluginContext } from '../../../preload/index.d'
 import { diagnosticToMarker } from './plugin-diagnostics'
 import {
@@ -93,6 +95,10 @@ function monacoTheme(theme: 'light' | 'dark'): string {
  */
 export function MonacoEditor(): JSX.Element {
   const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
+  const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
+  // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
+  // clears markers + the shared diagnostics store.
+  const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
 
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -103,9 +109,13 @@ export function MonacoEditor(): JSX.Element {
   const updateContentRef = useRef(updateContent)
   const saveFileRef = useRef(saveFile)
   const activeIdRef = useRef(activeId)
+  const setDiagnosticsRef = useRef(setDiagnostics)
+  const setLinterToolRef = useRef(setLinterTool)
   updateContentRef.current = updateContent
   saveFileRef.current = saveFile
   activeIdRef.current = activeId
+  setDiagnosticsRef.current = setDiagnostics
+  setLinterToolRef.current = setLinterTool
 
   // Create the editor once.
   useEffect(() => {
@@ -207,11 +217,19 @@ export function MonacoEditor(): JSX.Element {
     const editor = editorRef.current
     if (!editor || !activeFile) return undefined
 
-    const plugins = window.api?.plugins
-    if (!plugins?.lint) return undefined
-
     const model = models.current.get(activeFile.id)
     if (!model || model.isDisposed()) return undefined
+
+    // Linting turned off: clear any existing markers + shared diagnostics and
+    // skip the host round-trip entirely.
+    if (!lintingEnabled) {
+      applyDiagnostics(model, [])
+      clearDiagnostics()
+      return undefined
+    }
+
+    const plugins = window.api?.plugins
+    if (!plugins?.lint) return undefined
 
     let cancelled = false
     const file = activeFile
@@ -234,6 +252,21 @@ export function MonacoEditor(): JSX.Element {
           const m = models.current.get(file.id)
           if (!m || m.isDisposed()) return
           applyDiagnostics(m, diagnostics)
+          // Publish to the shared store so the Problems panel mirrors the
+          // squiggles painted above.
+          setDiagnosticsRef.current(diagnostics)
+          // Probe which linter tool the host found (drives the "install ruff"
+          // hint). Only meaningful for Python files; ignore failures.
+          if (/\.py$/i.test(file.name)) {
+            try {
+              const { actions } = await plugins.runCommand('python_linter.status', context)
+              if (cancelled) return
+              const msg = actions.find((a) => a.type === 'message')
+              if (msg && 'text' in msg) setLinterToolRef.current(msg.text)
+            } catch {
+              // Status is best-effort; leave the previous value.
+            }
+          }
         } catch {
           // Linting must never disrupt typing; swallow + leave prior markers.
         }
@@ -244,7 +277,13 @@ export function MonacoEditor(): JSX.Element {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [activeFile, activeFile?.id, activeFile?.content])
+  }, [activeFile, activeFile?.id, activeFile?.content, lintingEnabled, clearDiagnostics])
+
+  // With no active file open there is nothing to lint, so the Problems panel
+  // should be empty (e.g. after closing the last tab).
+  useEffect(() => {
+    if (!activeFile) clearDiagnostics()
+  }, [activeFile, clearDiagnostics])
 
   // Reveal/scroll to a line on request (e.g. clicking an Outline symbol).
   // Keyed on `seq` so repeated clicks on the same symbol re-reveal it.
