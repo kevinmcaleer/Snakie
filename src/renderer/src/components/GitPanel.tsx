@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import './GitPanel.css'
+import { useWorkspace } from '../store/workspace'
 import type {
   GitBranchList,
   GitDiff,
@@ -66,6 +67,9 @@ function DiffView({ diff }: { diff: string }): JSX.Element {
 }
 
 export function GitPanel(): JSX.Element {
+  // Source control follows the app's shared working folder (chosen in Files /
+  // the toolbar). Opening a folder here delegates to the same store action.
+  const { currentFolder, openFolder: openWorkspaceFolder } = useWorkspace()
   const [repoPath, setRepoPath] = useState<string | null>(null)
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [branches, setBranches] = useState<GitBranchList | null>(null)
@@ -99,26 +103,33 @@ export function GitPanel(): JSX.Element {
     }
   }, [])
 
-  /** Pick a folder and open it as a repository. */
-  const openFolder = useCallback(async (): Promise<void> => {
-    setError(null)
-    setNotice(null)
-    setOpenDiff(null)
-    try {
-      const picked = await window.api.fs.openFolderDialog()
-      if (!picked) return
-      await window.api.git.openRepo(picked)
-      setRepoPath(picked)
-      await refresh()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [refresh])
-
-  // Re-resolve status when a repo path is set (also covers the openRepo above).
+  // Follow the app's working folder: point the Git service at it and load
+  // status whenever it changes. No separate repo picker — Git tracks Files.
   useEffect(() => {
-    if (repoPath) void refresh()
-  }, [repoPath, refresh])
+    if (!currentFolder) {
+      setRepoPath(null)
+      setStatus(null)
+      setBranches(null)
+      return undefined
+    }
+    let cancelled = false
+    void (async () => {
+      setError(null)
+      setNotice(null)
+      setOpenDiff(null)
+      try {
+        await window.api.git.openRepo(currentFolder)
+        if (cancelled) return
+        setRepoPath(currentFolder)
+        await refresh()
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [currentFolder, refresh])
 
   /** Run an action with busy-state + error capture, then refresh status. */
   const run = useCallback(
@@ -166,10 +177,14 @@ export function GitPanel(): JSX.Element {
     return (
       <div className="git git--empty">
         <p className="git__empty-note">
-          Open a folder to manage it with Git. Source control runs on your
-          machine using the system <code>git</code>.
+          Open a folder (in the Files panel or below) to manage it with Git.
+          Source control runs on your machine using the system <code>git</code>.
         </p>
-        <button type="button" className="git__btn git__btn--primary" onClick={() => void openFolder()}>
+        <button
+          type="button"
+          className="git__btn git__btn--primary"
+          onClick={() => void openWorkspaceFolder()}
+        >
           Open Folder…
         </button>
       </div>
@@ -184,7 +199,7 @@ export function GitPanel(): JSX.Element {
           <code>{repoPath}</code> is not a Git repository.
         </p>
         <div className="git__empty-actions">
-          <button type="button" className="git__btn" onClick={() => void openFolder()}>
+          <button type="button" className="git__btn" onClick={() => void openWorkspaceFolder()}>
             Open a different folder…
           </button>
           <button type="button" className="git__btn" onClick={() => void refresh()}>
@@ -418,7 +433,7 @@ export function GitPanel(): JSX.Element {
         <span className="git__repo-path" title={status?.root ?? repoPath}>
           {status?.root ?? repoPath}
         </span>
-        <button type="button" className="git__link-btn" onClick={() => void openFolder()}>
+        <button type="button" className="git__link-btn" onClick={() => void openWorkspaceFolder()}>
           Change…
         </button>
       </div>
