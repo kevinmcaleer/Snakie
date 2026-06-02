@@ -8,7 +8,6 @@ import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
 import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
-import { useTheme } from '../hooks/useTheme'
 
 /**
  * Map a file name to a Monaco language id. MicroPython sources are plain Python,
@@ -22,8 +21,36 @@ function languageForName(name: string): string {
   return 'python'
 }
 
+/** Read the app's authoritative theme from the document root (set by useTheme
+ * on every theme change). Reading this — rather than a separate useTheme()
+ * instance — guarantees the editor always matches the visible app theme. */
+function readDocTheme(): 'light' | 'dark' {
+  return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark'
+}
+
+let themesDefined = false
+/** Define Monaco themes whose backgrounds match the app's NES palette so the
+ * editor blends into the dark UI instead of showing Monaco's default colours. */
+function ensureThemes(): void {
+  if (themesDefined) return
+  themesDefined = true
+  monaco.editor.defineTheme('snakie-dark', {
+    base: 'vs-dark',
+    inherit: true,
+    rules: [],
+    colors: {
+      'editor.background': '#14141f',
+      'editorGutter.background': '#14141f',
+      'minimap.background': '#14141f',
+      'editorWidget.background': '#1f1f30',
+      'editor.lineHighlightBackground': '#1f1f30'
+    }
+  })
+  monaco.editor.defineTheme('snakie-light', { base: 'vs', inherit: true, rules: [], colors: {} })
+}
+
 function monacoTheme(theme: 'light' | 'dark'): string {
-  return theme === 'dark' ? 'vs-dark' : 'vs'
+  return theme === 'dark' ? 'snakie-dark' : 'snakie-light'
 }
 
 /**
@@ -37,7 +64,6 @@ function monacoTheme(theme: 'light' | 'dark'): string {
  */
 export function MonacoEditor(): JSX.Element {
   const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
-  const { theme } = useTheme()
 
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
@@ -57,10 +83,11 @@ export function MonacoEditor(): JSX.Element {
     const container = containerRef.current
     if (!container) return undefined
 
+    ensureThemes()
     const editor = monaco.editor.create(container, {
       value: '',
       language: 'python',
-      theme: monacoTheme(theme),
+      theme: monacoTheme(readDocTheme()),
       automaticLayout: true,
       lineNumbers: 'on',
       minimap: { enabled: true },
@@ -102,10 +129,18 @@ export function MonacoEditor(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Follow theme changes.
+  // Follow theme changes by observing the document root's data-theme attribute
+  // (the app's single source of truth), so the editor never desyncs from the UI.
   useEffect(() => {
-    monaco.editor.setTheme(monacoTheme(theme))
-  }, [theme])
+    const apply = (): void => monaco.editor.setTheme(monacoTheme(readDocTheme()))
+    apply()
+    const observer = new MutationObserver(apply)
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    })
+    return () => observer.disconnect()
+  }, [])
 
   // Bind the active file to a per-id model and attach it to the editor.
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null

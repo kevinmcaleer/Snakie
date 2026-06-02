@@ -21,7 +21,7 @@ function createWindow(): void {
     autoHideMenuBar: true,
     title: 'Snakie',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.cjs'),
       // sandbox MUST be false: the preload uses CommonJS require() for
       // @electron-toolkit/preload, which a sandboxed preload cannot load — that
       // would silently break the entire window.api bridge. Security is kept via

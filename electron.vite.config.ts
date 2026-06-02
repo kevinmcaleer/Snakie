@@ -21,9 +21,11 @@ export default defineConfig({
           index: resolve(__dirname, 'src/preload/index.ts')
         },
         output: {
-          // Sandboxed preload scripts must be CommonJS, not ESM.
+          // The preload must be CommonJS. package.json has "type": "module", so
+          // a `.js` file is treated as ESM and Electron's require() of it fails
+          // with ERR_REQUIRE_ESM — emit `.cjs` so Node always loads it as CJS.
           format: 'cjs',
-          entryFileNames: '[name].js'
+          entryFileNames: '[name].cjs'
         }
       }
     }
