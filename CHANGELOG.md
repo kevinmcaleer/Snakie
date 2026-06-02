@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Python plugin system (MVP, #61).** Snakie spawns the user's `python3` running
+  a host that discovers and loads Python plugins and talks to the app over
+  JSON-RPC. Plugins use a stdlib-only `snakie` SDK (`@plugin.command`, `Context`,
+  `message`/`edit` helpers); discovery from `~/.snakie/plugins/` (+ bundled
+  examples and entry points). New **Plugins** activity-bar view lists plugins and
+  runs their commands against the active file; graceful "Python not found" state.
+  Ships an example plugin + `docs/writing-plugins.md` (design: `docs/plugin-system.md`).
 - **Toolbar file actions:** New File, Open Folder and Save icon buttons (left of
   Run). Save also works via Ctrl/Cmd-S, with a native **Save As** dialog for
   untitled buffers. The opened folder is now the app's shared working directory,
