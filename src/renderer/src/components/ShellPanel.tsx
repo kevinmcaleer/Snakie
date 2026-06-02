@@ -61,7 +61,7 @@ export function ShellPanel(): JSX.Element {
             {view === 'console' && (
               <button
                 type="button"
-                className="btn btn--ghost btn--lg shell-actions__clear"
+                className="btn btn--ghost shell-actions__clear"
                 onClick={handleClear}
                 title="Clear shell output"
                 aria-label="Clear shell output"

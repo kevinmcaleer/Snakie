@@ -1,8 +1,8 @@
 import { ReactNode } from 'react'
 
 interface PlaceholderProps {
-  /** Region label shown to the developer until real content lands. */
-  label: string
+  /** Optional region label. Omit when a surrounding header already names it. */
+  label?: string
   /** Short hint describing what will eventually live here. */
   hint?: string
   children?: ReactNode
@@ -16,7 +16,7 @@ interface PlaceholderProps {
 export function Placeholder({ label, hint, children }: PlaceholderProps): JSX.Element {
   return (
     <div className="placeholder">
-      <span className="placeholder__label">{label}</span>
+      {label && <span className="placeholder__label">{label}</span>}
       {hint && <span className="placeholder__hint">{hint}</span>}
       {children}
     </div>
