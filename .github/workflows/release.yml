@@ -68,9 +68,19 @@ jobs:
         # to its native arch to avoid cross-arch native rebuild failures.
         run: npm run dist -- ${{ matrix.platform_flag }} --publish never
         env:
-          # Code signing intentionally disabled (future work); without this,
-          # macOS builds would try to discover a signing identity and fail.
+          # macOS code signing + notarization (#47). These secrets are only set
+          # on the repo once an Apple Developer cert is configured; when empty,
+          # electron-builder skips signing (and therefore notarization), so
+          # unsigned builds keep working. See docs/macos-signing.md.
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }} # base64 of the Developer ID .p12
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          # Don't search the CI keychain; sign only with CSC_LINK when provided.
           CSC_IDENTITY_AUTO_DISCOVERY: false
+          # Notarization (Apple ID method). Skipped automatically if the app
+          # wasn't signed (no CSC_LINK).
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

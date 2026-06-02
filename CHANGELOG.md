@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **macOS code signing + notarization** wired into the release workflow (#47).
+  When the Apple secrets are set (`MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`,
+  `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — see
+  `docs/macos-signing.md`), releases are signed (Developer ID, hardened runtime
+  + entitlements) and notarized — which is what lets the **in-app updater
+  install on macOS** and removes the "damaged" Gatekeeper warning. Builds stay
+  unsigned-but-working when the secrets are absent.
+
 ## [0.3.3] - 2026-06-02
 
 ### Fixed
