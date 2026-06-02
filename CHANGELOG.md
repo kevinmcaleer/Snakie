@@ -6,7 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Toolbar file actions:** New File, Open Folder and Save icon buttons (left of
+  Run). Save also works via Ctrl/Cmd-S, with a native **Save As** dialog for
+  untitled buffers. The opened folder is now the app's shared working directory,
+  so both the toolbar and the Files panel drive it.
+
 ### Fixed
+- **File operations did nothing in Electron.** New File / New Folder / Rename
+  (in both file trees) and the "Upload to board" path used `window.prompt`,
+  which Electron's renderer doesn't implement — replaced with an in-app prompt
+  modal so they work.
 - **Critical: `window.api` preload bridge never loaded in the real Electron
   app** (only the browser preview "worked"), so Open Folder, package search, the
   serial port list and all device features did nothing. Two causes, both fixed:

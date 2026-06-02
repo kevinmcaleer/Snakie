@@ -1,0 +1,24 @@
+/*
+ * Toolbar.css — small additions for the file-action icon group placed to the
+ * LEFT of the Run button (New File / Open Folder / Save), plus the vertical
+ * divider separating it from the Run/Stop group. Reuses the shared `.btn`
+ * family from index.css; this only adds an icon-button sizing variant and the
+ * divider so the shared stylesheet stays untouched.
+ */
+
+.toolbar__divider {
+  align-self: stretch;
+  width: var(--border-w);
+  margin: 0.4rem 0.15rem;
+  background: var(--border);
+}
+
+/* Compact, square icon-only buttons for the file actions. */
+.btn--icon {
+  padding: 0.4rem;
+  line-height: 0;
+}
+
+.btn--icon svg {
+  display: block;
+}

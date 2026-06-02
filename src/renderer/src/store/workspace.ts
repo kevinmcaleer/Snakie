@@ -15,6 +15,7 @@
  *
  *   openFiles: OpenFile[]
  *   activeId: string | null
+ *   currentFolder: string | null            // working folder for the local tree
  *
  *   openFile(source, path): Promise<void>   // reads via window.api.fs (local)
  *                                           // or window.api.device (device);
@@ -22,8 +23,10 @@
  *   setActive(id): void
  *   closeFile(id): void
  *   updateContent(id, content): void        // marks dirty=true
- *   saveFile(id): Promise<void>             // writes back (fs/device); clears dirty
+ *   saveFile(id): Promise<void>             // writes back (fs/device); clears dirty.
+ *                                           // untitled local buffer -> Save As dialog
  *   newFile(): void                          // untitled local buffer
+ *   openFolder(): Promise<void>              // native folder picker -> currentFolder
  *
  * Implemented as a React context + reducer (no external state dep). Consume via
  * the `useWorkspace()` hook below; wrap the app in <WorkspaceProvider>.
@@ -74,12 +77,19 @@ export interface WorkspaceStore {
   activeId: string | null
   /** Latest editor reveal request, or null if none has been made yet. */
   revealRequest: RevealRequest | null
+  /** The current working folder for the local file browser, or null. */
+  currentFolder: string | null
   openFile: (source: FileSource, path: string) => Promise<void>
   setActive: (id: string) => void
   closeFile: (id: string) => void
   updateContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
   newFile: () => void
+  /**
+   * Open the native folder picker and, on a non-null result, set it as the
+   * current working folder (the local file browser lists it).
+   */
+  openFolder: () => Promise<void>
   /** Ask the editor to scroll to and place the cursor on a 1-based `line`. */
   revealLine: (line: number) => void
 }
@@ -88,6 +98,7 @@ interface State {
   openFiles: OpenFile[]
   activeId: string | null
   revealRequest: RevealRequest | null
+  currentFolder: string | null
 }
 
 type Action =
@@ -96,8 +107,10 @@ type Action =
   | { type: 'close'; id: string }
   | { type: 'updateContent'; id: string; content: string }
   | { type: 'markSaved'; id: string }
+  | { type: 'savedAs'; id: string; path: string; name: string }
   | { type: 'add'; file: OpenFile }
   | { type: 'revealLine'; line: number }
+  | { type: 'setFolder'; folder: string | null }
 
 /** Derive a stable document id from its source and path. */
 function makeId(source: FileSource, path: string): string {
@@ -105,7 +118,7 @@ function makeId(source: FileSource, path: string): string {
 }
 
 /** Base name of a path, handling both `/` and `\` separators. */
-function baseName(path: string): string {
+export function baseName(path: string): string {
   const parts = path.split(/[/\\]/).filter(Boolean)
   return parts.length > 0 ? parts[parts.length - 1] : path
 }
@@ -156,6 +169,19 @@ function reducer(state: State, action: Action): State {
           f.id === action.id ? { ...f, dirty: false } : f
         )
       }
+    case 'savedAs':
+      // An untitled buffer was saved to a real path: it becomes a saved file.
+      // Keep the buffer's stable id so its open tab/editor stays mounted.
+      return {
+        ...state,
+        openFiles: state.openFiles.map((f) =>
+          f.id === action.id
+            ? { ...f, path: action.path, name: action.name, dirty: false }
+            : f
+        )
+      }
+    case 'setFolder':
+      return { ...state, currentFolder: action.folder }
     case 'revealLine':
       return {
         ...state,
@@ -178,7 +204,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
   const [state, dispatch] = useReducer(reducer, {
     openFiles: [],
     activeId: null,
-    revealRequest: null
+    revealRequest: null,
+    currentFolder: null
   })
 
   const openFile = useCallback(
@@ -214,8 +241,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     async (id: string): Promise<void> => {
       const file = state.openFiles.find((f) => f.id === id)
       if (!file) return
-      // Untitled buffers have no path yet; a "save as" flow (separate issue)
-      // will assign one. For now, skip persisting pathless buffers.
+      if (file.source === 'local' && !file.path) {
+        // Untitled local buffer: "Save As" — pick a destination, write it, and
+        // promote the buffer to a real saved file (path/name updated, dirty
+        // cleared). Cancelling the dialog leaves the buffer untouched.
+        const chosen = await window.api.fs.saveFileDialog(file.name)
+        if (!chosen) return
+        await window.api.fs.writeFile(chosen, file.content)
+        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen) })
+        return
+      }
       if (!file.path) return
       if (file.source === 'local') {
         await window.api.fs.writeFile(file.path, file.content)
@@ -226,6 +261,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     },
     [state.openFiles]
   )
+
+  const openFolder = useCallback(async (): Promise<void> => {
+    const folder = await window.api.fs.openFolderDialog()
+    if (folder) dispatch({ type: 'setFolder', folder })
+  }, [])
 
   const revealLine = useCallback((line: number): void => {
     dispatch({ type: 'revealLine', line })
@@ -252,24 +292,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       openFiles: state.openFiles,
       activeId: state.activeId,
       revealRequest: state.revealRequest,
+      currentFolder: state.currentFolder,
       openFile,
       setActive,
       closeFile,
       updateContent,
       saveFile,
       newFile,
+      openFolder,
       revealLine
     }),
     [
       state.openFiles,
       state.activeId,
       state.revealRequest,
+      state.currentFolder,
       openFile,
       setActive,
       closeFile,
       updateContent,
       saveFile,
       newFile,
+      openFolder,
       revealLine
     ]
   )

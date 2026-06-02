@@ -3,6 +3,7 @@ import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
+import { usePrompt } from './PromptModal'
 import './LocalFileTree.css'
 
 /**
@@ -118,10 +119,13 @@ interface MenuState {
 }
 
 export function LocalFileTree(): JSX.Element {
-  const { openFile } = useWorkspace()
+  const { openFile, currentFolder, openFolder } = useWorkspace()
+  const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
-  const [root, setRoot] = useState<string | null>(null)
+  // The working folder now lives in the workspace store so the toolbar and tree
+  // share one entry point; `root` is just a local alias for readability.
+  const root = currentFolder
   const [entries, setEntries] = useState<FsEntry[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
   const [selectedIsDir, setSelectedIsDir] = useState(false)
@@ -142,18 +146,20 @@ export function LocalFileTree(): JSX.Element {
     void refresh()
   }, [refresh])
 
+  // When the working folder changes (e.g. opened from the toolbar), reset the
+  // selection to the new root so create actions target it.
+  useEffect(() => {
+    setSelectedPath(root)
+    setSelectedIsDir(true)
+  }, [root])
+
   const handleOpenFolder = useCallback(async (): Promise<void> => {
     try {
-      const folder = await window.api.fs.openFolderDialog()
-      if (folder) {
-        setRoot(folder)
-        setSelectedPath(folder)
-        setSelectedIsDir(true)
-      }
+      await openFolder()
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
-  }, [])
+  }, [openFolder])
 
   const handleSelect = useCallback((path: string, isDir: boolean): void => {
     setSelectedPath(path)
@@ -206,34 +212,40 @@ export function LocalFileTree(): JSX.Element {
     (target: FsEntry | null): void => {
       const dir = dirFor(target)
       if (!dir) return
-      const name = window.prompt('New file name', 'untitled.py')
-      if (!name) return
-      void run(() => window.api.fs.writeFile(join(dir, name), ''))
+      void (async (): Promise<void> => {
+        const name = await prompt('New file name', 'untitled.py')
+        if (!name) return
+        await run(() => window.api.fs.writeFile(join(dir, name), ''))
+      })()
     },
-    [dirFor, run]
+    [dirFor, prompt, run]
   )
 
   const newFolderIn = useCallback(
     (target: FsEntry | null): void => {
       const dir = dirFor(target)
       if (!dir) return
-      const name = window.prompt('New folder name', 'new-folder')
-      if (!name) return
-      void run(() => window.api.fs.mkdir(join(dir, name)))
+      void (async (): Promise<void> => {
+        const name = await prompt('New folder name', 'new-folder')
+        if (!name) return
+        await run(() => window.api.fs.mkdir(join(dir, name)))
+      })()
     },
-    [dirFor, run]
+    [dirFor, prompt, run]
   )
 
   const renamePath = useCallback(
     (path: string): void => {
       if (!path || path === root) return
       const current = path.split(/[/\\]/).pop() ?? ''
-      const name = window.prompt('Rename to', current)
-      if (!name || name === current) return
-      const parent = path.replace(/[/\\][^/\\]+$/, '')
-      void run(() => window.api.fs.rename(path, join(parent || root!, name)))
+      void (async (): Promise<void> => {
+        const name = await prompt('Rename to', current)
+        if (!name || name === current) return
+        const parent = path.replace(/[/\\][^/\\]+$/, '')
+        await run(() => window.api.fs.rename(path, join(parent || root!, name)))
+      })()
     },
-    [root, run]
+    [prompt, root, run]
   )
 
   const deletePath = useCallback(

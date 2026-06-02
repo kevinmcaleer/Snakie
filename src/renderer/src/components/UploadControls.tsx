@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useWorkspace } from '../store/workspace'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { usePrompt } from './PromptModal'
 import './UploadControls.css'
 
 type Feedback = { kind: 'success' | 'error' | 'info'; message: string } | null
@@ -28,6 +29,7 @@ function joinLocal(folder: string, name: string): string {
 export function UploadControls(): JSX.Element {
   const { openFiles, activeId } = useWorkspace()
   const status = useDeviceStatus()
+  const prompt = usePrompt()
   const connected = status.state === 'connected'
 
   const [busy, setBusy] = useState(false)
@@ -41,7 +43,7 @@ export function UploadControls(): JSX.Element {
   async function handleUpload(): Promise<void> {
     if (!activeFile || !connected) return
     const defaultPath = `/${activeFile.name}`
-    const destPath = window.prompt('Upload to device path:', defaultPath)
+    const destPath = await prompt('Upload to device path:', defaultPath)
     if (destPath == null) return // cancelled
     const dest = destPath.trim()
     if (!dest) {

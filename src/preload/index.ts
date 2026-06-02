@@ -113,6 +113,13 @@ const fs = {
   /** Show the native "open folder" dialog. Resolves to the path or null. */
   openFolderDialog: (): Promise<string | null> =>
     unwrap(ipcRenderer.invoke('fs:openFolderDialog')),
+  /**
+   * Show the native "save file" dialog (used for the untitled "Save As" flow).
+   * `defaultName` seeds the dialog's default path. Resolves to the chosen path,
+   * or null if the user cancels.
+   */
+  saveFileDialog: (defaultName?: string): Promise<string | null> =>
+    unwrap(ipcRenderer.invoke('fs:saveFileDialog', defaultName)),
   /** List a directory's entries (directories first, then alphabetical). */
   readDir: (path: string): Promise<FsEntry[]> => unwrap(ipcRenderer.invoke('fs:readDir', path)),
   /** Read a file's contents (UTF-8). */

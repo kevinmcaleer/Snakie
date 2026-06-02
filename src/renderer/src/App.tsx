@@ -1,13 +1,16 @@
 import { AppShell } from './components/AppShell'
+import { PromptProvider } from './components/PromptModal'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { WorkspaceProvider } from './store/workspace'
 
 function App(): JSX.Element {
   return (
-    <WorkspaceProvider>
-      <AppShell />
-      <UpdateNotifier />
-    </WorkspaceProvider>
+    <PromptProvider>
+      <WorkspaceProvider>
+        <AppShell />
+        <UpdateNotifier />
+      </WorkspaceProvider>
+    </PromptProvider>
   )
 }
 
