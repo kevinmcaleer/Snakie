@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-06-02
+
+### Fixed
+- **macOS auto-update** failed with "ZIP file not provided" — electron-updater
+  on macOS downloads a `.zip`, but the mac target only built a `.dmg`. Added a
+  `zip` mac target so `latest-mac.yml` references an updatable artifact. (Note:
+  the *install* step still needs a signed app on macOS — see #47.)
+
 ## [0.3.1] - 2026-06-02
 
 ### Added
@@ -141,7 +149,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.1.0...v0.2.0

@@ -78,13 +78,23 @@ nsis:
 # (darwin-x64+arm64), so no per-arch recompilation is needed.
 mac:
   target:
+    # dmg for manual install; zip is REQUIRED for electron-updater on macOS
+    # (the auto-updater downloads the zip, not the dmg — otherwise it errors
+    # "ZIP file not provided").
     - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
       arch:
         - arm64
         - x64
   category: public.app-category.developer-tools
   # Code signing is intentionally disabled for now (see release.yml /
-  # CSC_IDENTITY_AUTO_DISCOVERY=false). Future work: add real signing.
+  # CSC_IDENTITY_AUTO_DISCOVERY=false). NOTE: macOS auto-update *apply/relaunch*
+  # generally requires a signed app (Squirrel.Mac) — so unsigned builds can
+  # detect + download an update but may fail to install it. Real signing +
+  # notarization is tracked in #47.
 
 # Publish installers to a GitHub Release for the pushed tag.
 publish:
