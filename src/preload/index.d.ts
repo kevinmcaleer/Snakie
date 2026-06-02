@@ -55,6 +55,23 @@ export type {
   GitRemoteResult
 } from '../main/git/types'
 
+// Re-export the Python plugin-system types (issue #61) so the Plugins panel can
+// import them from this single UI-facing module.
+export type {
+  PluginInfo,
+  CommandInfo,
+  PluginContext,
+  PluginFileContext,
+  PluginSelection,
+  PluginAction,
+  MessageAction,
+  EditAction,
+  DiagnosticAction,
+  RunCommandResult,
+  PluginListing,
+  PluginStatus
+} from '../main/plugins/types'
+
 declare global {
   interface Window {
     electron: ElectronAPI

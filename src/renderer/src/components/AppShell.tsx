@@ -8,6 +8,7 @@ import { PanelHeader } from './PanelHeader'
 import { FilePanel } from './FilePanel'
 import { GitPanel } from './GitPanel'
 import { PackagesPanel } from './PackagesPanel'
+import { PluginsPanel } from './PluginsPanel'
 import { InspectPanel } from './InspectPanel'
 import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
@@ -42,6 +43,12 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
       return (
         <LeftRegion title="Packages">
           <PackagesPanel />
+        </LeftRegion>
+      )
+    case 'plugins':
+      return (
+        <LeftRegion title="Plugins">
+          <PluginsPanel />
         </LeftRegion>
       )
     case 'inspect':

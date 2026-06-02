@@ -32,6 +32,12 @@ import type {
   GitRemoteResult,
   GitStatus
 } from '../main/git/types'
+import type {
+  PluginContext,
+  PluginListing,
+  PluginStatus,
+  RunCommandResult
+} from '../main/plugins/types'
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -322,6 +328,28 @@ const git = {
   pull: (): Promise<GitRemoteResult> => unwrap(ipcRenderer.invoke('git:pull'))
 }
 
+/**
+ * Python plugin system API (issue #61). Mirrors the main-process `plugins:*`
+ * IPC handlers and unwraps their typed results. Snakie's main process spawns
+ * the user's `python3` running `snakie.host`, which discovers + loads Python
+ * plugins and speaks JSON-RPC over stdio.
+ *
+ * The no-Python case is reported via `status().pythonFound === false` (with a
+ * human-readable `error`) rather than thrown, so the Plugins panel can show a
+ * clear "install Python 3 and `pip install snakie`" empty state.
+ */
+const plugins = {
+  /** Whether a Python interpreter + host were found (and which interpreter). */
+  status: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:status')),
+  /** Discovered plugins + their registered commands. */
+  list: (): Promise<PluginListing> => unwrap(ipcRenderer.invoke('plugins:list')),
+  /** Run a command against the active editor context; returns its actions. */
+  runCommand: (commandId: string, context: PluginContext): Promise<RunCommandResult> =>
+    unwrap(ipcRenderer.invoke('plugins:runCommand', commandId, context)),
+  /** Kill + re-spawn the host, picking up newly added plugins. */
+  reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload'))
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -342,7 +370,9 @@ const api = {
   /** LLM (Claude) chat layer. */
   llm,
   /** Built-in version-control (Git) layer. */
-  git
+  git,
+  /** Python plugin system layer (spawns snakie.host over JSON-RPC). */
+  plugins
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

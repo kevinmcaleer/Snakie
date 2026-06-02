@@ -7,6 +7,7 @@ import { registerPackagesIpc } from './packages/ipc'
 import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
+import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater } from './updater'
 
 /** The single application window, used to route device push-events. */
@@ -89,6 +90,11 @@ app.whenReady().then(() => {
   // operations run here via simple-git, scoped to a folder the renderer picks.
   registerGitIpc()
 
+  // Register the Python plugin system (issue #61). Spawns the user's python3
+  // running snakie.host lazily on first use and speaks JSON-RPC over stdio.
+  // Absent Python is reported via status() rather than crashing.
+  registerPluginsIpc()
+
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
   // packaged it checks GitHub Releases and pushes status to the live window.
   registerUpdater(() => mainWindow?.webContents)
@@ -113,7 +119,9 @@ app.on('window-all-closed', () => {
   }
 })
 
-// Ensure the serial port is released before the process exits.
+// Ensure the serial port is released and the plugin host is killed before the
+// process exits.
 app.on('before-quit', () => {
   void disposeDevice()
+  void disposePlugins()
 })
