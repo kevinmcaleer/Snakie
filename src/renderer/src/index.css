@@ -44,6 +44,7 @@
   --pixel-shadow: 3px 3px 0 #000;
   --pixel-shadow-active: 1px 1px 0 #000;
   --font-pixel: 'Press Start 2P', monospace;
+  --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
   --toolbar-h: 52px;
 }
 
@@ -82,12 +83,25 @@ body,
 
 body {
   margin: 0;
-  font-family: var(--font-pixel);
-  font-size: 11px;
-  line-height: 1.6;
+  /* Body text / content (editor, console, file trees, chat, lists) uses a
+   * crisp READABLE monospace. The retro pixel font is applied to chrome only
+   * (see the .pixel-chrome rule below). */
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
-  /* Crisp pixel rendering — no soft anti-alias smear on the retro look. */
+}
+
+/* Retro pixel font for CHROME only: toolbar, activity bar, panel/section
+ * headers, and buttons. Pixel fonts look best with anti-aliasing OFF. */
+.toolbar,
+.activitybar,
+.panel-header,
+.localtree__title,
+.devicetree__title,
+.btn {
+  font-family: var(--font-pixel);
   -webkit-font-smoothing: none;
   font-smooth: never;
 }
@@ -136,8 +150,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font: inherit;
   font-family: var(--font-pixel);
+  font-size: 0.7rem;
   color: var(--text);
   background: var(--bg-sunken);
   border: var(--border-w) solid var(--border);
