@@ -1,7 +1,13 @@
 import { ipcMain } from 'electron'
 import type { IpcResult } from '../device/types'
 import { PluginHost } from './PluginHost'
-import type { PluginContext, PluginListing, PluginStatus, RunCommandResult } from './types'
+import type {
+  LintResult,
+  PluginContext,
+  PluginListing,
+  PluginStatus,
+  RunCommandResult
+} from './types'
 
 /**
  * IPC for the Python plugin system (issue #61).
@@ -45,6 +51,9 @@ export function registerPluginsIpc(): void {
   ipcMain.handle('plugins:list', () => wrap<PluginListing>(() => h.list()))
   ipcMain.handle('plugins:runCommand', (_e, commandId: string, context: PluginContext) =>
     wrap<RunCommandResult>(() => h.runCommand(commandId, context))
+  )
+  ipcMain.handle('plugins:lint', (_e, context: PluginContext) =>
+    wrap<LintResult>(() => h.lint(context))
   )
   ipcMain.handle('plugins:reload', () => wrap<PluginStatus>(() => h.reload()))
 }

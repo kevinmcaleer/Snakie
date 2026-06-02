@@ -67,18 +67,43 @@ export interface EditAction {
   content: string
 }
 
-/** A single diagnostic (problem marker). */
-export interface DiagnosticAction {
-  type: 'diagnostic'
-  item: {
-    line: number
+/**
+ * A quick-fix attached to a diagnostic, surfaced as an editor lightbulb action.
+ * An absent range means "replace the diagnostic's own range" (fixes are always
+ * ranged — there is no whole-file replacement form).
+ */
+export interface DiagnosticFix {
+  title: string
+  edit: {
+    line?: number
     column?: number
     endLine?: number
     endColumn?: number
-    severity: string
-    message: string
-    source: string
+    newText: string
   }
+}
+
+/** A single diagnostic (problem marker / squiggle). Coordinates are 1-based. */
+export interface Diagnostic {
+  line: number
+  column?: number
+  endLine?: number
+  endColumn?: number
+  severity: string
+  message: string
+  source: string
+  fixes?: DiagnosticFix[]
+}
+
+/** A single diagnostic action (problem marker) returned from a command. */
+export interface DiagnosticAction {
+  type: 'diagnostic'
+  item: Diagnostic
+}
+
+/** Result of the `lint` RPC: all linters' diagnostics, concatenated. */
+export interface LintResult {
+  diagnostics: Diagnostic[]
 }
 
 /** Any action a command can return. */

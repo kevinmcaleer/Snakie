@@ -8,6 +8,35 @@ import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
 import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
+import type { Diagnostic, PluginContext } from '../../../preload/index.d'
+import { diagnosticToMarker } from './plugin-diagnostics'
+import {
+  clearModelDiagnostics,
+  registerPluginCodeActions,
+  setModelDiagnostics
+} from './plugin-code-actions'
+
+// Register the plugin quick-fix (lightbulb) provider exactly once at module
+// load, mirroring the completion provider. The function is idempotent and
+// guarded against HMR double-registration.
+registerPluginCodeActions(monaco)
+
+/** Monaco marker owner used for plugin-sourced diagnostics. */
+const PLUGIN_MARKER_OWNER = 'snakie-plugins'
+
+/** Debounce window (ms) before re-linting after the active file changes. */
+const LINT_DEBOUNCE_MS = 400
+
+/**
+ * Paint plugin diagnostics onto a model: set Monaco markers (squiggles) and
+ * record the diagnostics-with-fixes so the code-action provider can offer
+ * lightbulb quick-fixes. Clears both when there are no diagnostics.
+ */
+function applyDiagnostics(model: monaco.editor.ITextModel, diagnostics: Diagnostic[]): void {
+  const markers = diagnostics.map((d) => diagnosticToMarker(model, d))
+  monaco.editor.setModelMarkers(model, PLUGIN_MARKER_OWNER, markers)
+  setModelDiagnostics(model.uri.toString(), diagnostics)
+}
 
 /**
  * Map a file name to a Monaco language id. MicroPython sources are plain Python,
@@ -123,7 +152,10 @@ export function MonacoEditor(): JSX.Element {
       changeDisposable.dispose()
       editor.dispose()
       editorRef.current = null
-      modelStore.forEach((m) => m.dispose())
+      modelStore.forEach((m) => {
+        clearModelDiagnostics(m.uri.toString())
+        m.dispose()
+      })
       modelStore.clear()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +199,53 @@ export function MonacoEditor(): JSX.Element {
     }
   }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
 
+  // Reactive linting: when the active file's content changes (or the active
+  // file switches), debounce then run all plugin linters and paint the results
+  // as Monaco markers (squiggles). Stale requests are dropped via a per-run
+  // token. No-ops when the plugin bridge is absent or Python wasn't found.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !activeFile) return undefined
+
+    const plugins = window.api?.plugins
+    if (!plugins?.lint) return undefined
+
+    const model = models.current.get(activeFile.id)
+    if (!model || model.isDisposed()) return undefined
+
+    let cancelled = false
+    const file = activeFile
+    const context: PluginContext = {
+      file: {
+        path: file.path,
+        name: file.name,
+        source: file.source,
+        content: file.content
+      }
+    }
+
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const status = await plugins.status()
+          if (cancelled || !status.pythonFound) return
+          const { diagnostics } = await plugins.lint(context)
+          if (cancelled) return
+          const m = models.current.get(file.id)
+          if (!m || m.isDisposed()) return
+          applyDiagnostics(m, diagnostics)
+        } catch {
+          // Linting must never disrupt typing; swallow + leave prior markers.
+        }
+      })()
+    }, LINT_DEBOUNCE_MS)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [activeFile, activeFile?.id, activeFile?.content])
+
   // Reveal/scroll to a line on request (e.g. clicking an Outline symbol).
   // Keyed on `seq` so repeated clicks on the same symbol re-reveal it.
   useEffect(() => {
@@ -183,6 +262,7 @@ export function MonacoEditor(): JSX.Element {
     const openIds = new Set(openFiles.map((f) => f.id))
     models.current.forEach((model, id) => {
       if (!openIds.has(id)) {
+        clearModelDiagnostics(model.uri.toString())
         model.dispose()
         models.current.delete(id)
       }

@@ -36,9 +36,11 @@ __all__ = [
     "FileContext",
     "Selection",
     "Command",
+    "Linter",
     "message",
     "edit",
     "diagnostic",
+    "fix",
 ]
 
 __version__ = "0.1.0"
@@ -128,6 +130,38 @@ def edit(new_content: str) -> Action:
     return {"type": "edit", "content": new_content}
 
 
+def fix(
+    title: str,
+    new_text: str,
+    *,
+    line: Optional[int] = None,
+    column: Optional[int] = None,
+    end_line: Optional[int] = None,
+    end_column: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build a quick-fix attached to a diagnostic.
+
+    A fix is ``{ title, edit: { line?, column?, endLine?, endColumn?, newText } }``.
+    When the range is omitted entirely the host/editor replaces *the diagnostic's
+    own range*. Fixes are always ranged — a ``newText``-only fix that would
+    replace the whole file is intentionally not supported (linters should target
+    the exact span they flag).
+
+    ``line``/``column``/``end_line``/``end_column`` are 1-based, matching the
+    diagnostic coordinate system.
+    """
+    edit_obj: Dict[str, Any] = {"newText": str(new_text)}
+    if line is not None:
+        edit_obj["line"] = int(line)
+    if column is not None:
+        edit_obj["column"] = int(column)
+    if end_line is not None:
+        edit_obj["endLine"] = int(end_line)
+    if end_column is not None:
+        edit_obj["endColumn"] = int(end_column)
+    return {"title": str(title), "edit": edit_obj}
+
+
 def diagnostic(
     line: int,
     message: str,
@@ -137,10 +171,18 @@ def diagnostic(
     end_line: Optional[int] = None,
     end_column: Optional[int] = None,
     source: str = "snakie",
+    fixes: Optional[List[Dict[str, Any]]] = None,
 ) -> Action:
-    """Produce a single diagnostic action (problem marker).
+    """Produce a single diagnostic action (problem marker / squiggle).
 
-    ``severity`` is one of ``error``, ``warning``, ``info``, ``hint``.
+    ``severity`` is one of ``error``, ``warning``, ``info``, ``hint``. All
+    line/column coordinates are 1-based. ``fixes`` is an optional list of
+    quick-fixes built with :func:`fix`, surfaced as editor lightbulb actions.
+
+    The returned value is an *action* (``{"type": "diagnostic", "item": {...}}``)
+    so it can be returned from a regular ``@plugin.command``. Linters
+    (``@plugin.linter``) may return the action form or the bare ``item`` dict —
+    the host normalises both.
     """
     item: Dict[str, Any] = {
         "line": int(line),
@@ -154,6 +196,8 @@ def diagnostic(
         item["endLine"] = int(end_line)
     if end_column is not None:
         item["endColumn"] = int(end_column)
+    if fixes:
+        item["fixes"] = list(fixes)
     return {"type": "diagnostic", "item": item}
 
 
@@ -172,6 +216,21 @@ class Command:
     plugin_id: str = ""
 
 
+@dataclass
+class Linter:
+    """A registered linter.
+
+    ``handler`` is ``(ctx: Context) -> list[Diagnostic]`` (or a single
+    diagnostic / the :func:`diagnostic` action form — the host normalises the
+    return value). It is run reactively by the editor whenever the active file's
+    content changes.
+    """
+
+    name: str
+    handler: Callable[[Context], Any]
+    plugin_id: str = ""
+
+
 class Plugin:
     """The shared registry that ``@plugin.command`` writes to.
 
@@ -182,6 +241,7 @@ class Plugin:
 
     def __init__(self) -> None:
         self.commands: List[Command] = []
+        self.linters: List[Linter] = []
         # The plugin id the host is currently importing; commands registered
         # while this is set are attributed to it. Set by the host around each
         # import (see snakie.host).
@@ -198,14 +258,19 @@ class Plugin:
 
         return decorator
 
-    def linter(self, name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-        """Reserved for the linter feature (separate issue).
+    def linter(self, name: str) -> Callable[[Callable[[Context], Any]], Callable[[Context], Any]]:
+        """Decorator: register ``func`` as a linter named ``name``.
 
-        Registering is a no-op in the MVP — kept so plugins that use it import
-        cleanly. Returns the function unchanged.
+        The handler is ``(ctx: Context) -> list[Diagnostic]`` and is run
+        reactively by the editor as the active file changes. Each diagnostic may
+        carry quick-fixes (see :func:`diagnostic` / :func:`fix`). Returning a
+        single diagnostic, a list, or ``None`` are all accepted.
         """
 
-        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def decorator(func: Callable[[Context], Any]) -> Callable[[Context], Any]:
+            self.linters.append(
+                Linter(name=name, handler=func, plugin_id=self._current_plugin_id)
+            )
             return func
 
         return decorator
