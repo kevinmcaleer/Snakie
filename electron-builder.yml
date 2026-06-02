@@ -90,11 +90,17 @@ mac:
         - arm64
         - x64
   category: public.app-category.developer-tools
-  # Code signing is intentionally disabled for now (see release.yml /
-  # CSC_IDENTITY_AUTO_DISCOVERY=false). NOTE: macOS auto-update *apply/relaunch*
-  # generally requires a signed app (Squirrel.Mac) — so unsigned builds can
-  # detect + download an update but may fail to install it. Real signing +
-  # notarization is tracked in #47.
+  # Signing + notarization (#47). Active only when the CI signing secrets are
+  # present (MAC_CSC_LINK etc. in release.yml); with no cert electron-builder
+  # skips signing AND notarization, so unsigned CI builds keep working.
+  # Signing (Developer ID) is what lets macOS auto-update *apply* (Squirrel.Mac
+  # validates the signature); notarization clears the "damaged"/Gatekeeper
+  # warning on first download. See docs/macos-signing.md.
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: true
 
 # Publish installers to a GitHub Release for the pushed tag.
 publish:
