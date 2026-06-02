@@ -157,9 +157,9 @@ export function Toolbar({
           className={`btn btn--ghost ${rightCollapsed ? '' : 'is-active'}`}
           aria-pressed={!rightCollapsed}
           onClick={onToggleRight}
-          title="Toggle side Panel"
+          title="Toggle Chat panel"
         >
-          Panel
+          Chat
         </button>
         <button
           type="button"

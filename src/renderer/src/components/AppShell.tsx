@@ -3,10 +3,60 @@ import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from 'rea
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
+import { ActivityBar, ActivityView } from './ActivityBar'
+import { PanelHeader } from './PanelHeader'
 import { FilePanel } from './FilePanel'
+import { GitPanel } from './GitPanel'
+import { PackagesPanel } from './PackagesPanel'
+import { InspectPanel } from './InspectPanel'
+import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
+
+/** Wrap a panel that lacks its own region chrome in a titled, scrollable region. */
+function LeftRegion({ title, children }: { title: string; children: JSX.Element }): JSX.Element {
+  return (
+    <section className="region" aria-label={title}>
+      <PanelHeader title={title} />
+      <div className="region__body">{children}</div>
+    </section>
+  )
+}
+
+/**
+ * Map each activity-bar view id to the component shown in the left sidebar.
+ * FilePanel and InspectPanel bring their own region + header; the others are
+ * wrapped here so every view gets a consistent titled, scrollable container
+ * (previously provided by the right-pane tab host).
+ */
+function LeftView({ view }: { view: ActivityView }): JSX.Element {
+  switch (view) {
+    case 'source-control':
+      return (
+        <LeftRegion title="Source Control">
+          <GitPanel />
+        </LeftRegion>
+      )
+    case 'packages':
+      return (
+        <LeftRegion title="Packages">
+          <PackagesPanel />
+        </LeftRegion>
+      )
+    case 'inspect':
+      return <InspectPanel />
+    case 'help':
+      return (
+        <LeftRegion title="Help">
+          <HelpPanel />
+        </LeftRegion>
+      )
+    case 'files':
+    default:
+      return <FilePanel />
+  }
+}
 
 /**
  * AppShell — the structural base layout that every later feature plugs into.
@@ -29,6 +79,12 @@ export function AppShell(): JSX.Element {
   const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
   const [shellCollapsed, setShellCollapsed] = useLocalStorage('snakie.collapsed.shell', false)
   const [rightCollapsed, setRightCollapsed] = useLocalStorage('snakie.collapsed.right', true)
+
+  // Which view the left sidebar shows, driven by the ActivityBar.
+  const [activityView, setActivityView] = useLocalStorage<ActivityView>(
+    'snakie.activityView',
+    'files'
+  )
 
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
@@ -59,8 +115,20 @@ export function AppShell(): JSX.Element {
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
       />
 
-      <div className="shell__body">
-        <PanelGroup direction="horizontal" autoSaveId="snakie.layout.horizontal">
+      <div className="shell__body shell__main">
+        <ActivityBar
+          active={activityView}
+          onSelect={(view) => {
+            setActivityView(view)
+            // Selecting a view should reveal the sidebar if it was collapsed.
+            if (filesCollapsed) toggle(filesRef, true, setFilesCollapsed)
+          }}
+        />
+        <PanelGroup
+          direction="horizontal"
+          autoSaveId="snakie.layout.horizontal"
+          className="shell__panels"
+        >
           <Panel
             ref={filesRef}
             order={1}
@@ -71,7 +139,7 @@ export function AppShell(): JSX.Element {
             onCollapse={() => setFilesCollapsed(true)}
             onExpand={() => setFilesCollapsed(false)}
           >
-            <FilePanel />
+            <LeftView view={activityView} />
           </Panel>
 
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />

@@ -1,50 +1,72 @@
 /* ---------------------------------------------------------------------------
- * Theme tokens
- * Light/dark theming via CSS custom properties. `data-theme` is set on
- * <html> by useTheme(). Keep all colour decisions referencing these tokens so
- * later feature work themes for free.
+ * Theme tokens — 8-bit NES retro (dark-first)
+ * Theming via CSS custom properties. `data-theme` is set on <html> by
+ * useTheme(). Dark is the default (the NES console look); a lighter retro
+ * variant is provided for the theme toggle. Keep all colour decisions
+ * referencing these tokens so every component themes for free.
+ *
+ *   bg            #14141f   app background (slate)
+ *   panel/elev    #1f1f30   panels, sidebars, toolbar
+ *   panel-2       #28284a   raised controls / hover
+ *   border        #3a3a5c
+ *   text          #e8e8f0
+ *   text-muted    #9a9ab8
+ *   accent        #3cbcfc   NES blue   — selection/active/links
+ *   accent-2      #00b800   NES green  — success/connected/run
+ *   danger        #e60012   NES red    — stop/delete/errors
+ *   warn          #f8d800   NES yellow — warnings/dirty
  * ------------------------------------------------------------------------- */
 :root,
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  --bg: #f5f6f8;
-  --bg-elevated: #ffffff;
-  --bg-sunken: #eceef1;
-  --border: #d8dbe0;
-  --text: #1c1f23;
-  --text-muted: #6b7280;
-
-  --accent: #2563eb;
-  --accent-contrast: #ffffff;
-  --danger: #dc2626;
-  --success: #16a34a;
-  --disconnected: #9ca3af;
-
-  --handle: #d8dbe0;
-  --handle-hover: var(--accent);
-
-  --radius: 6px;
-  --toolbar-h: 52px;
-}
-
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #16181d;
-  --bg-elevated: #1e2128;
-  --bg-sunken: #101216;
-  --border: #2c3038;
-  --text: #e6e8eb;
-  --text-muted: #9099a6;
+  --bg: #14141f;
+  --bg-elevated: #1f1f30;
+  --bg-sunken: #28284a;
+  --border: #3a3a5c;
+  --text: #e8e8f0;
+  --text-muted: #9a9ab8;
 
-  --accent: #3b82f6;
+  --accent: #3cbcfc;
+  --accent-2: #00b800;
+  --accent-contrast: #14141f;
+  --danger: #e60012;
+  --success: #00b800;
+  --warn: #f8d800;
+  --disconnected: #9a9ab8;
+
+  --handle: #3a3a5c;
+  --handle-hover: var(--accent);
+
+  /* 8-bit chrome: square corners, chunky borders, hard pixel shadow. */
+  --radius: 0px;
+  --border-w: 2px;
+  --pixel-shadow: 3px 3px 0 #000;
+  --pixel-shadow-active: 1px 1px 0 #000;
+  --font-pixel: 'Press Start 2P', monospace;
+  --toolbar-h: 52px;
+}
+
+/* Lighter retro variant (keeps the toggle working). */
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #d8d8f0;
+  --bg-elevated: #ececff;
+  --bg-sunken: #c4c4e4;
+  --border: #5a5a8c;
+  --text: #14141f;
+  --text-muted: #4a4a6a;
+
+  --accent: #0058f8;
+  --accent-2: #008000;
   --accent-contrast: #ffffff;
-  --danger: #ef4444;
-  --success: #22c55e;
-  --disconnected: #6b7280;
+  --danger: #d80000;
+  --success: #008000;
+  --warn: #ac7c00;
+  --disconnected: #7a7aa0;
 
-  --handle: #2c3038;
+  --handle: #5a5a8c;
   --handle-hover: var(--accent);
 }
 
@@ -60,14 +82,14 @@ body,
 
 body {
   margin: 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    'Segoe UI',
-    Roboto,
-    sans-serif;
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  line-height: 1.6;
   background: var(--bg);
   color: var(--text);
+  /* Crisp pixel rendering — no soft anti-alias smear on the retro look. */
+  -webkit-font-smoothing: none;
+  font-smooth: never;
 }
 
 /* --------------------------------------------------------------------------
@@ -95,7 +117,7 @@ body {
   height: var(--toolbar-h);
   padding: 0 0.75rem;
   background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--border-w) solid var(--border);
   flex: 0 0 auto;
 }
 
@@ -109,33 +131,40 @@ body {
   flex: 1;
 }
 
-/* Buttons — big and easy to click per feedback. */
+/* Buttons — big, easy to click, and pressable like 8-bit hardware. */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
   font: inherit;
-  font-weight: 600;
+  font-family: var(--font-pixel);
   color: var(--text);
   background: var(--bg-sunken);
-  border: 1px solid var(--border);
+  border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
-  padding: 0.4rem 0.7rem;
+  padding: 0.45rem 0.7rem;
   cursor: pointer;
-  line-height: 1;
+  line-height: 1.4;
+  box-shadow: var(--pixel-shadow);
   transition:
-    background 0.12s ease,
-    border-color 0.12s ease,
-    color 0.12s ease;
+    background 0.06s steps(1),
+    border-color 0.06s steps(1),
+    color 0.06s steps(1);
 }
 
 .btn:hover {
   border-color: var(--accent);
 }
 
+/* Hard "press" — element shifts down/right, shadow collapses. */
+.btn:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: var(--pixel-shadow-active);
+}
+
 .btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
 }
 
 .btn--lg {
@@ -155,6 +184,7 @@ body {
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn__glyph {
@@ -220,11 +250,10 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.4rem 0.7rem;
+  padding: 0.5rem 0.7rem;
   background: var(--bg-elevated);
-  border-bottom: 1px solid var(--border);
-  font-size: 0.78rem;
-  font-weight: 600;
+  border-bottom: var(--border-w) solid var(--border);
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
@@ -245,7 +274,7 @@ body {
 /* The terminal owns its own scrolling; don't double up. */
 .region__body--terminal {
   overflow: hidden;
-  background: #101216;
+  background: var(--bg);
 }
 
 /* --------------------------------------------------------------------------
@@ -305,13 +334,13 @@ body {
 
 .conn-control__select {
   font: inherit;
-  font-size: 0.78rem;
-  font-weight: 500;
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
   color: var(--text);
   background: var(--bg-sunken);
-  border: 1px solid var(--border);
+  border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
-  padding: 0.25rem 0.4rem;
+  padding: 0.3rem 0.4rem;
   max-width: 14rem;
 }
 
@@ -359,7 +388,7 @@ body {
   flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--border-w) solid var(--border);
 }
 
 .filepanel__device {
@@ -531,16 +560,126 @@ body {
 }
 
 .resize-handle--vertical {
-  width: 4px;
+  width: var(--border-w);
   cursor: col-resize;
 }
 
 .resize-handle--horizontal {
-  height: 4px;
+  height: var(--border-w);
   cursor: row-resize;
 }
 
 .resize-handle:hover,
 .resize-handle[data-resize-handle-active] {
   background: var(--handle-hover);
+}
+
+/* --------------------------------------------------------------------------
+ * Activity bar — narrow vertical icon strip on the far left.
+ * Switches the left sidebar between views (Files / Source Control / Packages /
+ * Inspect / Help). Active item is highlighted. Sits flush against the toolbar
+ * and left sidebar in the body row.
+ * ------------------------------------------------------------------------ */
+.shell__main {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.shell__main .shell__panels {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.activitybar {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 56px;
+  background: var(--bg-elevated);
+  border-right: var(--border-w) solid var(--border);
+  padding: 0.5rem 0;
+  gap: 0.4rem;
+}
+
+.activitybar__group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.activitybar__group--bottom {
+  margin-top: auto;
+}
+
+.activitybar__item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  width: 44px;
+  height: 44px;
+  font-family: var(--font-pixel);
+  font-size: 1rem;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+  cursor: pointer;
+  transition:
+    background 0.06s steps(1),
+    color 0.06s steps(1),
+    border-color 0.06s steps(1);
+}
+
+.activitybar__item:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.activitybar__item:active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--pixel-shadow-active);
+}
+
+.activitybar__item:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.activitybar__item.is-active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.activitybar__item-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.activitybar__item-label {
+  font-size: 0.42rem;
+  letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------------------
+ * Inspect view — Outline (top) over Variables (bottom), vertical split.
+ * Mirrors how Files stacks local/device.
+ * ------------------------------------------------------------------------ */
+.inspectpanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.inspectpanel__section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
 }

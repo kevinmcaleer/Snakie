@@ -18,26 +18,26 @@ export interface TerminalHandle {
  * specifically valued console colour highlighting.
  */
 const TERMINAL_THEME = {
-  background: '#101216',
-  foreground: '#e6e8eb',
-  cursor: '#3b82f6',
-  cursorAccent: '#101216',
-  selectionBackground: '#3b82f655',
-  black: '#16181d',
-  red: '#ef4444',
-  green: '#22c55e',
-  yellow: '#eab308',
-  blue: '#3b82f6',
-  magenta: '#a855f7',
-  cyan: '#06b6d4',
-  white: '#e6e8eb',
-  brightBlack: '#6b7280',
-  brightRed: '#f87171',
-  brightGreen: '#4ade80',
-  brightYellow: '#facc15',
-  brightBlue: '#60a5fa',
-  brightMagenta: '#c084fc',
-  brightCyan: '#22d3ee',
+  background: '#14141f',
+  foreground: '#e8e8f0',
+  cursor: '#3cbcfc',
+  cursorAccent: '#14141f',
+  selectionBackground: '#3cbcfc55',
+  black: '#1f1f30',
+  red: '#e60012',
+  green: '#00b800',
+  yellow: '#f8d800',
+  blue: '#3cbcfc',
+  magenta: '#b800e6',
+  cyan: '#00b8b8',
+  white: '#e8e8f0',
+  brightBlack: '#9a9ab8',
+  brightRed: '#f83800',
+  brightGreen: '#58f898',
+  brightYellow: '#f8f858',
+  brightBlue: '#6cbcfc',
+  brightMagenta: '#f878f8',
+  brightCyan: '#58f8f8',
   brightWhite: '#ffffff'
 }
 
@@ -76,9 +76,8 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     const term = new XTerm({
       cursorBlink: true,
       convertEol: true,
-      fontFamily:
-        'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
-      fontSize: 13,
+      fontFamily: "'Press Start 2P', monospace",
+      fontSize: 12,
       scrollback: 5000,
       theme: TERMINAL_THEME,
       allowProposedApi: true
