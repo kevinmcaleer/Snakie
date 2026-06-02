@@ -121,7 +121,7 @@ function DeviceTreeNode({
         }}
       >
         <span className="tree-row__glyph" aria-hidden>
-          {entry.isDir ? (expanded ? '▼' : '▶') : '\u{1F4C4}'}
+          {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
       </div>
@@ -387,7 +387,7 @@ export function DeviceFileTree(): JSX.Element {
       <div className="devicetree">
         <div className="devicetree__header">
           <span className="devicetree__title">
-            <span aria-hidden>{'\u{1F50C}'}</span> Device files
+            <span aria-hidden>{'▦'}</span> Device files
           </span>
         </div>
         <Placeholder label="Device files" hint="Connect a board to browse its filesystem." />
@@ -404,7 +404,7 @@ export function DeviceFileTree(): JSX.Element {
     <div className="devicetree">
       <div className="devicetree__header">
         <span className="devicetree__title">
-          <span aria-hidden>{'\u{1F50C}'}</span> Device files
+          <span aria-hidden>{'▦'}</span> Device files
         </span>
         <button
           className="btn btn--ghost"

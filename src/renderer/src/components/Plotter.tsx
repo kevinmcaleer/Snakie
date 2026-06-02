@@ -296,10 +296,10 @@ export function Plotter(): JSX.Element {
           onClick={() => setPaused((p) => !p)}
           aria-pressed={paused}
         >
-          {paused ? '▶ Resume' : '⏸ Pause'}
+          {paused ? '▶ Resume' : '▮▮ Pause'}
         </button>
         <button type="button" className="btn btn--ghost" onClick={handleClear}>
-          🗑 Clear
+          ✕ Clear
         </button>
         <label className="plotter__window">
           Window

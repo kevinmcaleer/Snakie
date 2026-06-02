@@ -5,10 +5,9 @@ export type Theme = 'light' | 'dark'
 
 const STORAGE_KEY = 'snakie.theme'
 
+// Snakie is a dark-first retro app: default to dark regardless of the OS
+// preference. Users can still toggle to the lighter retro variant (persisted).
 function getInitialTheme(): Theme {
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  }
   return 'dark'
 }
 

@@ -83,7 +83,7 @@ function TreeNode({
         }}
       >
         <span className="tree-row__glyph" aria-hidden>
-          {entry.isDir ? (expanded ? '▼' : '▶') : '\u{1F4C4}'}
+          {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
       </div>
@@ -324,7 +324,7 @@ export function LocalFileTree(): JSX.Element {
     <div className="localtree">
       <div className="localtree__header">
         <span className="localtree__title">
-          <span aria-hidden>{'\u{1F4BB}'}</span> Local files
+          <span aria-hidden>{'▣'}</span> Local files
         </span>
       </div>
 
@@ -395,7 +395,7 @@ export function LocalFileTree(): JSX.Element {
         <div className="localtree__empty">
           {error && <div className="localtree__error">{error}</div>}
           <button className="btn btn--primary" onClick={handleOpenFolder}>
-            <span aria-hidden>{'\u{1F4C2}'}</span> Open Folder
+            <span aria-hidden>{'▸'}</span> Open Folder
           </button>
         </div>
       )}
