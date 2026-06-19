@@ -806,11 +806,28 @@ body {
   letter-spacing: 0.04em;
   color: var(--text-muted);
   flex: 0 0 auto;
+  /* Let the header wrap instead of clipping its actions under a neighbouring
+   * panel at narrow widths (issue #85). */
+  flex-wrap: wrap;
+}
+
+/* The title must be allowed to shrink so it never pushes the actions off the
+ * edge; truncate it rather than overflow the header. */
+.panel-header__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .panel-header__actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.35rem;
+  /* Allow the actions block (and its flex children) to shrink rather than
+   * overflow the header at narrow widths (issue #85). */
+  min-width: 0;
 }
 
 .region__body {
@@ -878,6 +895,9 @@ body {
   gap: 0.35rem;
   text-transform: none;
   letter-spacing: normal;
+  /* Allow the control to shrink within the (wrapping) shell header so its
+   * Connect/Disconnect button is never pushed off-screen (issue #85). */
+  min-width: 0;
 }
 
 .conn-control__select {
@@ -889,6 +909,9 @@ body {
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   padding: 0.3rem 0.4rem;
+  /* Cap the width but let the dropdown shrink (min-width: 0) so a long port
+   * label can't push the Connect button out of the header (issue #85). */
+  min-width: 0;
   max-width: 14rem;
 }
 

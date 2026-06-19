@@ -11,3 +11,20 @@
 .localtree__tree {
   min-height: 4rem;
 }
+
+/*
+ * Keep the header title from overflowing at narrow panel widths (issue #85).
+ * The action row (+ File / + Folder / Rename / Delete / Open Folder) already
+ * wraps via `.localtree__actions { flex-wrap: wrap }` in index.css, so the
+ * buttons stay reachable; this just stops the title pushing past the edge.
+ */
+.localtree__header {
+  flex-wrap: wrap;
+}
+
+.localtree__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

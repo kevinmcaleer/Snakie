@@ -7,6 +7,22 @@
  * file trees feel consistent.
  */
 
+/*
+ * Header row (title + Refresh). At narrow panel widths the Refresh button used
+ * to be clipped off the right edge (issue #85): allow the row to wrap and let
+ * the title shrink so Refresh always stays reachable.
+ */
+.devicetree__header {
+  flex-wrap: wrap;
+}
+
+.devicetree__title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .devicetree__actions {
   display: flex;
   flex-wrap: wrap;
