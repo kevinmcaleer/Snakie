@@ -49,6 +49,12 @@ export interface LlmProviderInfo {
   models: LlmModelInfo[]
   /** Default model id when the user hasn't chosen one. */
   defaultModel: string
+  /**
+   * Default fast model for inline autocomplete (issue #82). Completion reuses
+   * the same `models` list for selection, but defaults to this fast, cheap model
+   * (e.g. Haiku) rather than the heavier chat default.
+   */
+  defaultCompletionModel?: string
   /** Reasoning-effort levels the provider supports, if any (e.g. low/medium/high). */
   efforts?: string[]
   /** Speed/latency tiers the provider supports, if any. */
@@ -91,3 +97,21 @@ export type LlmStreamEvent =
   | { type: 'delta'; requestId: string; text: string }
   | { type: 'done'; requestId: string }
   | { type: 'error'; requestId: string; message: string }
+
+/**
+ * Arguments for a one-shot inline completion (issue #82). Non-streaming: the IPC
+ * call resolves with the raw text to insert at the cursor. Bounded prefix/suffix
+ * give the model FIM context without shipping the whole file each keystroke.
+ */
+export interface LlmCompleteRequest {
+  /** Which provider to route this request to (see {@link LlmProviderInfo.id}). */
+  providerId: string
+  /** Fast completion model id; falls back to the provider's default when omitted. */
+  model?: string
+  /** Code immediately before the cursor (bounded by the renderer). */
+  prefix: string
+  /** Code immediately after the cursor (bounded by the renderer). */
+  suffix: string
+  /** Editor language id (e.g. `python`), to steer the completion. */
+  language: string
+}

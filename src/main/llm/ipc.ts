@@ -20,6 +20,7 @@ import type { IpcResult } from '../device/types'
 import { getKey, hasKey, isEncryptionAvailable, setKey } from './keyStore'
 import { DEFAULT_PROVIDER_ID, getProvider, listProviders } from './providers/registry'
 import type {
+  LlmCompleteRequest,
   LlmKeyStatus,
   LlmProviderInfo,
   LlmSendRequest,
@@ -32,8 +33,13 @@ export const LLM_CHANNELS = {
   listProviders: 'llm:listProviders',
   getKeyStatus: 'llm:getKeyStatus',
   setKey: 'llm:setKey',
-  sendMessage: 'llm:sendMessage'
+  sendMessage: 'llm:sendMessage',
+  complete: 'llm:complete'
 } as const
+
+/** Upper bound on the prompt context sent for a single inline completion. */
+const MAX_COMPLETION_PREFIX = 4000
+const MAX_COMPLETION_SUFFIX = 1000
 
 /** Monotonic id so the renderer can correlate stream events with a request. */
 let requestCounter = 0
@@ -114,6 +120,38 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
         push({ type: 'error', requestId, message })
         throw err
       }
+    })
+  )
+
+  // One-shot inline completion (issue #82). Non-streaming: routes to the
+  // provider's fast `complete` with that provider's stored key and returns the
+  // raw text to insert at the cursor. The renderer cancels stale requests via
+  // its IPC token; we additionally clamp the prefix/suffix here as a backstop.
+  ipcMain.handle(LLM_CHANNELS.complete, (_e, req: LlmCompleteRequest) =>
+    wrap(async (): Promise<string> => {
+      const providerId = req.providerId || DEFAULT_PROVIDER_ID
+      const provider = getProvider(providerId)
+      if (!provider) {
+        throw new Error(`Unknown LLM provider "${providerId}".`)
+      }
+
+      const apiKey = await getKey(providerId)
+      if (!apiKey) {
+        // No key → no suggestion. The renderer only calls this when it believes
+        // a key is set, but guard anyway so a race never throws into the editor.
+        return ''
+      }
+
+      const prefix = (req.prefix ?? '').slice(-MAX_COMPLETION_PREFIX)
+      const suffix = (req.suffix ?? '').slice(0, MAX_COMPLETION_SUFFIX)
+
+      return provider.complete({
+        apiKey,
+        model: req.model || provider.info.defaultCompletionModel || provider.info.defaultModel,
+        prefix,
+        suffix,
+        language: req.language || 'python'
+      })
     })
   )
 }

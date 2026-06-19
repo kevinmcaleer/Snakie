@@ -10,8 +10,16 @@
  * All requests run in the MAIN process (the renderer CSP blocks external
  * requests). The API key never leaves main and is never logged.
  */
-import { buildSystemString } from './context'
-import type { Provider, ProviderInfo, StreamChatArgs } from './types'
+import {
+  COMPLETION_SYSTEM_PROMPT,
+  buildCompletionUserPrompt,
+  buildSystemString,
+  sanitizeCompletion
+} from './context'
+import type { CompleteArgs, Provider, ProviderInfo, StreamChatArgs } from './types'
+
+/** Upper bound on inline-completion output tokens — small + fast (issue #82). */
+const COMPLETION_MAX_TOKENS = 64
 
 /** Config that distinguishes one OpenAI-compatible backend from another. */
 export interface OpenAiCompatibleConfig {
@@ -93,6 +101,53 @@ async function streamOpenAiCompatible(
   return await consumeSse(res.body, onDelta)
 }
 
+/**
+ * One-shot inline completion (issue #82) against the non-streaming
+ * `/chat/completions` endpoint. The FIM prefix/suffix go in the user turn and a
+ * strict system prompt keeps the reply to raw insertion text. Returns the
+ * sanitized `choices[0].message.content`.
+ */
+async function completeOpenAiCompatible(
+  config: OpenAiCompatibleConfig,
+  args: CompleteArgs
+): Promise<string> {
+  const { apiKey, model, prefix, suffix, language, signal } = args
+
+  const body: Record<string, unknown> = {
+    model,
+    stream: false,
+    max_tokens: COMPLETION_MAX_TOKENS,
+    messages: [
+      { role: 'system', content: COMPLETION_SYSTEM_PROMPT },
+      { role: 'user', content: buildCompletionUserPrompt({ prefix, suffix, language }) }
+    ]
+  }
+
+  const res = await fetch(`${config.baseURL}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      ...(config.extraHeaders ?? {})
+    },
+    body: JSON.stringify(body),
+    signal
+  })
+
+  if (!res.ok) {
+    const detail = await safeErrorText(res)
+    throw new Error(
+      `${config.info.label} completion failed (HTTP ${res.status})${detail ? `: ${detail}` : ''}`
+    )
+  }
+
+  const json = (await res.json()) as {
+    choices?: Array<{ message?: { content?: string | null } }>
+  }
+  const text = json.choices?.[0]?.message?.content ?? ''
+  return sanitizeCompletion(text)
+}
+
 /** Read the SSE body, accumulating `choices[0].delta.content` until `[DONE]`. */
 async function consumeSse(
   body: ReadableStream<Uint8Array>,
@@ -159,7 +214,8 @@ async function safeErrorText(res: Response): Promise<string> {
 export function makeOpenAiCompatibleProvider(config: OpenAiCompatibleConfig): Provider {
   return {
     info: config.info,
-    streamChat: (args) => streamOpenAiCompatible(config, args)
+    streamChat: (args) => streamOpenAiCompatible(config, args),
+    complete: (args) => completeOpenAiCompatible(config, args)
   }
 }
 
@@ -176,6 +232,7 @@ export const openaiProvider = makeOpenAiCompatibleProvider({
       { id: 'o4-mini', label: 'o4-mini (reasoning)' }
     ],
     defaultModel: 'gpt-4o',
+    defaultCompletionModel: 'gpt-4o-mini',
     efforts: ['low', 'medium', 'high'],
     keyHint: 'OpenAI API key (sk-…)',
     keyUrl: 'https://platform.openai.com/api-keys'
@@ -194,6 +251,7 @@ export const grokProvider = makeOpenAiCompatibleProvider({
       { id: 'grok-2', label: 'Grok 2' }
     ],
     defaultModel: 'grok-2-latest',
+    defaultCompletionModel: 'grok-2',
     keyHint: 'xAI API key (xai-…)',
     keyUrl: 'https://console.x.ai'
   },
@@ -215,6 +273,7 @@ export const copilotProvider = makeOpenAiCompatibleProvider({
       { id: 'gpt-4o-mini', label: 'GPT-4o mini' }
     ],
     defaultModel: 'gpt-4o',
+    defaultCompletionModel: 'gpt-4o-mini',
     keyHint: 'GitHub Copilot token (not a plain API key) — experimental',
     keyUrl: 'https://github.com/features/copilot',
     experimental: true

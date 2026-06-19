@@ -18,14 +18,27 @@
  *    prefix.
  */
 import Anthropic from '@anthropic-ai/sdk'
-import { SYSTEM_PROMPT, activeFileBlock, consoleBlock } from './context'
-import type { Provider, ProviderInfo, StreamChatArgs } from './types'
+import {
+  COMPLETION_SYSTEM_PROMPT,
+  SYSTEM_PROMPT,
+  activeFileBlock,
+  buildCompletionUserPrompt,
+  consoleBlock,
+  sanitizeCompletion
+} from './context'
+import type { CompleteArgs, Provider, ProviderInfo, StreamChatArgs } from './types'
 
 /** Default Claude model. */
 export const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
+/** Default fast model for inline autocomplete (issue #82). */
+export const DEFAULT_COMPLETION_MODEL = 'claude-haiku-4-5'
+
 /** Upper bound on streamed output tokens. */
 const MAX_TOKENS = 4096
+
+/** Upper bound on inline-completion output tokens — small + fast (issue #82). */
+const COMPLETION_MAX_TOKENS = 64
 
 export const ANTHROPIC_INFO: ProviderInfo = {
   id: 'anthropic',
@@ -36,6 +49,7 @@ export const ANTHROPIC_INFO: ProviderInfo = {
     { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5' }
   ],
   defaultModel: DEFAULT_MODEL,
+  defaultCompletionModel: DEFAULT_COMPLETION_MODEL,
   efforts: ['low', 'medium', 'high'],
   keyHint: 'Anthropic API key (sk-ant-…)',
   keyUrl: 'https://console.anthropic.com/settings/keys'
@@ -94,7 +108,34 @@ async function streamChat(args: StreamChatArgs): Promise<string> {
   return full
 }
 
+/**
+ * One-shot inline completion (issue #82). A small, non-streaming
+ * `messages.create` on the fast model: the FIM prefix/suffix go in the user
+ * turn, and a strict system prompt keeps the reply to raw insertion text.
+ */
+async function complete(args: CompleteArgs): Promise<string> {
+  const { apiKey, model, prefix, suffix, language, signal } = args
+  const client = new Anthropic({ apiKey })
+
+  const message = await client.messages.create(
+    {
+      model: model || DEFAULT_COMPLETION_MODEL,
+      max_tokens: COMPLETION_MAX_TOKENS,
+      system: COMPLETION_SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: buildCompletionUserPrompt({ prefix, suffix, language }) }]
+    },
+    { signal }
+  )
+
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+    .map((b) => b.text)
+    .join('')
+  return sanitizeCompletion(text)
+}
+
 export const anthropicProvider: Provider = {
   info: ANTHROPIC_INFO,
-  streamChat
+  streamChat,
+  complete
 }

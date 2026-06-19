@@ -10,10 +10,18 @@
  * All requests run in the MAIN process (the renderer CSP blocks external
  * requests). The API key is sent only as a query param and is never logged.
  */
-import { buildSystemString } from './context'
-import type { Provider, ProviderInfo, StreamChatArgs } from './types'
+import {
+  COMPLETION_SYSTEM_PROMPT,
+  buildCompletionUserPrompt,
+  buildSystemString,
+  sanitizeCompletion
+} from './context'
+import type { CompleteArgs, Provider, ProviderInfo, StreamChatArgs } from './types'
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta'
+
+/** Upper bound on inline-completion output tokens — small + fast (issue #82). */
+const COMPLETION_MAX_TOKENS = 64
 
 export const GEMINI_INFO: ProviderInfo = {
   id: 'gemini',
@@ -23,6 +31,7 @@ export const GEMINI_INFO: ProviderInfo = {
     { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' }
   ],
   defaultModel: 'gemini-2.0-flash',
+  defaultCompletionModel: 'gemini-2.0-flash',
   keyHint: 'Google AI Studio API key',
   keyUrl: 'https://aistudio.google.com/app/apikey'
 }
@@ -112,6 +121,49 @@ async function consumeSse(
   return full
 }
 
+/**
+ * One-shot inline completion (issue #82) via the non-streaming
+ * `:generateContent` endpoint. The FIM prefix/suffix go in the user turn and a
+ * strict `systemInstruction` keeps the reply to raw insertion text. Returns the
+ * sanitized first candidate's joined part text.
+ */
+async function complete(args: CompleteArgs): Promise<string> {
+  const { apiKey, model, prefix, suffix, language, signal } = args
+
+  const body = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: buildCompletionUserPrompt({ prefix, suffix, language }) }]
+      }
+    ],
+    systemInstruction: { parts: [{ text: COMPLETION_SYSTEM_PROMPT }] },
+    generationConfig: { maxOutputTokens: COMPLETION_MAX_TOKENS }
+  }
+
+  const url =
+    `${BASE_URL}/models/${encodeURIComponent(model)}:generateContent` +
+    `?key=${encodeURIComponent(apiKey)}`
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal
+  })
+
+  if (!res.ok) {
+    const detail = await safeErrorText(res)
+    throw new Error(`Gemini completion failed (HTTP ${res.status})${detail ? `: ${detail}` : ''}`)
+  }
+
+  const json = (await res.json()) as GeminiChunk
+  const text = (json.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => p.text ?? '')
+    .join('')
+  return sanitizeCompletion(text)
+}
+
 /** Best-effort read of an error response body for a friendlier message. */
 async function safeErrorText(res: Response): Promise<string> {
   try {
@@ -129,5 +181,6 @@ async function safeErrorText(res: Response): Promise<string> {
 
 export const geminiProvider: Provider = {
   info: GEMINI_INFO,
-  streamChat
+  streamChat,
+  complete
 }

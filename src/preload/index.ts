@@ -26,6 +26,7 @@ import type {
   PackageInfo
 } from '../main/packages/types'
 import type {
+  LlmCompleteRequest,
   LlmKeyStatus,
   LlmProviderInfo,
   LlmSendRequest,
@@ -272,6 +273,14 @@ const llm = {
    */
   sendMessage: (req: LlmSendRequest): Promise<string> =>
     unwrap(ipcRenderer.invoke('llm:sendMessage', req)),
+  /**
+   * One-shot inline completion (issue #82). Non-streaming: resolves with the raw
+   * text to insert at the cursor (empty string when there's no suggestion). The
+   * editor's inline-completion provider calls this on a debounce and cancels
+   * stale calls via Monaco's cancellation token.
+   */
+  complete: (req: LlmCompleteRequest): Promise<string> =>
+    unwrap(ipcRenderer.invoke('llm:complete', req)),
   /** Subscribe to streamed completion chunks. Returns an unsubscribe function. */
   onStream: (cb: (event: LlmStreamEvent) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, event: LlmStreamEvent): void => cb(event)

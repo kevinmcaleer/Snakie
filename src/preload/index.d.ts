@@ -44,6 +44,7 @@ export type {
 // Re-export the LLM chat types so the renderer's chat panel can import them
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type {
+  LlmCompleteRequest,
   LlmKeyStatus,
   LlmMessage,
   LlmModelInfo,

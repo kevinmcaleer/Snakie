@@ -55,3 +55,52 @@ export function buildSystemString(context: ChatContext): string {
   if (console) parts.push(console)
   return parts.join('\n\n')
 }
+
+// ── Inline autocomplete (issue #82) ─────────────────────────────────────────
+
+/**
+ * The frozen system prompt for one-shot inline completions. Kept byte-stable so
+ * it can be prompt-cached, and worded so the model returns ONLY the insertion
+ * text (no fences, no prose) — the renderer pastes the raw string at the cursor.
+ */
+export const COMPLETION_SYSTEM_PROMPT =
+  'You are a code completion engine. Return only the code that should be ' +
+  'inserted at the cursor — no explanations, no markdown, no code fences. ' +
+  'Continue the code naturally and stop at a sensible point.'
+
+/** Args shared by the per-provider completion prompt builders. */
+export interface CompletionPromptInput {
+  prefix: string
+  suffix: string
+  language: string
+}
+
+/**
+ * Build the FIM-style user prompt for an inline completion: the code before the
+ * cursor, an explicit `[CURSOR]` marker, then the code after it. Exported (and
+ * pure) so the prompt shape can be unit-tested without a network call.
+ */
+export function buildCompletionUserPrompt({
+  prefix,
+  suffix,
+  language
+}: CompletionPromptInput): string {
+  return (
+    `Complete the ${language || 'code'} at the [CURSOR] marker. ` +
+    `Return only the text to insert there.\n\n` +
+    `${prefix}[CURSOR]${suffix}`
+  )
+}
+
+/**
+ * Strip anything the model might wrap a completion in despite instructions —
+ * leading/trailing markdown code fences and a stray language tag line. Keeps the
+ * insertion text clean so it pastes verbatim at the cursor.
+ */
+export function sanitizeCompletion(text: string): string {
+  let out = text
+  // Drop a leading ```lang fence (and its newline) plus a trailing ``` fence.
+  const fenced = /^\s*```[^\n]*\n([\s\S]*?)\n?```\s*$/.exec(out)
+  if (fenced) out = fenced[1]
+  return out
+}

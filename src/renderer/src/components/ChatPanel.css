@@ -226,6 +226,31 @@
   background: var(--bg-elevated);
 }
 
+/* Code-block actions: Apply + Copy, top-right (issue #82). */
+.chat__code-actions {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  display: flex;
+  gap: 4px;
+  z-index: 1;
+}
+
+.chat__code-actions .chat__copy {
+  background: var(--bg-elevated);
+}
+
+/* Apply button: accent-tinted so it reads as the "act on this" affordance. */
+.chat__code-apply {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.chat__code-apply:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 /* Error + composer ----------------------------------------------------- */
 .chat__error {
   margin: 0;
@@ -320,5 +345,18 @@
   border-radius: 4px;
   font-family: inherit;
   font-size: 0.72rem;
+  cursor: pointer;
+}
+
+/* Inline-autocomplete toggle in the footer (issue #82). */
+.chat__footer-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.chat__footer-toggle input {
   cursor: pointer;
 }

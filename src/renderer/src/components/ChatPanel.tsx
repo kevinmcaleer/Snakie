@@ -8,6 +8,12 @@ import type {
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import {
+  COMPLETION_ENABLED_KEY,
+  COMPLETION_MODELS_KEY,
+  notifyCompletionConfigChanged
+} from '../store/completionConfig'
+import { invalidateCompletionKeyStatus } from './inline-completions'
 import './ChatPanel.css'
 
 /**
@@ -37,7 +43,7 @@ interface ChatTurn extends LlmMessage {
 }
 
 export function ChatPanel(): JSX.Element {
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, updateContent } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId)
   const { getSinceRun } = useConsole()
 
@@ -57,6 +63,17 @@ export function ChatPanel(): JSX.Element {
     'snakie.chat.speeds',
     {}
   )
+  // Inline autocomplete (issue #82): master on/off (default OFF — opt-in, since
+  // it spends tokens on every typing pause) and a per-provider FAST completion
+  // model, separate from the chat model. Read live by the Monaco provider via
+  // the matching localStorage keys in store/completionConfig.
+  const [completionEnabled, setCompletionEnabled] = useLocalStorage<boolean>(
+    COMPLETION_ENABLED_KEY,
+    false
+  )
+  const [completionModelByProvider, setCompletionModelByProvider] = useLocalStorage<
+    Record<string, string>
+  >(COMPLETION_MODELS_KEY, {})
 
   const provider = useMemo(
     () => providers.find((p) => p.id === providerId) ?? providers[0],
@@ -65,6 +82,13 @@ export function ChatPanel(): JSX.Element {
   const model = (provider && modelByProvider[provider.id]) || provider?.defaultModel || ''
   const effort = provider ? effortByProvider[provider.id] : undefined
   const speed = provider ? speedByProvider[provider.id] : undefined
+  // The fast completion model: per-provider override, else the provider's
+  // declared fast default (issue #82).
+  const completionModel =
+    (provider && completionModelByProvider[provider.id]) ||
+    provider?.defaultCompletionModel ||
+    provider?.defaultModel ||
+    ''
 
   // ── Key settings ────────────────────────────────────────────────────────
   const [keyStatus, setKeyStatus] = useState<LlmKeyStatus | null>(null)
@@ -75,7 +99,13 @@ export function ChatPanel(): JSX.Element {
   // ── Thread state ──────────────────────────────────────────────────────────
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
-  const [includeFile, setIncludeFile] = useState(false)
+  // AI-first default (issue #82): include the active file ON by default so the
+  // model always sees the up-to-date editor content. Persisted so a user who
+  // turns it off keeps it off.
+  const [includeFile, setIncludeFile] = useLocalStorage<boolean>(
+    'snakie.chat.includeActiveFile',
+    true
+  )
   const [includeConsole, setIncludeConsole] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,6 +168,9 @@ export function ChatPanel(): JSX.Element {
       setError(null)
       try {
         await window.api.llm.setKey(provider.id, keyInput)
+        // The inline-completion provider caches "has key" per provider; a freshly
+        // saved key must invalidate that so suggestions start working at once.
+        invalidateCompletionKeyStatus(provider.id)
         setKeyInput('')
         await refreshKeyStatus()
         setShowSettings(false)
@@ -228,6 +261,22 @@ export function ChatPanel(): JSX.Element {
     setStreaming(null)
   }, [])
 
+  /**
+   * Apply an assistant code block to the ACTIVE file (issue #82). Writes the code
+   * through the workspace store; Monaco is bound to the active file and syncs on
+   * drift, so the editor updates live and the change is undoable (Ctrl-Z). We
+   * REPLACE the file's contents with the block — predictable and easy to undo —
+   * rather than trying to merge/splice (the model already sees the whole file
+   * since "Include active file" defaults on, so blocks are usually full files).
+   */
+  const applyToEditor = useCallback(
+    (code: string): void => {
+      if (!activeId) return
+      updateContent(activeId, code)
+    },
+    [activeId, updateContent]
+  )
+
   const setModel = useCallback(
     (next: string): void => {
       if (!provider) return
@@ -248,6 +297,21 @@ export function ChatPanel(): JSX.Element {
       setSpeedByProvider({ ...speedByProvider, [provider.id]: next })
     },
     [provider, speedByProvider, setSpeedByProvider]
+  )
+  const setCompletionModel = useCallback(
+    (next: string): void => {
+      if (!provider) return
+      setCompletionModelByProvider({ ...completionModelByProvider, [provider.id]: next })
+      notifyCompletionConfigChanged()
+    },
+    [provider, completionModelByProvider, setCompletionModelByProvider]
+  )
+  const toggleCompletionEnabled = useCallback(
+    (next: boolean): void => {
+      setCompletionEnabled(next)
+      notifyCompletionConfigChanged()
+    },
+    [setCompletionEnabled]
   )
 
   const ready = keyStatus?.hasKey ?? false
@@ -306,6 +370,7 @@ export function ChatPanel(): JSX.Element {
                 className="chat__btn"
                 onClick={async () => {
                   await window.api.llm.setKey(provider.id, '')
+                  invalidateCompletionKeyStatus(provider.id)
                   await refreshKeyStatus()
                 }}
                 disabled={savingKey}
@@ -343,7 +408,13 @@ export function ChatPanel(): JSX.Element {
           </p>
         )}
         {turns.map((t) => (
-          <Bubble key={t.id} role={t.role} content={t.content} assistantLabel={providerLabel} />
+          <Bubble
+            key={t.id}
+            role={t.role}
+            content={t.content}
+            assistantLabel={providerLabel}
+            onApply={activeFile ? applyToEditor : undefined}
+          />
         ))}
         {streaming !== null && (
           <Bubble role="assistant" content={streaming} assistantLabel={providerLabel} streaming />
@@ -434,6 +505,27 @@ export function ChatPanel(): JSX.Element {
               ]}
             />
           )}
+          {/* Inline autocomplete (issue #82): opt-in toggle + the FAST model used
+              for ghost-text completions, separate from the chat model above. */}
+          <label
+            className="chat__footer-toggle"
+            title="Suggest code as you type (uses the completion model below)"
+          >
+            <input
+              type="checkbox"
+              checked={completionEnabled}
+              onChange={(e) => toggleCompletionEnabled(e.target.checked)}
+            />
+            <span className="chat__footer-label">Autocomplete</span>
+          </label>
+          {completionEnabled && (
+            <FooterSelect
+              label="Completion"
+              value={completionModel}
+              onChange={setCompletionModel}
+              options={provider.models.map((m) => ({ value: m.id, label: m.label }))}
+            />
+          )}
         </div>
       )}
     </div>
@@ -468,21 +560,30 @@ function FooterSelect({
 
 /**
  * A single chat bubble. Renders text with fenced code blocks broken out into
- * styled `<pre>` blocks (each with a Copy button); a Copy button also covers the
- * whole assistant message. Markdown beyond fenced code is rendered as plain text.
+ * styled `<pre>` blocks (each with a Copy button — and, when `onApply` is given,
+ * an Apply button that writes the block into the active editor file, issue #82);
+ * a Copy button also covers the whole assistant message. Markdown beyond fenced
+ * code is rendered as plain text.
+ *
+ * `onApply` is only supplied for completed ASSISTANT bubbles when there is an
+ * active file, so Apply never appears on user messages, while streaming, or with
+ * no file to apply to.
  */
 function Bubble({
   role,
   content,
   assistantLabel,
-  streaming
+  streaming,
+  onApply
 }: {
   role: 'user' | 'assistant'
   content: string
   assistantLabel: string
   streaming?: boolean
+  onApply?: (code: string) => void
 }): JSX.Element {
   const segments = parseSegments(content)
+  const canApply = role === 'assistant' && !streaming && !!onApply
   return (
     <div className={`chat__bubble chat__bubble--${role}`}>
       <div className="chat__bubble-head">
@@ -493,7 +594,10 @@ function Bubble({
         {segments.map((seg, i) =>
           seg.type === 'code' ? (
             <div className="chat__code" key={i}>
-              <CopyButton text={seg.text} label="Copy" className="chat__code-copy" />
+              <div className="chat__code-actions">
+                {canApply && <ApplyButton code={seg.text} onApply={onApply!} />}
+                <CopyButton text={seg.text} label="Copy" />
+              </div>
               <pre className="chat__code-pre">{seg.text}</pre>
             </div>
           ) : (
@@ -505,6 +609,35 @@ function Bubble({
         )}
       </div>
     </div>
+  )
+}
+
+/**
+ * Apply a code block to the active editor file (issue #82). Calls `onApply`
+ * (which writes the block via the workspace store) and shows a brief "Applied"
+ * confirmation, mirroring the Copy button's affordance.
+ */
+function ApplyButton({
+  code,
+  onApply
+}: {
+  code: string
+  onApply: (code: string) => void
+}): JSX.Element {
+  const [applied, setApplied] = useState(false)
+  return (
+    <button
+      type="button"
+      className="chat__copy chat__code-apply"
+      title="Replace the active file's contents with this code (undo with Ctrl-Z)"
+      onClick={() => {
+        onApply(code)
+        setApplied(true)
+        setTimeout(() => setApplied(false), 1200)
+      }}
+    >
+      {applied ? 'Applied' : 'Apply'}
+    </button>
   )
 }
 

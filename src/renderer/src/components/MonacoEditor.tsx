@@ -18,11 +18,17 @@ import {
   registerPluginCodeActions,
   setModelDiagnostics
 } from './plugin-code-actions'
+import { registerInlineCompletions } from './inline-completions'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
 // guarded against HMR double-registration.
 registerPluginCodeActions(monaco)
+
+// Register the AI inline-completion (ghost text) provider exactly once at module
+// load (issue #82). Idempotent + HMR-guarded; reads the enable/provider/model
+// config live on each suggestion, so settings changes apply without a remount.
+registerInlineCompletions(monaco)
 
 /** Monaco marker owner used for plugin-sourced diagnostics. */
 const PLUGIN_MARKER_OWNER = 'snakie-plugins'
@@ -196,7 +202,11 @@ export function MonacoEditor(): JSX.Element {
       fontSize: metrics.fontSize,
       lineHeight: metrics.lineHeight,
       letterSpacing: 0,
-      scrollBeyondLastLine: false
+      scrollBeyondLastLine: false,
+      // AI ghost text (issue #82). The registered provider gates itself on the
+      // enable toggle + a stored key, so leaving this on costs nothing when the
+      // feature is off.
+      inlineSuggest: { enabled: true }
     })
     editorRef.current = editor
 

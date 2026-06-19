@@ -42,6 +42,26 @@ export interface StreamChatArgs {
   signal?: AbortSignal
 }
 
+/**
+ * Arguments to {@link Provider.complete} — a one-shot, non-streaming inline
+ * completion (issue #82). FIM-style: the model fills in the text that belongs at
+ * the cursor, given the code before (`prefix`) and after (`suffix`) it.
+ */
+export interface CompleteArgs {
+  /** The provider API key / token (never logged). */
+  apiKey: string
+  /** The fast completion model id to use (already defaulted by the IPC layer). */
+  model: string
+  /** Code immediately before the cursor (bounded by the caller). */
+  prefix: string
+  /** Code immediately after the cursor (bounded by the caller). */
+  suffix: string
+  /** Editor language id (e.g. `python`), to steer the completion. */
+  language: string
+  /** Optional abort signal to cancel an in-flight request (new keystrokes). */
+  signal?: AbortSignal
+}
+
 /** A pluggable LLM backend. */
 export interface Provider {
   /** Static, renderer-safe metadata. */
@@ -52,4 +72,11 @@ export interface Provider {
    * layer translates these into a serializable error result).
    */
   streamChat(args: StreamChatArgs): Promise<string>
+  /**
+   * One-shot inline code completion (issue #82). Returns ONLY the text to insert
+   * at the cursor — no markdown fences, no prose. Uses a small, fast model (low
+   * `max_tokens`) so it can run on every typing pause without spending much.
+   * Throws on API errors; the caller treats a throw/abort as "no suggestion".
+   */
+  complete(args: CompleteArgs): Promise<string>
 }
