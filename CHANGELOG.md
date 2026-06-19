@@ -6,15 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-06-19
+
+### Fixed
+- **macOS code signing actually runs now.** The release workflow set
+  `CSC_IDENTITY_AUTO_DISCOVERY=false`, which *disables* macOS code signing
+  outright — so even with the signing secrets configured, the macOS build shipped
+  **unsigned** (and that shared signing env was also leaking into the Windows
+  build, signing the `.exe` with the macOS certificate). Scoped the signing env to
+  the macOS job and removed the kill-switch. This is the first macOS build that is
+  genuinely signed (Developer ID Application) **and** notarized, so the in-app
+  updater can install on macOS (Squirrel.Mac validates the signature) and
+  Gatekeeper no longer flags the app as "damaged". No functional changes.
+
 ## [0.6.1] - 2026-06-19
 
 ### Changed
-- First **signed + notarized** macOS release. Builds are now signed with a
-  Developer ID Application certificate and notarized by Apple (via the CI signing
-  secrets — see `docs/macos-signing.md`), so the in-app updater can install
-  updates on macOS (Squirrel.Mac validates the signature) and Gatekeeper no
-  longer flags the app as "damaged" on first download. No functional changes from
-  0.6.0.
+- Configured the macOS signing + notarization secrets in CI, intended as the
+  first signed build — but a release-workflow bug shipped it unsigned anyway (see
+  0.6.2). No functional changes from 0.6.0.
 
 ## [0.6.0] - 2026-06-19
 
@@ -263,7 +273,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.5.0
