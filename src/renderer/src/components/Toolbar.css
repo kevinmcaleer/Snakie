@@ -13,6 +13,36 @@
   background: var(--border);
 }
 
+/* Product brand: snake mark + wordmark at the far left of the toolbar. */
+.toolbar__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.25rem;
+  flex: 0 0 auto;
+}
+
+.toolbar__logo {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.toolbar__wordmark {
+  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #3a7a34;
+}
+
+/* File-action group (New / Open / Save). The Skeuomorph skin fuses these into a
+ * single segmented control; other themes keep them as spaced icon buttons. */
+.toolbar__seg {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 /* Compact, square icon-only buttons for the file actions. */
 .btn--icon {
   padding: 0.4rem;

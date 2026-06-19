@@ -74,6 +74,496 @@
   --handle-hover: var(--accent);
 }
 
+/* ===========================================================================
+ * Skeuomorph skin (default look) — concept 08 of the "MicroPython IDE
+ * Concepts" design: brushed metal chrome, green-felt source control, cream
+ * ruled-paper editor, recessed dark-glass console, brass knobs & glossy pills.
+ *
+ * Token overrides below re-skin everything that uses var(--…). The scoped rules
+ * further down add the gradients, bevels and textures tokens can't express. The
+ * Monaco editor (snakie-skeuomorph) and xterm (SKEUO_TERMINAL_THEME) carry the
+ * matching paper / phosphor palettes in their own components.
+ * ========================================================================= */
+:root[data-theme='skeuomorph'] {
+  color-scheme: light;
+
+  --bg: #e7e2d3; /* warm parchment behind sidebars / editor */
+  --bg-elevated: #d8dce2; /* brushed-metal chrome */
+  --bg-sunken: #cdd1d8; /* recessed controls */
+  --border: #9498a1; /* metal edge */
+  --text: #34373d;
+  --text-muted: #6c7178;
+
+  --accent: #b07d1e; /* brass — active/selected/links */
+  --accent-2: #1c7a34; /* green — connected / run / saved */
+  --accent-contrast: #fffdf6;
+  --danger: #c4301f;
+  --success: #1c7a34;
+  --warn: #9a6b1e;
+  --disconnected: #9498a1;
+
+  --handle: #a9aeb8;
+  --handle-hover: #8d9099;
+
+  --radius: 8px; /* skeuomorph is rounded, not square */
+  --pixel-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --pixel-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Chrome speaks sans (Helvetica) in this skin; editor/console/trees stay mono. */
+:root[data-theme='skeuomorph'] .toolbar,
+:root[data-theme='skeuomorph'] .btn,
+:root[data-theme='skeuomorph'] .panel-header,
+:root[data-theme='skeuomorph'] .activitybar,
+:root[data-theme='skeuomorph'] .activitybar__item,
+:root[data-theme='skeuomorph'] .statusbar,
+:root[data-theme='skeuomorph'] .shell-toggle__btn,
+:root[data-theme='skeuomorph'] .editor-tab,
+:root[data-theme='skeuomorph'] .localtree__title,
+:root[data-theme='skeuomorph'] .devicetree__title {
+  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+}
+
+/* Metal backdrop shows through any seams between panels. */
+:root[data-theme='skeuomorph'] .shell {
+  background: linear-gradient(180deg, #d3d6dc, #b9bdc6);
+}
+
+/* --- Toolbar: brushed aluminium ----------------------------------------- */
+:root[data-theme='skeuomorph'] .toolbar {
+  height: 60px;
+  background: linear-gradient(180deg, #f3f4f7, #cfd3da 52%, #bcc1ca);
+  border-bottom: 1px solid #8d9099;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 0 rgba(0, 0, 0, 0.15);
+}
+
+:root[data-theme='skeuomorph'] .toolbar__divider {
+  width: 2px;
+  background: linear-gradient(#9498a1, #cfd3da);
+  box-shadow: 1px 0 0 #fff;
+}
+
+:root[data-theme='skeuomorph'] .toolbar__wordmark {
+  text-shadow: 0 1px 0 #fff;
+}
+
+/* New / Open / Save fuse into one brushed-metal segmented control (the internal
+ * dividers were intentionally removed in the refined concept). */
+:root[data-theme='skeuomorph'] .toolbar__seg {
+  gap: 0;
+  border-radius: 9px;
+  border: 1px solid #9498a1;
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+:root[data-theme='skeuomorph'] .toolbar__seg .btn {
+  width: 44px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #5a5e66;
+}
+
+:root[data-theme='skeuomorph'] .toolbar__seg .btn:hover {
+  border: none;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme='skeuomorph'] .toolbar__seg .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme='skeuomorph'] .toolbar__seg .toolbar__seg-btn--open {
+  color: #9a7b3a;
+}
+
+/* --- Buttons: glossy bevelled pills -------------------------------------- */
+:root[data-theme='skeuomorph'] .btn {
+  border-radius: 9px;
+  border: 1px solid #9498a1;
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+  color: #4a4e56;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+:root[data-theme='skeuomorph'] .btn:hover {
+  border-color: #7d818b;
+}
+
+:root[data-theme='skeuomorph'] .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .btn--primary {
+  border-radius: 21px;
+  background: linear-gradient(180deg, #8fe49a, #34ad4f 52%, #218c39);
+  border: 1px solid #1c7a34;
+  color: #fff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.22),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .btn--danger {
+  border-radius: 21px;
+  background: linear-gradient(180deg, #ff9d8e, #e34f3d 52%, #c4301f);
+  border: 1px solid #aa2a1c;
+  color: #fff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.22),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* Domed Run / Stop pills in the toolbar get the roomier hardware padding;
+ * the small Connect / Disconnect keys in the shell keep their compact size. */
+:root[data-theme='skeuomorph'] .toolbar .btn--primary,
+:root[data-theme='skeuomorph'] .toolbar .btn--danger {
+  padding: 10px 22px;
+}
+
+:root[data-theme='skeuomorph'] .btn--ghost {
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+}
+
+:root[data-theme='skeuomorph'] .btn--ghost.is-active {
+  background: linear-gradient(180deg, #bcc0c8, #d6dae1);
+  border-color: #8d9099;
+  color: #2e3138;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* The theme toggle is a round brass knob. */
+:root[data-theme='skeuomorph'] .btn--knob {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #9a6b1e;
+  background: radial-gradient(circle at 50% 30%, #fff4b8, #f6d572 40%, #e6ab30 72%, #c4881d);
+  color: #5a3d0e;
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.9),
+    inset 0 -4px 6px rgba(120, 75, 10, 0.55),
+    0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='skeuomorph'] .btn--knob:hover {
+  border-color: #8a5f15;
+}
+
+:root[data-theme='skeuomorph'] .btn--knob:active:not(:disabled) {
+  box-shadow: inset 0 3px 5px rgba(70, 45, 5, 0.6);
+}
+
+/* A panel-collapse knob whose panel is shown reads as a pressed-in (concave)
+ * hardware key — the active/toggled state from the Skeuomorph concept. */
+:root[data-theme='skeuomorph'] .btn--knob.is-active {
+  border-color: #8a5f15;
+  background: radial-gradient(circle at 50% 68%, #e6b743, #c4881d 58%, #a06c16);
+  color: #4a3209;
+  box-shadow:
+    inset 0 3px 5px rgba(70, 45, 5, 0.6),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.3);
+}
+
+/* --- Activity bar: dark brushed metal ----------------------------------- */
+:root[data-theme='skeuomorph'] .activitybar {
+  background: linear-gradient(180deg, #3a3d45, #23252b);
+  border-right: 1px solid #15171b;
+  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='skeuomorph'] .activitybar__item {
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #9498a1;
+  text-shadow: 0 1px 0 #000;
+  box-shadow: none;
+}
+
+:root[data-theme='skeuomorph'] .activitybar__item:hover {
+  border: none;
+  color: #d6dae1;
+}
+
+:root[data-theme='skeuomorph'] .activitybar__item:active {
+  transform: none;
+  box-shadow: none;
+}
+
+:root[data-theme='skeuomorph'] .activitybar__item.is-active {
+  border: none;
+  background: linear-gradient(180deg, #5a5e68, #3a3d45);
+  color: #ffd36b;
+  text-shadow: 0 0 6px rgba(255, 200, 80, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Panel headers: light brushed metal --------------------------------- */
+:root[data-theme='skeuomorph'] .panel-header {
+  background: linear-gradient(180deg, #dfe2e7, #c9cdd4);
+  border-bottom: 1px solid #9498a1;
+  color: #43474f;
+  text-shadow: 0 1px 0 #fff;
+  box-shadow: inset 0 1px 0 #fff;
+}
+
+/* --- Resize handles: metal seams ---------------------------------------- */
+:root[data-theme='skeuomorph'] .resize-handle {
+  background: #a9aeb8;
+}
+
+:root[data-theme='skeuomorph'] .resize-handle:hover,
+:root[data-theme='skeuomorph'] .resize-handle[data-resize-handle-active] {
+  background: #8d9099;
+}
+
+/* --- Source Control: green felt with cream-paper inputs ------------------ */
+:root[data-theme='skeuomorph'] .git {
+  position: relative;
+  background-color: #2f5d44;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px;
+  color: #e8f1ea;
+  border-left: 3px solid #1c3b2a;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Stitched-leather inset border framing the felt panel content. */
+:root[data-theme='skeuomorph'] .git::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 2px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:root[data-theme='skeuomorph'] .git__toolbar,
+:root[data-theme='skeuomorph'] .git__branches,
+:root[data-theme='skeuomorph'] .git__commit,
+:root[data-theme='skeuomorph'] .git__group,
+:root[data-theme='skeuomorph'] .git__diff-wrap,
+:root[data-theme='skeuomorph'] .git__footer {
+  border-color: #1c3b2a;
+}
+
+:root[data-theme='skeuomorph'] .git__branch-icon,
+:root[data-theme='skeuomorph'] .git__sync-counts,
+:root[data-theme='skeuomorph'] .git__branches-label,
+:root[data-theme='skeuomorph'] .git__group-head,
+:root[data-theme='skeuomorph'] .git__notice,
+:root[data-theme='skeuomorph'] .git__file-dir,
+:root[data-theme='skeuomorph'] .git__repo-path {
+  color: #bcd4c4;
+}
+
+:root[data-theme='skeuomorph'] .git__branch-select,
+:root[data-theme='skeuomorph'] .git__commit-msg,
+:root[data-theme='skeuomorph'] .git__btn {
+  background: #f3efe2;
+  border: 1px solid #1c3b2a;
+  color: #2a3a30;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='skeuomorph'] .git__btn--primary {
+  background: linear-gradient(180deg, #f3d488, #d6a23f 55%, #bd8526);
+  border: 1px solid #9a6b1e;
+  color: #4a3410;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .git__file:hover,
+:root[data-theme='skeuomorph'] .git__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='skeuomorph'] .git__btn--primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f6dd9a, #dca945 55%, #c48d28);
+}
+
+:root[data-theme='skeuomorph'] .git__icon-btn {
+  color: #cfe0d4;
+}
+
+:root[data-theme='skeuomorph'] .git__icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+/* --- Editor: cream paper tabs ------------------------------------------- */
+:root[data-theme='skeuomorph'] .editor-tabs {
+  background: linear-gradient(180deg, #d6cfba, #cabfa3);
+  border-bottom: 1px solid #b3a888;
+}
+
+:root[data-theme='skeuomorph'] .editor-tab {
+  background: transparent;
+  color: #6a6450;
+  border-right: 1px solid #b3a888;
+}
+
+:root[data-theme='skeuomorph'] .editor-tab:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+:root[data-theme='skeuomorph'] .editor-tab--active {
+  background: #f6f1e3;
+  color: #4a4636;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme='skeuomorph'] .editor-tab__dirty {
+  background: #bd8526;
+}
+
+:root[data-theme='skeuomorph'] .region--editor .region__body--editor,
+:root[data-theme='skeuomorph'] .editor-empty {
+  background: #e9e3d2;
+}
+
+/* Ruled notebook paper: Monaco's surface is transparent (see the
+ * snakie-skeuomorph theme), so this gradient paints on the scrolling line layer
+ * — one faint rule every 30px to match the editor's notebook line height. */
+:root[data-theme='skeuomorph'] .region--editor .monaco-editor .lines-content {
+  background-image: repeating-linear-gradient(#f6f1e3 0 29px, #e0d4b2 29px 30px);
+}
+
+/* Red margin rule down the right edge of the line-number gutter (inset shadow
+ * so it doesn't shift Monaco's gutter width). */
+:root[data-theme='skeuomorph'] .region--editor .monaco-editor .margin {
+  box-shadow: inset -2px 0 0 #d98a8a;
+}
+
+/* --- Shell: brushed-metal frame around a recessed dark-glass screen ------ */
+:root[data-theme='skeuomorph'] .region--shell {
+  background: linear-gradient(180deg, #cdd1d8, #b4b9c2);
+}
+
+:root[data-theme='skeuomorph'] .region--shell .region__body--terminal {
+  background: transparent;
+  padding: 8px;
+}
+
+:root[data-theme='skeuomorph'] .terminal {
+  position: relative;
+  border-radius: 8px;
+  background: #080a07;
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 3px 10px rgba(0, 0, 0, 0.85),
+    0 1px 0 #fff;
+}
+
+/* Glass sheen across the top of the recessed screen. */
+:root[data-theme='skeuomorph'] .terminal::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 42%;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
+  pointer-events: none;
+}
+
+:root[data-theme='skeuomorph'] .shell-toggle {
+  border: 1px solid #9498a1;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme='skeuomorph'] .shell-toggle__btn {
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+  color: #5a5e66;
+  text-shadow: 0 1px 0 #fff;
+}
+
+:root[data-theme='skeuomorph'] .shell-toggle__btn + .shell-toggle__btn {
+  border-left: 1px solid #9498a1;
+}
+
+:root[data-theme='skeuomorph'] .shell-toggle__btn:hover {
+  background: linear-gradient(180deg, #fff, #d6dae1);
+  color: #2e3138;
+}
+
+:root[data-theme='skeuomorph'] .shell-toggle__btn--active {
+  background: linear-gradient(180deg, #bcc0c8, #d6dae1);
+  color: #2e3138;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.32);
+}
+
+:root[data-theme='skeuomorph'] .conn-control__select {
+  border-radius: 8px;
+  border: 1px solid #9498a1;
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+  color: #3a3d44;
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* --- Status bar: brushed metal with a glossy connection LED -------------- */
+:root[data-theme='skeuomorph'] .statusbar {
+  background: linear-gradient(180deg, #c9cdd4, #a9aeb8);
+  border-top: 1px solid #fff;
+  color: #3a3d44;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root[data-theme='skeuomorph'] .statusbar__conn--connected .statusbar__dot {
+  background: radial-gradient(circle at 30% 30%, #9dffb6, #15a64a);
+  box-shadow:
+    0 0 5px rgba(33, 200, 90, 0.8),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .statusbar__flash {
+  border-radius: 7px;
+  background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='skeuomorph'] .statusbar__update-btn {
+  border-radius: 7px;
+  color: #2a2008;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
 * {
   box-sizing: border-box;
 }

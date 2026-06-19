@@ -22,6 +22,17 @@ const ToolIcon = (children: ReactNode): JSX.Element => (
   </svg>
 )
 
+/**
+ * Inline SVG wrapper for the panel-collapse "knob" icons on the right of the
+ * toolbar — a rounded-rect window with a filled bar on the edge of the panel it
+ * toggles, plus a divider line (matches the Skeuomorph concept's hardware keys).
+ */
+const PanelIcon = (children: ReactNode): JSX.Element => (
+  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
+    {children}
+  </svg>
+)
+
 // page with a `+` (new file)
 const NEW_FILE_ICON = ToolIcon(
   <g fill="currentColor">
@@ -42,6 +53,63 @@ const SAVE_ICON = ToolIcon(
   </g>
 )
 
+// Window with a filled bar on the left edge — toggles the left (Files) panel.
+const PANEL_LEFT_ICON = PanelIcon(
+  <g>
+    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <rect x="4.2" y="6.2" width="4.6" height="11.6" rx="1" fill="currentColor" opacity="0.3" />
+    <line x1="9" y1="5" x2="9" y2="19" stroke="currentColor" strokeWidth="1.6" />
+  </g>
+)
+// Window with a filled bar on the bottom edge — toggles the bottom (Shell) panel.
+const PANEL_BOTTOM_ICON = PanelIcon(
+  <g>
+    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <rect x="4.2" y="14" width="15.6" height="3.8" rx="1" fill="currentColor" opacity="0.3" />
+    <line x1="3" y1="14" x2="21" y2="14" stroke="currentColor" strokeWidth="1.6" />
+  </g>
+)
+// Window with a filled bar on the right edge — toggles the right (Chat) panel.
+const PANEL_RIGHT_ICON = PanelIcon(
+  <g>
+    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+    <rect x="15.2" y="6.2" width="4.6" height="11.6" rx="1" fill="currentColor" opacity="0.3" />
+    <line x1="15" y1="5" x2="15" y2="19" stroke="currentColor" strokeWidth="1.6" />
+  </g>
+)
+
+/**
+ * Glossy green snake brand mark from the Skeuomorph concept: a green
+ * vertical-gradient body with a round head, eye and a small red forked tongue.
+ */
+const SNAKE_LOGO = (
+  <svg
+    width="28"
+    height="28"
+    viewBox="0 0 32 32"
+    className="toolbar__logo"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <defs>
+      <linearGradient id="snakie-mark" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stopColor="#86df6f" />
+        <stop offset="1" stopColor="#369b2c" />
+      </linearGradient>
+    </defs>
+    <path
+      d="M10 27c0-4 6-3.5 6-8s-6-3.5-6-8 5.5-5 10-3.6"
+      fill="none"
+      stroke="url(#snakie-mark)"
+      strokeWidth="4.3"
+      strokeLinecap="round"
+    />
+    <circle cx="21" cy="7" r="3.7" fill="url(#snakie-mark)" stroke="#2f7a28" strokeWidth="0.7" />
+    <circle cx="22.1" cy="6.3" r="0.95" fill="#16240f" />
+    <path d="M24.4 8l3 .7m-3-.7l3-.9" stroke="#e23b2b" strokeWidth="1.1" strokeLinecap="round" />
+  </svg>
+)
+
 interface ToolbarProps {
   theme: Theme
   onToggleTheme: () => void
@@ -57,16 +125,18 @@ interface ToolbarProps {
  * TOP TOOLBAR.
  *
  * Big, easy-to-click action buttons (Run / Stop) plus the file actions
- * (New / Open / Save). Run executes the active editor file on the device via
- * MicroPython paste mode (output streams to the existing Shell terminal); Stop
- * sends an interrupt (Ctrl-C).
+ * (New / Open / Save, grouped as one segmented control). Run executes the
+ * active editor file on the device via MicroPython paste mode (output streams to
+ * the existing Shell terminal); Stop sends an interrupt (Ctrl-C).
  *
  * Connection state and the Flash-firmware action now live in the bottom
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Also hosts layout controls (panel show/hide toggles) and the theme toggle,
- * following progressive disclosure: complexity stays tucked away by default.
+ * Also hosts the layout controls — the right cluster of panel-collapse knobs
+ * (Files / Shell / Chat) and the light/dark toggle — which render as pressable
+ * hardware keys in the Skeuomorph skin (a pressed-in look marks the active /
+ * shown panel).
  */
 export function Toolbar({
   theme,
@@ -111,35 +181,42 @@ export function Toolbar({
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
+      <div className="toolbar__brand">
+        {SNAKE_LOGO}
+        <span className="toolbar__wordmark">Snakie</span>
+      </div>
+
       <div className="toolbar__group">
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon"
-          onClick={newFile}
-          title="New file"
-          aria-label="New file"
-        >
-          {NEW_FILE_ICON}
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon"
-          onClick={handleOpenFolder}
-          title="Open folder"
-          aria-label="Open folder"
-        >
-          {OPEN_FOLDER_ICON}
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon"
-          onClick={handleSave}
-          disabled={!activeFile}
-          title={activeFile ? `Save ${activeFile.name}` : 'Open a file to save'}
-          aria-label="Save active file"
-        >
-          {SAVE_ICON}
-        </button>
+        <div className="toolbar__seg" role="group" aria-label="File actions">
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon toolbar__seg-btn"
+            onClick={newFile}
+            title="New file"
+            aria-label="New file"
+          >
+            {NEW_FILE_ICON}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon toolbar__seg-btn toolbar__seg-btn--open"
+            onClick={handleOpenFolder}
+            title="Open folder"
+            aria-label="Open folder"
+          >
+            {OPEN_FOLDER_ICON}
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon toolbar__seg-btn"
+            onClick={handleSave}
+            disabled={!activeFile}
+            title={activeFile ? `Save ${activeFile.name}` : 'Open a file to save'}
+            aria-label="Save active file"
+          >
+            {SAVE_ICON}
+          </button>
+        </div>
       </div>
 
       <span className="toolbar__divider" aria-hidden="true" />
@@ -184,36 +261,39 @@ export function Toolbar({
       <div className="toolbar__group">
         <button
           type="button"
-          className={`btn btn--ghost ${filesCollapsed ? '' : 'is-active'}`}
+          className={`btn btn--ghost btn--icon btn--knob ${filesCollapsed ? '' : 'is-active'}`}
           aria-pressed={!filesCollapsed}
           onClick={onToggleFiles}
           title="Toggle Files panel"
+          aria-label="Toggle Files panel"
         >
-          Files
+          {PANEL_LEFT_ICON}
         </button>
         <button
           type="button"
-          className={`btn btn--ghost ${shellCollapsed ? '' : 'is-active'}`}
+          className={`btn btn--ghost btn--icon btn--knob ${shellCollapsed ? '' : 'is-active'}`}
           aria-pressed={!shellCollapsed}
           onClick={onToggleShell}
           title="Toggle Shell panel"
+          aria-label="Toggle Shell panel"
         >
-          Shell
+          {PANEL_BOTTOM_ICON}
         </button>
         <button
           type="button"
-          className={`btn btn--ghost ${rightCollapsed ? '' : 'is-active'}`}
+          className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
           aria-pressed={!rightCollapsed}
           onClick={onToggleRight}
           title="Toggle Chat panel"
+          aria-label="Toggle Chat panel"
         >
-          Chat
+          {PANEL_RIGHT_ICON}
         </button>
         <button
           type="button"
-          className="btn btn--ghost"
+          className="btn btn--ghost btn--icon btn--knob"
           onClick={onToggleTheme}
-          title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          title={theme === 'dark' ? 'Switch to the Skeuomorph theme' : 'Switch to the dark theme'}
           aria-label="Toggle theme"
         >
           <svg

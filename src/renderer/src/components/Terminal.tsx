@@ -17,7 +17,7 @@ export interface TerminalHandle {
  * output (tracebacks, prompts, coloured logging) reads clearly — the reviewer
  * specifically valued console colour highlighting.
  */
-const TERMINAL_THEME = {
+const DARK_TERMINAL_THEME = {
   background: '#14141f',
   foreground: '#e8e8f0',
   cursor: '#3cbcfc',
@@ -39,6 +39,41 @@ const TERMINAL_THEME = {
   brightMagenta: '#f878f8',
   brightCyan: '#58f8f8',
   brightWhite: '#ffffff'
+}
+
+/**
+ * Skeuomorph skin: a recessed dark-glass screen glowing green phosphor, matching
+ * concept 08 of the MicroPython IDE Concepts design. The near-black background
+ * pairs with the inset frame applied to `.terminal` in index.css.
+ */
+const SKEUO_TERMINAL_THEME = {
+  background: '#080a07',
+  foreground: '#5dff8a',
+  cursor: '#8affa8',
+  cursorAccent: '#080a07',
+  selectionBackground: '#2bbf6a55',
+  black: '#0b0d0a',
+  red: '#ff7a5a',
+  green: '#5dff8a',
+  yellow: '#e8d36b',
+  blue: '#7fd0ff',
+  magenta: '#c9a0ff',
+  cyan: '#7fe9d8',
+  white: '#d6e6da',
+  brightBlack: '#3f7a52',
+  brightRed: '#ff9a7a',
+  brightGreen: '#8affa8',
+  brightYellow: '#f0e08a',
+  brightBlue: '#a0e0ff',
+  brightMagenta: '#e0b8ff',
+  brightCyan: '#a8f0e0',
+  brightWhite: '#eafff0'
+}
+
+/** Pick the terminal palette for the app's current `data-theme`. Only the
+ * Skeuomorph skin diverges; every other theme keeps the dark REPL palette. */
+function terminalThemeFor(docTheme: string | null): typeof DARK_TERMINAL_THEME {
+  return docTheme === 'skeuomorph' ? SKEUO_TERMINAL_THEME : DARK_TERMINAL_THEME
 }
 
 const decoder = new TextDecoder()
@@ -79,7 +114,7 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
       fontFamily: "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
       fontSize: 13,
       scrollback: 5000,
-      theme: TERMINAL_THEME,
+      theme: terminalThemeFor(document.documentElement.getAttribute('data-theme')),
       allowProposedApi: true
     })
     const fitAddon = new FitAddon()
@@ -87,6 +122,17 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     term.open(container)
     fitAddon.fit()
     termRef.current = term
+
+    // Follow app theme changes (the document root's data-theme is the single
+    // source of truth, set by useTheme) so the console repaints in step with
+    // the rest of the UI — e.g. the Skeuomorph green-phosphor palette.
+    const themeObserver = new MutationObserver(() => {
+      term.options.theme = terminalThemeFor(document.documentElement.getAttribute('data-theme'))
+    })
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme']
+    })
 
     // Device -> terminal.
     const unsubscribeData = window.api.device.onData((chunk) => {
@@ -112,6 +158,7 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
       unsubscribeData()
       inputDisposable.dispose()
       resizeObserver.disconnect()
+      themeObserver.disconnect()
       term.dispose()
       termRef.current = null
     }

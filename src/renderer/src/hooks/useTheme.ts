@@ -1,14 +1,18 @@
 import { useEffect } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 
-export type Theme = 'light' | 'dark'
+export type Theme = 'light' | 'dark' | 'skeuomorph'
 
-const STORAGE_KEY = 'snakie.theme'
+// Bumped from `snakie.theme` so the new Skeuomorph default takes effect for
+// users who had only ever run the previous dark-first build (their old value
+// stays untouched under the legacy key).
+const STORAGE_KEY = 'snakie.theme.v2'
 
-// Snakie is a dark-first retro app: default to dark regardless of the OS
-// preference. Users can still toggle to the lighter retro variant (persisted).
+// Snakie ships the "Skeuomorph" skin (brushed metal, green felt, cream ruled
+// paper, recessed dark-glass console) as the default look. The toggle drops to
+// the dark "lights out" theme and back; both are persisted.
 function getInitialTheme(): Theme {
-  return 'dark'
+  return 'skeuomorph'
 }
 
 /**
@@ -23,7 +27,8 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
     document.documentElement.setAttribute('data-theme', theme)
   }, [theme])
 
-  const toggleTheme = (): void => setTheme(theme === 'dark' ? 'light' : 'dark')
+  // Flip between the Skeuomorph skin and the dark "lights out" theme.
+  const toggleTheme = (): void => setTheme(theme === 'dark' ? 'skeuomorph' : 'dark')
 
   return { theme, toggleTheme }
 }
