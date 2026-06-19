@@ -12,7 +12,9 @@ import type {
 import type { FsEntry, FsStat } from '../main/fs/types'
 import type {
   BoardCandidate,
+  DownloadAndFlashOptions,
   EsptoolInfo,
+  FirmwareCatalog,
   FlashOptions,
   FlashProgress,
   FlashResult
@@ -320,6 +322,19 @@ const firmware = {
   /** Flash the given firmware; progress streams via {@link firmware.onProgress}. */
   flash: (opts: FlashOptions): Promise<FlashResult> =>
     unwrap(ipcRenderer.invoke('firmware:flash', opts)),
+  /**
+   * Fetch the MicroPython UF2 firmware catalog (Family → Model → Variant →
+   * Version cascade) from Thonny's curated list. Throws when offline.
+   */
+  fetchCatalog: (): Promise<FirmwareCatalog> =>
+    unwrap(ipcRenderer.invoke('firmware:fetchCatalog')),
+  /**
+   * Download a catalog `.uf2` to a temp file then flash it onto the boot drive.
+   * Emits one combined progress stream (download %, copy %, then `done`) via
+   * {@link firmware.onProgress}.
+   */
+  downloadAndFlash: (opts: DownloadAndFlashOptions): Promise<FlashResult> =>
+    unwrap(ipcRenderer.invoke('firmware:downloadAndFlash', opts)),
   /** Subscribe to flash progress/log lines. Returns an unsubscribe function. */
   onProgress: (cb: (progress: FlashProgress) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, progress: FlashProgress): void => cb(progress)

@@ -45,6 +45,12 @@ export interface FlashProgress {
   message: string
   /** Present on the terminal `done` event: whether the flash succeeded. */
   ok?: boolean
+  /**
+   * Optional 0–100 completion percentage for the current phase (download then
+   * copy). Drives the UI progress bar without breaking the plain text log; many
+   * `log` lines carry no `percent` and should leave the bar untouched.
+   */
+  percent?: number
 }
 
 /** Options describing a flash request from the renderer. */
@@ -80,4 +86,72 @@ export interface EsptoolInfo {
   command?: string
   /** Version string reported by the tool, when it could be read. */
   version?: string
+}
+
+/**
+ * One downloadable firmware build (a single `.uf2` for one version), the leaf
+ * of the catalog cascade.
+ */
+export interface FirmwareVersion {
+  /** Version label, e.g. `v1.28.0` (or a preview/nightly tag). */
+  version: string
+  /** Absolute URL of the `.uf2` file on micropython.org. */
+  url: string
+}
+
+/**
+ * A board *variant* (Thonny's `title`, e.g. the SPIRAM vs. non-SPIRAM build, or
+ * a vendor sub-model). Carries its own list of downloadable versions.
+ */
+export interface FirmwareVariant {
+  /** Variant label shown in the Variant dropdown. */
+  title: string
+  /** Optional human info page for the variant/board. */
+  infoUrl?: string
+  /** Whether Thonny flags this entry as a popular/common choice. */
+  popular?: boolean
+  /** Downloadable versions, newest first. */
+  versions: FirmwareVersion[]
+}
+
+/** A board *model* (e.g. `Raspberry Pi Pico`) grouping one or more variants. */
+export interface FirmwareModel {
+  /** Vendor name, e.g. `Raspberry Pi`. */
+  vendor: string
+  /** Model name, e.g. `Pico`. */
+  model: string
+  /** Display label combining vendor + model for the Model dropdown. */
+  label: string
+  /** Variants for this model. */
+  variants: FirmwareVariant[]
+}
+
+/**
+ * A board *family* (Thonny's `family`, e.g. `rp2`, `esp32`, `esp8266`),
+ * grouping its models. This is the top of the Family → Model → Variant →
+ * Version cascade rendered by the flash dialog.
+ */
+export interface FirmwareFamily {
+  /** Family id, e.g. `rp2`. */
+  family: string
+  /** Models in the family, sorted by label. */
+  models: FirmwareModel[]
+}
+
+/**
+ * The serializable firmware catalog handed to the renderer: a list of families,
+ * each cascading down to per-version `.uf2` download URLs.
+ */
+export interface FirmwareCatalog {
+  families: FirmwareFamily[]
+}
+
+/** Request to download a `.uf2` from a URL and flash it onto a boot drive. */
+export interface DownloadAndFlashOptions {
+  /** Absolute URL of the `.uf2` to download (from the catalog). */
+  url: string
+  /** Board family for the flash dispatch (UF2 copy uses `rp2040`). */
+  board: BoardType
+  /** Mounted UF2 boot-drive path to copy the firmware onto. */
+  mountPath: string
 }

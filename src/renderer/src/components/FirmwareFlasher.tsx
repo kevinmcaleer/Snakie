@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   BoardCandidate,
   BoardType,
   EsptoolInfo,
+  FirmwareCatalog,
   FlashProgress
 } from '../../../preload/index.d'
 import './FirmwareFlasher.css'
@@ -25,14 +26,20 @@ const DEFAULT_OFFSET: Record<BoardType, string> = {
   rp2040: ''
 }
 
+/** Where the `.uf2` to flash comes from. */
+type Source = 'local' | 'catalog'
+
 /**
- * FIRMWARE FLASHER MODAL (issue #14).
+ * FIRMWARE FLASHER MODAL (issues #14, #64).
  *
  * Lets the user flash MicroPython firmware to a device without leaving Snakie:
  *  - auto-detects board candidates (serial VID/PID for ESP, RPI-RP2 UF2 drive),
- *  - picks the firmware file (`.bin` for ESP, `.uf2` for RP2040),
- *  - flashes via esptool (ESP) or a UF2 copy (RP2040), and
- *  - streams a live log with clear success / error states.
+ *  - for UF2 boards, picks the firmware EITHER by browsing a local `.uf2`
+ *    file OR by downloading one from MicroPython.org via Thonny's curated
+ *    catalog (Family → Model → Variant → Version cascade) — issue #64,
+ *  - for ESP boards, picks the `.bin` file and flashes via esptool,
+ *  - streams a live log + a % progress bar (download then copy), with a Done
+ *    button once the flash finishes (success or failure).
  *
  * All heavy lifting happens in the main process via `window.api.firmware`; this
  * component is purely presentational state + orchestration.
@@ -46,9 +53,20 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [firmwarePath, setFirmwarePath] = useState<string>('')
   const [esptool, setEsptool] = useState<EsptoolInfo | null>(null)
   const [log, setLog] = useState<FlashProgress[]>([])
+  const [percent, setPercent] = useState<number | null>(null)
   const [flashing, setFlashing] = useState(false)
   const [outcome, setOutcome] = useState<'idle' | 'success' | 'error'>('idle')
   const logRef = useRef<HTMLDivElement>(null)
+
+  // --- Catalog (download-from-MicroPython.org) state (issue #64) ---
+  const [source, setSource] = useState<Source>('local')
+  const [catalog, setCatalog] = useState<FirmwareCatalog | null>(null)
+  const [catalogLoading, setCatalogLoading] = useState(false)
+  const [catalogError, setCatalogError] = useState<string | null>(null)
+  const [selFamily, setSelFamily] = useState<string>('')
+  const [selModel, setSelModel] = useState<string>('')
+  const [selVariant, setSelVariant] = useState<string>('')
+  const [selVersionUrl, setSelVersionUrl] = useState<string>('')
 
   const isEsp = board === 'esp32' || board === 'esp8266'
 
@@ -56,6 +74,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   useEffect(() => {
     const unsubscribe = window.api.firmware.onProgress((p) => {
       setLog((prev) => [...prev, p])
+      if (typeof p.percent === 'number') setPercent(p.percent)
       if (p.kind === 'done') {
         setFlashing(false)
         setOutcome(p.ok ? 'success' : 'error')
@@ -98,6 +117,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const handleBoardChange = useCallback((next: BoardType): void => {
     setBoard(next)
     setOffset(DEFAULT_OFFSET[next])
+    // The catalog source only applies to UF2 boards; snap ESP back to local.
+    if (next === 'esp32' || next === 'esp8266') setSource('local')
   }, [])
 
   const handlePickFile = useCallback(async (): Promise<void> => {
@@ -109,27 +130,111 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     }
   }, [])
 
+  // --- Catalog cascade helpers (issue #64) ---
+
+  const loadCatalog = useCallback(async (): Promise<void> => {
+    setCatalogLoading(true)
+    setCatalogError(null)
+    try {
+      const fetched = await window.api.firmware.fetchCatalog()
+      setCatalog(fetched)
+    } catch (err) {
+      setCatalog(null)
+      setCatalogError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setCatalogLoading(false)
+    }
+  }, [])
+
+  // When the user switches to the catalog source for a UF2 board, fetch it once
+  // and pre-select a sensible family (rp2 for RP2040) + the detected boot drive.
+  useEffect(() => {
+    if (source !== 'catalog') return
+    if (!catalog && !catalogLoading && !catalogError) void loadCatalog()
+  }, [source, catalog, catalogLoading, catalogError, loadCatalog])
+
+  const families = useMemo(() => catalog?.families ?? [], [catalog])
+  const family = useMemo(
+    () => families.find((f) => f.family === selFamily),
+    [families, selFamily]
+  )
+  const models = useMemo(() => family?.models ?? [], [family])
+  const model = useMemo(
+    () => models.find((m) => `${m.vendor}|${m.model}` === selModel),
+    [models, selModel]
+  )
+  const variants = useMemo(() => model?.variants ?? [], [model])
+  const variant = useMemo(
+    () => variants.find((v) => v.title === selVariant),
+    [variants, selVariant]
+  )
+  const versions = useMemo(() => variant?.versions ?? [], [variant])
+
+  // Pre-select Family (rp2 if present, else first) once the catalog arrives.
+  useEffect(() => {
+    if (families.length === 0) return
+    if (selFamily && families.some((f) => f.family === selFamily)) return
+    const preferred = families.find((f) => f.family === 'rp2') ?? families[0]
+    setSelFamily(preferred.family)
+  }, [families, selFamily])
+
+  // Reset downstream selections whenever the upstream selection changes.
+  useEffect(() => {
+    setSelModel('')
+    setSelVariant('')
+    setSelVersionUrl('')
+  }, [selFamily])
+
+  // Auto-pick the sole variant + newest version once a Model is chosen.
+  useEffect(() => {
+    if (variants.length === 1) setSelVariant(variants[0].title)
+  }, [variants])
+
+  useEffect(() => {
+    if (versions.length > 0) setSelVersionUrl(versions[0].url)
+    else setSelVersionUrl('')
+  }, [versions])
+
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive')
 
-  const canFlash =
-    !flashing &&
-    firmwarePath.length > 0 &&
-    (isEsp ? port.length > 0 : mountPath.length > 0) &&
-    (!isEsp || esptool?.available === true)
+  const usingCatalog = !isEsp && source === 'catalog'
 
-  const handleFlash = useCallback(async (): Promise<void> => {
+  const canFlash = useMemo(() => {
+    if (flashing) return false
+    if (isEsp) {
+      return port.length > 0 && esptool?.available === true && firmwarePath.length > 0
+    }
+    // UF2 boards: need the boot drive plus either a local file or a chosen URL.
+    if (mountPath.length === 0) return false
+    return usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
+  }, [flashing, isEsp, port, esptool, firmwarePath, mountPath, usingCatalog, selVersionUrl])
+
+  const resetRun = useCallback((): void => {
     setLog([])
+    setPercent(null)
     setOutcome('idle')
     setFlashing(true)
+  }, [])
+
+  const handleFlash = useCallback(async (): Promise<void> => {
+    resetRun()
     try {
-      await window.api.firmware.flash({
-        board,
-        firmwarePath,
-        port: isEsp ? port : undefined,
-        mountPath: isEsp ? undefined : mountPath,
-        offset: isEsp ? offset : undefined
-      })
+      if (usingCatalog) {
+        await window.api.firmware.downloadAndFlash({
+          url: selVersionUrl,
+          board,
+          mountPath
+        })
+      } else {
+        await window.api.firmware.flash({
+          board,
+          firmwarePath,
+          port: isEsp ? port : undefined,
+          mountPath: isEsp ? undefined : mountPath,
+          offset: isEsp ? offset : undefined
+        })
+      }
       // The terminal `done` progress event drives `flashing` / `outcome`.
     } catch (err) {
       setLog((prev) => [
@@ -139,7 +244,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       setFlashing(false)
       setOutcome('error')
     }
-  }, [board, firmwarePath, isEsp, port, mountPath, offset])
+  }, [resetRun, usingCatalog, selVersionUrl, board, mountPath, firmwarePath, isEsp, port, offset])
+
+  const finished = outcome === 'success' || outcome === 'error'
 
   return (
     <div
@@ -291,26 +398,176 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
             </div>
           )}
 
-          <div className="firmware-field">
-            <label className="firmware-field__label">Firmware file</label>
-            <div className="firmware-field__row">
-              <input
-                className="firmware-input firmware-input--grow"
-                type="text"
-                readOnly
-                value={firmwarePath}
-                placeholder={isEsp ? 'Choose a .bin file…' : 'Choose a .uf2 file…'}
-              />
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => void handlePickFile()}
-                disabled={flashing}
-              >
-                Browse…
-              </button>
+          {/* Firmware source: local file (always) or, for UF2 boards, the catalog. */}
+          {!isEsp && (
+            <div className="firmware-field">
+              <span className="firmware-field__label">Firmware source</span>
+              <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={source === 'catalog'}
+                  className={`firmware-source-tab ${source === 'catalog' ? 'is-active' : ''}`}
+                  onClick={() => setSource('catalog')}
+                  disabled={flashing}
+                >
+                  Download from MicroPython.org
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={source === 'local'}
+                  className={`firmware-source-tab ${source === 'local' ? 'is-active' : ''}`}
+                  onClick={() => setSource('local')}
+                  disabled={flashing}
+                >
+                  Local file
+                </button>
+              </div>
             </div>
-          </div>
+          )}
+
+          {usingCatalog ? (
+            <div className="firmware-field">
+              <div className="firmware-field__row">
+                <span className="firmware-field__label">MicroPython.org firmware</span>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => void loadCatalog()}
+                  disabled={flashing || catalogLoading}
+                  title="Re-fetch the firmware catalog"
+                >
+                  ⟳ Refresh
+                </button>
+              </div>
+
+              {catalogLoading && <p className="firmware-hint">Fetching firmware catalog…</p>}
+              {catalogError && (
+                <p className="firmware-banner firmware-banner--warn">
+                  Could not load the firmware catalog: {catalogError} You can still use{' '}
+                  <strong>Local file</strong>.
+                </p>
+              )}
+
+              {catalog && !catalogLoading && (
+                <>
+                  <label className="firmware-field__label" htmlFor="firmware-cat-family">
+                    Family
+                  </label>
+                  <select
+                    id="firmware-cat-family"
+                    className="firmware-select"
+                    value={selFamily}
+                    disabled={flashing}
+                    onChange={(e) => setSelFamily(e.target.value)}
+                  >
+                    <option value="">Select a family…</option>
+                    {families.map((f) => (
+                      <option key={f.family} value={f.family}>
+                        {f.family}
+                      </option>
+                    ))}
+                  </select>
+
+                  <label className="firmware-field__label" htmlFor="firmware-cat-model">
+                    Model
+                  </label>
+                  <select
+                    id="firmware-cat-model"
+                    className="firmware-select"
+                    value={selModel}
+                    disabled={flashing || !family}
+                    onChange={(e) => setSelModel(e.target.value)}
+                  >
+                    <option value="">Select a model…</option>
+                    {models.map((m) => (
+                      <option key={`${m.vendor}|${m.model}`} value={`${m.vendor}|${m.model}`}>
+                        {m.label}
+                      </option>
+                    ))}
+                  </select>
+
+                  {model && (
+                    <>
+                      <label className="firmware-field__label" htmlFor="firmware-cat-variant">
+                        Variant
+                      </label>
+                      <select
+                        id="firmware-cat-variant"
+                        className="firmware-select"
+                        value={selVariant}
+                        disabled={flashing}
+                        onChange={(e) => setSelVariant(e.target.value)}
+                      >
+                        <option value="">Select a variant…</option>
+                        {variants.map((v) => (
+                          <option key={v.title} value={v.title}>
+                            {v.title}
+                            {v.popular ? ' ★' : ''}
+                          </option>
+                        ))}
+                      </select>
+
+                      <label className="firmware-field__label" htmlFor="firmware-cat-version">
+                        Version
+                      </label>
+                      <select
+                        id="firmware-cat-version"
+                        className="firmware-select"
+                        value={selVersionUrl}
+                        disabled={flashing || !variant}
+                        onChange={(e) => setSelVersionUrl(e.target.value)}
+                      >
+                        <option value="">Select a version…</option>
+                        {versions.map((ver) => (
+                          <option key={ver.url} value={ver.url}>
+                            {ver.version}
+                          </option>
+                        ))}
+                      </select>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
+          ) : (
+            <div className="firmware-field">
+              <label className="firmware-field__label">Firmware file</label>
+              <div className="firmware-field__row">
+                <input
+                  className="firmware-input firmware-input--grow"
+                  type="text"
+                  readOnly
+                  value={firmwarePath}
+                  placeholder={isEsp ? 'Choose a .bin file…' : 'Choose a .uf2 file…'}
+                />
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => void handlePickFile()}
+                  disabled={flashing}
+                >
+                  Browse…
+                </button>
+              </div>
+            </div>
+          )}
+
+          {percent !== null && (
+            <div className="firmware-field">
+              <div
+                className="firmware-progress"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percent}
+              >
+                <div className="firmware-progress__bar" style={{ width: `${percent}%` }} />
+              </div>
+              <p className="firmware-hint firmware-progress__label">{percent}% complete</p>
+            </div>
+          )}
 
           {(log.length > 0 || flashing) && (
             <div
@@ -342,33 +599,50 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         </div>
 
         <footer className="firmware-modal__footer">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={onClose}
-            disabled={flashing}
-          >
-            Close
-          </button>
-          <button
-            type="button"
-            className="btn btn--primary btn--lg"
-            onClick={() => void handleFlash()}
-            disabled={!canFlash}
-            title={
-              !firmwarePath
-                ? 'Choose a firmware file first'
-                : isEsp && !port
-                  ? 'Select a serial port'
-                  : !isEsp && !mountPath
-                    ? 'Select the RP2040 boot drive'
+          {finished ? (
+            <button
+              type="button"
+              className="btn btn--primary btn--lg"
+              onClick={onClose}
+              autoFocus
+            >
+              Done
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={onClose}
+                disabled={flashing}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn--primary btn--lg"
+                onClick={() => void handleFlash()}
+                disabled={!canFlash}
+                title={
+                  isEsp && !port
+                    ? 'Select a serial port'
                     : isEsp && esptool?.available !== true
                       ? 'esptool is required to flash ESP boards'
-                      : 'Flash the firmware to the device'
-            }
-          >
-            {flashing ? 'Flashing…' : 'Flash'}
-          </button>
+                      : isEsp && !firmwarePath
+                        ? 'Choose a firmware file first'
+                        : !isEsp && !mountPath
+                          ? 'Select the RP2040 boot drive'
+                          : usingCatalog && !selVersionUrl
+                            ? 'Choose a firmware version to download'
+                            : !usingCatalog && !firmwarePath
+                              ? 'Choose a firmware file first'
+                              : 'Flash the firmware to the device'
+                }
+              >
+                {flashing ? 'Flashing…' : usingCatalog ? 'Download & Flash' : 'Flash'}
+              </button>
+            </>
+          )}
         </footer>
       </div>
     </div>
