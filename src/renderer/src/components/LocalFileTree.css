@@ -13,18 +13,94 @@
 }
 
 /*
- * Keep the header title from overflowing at narrow panel widths (issue #85).
- * The action row (+ File / + Folder / Rename / Delete / Open Folder) already
- * wraps via `.localtree__actions { flex-wrap: wrap }` in index.css, so the
- * buttons stay reachable; this just stops the title pushing past the edge.
+ * Header layout (issue #87): the title sits on the left and the compact,
+ * icon-only actions (New File / New Folder / Open Folder) on the right. At
+ * narrow widths the header wraps (matching the #85 narrow-width work) so the
+ * actions stay reachable, and the title ellipsises rather than pushing past
+ * the edge.
  */
 .localtree__header {
   flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .localtree__title {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.localtree__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 0 auto;
+}
+
+/* Square icon-only buttons for the header actions. */
+.btn.btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  line-height: 0;
+}
+
+.btn.btn--icon svg {
+  display: block;
+}
+
+/*
+ * Path breadcrumb of the working folder (issue #87). Replaces the old "Open
+ * Folder" button — each segment re-roots the tree to that ancestor. Kept
+ * compact; wraps at narrow widths like the rest of the panel (#85).
+ */
+.localtree__breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.1rem 0.05rem;
+  padding: 0 0.6rem 0.4rem;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.localtree__crumb-wrap {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.localtree__crumb-sep {
+  padding: 0 0.1rem;
+  opacity: 0.6;
+}
+
+.localtree__crumb {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0.05rem 0.2rem;
+  border-radius: 2px;
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.localtree__crumb:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-elevated);
+}
+
+/* The last (current) segment is non-interactive but still legible. */
+.localtree__crumb:disabled {
+  cursor: default;
+  color: var(--text);
+  font-weight: 600;
 }
