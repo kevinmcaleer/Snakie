@@ -62,31 +62,34 @@ jobs:
         shell: bash
         run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
 
-      - name: Build installers (no publish)
-        # platform_flag selects platform (+ arch for Linux). --mac builds both
-        # mac arches (universal serialport prebuild); each Linux job is pinned
-        # to its native arch to avoid cross-arch native rebuild failures.
+      # platform_flag selects platform (+ arch for Linux). --mac builds both mac
+      # arches (universal serialport prebuild); each Linux job is pinned to its
+      # native arch to avoid cross-arch native rebuild failures.
+      #
+      # The build is split into a macOS step (with the signing + notarization env
+      # from secrets) and a Windows/Linux step with NO signing env at all. This
+      # avoids two traps:
+      #   1. CSC_LINK leaking to Windows makes electron-builder sign the .exe with
+      #      the macOS Developer ID cert (wrong);
+      #   2. setting CSC_LINK to an *empty string* on Windows FAILS the build
+      #      ("Env WIN_CSC_LINK ... not a file") — the var must be ABSENT, not
+      #      empty. A per-key `… || ''` env can't omit a key, hence two steps.
+      # Do NOT add CSC_IDENTITY_AUTO_DISCOVERY=false: it *disables* macOS code
+      # signing outright (electron-builder logs "skipped … code signing"), which
+      # previously shipped signed builds unsigned. See docs/macos-signing.md.
+      - name: Build installers — macOS (signed + notarized)
+        if: matrix.os == 'macos-latest'
         run: npm run dist -- ${{ matrix.platform_flag }} --publish never
         env:
-          # macOS code signing + notarization (#47). The signing env is scoped to
-          # the macOS job ONLY — passing CSC_LINK to the Windows/Linux jobs makes
-          # electron-builder sign the Windows .exe with the macOS Developer ID
-          # cert, which is wrong. Each var is empty for non-mac jobs, so they
-          # build unsigned as before. When empty everywhere (no secrets),
-          # electron-builder skips signing (and notarization). See
-          # docs/macos-signing.md.
-          #
-          # IMPORTANT: do NOT set CSC_IDENTITY_AUTO_DISCOVERY=false here — that env
-          # var *disables* macOS code signing outright (electron-builder logs
-          # "skipped macOS application code signing"), which previously caused
-          # signed builds to silently ship unsigned. With CSC_LINK set, electron-
-          # builder signs with that specific imported cert; with it unset it finds
-          # no identity on the clean CI runner and skips — correct either way.
-          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_LINK || '' }}
-          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.MAC_CSC_KEY_PASSWORD || '' }}
-          APPLE_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_ID || '' }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_TEAM_ID || '' }}
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Build installers — Windows / Linux (unsigned)
+        if: matrix.os != 'macos-latest'
+        run: npm run dist -- ${{ matrix.platform_flag }} --publish never
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
