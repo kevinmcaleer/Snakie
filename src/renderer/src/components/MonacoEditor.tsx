@@ -10,6 +10,7 @@ import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
 import { useDiagnostics } from '../store/diagnostics'
 import { useEditorSettings } from '../store/settings'
+import { EDITOR_THEME_LIST, monacoThemeName } from '../store/editorThemes'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { Diagnostic, PluginContext } from '../../../preload/index.d'
 import { diagnosticToMarker } from './plugin-diagnostics'
@@ -68,7 +69,10 @@ function readDocTheme(): string {
 
 let themesDefined = false
 /** Define Monaco themes whose backgrounds match the app's palette so the editor
- * blends into the surrounding UI instead of showing Monaco's defaults. */
+ * blends into the surrounding UI instead of showing Monaco's defaults. The
+ * Skeuomorph skin's editor colours come from the keyed editor-theme table
+ * (store/editorThemes, issue #84) — one Monaco theme per entry, so adding a
+ * theme there registers it here for free. */
 function ensureThemes(): void {
   if (themesDefined) return
   themesDefined = true
@@ -85,46 +89,45 @@ function ensureThemes(): void {
     }
   })
   monaco.editor.defineTheme('snakie-light', { base: 'vs', inherit: true, rules: [], colors: {} })
-  // Skeuomorph skin: cream ruled-paper editor with warm ink-on-paper syntax
-  // colours (rust keywords, slate modules, plum classes, moss strings, amber
-  // numbers), matching concept 08 of the MicroPython IDE Concepts design.
-  monaco.editor.defineTheme('snakie-skeuomorph', {
-    base: 'vs',
-    inherit: true,
-    rules: [
-      { token: 'keyword', foreground: '8a3b2f', fontStyle: 'bold' },
-      { token: 'keyword.python', foreground: '8a3b2f', fontStyle: 'bold' },
-      { token: 'string', foreground: '4a6b3a' },
-      { token: 'string.python', foreground: '4a6b3a' },
-      { token: 'number', foreground: '9a6b2f' },
-      { token: 'number.python', foreground: '9a6b2f' },
-      { token: 'comment', foreground: '9a9075', fontStyle: 'italic' },
-      { token: 'type', foreground: '5a4a8a' },
-      { token: 'type.identifier', foreground: '5a4a8a' },
-      { token: 'identifier', foreground: '2a2620' },
-      { token: 'delimiter', foreground: '5a544a' }
-    ],
-    colors: {
-      // Transparent surface so the ruled-paper background painted behind Monaco
-      // (see `.lines-content` in index.css) shows through and scrolls with the
-      // text; the cream base lives on the editor region body.
-      'editor.background': '#00000000',
-      'editorGutter.background': '#00000000',
-      'editorLineNumber.foreground': '#b8ad8c',
-      'editorLineNumber.activeForeground': '#8a3b2f',
-      'minimap.background': '#efe9d7',
-      'editorWidget.background': '#e9e3d2',
-      'editor.lineHighlightBackground': '#00000000',
-      'editor.selectionBackground': '#d9c79a',
-      'editor.foreground': '#2a2620'
-    }
-  })
+  // Skeuomorph editor colour themes (issue #84): Paper (warm cream), Bright
+  // (whiter paper, vivid syntax) and Midnight (dark). Paper themes keep a
+  // transparent surface so the CSS ruled-paper (`.lines-content` in index.css)
+  // shows through; an opaque theme paints its own background and the ruled lines
+  // are hidden by the matching `data-editor-theme` CSS branch.
+  for (const def of EDITOR_THEME_LIST) {
+    monaco.editor.defineTheme(monacoThemeName(def.id), {
+      base: def.paper ? 'vs' : 'vs-dark',
+      inherit: true,
+      rules: def.rules,
+      colors: {
+        'editor.background': def.monaco.background,
+        'editorGutter.background': def.monaco.gutterBackground,
+        'editorLineNumber.foreground': def.monaco.lineNumber,
+        'editorLineNumber.activeForeground': def.monaco.lineNumberActive,
+        'minimap.background': def.monaco.minimap,
+        'editorWidget.background': def.monaco.widget,
+        'editor.lineHighlightBackground': def.monaco.lineHighlight,
+        'editor.selectionBackground': def.monaco.selection,
+        'editor.foreground': def.monaco.foreground
+      }
+    })
+  }
 }
 
-function monacoTheme(theme: string): string {
-  if (theme === 'skeuomorph') return 'snakie-skeuomorph'
+/** Resolve the app skin + editor-theme id to the Monaco theme name. The
+ * Skeuomorph skin uses the user-selected editor colour theme; the dark/light
+ * skins keep their plain backgrounds. */
+function monacoTheme(theme: string, editorTheme: string): string {
+  if (theme === 'skeuomorph') return monacoThemeName(editorTheme)
   if (theme === 'light') return 'snakie-light'
   return 'snakie-dark'
+}
+
+/** Read the user's editor colour-theme id from the document root (set by the
+ * settings store), so the create/observe effects can resolve the Monaco theme
+ * without a fresh useEditorSettings() instance racing the attribute. */
+function readEditorTheme(): string {
+  return document.documentElement.getAttribute('data-editor-theme') ?? 'paper'
 }
 
 /** Editor metrics per skin. The Skeuomorph skin sits the text on ruled-paper
@@ -154,7 +157,7 @@ export function MonacoEditor(): JSX.Element {
   const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
   // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
   // the ruled-paper CSS period.
-  const { lineSpacing } = useEditorSettings()
+  const { lineSpacing, editorTheme } = useEditorSettings()
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
@@ -190,7 +193,7 @@ export function MonacoEditor(): JSX.Element {
     const editor = monaco.editor.create(container, {
       value: '',
       language: 'python',
-      theme: monacoTheme(readDocTheme()),
+      theme: monacoTheme(readDocTheme(), readEditorTheme()),
       automaticLayout: true,
       lineNumbers: 'on',
       minimap: { enabled: true },
@@ -239,12 +242,13 @@ export function MonacoEditor(): JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Follow theme changes by observing the document root's data-theme attribute
-  // (the app's single source of truth), so the editor never desyncs from the UI.
+  // Follow theme changes by observing the document root's data-theme +
+  // data-editor-theme attributes (the app's single source of truth), so the
+  // editor never desyncs from the UI or the selected editor colour theme.
   useEffect(() => {
     const apply = (): void => {
       const docTheme = readDocTheme()
-      monaco.editor.setTheme(monacoTheme(docTheme))
+      monaco.editor.setTheme(monacoTheme(docTheme, readEditorTheme()))
       // Re-apply the per-skin metrics so the notebook line height (and the
       // ruled-paper alignment) tracks theme switches, not just first paint.
       editorRef.current?.updateOptions(editorMetricsFor(docTheme, lineSpacingRef.current))
@@ -253,10 +257,17 @@ export function MonacoEditor(): JSX.Element {
     const observer = new MutationObserver(apply)
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['data-theme']
+      attributeFilter: ['data-theme', 'data-editor-theme']
     })
     return () => observer.disconnect()
   }, [])
+
+  // Re-apply the Monaco theme when the user picks a different editor colour
+  // theme (issue #84). The observer above also catches the data-attribute flip,
+  // but reacting to the store value too keeps the editor instant + deterministic.
+  useEffect(() => {
+    editorRef.current && monaco.editor.setTheme(monacoTheme(readDocTheme(), editorTheme))
+  }, [editorTheme])
 
   // Follow ruled-line spacing changes (Settings dialog, issues #80/#81) so the
   // editor's line height stays equal to the CSS ruled-paper period.

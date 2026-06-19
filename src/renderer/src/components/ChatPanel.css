@@ -14,41 +14,7 @@
   color: var(--text);
 }
 
-/* Toolbar -------------------------------------------------------------- */
-.chat__toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 0.45rem 0.85rem;
-  border-bottom: 1px solid var(--border);
-  flex: 0 0 auto;
-}
-
-.chat__status {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.chat__badge {
-  font-size: 0.62rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  padding: 0.05rem 0.35rem;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-}
-
-.chat__toolbar-actions {
-  display: flex;
-  gap: 6px;
-}
-
+/* Buttons (Clear / Send / footer ⚙) ----------------------------------- */
 .chat__btn {
   padding: 0.2rem 0.6rem;
   background: var(--bg-sunken);
@@ -73,49 +39,6 @@
   background: var(--accent);
   color: var(--accent-contrast);
   border-color: var(--accent);
-}
-
-/* Settings (API key) --------------------------------------------------- */
-.chat__settings {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.65rem 0.85rem;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-sunken);
-  flex: 0 0 auto;
-}
-
-.chat__settings-label {
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.chat__input-key {
-  padding: 0.35rem 0.5rem;
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-}
-
-.chat__settings-row {
-  display: flex;
-  gap: 6px;
-}
-
-.chat__settings-hint,
-.chat__settings-warn {
-  margin: 0;
-  font-size: 0.74rem;
-  line-height: 1.4;
-  color: var(--text-muted);
-}
-
-.chat__settings-warn {
-  color: var(--danger, #c0392b);
 }
 
 /* Message thread ------------------------------------------------------- */
@@ -348,40 +271,18 @@
   cursor: pointer;
 }
 
-/* Inline-autocomplete toggle in the footer (issue #82). */
-.chat__footer-toggle {
+/* Footer quick actions: Clear + the ⚙ that opens Settings → Chat (issue #83).
+ * Pushed to the right so the provider/model selects stay left. */
+.chat__footer-actions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: var(--text-muted);
-  cursor: pointer;
+  gap: 6px;
+  margin-left: auto;
 }
 
-.chat__footer-toggle input {
-  cursor: pointer;
-}
-
-/* GitHub Copilot device-flow sign-in. */
-.chat__copilot {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.chat__copilot-code {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.chat__copilot-code code {
-  font-family: var(--font-mono);
-  font-size: 1.2rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  padding: 0.3rem 0.6rem;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  color: var(--accent);
+.chat__footer-warn {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--danger, #c0392b);
 }

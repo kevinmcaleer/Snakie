@@ -24,6 +24,7 @@ import {
   type ReactNode
 } from 'react'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
 
 /** How the notebook paper is drawn behind the editor. */
 export type EditorPaper = 'lines' | 'dots' | 'off'
@@ -37,9 +38,13 @@ export interface SettingsStore {
   paper: EditorPaper
   /** Px between ruled lines; also the editor line height (kept in sync). */
   lineSpacing: number
+  /** Selected editor colour theme id (see store/editorThemes). */
+  editorTheme: string
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
+  /** Set the editor colour theme by id. */
+  setEditorTheme: (id: string) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -57,6 +62,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     'snakie.editor.lineSpacing',
     DEFAULT_LINE_SPACING
   )
+  const [editorTheme, setEditorTheme] = useLocalStorage<string>(
+    'snakie.editor.theme',
+    DEFAULT_EDITOR_THEME
+  )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -68,14 +77,32 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     document.documentElement.style.setProperty('--editor-rule-spacing', `${lineSpacing}px`)
   }, [lineSpacing])
 
+  // Apply the editor colour theme (issue #84): set a data attribute (so CSS can
+  // branch per theme, e.g. hiding ruled lines for an opaque dark theme) and
+  // publish the theme's paper-band / rule / region / dot colours as CSS custom
+  // properties that index.css reads — keeping the CSS ruled paper and the Monaco
+  // theme (registered + selected in MonacoEditor) in lockstep from one source.
+  useEffect(() => {
+    const def = editorThemeFor(editorTheme)
+    const root = document.documentElement
+    root.setAttribute('data-editor-theme', def.id)
+    root.style.setProperty('--editor-paper-band', def.paperBand)
+    root.style.setProperty('--editor-paper-rule', def.paperRule)
+    root.style.setProperty('--editor-paper-dot', def.dotColor)
+    root.style.setProperty('--editor-region-bg', def.regionBg)
+    root.style.setProperty('--editor-margin-rule', def.marginRule)
+  }, [editorTheme])
+
   const store = useMemo<SettingsStore>(
     () => ({
       paper,
       lineSpacing,
+      editorTheme,
       setPaper,
-      setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px))
+      setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
+      setEditorTheme
     }),
-    [paper, lineSpacing, setPaper, setLineSpacingRaw]
+    [paper, lineSpacing, editorTheme, setPaper, setLineSpacingRaw, setEditorTheme]
   )
 
   return createElement(SettingsContext.Provider, { value: store }, children)
