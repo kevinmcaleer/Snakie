@@ -360,3 +360,28 @@
 .chat__footer-toggle input {
   cursor: pointer;
 }
+
+/* GitHub Copilot device-flow sign-in. */
+.chat__copilot {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chat__copilot-code {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.chat__copilot-code code {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  padding: 0.3rem 0.6rem;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+}

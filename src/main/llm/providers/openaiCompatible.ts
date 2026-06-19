@@ -268,12 +268,13 @@ export const grokProvider = makeOpenAiCompatibleProvider({
 })
 
 /**
- * GitHub Copilot (OpenAI-compatible). Authenticate with a **GitHub personal
- * access token** (fine-grained or classic) or OAuth token on an account with an
- * active Copilot subscription — {@link getCopilotToken} exchanges it for the
- * short-lived Copilot token the chat endpoint actually requires (cached until
- * just before expiry) and adds the integration/editor headers. Still flagged
- * experimental: it can only be verified against a real Copilot account.
+ * GitHub Copilot (OpenAI-compatible). The user signs in with their GitHub
+ * account via the OAuth **device flow** (see `copilotAuth.ts`); the resulting
+ * GitHub token is exchanged by {@link getCopilotToken} for the short-lived
+ * Copilot token the chat endpoint actually requires (cached until just before
+ * expiry), with the integration/editor headers. A plain personal access token
+ * can't reach the Copilot endpoint, which is why sign-in is used instead. Still
+ * flagged experimental: it can only be verified against a real Copilot account.
  */
 export const copilotProvider = makeOpenAiCompatibleProvider({
   info: {
@@ -285,8 +286,8 @@ export const copilotProvider = makeOpenAiCompatibleProvider({
     ],
     defaultModel: 'gpt-4o',
     defaultCompletionModel: 'gpt-4o-mini',
-    keyHint: 'GitHub PAT or OAuth token (needs an active Copilot subscription)',
-    keyUrl: 'https://github.com/settings/tokens',
+    keyHint: 'Sign in with GitHub (active Copilot subscription required)',
+    keyUrl: 'https://github.com/features/copilot',
     experimental: true
   },
   baseURL: 'https://api.githubcopilot.com',

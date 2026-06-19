@@ -52,6 +52,7 @@ export type {
   LlmSendRequest,
   LlmStreamEvent
 } from '../main/llm/types'
+export type { CopilotDeviceCode, CopilotPollResult } from '../main/llm/providers/copilotAuth'
 
 // Re-export the Git (version-control) types (issue #15) so the Source Control
 // panel can import them from this single UI-facing module.

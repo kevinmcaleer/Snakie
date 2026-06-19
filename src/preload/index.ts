@@ -26,6 +26,10 @@ import type {
   PackageInfo
 } from '../main/packages/types'
 import type {
+  CopilotDeviceCode,
+  CopilotPollResult
+} from '../main/llm/providers/copilotAuth'
+import type {
   LlmCompleteRequest,
   LlmKeyStatus,
   LlmProviderInfo,
@@ -281,6 +285,15 @@ const llm = {
    */
   complete: (req: LlmCompleteRequest): Promise<string> =>
     unwrap(ipcRenderer.invoke('llm:complete', req)),
+  /** Begin the GitHub Copilot device-flow sign-in (returns the user code + URL). */
+  copilotDeviceStart: (): Promise<CopilotDeviceCode> =>
+    unwrap(ipcRenderer.invoke('llm:copilotDeviceStart')),
+  /**
+   * Poll the Copilot device flow. The `gho_` token never reaches the renderer —
+   * on `authorized` the main process has already stored it as Copilot's key.
+   */
+  copilotDevicePoll: (deviceCode: string): Promise<CopilotPollResult> =>
+    unwrap(ipcRenderer.invoke('llm:copilotDevicePoll', deviceCode)),
   /** Subscribe to streamed completion chunks. Returns an unsubscribe function. */
   onStream: (cb: (event: LlmStreamEvent) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, event: LlmStreamEvent): void => cb(event)

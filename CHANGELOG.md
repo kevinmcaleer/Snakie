@@ -24,10 +24,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   editor (undoable); and an opt-in **inline autocomplete** (ghost text) suggests
   as you type via a fast, per-provider completion model configured separately
   from the main chat model.
-- **GitHub Copilot via a personal access token.** The Copilot provider exchanges
-  a GitHub PAT / OAuth token (on a Copilot-enabled account) for the short-lived
-  Copilot token its chat endpoint requires, caching it until just before expiry.
-  Experimental — verifiable only against a real Copilot account.
+- **GitHub Copilot sign-in.** The Copilot provider authenticates with a GitHub
+  **OAuth device-flow** sign-in (approve a code at github.com/login/device) on an
+  account with an active Copilot subscription — Snakie exchanges the resulting
+  GitHub token for the short-lived Copilot token its chat endpoint requires
+  (cached until expiry). A plain personal access token can't reach that endpoint,
+  so sign-in is used instead. Experimental — verifiable only against a real
+  Copilot account.
 - **Editor paper settings (#80, #81).** A new **Settings** dialog (toolbar gear)
   toggles the notebook **ruled lines**, a subtle squared **dots** grid, or
   **off**, and adjusts the **line spacing** (shown live) — persisted across

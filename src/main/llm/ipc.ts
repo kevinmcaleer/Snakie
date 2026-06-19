@@ -19,6 +19,13 @@ import { ipcMain, type WebContents } from 'electron'
 import type { IpcResult } from '../device/types'
 import { getKey, hasKey, isEncryptionAvailable, setKey } from './keyStore'
 import { DEFAULT_PROVIDER_ID, getProvider, listProviders } from './providers/registry'
+import {
+  clearCopilotTokenCache,
+  pollCopilotDeviceFlow,
+  startCopilotDeviceFlow,
+  type CopilotDeviceCode,
+  type CopilotPollResult
+} from './providers/copilotAuth'
 import type {
   LlmCompleteRequest,
   LlmKeyStatus,
@@ -27,6 +34,9 @@ import type {
   LlmStreamEvent
 } from './types'
 
+/** Provider id whose key is a GitHub OAuth token obtained via the device flow. */
+const COPILOT_PROVIDER_ID = 'copilot'
+
 /** IPC channel names for the LLM layer. */
 export const LLM_CHANNELS = {
   stream: 'llm:stream',
@@ -34,7 +44,9 @@ export const LLM_CHANNELS = {
   getKeyStatus: 'llm:getKeyStatus',
   setKey: 'llm:setKey',
   sendMessage: 'llm:sendMessage',
-  complete: 'llm:complete'
+  complete: 'llm:complete',
+  copilotDeviceStart: 'llm:copilotDeviceStart',
+  copilotDevicePoll: 'llm:copilotDevicePoll'
 } as const
 
 /** Upper bound on the prompt context sent for a single inline completion. */
@@ -152,6 +164,28 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
         suffix,
         language: req.language || 'python'
       })
+    })
+  )
+
+  // GitHub Copilot sign-in (device flow). `start` returns the user code +
+  // verification URL to show; the renderer then polls until authorized. The
+  // `gho_` token never crosses to the renderer — on authorization we store it as
+  // the Copilot provider's key here in main, so the existing token exchange can
+  // turn it into a Copilot token on the next chat/completion request.
+  ipcMain.handle(LLM_CHANNELS.copilotDeviceStart, () =>
+    wrap(async (): Promise<CopilotDeviceCode> => startCopilotDeviceFlow())
+  )
+
+  ipcMain.handle(LLM_CHANNELS.copilotDevicePoll, (_e, deviceCode: string) =>
+    wrap(async (): Promise<CopilotPollResult> => {
+      const result = await pollCopilotDeviceFlow(deviceCode)
+      if (result.status === 'authorized' && result.token) {
+        await setKey(COPILOT_PROVIDER_ID, result.token)
+        clearCopilotTokenCache()
+        // Strip the token before it leaves the main process.
+        return { status: 'authorized' }
+      }
+      return { status: result.status, message: result.message }
     })
   )
 }

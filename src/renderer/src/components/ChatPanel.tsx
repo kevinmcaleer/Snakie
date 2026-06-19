@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  CopilotDeviceCode,
   LlmKeyStatus,
   LlmMessage,
   LlmProviderInfo,
@@ -344,7 +345,20 @@ export function ChatPanel(): JSX.Element {
         </div>
       </div>
 
-      {showSettings && provider && (
+      {showSettings && provider && provider.id === 'copilot' && (
+        <div className="chat__settings">
+          <CopilotSignIn
+            providerLabel={provider.label}
+            signedIn={!!keyStatus?.hasKey}
+            onChange={async () => {
+              invalidateCompletionKeyStatus(provider.id)
+              await refreshKeyStatus()
+            }}
+          />
+        </div>
+      )}
+
+      {showSettings && provider && provider.id !== 'copilot' && (
         <form className="chat__settings" onSubmit={saveKey}>
           <label className="chat__settings-label" htmlFor="chat-key">
             {provider.label} API key
@@ -528,6 +542,171 @@ export function ChatPanel(): JSX.Element {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * GitHub Copilot sign-in via the OAuth device flow. A plain personal access
+ * token can't reach the Copilot token endpoint, so the user approves a short
+ * code at github.com/login/device; the main process then holds the resulting
+ * GitHub token (never exposed here) and exchanges it for the Copilot token.
+ */
+function CopilotSignIn({
+  providerLabel,
+  signedIn,
+  onChange
+}: {
+  providerLabel: string
+  signedIn: boolean
+  onChange: () => Promise<void>
+}): JSX.Element {
+  const [device, setDevice] = useState<CopilotDeviceCode | null>(null)
+  const [phase, setPhase] = useState<'idle' | 'starting' | 'awaiting' | 'error'>('idle')
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const cancelledRef = useRef(false)
+
+  // Stop polling if the panel unmounts mid-flow.
+  useEffect(() => {
+    return () => {
+      cancelledRef.current = true
+    }
+  }, [])
+
+  const poll = useCallback(
+    async (dc: CopilotDeviceCode): Promise<void> => {
+      const deadline = Date.now() + dc.expiresInSeconds * 1000
+      let intervalMs = Math.max(1, dc.intervalSeconds) * 1000
+      while (!cancelledRef.current && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, intervalMs))
+        if (cancelledRef.current) return
+        let res: Awaited<ReturnType<typeof window.api.llm.copilotDevicePoll>>
+        try {
+          res = await window.api.llm.copilotDevicePoll(dc.deviceCode)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e))
+          setPhase('error')
+          setDevice(null)
+          return
+        }
+        if (res.status === 'authorized') {
+          setDevice(null)
+          setPhase('idle')
+          await onChange()
+          return
+        }
+        if (res.status === 'slow_down') {
+          intervalMs += 5000
+          continue
+        }
+        if (res.status === 'pending') continue
+        // denied / expired / error — terminal.
+        setError(res.message || `Sign-in ${res.status}.`)
+        setPhase('error')
+        setDevice(null)
+        return
+      }
+      if (!cancelledRef.current) {
+        setError('Sign-in timed out — try again.')
+        setPhase('error')
+        setDevice(null)
+      }
+    },
+    [onChange]
+  )
+
+  const start = useCallback(async (): Promise<void> => {
+    setError(null)
+    setPhase('starting')
+    cancelledRef.current = false
+    try {
+      const dc = await window.api.llm.copilotDeviceStart()
+      setDevice(dc)
+      setPhase('awaiting')
+      void window.api.openExternal(dc.verificationUri)
+      void poll(dc)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+      setPhase('error')
+    }
+  }, [poll])
+
+  if (signedIn && phase === 'idle') {
+    return (
+      <div className="chat__copilot">
+        <p className="chat__settings-hint">✓ Signed in to {providerLabel}.</p>
+        <div className="chat__settings-row">
+          <button
+            type="button"
+            className="chat__btn"
+            onClick={async () => {
+              await window.api.llm.setKey('copilot', '')
+              await onChange()
+            }}
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="chat__copilot">
+      {phase === 'awaiting' && device ? (
+        <>
+          <p className="chat__settings-hint">
+            A GitHub page opened — enter this code to authorize Snakie:
+          </p>
+          <div className="chat__copilot-code">
+            <code>{device.userCode}</code>
+            <button
+              type="button"
+              className="chat__btn"
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(device.userCode)
+                  .then(() => {
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 1200)
+                  })
+                  .catch(() => undefined)
+              }
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div className="chat__settings-row">
+            <button
+              type="button"
+              className="chat__btn"
+              onClick={() => void window.api.openExternal(device.verificationUri)}
+            >
+              Reopen github.com/login/device
+            </button>
+          </div>
+          <p className="chat__settings-hint">Waiting for you to authorize…</p>
+        </>
+      ) : (
+        <>
+          <p className="chat__settings-hint">
+            Sign in with your GitHub account (needs an active Copilot subscription) — no personal
+            access token required.
+          </p>
+          <div className="chat__settings-row">
+            <button
+              type="button"
+              className="chat__btn chat__btn--primary"
+              onClick={() => void start()}
+              disabled={phase === 'starting'}
+            >
+              {phase === 'starting' ? 'Starting…' : 'Sign in to GitHub Copilot'}
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p className="chat__error">{error}</p>}
     </div>
   )
 }
