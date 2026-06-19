@@ -6,7 +6,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-06-19
+## [0.5.0] - 2026-06-19
 
 ### Added
 - **In-app LLM provider system (#77).** The Claude chat is now provider-agnostic:
@@ -35,6 +35,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   toggles the notebook **ruled lines**, a subtle squared **dots** grid, or
   **off**, and adjusts the **line spacing** (shown live) — persisted across
   launches.
+- **Syntax highlighting + editor themes (#84).** Richer Monaco highlighting
+  (keywords, strings, numbers, comments and types in distinct colours), a whiter
+  off-white paper so the colours read clearly, and an **editor theme** selector
+  (Paper / Bright / Midnight) in the Settings → Editor tab, backed by an
+  extensible theme table.
+- **Tabbed Settings dialog + Chat settings (#83).** The Settings dialog now has
+  **Editor** and **Chat** tabs; the chat's title bar is gone and its per-provider
+  API keys, the GitHub Copilot sign-in, and the autocomplete settings moved into
+  the **Chat** tab (the chat's ⚙ opens it directly).
 - **macOS code signing + notarization** wired into the release workflow (#47).
   When the Apple secrets are set (`MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`,
   `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — see
@@ -53,6 +62,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Removed the redundant panel title bars** for Editor, Source Control, Files,
   Packages, Plugins and Inspect (#79) — the activity bar already names the active
   view (Shell and Chat keep their headers, which carry controls).
+- **Activity-bar buttons toggle the left panel (#86).** Clicking a view button
+  switches to / expands it; clicking the already-active one collapses the left
+  panel (click again to re-expand), matching the familiar editor behaviour.
+
+### Fixed
+- **Toolbars no longer clip at narrow widths (#85).** The shell-panel header
+  controls (Console/Plotter/Problems, Clear, port + connect/disconnect) and the
+  device/local file-tree action buttons now wrap instead of being hidden under
+  the chat panel when space is tight.
 
 ## [0.3.3] - 2026-06-02
 
@@ -204,8 +222,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.4.0
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.5.0
 [0.3.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.0...v0.3.1
