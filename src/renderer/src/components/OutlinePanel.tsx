@@ -25,6 +25,11 @@ interface OutlineSymbol {
   line: number
   /** Optional signature/detail shown muted after the name. */
   detail?: string
+  /**
+   * Optional docstring (the first string literal directly after a
+   * function/class header), trimmed. Surfaced as a hover tooltip in the panel.
+   */
+  doc?: string
 }
 
 const KIND_GLYPH: Record<SymbolKind, string> = {
@@ -47,6 +52,50 @@ const CLASS_RE = /^class\s+([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?/
 // `A = B = ...`. Excludes `==`, `<=`, etc. by requiring a non-`=` char after.
 const ASSIGN_RE = /^([A-Za-z_]\w*)\s*(?::\s*[^=]+)?=(?!=)/
 
+// A docstring opener on the first body line: an optional `r`/`u`/`b`/`f` prefix
+// then `"""`, `'''`, `"`, or `'`. We capture the quote so we can find its close.
+const DOCSTRING_OPEN_RE = /^(?:[rRuUbBfF]{0,2})("""|'''|"|')/
+
+/**
+ * Read the docstring of a function/class whose header is on `lines[headerIdx]`.
+ *
+ * Scans forward for the first non-blank, non-comment body line; if it begins
+ * with a string literal (triple- or single-quoted, possibly spanning multiple
+ * lines) the literal's contents are returned trimmed. Returns `undefined` when
+ * there is no docstring. Pure helper — no side effects, easy to unit test.
+ */
+function extractDocstring(lines: string[], headerIdx: number): string | undefined {
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const trimmed = lines[i].trim()
+    // Skip blank lines and comments before the (potential) docstring.
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue
+
+    const open = DOCSTRING_OPEN_RE.exec(trimmed)
+    if (!open) return undefined // first body statement isn't a string ⇒ no doc.
+    const quote = open[1]
+    const after = trimmed.slice(open.index + open[0].length)
+
+    // Single-line literal: closing quote on the same line.
+    const closeOnSame = after.indexOf(quote)
+    if (closeOnSame !== -1) return after.slice(0, closeOnSame).trim()
+
+    // Triple-quoted literal that spans multiple lines; gather until the close.
+    if (quote.length === 3) {
+      const parts = [after]
+      for (let j = i + 1; j < lines.length; j++) {
+        const end = lines[j].indexOf(quote)
+        if (end !== -1) {
+          parts.push(lines[j].slice(0, end))
+          return parts.join('\n').trim()
+        }
+        parts.push(lines[j])
+      }
+    }
+    return undefined // unterminated literal ⇒ ignore.
+  }
+  return undefined
+}
+
 /** Extract top-level outline symbols from Python source via a line scan. */
 export function parseOutline(source: string): OutlineSymbol[] {
   const symbols: OutlineSymbol[] = []
@@ -64,24 +113,30 @@ export function parseOutline(source: string): OutlineSymbol[] {
     const fn = FUNC_RE.exec(line)
     if (fn) {
       const params = fn[2].trim()
-      symbols.push({
+      const sym: OutlineSymbol = {
         kind: 'function',
         name: fn[1],
         line: i + 1,
         detail: `(${params})`
-      })
+      }
+      const doc = extractDocstring(lines, i)
+      if (doc) sym.doc = doc
+      symbols.push(sym)
       continue
     }
 
     const cls = CLASS_RE.exec(line)
     if (cls) {
       const bases = (cls[2] ?? '').trim()
-      symbols.push({
+      const sym: OutlineSymbol = {
         kind: 'class',
         name: cls[1],
         line: i + 1,
         detail: bases ? `(${bases})` : undefined
-      })
+      }
+      const doc = extractDocstring(lines, i)
+      if (doc) sym.doc = doc
+      symbols.push(sym)
       continue
     }
 
@@ -136,7 +191,7 @@ export function OutlinePanel(): JSX.Element {
             <button
               type="button"
               className="outline__item"
-              title={`Go to line ${sym.line}`}
+              title={sym.doc ?? `Go to line ${sym.line}`}
               onClick={() => revealLine(sym.line)}
             >
               <span

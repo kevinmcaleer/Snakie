@@ -85,4 +85,64 @@ describe('parseOutline', () => {
     const out = parseOutline('a = b = 0\n')
     expect(out).toEqual([{ kind: 'variable', name: 'a', line: 1 }])
   })
+
+  it('extracts a single-line triple-quoted docstring on a function', () => {
+    const src = ['def foo():', '    """Does a thing."""', '    return 1'].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([
+      { kind: 'function', name: 'foo', line: 1, detail: '()', doc: 'Does a thing.' }
+    ])
+  })
+
+  it('extracts a multi-line triple-quoted docstring, trimmed', () => {
+    const src = [
+      'def foo():',
+      '    """Short summary.',
+      '',
+      '    More detail here.',
+      '    """',
+      '    pass'
+    ].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([
+      {
+        kind: 'function',
+        name: 'foo',
+        line: 1,
+        detail: '()',
+        doc: 'Short summary.\n\n    More detail here.'
+      }
+    ])
+  })
+
+  it('extracts a single-quoted single-line docstring', () => {
+    const src = ["def foo():", "    'one liner'", '    pass'].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([
+      { kind: 'function', name: 'foo', line: 1, detail: '()', doc: 'one liner' }
+    ])
+  })
+
+  it('extracts a class docstring', () => {
+    const src = ['class Foo:', '    """A class doc."""', '    pass'].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([
+      { kind: 'class', name: 'Foo', line: 1, detail: undefined, doc: 'A class doc.' }
+    ])
+  })
+
+  it('skips blank lines and comments before the docstring', () => {
+    const src = ['def foo():', '', '    # set up', '    """The doc."""', '    pass'].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([
+      { kind: 'function', name: 'foo', line: 1, detail: '()', doc: 'The doc.' }
+    ])
+  })
+
+  it('omits doc when the function has no docstring', () => {
+    const src = ['def foo():', '    return 1'].join('\n')
+    const out = parseOutline(src)
+    expect(out).toEqual([{ kind: 'function', name: 'foo', line: 1, detail: '()' }])
+    expect(out[0]).not.toHaveProperty('doc')
+  })
 })
