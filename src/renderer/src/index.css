@@ -108,6 +108,11 @@
   --radius: 8px; /* skeuomorph is rounded, not square */
   --pixel-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   --pixel-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+
+  /* Notebook line height / ruled-line spacing. Overridden at runtime on the
+   * document root by the Settings dialog (issues #80/#81); kept in lockstep
+   * with Monaco's line height. */
+  --editor-rule-spacing: 30px;
 }
 
 /* Chrome speaks sans (Helvetica) in this skin; editor/console/trees stay mono. */
@@ -451,15 +456,50 @@
 }
 
 /* Ruled notebook paper: Monaco's surface is transparent (see the
- * snakie-skeuomorph theme), so this gradient paints on the scrolling line layer
- * — one faint rule every 30px to match the editor's notebook line height. */
-:root[data-theme='skeuomorph'] .region--editor .monaco-editor .lines-content {
-  background-image: repeating-linear-gradient(#f6f1e3 0 29px, #e0d4b2 29px 30px);
+ * snakie-skeuomorph theme), so this paints on the scrolling line layer. The
+ * pattern follows the Settings dialog (issues #80/#81): `lines` draws one faint
+ * rule per row, `dots` draws a subtle squared-grid of dots where the lines would
+ * cross, `off` clears it. The period is `--editor-rule-spacing`, which equals
+ * Monaco's line height so the text always sits on the lines. `:not([data-…])`
+ * covers the first paint before the settings store sets the attribute. */
+:root[data-theme='skeuomorph'][data-editor-paper='lines']
+  .region--editor
+  .monaco-editor
+  .lines-content,
+:root[data-theme='skeuomorph']:not([data-editor-paper])
+  .region--editor
+  .monaco-editor
+  .lines-content {
+  background-image: repeating-linear-gradient(
+    #f6f1e3 0 calc(var(--editor-rule-spacing) - 1px),
+    #e0d4b2 calc(var(--editor-rule-spacing) - 1px) var(--editor-rule-spacing)
+  );
+}
+
+/* Squared-grid dots — really subtle, sitting where the ruled lines would meet
+ * each other, spaced into squares by the same rule spacing. */
+:root[data-theme='skeuomorph'][data-editor-paper='dots']
+  .region--editor
+  .monaco-editor
+  .lines-content {
+  background-image: radial-gradient(circle, rgba(176, 150, 96, 0.22) 1px, transparent 1.5px);
+  background-size: var(--editor-rule-spacing) var(--editor-rule-spacing);
+  background-position: 0 calc(var(--editor-rule-spacing) - 1px);
+}
+
+:root[data-theme='skeuomorph'][data-editor-paper='off']
+  .region--editor
+  .monaco-editor
+  .lines-content {
+  background-image: none;
 }
 
 /* Red margin rule down the right edge of the line-number gutter (inset shadow
- * so it doesn't shift Monaco's gutter width). */
-:root[data-theme='skeuomorph'] .region--editor .monaco-editor .margin {
+ * so it doesn't shift Monaco's gutter width). Hidden when the paper is off. */
+:root[data-theme='skeuomorph']:not([data-editor-paper='off'])
+  .region--editor
+  .monaco-editor
+  .margin {
   box-shadow: inset -2px 0 0 #d98a8a;
 }
 

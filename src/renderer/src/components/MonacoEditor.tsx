@@ -9,6 +9,7 @@ import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
 import { useDiagnostics } from '../store/diagnostics'
+import { useEditorSettings } from '../store/settings'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { Diagnostic, PluginContext } from '../../../preload/index.d'
 import { diagnosticToMarker } from './plugin-diagnostics'
@@ -120,10 +121,17 @@ function monacoTheme(theme: string): string {
   return 'snakie-dark'
 }
 
-/** Editor metrics per skin. The Skeuomorph skin uses a roomy 30px line height so
- * each row sits on a ruled-paper line (the CSS gradient period must match). */
-function editorMetricsFor(theme: string): { fontSize: number; lineHeight: number } {
-  return theme === 'skeuomorph' ? { fontSize: 14, lineHeight: 30 } : { fontSize: 13, lineHeight: 20 }
+/** Editor metrics per skin. The Skeuomorph skin sits the text on ruled-paper
+ * lines, so its line height tracks the user's configured spacing (issues
+ * #80/#81) — which must equal the CSS gradient period (`--editor-rule-spacing`)
+ * for the text to land on the lines. */
+function editorMetricsFor(
+  theme: string,
+  lineSpacing: number
+): { fontSize: number; lineHeight: number } {
+  return theme === 'skeuomorph'
+    ? { fontSize: 14, lineHeight: lineSpacing }
+    : { fontSize: 13, lineHeight: 20 }
 }
 
 /**
@@ -138,6 +146,9 @@ function editorMetricsFor(theme: string): { fontSize: number; lineHeight: number
 export function MonacoEditor(): JSX.Element {
   const { openFiles, activeId, revealRequest, updateContent, saveFile } = useWorkspace()
   const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
+  // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
+  // the ruled-paper CSS period.
+  const { lineSpacing } = useEditorSettings()
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
@@ -145,6 +156,10 @@ export function MonacoEditor(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const models = useRef(new Map<string, monaco.editor.ITextModel>())
+  // Latest spacing, read inside the create + theme-change effects without
+  // re-creating the editor.
+  const lineSpacingRef = useRef(lineSpacing)
+  lineSpacingRef.current = lineSpacing
 
   // Latest store callbacks, read inside Monaco event handlers without
   // re-creating the editor on every render.
@@ -165,7 +180,7 @@ export function MonacoEditor(): JSX.Element {
     if (!container) return undefined
 
     ensureThemes()
-    const metrics = editorMetricsFor(readDocTheme())
+    const metrics = editorMetricsFor(readDocTheme(), lineSpacingRef.current)
     const editor = monaco.editor.create(container, {
       value: '',
       language: 'python',
@@ -222,7 +237,7 @@ export function MonacoEditor(): JSX.Element {
       monaco.editor.setTheme(monacoTheme(docTheme))
       // Re-apply the per-skin metrics so the notebook line height (and the
       // ruled-paper alignment) tracks theme switches, not just first paint.
-      editorRef.current?.updateOptions(editorMetricsFor(docTheme))
+      editorRef.current?.updateOptions(editorMetricsFor(docTheme, lineSpacingRef.current))
     }
     apply()
     const observer = new MutationObserver(apply)
@@ -232,6 +247,12 @@ export function MonacoEditor(): JSX.Element {
     })
     return () => observer.disconnect()
   }, [])
+
+  // Follow ruled-line spacing changes (Settings dialog, issues #80/#81) so the
+  // editor's line height stays equal to the CSS ruled-paper period.
+  useEffect(() => {
+    editorRef.current?.updateOptions(editorMetricsFor(readDocTheme(), lineSpacing))
+  }, [lineSpacing])
 
   // Bind the active file to a per-id model and attach it to the editor.
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null

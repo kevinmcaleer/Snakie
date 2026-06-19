@@ -3,16 +3,19 @@ import { PromptProvider } from './components/PromptModal'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { WorkspaceProvider } from './store/workspace'
 import { DiagnosticsProvider } from './store/diagnostics'
+import { SettingsProvider } from './store/settings'
 
 function App(): JSX.Element {
   return (
     <PromptProvider>
-      <WorkspaceProvider>
-        <DiagnosticsProvider>
-          <AppShell />
-          <UpdateNotifier />
-        </DiagnosticsProvider>
-      </WorkspaceProvider>
+      <SettingsProvider>
+        <WorkspaceProvider>
+          <DiagnosticsProvider>
+            <AppShell />
+            <UpdateNotifier />
+          </DiagnosticsProvider>
+        </WorkspaceProvider>
+      </SettingsProvider>
     </PromptProvider>
   )
 }

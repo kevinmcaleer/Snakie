@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useTheme } from '../hooks/useTheme'
@@ -15,6 +15,7 @@ import { EditorArea } from './EditorArea'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
+import { SettingsDialog } from './SettingsDialog'
 
 /** Wrap a panel that lacks its own region chrome in a titled, scrollable region. */
 function LeftRegion({ title, children }: { title: string; children: JSX.Element }): JSX.Element {
@@ -94,6 +95,9 @@ export function AppShell(): JSX.Element {
     'files'
   )
 
+  // Settings dialog (issues #80/#81) — opened from the toolbar gear.
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
   const rightRef = useRef<ImperativePanelHandle>(null)
@@ -121,6 +125,7 @@ export function AppShell(): JSX.Element {
         onToggleShell={() => toggle(shellRef, shellCollapsed, setShellCollapsed)}
         rightCollapsed={rightCollapsed}
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
+        onOpenSettings={() => setSettingsOpen(true)}
       />
 
       <div className="shell__body shell__main">
@@ -193,6 +198,8 @@ export function AppShell(): JSX.Element {
       </div>
 
       <StatusBar />
+
+      {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
     </div>
   )
 }

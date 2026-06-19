@@ -1,0 +1,161 @@
+/*
+ * Styles for the Settings dialog (issues #80, #81). Uses the shared theme
+ * tokens so it sits naturally over whichever skin is active (it appears over the
+ * Skeuomorph cream/metal look by default). A centered modal over a dimmed
+ * backdrop.
+ */
+
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.settings-dialog {
+  width: 100%;
+  max-width: 26rem;
+  max-height: 90vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 1.1rem 1.1rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+.settings-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-dialog__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.settings-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w) solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.settings-dialog__close:hover {
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.settings-section__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.settings-section__title {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.settings-section__hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.settings-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Segmented Lines / Dots / Off control. */
+.settings-segment {
+  display: inline-flex;
+  align-items: stretch;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  align-self: flex-start;
+}
+
+.settings-segment__btn {
+  appearance: none;
+  border: none;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+}
+
+.settings-segment__btn + .settings-segment__btn {
+  border-left: 1px solid var(--border);
+}
+
+.settings-segment__btn:hover {
+  color: var(--text);
+}
+
+.settings-segment__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.settings-range {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-range:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.settings-range__scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-dialog__foot {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  text-align: right;
+}
