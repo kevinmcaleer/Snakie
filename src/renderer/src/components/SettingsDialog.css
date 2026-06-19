@@ -65,6 +65,37 @@
   border-color: var(--border);
 }
 
+/* Tab strip at the top of the dialog (issue #83) — a simple, extensible row. */
+.settings-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: var(--border-w) solid var(--border);
+  margin: -0.25rem 0 0.25rem;
+}
+
+.settings-tab {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.85rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  color: var(--text);
+}
+
+.settings-tab.is-active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;

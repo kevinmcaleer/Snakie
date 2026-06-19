@@ -113,6 +113,17 @@
    * document root by the Settings dialog (issues #80/#81); kept in lockstep
    * with Monaco's line height. */
   --editor-rule-spacing: 30px;
+
+  /* Editor colour-theme paper palette (issue #84). Defaults match the warm
+   * cream `paper` theme; the settings store overrides these on the document
+   * root when the user picks a different editor theme (store/editorThemes), so
+   * the ruled paper + Monaco theme stay in lockstep from one source. `bright`
+   * uses a whiter band (~#fbfbf6) so the colourful syntax reads clearly. */
+  --editor-paper-band: #f6f1e3;
+  --editor-paper-rule: #e0d4b2;
+  --editor-paper-dot: rgba(176, 150, 96, 0.22);
+  --editor-region-bg: #e9e3d2;
+  --editor-margin-rule: #d98a8a;
 }
 
 /* Chrome speaks sans (Helvetica) in this skin; editor/console/trees stay mono. */
@@ -452,7 +463,7 @@
 
 :root[data-theme='skeuomorph'] .region--editor .region__body--editor,
 :root[data-theme='skeuomorph'] .editor-empty {
-  background: #e9e3d2;
+  background: var(--editor-region-bg);
 }
 
 /* Ruled notebook paper: Monaco's surface is transparent (see the
@@ -471,8 +482,8 @@
   .monaco-editor
   .lines-content {
   background-image: repeating-linear-gradient(
-    #f6f1e3 0 calc(var(--editor-rule-spacing) - 1px),
-    #e0d4b2 calc(var(--editor-rule-spacing) - 1px) var(--editor-rule-spacing)
+    var(--editor-paper-band) 0 calc(var(--editor-rule-spacing) - 1px),
+    var(--editor-paper-rule) calc(var(--editor-rule-spacing) - 1px) var(--editor-rule-spacing)
   );
 }
 
@@ -482,7 +493,7 @@
   .region--editor
   .monaco-editor
   .lines-content {
-  background-image: radial-gradient(circle, rgba(176, 150, 96, 0.22) 1px, transparent 1.5px);
+  background-image: radial-gradient(circle, var(--editor-paper-dot) 1px, transparent 1.5px);
   background-size: var(--editor-rule-spacing) var(--editor-rule-spacing);
   background-position: 0 calc(var(--editor-rule-spacing) - 1px);
 }
@@ -500,7 +511,18 @@
   .region--editor
   .monaco-editor
   .margin {
-  box-shadow: inset -2px 0 0 #d98a8a;
+  box-shadow: inset -2px 0 0 var(--editor-margin-rule);
+}
+
+/* Opaque editor themes (e.g. Midnight, issue #84) paint their surface in Monaco
+ * itself, so the CSS ruled-paper lines/dots are intentionally hidden — Monaco's
+ * own background already shows. The line height still equals the rule spacing,
+ * so switching back to a paper theme lands text on the lines unchanged. */
+:root[data-theme='skeuomorph'][data-editor-theme='midnight']
+  .region--editor
+  .monaco-editor
+  .lines-content {
+  background-image: none;
 }
 
 /* --- Shell: brushed-metal frame around a recessed dark-glass screen ------ */

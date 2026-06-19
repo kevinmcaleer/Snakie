@@ -1,38 +1,31 @@
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  CopilotDeviceCode,
-  LlmKeyStatus,
-  LlmMessage,
-  LlmProviderInfo,
-  LlmStreamEvent
-} from '../../../preload/index.d'
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import type { LlmMessage, LlmStreamEvent } from '../../../preload/index.d'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import {
-  COMPLETION_ENABLED_KEY,
-  COMPLETION_MODELS_KEY,
-  notifyCompletionConfigChanged
-} from '../store/completionConfig'
-import { invalidateCompletionKeyStatus } from './inline-completions'
+import { useChatProviders } from '../hooks/useChatProviders'
+import { openSettings } from './settingsBus'
 import './ChatPanel.css'
 
 /**
- * CHAT TAB (issue #18, generalized in #77 + #78)
- * ==============================================
+ * CHAT TAB (issue #18, generalized in #77 + #78; settings moved out in #83)
+ * ========================================================================
  *
- * An in-app multi-provider chat assistant. The message thread, an input box,
- * per-provider API-key settings, a subtle footer bar to pick provider / model /
- * effort / speed, and toggles to attach the active editor file and recent
- * console output as context.
+ * An in-app multi-provider chat assistant. The message thread, an input box, a
+ * subtle footer bar to pick provider / model / effort / speed (plus Clear and a
+ * ⚙ that opens the Settings dialog's Chat tab), and toggles to attach the active
+ * editor file and recent console output as context.
+ *
+ * The redundant title bar and the inline key-settings form were removed in
+ * issue #83 — the per-provider API keys, the GitHub Copilot sign-in and the
+ * autocomplete settings now live in the Settings dialog's Chat tab
+ * ({@link ChatSettings}). Provider/model/key state is shared via
+ * {@link useChatProviders} so the footer here and that tab stay in sync.
  *
  * All provider API calls run in the MAIN process (the renderer CSP blocks
  * external requests), so this panel only talks to `window.api.llm`. Replies are
  * streamed: `sendMessage` resolves with the full text, but we also subscribe to
  * `onStream` deltas so the assistant bubble fills in live.
- *
- * If no API key is stored for the selected provider, the panel prompts for one
- * rather than crashing.
  */
 
 /** Window CustomEvent name the ShellPanel "Send to chat" button dispatches (issue #78). */
@@ -48,54 +41,24 @@ export function ChatPanel(): JSX.Element {
   const activeFile = openFiles.find((f) => f.id === activeId)
   const { getSinceRun } = useConsole()
 
-  // ── Provider registry + persisted selection ────────────────────────────
-  const [providers, setProviders] = useState<LlmProviderInfo[]>([])
-  const [providerId, setProviderId] = useLocalStorage<string>('snakie.chat.provider', 'anthropic')
-  // Per-provider model selection, persisted under snakie.chat.model.<provider>.
-  const [modelByProvider, setModelByProvider] = useLocalStorage<Record<string, string>>(
-    'snakie.chat.models',
-    {}
-  )
-  const [effortByProvider, setEffortByProvider] = useLocalStorage<Record<string, string>>(
-    'snakie.chat.efforts',
-    {}
-  )
-  const [speedByProvider, setSpeedByProvider] = useLocalStorage<Record<string, string>>(
-    'snakie.chat.speeds',
-    {}
-  )
-  // Inline autocomplete (issue #82): master on/off (default OFF — opt-in, since
-  // it spends tokens on every typing pause) and a per-provider FAST completion
-  // model, separate from the chat model. Read live by the Monaco provider via
-  // the matching localStorage keys in store/completionConfig.
-  const [completionEnabled, setCompletionEnabled] = useLocalStorage<boolean>(
-    COMPLETION_ENABLED_KEY,
-    false
-  )
-  const [completionModelByProvider, setCompletionModelByProvider] = useLocalStorage<
-    Record<string, string>
-  >(COMPLETION_MODELS_KEY, {})
-
-  const provider = useMemo(
-    () => providers.find((p) => p.id === providerId) ?? providers[0],
-    [providers, providerId]
-  )
-  const model = (provider && modelByProvider[provider.id]) || provider?.defaultModel || ''
-  const effort = provider ? effortByProvider[provider.id] : undefined
-  const speed = provider ? speedByProvider[provider.id] : undefined
-  // The fast completion model: per-provider override, else the provider's
-  // declared fast default (issue #82).
-  const completionModel =
-    (provider && completionModelByProvider[provider.id]) ||
-    provider?.defaultCompletionModel ||
-    provider?.defaultModel ||
-    ''
-
-  // ── Key settings ────────────────────────────────────────────────────────
-  const [keyStatus, setKeyStatus] = useState<LlmKeyStatus | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [keyInput, setKeyInput] = useState('')
-  const [savingKey, setSavingKey] = useState(false)
+  // ── Shared provider registry + selection + key status (issue #83) ─────────
+  // The per-provider keys, Copilot sign-in and autocomplete settings now live in
+  // the Settings dialog's Chat tab; this panel keeps the quick footer selectors,
+  // reading/writing the same persisted values via the shared hook so the two
+  // stay in sync.
+  const {
+    providers,
+    provider,
+    setProviderId,
+    model,
+    setModel,
+    effort,
+    setEffort,
+    speed,
+    setSpeed,
+    keyStatus,
+    error: providerError
+  } = useChatProviders()
 
   // ── Thread state ──────────────────────────────────────────────────────────
   const [turns, setTurns] = useState<ChatTurn[]>([])
@@ -115,30 +78,6 @@ export function ChatPanel(): JSX.Element {
 
   const threadRef = useRef<HTMLDivElement>(null)
   const streamingRef = useRef('')
-
-  // Load the provider registry once on mount.
-  useEffect(() => {
-    void window.api.llm
-      .listProviders()
-      .then(setProviders)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
-  }, [])
-
-  // Load whether a key is configured for the selected provider (and re-check
-  // whenever the selection changes).
-  const refreshKeyStatus = useCallback(async (): Promise<void> => {
-    if (!provider) return
-    try {
-      const status = await window.api.llm.getKeyStatus(provider.id)
-      setKeyStatus(status)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [provider])
-
-  useEffect(() => {
-    void refreshKeyStatus()
-  }, [refreshKeyStatus])
 
   // Subscribe to streamed deltas for the in-flight request.
   useEffect(() => {
@@ -160,29 +99,6 @@ export function ChatPanel(): JSX.Element {
     const el = threadRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [turns, streaming])
-
-  const saveKey = useCallback(
-    async (e: FormEvent): Promise<void> => {
-      e.preventDefault()
-      if (!provider) return
-      setSavingKey(true)
-      setError(null)
-      try {
-        await window.api.llm.setKey(provider.id, keyInput)
-        // The inline-completion provider caches "has key" per provider; a freshly
-        // saved key must invalidate that so suggestions start working at once.
-        invalidateCompletionKeyStatus(provider.id)
-        setKeyInput('')
-        await refreshKeyStatus()
-        setShowSettings(false)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
-      } finally {
-        setSavingKey(false)
-      }
-    },
-    [keyInput, provider, refreshKeyStatus]
-  )
 
   const sendText = useCallback(
     async (text: string, console?: string): Promise<void> => {
@@ -278,147 +194,19 @@ export function ChatPanel(): JSX.Element {
     [activeId, updateContent]
   )
 
-  const setModel = useCallback(
-    (next: string): void => {
-      if (!provider) return
-      setModelByProvider({ ...modelByProvider, [provider.id]: next })
-    },
-    [provider, modelByProvider, setModelByProvider]
-  )
-  const setEffort = useCallback(
-    (next: string): void => {
-      if (!provider) return
-      setEffortByProvider({ ...effortByProvider, [provider.id]: next })
-    },
-    [provider, effortByProvider, setEffortByProvider]
-  )
-  const setSpeed = useCallback(
-    (next: string): void => {
-      if (!provider) return
-      setSpeedByProvider({ ...speedByProvider, [provider.id]: next })
-    },
-    [provider, speedByProvider, setSpeedByProvider]
-  )
-  const setCompletionModel = useCallback(
-    (next: string): void => {
-      if (!provider) return
-      setCompletionModelByProvider({ ...completionModelByProvider, [provider.id]: next })
-      notifyCompletionConfigChanged()
-    },
-    [provider, completionModelByProvider, setCompletionModelByProvider]
-  )
-  const toggleCompletionEnabled = useCallback(
-    (next: boolean): void => {
-      setCompletionEnabled(next)
-      notifyCompletionConfigChanged()
-    },
-    [setCompletionEnabled]
-  )
-
   const ready = keyStatus?.hasKey ?? false
   const providerLabel = provider?.label ?? 'Loading…'
+  // Surface a provider-load error or an in-flight send error (whichever is set).
+  const shownError = error ?? providerError
 
   return (
     <div className="chat">
-      <div className="chat__toolbar">
-        <span className="chat__status">
-          {ready ? `${providerLabel} ready` : 'No API key'}
-          {provider?.experimental && <span className="chat__badge">experimental</span>}
-        </span>
-        <div className="chat__toolbar-actions">
-          <button
-            type="button"
-            className="chat__btn"
-            onClick={clearThread}
-            disabled={turns.length === 0 || busy}
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            className="chat__btn"
-            onClick={() => setShowSettings((s) => !s)}
-            aria-expanded={showSettings}
-          >
-            ⚙ Key
-          </button>
-        </div>
-      </div>
-
-      {showSettings && provider && provider.id === 'copilot' && (
-        <div className="chat__settings">
-          <CopilotSignIn
-            providerLabel={provider.label}
-            signedIn={!!keyStatus?.hasKey}
-            onChange={async () => {
-              invalidateCompletionKeyStatus(provider.id)
-              await refreshKeyStatus()
-            }}
-          />
-        </div>
-      )}
-
-      {showSettings && provider && provider.id !== 'copilot' && (
-        <form className="chat__settings" onSubmit={saveKey}>
-          <label className="chat__settings-label" htmlFor="chat-key">
-            {provider.label} API key
-          </label>
-          <input
-            id="chat-key"
-            type="password"
-            className="chat__input-key"
-            placeholder={
-              keyStatus?.hasKey ? '•••••••• (stored)' : provider.keyHint || 'API key'
-            }
-            value={keyInput}
-            onChange={(e) => setKeyInput(e.target.value)}
-            autoComplete="off"
-          />
-          <div className="chat__settings-row">
-            <button type="submit" className="chat__btn chat__btn--primary" disabled={savingKey}>
-              {savingKey ? 'Saving…' : 'Save key'}
-            </button>
-            {keyStatus?.hasKey && (
-              <button
-                type="button"
-                className="chat__btn"
-                onClick={async () => {
-                  await window.api.llm.setKey(provider.id, '')
-                  invalidateCompletionKeyStatus(provider.id)
-                  await refreshKeyStatus()
-                }}
-                disabled={savingKey}
-              >
-                Remove
-              </button>
-            )}
-            {provider.keyUrl && (
-              <button
-                type="button"
-                className="chat__btn"
-                onClick={() => void window.api.openExternal(provider.keyUrl as string)}
-              >
-                Get a key
-              </button>
-            )}
-          </div>
-          {keyStatus && !keyStatus.secure && (
-            <p className="chat__settings-warn">
-              Secure OS encryption is unavailable on this system; the key is stored obfuscated but
-              not encrypted.
-            </p>
-          )}
-          <p className="chat__settings-hint">
-            Your key is stored locally and used only to call the {provider.label} API from this app.
-          </p>
-        </form>
-      )}
-
       <div className="chat__thread" ref={threadRef}>
         {turns.length === 0 && !streaming && (
           <p className="chat__empty">
-            Ask the assistant about your MicroPython code. Use the toggles below to attach the
-            current editor file or recent console output as context.
+            {ready
+              ? 'Ask the assistant about your MicroPython code. Use the toggles below to attach the current editor file or recent console output as context.'
+              : `No API key for ${providerLabel}. Open ⚙ Settings → Chat to add one.`}
           </p>
         )}
         {turns.map((t) => (
@@ -435,7 +223,7 @@ export function ChatPanel(): JSX.Element {
         )}
       </div>
 
-      {error && <p className="chat__error">{error}</p>}
+      {shownError && <p className="chat__error">{shownError}</p>}
 
       <form className="chat__composer" onSubmit={send}>
         <div className="chat__includes">
@@ -519,194 +307,30 @@ export function ChatPanel(): JSX.Element {
               ]}
             />
           )}
-          {/* Inline autocomplete (issue #82): opt-in toggle + the FAST model used
-              for ghost-text completions, separate from the chat model above. */}
-          <label
-            className="chat__footer-toggle"
-            title="Suggest code as you type (uses the completion model below)"
-          >
-            <input
-              type="checkbox"
-              checked={completionEnabled}
-              onChange={(e) => toggleCompletionEnabled(e.target.checked)}
-            />
-            <span className="chat__footer-label">Autocomplete</span>
-          </label>
-          {completionEnabled && (
-            <FooterSelect
-              label="Completion"
-              value={completionModel}
-              onChange={setCompletionModel}
-              options={provider.models.map((m) => ({ value: m.id, label: m.label }))}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * GitHub Copilot sign-in via the OAuth device flow. A plain personal access
- * token can't reach the Copilot token endpoint, so the user approves a short
- * code at github.com/login/device; the main process then holds the resulting
- * GitHub token (never exposed here) and exchanges it for the Copilot token.
- */
-function CopilotSignIn({
-  providerLabel,
-  signedIn,
-  onChange
-}: {
-  providerLabel: string
-  signedIn: boolean
-  onChange: () => Promise<void>
-}): JSX.Element {
-  const [device, setDevice] = useState<CopilotDeviceCode | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'starting' | 'awaiting' | 'error'>('idle')
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const cancelledRef = useRef(false)
-
-  // Stop polling if the panel unmounts mid-flow.
-  useEffect(() => {
-    return () => {
-      cancelledRef.current = true
-    }
-  }, [])
-
-  const poll = useCallback(
-    async (dc: CopilotDeviceCode): Promise<void> => {
-      const deadline = Date.now() + dc.expiresInSeconds * 1000
-      let intervalMs = Math.max(1, dc.intervalSeconds) * 1000
-      while (!cancelledRef.current && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, intervalMs))
-        if (cancelledRef.current) return
-        let res: Awaited<ReturnType<typeof window.api.llm.copilotDevicePoll>>
-        try {
-          res = await window.api.llm.copilotDevicePoll(dc.deviceCode)
-        } catch (e) {
-          setError(e instanceof Error ? e.message : String(e))
-          setPhase('error')
-          setDevice(null)
-          return
-        }
-        if (res.status === 'authorized') {
-          setDevice(null)
-          setPhase('idle')
-          await onChange()
-          return
-        }
-        if (res.status === 'slow_down') {
-          intervalMs += 5000
-          continue
-        }
-        if (res.status === 'pending') continue
-        // denied / expired / error — terminal.
-        setError(res.message || `Sign-in ${res.status}.`)
-        setPhase('error')
-        setDevice(null)
-        return
-      }
-      if (!cancelledRef.current) {
-        setError('Sign-in timed out — try again.')
-        setPhase('error')
-        setDevice(null)
-      }
-    },
-    [onChange]
-  )
-
-  const start = useCallback(async (): Promise<void> => {
-    setError(null)
-    setPhase('starting')
-    cancelledRef.current = false
-    try {
-      const dc = await window.api.llm.copilotDeviceStart()
-      setDevice(dc)
-      setPhase('awaiting')
-      void window.api.openExternal(dc.verificationUri)
-      void poll(dc)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
-      setPhase('error')
-    }
-  }, [poll])
-
-  if (signedIn && phase === 'idle') {
-    return (
-      <div className="chat__copilot">
-        <p className="chat__settings-hint">✓ Signed in to {providerLabel}.</p>
-        <div className="chat__settings-row">
-          <button
-            type="button"
-            className="chat__btn"
-            onClick={async () => {
-              await window.api.llm.setKey('copilot', '')
-              await onChange()
-            }}
-          >
-            Sign out
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div className="chat__copilot">
-      {phase === 'awaiting' && device ? (
-        <>
-          <p className="chat__settings-hint">
-            A GitHub page opened — enter this code to authorize Snakie:
-          </p>
-          <div className="chat__copilot-code">
-            <code>{device.userCode}</code>
+          {/* Quick actions: clear the thread + open the Settings dialog's Chat
+              tab (keys, Copilot sign-in, autocomplete — moved here in #83). */}
+          <div className="chat__footer-actions">
+            {!ready && <span className="chat__footer-warn">no key</span>}
             <button
               type="button"
               className="chat__btn"
-              onClick={() =>
-                void navigator.clipboard
-                  .writeText(device.userCode)
-                  .then(() => {
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1200)
-                  })
-                  .catch(() => undefined)
-              }
+              onClick={clearThread}
+              disabled={turns.length === 0 || busy}
             >
-              {copied ? 'Copied' : 'Copy'}
+              Clear
             </button>
-          </div>
-          <div className="chat__settings-row">
             <button
               type="button"
               className="chat__btn"
-              onClick={() => void window.api.openExternal(device.verificationUri)}
+              onClick={() => openSettings('chat')}
+              title="Open chat settings (API keys, sign-in, autocomplete)"
+              aria-label="Open chat settings"
             >
-              Reopen github.com/login/device
+              ⚙
             </button>
           </div>
-          <p className="chat__settings-hint">Waiting for you to authorize…</p>
-        </>
-      ) : (
-        <>
-          <p className="chat__settings-hint">
-            Sign in with your GitHub account (needs an active Copilot subscription) — no personal
-            access token required.
-          </p>
-          <div className="chat__settings-row">
-            <button
-              type="button"
-              className="chat__btn chat__btn--primary"
-              onClick={() => void start()}
-              disabled={phase === 'starting'}
-            >
-              {phase === 'starting' ? 'Starting…' : 'Sign in to GitHub Copilot'}
-            </button>
-          </div>
-        </>
+        </div>
       )}
-      {error && <p className="chat__error">{error}</p>}
     </div>
   )
 }
