@@ -170,7 +170,7 @@ export function AppShell(): JSX.Element {
                 onCollapse={() => setShellCollapsed(true)}
                 onExpand={() => setShellCollapsed(false)}
               >
-                <ShellPanel />
+                <ShellPanel chatOpen={!rightCollapsed} />
               </Panel>
             </PanelGroup>
           </Panel>

@@ -43,7 +43,14 @@ export type {
 } from '../main/packages/types'
 // Re-export the LLM chat types so the renderer's chat panel can import them
 // from the UI-facing preload module rather than reaching into `src/main`.
-export type { LlmKeyStatus, LlmMessage, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
+export type {
+  LlmKeyStatus,
+  LlmMessage,
+  LlmModelInfo,
+  LlmProviderInfo,
+  LlmSendRequest,
+  LlmStreamEvent
+} from '../main/llm/types'
 
 // Re-export the Git (version-control) types (issue #15) so the Source Control
 // panel can import them from this single UI-facing module.

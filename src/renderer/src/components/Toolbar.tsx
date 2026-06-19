@@ -2,6 +2,7 @@ import { useCallback, type ReactNode } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { useConsole } from '../store/console'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -80,6 +81,7 @@ export function Toolbar({
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
+  const { markRun } = useConsole()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
   const canRun = connected && activeFile != null
@@ -93,9 +95,12 @@ export function Toolbar({
    */
   const handleRun = useCallback(() => {
     if (!connected || !activeFile) return
+    // Record the console position so "send console to chat" / the composer's
+    // attach-console control grab only this run's output (issue #78).
+    markRun()
     const payload = `\x05${activeFile.content}\x04`
     window.api.device.sendData(payload).catch(() => undefined)
-  }, [connected, activeFile])
+  }, [connected, activeFile, markRun])
 
   const handleStop = useCallback(() => {
     window.api.device.interrupt().catch(() => undefined)
