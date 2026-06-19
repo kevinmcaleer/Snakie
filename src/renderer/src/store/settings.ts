@@ -82,15 +82,39 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
   // publish the theme's paper-band / rule / region / dot colours as CSS custom
   // properties that index.css reads — keeping the CSS ruled paper and the Monaco
   // theme (registered + selected in MonacoEditor) in lockstep from one source.
+  //
+  // The editor COLOUR themes are a Skeuomorph(-light)-skin feature: the Dark
+  // Skeuomorph skin (issue #91) renders its own cohesive deep-slate ruled paper
+  // from the `:root[data-theme='dark']` token defaults in index.css. So under
+  // the dark skin we must NOT push the (light/cream) editor-theme paper vars as
+  // inline styles (they'd win over the stylesheet and repaint the dark paper
+  // cream), and we clear `data-editor-theme` so the `…='midnight'` line-hiding
+  // branch never fires. We re-run on `data-theme` changes so toggling the skin
+  // re-applies correctly. The plain `light` skin keeps the cream paper vars.
   useEffect(() => {
-    const def = editorThemeFor(editorTheme)
     const root = document.documentElement
-    root.setAttribute('data-editor-theme', def.id)
-    root.style.setProperty('--editor-paper-band', def.paperBand)
-    root.style.setProperty('--editor-paper-rule', def.paperRule)
-    root.style.setProperty('--editor-paper-dot', def.dotColor)
-    root.style.setProperty('--editor-region-bg', def.regionBg)
-    root.style.setProperty('--editor-margin-rule', def.marginRule)
+    const apply = (): void => {
+      if (root.getAttribute('data-theme') === 'dark') {
+        root.removeAttribute('data-editor-theme')
+        root.style.removeProperty('--editor-paper-band')
+        root.style.removeProperty('--editor-paper-rule')
+        root.style.removeProperty('--editor-paper-dot')
+        root.style.removeProperty('--editor-region-bg')
+        root.style.removeProperty('--editor-margin-rule')
+        return
+      }
+      const def = editorThemeFor(editorTheme)
+      root.setAttribute('data-editor-theme', def.id)
+      root.style.setProperty('--editor-paper-band', def.paperBand)
+      root.style.setProperty('--editor-paper-rule', def.paperRule)
+      root.style.setProperty('--editor-paper-dot', def.dotColor)
+      root.style.setProperty('--editor-region-bg', def.regionBg)
+      root.style.setProperty('--editor-margin-rule', def.marginRule)
+    }
+    apply()
+    const observer = new MutationObserver(apply)
+    observer.observe(root, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
   }, [editorTheme])
 
   const store = useMemo<SettingsStore>(

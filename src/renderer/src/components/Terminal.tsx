@@ -42,9 +42,11 @@ const DARK_TERMINAL_THEME = {
 }
 
 /**
- * Skeuomorph skin: a recessed dark-glass screen glowing green phosphor, matching
- * concept 08 of the MicroPython IDE Concepts design. The near-black background
- * pairs with the inset frame applied to `.terminal` in index.css.
+ * Skeuomorph skin (light + the dark variant, issue #91): a recessed dark-glass
+ * screen glowing green phosphor, matching concept 08 of the MicroPython IDE
+ * Concepts design. The near-black background pairs with the inset frame applied
+ * to `.terminal` in index.css — which both skins now paint as a recessed
+ * dark-glass console, so they share this phosphor palette.
  */
 const SKEUO_TERMINAL_THEME = {
   background: '#080a07',
@@ -70,10 +72,14 @@ const SKEUO_TERMINAL_THEME = {
   brightWhite: '#eafff0'
 }
 
-/** Pick the terminal palette for the app's current `data-theme`. Only the
- * Skeuomorph skin diverges; every other theme keeps the dark REPL palette. */
+/** Pick the terminal palette for the app's current `data-theme`. Both Skeuomorph
+ * skins — the light default and its dark variant (issue #91) — frame the console
+ * as a recessed dark-glass screen, so both glow green phosphor; the plain `light`
+ * skin keeps the dark REPL palette. */
 function terminalThemeFor(docTheme: string | null): typeof DARK_TERMINAL_THEME {
-  return docTheme === 'skeuomorph' ? SKEUO_TERMINAL_THEME : DARK_TERMINAL_THEME
+  return docTheme === 'skeuomorph' || docTheme === 'dark'
+    ? SKEUO_TERMINAL_THEME
+    : DARK_TERMINAL_THEME
 }
 
 const decoder = new TextDecoder()

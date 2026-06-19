@@ -1,54 +1,78 @@
 /* ---------------------------------------------------------------------------
- * Theme tokens — 8-bit NES retro (dark-first)
- * Theming via CSS custom properties. `data-theme` is set on <html> by
- * useTheme(). Dark is the default (the NES console look); a lighter retro
- * variant is provided for the theme toggle. Keep all colour decisions
- * referencing these tokens so every component themes for free.
+ * Theme tokens — Skeuomorph (the default look) and its dark variant.
  *
- *   bg            #14141f   app background (slate)
- *   panel/elev    #1f1f30   panels, sidebars, toolbar
- *   panel-2       #28284a   raised controls / hover
- *   border        #3a3a5c
- *   text          #e8e8f0
- *   text-muted    #9a9ab8
- *   accent        #3cbcfc   NES blue   — selection/active/links
- *   accent-2      #00b800   NES green  — success/connected/run
- *   danger        #e60012   NES red    — stop/delete/errors
- *   warn          #f8d800   NES yellow — warnings/dirty
+ * Theming via CSS custom properties. `data-theme` is set on <html> by
+ * useTheme(). Two production skins toggle skeuomorph ⇄ dark, and both share the
+ * SAME material language (brushed metal, brass knobs, glossy pills, green felt
+ * source control, ruled-paper editor, recessed green-phosphor console) — `dark`
+ * is simply the Skeuomorph design rendered in a cohesive dark palette (issue
+ * #91). Keep all colour decisions referencing these tokens so every component
+ * themes for free; the scoped rules further down add the gradients, bevels and
+ * textures tokens can't express (mirrored skeuomorph ⇄ dark).
  * ------------------------------------------------------------------------- */
+:root {
+  /* Base/shared chrome metrics — overridden per skin below where they differ. */
+  --radius: 8px;
+  --border-w: 1px;
+  --pixel-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+  --pixel-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  /* Single readable content font; the chrome speaks Helvetica in this skin
+   * (see the sans rule in the Skeuomorph block). Kept as a token so refs
+   * resolve here. */
+  --font-pixel: var(--font-mono);
+  --toolbar-h: 60px;
+}
+
+/* --- Dark Skeuomorph (the toggle's "lights out" variant, issue #91) --------
+ * Same materials as the light Skeuomorph skin, dark palette: dark brushed metal
+ * chrome (#2a2c30/#1c1e22), deep-slate "paper" editor, dark green felt source
+ * control, glossy-but-dark pills, the same brass knobs (they read fine on dark),
+ * the recessed green-phosphor console, and a dark metal status bar. */
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
 
-  --bg: #14141f;
-  --bg-elevated: #1f1f30;
-  --bg-sunken: #28284a;
-  --border: #3a3a5c;
-  --text: #e8e8f0;
-  --text-muted: #9a9ab8;
+  --bg: #1a1c20; /* charcoal behind sidebars / editor */
+  --bg-elevated: #2a2c30; /* dark brushed-metal chrome */
+  --bg-sunken: #202226; /* recessed controls */
+  --border: #3a3d44; /* metal edge */
+  --text: #d8dbe0;
+  --text-muted: #8a8f98;
 
-  --accent: #3cbcfc;
-  --accent-2: #00b800;
-  --accent-contrast: #14141f;
-  --danger: #e60012;
-  --success: #00b800;
-  --warn: #f8d800;
-  --disconnected: #9a9ab8;
+  --accent: #d6a23f; /* brass — active/selected/links */
+  --accent-2: #3fae5a; /* green — connected / run / saved */
+  --accent-contrast: #15161a;
+  --danger: #e3624f;
+  --success: #3fae5a;
+  --warn: #d6a23f;
+  --disconnected: #6c7078;
 
-  --handle: #3a3a5c;
-  --handle-hover: var(--accent);
+  --handle: #3a3d44;
+  --handle-hover: #4d515a;
 
-  /* 8-bit chrome: square corners, chunky borders, hard pixel shadow. */
-  --radius: 0px;
-  --border-w: 2px;
-  --pixel-shadow: 3px 3px 0 #000;
-  --pixel-shadow-active: 1px 1px 0 #000;
+  /* Skeuomorph is rounded with soft shadows (shared metrics live in :root). */
+  --radius: 8px;
+  --border-w: 1px;
+  --pixel-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --pixel-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.55);
+
+  /* Notebook line height / ruled-line spacing (issues #80/#81); kept in
+   * lockstep with Monaco's line height. */
+  --editor-rule-spacing: 30px;
+
+  /* Editor colour-theme paper palette (issue #84) — dark "paper" defaults so
+   * the deep-slate ruled paper paints before the settings store overrides these
+   * on the document root. A subtle LIGHT rule reads on the dark paper. */
+  --editor-paper-band: #1f2128;
+  --editor-paper-rule: #2c2f38;
+  --editor-paper-dot: rgba(170, 180, 200, 0.14);
+  --editor-region-bg: #1c1e24;
+  --editor-margin-rule: #7a4a4a;
+
   --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
-  /* Single UI font: chrome uses the same readable JetBrains Mono as content.
-   * The 8-bit feel comes from the NES palette, chunky buttons and square
-   * borders — not the font. (Kept as a token so chrome refs resolve here.) */
   --font-pixel: var(--font-mono);
-  --toolbar-h: 52px;
+  --toolbar-h: 60px;
 }
 
 /* Lighter retro variant (keeps the toggle working). */
@@ -624,6 +648,491 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.5),
     0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* ===========================================================================
+ * Dark Skeuomorph (issue #91) — the SAME structural treatments as the light
+ * Skeuomorph skin above, in a cohesive dark palette. Each rule mirrors its
+ * `data-theme='skeuomorph'` counterpart: dark brushed-metal chrome, glossy-dark
+ * pills, the same brass knobs, dark green felt source control, deep-slate ruled
+ * paper, the recessed green-phosphor console and a dark metal status bar. The
+ * Monaco editor (snakie-dark) and xterm (DARK_TERMINAL_THEME) carry the matching
+ * dark-paper / phosphor palettes in their own components.
+ * ========================================================================= */
+
+/* Chrome speaks sans (Helvetica) in this skin too; editor/console/trees mono. */
+:root[data-theme='dark'] .toolbar,
+:root[data-theme='dark'] .btn,
+:root[data-theme='dark'] .panel-header,
+:root[data-theme='dark'] .activitybar,
+:root[data-theme='dark'] .activitybar__item,
+:root[data-theme='dark'] .statusbar,
+:root[data-theme='dark'] .shell-toggle__btn,
+:root[data-theme='dark'] .editor-tab,
+:root[data-theme='dark'] .localtree__title,
+:root[data-theme='dark'] .devicetree__title {
+  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+}
+
+/* Metal backdrop shows through any seams between panels. */
+:root[data-theme='dark'] .shell {
+  background: linear-gradient(180deg, #25272c, #16181c);
+}
+
+/* --- Toolbar: dark brushed aluminium ------------------------------------- */
+:root[data-theme='dark'] .toolbar {
+  height: 60px;
+  background: linear-gradient(180deg, #34373d, #25272c 52%, #1c1e22);
+  border-bottom: 1px solid #0f1013;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .toolbar__divider {
+  width: 2px;
+  background: linear-gradient(#15171b, #34373d);
+  box-shadow: 1px 0 0 rgba(255, 255, 255, 0.05);
+}
+
+:root[data-theme='dark'] .toolbar__wordmark {
+  text-shadow: 0 1px 0 #000;
+}
+
+/* New / Open / Save: one dark brushed-metal segmented control. */
+:root[data-theme='dark'] .toolbar__seg {
+  gap: 0;
+  border-radius: 9px;
+  border: 1px solid #15171b;
+  background: linear-gradient(180deg, #3a3d44, #25272c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+:root[data-theme='dark'] .toolbar__seg .btn {
+  width: 44px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #c2c6cd;
+}
+
+:root[data-theme='dark'] .toolbar__seg .btn:hover {
+  border: none;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme='dark'] .toolbar__seg .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .toolbar__seg .toolbar__seg-btn--open {
+  color: #e3bd6a;
+}
+
+/* --- Buttons: glossy bevelled dark pills --------------------------------- */
+:root[data-theme='dark'] .btn {
+  border-radius: 9px;
+  border: 1px solid #15171b;
+  background: linear-gradient(180deg, #3a3d44, #25272c);
+  color: #d2d6dd;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .btn:hover {
+  border-color: #4d515a;
+}
+
+:root[data-theme='dark'] .btn:active:not(:disabled) {
+  transform: none;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .btn--primary {
+  border-radius: 21px;
+  background: linear-gradient(180deg, #4fce6e, #2f9a48 52%, #1f7a38);
+  border: 1px solid #14512a;
+  color: #f3fff5;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .btn--danger {
+  border-radius: 21px;
+  background: linear-gradient(180deg, #ef7e6c, #cf4434 52%, #a8301f);
+  border: 1px solid #7a2316;
+  color: #fff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.45);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -3px 5px rgba(0, 0, 0, 0.35),
+    0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Domed Run / Stop pills in the toolbar get the roomier hardware padding. */
+:root[data-theme='dark'] .toolbar .btn--primary,
+:root[data-theme='dark'] .toolbar .btn--danger {
+  padding: 10px 22px;
+}
+
+:root[data-theme='dark'] .btn--ghost {
+  background: linear-gradient(180deg, #34373d, #25272c);
+}
+
+:root[data-theme='dark'] .btn--ghost.is-active {
+  background: linear-gradient(180deg, #202226, #16181c);
+  border-color: #15171b;
+  color: #e9c878;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+/* The theme toggle is a round brass knob — reads fine on dark, so keep it. */
+:root[data-theme='dark'] .btn--knob {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #7a531a;
+  background: radial-gradient(circle at 50% 30%, #f7e6a8, #e2bd6a 40%, #c4881d 72%, #9a6716);
+  color: #4a3209;
+  text-shadow: none;
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.65),
+    inset 0 -4px 6px rgba(60, 38, 6, 0.6),
+    0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .btn--knob:hover {
+  border-color: #8a5f15;
+}
+
+:root[data-theme='dark'] .btn--knob:active:not(:disabled) {
+  box-shadow: inset 0 3px 5px rgba(40, 26, 4, 0.7);
+}
+
+/* Pressed-in (concave) hardware key for a shown panel's collapse knob. */
+:root[data-theme='dark'] .btn--knob.is-active {
+  border-color: #8a5f15;
+  background: radial-gradient(circle at 50% 68%, #d0a13a, #a06c16 58%, #7a5212);
+  color: #2e1f06;
+  box-shadow:
+    inset 0 3px 5px rgba(40, 26, 4, 0.7),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+}
+
+/* --- Activity bar: near-black brushed metal ------------------------------ */
+:root[data-theme='dark'] .activitybar {
+  background: linear-gradient(180deg, #25272c, #131418);
+  border-right: 1px solid #0c0d10;
+  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .activitybar__item {
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a8f98;
+  text-shadow: 0 1px 0 #000;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .activitybar__item:hover {
+  border: none;
+  color: #d6dae1;
+}
+
+:root[data-theme='dark'] .activitybar__item:active {
+  transform: none;
+  box-shadow: none;
+}
+
+:root[data-theme='dark'] .activitybar__item.is-active {
+  border: none;
+  background: linear-gradient(180deg, #3d4047, #25272c);
+  color: #ffd36b;
+  text-shadow: 0 0 6px rgba(255, 200, 80, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* --- Panel headers: dark brushed metal ----------------------------------- */
+:root[data-theme='dark'] .panel-header {
+  background: linear-gradient(180deg, #313439, #23252a);
+  border-bottom: 1px solid #15171b;
+  color: #b6bbc3;
+  text-shadow: 0 -1px 0 #000;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* --- Resize handles: metal seams ----------------------------------------- */
+:root[data-theme='dark'] .resize-handle {
+  background: #2c2f36;
+}
+
+:root[data-theme='dark'] .resize-handle:hover,
+:root[data-theme='dark'] .resize-handle[data-resize-handle-active] {
+  background: #4d515a;
+}
+
+/* --- Source Control: dark green felt with slate-paper inputs -------------- */
+:root[data-theme='dark'] .git {
+  position: relative;
+  background-color: #1a3326;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 3px 3px;
+  color: #cfe0d4;
+  border-left: 3px solid #0c1c14;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+/* Stitched-leather inset border framing the felt panel content. */
+:root[data-theme='dark'] .git::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:root[data-theme='dark'] .git__toolbar,
+:root[data-theme='dark'] .git__branches,
+:root[data-theme='dark'] .git__commit,
+:root[data-theme='dark'] .git__group,
+:root[data-theme='dark'] .git__diff-wrap,
+:root[data-theme='dark'] .git__footer {
+  border-color: #0c1c14;
+}
+
+:root[data-theme='dark'] .git__branch-icon,
+:root[data-theme='dark'] .git__sync-counts,
+:root[data-theme='dark'] .git__branches-label,
+:root[data-theme='dark'] .git__group-head,
+:root[data-theme='dark'] .git__notice,
+:root[data-theme='dark'] .git__file-dir,
+:root[data-theme='dark'] .git__repo-path {
+  color: #9bbfa6;
+}
+
+:root[data-theme='dark'] .git__branch-select,
+:root[data-theme='dark'] .git__commit-msg,
+:root[data-theme='dark'] .git__btn {
+  background: #14201a;
+  border: 1px solid #0c1c14;
+  color: #d4e2d9;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='dark'] .git__btn--primary {
+  background: linear-gradient(180deg, #d6a23f, #b07d1e 55%, #936418);
+  border: 1px solid #6e4a12;
+  color: #2a1d06;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .git__file:hover,
+:root[data-theme='dark'] .git__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+:root[data-theme='dark'] .git__btn--primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #e2b04c, #bd8526 55%, #9e6c1a);
+}
+
+:root[data-theme='dark'] .git__icon-btn {
+  color: #a9c7b2;
+}
+
+:root[data-theme='dark'] .git__icon-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+/* --- Editor: dark "paper" tabs ------------------------------------------- */
+:root[data-theme='dark'] .editor-tabs {
+  background: linear-gradient(180deg, #26282e, #1d1f24);
+  border-bottom: 1px solid #131418;
+}
+
+:root[data-theme='dark'] .editor-tab {
+  background: transparent;
+  color: #9398a1;
+  border-right: 1px solid #131418;
+}
+
+:root[data-theme='dark'] .editor-tab:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+:root[data-theme='dark'] .editor-tab--active {
+  background: var(--editor-paper-band);
+  color: #d8dce3;
+  border-radius: 8px 8px 0 0;
+  box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] .editor-tab__dirty {
+  background: #d6a23f;
+}
+
+:root[data-theme='dark'] .region--editor .region__body--editor,
+:root[data-theme='dark'] .editor-empty {
+  background: var(--editor-region-bg);
+}
+
+/* Ruled notebook paper on the dark deep-slate "paper" — Monaco's surface is
+ * transparent (snakie-dark), so this paints on the scrolling line layer exactly
+ * like the light skin. A subtle LIGHT rule reads on the dark band. The period is
+ * `--editor-rule-spacing`, equal to Monaco's line height so text sits on the
+ * lines. `:not([data-…])` covers the first paint before the settings store sets
+ * the attribute. */
+:root[data-theme='dark'][data-editor-paper='lines'] .region--editor .monaco-editor .lines-content,
+:root[data-theme='dark']:not([data-editor-paper]) .region--editor .monaco-editor .lines-content {
+  background-image: repeating-linear-gradient(
+    var(--editor-paper-band) 0 calc(var(--editor-rule-spacing) - 1px),
+    var(--editor-paper-rule) calc(var(--editor-rule-spacing) - 1px) var(--editor-rule-spacing)
+  );
+}
+
+/* Squared-grid dots — subtle, where the ruled lines would meet. */
+:root[data-theme='dark'][data-editor-paper='dots'] .region--editor .monaco-editor .lines-content {
+  background-image: radial-gradient(circle, var(--editor-paper-dot) 1px, transparent 1.5px);
+  background-size: var(--editor-rule-spacing) var(--editor-rule-spacing);
+  background-position: 0 calc(var(--editor-rule-spacing) - 1px);
+}
+
+:root[data-theme='dark'][data-editor-paper='off'] .region--editor .monaco-editor .lines-content {
+  background-image: none;
+}
+
+/* Red margin rule down the right edge of the gutter; hidden when paper is off. */
+:root[data-theme='dark']:not([data-editor-paper='off']) .region--editor .monaco-editor .margin {
+  box-shadow: inset -2px 0 0 var(--editor-margin-rule);
+}
+
+/* Opaque editor themes (Midnight, #84) paint their own surface, so the CSS
+ * ruled-paper lines are intentionally hidden. */
+:root[data-theme='dark'][data-editor-theme='midnight'] .region--editor .monaco-editor .lines-content {
+  background-image: none;
+}
+
+/* --- Shell: dark brushed-metal frame around a recessed dark-glass screen -- */
+:root[data-theme='dark'] .region--shell {
+  background: linear-gradient(180deg, #25272c, #1a1c20);
+}
+
+:root[data-theme='dark'] .region--shell .region__body--terminal {
+  background: transparent;
+  padding: 8px;
+}
+
+:root[data-theme='dark'] .terminal {
+  position: relative;
+  border-radius: 8px;
+  background: #080a07;
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 3px 10px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Glass sheen across the top of the recessed screen. */
+:root[data-theme='dark'] .terminal::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 42%;
+  border-radius: 8px 8px 0 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
+  pointer-events: none;
+}
+
+:root[data-theme='dark'] .shell-toggle {
+  border: 1px solid #15171b;
+  border-radius: 8px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .shell-toggle__btn {
+  background: linear-gradient(180deg, #34373d, #25272c);
+  color: #c2c6cd;
+  text-shadow: 0 -1px 0 #000;
+}
+
+:root[data-theme='dark'] .shell-toggle__btn + .shell-toggle__btn {
+  border-left: 1px solid #15171b;
+}
+
+:root[data-theme='dark'] .shell-toggle__btn:hover {
+  background: linear-gradient(180deg, #3d4047, #2a2c30);
+  color: #e9edf2;
+}
+
+:root[data-theme='dark'] .shell-toggle__btn--active {
+  background: linear-gradient(180deg, #202226, #16181c);
+  color: #e9edf2;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.62);
+}
+
+:root[data-theme='dark'] .conn-control__select {
+  border-radius: 8px;
+  border: 1px solid #15171b;
+  background: linear-gradient(180deg, #34373d, #25272c);
+  color: #d2d6dd;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Status bar: dark brushed metal with a glossy connection LED ---------- */
+:root[data-theme='dark'] .statusbar {
+  background: linear-gradient(180deg, #2c2f35, #1c1e22);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #c2c6cd;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .statusbar__conn--connected .statusbar__dot {
+  background: radial-gradient(circle at 30% 30%, #9dffb6, #15a64a);
+  box-shadow:
+    0 0 5px rgba(33, 200, 90, 0.8),
+    inset 0 -1px 1px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] .statusbar__flash {
+  border-radius: 7px;
+  background: linear-gradient(180deg, #34373d, #25272c);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+:root[data-theme='dark'] .statusbar__update-btn {
+  border-radius: 7px;
+  color: #2a2008;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 * {

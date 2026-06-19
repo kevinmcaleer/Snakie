@@ -10,7 +10,7 @@ import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
 import { useDiagnostics } from '../store/diagnostics'
 import { useEditorSettings } from '../store/settings'
-import { EDITOR_THEME_LIST, monacoThemeName } from '../store/editorThemes'
+import { DARK_PAPER_RULES, EDITOR_THEME_LIST, monacoThemeName } from '../store/editorThemes'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import type { Diagnostic, PluginContext } from '../../../preload/index.d'
 import { diagnosticToMarker } from './plugin-diagnostics'
@@ -76,16 +76,26 @@ let themesDefined = false
 function ensureThemes(): void {
   if (themesDefined) return
   themesDefined = true
+  // Dark Skeuomorph editor (issue #91): the dark variant of the ruled-paper
+  // editor. Monaco's surface is TRANSPARENT so the CSS deep-slate ruled paper
+  // (`.lines-content` under `data-theme='dark'` in index.css) shows through and
+  // scrolls with the text — exactly like the light Skeuomorph `paper` theme.
+  // The syntax palette mirrors the Midnight editor theme so it reads legibly on
+  // the dark paper, with a matching transparent gutter/line-highlight.
   monaco.editor.defineTheme('snakie-dark', {
     base: 'vs-dark',
     inherit: true,
-    rules: [],
+    rules: DARK_PAPER_RULES,
     colors: {
-      'editor.background': '#14141f',
-      'editorGutter.background': '#14141f',
-      'minimap.background': '#14141f',
-      'editorWidget.background': '#1f1f30',
-      'editor.lineHighlightBackground': '#1f1f30'
+      'editor.background': '#00000000',
+      'editorGutter.background': '#00000000',
+      'editorLineNumber.foreground': '#5a5f6e',
+      'editorLineNumber.activeForeground': '#d6a23f',
+      'minimap.background': '#1c1e24',
+      'editorWidget.background': '#23262f',
+      'editor.lineHighlightBackground': '#00000000',
+      'editor.selectionBackground': '#3a4258',
+      'editor.foreground': '#d4d8e0'
     }
   })
   monaco.editor.defineTheme('snakie-light', { base: 'vs', inherit: true, rules: [], colors: {} })
@@ -115,8 +125,10 @@ function ensureThemes(): void {
 }
 
 /** Resolve the app skin + editor-theme id to the Monaco theme name. The
- * Skeuomorph skin uses the user-selected editor colour theme; the dark/light
- * skins keep their plain backgrounds. */
+ * Skeuomorph(-light) skin uses the user-selected editor colour theme; the Dark
+ * Skeuomorph skin (issue #91) uses `snakie-dark`, the dark ruled-paper theme
+ * (transparent surface so the CSS deep-slate paper shows through); the plain
+ * `light` skin keeps its plain background. */
 function monacoTheme(theme: string, editorTheme: string): string {
   if (theme === 'skeuomorph') return monacoThemeName(editorTheme)
   if (theme === 'light') return 'snakie-light'
@@ -130,15 +142,16 @@ function readEditorTheme(): string {
   return document.documentElement.getAttribute('data-editor-theme') ?? 'paper'
 }
 
-/** Editor metrics per skin. The Skeuomorph skin sits the text on ruled-paper
- * lines, so its line height tracks the user's configured spacing (issues
- * #80/#81) — which must equal the CSS gradient period (`--editor-rule-spacing`)
- * for the text to land on the lines. */
+/** Editor metrics per skin. Both Skeuomorph skins (light + the dark variant,
+ * issue #91) sit the text on ruled-paper lines, so their line height tracks the
+ * user's configured spacing (issues #80/#81) — which must equal the CSS gradient
+ * period (`--editor-rule-spacing`) for the text to land on the lines. The plain
+ * `light` skin keeps fixed metrics. */
 function editorMetricsFor(
   theme: string,
   lineSpacing: number
 ): { fontSize: number; lineHeight: number } {
-  return theme === 'skeuomorph'
+  return theme === 'skeuomorph' || theme === 'dark'
     ? { fontSize: 14, lineHeight: lineSpacing }
     : { fontSize: 13, lineHeight: 20 }
 }

@@ -268,6 +268,29 @@ export const EDITOR_THEMES: Record<string, EditorThemeDef> = {
   }
 }
 
+/**
+ * Syntax rules for the Dark Skeuomorph editor (issue #91). The dark skin renders
+ * the ruled-paper editor on a deep-slate "paper" with a TRANSPARENT Monaco
+ * surface (see `snakie-dark` in MonacoEditor) so the CSS ruled lines show
+ * through — the dark twin of the light `paper` theme. This palette mirrors the
+ * Midnight editor theme so the syntax reads legibly on the dark paper.
+ */
+export const DARK_PAPER_RULES: EditorTokenRule[] = buildRules({
+  keyword: 'c792ea', // lilac
+  control: 'f78c6c', // coral
+  string: 'c3e88d', // lime
+  stringEscape: '89ddff',
+  number: 'f78c6c', // coral
+  comment: '6f7896', // slate
+  type: 'ffcb6b', // amber
+  func: '82aaff', // blue
+  decorator: 'ffcb6b', // amber
+  constant: 'f07178', // salmon
+  identifier: 'd4d8e0', // light ink
+  operator: '89ddff', // cyan
+  delimiter: '8b93b0'
+})
+
 /** The default editor theme id (the warm cream paper). */
 export const DEFAULT_EDITOR_THEME = 'paper'
 
