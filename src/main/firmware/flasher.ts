@@ -191,7 +191,7 @@ async function flashRp2040(opts: FlashOptions, emit: Emit): Promise<FlashResult>
         const pct = size > 0 ? Math.floor((copied / size) * 100) : 0
         if (pct !== lastPct && pct % 10 === 0) {
           lastPct = pct
-          emit({ kind: 'log', message: `Copying… ${pct}%` })
+          emit({ kind: 'log', message: `Copying… ${pct}%`, percent: pct })
         }
       })
       read.on('error', reject)

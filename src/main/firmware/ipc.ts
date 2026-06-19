@@ -10,7 +10,17 @@ import { dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
 import type { IpcResult } from '../device/types'
 import { detectBoards } from './detect'
 import { detectEsptool, flash } from './flasher'
-import type { BoardCandidate, EsptoolInfo, FlashOptions, FlashProgress, FlashResult } from './types'
+import { fetchFirmwareCatalog } from './catalog'
+import { downloadAndFlash } from './download'
+import type {
+  BoardCandidate,
+  DownloadAndFlashOptions,
+  EsptoolInfo,
+  FirmwareCatalog,
+  FlashOptions,
+  FlashProgress,
+  FlashResult
+} from './types'
 
 /** Renderer-facing channel names for the firmware layer. */
 export const FIRMWARE_CHANNELS = {
@@ -18,7 +28,9 @@ export const FIRMWARE_CHANNELS = {
   detect: 'firmware:detect',
   esptool: 'firmware:esptool',
   pickFile: 'firmware:pickFile',
-  flash: 'firmware:flash'
+  flash: 'firmware:flash',
+  fetchCatalog: 'firmware:fetchCatalog',
+  downloadAndFlash: 'firmware:downloadAndFlash'
 } as const
 
 /**
@@ -73,5 +85,13 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
 
   ipcMain.handle(FIRMWARE_CHANNELS.flash, (_e, opts: FlashOptions) =>
     wrap<FlashResult>(() => flash(opts, sendProgress))
+  )
+
+  ipcMain.handle(FIRMWARE_CHANNELS.fetchCatalog, () =>
+    wrap<FirmwareCatalog>(() => fetchFirmwareCatalog())
+  )
+
+  ipcMain.handle(FIRMWARE_CHANNELS.downloadAndFlash, (_e, opts: DownloadAndFlashOptions) =>
+    wrap<FlashResult>(() => downloadAndFlash(opts, sendProgress))
   )
 }

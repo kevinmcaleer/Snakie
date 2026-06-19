@@ -188,6 +188,60 @@
   font-weight: 600;
 }
 
+/* Firmware-source toggle (Local file vs Download from MicroPython.org) — #64. */
+.firmware-source-toggle {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.firmware-source-tab {
+  flex: 1 1 0;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #161a22;
+  color: #e6e6e6;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.firmware-source-tab:hover:not(:disabled) {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.firmware-source-tab.is-active {
+  opacity: 1;
+  border-color: rgba(120, 170, 255, 0.7);
+  background: #1b2433;
+}
+
+.firmware-source-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* % progress bar (download then copy) — #64. */
+.firmware-progress {
+  height: 0.55rem;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  background: #11141b;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.firmware-progress__bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4f8cff, #6fd3a0);
+  transition: width 0.15s ease-out;
+}
+
+.firmware-progress__label {
+  margin-top: 0.25rem;
+}
+
 .firmware-modal__footer {
   display: flex;
   align-items: center;

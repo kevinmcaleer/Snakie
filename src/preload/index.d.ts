@@ -26,7 +26,13 @@ export type {
   FlashProgress,
   FlashOptions,
   FlashResult,
-  EsptoolInfo
+  EsptoolInfo,
+  FirmwareCatalog,
+  FirmwareFamily,
+  FirmwareModel,
+  FirmwareVariant,
+  FirmwareVersion,
+  DownloadAndFlashOptions
 } from '../main/firmware/types'
 
 // Re-export the update-status type so the renderer's notifier can import it
