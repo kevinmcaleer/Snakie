@@ -100,7 +100,13 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  notarize: true
+  # Notarize with notarytool. The Team ID is set here directly (it is NOT secret
+  # — it is embedded in every notarized app and in the Developer ID cert name);
+  # the Apple ID + app-specific password still come from APPLE_ID /
+  # APPLE_APP_SPECIFIC_PASSWORD in release.yml. Hardcoding teamId avoids the
+  # "teamId property is required" failure when the APPLE_TEAM_ID secret is empty.
+  notarize:
+    teamId: LWGGBLVE3Q
 
 # Publish installers to a GitHub Release for the pushed tag.
 publish:

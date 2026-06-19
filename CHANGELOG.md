@@ -6,25 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.6.2] - 2026-06-19
+## [0.6.3] - 2026-06-19
 
 ### Fixed
-- **macOS code signing actually runs now.** The release workflow set
-  `CSC_IDENTITY_AUTO_DISCOVERY=false`, which *disables* macOS code signing
-  outright — so even with the signing secrets configured, the macOS build shipped
-  **unsigned** (and that shared signing env was also leaking into the Windows
-  build, signing the `.exe` with the macOS certificate). Scoped the signing env to
-  the macOS job and removed the kill-switch. This is the first macOS build that is
-  genuinely signed (Developer ID Application) **and** notarized, so the in-app
-  updater can install on macOS (Squirrel.Mac validates the signature) and
-  Gatekeeper no longer flags the app as "damaged". No functional changes.
-
-## [0.6.1] - 2026-06-19
-
-### Changed
-- Configured the macOS signing + notarization secrets in CI, intended as the
-  first signed build — but a release-workflow bug shipped it unsigned anyway (see
-  0.6.2). No functional changes from 0.6.0.
+- **First signed + notarized macOS release.** Getting macOS signing to actually
+  run took fixing three release-workflow problems: `CSC_IDENTITY_AUTO_DISCOVERY=false`
+  was a kill-switch that *disabled* signing (so signed builds shipped unsigned);
+  the signing env leaked into the Windows job (signing the `.exe` with the macOS
+  cert, then failing when scoped to an empty string); and notarization needs the
+  Apple Team ID, now set in `electron-builder.yml`. The macOS build is now signed
+  (Developer ID Application) **and** notarized, so the in-app updater can install
+  on macOS (Squirrel.Mac validates the signature) and Gatekeeper no longer flags
+  the app as "damaged". No functional changes since 0.6.0. (0.6.1 and 0.6.2 were
+  superseded build attempts.)
 
 ## [0.6.0] - 2026-06-19
 
@@ -273,9 +267,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.2...HEAD
-[0.6.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.1...v0.6.2
-[0.6.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...v0.6.1
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...v0.6.3
 [0.6.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.5.0
 [0.3.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.2...v0.3.3
