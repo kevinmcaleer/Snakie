@@ -8,7 +8,8 @@ import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
 import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
-import { registerUpdater } from './updater'
+import { registerUpdater, checkForUpdatesManual } from './updater'
+import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
 let mainWindow: BrowserWindow | null = null
@@ -107,8 +108,14 @@ app.whenReady().then(() => {
   registerPluginsIpc()
 
   // Register the auto-update layer. No-ops cleanly in dev (unpackaged); when
-  // packaged it checks GitHub Releases and pushes status to the live window.
-  registerUpdater(() => mainWindow?.webContents)
+  // packaged it checks GitHub Releases and pushes status to the live window. The
+  // window resolver also parents the manual-check dialogs (issue #89).
+  registerUpdater(() => mainWindow ?? undefined)
+
+  // Build the application menu (issue #89). Its "Check for Updates…" item and
+  // the clickable status-bar version both invoke the same user-initiated check.
+  // Installed after `registerUpdater` so `checkForUpdatesManual` is assigned.
+  setupAppMenu(() => void checkForUpdatesManual())
 
   // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
   // main process; deltas stream back to whichever window is currently live.

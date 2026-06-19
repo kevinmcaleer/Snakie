@@ -128,8 +128,24 @@
   color: var(--accent-2);
 }
 
+/* Plain version slot (issue #89): a button styled to read like the surrounding
+ * status text, but clickable to run a manual update check. Stripped of default
+ * button chrome; gains a subtle hover/focus affordance to signal interactivity. */
 .statusbar__version {
+  background: transparent;
+  border: none;
+  font: inherit;
+  cursor: pointer;
   color: var(--text-muted);
+}
+
+.statusbar__version:hover {
+  color: var(--text);
+}
+
+.statusbar__version:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
 }
 
 /* Flash-firmware action — compact, sits at the far right. */

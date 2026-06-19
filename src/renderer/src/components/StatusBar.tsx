@@ -148,6 +148,14 @@ export function StatusBar(): JSX.Element {
     else if (updateView.action === 'quitAndInstall') void window.api.updates.quitAndInstall()
   }
 
+  // The plain version text is itself clickable: it runs the same user-initiated
+  // update check as the "Check for Updates…" menu item (issue #89). When an
+  // update is already known the slot becomes the issue-#74 Update/Restart button
+  // instead, handled by `onUpdateClick` above.
+  const onVersionClick = (): void => {
+    void window.api.updates.check()
+  }
+
   return (
     <footer className="statusbar" role="contentinfo" aria-label="Status bar">
       <div className="statusbar__group statusbar__group--left">
@@ -213,13 +221,26 @@ export function StatusBar(): JSX.Element {
             >
               {updateView.label}
             </button>
-          ) : (
+          ) : updateView.isUpdate ? (
+            // A non-clickable update state (downloading, or error fallback):
+            // passive label, no check-for-updates affordance.
             <span
-              className={`statusbar__item ${updateView.isUpdate ? 'statusbar__update' : 'statusbar__version'}`}
+              className="statusbar__item statusbar__update"
               title={updateView.title}
             >
               {updateView.label}
             </span>
+          ) : (
+            // Plain version: click to run the same manual check as the
+            // "Check for Updates…" menu item (issue #89).
+            <button
+              type="button"
+              className="statusbar__item statusbar__version"
+              title="Check for updates"
+              onClick={onVersionClick}
+            >
+              {updateView.label}
+            </button>
           ))}
         <button
           type="button"

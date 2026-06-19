@@ -157,14 +157,20 @@ const fs = {
 
 /**
  * Auto-update API. Mirrors the main-process `updates:*` IPC handlers. `check`
- * triggers an update check, `download` pulls an available update (downloads run
- * only on explicit user request — see issue #74), `quitAndInstall` restarts into
- * a downloaded update, and `onStatus` subscribes to lifecycle push events
- * (returns an unsubscribe function). In dev / unpackaged runs the main side
- * no-ops, so nothing is ever pushed.
+ * triggers a user-initiated update check (the same one the "Check for Updates…"
+ * menu item runs — see issue #89), `download` pulls an available update
+ * (downloads run only on explicit user request — see issue #74), `quitAndInstall`
+ * restarts into a downloaded update, and `onStatus` subscribes to lifecycle push
+ * events (returns an unsubscribe function). In dev / unpackaged runs the silent
+ * background flow no-ops; a `check` still shows a friendly "installed builds
+ * only" dialog rather than nothing.
  */
 const updates = {
-  /** Trigger an update check (no-op when unpackaged). */
+  /**
+   * Run a user-initiated update check. In packaged builds it queries GitHub and
+   * prompts to download if newer, or reports "up to date"; unpackaged it shows a
+   * friendly note that updates only work in installed builds.
+   */
   check: (): Promise<void> => ipcRenderer.invoke('updates:check'),
   /** Download an available update (the user explicitly opts in). */
   download: (): Promise<void> => ipcRenderer.invoke('updates:download'),
