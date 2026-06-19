@@ -16,11 +16,26 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 
-/** Wrap a panel that lacks its own region chrome in a titled, scrollable region. */
-function LeftRegion({ title, children }: { title: string; children: JSX.Element }): JSX.Element {
+/**
+ * Wrap a panel that lacks its own region chrome in a scrollable region.
+ *
+ * The label bar (`PanelHeader`) is opt-out: the activity bar already names the
+ * active view, so redundant title bars are dropped for most views (issue #79)
+ * by passing `showHeader={false}`. Views that still want a label (e.g. Help)
+ * leave the default on.
+ */
+function LeftRegion({
+  title,
+  showHeader = true,
+  children
+}: {
+  title: string
+  showHeader?: boolean
+  children: JSX.Element
+}): JSX.Element {
   return (
     <section className="region" aria-label={title}>
-      <PanelHeader title={title} />
+      {showHeader && <PanelHeader title={title} />}
       <div className="region__body">{children}</div>
     </section>
   )
@@ -28,27 +43,29 @@ function LeftRegion({ title, children }: { title: string; children: JSX.Element 
 
 /**
  * Map each activity-bar view id to the component shown in the left sidebar.
- * FilePanel and InspectPanel bring their own region + header; the others are
- * wrapped here so every view gets a consistent titled, scrollable container
- * (previously provided by the right-pane tab host).
+ * FilePanel and InspectPanel bring their own region; the others are wrapped
+ * here so every view gets a consistent scrollable container (previously
+ * provided by the right-pane tab host). The redundant title bars are omitted
+ * per issue #79 — the activity bar already labels the active view — except for
+ * Help, which keeps its label.
  */
 function LeftView({ view }: { view: ActivityView }): JSX.Element {
   switch (view) {
     case 'source-control':
       return (
-        <LeftRegion title="Source Control">
+        <LeftRegion title="Source Control" showHeader={false}>
           <GitPanel />
         </LeftRegion>
       )
     case 'packages':
       return (
-        <LeftRegion title="Packages">
+        <LeftRegion title="Packages" showHeader={false}>
           <PackagesPanel />
         </LeftRegion>
       )
     case 'plugins':
       return (
-        <LeftRegion title="Plugins">
+        <LeftRegion title="Plugins" showHeader={false}>
           <PluginsPanel />
         </LeftRegion>
       )

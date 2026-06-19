@@ -1,5 +1,4 @@
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
-import { PanelHeader } from './PanelHeader'
 import { OutlinePanel } from './OutlinePanel'
 import { VariablesPanel } from './VariablesPanel'
 
@@ -14,7 +13,6 @@ import { VariablesPanel } from './VariablesPanel'
 export function InspectPanel(): JSX.Element {
   return (
     <section className="region region--inspect" aria-label="Inspect">
-      <PanelHeader title="Inspect" />
       <div className="region__body inspectpanel">
         <PanelGroup direction="vertical" autoSaveId="snakie.layout.inspect">
           <Panel order={1} minSize={20} className="inspectpanel__section">
