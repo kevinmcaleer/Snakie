@@ -1,4 +1,3 @@
-import { PanelHeader } from './PanelHeader'
 import { LocalFileTree } from './LocalFileTree'
 import { DeviceFileTree } from './DeviceFileTree'
 import { UploadControls } from './UploadControls'
@@ -14,7 +13,6 @@ import { UploadControls } from './UploadControls'
 export function FilePanel(): JSX.Element {
   return (
     <section className="region region--files" aria-label="Files">
-      <PanelHeader title="Files" />
       <div className="region__body filepanel">
         <section className="filepanel__local">
           <LocalFileTree />

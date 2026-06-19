@@ -1,5 +1,4 @@
 import { lazy, Suspense } from 'react'
-import { PanelHeader } from './PanelHeader'
 import { EditorTabs } from './EditorTabs'
 import { useWorkspace } from '../store/workspace'
 
@@ -24,7 +23,6 @@ export function EditorArea(): JSX.Element {
 
   return (
     <section className="region region--editor" aria-label="Editor">
-      <PanelHeader title="Editor" />
       <EditorTabs />
       <div className="region__body region__body--editor">
         {hasFiles ? (
