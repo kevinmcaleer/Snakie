@@ -1,0 +1,105 @@
+/*
+ * Find & Replace bar (FindReplace.tsx, issue #92).
+ *
+ * A compact toolbar mounted over the editor (below the tabs), styled with the
+ * shared NES/JetBrains-Mono design tokens so it sits flush against the editor
+ * chrome without touching index.css.
+ */
+
+/* Slim toolbar above the editor that hosts the Find affordance (a visible way
+   to open the panel without the keyboard shortcut). */
+.region__editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 3px 8px;
+  background: var(--bg-sunken);
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.find-replace {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg-elevated);
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.find-replace__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.find-replace__row--options {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.find-replace__input {
+  flex: 1 1 auto;
+  min-width: 6rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.5rem;
+}
+
+.find-replace__input:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
+}
+
+.find-replace__hint {
+  flex: 0 0 auto;
+  min-width: 5rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.find-replace__hint--empty {
+  color: var(--accent-2, var(--text-muted));
+}
+
+.find-replace__close {
+  flex: 0 0 auto;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.find-replace__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.find-replace__direction {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.find-replace__legend {
+  float: none;
+  width: auto;
+  margin: 0 2px 0 0;
+  padding: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}

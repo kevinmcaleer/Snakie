@@ -20,6 +20,7 @@ import {
   setModelDiagnostics
 } from './plugin-code-actions'
 import { registerInlineCompletions } from './inline-completions'
+import { setActiveEditor, dispatchOpenFind } from './editorBridge'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
@@ -225,6 +226,9 @@ export function MonacoEditor(): JSX.Element {
       inlineSuggest: { enabled: true }
     })
     editorRef.current = editor
+    // Publish this instance to the editor-access seam (issue #92) so the Find &
+    // Replace panel can drive Monaco's search/edit APIs imperatively.
+    setActiveEditor(editor)
 
     // Edits -> store (marks dirty). Guarded against programmatic model swaps via
     // the active id captured per change.
@@ -241,9 +245,17 @@ export function MonacoEditor(): JSX.Element {
       if (id) void saveFileRef.current(id)
     })
 
+    // Ctrl/Cmd-F + Ctrl/Cmd-H -> the custom Find & Replace panel (issue #92).
+    // Rebinding the keys at the editor level overrides Monaco's built-in find
+    // widget, so OUR panel (in EditorArea, listening for FIND_EVENT) is what
+    // opens. F = find-only, H = find + replace.
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => dispatchOpenFind(false))
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => dispatchOpenFind(true))
+
     const modelStore = models.current
     return () => {
       changeDisposable.dispose()
+      setActiveEditor(null)
       editor.dispose()
       editorRef.current = null
       modelStore.forEach((m) => {
