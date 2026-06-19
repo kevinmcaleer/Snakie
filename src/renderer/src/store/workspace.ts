@@ -27,6 +27,8 @@
  *                                           // untitled local buffer -> Save As dialog
  *   newFile(): void                          // untitled local buffer
  *   openFolder(): Promise<void>              // native folder picker -> currentFolder
+ *   openFolderPath(path): void               // re-root the local tree to `path`
+ *                                           // (e.g. a breadcrumb ancestor)
  *
  * Implemented as a React context + reducer (no external state dep). Consume via
  * the `useWorkspace()` hook below; wrap the app in <WorkspaceProvider>.
@@ -90,6 +92,11 @@ export interface WorkspaceStore {
    * current working folder (the local file browser lists it).
    */
   openFolder: () => Promise<void>
+  /**
+   * Re-root the local file browser to an existing folder `path` (no native
+   * dialog). Used by the breadcrumb to open an ancestor of the current folder.
+   */
+  openFolderPath: (path: string) => void
   /** Ask the editor to scroll to and place the cursor on a 1-based `line`. */
   revealLine: (line: number) => void
 }
@@ -267,6 +274,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     if (folder) dispatch({ type: 'setFolder', folder })
   }, [])
 
+  const openFolderPath = useCallback((path: string): void => {
+    if (path) dispatch({ type: 'setFolder', folder: path })
+  }, [])
+
   const revealLine = useCallback((line: number): void => {
     dispatch({ type: 'revealLine', line })
   }, [])
@@ -300,6 +311,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       saveFile,
       newFile,
       openFolder,
+      openFolderPath,
       revealLine
     }),
     [
@@ -314,6 +326,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       saveFile,
       newFile,
       openFolder,
+      openFolderPath,
       revealLine
     ]
   )

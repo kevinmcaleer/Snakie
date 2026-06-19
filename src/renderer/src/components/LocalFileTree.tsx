@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -9,16 +9,58 @@ import './LocalFileTree.css'
 /**
  * Local (host) filesystem browser for issue #5.
  *
- * Offers an "Open Folder" action, an expandable tree of the chosen folder, and
- * opens files into the workspace store on click. Create/rename/delete actions
- * are available inline AND via a right-click context menu (issue #19), which
- * also exposes "Upload to board" — reading the local file via `fs.readFile`
- * and writing it to the connected device via `device.writeFile` (disabled when
- * no board is connected).
+ * Offers an expandable tree of the chosen folder and opens files into the
+ * workspace store on click. The header keeps the actions compact (issue #87):
+ * New File / New Folder are icon-only buttons, while Rename and Delete live
+ * solely in the right-click context menu (issue #19) alongside "Upload to
+ * board" — reading the local file via `fs.readFile` and writing it to the
+ * connected device via `device.writeFile` (disabled when no board is
+ * connected).
  *
- * Per the feedback UX cues a computer icon marks the local section and file
- * actions are revealed contextually (on row hover / selection / right-click).
+ * The "Open Folder" button is replaced by a path breadcrumb of the current
+ * working folder: each segment is a button that re-roots the tree to that
+ * ancestor via `openFolderPath`. When no folder is open yet, a single small
+ * "open folder" icon launches the native picker.
  */
+
+/** Inline pixel icons matching the retro toolbar style (16×16, crispEdges). */
+const iconProps = {
+  viewBox: '0 0 16 16',
+  width: 14,
+  height: 14,
+  shapeRendering: 'crispEdges' as const,
+  'aria-hidden': true,
+  focusable: false
+}
+
+// page with a `+` (new file)
+const NewFileIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M3 1h6l4 4v10H3z M9 1v4h4" />
+      <rect x="7" y="8" width="2" height="6" />
+      <rect x="5" y="10" width="6" height="2" />
+    </g>
+  </svg>
+)
+
+// folder with a `+` (new folder)
+const NewFolderIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M1 3h5l2 2h7v9H1z" />
+      <rect x="7" y="8" width="2" height="5" fill="var(--bg-elevated)" />
+      <rect x="5.5" y="9.5" width="5" height="2" fill="var(--bg-elevated)" />
+    </g>
+  </svg>
+)
+
+// folder (open a different folder)
+const OpenFolderIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <path d="M1 3h5l2 2h7v8H1z" fill="currentColor" />
+  </svg>
+)
 
 interface TreeNodeProps {
   entry: FsEntry
@@ -119,7 +161,7 @@ interface MenuState {
 }
 
 export function LocalFileTree(): JSX.Element {
-  const { openFile, currentFolder, openFolder } = useWorkspace()
+  const { openFile, currentFolder, openFolder, openFolderPath } = useWorkspace()
   const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
@@ -278,16 +320,6 @@ export function LocalFileTree(): JSX.Element {
     [connected]
   )
 
-  // Inline-button handlers delegate to the shared, target-aware helpers using
-  // the current selection.
-  const selectedEntry = useCallback(
-    (): FsEntry | null =>
-      selectedPath && selectedPath !== root
-        ? { name: selectedPath.split(/[/\\]/).pop() ?? '', path: selectedPath, isDir: selectedIsDir }
-        : null,
-    [root, selectedIsDir, selectedPath]
-  )
-
   const closeMenu = useCallback((): void => setMenu(null), [])
 
   const handleContextMenu = useCallback(
@@ -329,8 +361,26 @@ export function LocalFileTree(): JSX.Element {
     [connected, deletePath, handleOpenFile, newFileIn, newFolderIn, renamePath, uploadToBoard]
   )
 
-  const hasSelection = !!selectedPath && selectedPath !== root
-  const current = selectedEntry()
+  // Breadcrumb of the working folder: split on either separator and rebuild the
+  // absolute path for each ancestor so a click can re-root the tree there.
+  const crumbs = useMemo<{ label: string; path: string }[]>(() => {
+    if (!root) return []
+    const winDrive = /^[A-Za-z]:[/\\]/.test(root)
+    const sep = root.includes('\\') ? '\\' : '/'
+    const parts = root.split(/[/\\]/).filter((p) => p.length > 0)
+    const result: { label: string; path: string }[] = []
+    let acc = ''
+    parts.forEach((part, i) => {
+      if (i === 0) {
+        // POSIX root keeps a leading slash; a Windows drive keeps its own form.
+        acc = winDrive ? part : `${sep}${part}`
+      } else {
+        acc = `${acc}${sep}${part}`
+      }
+      result.push({ label: part, path: acc })
+    })
+    return result
+  }, [root])
 
   return (
     <div className="localtree">
@@ -338,48 +388,59 @@ export function LocalFileTree(): JSX.Element {
         <span className="localtree__title">
           <span aria-hidden>{'▣'}</span> Local files
         </span>
+        <div className="localtree__header-actions">
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => newFileIn(null)}
+            title="New file"
+            aria-label="New file"
+            disabled={!root}
+          >
+            <NewFileIcon />
+          </button>
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => newFolderIn(null)}
+            title="New folder"
+            aria-label="New folder"
+            disabled={!root}
+          >
+            <NewFolderIcon />
+          </button>
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={handleOpenFolder}
+            title="Open folder"
+            aria-label="Open folder"
+          >
+            <OpenFolderIcon />
+          </button>
+        </div>
       </div>
 
       {root ? (
         <>
-          <div className="localtree__actions">
-            <button className="btn btn--ghost" onClick={() => newFileIn(null)} title="New file">
-              + File
-            </button>
-            <button
-              className="btn btn--ghost"
-              onClick={() => newFolderIn(null)}
-              title="New folder"
-            >
-              + Folder
-            </button>
-            {/* File-specific actions revealed only when an entry is selected. */}
-            {hasSelection && (
-              <>
+          {/* Breadcrumb of the working folder: each ancestor re-roots the tree. */}
+          <nav className="localtree__breadcrumb" aria-label="Working folder path">
+            {crumbs.map((crumb, i) => (
+              <span className="localtree__crumb-wrap" key={crumb.path}>
+                {i > 0 && (
+                  <span className="localtree__crumb-sep" aria-hidden>
+                    /
+                  </span>
+                )}
                 <button
-                  className="btn btn--ghost"
-                  onClick={() => current && renamePath(current.path)}
-                  title="Rename"
+                  className="localtree__crumb"
+                  onClick={() => openFolderPath(crumb.path)}
+                  title={crumb.path}
+                  aria-current={i === crumbs.length - 1 ? 'true' : undefined}
+                  disabled={i === crumbs.length - 1}
                 >
-                  Rename
+                  {crumb.label}
                 </button>
-                <button
-                  className="btn btn--ghost btn--danger"
-                  onClick={() => current && deletePath(current.path)}
-                  title="Delete"
-                >
-                  Delete
-                </button>
-              </>
-            )}
-            <button
-              className="btn btn--ghost"
-              onClick={handleOpenFolder}
-              title="Open a different folder"
-            >
-              Open Folder
-            </button>
-          </div>
+              </span>
+            ))}
+          </nav>
 
           {error && <div className="localtree__error">{error}</div>}
 
