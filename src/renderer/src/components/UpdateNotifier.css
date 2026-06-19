@@ -27,10 +27,24 @@
 .update-notifier--error {
   background: #3a2326;
   border-color: rgba(255, 120, 120, 0.4);
+  /* Error text can be long (raw Squirrel/electron-updater strings); stack the
+   * message above its action so neither overflows the toast horizontally, and
+   * let the toast grow a little taller than the single-line states. */
+  flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .update-notifier__message {
   flex: 1 1 auto;
+  min-width: 0;
+  /* Contain long messages (issue #90): wrap aggressively so a single long
+   * "word" (a file:// URL, an unbroken token) still breaks inside the box, and
+   * cap the height with an internal scrollbar rather than letting it grow
+   * without bound. */
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-height: 6rem;
+  overflow-y: auto;
 }
 
 .update-notifier__action {

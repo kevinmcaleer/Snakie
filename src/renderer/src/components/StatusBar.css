@@ -95,8 +95,15 @@
   outline-offset: 1px;
 }
 
+/* Passive update label (downloading progress, or the error fallback). Capped
+ * and ellipsized so an unexpectedly long label can never blow out the thin bar
+ * (issue #90 — the full detail lives in the tooltip + notifier banner). */
 .statusbar__update {
   color: var(--accent-2);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Actionable update affordance in the version slot (issue #74) — styled as an

@@ -1,6 +1,41 @@
 import type { UpdateStatus } from '../../../preload/index.d'
 
 /**
+ * The GitHub "latest release" page, offered as a manual-download fallback when
+ * the in-app updater can't self-install (issue #90). Opened via
+ * `window.api.openExternal`.
+ */
+export const RELEASES_URL = 'https://github.com/kevinmcaleer/Snakie/releases/latest'
+
+/**
+ * Map a raw update-error string onto a short, friendly message for the user
+ * (issue #90). electron-updater / Squirrel.Mac surface low-level errors verbatim
+ * — most usefully the code-signature rejection you get when a published build
+ * isn't validly signed + notarized (e.g. "Code signature at URL … did not pass
+ * validation: code has no resources but signature indicates they must be
+ * present"). We never show that raw string as the primary message; instead we
+ * detect the signature phrasing and explain it, and fall back to a generic
+ * "couldn't install the update" line for anything else.
+ *
+ * Side-effect-free and exported so it can be unit-tested without rendering.
+ *
+ * @param raw the `UpdateStatus.message` from the `error` push, if any.
+ */
+export function friendlyUpdateError(raw: string | undefined): string {
+  const text = (raw ?? '').toLowerCase()
+  const isSignature =
+    text.includes('did not pass validation') ||
+    text.includes('code signature') ||
+    text.includes('code has no resources') ||
+    text.includes('not signed') ||
+    text.includes('code object is not signed')
+  if (isSignature) {
+    return "This build can't auto-install (it isn't signed for updates). Download the latest release manually."
+  }
+  return "Couldn't install the update automatically. You can download the latest release manually."
+}
+
+/**
  * Which renderer-side `window.api.updates` call an update control invokes when
  * clicked. `null` means the control is non-interactive in that state.
  */
@@ -78,11 +113,14 @@ export function updateButtonView(
         clickable: true
       }
     case 'error':
-      // Subtle failure: fall back to the version text but flag it + tooltip.
+      // Subtle failure: keep the thin bar compact by falling back to the short
+      // version text (never the long raw error, which would blow out the bar —
+      // issue #90). The tooltip carries a friendly explanation; the dismissible
+      // notifier banner offers the full text + a manual-download action.
       return {
         label: versionLabel || 'Update failed',
         action: null,
-        title: `Update failed${status.message ? `: ${status.message}` : ''}`,
+        title: friendlyUpdateError(status.message),
         isUpdate: true,
         clickable: false
       }

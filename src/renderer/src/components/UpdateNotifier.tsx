@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { UpdateStatus } from '../../../preload/index.d'
+import { friendlyUpdateError, RELEASES_URL } from './updateButton'
 import './UpdateNotifier.css'
 
 /**
@@ -38,6 +39,9 @@ export function UpdateNotifier(): JSX.Element | null {
   // shout at the user, so we keep it as a low-key, dismissible note.
   let message: string
   let action: JSX.Element | null = null
+  // The full raw error, shown on hover so the friendly summary stays compact
+  // but the underlying detail is still recoverable (issue #90).
+  let messageTitle: string | undefined
 
   switch (status.state) {
     case 'available':
@@ -79,7 +83,23 @@ export function UpdateNotifier(): JSX.Element | null {
       )
       break
     case 'error':
-      message = `Update error: ${status.message ?? 'unknown error'}`
+      // Present a clear, friendly summary instead of the raw Squirrel/
+      // electron-updater string (issue #90); the full text is on hover via
+      // `title`. The primary recovery is a manual download from GitHub Releases,
+      // since an unsigned build can't self-install.
+      message = friendlyUpdateError(status.message)
+      messageTitle = status.message
+      action = (
+        <button
+          type="button"
+          className="update-notifier__action"
+          onClick={() => {
+            void window.api.openExternal(RELEASES_URL)
+          }}
+        >
+          Download manually
+        </button>
+      )
       break
     default:
       return null
@@ -91,7 +111,9 @@ export function UpdateNotifier(): JSX.Element | null {
       role="status"
       aria-live="polite"
     >
-      <span className="update-notifier__message">{message}</span>
+      <span className="update-notifier__message" title={messageTitle}>
+        {message}
+      </span>
       {action}
       <button
         type="button"
