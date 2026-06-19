@@ -6,6 +6,37 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-19
+
+### Added
+- **MicroPython firmware catalog in the flash dialog (#64).** The firmware
+  flasher can now pull the UF2 firmware catalog (Thonny's curated MicroPython
+  list) in the main process and present a **Family → Model → Variant → Version**
+  cascade. **Download & Flash** streams the chosen `.uf2` to a temp file and
+  flashes it with a live **% progress bar** and a **Done** button. The local-file
+  Browse and the ESP/esptool paths are unchanged.
+- **Check for Updates (#89).** A native **Check for Updates…** menu item (in the
+  app menu on macOS, a Help menu on Windows/Linux) plus a clickable **status-bar
+  version** both run the same manual GitHub update check — prompting to download
+  when a newer release exists, reporting "up to date" otherwise, and noting that
+  updates only apply to installed builds when run unpackaged.
+- **Docstrings in the outline (#88).** Hovering a function or class in the
+  outline / function inspector now shows its docstring as a tooltip.
+
+### Changed
+- **Simplified the local Files panel (#87).** New File / New Folder are now
+  icon-only; Rename and Delete moved into the right-click menu; and the Open
+  Folder button is replaced by a clickable **path breadcrumb** where each
+  ancestor segment re-roots the tree.
+
+### Fixed
+- **Update errors stay contained (#90).** A long update/install error (e.g. the
+  macOS code-signature validation failure) now wraps inside its box with a short,
+  friendly summary (full text on hover) instead of overflowing the notifier and
+  status bar, and offers a **Download manually** button to the GitHub releases
+  page. (The signature failure itself still requires a properly signed +
+  notarized release — see `docs/macos-signing.md`.)
+
 ## [0.5.0] - 2026-06-19
 
 ### Added
@@ -222,7 +253,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.5.0
 [0.3.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.1...v0.3.2
