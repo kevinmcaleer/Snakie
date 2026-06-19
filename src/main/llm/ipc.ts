@@ -1,11 +1,13 @@
 /**
- * IPC handlers for the LLM (Claude) chat layer.
+ * IPC handlers for the LLM chat layer (issue #77).
  *
  * Renderer-facing channels (all under `llm:`):
- *   - `llm:getKeyStatus`  → {@link LlmKeyStatus}
- *   - `llm:setKey`        → store/clear the Anthropic API key
- *   - `llm:sendMessage`   → run a streaming completion; the assembled reply is
- *                           returned, and deltas are pushed on `llm:stream`.
+ *   - `llm:listProviders` → {@link LlmProviderInfo}[] — registry metadata for the UI.
+ *   - `llm:getKeyStatus`  → {@link LlmKeyStatus} for a given providerId.
+ *   - `llm:setKey`        → store/clear a given provider's API key.
+ *   - `llm:sendMessage`   → run a streaming completion against the request's
+ *                           provider; the assembled reply is returned, and
+ *                           deltas are pushed on `llm:stream`.
  *
  * Push channel:
  *   - `llm:stream`        → {@link LlmStreamEvent} chunks for the active request.
@@ -15,13 +17,19 @@
  */
 import { ipcMain, type WebContents } from 'electron'
 import type { IpcResult } from '../device/types'
-import { streamChat } from './client'
 import { getKey, hasKey, isEncryptionAvailable, setKey } from './keyStore'
-import type { LlmKeyStatus, LlmSendRequest, LlmStreamEvent } from './types'
+import { DEFAULT_PROVIDER_ID, getProvider, listProviders } from './providers/registry'
+import type {
+  LlmKeyStatus,
+  LlmProviderInfo,
+  LlmSendRequest,
+  LlmStreamEvent
+} from './types'
 
 /** IPC channel names for the LLM layer. */
 export const LLM_CHANNELS = {
   stream: 'llm:stream',
+  listProviders: 'llm:listProviders',
   getKeyStatus: 'llm:getKeyStatus',
   setKey: 'llm:setKey',
   sendMessage: 'llm:sendMessage'
@@ -55,31 +63,48 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
     if (wc && !wc.isDestroyed()) wc.send(LLM_CHANNELS.stream, event)
   }
 
-  ipcMain.handle(LLM_CHANNELS.getKeyStatus, () =>
+  ipcMain.handle(LLM_CHANNELS.listProviders, () =>
+    wrap(async (): Promise<LlmProviderInfo[]> => listProviders())
+  )
+
+  ipcMain.handle(LLM_CHANNELS.getKeyStatus, (_e, providerId?: string) =>
     wrap(
       async (): Promise<LlmKeyStatus> => ({
-        hasKey: await hasKey(),
+        hasKey: await hasKey(providerId || DEFAULT_PROVIDER_ID),
         secure: isEncryptionAvailable()
       })
     )
   )
 
-  ipcMain.handle(LLM_CHANNELS.setKey, (_e, key: string) => wrap(() => setKey(key)))
+  ipcMain.handle(LLM_CHANNELS.setKey, (_e, providerId: string, key: string) =>
+    wrap(() => setKey(providerId || DEFAULT_PROVIDER_ID, key))
+  )
 
   ipcMain.handle(LLM_CHANNELS.sendMessage, (_e, req: LlmSendRequest) =>
     wrap(async (): Promise<string> => {
-      const apiKey = await getKey()
-      if (!apiKey) {
-        throw new Error('No Anthropic API key set. Add your key in the chat settings.')
+      const providerId = req.providerId || DEFAULT_PROVIDER_ID
+      const provider = getProvider(providerId)
+      if (!provider) {
+        throw new Error(`Unknown LLM provider "${providerId}".`)
       }
+
+      const apiKey = await getKey(providerId)
+      if (!apiKey) {
+        throw new Error(
+          `No API key set for ${provider.info.label}. Add your key in the chat settings.`
+        )
+      }
+
       const requestId = `req-${++requestCounter}`
       push({ type: 'start', requestId })
       try {
-        const full = await streamChat({
+        const full = await provider.streamChat({
           apiKey,
+          model: req.model || provider.info.defaultModel,
+          effort: req.effort,
+          speed: req.speed,
           messages: req.messages,
-          activeFile: req.activeFile,
-          model: req.model,
+          context: { activeFile: req.activeFile, consoleOutput: req.consoleOutput },
           onDelta: (text) => push({ type: 'delta', requestId, text })
         })
         push({ type: 'done', requestId })

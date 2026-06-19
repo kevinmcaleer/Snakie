@@ -25,7 +25,12 @@ import type {
   InstallResult,
   PackageInfo
 } from '../main/packages/types'
-import type { LlmKeyStatus, LlmSendRequest, LlmStreamEvent } from '../main/llm/types'
+import type {
+  LlmKeyStatus,
+  LlmProviderInfo,
+  LlmSendRequest,
+  LlmStreamEvent
+} from '../main/llm/types'
 import type {
   GitBranchList,
   GitDiff,
@@ -242,20 +247,28 @@ const packages = {
 }
 
 /**
- * LLM (Claude) chat API. Mirrors the main-process `llm:*` IPC handlers and
- * unwraps their typed results. All Anthropic API calls run in the main process
+ * LLM chat API (issue #77). Mirrors the main-process `llm:*` IPC handlers and
+ * unwraps their typed results. All provider API calls run in the main process
  * (the renderer CSP blocks external requests), so the renderer never sees the
- * API key. `onStream` subscribes to streamed completion chunks and returns an
- * unsubscribe function.
+ * API key. The layer is a provider registry: `listProviders` enumerates the
+ * available backends, key status/save is per-provider, and `sendMessage` names
+ * the `providerId` it targets. `onStream` subscribes to streamed completion
+ * chunks and returns an unsubscribe function.
  */
 const llm = {
-  /** Whether an API key is stored, and whether storage is OS-encrypted. */
-  getKeyStatus: (): Promise<LlmKeyStatus> => unwrap(ipcRenderer.invoke('llm:getKeyStatus')),
-  /** Store (or, with an empty string, clear) the Anthropic API key. */
-  setKey: (key: string): Promise<void> => unwrap(ipcRenderer.invoke('llm:setKey', key)),
+  /** The available LLM providers (metadata for the chat footer + key settings). */
+  listProviders: (): Promise<LlmProviderInfo[]> =>
+    unwrap(ipcRenderer.invoke('llm:listProviders')),
+  /** Whether a key is stored for `providerId`, and whether storage is OS-encrypted. */
+  getKeyStatus: (providerId: string): Promise<LlmKeyStatus> =>
+    unwrap(ipcRenderer.invoke('llm:getKeyStatus', providerId)),
+  /** Store (or, with an empty string, clear) `providerId`'s API key. */
+  setKey: (providerId: string, key: string): Promise<void> =>
+    unwrap(ipcRenderer.invoke('llm:setKey', providerId, key)),
   /**
-   * Run a streaming chat completion. Deltas arrive via `onStream`; this resolves
-   * with the full assembled assistant reply once the stream ends.
+   * Run a streaming chat completion against `req.providerId`. Deltas arrive via
+   * `onStream`; this resolves with the full assembled assistant reply once the
+   * stream ends.
    */
   sendMessage: (req: LlmSendRequest): Promise<string> =>
     unwrap(ipcRenderer.invoke('llm:sendMessage', req)),
@@ -383,7 +396,7 @@ const api = {
   firmware,
   /** Auto-update check + status + restart layer. */
   updates,
-  /** LLM (Claude) chat layer. */
+  /** LLM chat layer (multi-provider registry: Claude, OpenAI, Gemini, Grok, Copilot). */
   llm,
   /** Built-in version-control (Git) layer. */
   git,

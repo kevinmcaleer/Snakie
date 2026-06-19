@@ -17,3 +17,9 @@
   font-size: 1rem;
   line-height: 1;
 }
+
+/* The "Send to chat" button (issue #78) sits next to Clear in the console header. */
+.shell-actions__send-chat .btn__glyph {
+  font-size: 0.95rem;
+  line-height: 1;
+}

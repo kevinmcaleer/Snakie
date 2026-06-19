@@ -6,11 +6,18 @@ import { Problems } from './Problems'
 import { ConnectionControl } from './ConnectionControl'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useDiagnostics } from '../store/diagnostics'
+import { useConsole } from '../store/console'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { SEND_CONSOLE_EVENT } from './ChatPanel'
 import './RunControls.css'
 import './ShellPanel.css'
 
 type ShellView = 'console' | 'plotter' | 'problems'
+
+interface ShellPanelProps {
+  /** Whether the right-hand chat panel is open (controls the "Send to chat" button). */
+  chatOpen?: boolean
+}
 
 /**
  * BOTTOM — shell / console (REPL) region.
@@ -26,11 +33,12 @@ type ShellView = 'console' | 'plotter' | 'problems'
  * survive toggling, and both subscribe independently to the broadcast serial
  * stream.
  */
-export function ShellPanel(): JSX.Element {
+export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
   const status = useDeviceStatus()
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
   const { diagnostics } = useDiagnostics()
+  const { getSinceRun } = useConsole()
   const [lintingEnabled, setLintingEnabled] = useLocalStorage<boolean>(
     'snakie.lintingEnabled',
     true
@@ -39,6 +47,18 @@ export function ShellPanel(): JSX.Element {
   const handleClear = useCallback(() => {
     terminalRef.current?.clear()
   }, [])
+
+  /**
+   * Grab the console output printed since the last Run and hand it to the chat
+   * panel via a window CustomEvent (issue #78). The chat panel listens for this
+   * and stages the output for the next message.
+   */
+  const handleSendToChat = useCallback(() => {
+    const output = getSinceRun()
+    window.dispatchEvent(
+      new CustomEvent<string>(SEND_CONSOLE_EVENT, { detail: output })
+    )
+  }, [getSinceRun])
 
   const problemsLabel = diagnostics.length > 0 ? `Problems (${diagnostics.length})` : 'Problems'
 
@@ -86,6 +106,20 @@ export function ShellPanel(): JSX.Element {
                 />
                 <span>Lint</span>
               </label>
+            )}
+            {view === 'console' && chatOpen && (
+              <button
+                type="button"
+                className="btn btn--ghost shell-actions__send-chat"
+                onClick={handleSendToChat}
+                title="Send console output (since last Run) to the chat"
+                aria-label="Send console output to chat"
+              >
+                <span className="btn__glyph" aria-hidden="true">
+                  💬
+                </span>
+                <span>Send to chat</span>
+              </button>
             )}
             {view === 'console' && (
               <button

@@ -4,6 +4,7 @@ import { UpdateNotifier } from './components/UpdateNotifier'
 import { WorkspaceProvider } from './store/workspace'
 import { DiagnosticsProvider } from './store/diagnostics'
 import { SettingsProvider } from './store/settings'
+import { ConsoleProvider } from './store/console'
 
 function App(): JSX.Element {
   return (
@@ -11,8 +12,10 @@ function App(): JSX.Element {
       <SettingsProvider>
         <WorkspaceProvider>
           <DiagnosticsProvider>
-            <AppShell />
-            <UpdateNotifier />
+            <ConsoleProvider>
+              <AppShell />
+              <UpdateNotifier />
+            </ConsoleProvider>
           </DiagnosticsProvider>
         </WorkspaceProvider>
       </SettingsProvider>
