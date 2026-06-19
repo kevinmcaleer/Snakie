@@ -168,8 +168,15 @@ export function AppShell(): JSX.Element {
         <ActivityBar
           active={activityView}
           onSelect={(view) => {
+            // Clicking the already-active view toggles the left panel collapse
+            // (issue #86): collapse it when open, re-expand it when collapsed.
+            if (view === activityView) {
+              toggle(filesRef, filesCollapsed, setFilesCollapsed)
+              return
+            }
+            // Switching to a different view selects it and reveals the sidebar
+            // if it was collapsed.
             setActivityView(view)
-            // Selecting a view should reveal the sidebar if it was collapsed.
             if (filesCollapsed) toggle(filesRef, true, setFilesCollapsed)
           }}
         />
