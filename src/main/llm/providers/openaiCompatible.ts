@@ -16,6 +16,7 @@ import {
   buildSystemString,
   sanitizeCompletion
 } from './context'
+import { getCopilotToken } from './copilotAuth'
 import type { CompleteArgs, Provider, ProviderInfo, StreamChatArgs } from './types'
 
 /** Upper bound on inline-completion output tokens — small + fast (issue #82). */
@@ -31,6 +32,12 @@ export interface OpenAiCompatibleConfig {
   extraHeaders?: Record<string, string>
   /** Model ids that should send a `reasoning_effort` field when an effort is set. */
   reasoningModels?: string[]
+  /**
+   * Optional hook to turn the stored key into the actual bearer token. Used by
+   * GitHub Copilot, which exchanges a GitHub PAT/OAuth token for a short-lived
+   * Copilot token. When absent, the stored key is sent as the bearer directly.
+   */
+  resolveBearer?: (apiKey: string, signal?: AbortSignal) => Promise<string>
 }
 
 /** One SSE line's parsed delta shape (only the fields we read). */
@@ -80,11 +87,12 @@ async function streamOpenAiCompatible(
     body.reasoning_effort = effort
   }
 
+  const bearer = config.resolveBearer ? await config.resolveBearer(apiKey, signal) : apiKey
   const res = await fetch(`${config.baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${bearer}`,
       ...(config.extraHeaders ?? {})
     },
     body: JSON.stringify(body),
@@ -123,11 +131,12 @@ async function completeOpenAiCompatible(
     ]
   }
 
+  const bearer = config.resolveBearer ? await config.resolveBearer(apiKey, signal) : apiKey
   const res = await fetch(`${config.baseURL}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${bearer}`,
       ...(config.extraHeaders ?? {})
     },
     body: JSON.stringify(body),
@@ -259,10 +268,12 @@ export const grokProvider = makeOpenAiCompatibleProvider({
 })
 
 /**
- * GitHub Copilot (OpenAI-compatible). Requires a Copilot token plus the
- * integration/editor headers. Experimental: Copilot's token/auth model differs
- * from a plain API key (it expects a short-lived Copilot token, not a PAT), so
- * this is wired to spec but flagged untested.
+ * GitHub Copilot (OpenAI-compatible). Authenticate with a **GitHub personal
+ * access token** (fine-grained or classic) or OAuth token on an account with an
+ * active Copilot subscription — {@link getCopilotToken} exchanges it for the
+ * short-lived Copilot token the chat endpoint actually requires (cached until
+ * just before expiry) and adds the integration/editor headers. Still flagged
+ * experimental: it can only be verified against a real Copilot account.
  */
 export const copilotProvider = makeOpenAiCompatibleProvider({
   info: {
@@ -274,13 +285,15 @@ export const copilotProvider = makeOpenAiCompatibleProvider({
     ],
     defaultModel: 'gpt-4o',
     defaultCompletionModel: 'gpt-4o-mini',
-    keyHint: 'GitHub Copilot token (not a plain API key) — experimental',
-    keyUrl: 'https://github.com/features/copilot',
+    keyHint: 'GitHub PAT or OAuth token (needs an active Copilot subscription)',
+    keyUrl: 'https://github.com/settings/tokens',
     experimental: true
   },
   baseURL: 'https://api.githubcopilot.com',
   extraHeaders: {
     'Copilot-Integration-Id': 'vscode-chat',
-    'Editor-Version': 'Snakie/1'
-  }
+    'Editor-Version': 'Snakie/1',
+    'Editor-Plugin-Version': 'Snakie/1'
+  },
+  resolveBearer: getCopilotToken
 })
