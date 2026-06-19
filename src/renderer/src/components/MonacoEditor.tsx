@@ -6,6 +6,9 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import 'monaco-editor/esm/vs/editor/editor.all'
 import 'monaco-editor/esm/vs/basic-languages/python/python.contribution'
 import 'monaco-editor/esm/vs/basic-languages/markdown/markdown.contribution'
+// YAML syntax colours (issue #93). The basic-language is tokenisation-only (no
+// language service / worker), so it stays within the bundle budget and the CSP.
+import 'monaco-editor/esm/vs/basic-languages/yaml/yaml.contribution'
 import './monaco-setup'
 import { useWorkspace } from '../store/workspace'
 import { useDiagnostics } from '../store/diagnostics'
@@ -20,11 +23,22 @@ import {
   setModelDiagnostics
 } from './plugin-code-actions'
 import { registerInlineCompletions } from './inline-completions'
+import { validateFormat, formatKindForName } from './format-validate'
+import {
+  clearFormatDiagnostics,
+  registerFormatCodeActions,
+  setFormatDiagnostics
+} from './format-code-actions'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
 // guarded against HMR double-registration.
 registerPluginCodeActions(monaco)
+
+// Register the JSON/YAML format quick-fix provider (issue #93) once at module
+// load. Idempotent + HMR-guarded; offers the "format / fix" autofix as a
+// lightbulb on YAML diagnostics.
+registerFormatCodeActions(monaco)
 
 // Register the AI inline-completion (ghost text) provider exactly once at module
 // load (issue #82). Idempotent + HMR-guarded; reads the enable/provider/model
@@ -33,6 +47,11 @@ registerInlineCompletions(monaco)
 
 /** Monaco marker owner used for plugin-sourced diagnostics. */
 const PLUGIN_MARKER_OWNER = 'snakie-plugins'
+
+/** Monaco marker owner used for JSON/YAML format diagnostics (issue #93). A
+ * distinct owner lets format squiggles coexist with the plugin lint squiggles
+ * without either clobbering the other's markers. */
+const FORMAT_MARKER_OWNER = 'snakie-format'
 
 /** Debounce window (ms) before re-linting after the active file changes. */
 const LINT_DEBOUNCE_MS = 400
@@ -49,13 +68,29 @@ function applyDiagnostics(model: monaco.editor.ITextModel, diagnostics: Diagnost
 }
 
 /**
+ * Paint JSON/YAML format diagnostics onto a model under the dedicated format
+ * marker owner, and record the diagnostics-with-fixes for the format code-action
+ * provider. Clears both when there are no diagnostics.
+ */
+function applyFormatDiagnostics(
+  model: monaco.editor.ITextModel,
+  diagnostics: Diagnostic[]
+): void {
+  const markers = diagnostics.map((d) => diagnosticToMarker(model, d))
+  monaco.editor.setModelMarkers(model, FORMAT_MARKER_OWNER, markers)
+  setFormatDiagnostics(model.uri.toString(), diagnostics)
+}
+
+/**
  * Map a file name to a Monaco language id. MicroPython sources are plain Python,
  * so `.py` (and unknown extensions) default to `python`.
  */
 function languageForName(name: string): string {
   // The JSON language service is intentionally not bundled (see monaco-setup),
   // so `.json` opens as plaintext rather than registering an unbacked language.
+  // `.yml`/`.yaml` use the basic-language for syntax colours (issue #93).
   if (/\.(md|markdown)$/i.test(name)) return 'markdown'
+  if (/\.ya?ml$/i.test(name)) return 'yaml'
   if (/\.(json|txt)$/i.test(name)) return 'plaintext'
   return 'python'
 }
@@ -235,6 +270,7 @@ export function MonacoEditor(): JSX.Element {
       editorRef.current = null
       modelStore.forEach((m) => {
         clearModelDiagnostics(m.uri.toString())
+        clearFormatDiagnostics(m.uri.toString())
         m.dispose()
       })
       modelStore.clear()
@@ -319,6 +355,14 @@ export function MonacoEditor(): JSX.Element {
       return undefined
     }
 
+    // JSON/YAML files are validated by the format effect below, which owns the
+    // shared diagnostics store for them. Skip the Python plugin lint path so it
+    // can't clobber the format diagnostics in the single-active-file store.
+    if (formatKindForName(activeFile.name)) {
+      applyDiagnostics(model, [])
+      return undefined
+    }
+
     const plugins = window.api?.plugins
     if (!plugins?.lint) return undefined
 
@@ -370,6 +414,41 @@ export function MonacoEditor(): JSX.Element {
     }
   }, [activeFile, activeFile?.id, activeFile?.content, lintingEnabled, clearDiagnostics])
 
+  // Reactive JSON/YAML validation (issue #93): when the active file is a
+  // `.json`/`.yml`/`.yaml` file, debounce then run the pure `validateFormat`,
+  // paint the result under the dedicated format marker owner (squiggles +
+  // lightbulb), and publish to the shared store so the Problems panel lists
+  // them. Clears them when the content is valid, or when switching to a
+  // non-format file. Runs entirely in the renderer (no host round-trip).
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !activeFile) return undefined
+
+    const model = models.current.get(activeFile.id)
+    if (!model || model.isDisposed()) return undefined
+
+    // Not a format file: clear any prior format markers/diagnostics and let the
+    // plugin lint effect own the Problems panel.
+    if (!formatKindForName(activeFile.name)) {
+      applyFormatDiagnostics(model, [])
+      return undefined
+    }
+
+    const file = activeFile
+    const timer = setTimeout(() => {
+      const m = models.current.get(file.id)
+      if (!m || m.isDisposed()) return
+      const diagnostics = validateFormat(file.name, file.content)
+      applyFormatDiagnostics(m, diagnostics)
+      // Publish to the shared store so the Problems panel mirrors the squiggles.
+      setDiagnosticsRef.current(diagnostics)
+      // Format files have no linter-tool concept; clear the "install ruff" hint.
+      setLinterToolRef.current(null)
+    }, LINT_DEBOUNCE_MS)
+
+    return () => clearTimeout(timer)
+  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name])
+
   // With no active file open there is nothing to lint, so the Problems panel
   // should be empty (e.g. after closing the last tab).
   useEffect(() => {
@@ -393,6 +472,7 @@ export function MonacoEditor(): JSX.Element {
     models.current.forEach((model, id) => {
       if (!openIds.has(id)) {
         clearModelDiagnostics(model.uri.toString())
+        clearFormatDiagnostics(model.uri.toString())
         model.dispose()
         models.current.delete(id)
       }
