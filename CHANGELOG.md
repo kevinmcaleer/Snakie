@@ -6,7 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-19
+
 ### Added
+- **In-app LLM provider system (#77).** The Claude chat is now provider-agnostic:
+  a main-process registry adds **OpenAI, Google Gemini, Grok (xAI) and GitHub
+  Copilot** alongside Anthropic Claude, surfaced as provider / model / effort
+  dropdowns at the bottom of the chat with secure per-provider API-key storage.
+  Only Anthropic is verified locally; the others are wired to spec and untested
+  without credentials.
+- **Send console output to chat (#78).** A **Send to chat** button above the
+  console (shown when the chat panel is open) plus an **Attach console (since
+  last Run)** composer toggle hand the device's REPL output to the assistant
+  without copy-paste.
+- **AI-first editor (#82).** The chat always sees the up-to-date active file;
+  assistant code blocks gain an **Apply** button that writes straight into the
+  editor (undoable); and an opt-in **inline autocomplete** (ghost text) suggests
+  as you type via a fast, per-provider completion model configured separately
+  from the main chat model.
+- **GitHub Copilot via a personal access token.** The Copilot provider exchanges
+  a GitHub PAT / OAuth token (on a Copilot-enabled account) for the short-lived
+  Copilot token its chat endpoint requires, caching it until just before expiry.
+  Experimental — verifiable only against a real Copilot account.
+- **Editor paper settings (#80, #81).** A new **Settings** dialog (toolbar gear)
+  toggles the notebook **ruled lines**, a subtle squared **dots** grid, or
+  **off**, and adjusts the **line spacing** (shown live) — persisted across
+  launches.
 - **macOS code signing + notarization** wired into the release workflow (#47).
   When the Apple secrets are set (`MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`,
   `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` — see
@@ -14,6 +39,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   + entitlements) and notarized — which is what lets the **in-app updater
   install on macOS** and removes the "damaged" Gatekeeper warning. Builds stay
   unsigned-but-working when the secrets are absent.
+
+### Changed
+- **Skeuomorph skin is the new default look.** A photoreal brushed-metal /
+  green-felt / cream **ruled-paper** theme: a segmented New/Open/Save control,
+  glossy Run/Stop pills, round panel-collapse knobs, a recessed green-phosphor
+  console, and a notebook editor whose text sits on ruled lines (transparent
+  Monaco over a ruled gradient, with a red margin rule). The toolbar knob flips
+  to a dark "lights out" theme.
+- **Removed the redundant panel title bars** for Editor, Source Control, Files,
+  Packages, Plugins and Inspect (#79) — the activity bar already names the active
+  view (Shell and Chat keep their headers, which carry controls).
 
 ## [0.3.3] - 2026-06-02
 
@@ -165,7 +201,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.0...v0.3.1
