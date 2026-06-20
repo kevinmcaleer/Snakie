@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Board View viewport controls (#99).** A floating control cluster on the board
+  canvas: **zoom in / out**, **zoom to fit**, a **100%** button that toggles between
+  fit and 1:1, and **export** of the current view as **SVG, PNG or PDF**.
+- **Board View rotate (#96).** A rotate button cycles the board view 90° clockwise;
+  pad/label text always stays legible (rendered at 0° or 90° CW, never upside down),
+  so a header that becomes horizontal reads correctly.
+
+### Fixed
+- **Find & Replace draggable by the whole title bar (#98).** The dialog can be
+  dragged from anywhere along its top row, not just the textured grip.
+
 ### Changed
 - **Board View node-graph.** The live Board View is redesigned as a **node graph**:
   one node per declared connection — a colour-coded type tag (`IN`/`OUT`/`I²C`/
