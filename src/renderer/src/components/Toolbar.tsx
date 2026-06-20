@@ -1,4 +1,4 @@
-import { useCallback, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -176,18 +176,35 @@ export function Toolbar({
    *   terminal automatically via its existing `onData` subscription — so we
    *   never need a handle to the terminal here.
    */
+  // Track whether a program is running so the Stop button can double as Reset.
+  // Set on Run; cleared when the user Stops (interrupts) or the device drops.
+  // A running program a user keeps in a loop stays "running" until Stop; a
+  // freshly-connected/idle board is "not running".
+  const [running, setRunning] = useState(false)
+  useEffect(() => {
+    if (!connected) setRunning(false)
+  }, [connected])
+
   const handleRun = useCallback(() => {
     if (!connected || !activeFile) return
     // Record the console position so "send console to chat" / the composer's
     // attach-console control grab only this run's output (issue #78).
     markRun()
+    setRunning(true)
     const payload = `\x05${activeFile.content}\x04`
     window.api.device.sendData(payload).catch(() => undefined)
   }, [connected, activeFile, markRun])
 
+  // Stop is dual-purpose: interrupt a running program (Ctrl-C); or, when nothing
+  // is running, soft-reset the board (Ctrl-D) — a quick way to clear device state.
   const handleStop = useCallback(() => {
-    window.api.device.interrupt().catch(() => undefined)
-  }, [])
+    if (running) {
+      window.api.device.interrupt().catch(() => undefined)
+      setRunning(false)
+    } else {
+      window.api.device.softReset().catch(() => undefined)
+    }
+  }, [running])
 
   const handleOpenFolder = useCallback(() => {
     void openFolder().catch(() => undefined)
@@ -264,13 +281,19 @@ export function Toolbar({
           className="btn btn--danger"
           onClick={handleStop}
           disabled={!connected}
-          title={connected ? 'Interrupt the running program (Ctrl-C)' : 'Connect to a device to stop'}
-          aria-label="Stop / interrupt running program"
+          title={
+            !connected
+              ? 'Connect to a device to stop'
+              : running
+                ? 'Interrupt the running program (Ctrl-C)'
+                : 'Reset the board (soft reboot)'
+          }
+          aria-label={running ? 'Stop / interrupt running program' : 'Reset the board'}
         >
           <span className="btn__glyph" aria-hidden="true">
-            ■
+            {running ? '■' : '⟳'}
           </span>
-          <span>Stop</span>
+          <span>{running ? 'Stop' : 'Reset'}</span>
         </button>
       </div>
 

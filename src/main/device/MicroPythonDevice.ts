@@ -83,6 +83,10 @@ export class MicroPythonDevice extends EventEmitter {
   /** True once we have entered raw REPL and not yet exited it. */
   private inRawRepl = false
 
+  /** True while an internal `exec` runs — suppresses the console `data` broadcast
+   * so raw-REPL/probe traffic (live-value polls, etc.) never hits the terminal. */
+  private execActive = false
+
   // ---------------------------------------------------------------------------
   // Typed event helpers (thin wrappers over EventEmitter)
   // ---------------------------------------------------------------------------
@@ -202,10 +206,15 @@ export class MicroPythonDevice extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   private handleData(chunk: Buffer): void {
-    // Always forward raw bytes so the renderer REPL sees everything live.
-    this.emit('data', chunk)
+    // Always buffer for the raw-REPL reader (readUntil).
     this.rxBuffer = Buffer.concat([this.rxBuffer, chunk])
     this.tryResolvePending()
+    // Forward raw bytes to the renderer REPL — EXCEPT while an internal `exec`
+    // is in flight. Exec drives the raw REPL (banners, Ctrl-C interrupts, our
+    // live-value probes like `<<SNKV>>0:9922`); that machine traffic must not
+    // pollute the user's console. User typing + Run go through `sendData` (the
+    // friendly REPL), not `exec`, so they still stream through.
+    if (!this.execActive) this.emit('data', chunk)
   }
 
   private tryResolvePending(): void {
@@ -325,38 +334,45 @@ export class MicroPythonDevice extends EventEmitter {
     if (!this.isConnected()) {
       throw new Error('Not connected')
     }
-    const enteredHere = !this.inRawRepl
-    if (enteredHere) {
-      await this.enterRawRepl()
-    }
+    // Suppress the renderer-console broadcast for the WHOLE exec (raw-REPL enter
+    // through exit) so probe/banner/interrupt bytes never reach the terminal.
+    this.execActive = true
     try {
-      // Send the code and execute with Ctrl-D.
-      await this.write(code)
-      await this.write(CTRL_D)
-
-      // The device acknowledges a well-formed paste with "OK".
-      const ack = await this.readUntil('OK', timeoutMs)
-      if (!ack.toString('binary').includes('OK')) {
-        throw new Error('Device did not acknowledge code (no "OK")')
-      }
-
-      // stdout is everything up to the first \x04.
-      const stdoutRaw = await this.readUntil(CTRL_D, timeoutMs)
-      const stdout = stdoutRaw.subarray(0, stdoutRaw.length - 1).toString('utf8')
-
-      // stderr/traceback is everything up to the second \x04.
-      const stderrRaw = await this.readUntil(CTRL_D, timeoutMs)
-      const stderr = stderrRaw.subarray(0, stderrRaw.length - 1).toString('utf8')
-
-      // Consume the trailing prompt so the buffer is clean for the next op.
-      await this.readUntil('>', timeoutMs)
-
-      return { stdout, stderr }
-    } finally {
+      const enteredHere = !this.inRawRepl
       if (enteredHere) {
-        // Best-effort return to friendly REPL.
-        await this.exitRawRepl().catch(() => undefined)
+        await this.enterRawRepl()
       }
+      try {
+        // Send the code and execute with Ctrl-D.
+        await this.write(code)
+        await this.write(CTRL_D)
+
+        // The device acknowledges a well-formed paste with "OK".
+        const ack = await this.readUntil('OK', timeoutMs)
+        if (!ack.toString('binary').includes('OK')) {
+          throw new Error('Device did not acknowledge code (no "OK")')
+        }
+
+        // stdout is everything up to the first \x04.
+        const stdoutRaw = await this.readUntil(CTRL_D, timeoutMs)
+        const stdout = stdoutRaw.subarray(0, stdoutRaw.length - 1).toString('utf8')
+
+        // stderr/traceback is everything up to the second \x04.
+        const stderrRaw = await this.readUntil(CTRL_D, timeoutMs)
+        const stderr = stderrRaw.subarray(0, stderrRaw.length - 1).toString('utf8')
+
+        // Consume the trailing prompt so the buffer is clean for the next op.
+        await this.readUntil('>', timeoutMs)
+
+        return { stdout, stderr }
+      } finally {
+        if (enteredHere) {
+          // Best-effort return to friendly REPL.
+          await this.exitRawRepl().catch(() => undefined)
+        }
+      }
+    } finally {
+      this.execActive = false
     }
   }
 
