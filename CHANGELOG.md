@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Board View live pin values (#97).** A **LIVE** toggle in the board view header
+  (off by default) reads the connected board over the REPL and shows each node's
+  real value — `1`/`0` for digital (green when asserted), PWM duty, and an activity
+  indicator for I²C/SPI/PIO — falling back to idle when disconnected. It is opt-in
+  because reading values interrupts a running program.
 - **Board View viewport controls (#99).** A floating control cluster on the board
   canvas: **zoom in / out**, **zoom to fit**, a **100%** button that toggles between
   fit and 1:1, and **export** of the current view as **SVG, PNG or PDF**.
