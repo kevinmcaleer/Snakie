@@ -20,6 +20,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   so a header that becomes horizontal reads correctly.
 
 ### Fixed
+- **Board View draws the full physical pinout.** The board view now renders the
+  selected board's complete pinout (every pad from its definition, at its real
+  edge position) and redraws when you switch board type — previously it only drew
+  the pins in use and barely changed on a board switch. Connections wire to their
+  actual pads. (Shared board-layout extracted to one tested module.)
 - **Find & Replace draggable by the whole title bar (#98).** The dialog can be
   dragged from anywhere along its top row, not just the textured grip.
 
