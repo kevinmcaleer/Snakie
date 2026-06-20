@@ -33,9 +33,20 @@ pin-perfect — and you can override any of them (see below).
 
 ## Authoring a board
 
-A board is a single **JSON** file matching the `BoardDefinition` schema. Drop it
-in your Snakie boards folder and it appears in the selector next time the window
-opens.
+There are two ways to author a board:
+
+1. **The Board Creator (visual editor).** Click the brass **create** knob in the
+   Board View title bar to enter design mode. It gives you board meta (name, chip
+   type, PCB colour, aspect), an **image upload OR rectangle-drawing** tool for
+   the board representation, a **pin-assignment tool** (headers per edge; each pad
+   gets a GPIO number, name, silk label, and type), an **onboard-LED** picker, a
+   **live preview** (the same drawing the view uses), and **Save / Load / Delete /
+   New**. Saving writes the JSON below to `<userData>/boards/<id>.json`; the JSON
+   is the round-trippable source of truth, so **Load** re-opens any saved board to
+   re-edit it. ("Export SVG" is a one-way convenience — it doesn't re-load.)
+2. **By hand.** A board is a single **JSON** file matching the `BoardDefinition`
+   schema. Drop it in your Snakie boards folder and it appears in the selector
+   next time the window opens.
 
 ### Where the files go
 
@@ -60,6 +71,8 @@ can correct or restyle the bundled boards too.
 interface BoardPad {
   gpio?: number   // numeric GPIO this pad breaks out (matched against Pin(n))
   label: string   // silk text drawn on/next to the pad, e.g. "GP0", "3V3", "IO34"
+  name?: string   // human pin NAME, distinct from the silk label (see below)
+  type?: 'gpio' | 'gnd' | 'vcc' | 'other'  // electrical role; defaults to 'gpio'
 }
 
 interface BoardHeader {
@@ -76,14 +89,43 @@ interface BoardFeature {
 interface BoardDefinition {
   id: string         // unique; a user file with this id overrides a built-in
   name: string       // shown in the selector
-  mcu: string        // sub-label, e.g. "RP2350"
+  mcu: string        // sub-label / chip type, e.g. "RP2350"
   pcbColor: string   // PCB fill (any CSS colour)
   aspect: number     // width / height of the outline (drives the drawing)
   ledLabel?: string  // onboard-LED pin token, e.g. "LED" or "25"
   features?: BoardFeature[]  // decorative chips/cans drawn as labelled rects
   headers: BoardHeader[]     // the castellated pads / pin headers
+  image?: string     // optional board photo/SVG as a data URL (see below)
 }
 ```
+
+### Pad `name`, `label`, and `type`
+
+- **`label`** is the **silk text** printed next to the pad — it's both what's
+  drawn and what the pin parser matches (`GP0`, `3V3`, `IO34`). Required.
+- **`name`** is the **human pin name**, separate metadata you can author for your
+  own reference (e.g. label `"GP0"`, name `"UART0 TX"`). The renderer matches on
+  `label`/`gpio`, never on `name`, so it's purely informational.
+- **`type`** is the pad's **electrical role** and defaults to `'gpio'` when
+  absent (so older boards still draw):
+  - `gpio` — a real GPIO pad. Only these are matched against parsed `Pin(...)`
+    tokens and highlighted when wired. Give it a `gpio` number.
+  - `gnd` — ground. Drawn dark; never wired/highlighted.
+  - `vcc` — a power rail (`3V3`, `5V`, `VBUS`…). Drawn red; never wired.
+  - `other` — any non-GPIO signal (`RUN`, `EN`, `ADC_VREF`…). Drawn grey;
+    never wired.
+
+  Power/other pads always show their `label` on the board; GPIO pads only show
+  theirs when a wire lands on them (to keep the live view uncluttered).
+
+### `image` — a board photo or SVG background
+
+`image` is an optional, self-contained **data URL**
+(`data:image/png;base64,…`, or `data:image/svg+xml,…`) drawn as the board
+background, clipped to the rounded PCB outline, behind the features and pads. The
+Board Creator's "Upload image" stores whatever you pick verbatim, so it
+round-trips: re-opening the board re-loads the same image. Leave it out to draw a
+plain coloured PCB with your `features` rectangles instead.
 
 ### Coordinates & layout
 
@@ -135,11 +177,11 @@ Save this as `<userData>/boards/my-tiny.json` and it appears in the selector as
     {
       "edge": "top",
       "pins": [
-        { "label": "5V" },
-        { "label": "GND" },
-        { "gpio": 0, "label": "GP0" },
-        { "gpio": 1, "label": "GP1" },
-        { "gpio": 2, "label": "GP2" }
+        { "label": "5V", "name": "5V In", "type": "vcc" },
+        { "label": "GND", "name": "Ground", "type": "gnd" },
+        { "gpio": 0, "label": "GP0", "name": "UART0 TX", "type": "gpio" },
+        { "gpio": 1, "label": "GP1", "name": "UART0 RX", "type": "gpio" },
+        { "gpio": 2, "label": "GP2", "type": "gpio" }
       ]
     },
     {
@@ -148,12 +190,16 @@ Save this as `<userData>/boards/my-tiny.json` and it appears in the selector as
         { "gpio": 28, "label": "A2" },
         { "gpio": 27, "label": "A1" },
         { "gpio": 26, "label": "A0" },
-        { "label": "3V3" }
+        { "label": "3V3", "name": "3.3V Out", "type": "vcc" }
       ]
     }
   ]
 }
 ```
+
+> The `type` defaults to `gpio` when omitted, so the older `{ "label": "GND" }`
+> shorthand still works — but tagging power pads `gnd`/`vcc` draws them in their
+> proper colours and stops them being treated as wireable GPIO.
 
 Open a `.py` file that wires one of those pins, e.g.:
 

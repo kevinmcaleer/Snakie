@@ -11,12 +11,33 @@
  * `docs/board.md` for the authoring guide (kept IN SYNC with this file).
  */
 
+/**
+ * The electrical role of a pad. Only `gpio` pads are matched against parsed
+ * `Pin(...)` tokens and can be highlighted as "used"; `gnd`/`vcc` are power
+ * rails (never wired) and are drawn in a distinct colour; `other` is any
+ * non-GPIO signal (e.g. `RUN`, `EN`, `ADC_VREF`). Absent ⇒ treated as `gpio`.
+ */
+export type BoardPadType = 'gpio' | 'gnd' | 'vcc' | 'other'
+
 /** One header pad: a numeric GPIO (if any) plus the silk-screen label text. */
 export interface BoardPad {
   /** The numeric GPIO this pad breaks out, matched against numeric `Pin(n)`. */
   gpio?: number
   /** The silk text drawn on/next to the pad (e.g. `"GP0"`, `"3V3"`, `"IO34"`). */
   label: string
+  /**
+   * The human pin NAME (distinct from the silk `label`): e.g. label `"GP0"` with
+   * name `"UART0 TX"`, or label `"3V3"` with name `"3.3V Out"`. Optional; purely
+   * informational metadata authored in the creator — the renderer matches on
+   * `label`/`gpio`, not `name`.
+   */
+  name?: string
+  /**
+   * The pad's electrical role (defaults to `'gpio'` when absent). Power pads
+   * (`gnd`/`vcc`) are drawn in a distinct colour and are never wired/highlighted
+   * by the pin parser (only `gpio` pads with a numeric `gpio`/`label` match).
+   */
+  type?: BoardPadType
 }
 
 /** A run of pads laid evenly along one edge of the board, in array order. */
@@ -59,4 +80,11 @@ export interface BoardDefinition {
   features?: BoardFeature[]
   /** The castellated pads / pin headers around the board. */
   headers: BoardHeader[]
+  /**
+   * An optional board photo/SVG, stored as a self-contained **data URL**
+   * (`data:image/...;base64,...`), drawn as the board background behind the
+   * features + pads. Authored via the Board Creator's image upload; stored
+   * verbatim so it round-trips (re-loading the board re-loads the image).
+   */
+  image?: string
 }

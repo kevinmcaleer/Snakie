@@ -17,9 +17,10 @@
 
 // Install the preload-bridge fallback BEFORE anything renders (mirrors main.tsx).
 import './lib/preloadFallback'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BoardView } from './components/BoardView'
+import { BoardCreator } from './components/BoardCreator'
 import type { BoardDefinition, BoardSourcePayload } from '../../preload/index.d'
 import '@fontsource/jetbrains-mono'
 import './index.css'
@@ -39,6 +40,17 @@ function BoardWindowApp(): JSX.Element {
     theme: 'skeuomorph'
   })
   const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
+  // VIEW vs DESIGN mode: the brass knob in the BoardView title bar enters the
+  // Board Creator; "Done" returns to the read-only view (and re-loads boards).
+  const [designMode, setDesignMode] = useState(false)
+
+  // Re-read the user boards off disk (after a save/delete, or on Done).
+  const refreshUserBoards = useCallback((): void => {
+    window.api.board
+      .listUserBoards()
+      .then(setUserBoards)
+      .catch(() => setUserBoards([]))
+  }, [])
 
   // Apply the persisted theme immediately so the first paint matches the app.
   useEffect(() => {
@@ -55,11 +67,8 @@ function BoardWindowApp(): JSX.Element {
 
   // Load user-authored boards once (read off disk by the main process).
   useEffect(() => {
-    window.api.board
-      .listUserBoards()
-      .then(setUserBoards)
-      .catch(() => setUserBoards([]))
-  }, [])
+    refreshUserBoards()
+  }, [refreshUserBoards])
 
   // Subscribe to the streamed active-file snapshot; apply its theme live.
   useEffect(() => {
@@ -70,14 +79,38 @@ function BoardWindowApp(): JSX.Element {
     return off
   }, [])
 
-  // Esc closes the window (a frameless window has no native close affordance).
+  // Esc closes the window (a frameless window has no native close affordance);
+  // in design mode it first backs out to the read-only view so work isn't lost
+  // to a stray Esc, and so a focused input's Esc doesn't slam the window shut.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') window.api.board.close()
+      if (e.key !== 'Escape') return
+      if (designMode) {
+        setDesignMode(false)
+        refreshUserBoards()
+      } else {
+        window.api.board.close()
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [])
+  }, [designMode, refreshUserBoards])
+
+  if (designMode) {
+    return (
+      <BoardCreator
+        userBoards={userBoards}
+        asWindow
+        onSave={(d) => window.api.board.saveUserBoard(d)}
+        onDelete={(id) => window.api.board.deleteUserBoard(id)}
+        onDone={() => {
+          setDesignMode(false)
+          // A newly-saved board must be selectable back in the view.
+          refreshUserBoards()
+        }}
+      />
+    )
+  }
 
   return (
     <BoardView
@@ -87,6 +120,7 @@ function BoardWindowApp(): JSX.Element {
       userBoards={userBoards}
       asWindow
       onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
+      onEnterCreator={() => setDesignMode(true)}
       onClose={() => window.api.board.close()}
     />
   )

@@ -431,7 +431,9 @@ const plugins = {
  * window; `close` closes it; `update` relays the active-file snapshot to it (it
  * streams in via `onSource`); `onClosed` fires when the user closes the window;
  * `listUserBoards` returns user-authored board definitions read off disk in the
- * main process; `openBoardsFolder` reveals `<userData>/boards`.
+ * main process; `openBoardsFolder` reveals `<userData>/boards`;
+ * `saveUserBoard`/`deleteUserBoard` persist boards authored in the Board Creator
+ * (issue #94).
  */
 const board = {
   /** Open (or focus) the floating Board View window. */
@@ -455,7 +457,17 @@ const board = {
   /** User-authored board definitions read from `<userData>/boards/*.json`. */
   listUserBoards: (): Promise<BoardDefinition[]> => ipcRenderer.invoke('board:listUserBoards'),
   /** Reveal the boards folder in the OS file manager (creates it if missing). */
-  openBoardsFolder: (): Promise<void> => ipcRenderer.invoke('board:openBoardsFolder')
+  openBoardsFolder: (): Promise<void> => ipcRenderer.invoke('board:openBoardsFolder'),
+  /**
+   * Persist a board definition (from the Board Creator) to
+   * `<userData>/boards/<id>.json`. Resolves to `{ok,error}` — never rejects, so
+   * the creator can show a friendly error inline.
+   */
+  saveUserBoard: (def: BoardDefinition): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('board:saveUserBoard', def),
+  /** Delete a user board file by id (no-op if it doesn't exist). */
+  deleteUserBoard: (id: string): Promise<void> =>
+    ipcRenderer.invoke('board:deleteUserBoard', id)
 }
 
 // Minimal, typed API exposed to the renderer. This establishes the IPC

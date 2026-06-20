@@ -13,7 +13,13 @@
 
 import type { BoardDefinition, BoardPad } from '../../../shared/board'
 
-export type { BoardDefinition, BoardPad, BoardHeader, BoardFeature } from '../../../shared/board'
+export type {
+  BoardDefinition,
+  BoardPad,
+  BoardPadType,
+  BoardHeader,
+  BoardFeature
+} from '../../../shared/board'
 
 /** Helper: a GPIO pad whose label is `GP<n>` (the RP2040/RP2350 convention). */
 function gp(n: number): BoardPad {

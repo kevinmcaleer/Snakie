@@ -13,6 +13,7 @@ import {
   type BoardDefinition,
   type BoardHeader,
   type BoardPad,
+  type BoardPadType,
   type BoardFeature
 } from './board-defs'
 import './BoardView.css'
@@ -49,6 +50,14 @@ export interface BoardViewProps {
   onOpenBoardsFolder?: () => void
   /** Close the view. When set, a ✕ button is shown in the title bar. */
   onClose?: () => void
+  /** Enter the Board Creator. When set, a brass knob button shows in the bar. */
+  onEnterCreator?: () => void
+  /**
+   * Preview mode for the Board Creator: when set, this exact definition is drawn
+   * (bypassing the picker + persisted selection) so the creator shows the same
+   * SVG the live view will produce. The board-id selector is hidden in this mode.
+   */
+  previewDef?: BoardDefinition
 }
 
 // --- Drawing geometry -------------------------------------------------------
@@ -242,7 +251,9 @@ export function BoardView({
   userBoards,
   asWindow = false,
   onOpenBoardsFolder,
-  onClose
+  onClose,
+  onEnterCreator,
+  previewDef
 }: BoardViewProps): JSX.Element {
   const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
 
@@ -254,7 +265,9 @@ export function BoardView({
       return DEFAULT_BOARD_ID
     }
   })
-  const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  // In preview mode the creator's working definition wins (no picker / storage).
+  const def =
+    previewDef ?? boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
   // Custom dropdown open state. We avoid a native <select>: its popup is
   // unreliable inside a frameless, always-on-top window with a drag region.
@@ -286,6 +299,7 @@ export function BoardView({
           ⋮⋮
         </span>
         <span className="boardview__title">BOARD VIEW</span>
+        {!previewDef && (
         <div className="boardview__picker">
           <button
             type="button"
@@ -326,11 +340,29 @@ export function BoardView({
             </>
           )}
         </div>
+        )}
         <span className="boardview__subtitle">{def.mcu}</span>
         <span className="boardview__live" title="Updates live as you edit">
           <span className="boardview__led" aria-hidden="true" />
           LIVE
         </span>
+        {onEnterCreator && (
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon btn--knob boardview__create"
+            onClick={onEnterCreator}
+            title="Create or edit a custom board"
+            aria-label="Open the Board Creator"
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+              {/* A pencil-on-board glyph for "design a board". */}
+              <path
+                fill="currentColor"
+                d="M10.6 1.6l3.8 3.8-1.4 1.4-3.8-3.8 1.4-1.4zM8.5 3.7l3.8 3.8L5.9 13.9 1.5 14.5l.6-4.4L8.5 3.7z"
+              />
+            </svg>
+          </button>
+        )}
         {onOpenBoardsFolder && (
           <button
             type="button"
@@ -356,7 +388,7 @@ export function BoardView({
       </header>
 
       <div className="boardview__mat">
-        {conns.length === 0 ? (
+        {conns.length === 0 && !previewDef ? (
           <div className="boardview__empty">
             {isPython
               ? 'No pins detected — wire up a Pin/PWM/I2C/SPI/StateMachine to see it here.'
@@ -365,6 +397,7 @@ export function BoardView({
         ) : (
           <svg
             className="boardview__svg"
+            xmlns="http://www.w3.org/2000/svg"
             viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
             role="img"
             aria-label={`${def.name}: ${conns.length} pin connection${
@@ -400,12 +433,35 @@ export function BoardView({
         )}
       </div>
 
-      <PinsInUse conns={conns} fileName={fileName} />
+      {!previewDef && <PinsInUse conns={conns} fileName={fileName} />}
     </div>
   )
 }
 
 // --- SVG drawing ------------------------------------------------------------
+
+/**
+ * Pad fill by electrical role. GPIO pads keep the gold gradient (and can be
+ * highlighted as "used"); power/other pads get a distinct, never-highlighted
+ * colour so the board reads correctly (gnd = dark, vcc = red, other = grey).
+ */
+function padFill(type: BoardPadType | undefined): string {
+  switch (type) {
+    case 'gnd':
+      return '#2b2f36'
+    case 'vcc':
+      return '#c0392b'
+    case 'other':
+      return '#8a9099'
+    default:
+      return 'url(#bv-gold)'
+  }
+}
+
+/** Whether a pad can ever be wired/highlighted (only true GPIO pads). */
+function padIsGpio(pad: BoardPad): boolean {
+  return (pad.type ?? 'gpio') === 'gpio'
+}
 
 /** Inline SVG of a generic board outline: PCB, holes, USB, features + pads. */
 function BoardOutline({
@@ -438,6 +494,13 @@ function BoardOutline({
         </linearGradient>
       </defs>
 
+      {/* A board photo/SVG (data URL) is clipped to the rounded PCB rect. */}
+      {def.image && (
+        <clipPath id="bv-pcb-clip">
+          <rect x={box.x} y={box.y} width={box.w} height={box.h} rx="16" />
+        </clipPath>
+      )}
+
       {/* PCB */}
       <rect
         x={box.x}
@@ -449,6 +512,18 @@ function BoardOutline({
         stroke="rgba(0,0,0,0.45)"
         strokeWidth="2"
       />
+      {/* Optional uploaded board image drawn over the PCB fill. */}
+      {def.image && (
+        <image
+          href={def.image}
+          x={box.x}
+          y={box.y}
+          width={box.w}
+          height={box.h}
+          preserveAspectRatio="xMidYMid slice"
+          clipPath="url(#bv-pcb-clip)"
+        />
+      )}
       {/* Mounting holes */}
       {[
         [box.x + 16, box.y + 16],
@@ -504,7 +579,9 @@ function BoardOutline({
 
       {/* Header pads. */}
       {pads.map((p, i) => {
-        const used = usedKeys.has(`${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+        const isGpio = padIsGpio(p.pad)
+        // Only GPIO pads can be highlighted as "used" (power pads never wire).
+        const used = isGpio && usedKeys.has(`${p.x.toFixed(1)},${p.y.toFixed(1)}`)
         const vertical = p.edge === 'left' || p.edge === 'right'
         // Label placement: outside the board, anchored away from the edge.
         const lx =
@@ -512,17 +589,20 @@ function BoardOutline({
         const ly = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 11 : p.y + 17
         const anchor: 'start' | 'middle' | 'end' =
           p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+        // Power/other pads always show their label so the silk is readable; GPIO
+        // pads only label when wired (to avoid a busy board in the live view).
+        const showLabel = used || !isGpio
         return (
           <g key={`pad-${i}`}>
             <circle
               cx={p.x}
               cy={p.y}
               r={PAD_R}
-              fill="url(#bv-gold)"
-              stroke={used ? '#fff' : '#8a6a1e'}
+              fill={padFill(p.pad.type)}
+              stroke={used ? '#fff' : isGpio ? '#8a6a1e' : 'rgba(0,0,0,0.5)'}
               strokeWidth={used ? 2.5 : 1}
             />
-            {used && (
+            {showLabel && (
               <text x={lx} y={ly} className="boardview__pad-label" textAnchor={anchor}>
                 {p.pad.label}
               </text>

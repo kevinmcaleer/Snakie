@@ -51,9 +51,23 @@
 .boardview__bar--drag .boardview__picker-menu,
 .boardview__bar--drag .boardview__picker-backdrop,
 .boardview__bar--drag .boardview__folder,
+.boardview__bar--drag .boardview__create,
 .boardview__bar--drag .boardview__close {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* The "enter Board Creator" brass knob is sized down to match the bar's row of
+   square chrome buttons (📁 / ✕) rather than the toolbar's larger 40px knob. */
+.boardview__create {
+  width: 1.7rem;
+  height: 1.7rem;
+}
+
+/* Outside the skeuomorph skin (dark theme) the knob has no brass styling, so
+   give the create button the same square chrome as the folder/close buttons. */
+:root:not([data-theme='skeuomorph']) .boardview__create {
+  border-radius: var(--radius);
 }
 
 .boardview__grip {
