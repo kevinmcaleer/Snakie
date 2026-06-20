@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useTheme } from '../hooks/useTheme'
@@ -19,7 +19,7 @@ import {
   type InstrumentVisibility,
   type OpenInstrument
 } from './InstrumentHost'
-import type { UsedPins } from './parse-pins'
+import { parsePins, type UsedPins } from './parse-pins'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
@@ -246,6 +246,14 @@ export function AppShell(): JSX.Element {
     onHideKind: hideKind
   })
 
+  // The PWM/ADC pins declared in the active file — so the dock's SCOPE/METER
+  // buttons can summon an instrument directly (without going through the
+  // board-view window's node launchers).
+  const fileConns = useMemo(
+    () => (boardIsPython ? parsePins(boardSource) : []),
+    [boardSource, boardIsPython]
+  )
+
   // Toggle one kind's dock-header visibility. Turning a kind ON also RE-DOCKS
   // every instrument of that kind (via the host) so a previously-undocked or
   // closed instrument reappears DOCKED — float a scope → ✕ (it hides, re-docked)
@@ -257,9 +265,27 @@ export function AppShell(): JSX.Element {
     (kind: keyof InstrumentVisibility): void => {
       const next = !visibility[kind]
       setVisibility({ ...visibility, [kind]: next })
-      if (next && (kind === 'scope' || kind === 'meter')) redockKind(kind)
+      if (next && (kind === 'scope' || kind === 'meter')) {
+        redockKind(kind)
+        // Summon an instrument if none of this kind is open yet: pick the first
+        // matching pin from the active file. This makes the dock's SCOPE/METER
+        // buttons a direct way to open an instrument (the board-view node
+        // launchers are the other entry point) — clicking SCOPE/METER now shows
+        // a scope/meter instead of toggling the visibility of nothing.
+        if (!openInstruments.some((it) => it.kind === kind)) {
+          const wantType = kind === 'scope' ? 'pwm' : 'adc'
+          const conn = fileConns.find((c) => c.type === wantType)
+          if (conn) {
+            setOpenInstruments((cur) =>
+              cur.some((it) => it.kind === kind && it.conn.variable === conn.variable)
+                ? cur
+                : [...cur, { kind, conn }]
+            )
+          }
+        }
+      }
     },
-    [visibility, setVisibility, redockKind]
+    [visibility, setVisibility, redockKind, openInstruments, fileConns]
   )
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the
