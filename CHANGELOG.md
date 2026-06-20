@@ -14,6 +14,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   interrupting the board and offers a one-click **Stop**.
 
 ### Fixed
+- **Instrument dock reliability.** Opening a scope/meter now reliably shows it
+  **docked** (the dock reveals wide enough for the 404px instrument instead of
+  crushing it), the docked **Plotter has a minimum height** so it isn't squashed
+  when sharing the dock, and **closing an instrument hides it back into the dock**
+  rather than discarding it — pressing its **SCOPE/METER/PLOT** dock button brings
+  it back docked.
 - **Console no longer shows internal probe traffic.** Live-value polling runs over the
   raw REPL via `device.exec`; the device layer was broadcasting that to the terminal,
   so probe lines (`<<SNKV>>…`), raw-REPL banners and interrupts polluted the console.
