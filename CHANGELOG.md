@@ -6,6 +6,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Board View v2.** The Board View is now its own **floating window** (a real
+  always-on-top window fed the active file live over IPC) instead of a modal
+  dialog, and it labels each wired pin by **connection type** — `output`, `input`,
+  `pwm`, `i2c`, `spi` or `pio` — instead of guessing a peripheral. `Pin` direction
+  is read from `Pin.OUT`/`Pin.IN` (and inferred from `.on()`/`.value()` usage when
+  undirected). It is now **multi-board**: a selector switches between built-in
+  definitions for the Raspberry Pi Pico 2 W, ESP32 DevKit, Pimoroni Pico Plus 2,
+  Tiny 2040 and Tiny 2350, drawn from a generic, data-driven renderer.
+
+### Added
+- **Custom board definitions.** Drop a `BoardDefinition` JSON file into
+  `<userData>/boards/` to add your own board to the Board View (a user board
+  overrides a built-in with the same `id`); an in-view button opens that folder.
+  See `docs/board.md` for the schema and a worked example.
+
 ## [0.8.0] - 2026-06-20
 
 ### Added
