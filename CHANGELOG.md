@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Plotter alongside the console (#103).** The serial Plotter is now a toggle in
+  the Shell header that splits the dock to show the live chart **next to** the
+  console (instead of replacing it), reskinned as a skeuomorphic blue-phosphor
+  strip-chart — scrolling traces with a live-edge cursor, a series legend, a
+  `samples · Hz` readout and a single CLEAR key.
 - **Oscilloscope instrument (#101).** PWM nodes in the Board View gain a scope
   launcher that opens a skeuomorphic CRT oscilloscope rendering the pin's square
   wave from its frequency + duty (FREQ / DUTY / PERIOD readouts, live duty when
