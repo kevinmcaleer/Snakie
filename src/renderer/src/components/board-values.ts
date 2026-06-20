@@ -22,6 +22,8 @@
  *   - `input` / `output` → `<var>.value()` → `0` / `1` (a digital level).
  *   - `pwm`              → `<var>.duty_u16()`, falling back to `<var>.duty()`
  *                          (older PWM API) → the current duty level.
+ *   - `adc`              → `<var>.read_u16()` → the 16-bit analog reading (the
+ *                          Multimeter derives volts + the 12-bit raw from it).
  *   - `i2c` / `spi` / `pio` → a presence / activity probe (`1 if <var> else 0`):
  *      the object exists in the device's global scope ⇒ "active". We deliberately
  *      do NOT `.scan()` an I²C bus or transfer on SPI — that could disrupt a
@@ -34,6 +36,8 @@
  *      universal truth; we can't know the wiring, so we treat electrical-high as
  *      asserted uniformly. Documented as a known limitation.
  *   - `pwm`    → asserted when the duty is NON-ZERO (the channel is driving).
+ *   - `adc`    → shows the converted voltage (`x.xx V`); asserted above ~50mV so
+ *      a pin that's reading a real signal lights green (a grounded pin stays dim).
  *   - `i2c` / `spi` / `pio` → asserted when the bus/object is present ("active").
  *   - Anything unreadable (`ERR`, missing) → idle (dim grey, the placeholder).
  *
@@ -42,6 +46,7 @@
  */
 
 import type { PinType, UsedPins } from './parse-pins'
+import { adcFromU16 } from './instrument-data'
 
 /** Sentinel prefix the probe prints before each `index:token` reading line. */
 export const PROBE_MARK = '<<SNKV>>'
@@ -83,6 +88,9 @@ function readExpr(type: PinType, variable: string): string {
     case 'pwm':
       // Primary: 16-bit duty. The fallback to `.duty()` is wired in the snippet.
       return `${variable}.duty_u16()`
+    case 'adc':
+      // 16-bit analog reading; the Multimeter derives volts + 12-bit raw from it.
+      return `${variable}.read_u16()`
     case 'i2c':
     case 'spi':
     case 'pio':
@@ -172,7 +180,7 @@ export function parseProbeOutput(stdout: string): Map<number, LiveValue> {
 export function liveValueDisplay(type: PinType, live: LiveValue | undefined): ValueDisplay {
   const boolean = type === 'input' || type === 'output'
   // Idle placeholder (no reading): mirrors the original NodeValue — `1` for
-  // boolean input/output, `—` for bus/pwm types — dim, never asserted.
+  // boolean input/output, `—` for bus/pwm/adc types — dim, never asserted.
   if (!live || live.value === undefined) {
     return { text: boolean ? '1' : '—', asserted: false, live: false }
   }
@@ -185,6 +193,11 @@ export function liveValueDisplay(type: PinType, live: LiveValue | undefined): Va
     case 'pwm':
       // Show the raw duty level; asserted when the channel is driving (non-zero).
       return { text: String(v), asserted: v !== 0, live: true }
+    case 'adc': {
+      // Convert the 16-bit reading to volts; asserted above ~50mV (a real signal).
+      const { volts } = adcFromU16(v)
+      return { text: `${volts.toFixed(2)} V`, asserted: volts > 0.05, live: true }
+    }
     case 'i2c':
     case 'spi':
     case 'pio':

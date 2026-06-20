@@ -40,6 +40,19 @@ import {
   parseProbeOutput,
   type LiveValue
 } from './board-values'
+import {
+  InstrumentDock,
+  InstrumentOverlay
+} from './InstrumentWindow'
+import { Oscilloscope } from './Oscilloscope'
+import { Multimeter } from './Multimeter'
+import {
+  adcFromU16,
+  emptyStats,
+  foldStat,
+  type AdcSample,
+  type Stats
+} from './instrument-data'
 import './BoardGraph.css'
 
 /**
@@ -147,6 +160,22 @@ interface GraphRow {
   /** Faint extra pads for the rest of a multi-pin bus (drawn as thin links). */
   extraPads: PadPoint[]
 }
+
+// --- Instruments (#101 / #102) ----------------------------------------------
+/** An open instrument window: its kind + the connection variable it tracks. */
+interface OpenInstrument {
+  kind: 'scope' | 'meter'
+  /** The connection's variable (stable id across re-parses); '' for unnamed. */
+  variable: string
+}
+
+/**
+ * Minimum board-window width (px) to DOCK instruments in the side rail rather
+ * than float them as an overlay. The dock rail is 436px wide; below this the
+ * canvas would be squeezed too far, so we overlay instead (per the handoff's
+ * responsive rule). Measured on the whole board window.
+ */
+const DOCK_MIN_WIDTH = 980
 
 // --- Live values (#97) ------------------------------------------------------
 /** How often we poll the device for live values while LIVE is ON (ms). */
@@ -284,6 +313,88 @@ export function BoardGraph({
   // on/off toggle). When ON + connected we poll the board; OFF never touches it.
   const [liveOn, setLiveOn] = useState(false)
   const { values: liveValues, connected: liveConnected } = useLiveValues(conns, liveOn)
+
+  // --- Open instruments (#101/#102) -----------------------------------------
+  // Keyed by the connection variable so a window survives source edits as long
+  // as its variable stays declared. Opening the same kind for the same pin again
+  // is a no-op (it just stays open / focused).
+  const [instruments, setInstruments] = useState<OpenInstrument[]>([])
+  const openInstrument = useCallback((kind: 'scope' | 'meter', variable: string): void => {
+    setInstruments((cur) =>
+      cur.some((it) => it.kind === kind && it.variable === variable)
+        ? cur
+        : [...cur, { kind, variable }]
+    )
+  }, [])
+  const closeInstrument = useCallback((kind: 'scope' | 'meter', variable: string): void => {
+    setInstruments((cur) => cur.filter((it) => !(it.kind === kind && it.variable === variable)))
+  }, [])
+  const retargetInstrument = useCallback(
+    (kind: 'scope' | 'meter', fromVar: string, toVar: string): void => {
+      setInstruments((cur) => {
+        // Switching to a pin that already has this instrument open → just drop
+        // the old one (avoid a duplicate); else retarget in place.
+        if (cur.some((it) => it.kind === kind && it.variable === toVar)) {
+          return cur.filter((it) => !(it.kind === kind && it.variable === fromVar))
+        }
+        return cur.map((it) =>
+          it.kind === kind && it.variable === fromVar ? { ...it, variable: toVar } : it
+        )
+      })
+    },
+    []
+  )
+
+  // Drop any instrument whose connection variable is no longer present (the user
+  // deleted/renamed the pin), so stale windows don't linger.
+  useEffect(() => {
+    setInstruments((cur) => {
+      const live = new Set(conns.map((c) => c.variable))
+      const next = cur.filter((it) => live.has(it.variable))
+      return next.length === cur.length ? cur : next
+    })
+  }, [conns])
+
+  // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), accumulated from the
+  // live volts samples. Reset when LIVE turns off (a fresh session).
+  const [meterStats, setMeterStats] = useState<Map<string, Stats>>(new Map())
+  useEffect(() => {
+    if (!liveOn) setMeterStats(new Map())
+  }, [liveOn])
+
+  // Fold each new live ADC reading into its variable's running stats.
+  useEffect(() => {
+    if (!liveOn) return
+    setMeterStats((prev) => {
+      let changed = false
+      const next = new Map(prev)
+      conns.forEach((c, i) => {
+        if (c.type !== 'adc') return
+        const live = liveValues.get(i)
+        if (!live || live.value === undefined) return
+        const { volts } = adcFromU16(live.value)
+        const folded = foldStat(next.get(c.variable) ?? emptyStats(), volts)
+        next.set(c.variable, folded)
+        changed = true
+      })
+      return changed ? next : prev
+    })
+  }, [liveValues, conns, liveOn])
+
+  // Dock vs. overlay: measure the whole board window. Wide enough → dock the
+  // instruments in the side rail; otherwise float them as an overlay (handoff).
+  // The dock-to-side key sets an explicit override (null = follow the width).
+  const [winW, setWinW] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1180
+  )
+  useEffect(() => {
+    const onResize = (): void => setWinW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  const [dockOverride, setDockOverride] = useState<boolean | null>(null)
+  const dockInstruments = dockOverride ?? winW >= DOCK_MIN_WIDTH
+  const toggleDock = useCallback(() => setDockOverride((d) => !(d ?? winW >= DOCK_MIN_WIDTH)), [winW])
 
   // The node column extent: one card per connection, 46px pitch.
   const nodeBottom = conns.length > 0 ? rowY(conns.length - 1) + NODE_H / 2 : FIRST_Y
@@ -467,6 +578,61 @@ export function BoardGraph({
     void exportView(exportFmt, { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation })
   }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation])
 
+  // --- Render the open instruments -------------------------------------------
+  // The PWM/ADC connections (sources for the scope/meter selectors).
+  const pwmConns = useMemo(() => conns.filter((c) => c.type === 'pwm'), [conns])
+  const adcConns = useMemo(() => conns.filter((c) => c.type === 'adc'), [conns])
+
+  // Resolve each open instrument to its current connection + live reading and
+  // build the JSX. An instrument whose variable no longer resolves is skipped
+  // (the cleanup effect removes it shortly after).
+  const instrumentEls = instruments
+    .map((it) => {
+      const idx = conns.findIndex((c) => c.variable === it.variable)
+      const conn = idx >= 0 ? conns[idx] : undefined
+      if (!conn) return null
+      const live = liveValues.get(idx)
+      const docked = dockInstruments
+      const onToggleDock = toggleDock
+      if (it.kind === 'scope' && conn.type === 'pwm') {
+        // Live duty fraction from the polled duty_u16 (else parsed/static).
+        const liveDuty = live && live.value !== undefined ? live.value / 65535 : undefined
+        return (
+          <Oscilloscope
+            key={`scope-${it.variable}`}
+            conn={conn}
+            sources={pwmConns}
+            fileSource={source}
+            liveDuty={liveDuty}
+            docked={docked}
+            onSelectSource={(next) => retargetInstrument('scope', it.variable, next.variable)}
+            onToggleDock={onToggleDock}
+            onClose={() => closeInstrument('scope', it.variable)}
+          />
+        )
+      }
+      if (it.kind === 'meter' && conn.type === 'adc') {
+        const sample: AdcSample | undefined =
+          live && live.value !== undefined ? adcFromU16(live.value) : undefined
+        return (
+          <Multimeter
+            key={`meter-${it.variable}`}
+            conn={conn}
+            sources={adcConns}
+            sample={sample}
+            stats={meterStats.get(it.variable)}
+            docked={docked}
+            onSelectSource={(next) => retargetInstrument('meter', it.variable, next.variable)}
+            onToggleDock={onToggleDock}
+            onClose={() => closeInstrument('meter', it.variable)}
+          />
+        )
+      }
+      return null
+    })
+    .filter((el): el is JSX.Element => el !== null)
+  const hasInstruments = instrumentEls.length > 0
+
   return (
     <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
       <header className={`boardgraph__bar ${asWindow ? 'boardgraph__bar--drag' : ''}`}>
@@ -588,6 +754,7 @@ export function BoardGraph({
         </div>
       </header>
 
+      <div className="boardgraph__body">
       <div
         className="boardgraph__canvas"
         ref={canvasRef}
@@ -672,9 +839,25 @@ export function BoardGraph({
                 </g>
               </svg>
 
-              {/* Node cards (HTML, over the SVG) — one per connection. */}
+              {/* Node cards (HTML, over the SVG) — one per connection. PWM/ADC
+                  nodes carry a scope/meter launcher after the value (#101/#102). */}
               {rows.map((r, i) => (
-                <NodeCard key={`node-${i}`} row={r} rotation={rotation} live={liveValues.get(i)} />
+                <NodeCard
+                  key={`node-${i}`}
+                  row={r}
+                  rotation={rotation}
+                  live={liveValues.get(i)}
+                  onOpenScope={
+                    r.conn.type === 'pwm'
+                      ? () => openInstrument('scope', r.conn.variable)
+                      : undefined
+                  }
+                  onOpenMeter={
+                    r.conn.type === 'adc'
+                      ? () => openInstrument('meter', r.conn.variable)
+                      : undefined
+                  }
+                />
               ))}
             </div>
 
@@ -791,6 +974,15 @@ export function BoardGraph({
             </div>
           </>
         )}
+
+        {/* Instruments as an OVERLAY when the window is too narrow to dock. */}
+        {hasInstruments && !dockInstruments && (
+          <InstrumentOverlay onScrim={() => setInstruments([])}>{instrumentEls}</InstrumentOverlay>
+        )}
+      </div>
+
+      {/* Instruments DOCKED in the side rail on a wide window. */}
+      {hasInstruments && dockInstruments && <InstrumentDock>{instrumentEls}</InstrumentDock>}
       </div>
 
       <PinsInUse conns={conns} fileName={fileName} />
@@ -1099,12 +1291,18 @@ function Feature({
 function NodeCard({
   row,
   rotation,
-  live
+  live,
+  onOpenScope,
+  onOpenMeter
 }: {
   row: GraphRow
   rotation: 0 | 90 | 180 | 270
   /** Live reading for this row's connection, or undefined → idle placeholder. */
   live?: LiveValue
+  /** Open the oscilloscope (PWM nodes only). */
+  onOpenScope?: () => void
+  /** Open the multimeter (ADC nodes only). */
+  onOpenMeter?: () => void
 }): JSX.Element {
   const { conn, color } = row
   // Counter-rotate the card's TEXT so it's never upside-down: at 180°/270° the
@@ -1130,8 +1328,53 @@ function NodeCard({
         </span>
         <span className="boardgraph__node-var">{conn.variable || conn.constructor}</span>
         <NodeValue type={conn.type} live={live} />
+        {onOpenScope && <ScopeLauncher onClick={onOpenScope} />}
+        {onOpenMeter && <MeterLauncher onClick={onOpenMeter} />}
       </span>
     </div>
+  )
+}
+
+/** PWM node's scope launcher — a green square-wave glyph button (#101). */
+function ScopeLauncher({ onClick }: { onClick: () => void }): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="boardgraph__launch boardgraph__launch--scope"
+      onClick={onClick}
+      title="Open oscilloscope"
+      aria-label="Open oscilloscope for this PWM pin"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M3 15 L3 9 L8 9 L8 15 L13 15 L13 9 L18 9 L18 15 L21 15"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+    </button>
+  )
+}
+
+/** ADC node's meter launcher — a teal dial-gauge glyph button (#102). */
+function MeterLauncher({ onClick }: { onClick: () => void }): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="boardgraph__launch boardgraph__launch--meter"
+      onClick={onClick}
+      title="Open multimeter"
+      aria-label="Open multimeter for this ADC pin"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 18 A9 9 0 0 1 20 18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <line x1="12" y1="18" x2="16.6" y2="12.4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        <circle cx="12" cy="18" r="1.7" fill="currentColor" />
+      </svg>
+    </button>
   )
 }
 

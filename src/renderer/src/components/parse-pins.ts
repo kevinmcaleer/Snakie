@@ -16,6 +16,7 @@
  *   - `X = I2C(id, sda=Pin(a), scl=Pin(b))`             → i2c   (pins a, b)
  *   - `X = SPI(id, sck=Pin(..), mosi=Pin(..), ...)`     → spi   (+ cs/dc Pins)
  *   - `X = PWM(Pin(n), ...)`                            → pwm
+ *   - `X = ADC(Pin(n))` / `ADC(n)` / `machine.ADC(...)` → adc   (analog input)
  *   - `X = StateMachine(n, prog, ...Pin(..))`           → pio
  *   - `X = Pin("LED" | n, ...)`                         → output | input (see below)
  *
@@ -34,7 +35,7 @@
  */
 
 /** The kind of connection a wired pin is — drives the wire colour + badge. */
-export type PinType = 'output' | 'input' | 'pwm' | 'i2c' | 'spi' | 'pio'
+export type PinType = 'output' | 'input' | 'pwm' | 'adc' | 'i2c' | 'spi' | 'pio'
 
 /** One parsed connection: a variable wired to one or more pins. */
 export interface UsedPins {
@@ -53,6 +54,7 @@ export const PIN_TYPE_COLOR: Record<PinType, string> = {
   output: '#f4c542',
   input: '#4a9fe0',
   pwm: '#f08a3c',
+  adc: '#34c0a8',
   i2c: '#33c6d6',
   spi: '#b06be0',
   pio: '#ff5ca8'
@@ -63,6 +65,7 @@ export const PIN_TYPE_LABEL: Record<PinType, string> = {
   output: 'OUTPUT',
   input: 'INPUT',
   pwm: 'PWM',
+  adc: 'ADC',
   i2c: 'I2C',
   spi: 'SPI',
   pio: 'PIO'
@@ -77,6 +80,7 @@ export const PIN_TYPE_TAG: Record<PinType, string> = {
   output: 'OUT',
   input: 'IN',
   pwm: 'PWM',
+  adc: 'ADC',
   i2c: 'I²C',
   spi: 'SPI',
   pio: 'PIO'
@@ -175,7 +179,8 @@ export function parsePins(source: string): UsedPins[] {
     const rhs = assign ? assign[2] : line
 
     // Identify the outermost constructor on the RHS and its argument span.
-    const ctor = rhs.match(/(?:machine\.)?(I2C|SPI|PWM|StateMachine|Pin)\s*\(/)
+    // ADC sits before the bare `Pin` fallback so `ADC(Pin(26))` reads as adc.
+    const ctor = rhs.match(/(?:machine\.)?(I2C|SPI|PWM|ADC|StateMachine|Pin)\s*\(/)
     if (!ctor) continue
     const name = ctor[1]
     const openIdx = rhs.indexOf('(', ctor.index)
@@ -200,6 +205,19 @@ export function parsePins(source: string): UsedPins[] {
         type = 'pwm'
         pins = extractPins(args)
         break
+      case 'ADC': {
+        // `ADC(Pin(26))` / `ADC(Pin('GP26'))` → the wrapped Pin's arg; the bare
+        // `ADC(26)` form has no inner Pin(...) so fall back to the 1st argument.
+        type = 'adc'
+        const wrapped = extractPins(args)
+        if (wrapped.length > 0) {
+          pins = wrapped
+        } else {
+          const first = args.match(/^\s*("([^"]*)"|'([^']*)'|[^,)\s]+)/)
+          pins = first ? [(first[2] ?? first[3] ?? first[1]).trim()] : []
+        }
+        break
+      }
       case 'StateMachine':
         type = 'pio'
         pins = extractPins(args)
