@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Board View node-graph.** The live Board View is redesigned as a **node graph**:
+  one node per declared connection — a colour-coded type tag (`IN`/`OUT`/`I²C`/
+  `PWM`/`SPI`/`PIO`) inline beside the variable, with a value readout — each wired
+  by a drooping cable to its GPIO pad on the board's left edge, aligned row-for-row.
+  The `PINS IN USE` table moves below it. (Node values are placeholders for now;
+  live device values are tracked in #97.) The Board Creator's preview is unchanged.
+
 ## [0.9.0] - 2026-06-20
 
 ### Fixed
