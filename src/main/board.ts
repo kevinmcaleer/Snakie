@@ -18,10 +18,13 @@ import type { BoardDefinition } from '../shared/board'
  *   board:closed        (main → main window, send)  window was closed
  *   board:listUserBoards(renderer → main, invoke)  user JSON board defs
  *   board:openBoardsFolder (renderer → main, invoke) reveal the boards folder
+ *   board:saveUserBoard (renderer → main, invoke)  write a board def to disk
+ *   board:deleteUserBoard(renderer → main, invoke) delete a user board file
  *
  * User-authored boards live as JSON at `<userData>/boards/*.json` (same shape
  * as {@link BoardDefinition}); they are read HERE (the renderer has no fs) and
- * merged with the compiled-in built-ins by the board window.
+ * merged with the compiled-in built-ins by the board window. The Board Creator
+ * (issue #94) authors them visually and persists via the save/delete handlers.
  */
 
 /** The live Board View window, or null when closed. One at a time. */
@@ -30,6 +33,18 @@ let boardWindow: BrowserWindow | null = null
 /** Absolute path to the user's boards folder (`<userData>/boards`). */
 function boardsDir(): string {
   return join(app.getPath('userData'), 'boards')
+}
+
+/**
+ * Sanitise a board id into a safe filename stem: lower-case, keep only
+ * `[a-z0-9-_]`, collapse the rest to `-`. Prevents path traversal / odd
+ * filenames when writing `<userData>/boards/<id>.json`.
+ */
+function sanitiseId(id: string): string {
+  return String(id)
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** Read + parse every `*.json` in the boards folder, skipping bad files. */
@@ -134,6 +149,39 @@ export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): voi
       // Best effort — still try to reveal it.
     }
     await shell.openPath(dir)
+  })
+
+  // Save a board definition (from the Board Creator) to disk as pretty JSON.
+  // Returns a serializable {ok,error} result and NEVER throws across IPC.
+  ipcMain.handle('board:saveUserBoard', async (_e, def: BoardDefinition) => {
+    try {
+      // Minimal validation (mirrors readUserBoards' load-time check).
+      if (!def || typeof def.id !== 'string' || !Array.isArray(def.headers)) {
+        return { ok: false, error: 'A board needs a string id and a headers array.' }
+      }
+      const id = sanitiseId(def.id)
+      if (!id) return { ok: false, error: 'Board id is empty after sanitising.' }
+      const dir = boardsDir()
+      await fsp.mkdir(dir, { recursive: true })
+      // Persist the sanitised id so the file name and the def agree.
+      const toWrite: BoardDefinition = { ...def, id }
+      await fsp.writeFile(join(dir, `${id}.json`), JSON.stringify(toWrite, null, 2), 'utf-8')
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: (err as Error).message }
+    }
+  })
+
+  // Delete a user board file if present (used by the creator's delete action).
+  // Never throws — a missing file is treated as already-deleted.
+  ipcMain.handle('board:deleteUserBoard', async (_e, id: string) => {
+    try {
+      const safe = sanitiseId(id)
+      if (!safe) return
+      await fsp.unlink(join(boardsDir(), `${safe}.json`))
+    } catch {
+      // No such file / already gone → success.
+    }
   })
 }
 

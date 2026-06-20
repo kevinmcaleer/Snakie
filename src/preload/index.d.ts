@@ -7,6 +7,7 @@ export type { BoardSourcePayload } from './index'
 export type {
   BoardDefinition,
   BoardPad,
+  BoardPadType,
   BoardHeader,
   BoardFeature
 } from '../shared/board'

@@ -103,7 +103,9 @@ if (!w.api) {
       onSource: unsub,
       onClosed: unsub,
       listUserBoards: P([]),
-      openBoardsFolder: P(undefined)
+      openBoardsFolder: P(undefined),
+      saveUserBoard: P({ ok: true }),
+      deleteUserBoard: P(undefined)
     },
     git: {
       openRepo: P(null),
