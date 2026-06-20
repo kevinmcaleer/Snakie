@@ -1,244 +1,600 @@
 /*
- * Styles co-located with PluginsPanel (issue #61).
+ * Plugins view — "module rack" skeuomorph (issue #61).
  *
- * The Plugins view lists discovered Python plugins + their commands with a Run
- * button each, plus a notices area for messages / applied edits. Uses the
- * shared design tokens from index.css so it tracks the active theme.
+ * The Plugins panel is a eurorack-style module rack: a dark powder-coated
+ * interior holding brushed-aluminium module faceplates on screwed mounting
+ * rails. Each plugin is a module; MOUNTED modules (loaded OK) light a green LED
+ * and expose a patch jack + knob, AVAILABLE modules (failed to load) show a
+ * gold GET button. The rack interior is intentionally dark in BOTH the
+ * skeuomorph and dark themes, so this styling is self-contained rather than
+ * scoped per `data-theme` — matching the Skeuomorph handoff. The notices strip
+ * is the one place that tracks the active theme's tokens.
+ *
+ * No IBM Plex Mono / silkscreen webfont ships with Snakie, so engraved labels
+ * reuse JetBrains Mono (`--font-mono`) with uppercase + letter-spacing + a
+ * text-shadow "engrave" trick, and meta text uses the mono token directly.
  */
 
-.plugins {
+.rack {
+  --rack-silk: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
   font-size: 13px;
-  color: var(--text);
+  color: #cfd3d8;
+  background: linear-gradient(180deg, #202125, #121316);
+  border-left: 3px solid #0a0a0c;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.7);
 }
 
-/* --- Empty / no-Python states --------------------------------------------- */
+/* --- Header: PLUGIN RACK silkscreen + PWR LED ----------------------------- */
 
-.plugins--empty {
-  align-items: flex-start;
-  gap: 0.6rem;
-  padding: 0.9rem 0.85rem;
-}
-
-.plugins__empty-note {
-  margin: 0;
-  color: var(--text-muted);
-  line-height: 1.5;
-}
-
-.plugins__empty-detail {
-  font-size: 0.78rem;
-}
-
-.plugins__code {
-  margin: 0;
-  padding: 0.45rem 0.6rem;
-  width: 100%;
-  box-sizing: border-box;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 0.82rem;
-  color: var(--text);
-}
-
-/* --- Toolbar --------------------------------------------------------------- */
-
-.plugins__toolbar {
+.rack__header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0.5rem 0.7rem;
-  border-bottom: 1px solid var(--border);
+  gap: 8px;
+  padding: 0.55rem 0.7rem;
+  background: linear-gradient(180deg, #2a2b30, #1b1c20);
+  border-bottom: 1px solid #050506;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-.plugins__interpreter {
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-  font-size: 0.78rem;
+.rack__brand {
+  font-family: var(--rack-silk);
+  font-weight: 700;
+  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  color: #cfd3d8;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
 }
 
-.plugins__toolbar-spacer {
+.rack__header-spacer {
   flex: 1 1 auto;
 }
 
-/* --- Trust notice ---------------------------------------------------------- */
-
-.plugins__trust {
-  margin: 0;
-  padding: 0.4rem 0.7rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  line-height: 1.4;
-  border-bottom: 1px solid var(--border);
-}
-
-/* --- Buttons --------------------------------------------------------------- */
-
-.plugins__btn {
-  padding: 0.25rem 0.6rem;
-  background: var(--bg-sunken);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-family: inherit;
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-
-.plugins__btn:hover:not(:disabled) {
-  background: var(--bg-elevated);
-}
-
-.plugins__btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.plugins__btn--run {
-  flex: 0 0 auto;
-}
-
-.plugins__icon-btn {
+.rack__reload {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   min-width: 24px;
   height: 24px;
   padding: 0 4px;
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid transparent;
-  border-radius: var(--radius);
+  background: radial-gradient(circle at 50% 30%, #4a4b50, #26272b 70%, #161719);
+  color: #cfd3d8;
+  border: 1px solid #050506;
+  border-radius: 50%;
   font-size: 0.95rem;
   line-height: 1;
   cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 1px 2px rgba(0, 0, 0, 0.6);
 }
 
-.plugins__icon-btn:hover:not(:disabled) {
-  background: var(--bg-elevated);
-  color: var(--text);
+.rack__reload:hover:not(:disabled) {
+  color: #fff;
 }
 
-.plugins__icon-btn:disabled {
+.rack__reload:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.rack__reload:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-/* --- Plugin + command list ------------------------------------------------- */
+.rack__pwr {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 
-.plugins__list {
+.rack__pwr-label {
+  font-family: var(--rack-silk);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #7c818a;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+.rack__pwr-led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #daffd2, #34d45a 58%, #0e7a2c);
+  box-shadow:
+    0 0 5px rgba(52, 212, 90, 0.8),
+    inset 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.rack__pwr-led--busy {
+  background: radial-gradient(circle at 35% 30%, #fff0c2, #f0b13c 58%, #a6700f);
+  box-shadow:
+    0 0 5px rgba(240, 177, 60, 0.85),
+    inset 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+/* --- Recessed search slot ------------------------------------------------- */
+
+.rack__search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0.6rem 0.7rem 0.4rem;
+}
+
+.rack__search-icon {
+  position: absolute;
+  left: 9px;
+  font-size: 0.85rem;
+  color: #5d626a;
+  pointer-events: none;
+}
+
+.rack__search-input {
+  flex: 1 1 auto;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.4rem 0.5rem 0.4rem 1.8rem;
+  background: #0c0d0f;
+  border: 1px solid #000;
+  border-radius: 4px;
+  color: #cfd3d8;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+.rack__search-input::placeholder {
+  color: #5d626a;
+}
+
+.rack__search-input:focus {
+  outline: none;
+  border-color: #2a2b30;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(74, 159, 224, 0.4);
+}
+
+/* --- Trust notice ---------------------------------------------------------- */
+
+.rack__trust {
+  margin: 0;
+  padding: 0 0.7rem 0.45rem;
+  color: #7c818a;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+/* --- Group labels (engraved silkscreen) ----------------------------------- */
+
+.rack__group-label {
+  margin: 0;
+  padding: 0.5rem 0.7rem 0.35rem;
+  font-family: var(--rack-silk);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #7c818a;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.8);
+}
+
+/* --- Module list ----------------------------------------------------------- */
+
+.rack__list {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
+  padding-bottom: 0.5rem;
 }
 
-.plugins__list > .plugins__empty-note {
-  padding: 0.8rem 0.85rem;
-}
-
-.plugins__plugin {
-  border-bottom: 1px solid var(--border);
-}
-
-.plugins__plugin-head {
+.rack__modules {
+  margin: 0;
+  padding: 0 0.6rem;
+  list-style: none;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0.5rem 0.7rem 0.3rem;
+  flex-direction: column;
+  gap: 7px;
 }
 
-.plugins__plugin-name {
-  font-weight: 600;
-}
-
-.plugins__source {
-  font-size: 0.66rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0 4px;
-}
-
-.plugins__plugin-error {
-  margin: 0;
-  padding: 0.3rem 0.7rem 0.5rem;
-  color: var(--danger, #c0392b);
-  font-size: 0.78rem;
-}
-
-.plugins__commands {
-  margin: 0;
-  padding: 0 0 0.4rem;
+.rack__module-wrap {
   list-style: none;
 }
 
-.plugins__command {
+.rack__empty-note {
+  margin: 0;
+  padding: 0.8rem 0.85rem;
+  color: #8a8f97;
+  line-height: 1.5;
+  font-size: 0.82rem;
+}
+
+.rack__empty-note code {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: #cfd3d8;
+}
+
+/* --- Module faceplate (brushed aluminium) --------------------------------- */
+
+.rack__module {
+  position: relative;
   display: flex;
+  align-items: stretch;
+  height: 62px;
+  border-radius: 3px;
+  overflow: hidden;
+  background:
+    /* faint vertical brush overlay */
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.025) 0 1px,
+      rgba(0, 0, 0, 0.02) 1px 2px
+    ),
+    linear-gradient(160deg, #3d3e43, #28292d 55%, #1d1e21);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.5),
+    0 2px 5px rgba(0, 0, 0, 0.55);
+}
+
+.rack__module--mounted {
+  cursor: pointer;
+}
+
+.rack__module--mounted:hover {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.04) 0 1px,
+      rgba(0, 0, 0, 0.02) 1px 2px
+    ),
+    linear-gradient(160deg, #45464c, #2e2f34 55%, #212225);
+}
+
+.rack__module--mounted:focus-visible {
+  outline: 2px solid rgba(74, 159, 224, 0.6);
+  outline-offset: 1px;
+}
+
+/* --- Mounting rails + hex screws ------------------------------------------ */
+
+.rack__rail {
+  flex: 0 0 15px;
+  width: 15px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 0.25rem 0.7rem;
+  justify-content: space-around;
+  padding: 7px 0;
+  background: linear-gradient(90deg, #141417, #2c2d31);
 }
 
-.plugins__command:hover {
-  background: var(--bg-elevated);
+.rack__rail--right {
+  background: linear-gradient(90deg, #2c2d31, #141417);
 }
 
-.plugins__command-title {
+.rack__screw {
+  position: relative;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #6a6b71, #303135 62%, #17181b);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 1px 1px rgba(0, 0, 0, 0.6);
+}
+
+/* slot line on the screw head */
+.rack__screw::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 1.5px;
+  right: 1.5px;
+  height: 1px;
+  transform: translateY(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* --- Accent stripe -------------------------------------------------------- */
+
+.rack__stripe {
+  flex: 0 0 4px;
+  width: 4px;
+  margin: 8px 0;
+  border-radius: 2px;
+}
+
+/* --- Silkscreen text column ----------------------------------------------- */
+
+.rack__label {
   flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 8px;
+}
+
+.rack__title {
+  font-family: var(--rack-silk);
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: #e9eaed;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.7);
+}
+
+.rack__desc {
+  font-size: 0.72rem;
+  color: #9ba1a9;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* --- Notices --------------------------------------------------------------- */
-
-.plugins__error {
-  margin: 0;
-  padding: 0.5rem 0.7rem;
-  font-size: 0.8rem;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--danger, #c0392b);
-  background: var(--bg-sunken);
+.rack__meta {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: #6f747c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.plugins__notices {
+/* --- Controls cluster (knob / LED / jack) --------------------------------- */
+
+.rack__controls {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 4px;
+}
+
+.rack__knob {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 30%, #5a5b61, #2c2d30 68%, #161719);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -2px 3px rgba(0, 0, 0, 0.6),
+    0 2px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* pointer line; rotation set inline per mounted/available state */
+.rack__knob-pointer {
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 2px;
+  height: 9px;
+  margin-left: -1px;
+  border-radius: 1px;
+  transform-origin: 50% 10px;
+  box-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+}
+
+.rack__led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #daffd2, #34d45a 58%, #0e7a2c);
+  box-shadow:
+    0 0 6px rgba(52, 212, 90, 0.85),
+    inset 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+.rack__jack {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 32%, #7e7f85, #34353a 65%, #161719);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* black centre hole of the patch jack */
+.rack__jack::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #1a1b1e, #000);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* --- AVAILABLE: gold GET button ------------------------------------------- */
+
+.rack__get {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-right: 6px;
+  padding: 0.28rem 0.7rem;
+  background: linear-gradient(180deg, #f3d488, #d6a23f 55%, #bd8526);
+  border: 1px solid #8a5f15;
+  border-radius: 4px;
+  color: #3a2708;
+  font-family: var(--rack-silk);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.rack__get:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f6dd9a, #dca945 55%, #c48d28);
+}
+
+.rack__get:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+.rack__get:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* --- Expanded patch panel (per-module commands) --------------------------- */
+
+.rack__patch {
+  margin: 4px 6px 0 21px;
+  padding: 0.2rem 0;
+  background: #0c0d0f;
+  border: 1px solid #000;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+.rack__patch-empty {
+  margin: 0;
+  padding: 0.4rem 0.7rem;
+  color: #6f747c;
+  font-size: 0.74rem;
+}
+
+.rack__commands {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rack__command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.28rem 0.6rem;
+}
+
+.rack__command-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.78rem;
+  color: #cfd3d8;
+}
+
+.rack__run {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.65rem;
+  background: linear-gradient(180deg, #4a4b50, #2a2b2f 60%, #1d1e21);
+  border: 1px solid #050506;
+  border-radius: 3px;
+  color: #e9eaed;
+  font-family: var(--rack-silk);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+.rack__run:hover:not(:disabled) {
+  background: linear-gradient(180deg, #54555b, #313236 60%, #232427);
+}
+
+.rack__run:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+.rack__run:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* --- No-Python empty state ------------------------------------------------ */
+
+.rack--empty .rack__empty-body {
+  padding: 0.9rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.rack__empty-detail {
+  font-size: 0.78rem;
+  padding: 0;
+}
+
+.rack__code {
+  margin: 0;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+  box-sizing: border-box;
+  background: #0c0d0f;
+  border: 1px solid #000;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  color: #cfd3d8;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+/* --- Errors + notices ----------------------------------------------------- */
+
+.rack__error {
+  margin: 0 0.7rem 0.4rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #ff8a72;
+  background: #0c0d0f;
+  border: 1px solid #000;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.8);
+}
+
+.rack__notices {
   flex: 0 0 auto;
   max-height: 40%;
   overflow: auto;
-  border-top: 1px solid var(--border);
-  background: var(--bg-sunken);
+  border-top: 1px solid #050506;
+  background: #0c0d0f;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.7);
 }
 
-.plugins__notice {
+.rack__notice {
   margin: 0;
   padding: 0.4rem 0.7rem;
-  font-size: 0.78rem;
+  font-size: 0.76rem;
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-word;
-  border-bottom: 1px solid var(--border);
+  color: #b9bdc4;
+  border-bottom: 1px solid #050506;
 }
 
-.plugins__notice:last-child {
+.rack__notice:last-child {
   border-bottom: none;
 }
 
-.plugins__notice--warning {
-  color: #d29922;
+.rack__notice--warning {
+  color: #f0b13c;
 }
 
-.plugins__notice--error {
-  color: var(--danger, #c0392b);
+.rack__notice--error {
+  color: #ff8a72;
 }
