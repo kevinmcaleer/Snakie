@@ -6,43 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-21
+
+### Changed
+- **Instruments now live in the main window.** The Oscilloscope, Multimeter and
+  Plotter moved out of the Board View window into the main editor window. They open
+  as **draggable windows that float above the whole window**, or dock into an
+  **INSTRUMENT DOCK** rail to the right of the chat panel — toggled by an
+  **Instruments** button in the toolbar (grouped with the panel toggles, in panel
+  order). The dock header's **SCOPE / METER / PLOT** buttons summon and show/hide
+  each instrument; opening a scope/meter from a Board-View PWM/ADC node also docks
+  it there, and closing one hides it back into the dock. The Plotter moved from the
+  shell into the dock (the shell is now Console / Problems). The dock is independent
+  of the chat panel.
+- **Stop button doubles as Reset.** Pressing Stop interrupts a running program
+  (Ctrl-C), or — when nothing is running — soft-resets the board (Ctrl-D); the
+  button shows **Stop** or **Reset** accordingly.
+
 ### Added
-- **Instrument LIVE toggle.** The Oscilloscope/Multimeter now have a **LIVE** toggle
-  (default **off**) that gates the device polling, so opening an instrument no longer
-  interrupts a running program by surprise — instruments show static/parsed readings
-  until you turn LIVE on. While LIVE is on, the **status bar warns** that polling is
+- **Instrument LIVE toggle.** The Oscilloscope and Multimeter have a **LIVE** toggle
+  (default **off**) that gates device polling, so opening an instrument no longer
+  interrupts a running program by surprise — they show static/parsed readings until
+  you turn LIVE on, at which point the **status bar warns** that polling is
   interrupting the board and offers a one-click **Stop**.
 
 ### Fixed
-- **Instrument dock reliability.** Scope/meter instruments now reliably appear in
-  the dock when opened. They were being silently removed: the host re-resolved each
-  one against the *main editor's* active file and discarded any whose pin wasn't
-  found there, so they vanished unless the editor happened to show the exact source.
-  Instruments now render from the **connection carried in the open request**,
-  independent of the active file. The dock also reveals wide enough for the 404px
-  windows (no longer crushed), the docked **Plotter has a minimum height** so it
-  isn't squashed, and **closing an instrument hides it back into the dock** rather
-  than discarding it — its **SCOPE/METER/PLOT** dock button brings it back docked.
-- **Console no longer shows internal probe traffic.** Live-value polling runs over the
-  raw REPL via `device.exec`; the device layer was broadcasting that to the terminal,
-  so probe lines (`<<SNKV>>…`), raw-REPL banners and interrupts polluted the console.
-  Internal `exec` traffic is now suppressed from the terminal (your typing + Run still
-  stream through).
-
-### Changed
-- **Stop button doubles as Reset.** Pressing Stop interrupts a running program (Ctrl-C),
-  or — when nothing is running — soft-resets the board (Ctrl-D); the button shows
-  **Stop** or **Reset** accordingly.
-- **Instruments live in the main window.** The Oscilloscope, Multimeter and Plotter
-  now live in the main editor window, not the Board View window. Undocked, they are
-  **draggable windows that float above the whole window**; docked, they sit in an
-  **INSTRUMENT DOCK** region to the **right of the chat panel**, toggled by a new
-  **Instruments** button in the toolbar (right of the light/dark toggle). The dock
-  header has **SCOPE / METER / PLOT** buttons that show/hide each instrument
-  independently of its docked state. The board-view PWM/ADC node buttons open the
-  scope/meter via IPC; live values are polled in the main window while an instrument
-  is open. The Plotter moved out of the shell into the dock (the shell is now
-  Console / Problems only).
+- **Console no longer shows internal probe traffic.** Live-value polling runs over
+  the raw REPL; that machine traffic (`<<SNKV>>…` probes, raw-REPL banners and
+  interrupts) is no longer broadcast to the terminal — your typing and Run output
+  still stream through.
 
 ## [0.10.0] - 2026-06-20
 
@@ -442,7 +434,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.7.0...v0.8.0
