@@ -1,0 +1,323 @@
+/*
+ * Multimeter (#102) — the skeuomorphic handheld DMM body + the right-column
+ * readouts. Values copied from the design handoff (`Board View (clean).dc.html`).
+ *
+ * DSEG7 font: no clean npm/@fontsource DSEG7 package is available, so the 7-seg
+ * LCD uses `'DSEG7-Classic', 'JetBrains Mono', monospace` — matching the
+ * handoff's family name (a self-hosted DSEG7 would slot in transparently) and
+ * falling back to a tasteful monospaced 7-seg approximation. The ghost `8.8.8.8`
+ * backing keeps the segmented-display read even with the fallback font.
+ */
+
+.dmm {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+}
+
+/* --- Yellow holster + grey body --- */
+.dmm__holster {
+  flex: none;
+  width: 168px;
+  border-radius: 18px 18px 22px 22px;
+  padding: 7px;
+  background: linear-gradient(180deg, #f6cb1e, #dca705);
+  box-shadow:
+    0 10px 22px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 6px rgba(0, 0, 0, 0.25);
+}
+.dmm__body {
+  border-radius: 13px 13px 16px 16px;
+  padding: 9px 9px 11px;
+  background: linear-gradient(180deg, #34363a, #202227);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.dmm__brand {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0 1px 7px;
+}
+.dmm__brand-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #f6cb1e;
+}
+.dmm__brand-model {
+  font-size: 7px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: #aeb4bd;
+}
+
+/* --- Grey-green LCD --- */
+.dmm__lcd {
+  border-radius: 6px;
+  padding: 7px 9px 8px;
+  background: linear-gradient(180deg, #bcc6ac, #9caa8c);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.45);
+}
+.dmm__annun {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #39422f;
+}
+.dmm__annun-box {
+  border: 1px solid #5a6149;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+.dmm__annun-gp {
+  margin-left: auto;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* 7-segment readout with ghost backing. */
+.dmm__seg {
+  position: relative;
+  height: 34px;
+  margin: 3px 0 0;
+}
+.dmm__seg-ghost,
+.dmm__seg-live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-family: 'DSEG7-Classic', var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+.dmm__seg-ghost {
+  color: rgba(40, 48, 36, 0.13);
+}
+.dmm__seg-live {
+  color: #1f261a;
+}
+
+.dmm__lcd-foot {
+  display: flex;
+  align-items: flex-end;
+  margin-top: 2px;
+}
+.dmm__lcd-vdc {
+  font-size: 8px;
+  font-weight: 700;
+  color: #39422f;
+}
+.dmm__lcd-v {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1f261a;
+  line-height: 1;
+}
+
+/* --- Knurled rotary dial --- */
+.dmm__dial {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  margin: 9px auto 5px;
+}
+.dmm__dial-lbl {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: 700;
+}
+.dmm__dial-off {
+  left: 52px;
+  top: 8px;
+  font-size: 8px;
+  color: #8a8f98;
+}
+.dmm__dial-v {
+  left: 96px;
+  top: 52px;
+  font-size: 9px;
+  font-weight: 800;
+  color: #f6cb1e;
+}
+.dmm__dial-ohm {
+  left: 52px;
+  top: 96px;
+  font-size: 9px;
+  color: #aeb4bd;
+}
+.dmm__dial-a {
+  left: 8px;
+  top: 52px;
+  font-size: 9px;
+  color: #aeb4bd;
+}
+.dmm__dial-tick {
+  position: absolute;
+  left: 90px;
+  top: 52px;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f6cb1e;
+  box-shadow: 0 0 6px rgba(246, 203, 30, 0.85);
+}
+.dmm__dial-knurl {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(#1b1d21 0deg 6deg, #303338 6deg 12deg);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.5),
+    inset 0 2px 0 rgba(255, 255, 255, 0.08);
+}
+.dmm__dial-face {
+  position: absolute;
+  inset: 23px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 34%, #3c3f45, #181a1d 76%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.6);
+}
+.dmm__dial-needle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 27px;
+  margin: -27px 0 0 -2px;
+  transform-origin: 2px 27px;
+  /* Point right toward the V⎓ position (90° from straight up). */
+  transform: rotate(90deg);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fff, #c6cad0);
+}
+.dmm__dial-hub {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 34%, #4c5057, #222428 76%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* --- Banana jacks --- */
+.dmm__jacks {
+  display: flex;
+  justify-content: space-around;
+  margin-top: 8px;
+}
+.dmm__jack {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+}
+.dmm__jack--black {
+  background: radial-gradient(circle at 50% 32%, #3a3d42, #161719 76%);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.dmm__jack--red {
+  background: radial-gradient(circle at 50% 32%, #c2362a, #761c13 76%);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.7),
+    0 0 0 2px rgba(246, 203, 30, 0.4);
+}
+
+/* --- Right column readouts --- */
+.dmm__readouts {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  min-width: 0;
+}
+
+.dmm__big {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.dmm__big-num {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 27px;
+  font-weight: 600;
+  color: #86ffb6;
+  text-shadow: 0 0 8px rgba(82, 224, 138, 0.6);
+}
+.dmm__big-unit {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #7de0a0;
+}
+
+.dmm__bar {
+  position: relative;
+  height: 14px;
+  border-radius: 7px;
+  background: #0d0f12;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+.dmm__bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, #1f7a44, #52e08a);
+  box-shadow: 0 0 8px rgba(82, 224, 138, 0.5);
+  transition: width 0.12s linear;
+}
+.dmm__bar-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: #6a7079;
+  margin-top: -6px;
+}
+.dmm__bar-raw {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+.dmm__stats {
+  display: flex;
+  gap: 7px;
+}
+.dmm__stat {
+  flex: 1;
+  background: #1c1f24;
+  border: 1px solid #2c2f36;
+  border-radius: 8px;
+  padding: 7px 8px;
+  min-width: 0;
+}
+.dmm__stat-lbl {
+  display: block;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6a7079;
+}
+.dmm__stat-val {
+  display: block;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: #86ffb6;
+  margin-top: 2px;
+}

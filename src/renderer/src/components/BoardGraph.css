@@ -314,6 +314,16 @@
   color: #fff;
 }
 
+/* --- Body row: the canvas + (optionally) the instrument dock rail side by
+   side. Fills the height between the header and the pins table. --- */
+.boardgraph__body {
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* --- Canvas (dark mat + faint 28px grid) — the pan/zoom/rotate VIEWPORT.
    `position: relative` anchors the floating control cluster; `overflow: hidden`
    clips the transformed stage (the transform, not scrollbars, does the panning);
@@ -322,6 +332,8 @@
   position: relative;
   flex: 1 1 auto;
   min-height: 320px;
+  /* Allow the canvas to shrink when the instrument dock claims its 436px. */
+  min-width: 0;
   overflow: hidden;
   touch-action: none;
   background-color: #161719;
@@ -442,6 +454,42 @@
 .boardgraph__node-dot.is-asserted {
   background: #43c46a;
   box-shadow: 0 0 7px rgba(67, 196, 106, 0.85);
+}
+
+/* --- Per-node instrument launcher buttons (#101 scope / #102 meter) ---
+   A 22px dark square key sitting AFTER the value on PWM/ADC nodes; the icon
+   takes the connection's class accent with a soft drop-shadow glow. */
+.boardgraph__launch {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #2a2e35, #1a1d22);
+  border: 1px solid #3a3f47;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  padding: 0;
+}
+.boardgraph__launch:hover {
+  border-color: #4a5059;
+  background: linear-gradient(180deg, #32363e, #1f2228);
+}
+.boardgraph__launch--scope {
+  color: #52e08a;
+}
+.boardgraph__launch--scope svg {
+  filter: drop-shadow(0 0 2px rgba(82, 224, 138, 0.7));
+}
+.boardgraph__launch--meter {
+  color: #46d6bb;
+}
+.boardgraph__launch--meter svg {
+  filter: drop-shadow(0 0 2px rgba(70, 214, 187, 0.7));
 }
 
 /* --- Viewport control cluster (#99 zoom/fit/100%/export, #96 rotate) ---

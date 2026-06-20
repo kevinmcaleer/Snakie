@@ -84,6 +84,38 @@ describe('parsePins', () => {
     expect(conn.variable).toBe('tft')
   })
 
+  it('parses an ADC wrapping a Pin', () => {
+    expect(parsePins('temp = ADC(Pin(26))')).toEqual([
+      { type: 'adc', pins: ['26'], variable: 'temp', constructor: 'ADC(Pin(26))' }
+    ])
+  })
+
+  it('parses a bare ADC(channel-number) form', () => {
+    const [conn] = parsePins('pot = ADC(0)')
+    expect(conn.type).toBe('adc')
+    expect(conn.pins).toEqual(['0'])
+    expect(conn.variable).toBe('pot')
+  })
+
+  it('parses a bare ADC(gpio-number) and machine.ADC', () => {
+    expect(parsePins('a = ADC(27)')[0]).toMatchObject({ type: 'adc', pins: ['27'] })
+    const [conn] = parsePins('a = machine.ADC(Pin(28))')
+    expect(conn.type).toBe('adc')
+    expect(conn.pins).toEqual(['28'])
+  })
+
+  it('parses an ADC wrapping a string-labelled Pin', () => {
+    const [conn] = parsePins("temp = ADC(Pin('GP26'))")
+    expect(conn.type).toBe('adc')
+    expect(conn.pins).toEqual(['GP26'])
+  })
+
+  it('does not misread an ADC as a plain Pin output', () => {
+    // `ADC(Pin(26))` must classify as adc — never fall through to the Pin case.
+    const [conn] = parsePins('temp = ADC(Pin(26))\ntemp.read_u16()')
+    expect(conn.type).toBe('adc')
+  })
+
   it('parses a PIO StateMachine pin', () => {
     const [conn] = parsePins('sm = StateMachine(0, prog, freq=8000000, sideset_base=Pin(22))')
     expect(conn.type).toBe('pio')
@@ -129,25 +161,29 @@ describe('parsePins', () => {
   })
 
   it('exposes a colour + label for every connection type', () => {
-    for (const type of ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'] as const) {
+    for (const type of ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'] as const) {
       expect(PIN_TYPE_COLOR[type]).toMatch(/^#[0-9a-f]{6}$/i)
       expect(PIN_TYPE_LABEL[type]).toMatch(/^[A-Z0-9]+$/)
     }
+    // ADC gets the teal accent + its own label/tag.
+    expect(PIN_TYPE_COLOR.adc).toBe('#34c0a8')
+    expect(PIN_TYPE_LABEL.adc).toBe('ADC')
+    expect(PIN_TYPE_TAG.adc).toBe('ADC')
   })
 
   it('exposes a short node-graph tag for every connection type', () => {
     // Each tag is short (≤3 visible chars) and a non-empty string — these label
     // the inline type chip on the node-graph Board View cards.
-    const tags = ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'].map(
+    const tags = ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'].map(
       (t) => PIN_TYPE_TAG[t as keyof typeof PIN_TYPE_TAG]
     )
-    expect(tags).toEqual(['OUT', 'IN', 'PWM', 'I²C', 'SPI', 'PIO'])
+    expect(tags).toEqual(['OUT', 'IN', 'PWM', 'ADC', 'I²C', 'SPI', 'PIO'])
     for (const tag of tags) {
       expect(tag.length).toBeGreaterThan(0)
       expect(tag.length).toBeLessThanOrEqual(3)
     }
     // The short tags are never longer than the full table labels.
-    for (const type of ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'] as const) {
+    for (const type of ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'] as const) {
       expect(PIN_TYPE_TAG[type].length).toBeLessThanOrEqual(PIN_TYPE_LABEL[type].length)
     }
   })

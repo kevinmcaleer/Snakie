@@ -1,0 +1,280 @@
+/*
+ * Instrument window — shared skeuomorphic chrome for the Oscilloscope (#101) and
+ * Multimeter (#102). Values copied from the design handoff
+ * (`Board View (clean).dc.html`): the 404px window, the 34px dark title bar, the
+ * green source pill, the dock/close keys, the green-phosphor screen treatment,
+ * and the dock-rail vs. overlay placement wrappers.
+ *
+ * Intentionally dark/self-contained (no theme tokens) so it reads identically in
+ * every theme, like the Board View it lives in. Fonts: JetBrains Mono.
+ */
+
+/* --- The 404px instrument window (silver brushed body) --- */
+.instr {
+  width: 404px;
+  box-sizing: border-box;
+  border-radius: 13px;
+  overflow: hidden;
+  background: linear-gradient(180deg, #c6c9ce, #9ea2a9);
+  box-shadow:
+    0 18px 42px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  flex: none;
+}
+
+/* --- 34px dark title bar --- */
+.instr__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 11px;
+  background: linear-gradient(180deg, #3a3d42, #25272b);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* 3-line drag grip. */
+.instr__grip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0.5;
+}
+.instr__grip span {
+  width: 11px;
+  height: 1.5px;
+  background: #aeb4bd;
+}
+
+.instr__name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #dfe3e8;
+}
+
+/* Green source pill. */
+.instr__source {
+  font-size: 10px;
+  color: #86ffb6;
+  background: rgba(82, 224, 138, 0.12);
+  border: 1px solid rgba(82, 224, 138, 0.3);
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 168px;
+}
+
+.instr__keys {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #9aa0a8;
+}
+
+.instr__key {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #2a2c30;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.instr__key:hover {
+  background: #34373c;
+  color: #d6dade;
+}
+
+.instr__body {
+  padding: 13px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- CRT bezel + green-phosphor screen (shared treatment) --- */
+.instr__bezel {
+  border-radius: 11px;
+  padding: 10px;
+  background: linear-gradient(180deg, #2a2c2f, #0d0e0f);
+  box-shadow: inset 0 2px 7px rgba(0, 0, 0, 0.8);
+}
+
+.instr__screen {
+  position: relative;
+  width: 100%;
+  height: 172px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 44%, #0e2c15, #06160b 72%, #020a05);
+}
+
+/* The scanline / vignette / gloss overlays sit ABOVE the trace. */
+.instr__scanlines {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 3px);
+  pointer-events: none;
+}
+.instr__vignette {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 44%, transparent 52%, rgba(0, 0, 0, 0.6));
+  pointer-events: none;
+}
+.instr__gloss {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 40%;
+  height: 46%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), transparent 72%);
+  pointer-events: none;
+}
+
+/* --- Recessed green "source selector" slot (scope + meter share it) --- */
+.instr__source-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+.instr__slot {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0a1a0c;
+  border: 1px solid #25351f;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7);
+  cursor: pointer;
+}
+.instr__slot-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f0b94a;
+  box-shadow: 0 0 6px rgba(240, 185, 74, 0.9);
+  flex: none;
+}
+.instr__slot-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #86ffb6;
+  text-shadow: 0 0 5px rgba(82, 224, 138, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.instr__slot-caret {
+  margin-left: auto;
+  color: #5a7a60;
+  font-size: 11px;
+}
+
+/* The source dropdown menu. */
+.instr__menu {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% + 4px);
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #14191a;
+  border: 1px solid #25351f;
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+  max-height: 180px;
+  overflow: auto;
+}
+.instr__menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: #86ffb6;
+  font-family: inherit;
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.instr__menu-item:hover,
+.instr__menu-item.is-active {
+  background: rgba(82, 224, 138, 0.12);
+}
+.instr__menu-item-sub {
+  margin-left: auto;
+  color: #5a7a60;
+  font-size: 10px;
+}
+
+/* --- INSTRUMENT DOCK rail (large screens) --- */
+.instr-dock {
+  flex: none;
+  width: 436px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  background: #0f1011;
+  border-left: 1px solid #2a2c2f;
+  overflow: auto;
+}
+.instr-dock__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+.instr-dock__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- OVERLAY placement (small board windows) --- */
+.instr-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.instr-overlay__scrim {
+  position: absolute;
+  inset: 0;
+  border: none;
+  padding: 0;
+  background: rgba(8, 9, 10, 0.45);
+  cursor: pointer;
+}
+.instr-overlay__stack {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 100%;
+  overflow: auto;
+  padding: 12px;
+}
