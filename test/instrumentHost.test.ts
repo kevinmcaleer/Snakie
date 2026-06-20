@@ -2,7 +2,10 @@ import { describe, it, expect } from 'vitest'
 import {
   clampOffset,
   initialOffset,
-  liveWarningVisible
+  instrumentKey,
+  liveWarningVisible,
+  redockKind,
+  redockOne
 } from '../src/renderer/src/components/instrument-host'
 
 describe('initialOffset', () => {
@@ -62,6 +65,76 @@ describe('clampOffset', () => {
     const out = clampOffset({ x: 500, y: 500 }, 10, 10, 40)
     expect(out.x).toBe(0)
     expect(out.y).toBe(0)
+  })
+})
+
+describe('instrumentKey', () => {
+  it('keys by kind + variable', () => {
+    expect(instrumentKey('scope', 'pwm0')).toBe('scope:pwm0')
+    expect(instrumentKey('meter', 'adc1')).toBe('meter:adc1')
+  })
+
+  it('distinguishes the same variable across kinds', () => {
+    expect(instrumentKey('scope', 'x')).not.toBe(instrumentKey('meter', 'x'))
+  })
+})
+
+describe('redockOne', () => {
+  it('re-docks a floated instrument (close ✕ returns it to the dock)', () => {
+    const before = { 'scope:a': false }
+    const after = redockOne(before, 'scope', 'a')
+    expect(after['scope:a']).toBe(true)
+    // Pure: the input is not mutated.
+    expect(before['scope:a']).toBe(false)
+  })
+
+  it('marks an unset instrument docked explicitly', () => {
+    expect(redockOne({}, 'meter', 'b')).toEqual({ 'meter:b': true })
+  })
+
+  it('returns the SAME reference when already docked (no needless re-render)', () => {
+    const docked = { 'scope:a': true }
+    expect(redockOne(docked, 'scope', 'a')).toBe(docked)
+  })
+
+  it('leaves other instruments untouched', () => {
+    const before = { 'scope:a': false, 'meter:b': false }
+    const after = redockOne(before, 'scope', 'a')
+    expect(after).toEqual({ 'scope:a': true, 'meter:b': false })
+  })
+})
+
+describe('redockKind', () => {
+  it('re-docks every open instrument of the kind (panel button restores docked)', () => {
+    const before = { 'scope:a': false, 'scope:b': false, 'meter:c': false }
+    const after = redockKind(before, 'scope', ['a', 'b'])
+    expect(after).toEqual({ 'scope:a': true, 'scope:b': true, 'meter:c': false })
+  })
+
+  it('only touches the named kind (leaves the other kind floating)', () => {
+    const before = { 'scope:a': false, 'meter:c': false }
+    const after = redockKind(before, 'meter', ['c'])
+    expect(after).toEqual({ 'scope:a': false, 'meter:c': true })
+  })
+
+  it('docks instruments with no prior override entry', () => {
+    expect(redockKind({}, 'scope', ['a', 'b'])).toEqual({ 'scope:a': true, 'scope:b': true })
+  })
+
+  it('returns the SAME reference when nothing changes (all already docked)', () => {
+    const docked = { 'scope:a': true, 'scope:b': true }
+    expect(redockKind(docked, 'scope', ['a', 'b'])).toBe(docked)
+  })
+
+  it('is a no-op for an empty variable list', () => {
+    const docked = { 'scope:a': false }
+    expect(redockKind(docked, 'scope', [])).toBe(docked)
+  })
+
+  it('does not mutate its input', () => {
+    const before = { 'scope:a': false }
+    redockKind(before, 'scope', ['a'])
+    expect(before['scope:a']).toBe(false)
   })
 })
 
