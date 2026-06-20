@@ -1,38 +1,26 @@
 /*
- * Instrument host (main window) — positions the Oscilloscope (#101) + Multimeter
- * (#102) ABOVE the code editor. The float layer overlays the editor region; the
- * dock rail sits on its right. The layer itself is click-through (so the editor
- * stays usable between windows) — only the instrument windows capture pointers.
+ * Instrument placement — the app-root FLOAT LAYER (undocked instruments float
+ * over the WHOLE window) and the docked windows inside the dock region.
+ *
+ * As of the dock-region rework the docked instruments live in their own panel
+ * (the rightmost panel, right of chat) rendered through `InstrumentDock`; the
+ * undocked windows float in a fixed, click-through layer over the entire app so
+ * they sit above every panel (not clipped inside the editor).
  */
 
-.instr-host {
-  position: absolute;
+/* The app-root float layer: covers the whole window, click-through, above the
+ * panels but below modals/dialogs (settings ≈ 1000). Its children re-enable
+ * pointer events so the rest of the UI stays usable between windows. */
+.instr-floats {
+  position: fixed;
   inset: 0;
-  /* Above the code editor, below app modals/dialogs (settings ≈ 1000). */
-  z-index: 50;
-  display: flex;
-  /* The layer is click-through; its children re-enable pointer events. */
+  z-index: 200;
   pointer-events: none;
 }
 
 /* Hidden by the toolbar's Instruments toggle. Kept mounted (positions survive). */
-.instr-host--hidden {
+.instr-floats--hidden {
   display: none;
-}
-
-/* The floating windows live in a relatively-clipped layer over the editor. */
-.instr-host__floats {
-  position: relative;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-}
-
-/* The side dock rail re-captures pointers (it's a real panel, not click-through). */
-.instr-host .instr-dock {
-  pointer-events: auto;
-  /* The rail scrolls itself; keep it within the editor height. */
-  max-height: 100%;
 }
 
 /* Each floating instrument window: absolutely placed (left/top from the drag
@@ -40,7 +28,7 @@
 .instr--floating {
   position: absolute;
   pointer-events: auto;
-  /* A floating window casts a deeper shadow so it reads above the code. */
+  /* A floating window casts a deeper shadow so it reads above everything. */
   box-shadow:
     0 22px 50px rgba(0, 0, 0, 0.5),
     inset 0 1px 0 rgba(255, 255, 255, 0.5);
@@ -54,4 +42,10 @@
 }
 .instr__bar--drag:active {
   cursor: grabbing;
+}
+
+/* A docked instrument sits in the dock rail; the rail is wider than the 404px
+ * window so the item just left-aligns within it. */
+.instr-dock__item {
+  display: flex;
 }

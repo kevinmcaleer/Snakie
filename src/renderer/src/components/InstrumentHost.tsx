@@ -10,25 +10,38 @@ import {
 } from './instrument-data'
 import {
   InstrumentDock,
+  InstrumentWindow,
   useFloatPlacement,
   type FloatProps
 } from './InstrumentWindow'
 import { Oscilloscope } from './Oscilloscope'
 import { Multimeter } from './Multimeter'
+import { Plotter } from './Plotter'
 import { initialOffset } from './instrument-host'
 import './InstrumentHost.css'
 
 /**
- * INSTRUMENT HOST (main window) — hosts the Oscilloscope (#101) + Multimeter
- * (#102) ABOVE the code editor in the MAIN editor window.
+ * INSTRUMENT HOST (main window) — hosts the Oscilloscope (#101), Multimeter
+ * (#102) and Plotter (#103) in the MAIN editor window.
  * =============================================================================
  *
  * The instruments used to live inside the separate board-view window; they now
- * belong to the main window so they float over / dock beside the actual code the
- * user is editing. The board-view window's node launchers fire a cross-window
- * `instruments.open({kind, variable, pin})` request (relayed by the main process,
- * see `src/main/board.ts`); this host subscribes to `window.api.instruments.onOpen`
- * and mounts/reveals the instrument here.
+ * belong to the main window. As of the dock-region rework they live in a
+ * dedicated **dock region** (the rightmost panel, to the RIGHT of the chat
+ * panel) — not over the code editor — while *undocked* instruments float over
+ * the WHOLE window from an app-root float layer.
+ *
+ * This module is split into three pieces so AppShell can place each surface
+ * independently while keeping ONE source of truth:
+ *
+ *   - {@link useInstruments} — the resolve + live-poll + per-instrument `docked`
+ *     state machine. Called once in AppShell; returns the resolved scope/meter
+ *     items (split into docked vs floating) plus the render helpers.
+ *   - {@link InstrumentDockRegion} — the dock content (header + SCOPE/METER/PLOT
+ *     visibility toggle row + the docked windows + the Plotter). Rendered inside
+ *     the dock panel (right of chat).
+ *   - {@link InstrumentFloatLayer} — the app-root float layer (`position:fixed`,
+ *     click-through) hosting the *undocked* scope/meter windows above everything.
  *
  * RESOLUTION: each open instrument is resolved against the MAIN window's OWN
  * active file (the same `source` AppShell streams to the board window). We
@@ -37,20 +50,14 @@ import './InstrumentHost.css'
  * its freq/duty from `fileSource = source`. An instrument whose variable is no
  * longer declared is dropped.
  *
- * LIVE VALUES: while ≥1 instrument is open AND a board is connected, we poll the
+ * LIVE VALUES: while ≥1 scope/meter is open AND a board is connected, we poll the
  * device on a gentle interval (reusing the unit-tested `buildValueProbe` /
  * `parseProbeOutput` from #97). NOTE: this enters the raw REPL and INTERRUPTS a
- * running program on each poll — inherent to REPL reads; we only poll while an
- * instrument is open + connected, throttle, and guard re-entrancy. This is
+ * running program on each poll — inherent to REPL reads; we only poll while a
+ * scope/meter is open + connected, throttle, and guard re-entrancy. This is
  * SEPARATE from the board window's own #97 node poll (both gate on connected +
- * throttle independently).
- *
- * PLACEMENT: each instrument floats over the editor as a draggable
- * {@link InstrumentWindow} (dragged by its title-bar grip, pointer-capture,
- * clamped on-screen) with a cascade start offset. The dock-to-side key snaps it
- * into a side rail ({@link InstrumentDock}) hosted here. The ✕ closes it in both
- * modes. `visible` hides everything (kept mounted so positions survive) for the
- * toolbar's Instruments toggle.
+ * throttle independently). The Plotter does NOT poll — it passively reads the
+ * broadcast serial stream.
  */
 
 /** How often we poll the device for the open instruments' values (ms). */
@@ -63,17 +70,11 @@ export interface OpenInstrument {
   variable: string
 }
 
-export interface InstrumentHostProps {
-  /** The MAIN window's active-file content (already `.py` when meaningful). */
-  source: string
-  /** Whether the active file is Python (gates parsing). */
-  isPython: boolean
-  /** When false, the instruments are hidden (kept mounted so state survives). */
-  visible: boolean
-  /** Open instruments + their state (lifted to AppShell so the toolbar sees the count). */
-  instruments: OpenInstrument[]
-  /** Replace the open-instrument list (add / close / dedupe handled by AppShell). */
-  onChange: (next: OpenInstrument[]) => void
+/** Per-kind visibility flags (dock-header SCOPE/METER/PLOT toggles). Default all on. */
+export interface InstrumentVisibility {
+  scope: boolean
+  meter: boolean
+  plotter: boolean
 }
 
 /**
@@ -137,13 +138,54 @@ function useInstrumentValues(conns: UsedPins[], active: boolean): Map<number, Li
   return values
 }
 
-export function InstrumentHost({
+/** A resolved scope/meter instrument: its connection + live reading + placement. */
+interface ResolvedInstrument {
+  it: OpenInstrument
+  conn: UsedPins
+  live?: LiveValue
+  stats?: Stats
+  isDocked: boolean
+  cascade: number
+}
+
+/**
+ * The single source of truth for the main-window instruments. Owns the open
+ * scope/meter list (lifted to AppShell so the toolbar sees the count and the
+ * dock + float layer share it), the per-instrument `docked` override map, and
+ * the live device poll. Returns the resolved items split by placement plus the
+ * shared render helpers — consumed by {@link InstrumentDockRegion} and
+ * {@link InstrumentFloatLayer}.
+ */
+export interface UseInstrumentsArgs {
+  /** The MAIN window's active-file content (already `.py` when meaningful). */
+  source: string
+  /** Whether the active file is Python (gates parsing). */
+  isPython: boolean
+  /** Open scope/meter instruments (lifted to AppShell). */
+  instruments: OpenInstrument[]
+  /** Replace the open-instrument list (add / close / dedupe). */
+  onChange: (next: OpenInstrument[]) => void
+}
+
+export interface UseInstrumentsResult {
+  /** Docked scope/meter items (those whose dock override is on). */
+  dockedItems: ResolvedInstrument[]
+  /** Floating scope/meter items (the rest). */
+  floatItems: ResolvedInstrument[]
+  source: string
+  pwmConns: UsedPins[]
+  adcConns: UsedPins[]
+  toggleDock: (it: OpenInstrument) => void
+  closeInstrument: (kind: 'scope' | 'meter', variable: string) => void
+  retargetInstrument: (kind: 'scope' | 'meter', fromVar: string, toVar: string) => void
+}
+
+export function useInstruments({
   source,
   isPython,
-  visible,
   instruments,
   onChange
-}: InstrumentHostProps): JSX.Element | null {
+}: UseInstrumentsArgs): UseInstrumentsResult {
   // Re-parse the MAIN window's active file → the connections instruments resolve
   // against (same parser the board view uses).
   const conns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
@@ -189,7 +231,7 @@ export function InstrumentHost({
     setDocked((d) => ({ ...d, [keyOf(it)]: !d[keyOf(it)] }))
   }, [])
 
-  // Live device values: poll only while ≥1 instrument is open (+ connected).
+  // Live device values: poll only while ≥1 scope/meter is open (+ connected).
   const liveValues = useInstrumentValues(conns, instruments.length > 0)
 
   // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), folded from the live
@@ -219,7 +261,7 @@ export function InstrumentHost({
   // index gives floating windows distinct start offsets. Docked vs floating is
   // decided per-instrument by the override map (default floating).
   const resolved = instruments
-    .map((it, i) => {
+    .map((it, i): ResolvedInstrument | null => {
       const idx = conns.findIndex((c) => c.variable === it.variable)
       const conn = idx >= 0 ? conns[idx] : undefined
       if (!conn) return null
@@ -229,60 +271,23 @@ export function InstrumentHost({
         it,
         conn,
         live: liveValues.get(idx),
+        stats: meterStats.get(it.variable),
         isDocked: docked[keyOf(it)] ?? false,
         cascade: i
       }
     })
-    .filter((r): r is NonNullable<typeof r> => r !== null)
+    .filter((r): r is ResolvedInstrument => r !== null)
 
-  const dockedItems = resolved.filter((r) => r.isDocked)
-  const floatItems = resolved.filter((r) => !r.isDocked)
-
-  // Nothing open → render nothing (don't even mount the layer).
-  if (resolved.length === 0) return null
-
-  return (
-    <div className={`instr-host ${visible ? '' : 'instr-host--hidden'}`} aria-hidden={!visible}>
-      {/* Floating instruments, draggable over the editor. */}
-      <div className="instr-host__floats">
-        {floatItems.map((r) => (
-          <FloatingInstrument
-            key={keyOf(r.it)}
-            cascade={r.cascade}
-            it={r.it}
-            conn={r.conn}
-            live={r.live}
-            source={source}
-            pwmConns={pwmConns}
-            adcConns={adcConns}
-            stats={meterStats.get(r.it.variable)}
-            onToggleDock={() => toggleDock(r.it)}
-            onClose={() => closeInstrument(r.it.kind, r.it.variable)}
-            onRetarget={(toVar) => retargetInstrument(r.it.kind, r.it.variable, toVar)}
-          />
-        ))}
-      </div>
-
-      {/* Docked instruments in the side rail (hosted in the MAIN window now). */}
-      {dockedItems.length > 0 && (
-        <InstrumentDock>
-          {dockedItems.map((r) =>
-            renderInstrument(r.it, r.conn, {
-              source,
-              pwmConns,
-              adcConns,
-              live: r.live,
-              stats: meterStats.get(r.it.variable),
-              docked: true,
-              onToggleDock: () => toggleDock(r.it),
-              onClose: () => closeInstrument(r.it.kind, r.it.variable),
-              onRetarget: (toVar) => retargetInstrument(r.it.kind, r.it.variable, toVar)
-            })
-          )}
-        </InstrumentDock>
-      )}
-    </div>
-  )
+  return {
+    dockedItems: resolved.filter((r) => r.isDocked),
+    floatItems: resolved.filter((r) => !r.isDocked),
+    source,
+    pwmConns,
+    adcConns,
+    toggleDock,
+    closeInstrument,
+    retargetInstrument
+  }
 }
 
 /** Shared render args for an instrument body in either placement. */
@@ -341,54 +346,124 @@ function renderInstrument(
 }
 
 /**
+ * Render one resolved scope/meter into a placement. Pulled out so the dock and
+ * float surfaces share the exact same body wiring.
+ */
+function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float?: FloatProps): JSX.Element {
+  return renderInstrument(r.it, r.conn, {
+    source: host.source,
+    pwmConns: host.pwmConns,
+    adcConns: host.adcConns,
+    live: r.live,
+    stats: r.stats,
+    docked: !float,
+    float,
+    onToggleDock: () => host.toggleDock(r.it),
+    onClose: () => host.closeInstrument(r.it.kind, r.it.variable),
+    onRetarget: (toVar) => host.retargetInstrument(r.it.kind, r.it.variable, toVar)
+  })
+}
+
+/**
+ * THE DOCK REGION — the rightmost panel content (right of chat). Renders the
+ * `INSTRUMENT DOCK` header with the SCOPE / METER / PLOT visibility toggle row,
+ * then the visible docked windows and the Plotter. Visibility (`vis`) is
+ * orthogonal to each instrument's docked state: a hidden kind is omitted
+ * entirely from the stack so the rest reflow up (no empty gap).
+ */
+export function InstrumentDockRegion({
+  host,
+  vis,
+  onToggleVisible
+}: {
+  host: UseInstrumentsResult
+  vis: InstrumentVisibility
+  onToggleVisible: (kind: keyof InstrumentVisibility) => void
+}): JSX.Element {
+  const scopeDocked = host.dockedItems.filter((r) => r.it.kind === 'scope')
+  const meterDocked = host.dockedItems.filter((r) => r.it.kind === 'meter')
+  return (
+    <InstrumentDock vis={vis} onToggleVisible={onToggleVisible}>
+      {vis.scope && scopeDocked.map((r) => (
+        <DockItem key={`scope:${r.it.variable}`}>{renderResolved(r, host)}</DockItem>
+      ))}
+      {vis.meter && meterDocked.map((r) => (
+        <DockItem key={`meter:${r.it.variable}`}>{renderResolved(r, host)}</DockItem>
+      ))}
+      {vis.plotter && (
+        <DockItem>
+          <InstrumentWindow
+            name="PLOTTER"
+            source="serial · live"
+            docked
+            onClose={() => onToggleVisible('plotter')}
+          >
+            <Plotter />
+          </InstrumentWindow>
+        </DockItem>
+      )}
+    </InstrumentDock>
+  )
+}
+
+/** A docked instrument fills the dock rail width (the rail is wider than the window). */
+function DockItem({ children }: { children: JSX.Element }): JSX.Element {
+  return <div className="instr-dock__item">{children}</div>
+}
+
+/**
+ * THE APP-ROOT FLOAT LAYER — a `position:fixed; inset:0` click-through layer
+ * over the WHOLE window (above the panels, below modals). The undocked
+ * scope/meter windows float here, draggable by their title bar and clamped to
+ * the whole window. `visible` is the toolbar Instruments toggle (it hides the
+ * whole layer; positions survive because it's CSS-hidden, kept mounted).
+ * Scope/meter floats are gated by their kind visibility (`vis`).
+ */
+export function InstrumentFloatLayer({
+  host,
+  vis,
+  visible
+}: {
+  host: UseInstrumentsResult
+  vis: InstrumentVisibility
+  visible: boolean
+}): JSX.Element | null {
+  const floats = host.floatItems.filter((r) =>
+    r.it.kind === 'scope' ? vis.scope : vis.meter
+  )
+  if (floats.length === 0) return null
+  return (
+    <div
+      className={`instr-floats ${visible ? '' : 'instr-floats--hidden'}`}
+      aria-hidden={!visible}
+    >
+      {floats.map((r) => (
+        <FloatingInstrument key={`${r.it.kind}:${r.it.variable}`} r={r} host={host} />
+      ))}
+    </div>
+  )
+}
+
+/**
  * One floating instrument: owns its drag offset via {@link useFloatPlacement}
  * (so each window drags independently) and renders the scope/meter body. Split
  * into its own component because the hook must be called once per window.
  */
 function FloatingInstrument({
-  cascade,
-  it,
-  conn,
-  live,
-  source,
-  pwmConns,
-  adcConns,
-  stats,
-  onToggleDock,
-  onClose,
-  onRetarget
+  r,
+  host
 }: {
-  cascade: number
-  it: OpenInstrument
-  conn: UsedPins
-  live?: LiveValue
-  source: string
-  pwmConns: UsedPins[]
-  adcConns: UsedPins[]
-  stats?: Stats
-  onToggleDock: () => void
-  onClose: () => void
-  onRetarget: (toVar: string) => void
+  r: ResolvedInstrument
+  host: UseInstrumentsResult
 }): JSX.Element {
-  // The host box = this float layer's parent, measured live so the drag clamp
-  // tracks editor resizes. Read at drag time (not on every render).
+  // The host box = the WHOLE app window (the `.shell` root), measured live so the
+  // drag clamp tracks window resizes and undocked windows can roam over every
+  // panel. Read at drag time (not on every render).
   const getHostSize = useCallback((): { w: number; h: number } => {
-    const host = document.querySelector('.instr-host__floats') as HTMLElement | null
+    const host = document.querySelector('.shell') as HTMLElement | null
     if (!host) return { w: window.innerWidth, h: window.innerHeight }
     return { w: host.clientWidth, h: host.clientHeight }
   }, [])
-  const float = useFloatPlacement(initialOffset(cascade), getHostSize)
-
-  return renderInstrument(it, conn, {
-    source,
-    pwmConns,
-    adcConns,
-    live,
-    stats,
-    docked: false,
-    float,
-    onToggleDock,
-    onClose,
-    onRetarget
-  })
+  const float = useFloatPlacement(initialOffset(r.cascade), getHostSize)
+  return renderResolved(r, host, float)
 }

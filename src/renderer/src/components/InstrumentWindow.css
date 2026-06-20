@@ -230,10 +230,10 @@
   font-size: 10px;
 }
 
-/* --- INSTRUMENT DOCK rail (large screens) --- */
+/* --- INSTRUMENT DOCK rail (the rightmost panel, right of chat) --- */
 .instr-dock {
-  flex: none;
-  width: 436px;
+  width: 100%;
+  height: 100%;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -246,16 +246,56 @@
 .instr-dock__head {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+.instr-dock__title {
+  display: flex;
+  align-items: center;
   gap: 7px;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: #5a5f67;
+  text-transform: uppercase;
 }
 .instr-dock__stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* SCOPE / METER / PLOT visibility toggle row (dock header, pushed right). */
+.instr-dock__toggles {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+}
+.instr-dock__toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 21px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-family: 'Space Grotesk', var(--font-mono), sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+  background: #15171a;
+  border: 1px solid #26282b;
+  color: #4a4f57;
+}
+.instr-dock__toggle svg {
+  flex: none;
+}
+.instr-dock__toggle--active {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--toggle-accent-border);
+  color: var(--toggle-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* --- OVERLAY placement (small board windows) --- */
