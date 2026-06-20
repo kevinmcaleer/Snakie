@@ -59,6 +59,39 @@
   color: var(--text-muted);
 }
 
+/* Instrument live-poll warning — the poll interrupts a running program, so this
+ * segment is deliberately loud (warning accent) and carries an inline Stop link.
+ * Only rendered while live polling is actually interrupting the board. */
+.statusbar__live-warn {
+  color: var(--warn);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.statusbar__live-stop {
+  background: var(--danger);
+  border: var(--border-w) solid var(--danger);
+  border-radius: var(--radius);
+  color: var(--bg);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0 0.45rem;
+  line-height: 1.2rem;
+  flex: 0 0 auto;
+}
+
+.statusbar__live-stop:hover {
+  filter: brightness(1.12);
+}
+
+.statusbar__live-stop:focus-visible {
+  outline: var(--border-w) solid var(--text);
+  outline-offset: 1px;
+}
+
 .statusbar__dot {
   width: 8px;
   height: 8px;

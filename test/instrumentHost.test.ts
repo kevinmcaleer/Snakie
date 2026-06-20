@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { clampOffset, initialOffset } from '../src/renderer/src/components/instrument-host'
+import {
+  clampOffset,
+  initialOffset,
+  liveWarningVisible
+} from '../src/renderer/src/components/instrument-host'
 
 describe('initialOffset', () => {
   it('cascades the first windows down-right', () => {
@@ -58,5 +62,28 @@ describe('clampOffset', () => {
     const out = clampOffset({ x: 500, y: 500 }, 10, 10, 40)
     expect(out.x).toBe(0)
     expect(out.y).toBe(0)
+  })
+})
+
+describe('liveWarningVisible', () => {
+  it('shows only when live + connected + ≥1 instrument open', () => {
+    expect(liveWarningVisible(true, true, 1)).toBe(true)
+    expect(liveWarningVisible(true, true, 3)).toBe(true)
+  })
+
+  it('hides when LIVE is off (the default → no poll, no interruption)', () => {
+    expect(liveWarningVisible(false, true, 2)).toBe(false)
+  })
+
+  it('hides when the board is disconnected (nothing is being interrupted)', () => {
+    expect(liveWarningVisible(true, false, 2)).toBe(false)
+  })
+
+  it('hides when no instrument is open', () => {
+    expect(liveWarningVisible(true, true, 0)).toBe(false)
+  })
+
+  it('treats a negative count defensively as nothing open', () => {
+    expect(liveWarningVisible(true, true, -1)).toBe(false)
   })
 })

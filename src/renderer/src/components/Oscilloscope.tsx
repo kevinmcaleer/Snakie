@@ -44,6 +44,10 @@ export interface OscilloscopeProps {
    * undefined when not connected → fall back to the parsed/static config.
    */
   liveDuty?: number
+  /** Whether the global instrument live-poll is on (drives the LIVE toggle). */
+  live?: boolean
+  /** Flip the global live-poll (shared by all open instruments). */
+  onToggleLive?: () => void
   /** Switch the scope to another PWM pin. */
   onSelectSource?: (conn: UsedPins) => void
   onToggleDock?: () => void
@@ -64,6 +68,8 @@ export function Oscilloscope({
   sources,
   fileSource,
   liveDuty,
+  live,
+  onToggleLive,
   onSelectSource,
   onToggleDock,
   docked = true,
@@ -94,6 +100,8 @@ export function Oscilloscope({
     <InstrumentWindow
       name="OSCILLOSCOPE"
       source={`${gp} ${conn.variable || 'pwm'}`}
+      live={live}
+      onToggleLive={onToggleLive}
       onToggleDock={onToggleDock}
       docked={docked}
       onClose={onClose}

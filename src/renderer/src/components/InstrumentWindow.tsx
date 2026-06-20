@@ -33,6 +33,20 @@ export interface InstrumentWindowProps {
   source: string
   /** The instrument body (screen + controls). */
   children: ReactNode
+  /**
+   * Whether the GLOBAL instrument live-poll is on. When set (not `undefined`),
+   * a LIVE toggle is rendered in the title bar reflecting this state — lit/green
+   * when on, grey when off. Live reads enter the raw REPL and INTERRUPT a running
+   * program, so the control is the user's way to start/stop the polling.
+   */
+  live?: boolean
+  /**
+   * Flip the global live-poll. The poll is one batched probe shared by ALL open
+   * instruments, so toggling here affects every instrument's polling (and the
+   * status-bar warning makes that global effect clear). Only rendered when
+   * `live` is provided.
+   */
+  onToggleLive?: () => void
   /** Toggle dock ⟷ overlay placement (the dock-to-side key). */
   onToggleDock?: () => void
   /** Whether the window is currently docked (drives the dock key tooltip). */
@@ -58,6 +72,8 @@ export function InstrumentWindow({
   name,
   source,
   children,
+  live,
+  onToggleLive,
   onToggleDock,
   docked = true,
   onClose,
@@ -87,6 +103,23 @@ export function InstrumentWindow({
           {source}
         </span>
         <span className="instr__keys">
+          {live !== undefined && (
+            <button
+              type="button"
+              className={`instr__key instr__live ${live ? 'instr__live--on' : ''}`}
+              onClick={onToggleLive}
+              aria-pressed={live}
+              title={
+                live
+                  ? 'LIVE on — live reads interrupt a running program. Click to stop polling.'
+                  : 'LIVE off — instruments show static readings. Click to start live polling (interrupts a running program).'
+              }
+              aria-label={live ? 'Stop live polling' : 'Start live polling'}
+            >
+              <span className="instr__live-dot" aria-hidden="true" />
+              LIVE
+            </button>
+          )}
           {onToggleDock && (
             <button
               type="button"

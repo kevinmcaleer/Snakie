@@ -39,6 +39,10 @@ export interface MultimeterProps {
   sample?: AdcSample
   /** Rolling MIN/MAX/AVG over the volts samples received, or undefined (idle). */
   stats?: Stats
+  /** Whether the global instrument live-poll is on (drives the LIVE toggle). */
+  live?: boolean
+  /** Flip the global live-poll (shared by all open instruments). */
+  onToggleLive?: () => void
   /** Switch the meter to another ADC pin. */
   onSelectSource?: (conn: UsedPins) => void
   onToggleDock?: () => void
@@ -64,6 +68,8 @@ export function Multimeter({
   sources,
   sample,
   stats,
+  live,
+  onToggleLive,
   onSelectSource,
   onToggleDock,
   docked = true,
@@ -83,6 +89,8 @@ export function Multimeter({
     <InstrumentWindow
       name="MULTIMETER"
       source={`${channel} ${gp}`}
+      live={live}
+      onToggleLive={onToggleLive}
       onToggleDock={onToggleDock}
       docked={docked}
       onClose={onClose}
