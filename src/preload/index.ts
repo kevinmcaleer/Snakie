@@ -51,6 +51,15 @@ import type {
   PluginStatus,
   RunCommandResult
 } from '../main/plugins/types'
+import type { BoardDefinition } from '../shared/board'
+
+/** The active-file snapshot the main renderer streams to the Board View window. */
+export interface BoardSourcePayload {
+  source: string
+  fileName?: string
+  isPython: boolean
+  theme: string
+}
 
 /**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
@@ -417,6 +426,36 @@ const plugins = {
   reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload'))
 }
 
+/**
+ * Board View API. `open` launches/focuses the separate floating Board View
+ * window; `update` relays the active-file snapshot to it (it streams in via
+ * `onSource`); `onClosed` fires when the user closes the window;
+ * `listUserBoards` returns user-authored board definitions read off disk in the
+ * main process; `openBoardsFolder` reveals `<userData>/boards`.
+ */
+const board = {
+  /** Open (or focus) the floating Board View window. */
+  open: (): Promise<void> => ipcRenderer.invoke('board:open'),
+  /** Relay the active-file snapshot to the board window. Fire-and-forget. */
+  update: (payload: BoardSourcePayload): void => ipcRenderer.send('board:update', payload),
+  /** Subscribe to the streamed active-file payload. Returns an unsubscribe fn. */
+  onSource: (cb: (payload: BoardSourcePayload) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: BoardSourcePayload): void => cb(payload)
+    ipcRenderer.on('board:source', listener)
+    return () => ipcRenderer.removeListener('board:source', listener)
+  },
+  /** Subscribe to the board window closing. Returns an unsubscribe function. */
+  onClosed: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('board:closed', listener)
+    return () => ipcRenderer.removeListener('board:closed', listener)
+  },
+  /** User-authored board definitions read from `<userData>/boards/*.json`. */
+  listUserBoards: (): Promise<BoardDefinition[]> => ipcRenderer.invoke('board:listUserBoards'),
+  /** Reveal the boards folder in the OS file manager (creates it if missing). */
+  openBoardsFolder: (): Promise<void> => ipcRenderer.invoke('board:openBoardsFolder')
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -444,7 +483,9 @@ const api = {
   /** Built-in version-control (Git) layer. */
   git,
   /** Python plugin system layer (spawns snakie.host over JSON-RPC). */
-  plugins
+  plugins,
+  /** Board View layer: floating window + live active-file relay + user boards. */
+  board
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

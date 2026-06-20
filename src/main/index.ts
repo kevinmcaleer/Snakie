@@ -9,6 +9,7 @@ import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
 import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater, checkForUpdatesManual } from './updater'
+import { registerBoardIpc, disposeBoard } from './board'
 import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
@@ -121,6 +122,11 @@ app.whenReady().then(() => {
   // main process; deltas stream back to whichever window is currently live.
   registerLlmIpc(() => mainWindow?.webContents)
 
+  // Register the Board View layer: a separate frameless, always-on-top window
+  // that visualises the active file's pin wiring, fed live over IPC. The
+  // resolver lets it notify the main window when it closes.
+  registerBoardIpc(() => mainWindow)
+
   createWindow()
 
   app.on('activate', () => {
@@ -142,4 +148,5 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   void disposeDevice()
   void disposePlugins()
+  disposeBoard()
 })

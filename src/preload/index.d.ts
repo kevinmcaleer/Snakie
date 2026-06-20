@@ -1,6 +1,16 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Api } from './index'
 
+// Re-export the Board View payload + shared board-definition types so the
+// renderer can import them from this single UI-facing module.
+export type { BoardSourcePayload } from './index'
+export type {
+  BoardDefinition,
+  BoardPad,
+  BoardHeader,
+  BoardFeature
+} from '../shared/board'
+
 // Re-export the device layer types so the renderer can import them from a
 // single, UI-facing module without reaching into `src/main`.
 export type {

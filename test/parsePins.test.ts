@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parsePins, BUS_PERIPHERAL, BUS_COLOR } from '../src/renderer/src/components/parse-pins'
+import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_LABEL } from '../src/renderer/src/components/parse-pins'
 
 describe('parsePins', () => {
   it('returns nothing for empty / pinless source', () => {
@@ -7,34 +7,64 @@ describe('parsePins', () => {
     expect(parsePins('x = 1\nprint("hello")\n')).toEqual([])
   })
 
-  it('parses a numeric digital Pin', () => {
+  it('classifies an explicit Pin.OUT as output', () => {
     expect(parsePins('led = Pin(25, Pin.OUT)')).toEqual([
-      { bus: 'digital', pins: ['25'], variable: 'led', constructor: 'Pin(25, Pin.OUT)' }
+      { type: 'output', pins: ['25'], variable: 'led', constructor: 'Pin(25, Pin.OUT)' }
     ])
   })
 
-  it('parses a string-labelled digital Pin (onboard LED)', () => {
+  it('classifies a bare OUT 2nd positional as output', () => {
+    const [conn] = parsePins('from machine import Pin, OUT\nled = Pin(15, OUT)')
+    expect(conn.type).toBe('output')
+    expect(conn.pins).toEqual(['15'])
+  })
+
+  it('classifies an explicit Pin.IN as input', () => {
+    const [conn] = parsePins('btn = machine.Pin(14, machine.Pin.IN)')
+    expect(conn.type).toBe('input')
+    expect(conn.pins).toEqual(['14'])
+  })
+
+  it('classifies Pin.IN with a pull resistor as input', () => {
+    const [conn] = parsePins('btn = Pin(16, Pin.IN, Pin.PULL_UP)')
+    expect(conn.type).toBe('input')
+    expect(conn.pins).toEqual(['16'])
+  })
+
+  it('classifies a string-labelled Pin (onboard LED) by usage', () => {
     const [conn] = parsePins('led = Pin("LED", Pin.OUT)')
-    expect(conn.bus).toBe('digital')
+    expect(conn.type).toBe('output')
     expect(conn.pins).toEqual(['LED'])
     expect(conn.variable).toBe('led')
   })
 
-  it('handles the machine.Pin prefix', () => {
-    const [conn] = parsePins('btn = machine.Pin(14, machine.Pin.IN)')
-    expect(conn.bus).toBe('digital')
-    expect(conn.pins).toEqual(['14'])
+  it('infers output from a later .on() / .value(1) write on an undirected Pin', () => {
+    const on = parsePins('led = Pin(2)\nled.on()')
+    expect(on[0].type).toBe('output')
+    const val = parsePins('relay = Pin(5)\nrelay.value(1)')
+    expect(val[0].type).toBe('output')
+  })
+
+  it('infers input from a later bare .value() read on an undirected Pin', () => {
+    const [conn] = parsePins('btn = Pin(12)\nif btn.value():\n    pass')
+    expect(conn.type).toBe('input')
+    expect(conn.pins).toEqual(['12'])
+  })
+
+  it('defaults an ambiguous undirected Pin to output', () => {
+    const [conn] = parsePins('led = Pin(3)')
+    expect(conn.type).toBe('output')
   })
 
   it('parses a PWM-wrapped Pin', () => {
     expect(parsePins('servo = PWM(Pin(16))')).toEqual([
-      { bus: 'pwm', pins: ['16'], variable: 'servo', constructor: 'PWM(Pin(16))' }
+      { type: 'pwm', pins: ['16'], variable: 'servo', constructor: 'PWM(Pin(16))' }
     ])
   })
 
   it('parses an I2C bus with sda/scl pins', () => {
     const [conn] = parsePins('i2c = I2C(0, sda=Pin(0), scl=Pin(1))')
-    expect(conn.bus).toBe('i2c')
+    expect(conn.type).toBe('i2c')
     expect(conn.pins).toEqual(['0', '1'])
     expect(conn.variable).toBe('i2c')
     expect(conn.constructor).toBe('I2C(0, sda=Pin(0), scl=Pin(1))')
@@ -44,14 +74,14 @@ describe('parsePins', () => {
     const [conn] = parsePins(
       'tft = SPI(1, sck=Pin(10), mosi=Pin(11), cs=Pin(13), dc=Pin(8))'
     )
-    expect(conn.bus).toBe('spi')
+    expect(conn.type).toBe('spi')
     expect(conn.pins).toEqual(['10', '11', '13', '8'])
     expect(conn.variable).toBe('tft')
   })
 
   it('parses a PIO StateMachine pin', () => {
     const [conn] = parsePins('sm = StateMachine(0, prog, freq=8000000, sideset_base=Pin(22))')
-    expect(conn.bus).toBe('pio')
+    expect(conn.type).toBe('pio')
     expect(conn.pins).toEqual(['22'])
     expect(conn.variable).toBe('sm')
   })
@@ -64,7 +94,7 @@ describe('parsePins', () => {
       'i2c = I2C(0, sda=Pin(0), scl=Pin(1))'
     ].join('\n')
     const conns = parsePins(src)
-    expect(conns.map((c) => c.bus)).toEqual(['digital', 'pwm', 'i2c'])
+    expect(conns.map((c) => c.type)).toEqual(['output', 'pwm', 'i2c'])
     expect(conns.map((c) => c.variable)).toEqual(['led', 'servo', 'i2c'])
   })
 
@@ -83,7 +113,7 @@ describe('parsePins', () => {
 
   it('reads a non-assignment constructor with an empty variable', () => {
     const [conn] = parsePins('PWM(Pin(3)).duty_u16(0)')
-    expect(conn.bus).toBe('pwm')
+    expect(conn.type).toBe('pwm')
     expect(conn.variable).toBe('')
     expect(conn.pins).toEqual(['3'])
   })
@@ -93,10 +123,10 @@ describe('parsePins', () => {
     expect(parsePins('i2c = I2C(0)')).toEqual([])
   })
 
-  it('exposes a peripheral + colour for every bus', () => {
-    for (const bus of ['digital', 'pwm', 'i2c', 'pio', 'spi'] as const) {
-      expect(BUS_PERIPHERAL[bus]).toBeTruthy()
-      expect(BUS_COLOR[bus]).toMatch(/^#[0-9a-f]{6}$/i)
+  it('exposes a colour + label for every connection type', () => {
+    for (const type of ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'] as const) {
+      expect(PIN_TYPE_COLOR[type]).toMatch(/^#[0-9a-f]{6}$/i)
+      expect(PIN_TYPE_LABEL[type]).toMatch(/^[A-Z0-9]+$/)
     }
   })
 })
