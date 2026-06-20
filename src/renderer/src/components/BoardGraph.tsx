@@ -11,8 +11,18 @@ import {
   BUILTIN_BOARDS,
   DEFAULT_BOARD_ID,
   mergeBoards,
-  type BoardDefinition
+  type BoardDefinition,
+  type BoardFeature,
+  type BoardPadType
 } from './board-defs'
+import {
+  boardBox,
+  layoutPads,
+  ledPoint,
+  padForToken,
+  type BoardBox,
+  type PadPoint
+} from './board-layout'
 import {
   clampZoom,
   fitTransform,
@@ -37,16 +47,21 @@ import './BoardGraph.css'
  * ========================================
  *
  * The live, read-only Board View rendered as a **node graph**: one dark node
- * card per parsed connection on the left, each wired by a drooping blue/coloured
- * "noodle" cable to a gold castellated GPIO pad on the board's left edge, the
- * board drawn on the right, and a light "pins in use" table below.
+ * card per parsed connection on the left, each wired by a drooping coloured
+ * "noodle" cable to its connection's REAL pad on the **physical board** drawn on
+ * the right, and a light "pins in use" table below.
+ *
+ * The board is a true physical representation of the SELECTED board: the outline
+ * is sized from `def.aspect` and EVERY pad of `def.headers` is drawn at its real
+ * edge position (left/right/top/bottom) via the shared {@link ./board-layout}
+ * helpers (`boardBox`/`layoutPads`/`padForToken`) — the same layout the
+ * {@link BoardView} creator preview uses. Used pads (a connection resolves to
+ * them) are highlighted; idle pads are still drawn. Switching the board in the
+ * picker redraws the whole pinout and re-targets every wire.
  *
  * It re-derives entirely from `{ source, fileName, isPython }` + the persisted
  * board selection (shared with {@link BoardView} via the `snakie.board.id` key),
- * so it updates live as the parent re-streams the active file. It draws the
- * board itself (PCB / MCU / LED / pads) directly here — the generic
- * {@link BoardView} drawer is kept for the Board Creator's preview and is NOT
- * reused for this layout.
+ * so it updates live as the parent re-streams the active file.
  *
  * VIEWPORT TOOLBAR (#99 / #96): the stage (node cards + wires + board) lives
  * inside a pan/zoom/rotate viewport with a noodleplanner-style floating control
@@ -87,47 +102,50 @@ export interface BoardGraphProps {
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
 const STORAGE_KEY = 'snakie.board.id'
 
-// --- Node-graph geometry (mirrors the design mockup) ------------------------
-// Everything is laid out in a single SVG coordinate space so the noodle wires,
-// the gold pads and the HTML node cards all line up on the same row Y.
+// --- Node-graph geometry ----------------------------------------------------
+// The view has TWO regions in one SVG coordinate space: a vertical column of
+// node cards on the LEFT (one per parsed connection), and the **physical board**
+// drawn on the RIGHT — its full pinout from `def.headers` laid out by
+// {@link layoutPads}, every pad at its real edge position. A drooping "noodle"
+// wire runs from each node's solder dot to its connection's REAL pad coordinate
+// (which may be on any edge), so switching boards redraws the whole pinout and
+// re-targets every wire.
 const PITCH = 46 // vertical distance between node rows
 const NODE_H = 36 // node card height
 const NODE_W = 252 // node card width
 const NODE_LEFT = 36 // node card left inset
-const FIRST_Y = 149 // centre Y of the first row (and its pad / wire ends)
+const FIRST_Y = 149 // centre Y of the first node row
 const NODE_DOT_X = 288 // node right-edge solder dot X (wire start)
-const PAD_X = 742 // gold GPIO pad X (wire end + board left edge)
-const SAG = 32 // downward bezier sag for the drooping noodle
-const CANVAS_W = 1180 // canvas / SVG width
-const BOARD_X = 720 // PCB rect left
-const BOARD_W = 300 // PCB rect width
-const BOARD_TOP_PAD = 31 // PCB top above the first pad row
-const BOARD_BOT_PAD = 33 // PCB bottom below the last pad row
+const SAG = 30 // downward bezier sag for the drooping noodle
 
-/** Centre Y of row `i` (node card, pad and wire all share it). */
+// The board drawing region (to the right of the node column). The physical
+// board is fitted inside it from its aspect, with margins for the edge labels.
+const BOARD_REGION_X = 470 // left of the board area (after the node dots)
+const BOARD_REGION_W = 600 // width of the board area
+const BOARD_MAX_W = 320 // largest board footprint (keeps room for labels)
+const BOARD_MAX_H = 460 // largest board footprint
+const BOARD_REGION_CX = BOARD_REGION_X + BOARD_REGION_W / 2 // board centre X
+const CANVAS_W = BOARD_REGION_X + BOARD_REGION_W + 60 // canvas / SVG width (1130)
+const PAD_R = 7 // drawn pad radius
+const STAGE_PAD = 48 // vertical breathing room above/below the content
+
+/** Centre Y of node row `i`. */
 function rowY(i: number): number {
   return FIRST_Y + i * PITCH
 }
 
-/**
- * Resolve a parsed pin token to the label drawn on its gold pad. Numeric tokens
- * become `GP<n>` (the RP2040/RP2350 convention); a board's `ledLabel` and any
- * other non-numeric label pass through unchanged (mirrors BoardView's matching).
- */
-function padLabelForToken(token: string, def: BoardDefinition): string {
-  const t = token.trim()
-  if (/^\d+$/.test(t)) return `GP${t}`
-  if (def.ledLabel && def.ledLabel.toLowerCase() === t.toLowerCase()) return def.ledLabel
-  return t
-}
-
-/** One drawable connection row: its node, its pad and the wire between them. */
+/** One drawable connection row: its node card + the pad its first pin taps. */
 interface GraphRow {
   conn: UsedPins
+  /** Source index (for live-value merge). */
+  index: number
+  /** Node row centre Y. */
   y: number
   color: string
-  /** The pad label (e.g. `GP2`) — a connection's FIRST pin owns the row. */
-  padLabel: string
+  /** The resolved real pad coordinate for the connection's FIRST pin. */
+  pad: PadPoint
+  /** Faint extra pads for the rest of a multi-pin bus (drawn as thin links). */
+  extraPads: PadPoint[]
 }
 
 // --- Live values (#97) ------------------------------------------------------
@@ -267,26 +285,65 @@ export function BoardGraph({
   const [liveOn, setLiveOn] = useState(false)
   const { values: liveValues, connected: liveConnected } = useLiveValues(conns, liveOn)
 
-  // One row per connection, evenly spaced from the 46px pitch — the first pin of
-  // each connection owns the row (a bus's other pins ride the same node card).
+  // The node column extent: one card per connection, 46px pitch.
+  const nodeBottom = conns.length > 0 ? rowY(conns.length - 1) + NODE_H / 2 : FIRST_Y
+  const nodeMidY = (FIRST_Y + nodeBottom) / 2
+
+  // The PHYSICAL board: fit the outline from the board's aspect and lay out
+  // EVERY pad of every header (left/right/top/bottom) at its real edge position.
+  // Reactive to `def`, so switching board in the picker redraws the whole pinout.
+  const box = useMemo<BoardBox>(
+    () =>
+      boardBox(def.aspect, {
+        cx: BOARD_REGION_CX,
+        // Centre the board vertically on the node column so the wires read.
+        cy: Math.max(FIRST_Y + BOARD_MAX_H / 2 - 10, nodeMidY),
+        maxW: BOARD_MAX_W,
+        maxH: BOARD_MAX_H
+      }),
+    [def.aspect, nodeMidY]
+  )
+  const pads = useMemo<PadPoint[]>(() => layoutPads(def, box), [def, box])
+
+  // One row per connection: its node card + its FIRST pin's REAL pad coordinate
+  // (which may be on any edge). A bus's remaining pins become faint extra pads.
   const rows = useMemo<GraphRow[]>(
     () =>
-      conns.map((conn, i) => ({
-        conn,
-        y: rowY(i),
-        color: PIN_TYPE_COLOR[conn.type],
-        padLabel: padLabelForToken(conn.pins[0] ?? '', def)
-      })),
-    [conns, def]
+      conns.map((conn, i) => {
+        const pad = padForToken(conn.pins[0] ?? '', def, pads, box)
+        const extraPads = conn.pins
+          .slice(1)
+          .map((tok) => padForToken(tok, def, pads, box))
+        return {
+          conn,
+          index: i,
+          y: rowY(i),
+          color: PIN_TYPE_COLOR[conn.type],
+          pad,
+          extraPads
+        }
+      }),
+    [conns, def, pads, box]
   )
 
-  // Synthesise the board + stage height to span every pad row so a large N never
-  // clips: the stage grows and the viewport zoom-to-fit keeps it framed.
-  const lastY = rows.length > 0 ? rowY(rows.length - 1) : FIRST_Y
-  const boardYTop = FIRST_Y - BOARD_TOP_PAD
-  const boardH = lastY - boardYTop + BOARD_BOT_PAD
-  // Stage is at least the mockup height; grows for large N.
-  const stageH = Math.max(680, boardYTop + boardH + 40)
+  // The set of drawn pad coordinates that a connection resolves to → "used".
+  const usedPadKeys = useMemo(() => {
+    const keys = new Set<string>()
+    for (const r of rows) {
+      keys.add(padKey(r.pad))
+      for (const p of r.extraPads) keys.add(padKey(p))
+    }
+    return keys
+  }, [rows])
+  const ledLit = useMemo(() => rows.some((r) => r.pad.edge === 'led'), [rows])
+
+  // Stage extent spans BOTH the node column and the physical board (with its
+  // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
+  // Derived from geometry, NOT the connection count — so large N grows the node
+  // column and the board stays put, and an empty board still has a sane size.
+  const contentTop = Math.min(FIRST_Y - NODE_H / 2, box.y - 24)
+  const contentBottom = Math.max(nodeBottom, box.y + box.h + 28)
+  const stageH = Math.max(680, contentBottom - Math.min(0, contentTop) + STAGE_PAD)
 
   const hasRows = rows.length > 0
 
@@ -316,13 +373,14 @@ export function BoardGraph({
     return () => ro.disconnect()
   }, [hasRows])
 
-  // Auto-fit until the user interacts (and re-fit on rotation while untouched).
+  // Auto-fit until the user interacts (re-fit on rotation / board change while
+  // untouched, so switching board in the picker reframes the whole new pinout).
   useEffect(() => {
     if (touchedRef.current) return
     if (!hasRows || vp.w === 0 || vp.h === 0) return
     setView(fitTransform(CANVAS_W, stageH, vp.w, vp.h, rotation))
     setIsOneToOne(false)
-  }, [hasRows, vp.w, vp.h, stageH, rotation])
+  }, [hasRows, vp.w, vp.h, stageH, rotation, def.id])
 
   const onZoomIn = useCallback((): void => {
     touchedRef.current = true
@@ -406,8 +464,8 @@ export function BoardGraph({
   // A <select> picks the format; the button triggers a download in that format.
   const [exportFmt, setExportFmt] = useState<ExportFmt>('svg')
   const onExport = useCallback((): void => {
-    void exportView(exportFmt, rows, def, stageH, rotation)
-  }, [exportFmt, rows, def, stageH, rotation])
+    void exportView(exportFmt, { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation })
+  }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation])
 
   return (
     <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
@@ -569,12 +627,38 @@ export function BoardGraph({
               >
                 <BoardDefs def={def} />
 
-                {/* Drooping noodle wires (under the board), coloured by type. */}
+                {/* The physical board (full pinout) UNDER the wires + dots so the
+                    coloured noodles read on top of the green PCB. */}
+                <Board
+                  def={def}
+                  box={box}
+                  pads={pads}
+                  usedPadKeys={usedPadKeys}
+                  ledLit={ledLit}
+                  rotation={rotation}
+                />
+
+                {/* Faint bus links (a multi-pin connection's other pins). */}
+                <g fill="none" strokeLinecap="round" opacity="0.5">
+                  {rows.flatMap((r, i) =>
+                    r.extraPads.map((p, j) => (
+                      <path
+                        key={`bus-${i}-${j}`}
+                        d={noodlePath(NODE_DOT_X, r.y, p)}
+                        stroke={r.color}
+                        strokeWidth="1.4"
+                        strokeDasharray="3 4"
+                      />
+                    ))
+                  )}
+                </g>
+
+                {/* Drooping noodle wires from each node dot to its REAL pad. */}
                 <g fill="none" strokeLinecap="round" filter="url(#bg-glow)" opacity="0.92">
                   {rows.map((r, i) => (
                     <path
                       key={`wire-${i}`}
-                      d={noodlePath(r.y)}
+                      d={noodlePath(NODE_DOT_X, r.y, r.pad)}
                       stroke={r.color}
                       strokeWidth="2.6"
                     />
@@ -586,8 +670,6 @@ export function BoardGraph({
                     <circle key={`dot-${i}`} cx={NODE_DOT_X} cy={r.y} r="4.5" fill={r.color} />
                   ))}
                 </g>
-
-                <Board def={def} yTop={boardYTop} height={boardH} rows={rows} rotation={rotation} />
               </svg>
 
               {/* Node cards (HTML, over the SVG) — one per connection. */}
@@ -718,17 +800,49 @@ export function BoardGraph({
 
 // --- SVG drawing ------------------------------------------------------------
 
+/** Stable key for a drawn pad coordinate (matches "used" pads to drawn pads). */
+function padKey(p: { x: number; y: number }): string {
+  return `${p.x.toFixed(1)},${p.y.toFixed(1)}`
+}
+
 /**
- * A drooping cubic bezier from the node solder dot to its aligned gold pad —
- * horizontal tangents and a ~32px downward sag (matches the mockup's
- * `M288 y C 462 y+32 568 y+32 742 y`). Same Y at both ends so the pad row is
- * exactly aligned to its node row.
+ * A drooping cubic bezier from a node solder dot `(sx, sy)` to a target pad on
+ * the physical board — wherever it sits (left / right / top / bottom / led).
+ *
+ * The wire leaves the node horizontally to the right and arrives at the pad with
+ * an edge-aware tangent (so it docks INTO the pad's edge), keeping the signature
+ * downward droop. Left-edge pads read as the classic flat noodle; right/top/
+ * bottom pads route around with a deeper control pull so the cable still reads.
  */
-function noodlePath(y: number): string {
-  const c1x = NODE_DOT_X + 174 // 462
-  const c2x = PAD_X - 174 // 568
-  const cy = y + SAG
-  return `M${NODE_DOT_X} ${y} C ${c1x} ${cy} ${c2x} ${cy} ${PAD_X} ${y}`
+function noodlePath(sx: number, sy: number, pad: PadPoint): string {
+  const dx = pad.x - sx
+  // Control 1 leaves the node horizontally to the right, drooping down.
+  const c1x = sx + Math.max(80, dx * 0.45)
+  const c1y = sy + SAG
+  // Control 2 approaches the pad along its edge's inward normal.
+  let c2x: number
+  let c2y: number
+  switch (pad.edge) {
+    case 'right':
+      // Enter from the right of the board, swinging past then back in.
+      c2x = pad.x + 90
+      c2y = pad.y + SAG
+      break
+    case 'top':
+      c2x = pad.x
+      c2y = pad.y - 70
+      break
+    case 'bottom':
+      c2x = pad.x
+      c2y = pad.y + 70
+      break
+    default:
+      // left / led: approach horizontally from the left with the droop.
+      c2x = pad.x - Math.max(80, dx * 0.45)
+      c2y = pad.y + SAG
+      break
+  }
+  return `M${sx} ${sy} C ${c1x} ${c1y} ${c2x} ${c2y} ${pad.x} ${pad.y}`
 }
 
 /**
@@ -768,25 +882,53 @@ function BoardDefs({ def }: { def: BoardDefinition }): JSX.Element {
   )
 }
 
-/** The green PCB, USB nub, MCU block, onboard LED, decorative + GPIO pads. */
+/** Style table for the feature kinds (mirrors BoardView's FEATURE_STYLE). */
+const FEATURE_STYLE: Record<BoardFeature['kind'], { fill: string; stroke: string; text: string }> = {
+  mcu: { fill: '#15171b', stroke: '#2a2d33', text: '#b9bdc6' },
+  wifi: { fill: '#c2c7cf', stroke: '#8d929b', text: '#3a3d44' },
+  usb: { fill: '#d7dbe1', stroke: '#7b8088', text: '#3a3d44' },
+  chip: { fill: '#23262c', stroke: '#454a52', text: '#c8ccd3' },
+  led: { fill: '#2c3a30', stroke: '#46e06a', text: '#cfe9d6' }
+}
+
+/** Pad fill by electrical role (gnd dark, vcc red, other grey, gpio gold). */
+function padFill(type: BoardPadType | undefined): string {
+  switch (type) {
+    case 'gnd':
+      return '#2b2f36'
+    case 'vcc':
+      return '#c0392b'
+    case 'other':
+      return '#8a9099'
+    default:
+      return 'url(#bg-gold)'
+  }
+}
+
+/**
+ * The PHYSICAL board: PCB outline (sized from `box`), dashed silkscreen inset,
+ * USB nub, the declared features (MCU / wifi / chips), the onboard LED, and
+ * EVERY pad from `def.headers` (laid out by {@link layoutPads}) at its real edge
+ * position with its silk label. Pads a connection resolves to (`usedPadKeys`)
+ * are highlighted; idle pads are still drawn so the full header reads.
+ */
 function Board({
   def,
-  yTop,
-  height,
-  rows,
+  box,
+  pads,
+  usedPadKeys,
+  ledLit,
   rotation
 }: {
   def: BoardDefinition
-  yTop: number
-  height: number
-  rows: GraphRow[]
+  box: BoardBox
+  pads: PadPoint[]
+  usedPadKeys: Set<string>
+  ledLit: boolean
   rotation: 0 | 90 | 180 | 270
 }): JSX.Element {
-  const cx = BOARD_X + BOARD_W / 2 // board centre X
-  const mcuY = yTop + height / 2 - 58
-  const ledY = yTop + 50
-  const firstY = rows[0]?.y ?? FIRST_Y
-  const lastY = rows[rows.length - 1]?.y ?? FIRST_Y
+  const cx = box.x + box.w / 2 // board centre X
+  const led = ledPoint(box)
   // Legibility (#96): the in-stage counter-rotation keeps every label at a net
   // 0° / 90°-CW on screen (never upside down) for the current stage rotation.
   const { counter } = labelCounterRotation(rotation)
@@ -794,20 +936,20 @@ function Board({
     <g>
       {/* PCB + dashed silkscreen inset. */}
       <rect
-        x={BOARD_X}
-        y={yTop}
-        width={BOARD_W}
-        height={height}
+        x={box.x}
+        y={box.y}
+        width={box.w}
+        height={box.h}
         rx="18"
         fill="url(#bg-pcb)"
         stroke="#0c3a23"
         strokeWidth="1.5"
       />
       <rect
-        x={BOARD_X + 10}
-        y={yTop + 10}
-        width={BOARD_W - 20}
-        height={height - 20}
+        x={box.x + 10}
+        y={box.y + 10}
+        width={box.w - 20}
+        height={box.h - 20}
         rx="12"
         fill="none"
         stroke="rgba(255,255,255,.32)"
@@ -818,7 +960,7 @@ function Board({
       {/* USB connector nub on top. */}
       <rect
         x={cx - 28}
-        y={yTop - 16}
+        y={box.y - 16}
         width="56"
         height="24"
         rx="4"
@@ -827,99 +969,128 @@ function Board({
         strokeWidth="1"
       />
 
-      {/* Onboard LED dot + 3V3 / LED labels. */}
-      <circle cx={cx + 42} cy={ledY} r="7" fill="#e23b2b" />
-      <text
-        x={cx + 20}
-        y={ledY + 4}
-        textAnchor="end"
-        className="boardgraph__svg-label"
-        fill="#cfe8d4"
-        transform={labelTransform(counter, cx + 20, ledY + 4)}
-      >
-        3V3
-      </text>
-      <text
-        x={cx + 42}
-        y={ledY + 28}
-        textAnchor="middle"
-        className="boardgraph__svg-label"
-        fill="#bcd9c4"
-        transform={labelTransform(counter, cx + 42, ledY + 28)}
-      >
-        {def.ledLabel ?? 'LED'}
-      </text>
+      {/* Declared features (MCU / wifi / chips). When a board defines none we
+          still draw an MCU block so the centre never reads empty. */}
+      {def.features && def.features.length > 0 ? (
+        def.features.map((f, i) => (
+          <Feature key={`feat-${i}`} feature={f} box={box} counter={counter} />
+        ))
+      ) : (
+        <g>
+          <rect
+            x={cx - 58}
+            y={box.y + box.h / 2 - 58}
+            width="116"
+            height="116"
+            rx="7"
+            fill="#1c1d20"
+            stroke="#0c0d0f"
+            strokeWidth="1"
+          />
+          <text
+            x={cx}
+            y={box.y + box.h / 2 + 4}
+            textAnchor="middle"
+            className="boardgraph__svg-mcu"
+            fill="#cfd3d8"
+            transform={labelTransform(counter, cx, box.y + box.h / 2 + 4)}
+          >
+            {def.mcu}
+          </text>
+        </g>
+      )}
 
-      {/* MCU block. */}
-      <rect
-        x={cx - 58}
-        y={mcuY}
-        width="116"
-        height="116"
-        rx="7"
-        fill="#1c1d20"
-        stroke="#0c0d0f"
-        strokeWidth="1"
-      />
-      <rect x={cx - 50} y={mcuY + 8} width="100" height="100" rx="4" fill="#26282c" />
+      {/* Onboard LED dot (lit when a connection taps the ledLabel). */}
+      {def.ledLabel && (
+        <g className="boardgraph__svg-pad-text">
+          {ledLit && <circle cx={led.x} cy={led.y} r="11" fill="#46e06a" opacity="0.3" />}
+          <circle
+            cx={led.x}
+            cy={led.y}
+            r="6.5"
+            fill={ledLit ? '#46e06a' : '#e23b2b'}
+            stroke="rgba(0,0,0,0.5)"
+            strokeWidth="1"
+          />
+          <text
+            x={led.x}
+            y={led.y + 19}
+            textAnchor="middle"
+            fill="#cfe8d4"
+            transform={labelTransform(counter, led.x, led.y + 19)}
+          >
+            {def.ledLabel}
+          </text>
+        </g>
+      )}
+
+      {/* EVERY header pad at its real edge position + silk label. Used GPIO pads
+          are ringed white; idle pads are drawn dimmer so the full header reads. */}
+      <g className="boardgraph__svg-pad-text">
+        {pads.map((p, i) => {
+          const isGpio = (p.pad.type ?? 'gpio') === 'gpio'
+          const used = isGpio && usedPadKeys.has(padKey(p))
+          const vertical = p.edge === 'left' || p.edge === 'right'
+          const lx = p.edge === 'left' ? p.x + 14 : p.edge === 'right' ? p.x - 14 : p.x
+          const ly = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 12 : p.y + 18
+          const anchor: 'start' | 'middle' | 'end' =
+            p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+          return (
+            <g key={`pad-${i}`} opacity={used || !isGpio ? 1 : 0.82}>
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={PAD_R}
+                fill={padFill(p.pad.type)}
+                stroke={used ? '#fff' : isGpio ? '#9a7a1e' : 'rgba(0,0,0,0.5)'}
+                strokeWidth={used ? 2.4 : 0.8}
+              />
+              {isGpio && <circle cx={p.x} cy={p.y} r="2.6" fill="#5a4a1a" />}
+              <text
+                x={lx}
+                y={ly}
+                textAnchor={anchor}
+                fill={used ? '#fff' : '#cfe8d4'}
+                transform={labelTransform(counter, lx, ly)}
+              >
+                {p.pad.label}
+              </text>
+            </g>
+          )
+        })}
+      </g>
+    </g>
+  )
+}
+
+/** One decorative feature as a labelled rounded rect (normalised 0..1 coords). */
+function Feature({
+  feature,
+  box,
+  counter
+}: {
+  feature: BoardFeature
+  box: BoardBox
+  counter: 0 | 180
+}): JSX.Element {
+  const x = box.x + feature.x * box.w
+  const y = box.y + feature.y * box.h
+  const w = feature.w * box.w
+  const h = feature.h * box.h
+  const s = FEATURE_STYLE[feature.kind] ?? FEATURE_STYLE.chip
+  return (
+    <g>
+      <rect x={x} y={y} width={w} height={h} rx="4" fill={s.fill} stroke={s.stroke} strokeWidth="1.2" />
       <text
-        x={cx}
-        y={mcuY + 62}
-        textAnchor="middle"
-        className="boardgraph__svg-mcu"
-        fill="#cfd3d8"
-        transform={labelTransform(counter, cx, mcuY + 62)}
-      >
-        {def.mcu}
-      </text>
-      <text
-        x={cx}
-        y={mcuY + 80}
+        x={x + w / 2}
+        y={y + h / 2 + 4}
         textAnchor="middle"
         className="boardgraph__svg-sub"
-        fill="#8a8f98"
-        transform={labelTransform(counter, cx, mcuY + 80)}
+        fill={s.text}
+        transform={labelTransform(counter, x + w / 2, y + h / 2 + 4)}
       >
-        MCU
+        {feature.label}
       </text>
-
-      {/* A few decorative right-edge pads. */}
-      {[firstY, (firstY + lastY) / 2, lastY].map((y, i) => (
-        <circle
-          key={`deco-${i}`}
-          cx={BOARD_X + BOARD_W - 22}
-          cy={y}
-          r="6.5"
-          fill="url(#bg-gold)"
-          stroke="#9a7a1e"
-          strokeWidth="0.7"
-        />
-      ))}
-
-      {/* Left-edge GPIO pads — one per connection row, aligned to its node Y. */}
-      <g className="boardgraph__svg-pad-text">
-        {rows.map((r, i) => (
-          <g key={`pad-${i}`}>
-            <circle
-              cx={PAD_X}
-              cy={r.y}
-              r="7"
-              fill="url(#bg-gold)"
-              stroke="#9a7a1e"
-              strokeWidth="0.8"
-            />
-            <circle cx={PAD_X} cy={r.y} r="2.6" fill="#5a4a1a" />
-            <text
-              x={PAD_X + 16}
-              y={r.y + 4}
-              fill="#cfe8d4"
-              transform={labelTransform(counter, PAD_X + 16, r.y + 4)}
-            >
-              {r.padLabel}
-            </text>
-          </g>
-        ))}
-      </g>
     </g>
   )
 }
@@ -1032,23 +1203,32 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/** Everything {@link buildExportSvg}/{@link exportView} need to serialise. */
+interface ExportArgs {
+  rows: GraphRow[]
+  def: BoardDefinition
+  box: BoardBox
+  pads: PadPoint[]
+  usedPadKeys: Set<string>
+  ledLit: boolean
+  stageH: number
+  rotation: 0 | 90 | 180 | 270
+}
+
 /**
  * Serialise the WHOLE board view (at 1:1 in stage pixels, honouring the current
- * rotation) to a standalone `<svg>` string. The wires + board are SVG already;
- * the HTML node cards are embedded via `<foreignObject>` so the file is fully
- * self-contained (no external CSS / fonts beyond inline styles).
+ * rotation) to a standalone `<svg>` string. The wires + physical board are SVG
+ * already; the HTML node cards are embedded via `<foreignObject>` so the file is
+ * fully self-contained (no external CSS / fonts beyond inline styles).
  *
  * Export captures the full board at actual size — NOT the current zoom/pan — so
  * the saved image is always the complete, framed view; the rotation IS applied
  * (the whole drawing rotates via a group transform; labels keep the legibility
- * counter-rotation so they're never upside-down).
+ * counter-rotation so they're never upside-down). It mirrors the live `<Board/>`
+ * drawing: the full pinout from `pads`, used pads highlighted, plus the wires.
  */
-export function buildExportSvg(
-  rows: GraphRow[],
-  def: BoardDefinition,
-  stageH: number,
-  rotation: 0 | 90 | 180 | 270
-): string {
+export function buildExportSvg(args: ExportArgs): string {
+  const { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation } = args
   const W = CANVAS_W
   const H = stageH
   // Rotated canvas dimensions (90/270 swap W/H).
@@ -1062,54 +1242,80 @@ export function buildExportSvg(
   else if (rotation === 180) groupTransform = `translate(${W},${H}) rotate(180)`
   else if (rotation === 270) groupTransform = `translate(0,${W}) rotate(270)`
 
-  const boardYTop = FIRST_Y - BOARD_TOP_PAD
-  const lastY = rows.length > 0 ? rows[rows.length - 1].y : FIRST_Y
-  const boardH = lastY - boardYTop + BOARD_BOT_PAD
   const { counter } = labelCounterRotation(rotation)
+  const lt = (ax: number, ay: number): string =>
+    counter === 0 ? '' : ` transform="rotate(${counter} ${ax} ${ay})"`
 
-  // Wires + dots.
+  // Faint bus links + the main wires + node-side dots.
+  const buses = rows
+    .flatMap((r) =>
+      r.extraPads.map(
+        (p) =>
+          `<path d="${noodlePath(NODE_DOT_X, r.y, p)}" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="3 4" fill="none" opacity="0.5"/>`
+      )
+    )
+    .join('')
   const wires = rows
     .map(
-      (r) => `<path d="${noodlePath(r.y)}" stroke="${r.color}" stroke-width="2.6" fill="none"/>`
+      (r) =>
+        `<path d="${noodlePath(NODE_DOT_X, r.y, r.pad)}" stroke="${r.color}" stroke-width="2.6" fill="none"/>`
     )
     .join('')
   const dots = rows
     .map((r) => `<circle cx="${NODE_DOT_X}" cy="${r.y}" r="4.5" fill="${r.color}"/>`)
     .join('')
 
-  // Board pieces (mirrors <Board/> but as a string).
-  const cx = BOARD_X + BOARD_W / 2
-  const mcuY = boardYTop + boardH / 2 - 58
-  const ledY = boardYTop + 50
-  const firstY = rows[0]?.y ?? FIRST_Y
-  const lY = rows[rows.length - 1]?.y ?? FIRST_Y
-  const lt = (ax: number, ay: number): string =>
-    counter === 0 ? '' : ` transform="rotate(${counter} ${ax} ${ay})"`
+  // Board pieces (mirrors <Board/> but as a string): PCB, USB, features, LED,
+  // then EVERY pad of the physical pinout at its real edge position.
+  const cx = box.x + box.w / 2
+  const led = ledPoint(box)
+  const featureSvg =
+    def.features && def.features.length > 0
+      ? def.features
+          .map((f) => {
+            const fx = box.x + f.x * box.w
+            const fy = box.y + f.y * box.h
+            const fw = f.w * box.w
+            const fh = f.h * box.h
+            const s = FEATURE_STYLE[f.kind] ?? FEATURE_STYLE.chip
+            return (
+              `<rect x="${fx}" y="${fy}" width="${fw}" height="${fh}" rx="4" fill="${s.fill}" stroke="${s.stroke}" stroke-width="1.2"/>` +
+              `<text x="${fx + fw / 2}" y="${fy + fh / 2 + 4}" text-anchor="middle" font-family="monospace" font-size="9" fill="${s.text}"${lt(fx + fw / 2, fy + fh / 2 + 4)}>${esc(f.label)}</text>`
+            )
+          })
+          .join('')
+      : `<rect x="${cx - 58}" y="${box.y + box.h / 2 - 58}" width="116" height="116" rx="7" fill="#1c1d20" stroke="#0c0d0f" stroke-width="1"/>` +
+        `<text x="${cx}" y="${box.y + box.h / 2 + 4}" text-anchor="middle" font-family="monospace" font-size="13" font-weight="700" fill="#cfd3d8"${lt(cx, box.y + box.h / 2 + 4)}>${esc(def.mcu)}</text>`
+  const ledSvg = def.ledLabel
+    ? (ledLit ? `<circle cx="${led.x}" cy="${led.y}" r="11" fill="#46e06a" opacity="0.3"/>` : '') +
+      `<circle cx="${led.x}" cy="${led.y}" r="6.5" fill="${ledLit ? '#46e06a' : '#e23b2b'}" stroke="rgba(0,0,0,0.5)" stroke-width="1"/>` +
+      `<text x="${led.x}" y="${led.y + 19}" text-anchor="middle" font-family="monospace" font-size="12" fill="#cfe8d4"${lt(led.x, led.y + 19)}>${esc(def.ledLabel)}</text>`
+    : ''
+  const padSvg = pads
+    .map((p) => {
+      const isGpio = (p.pad.type ?? 'gpio') === 'gpio'
+      const used = isGpio && usedPadKeys.has(padKey(p))
+      const vertical = p.edge === 'left' || p.edge === 'right'
+      const px = p.edge === 'left' ? p.x + 14 : p.edge === 'right' ? p.x - 14 : p.x
+      const py = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 12 : p.y + 18
+      const anchor = p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+      const stroke = used ? '#fff' : isGpio ? '#9a7a1e' : 'rgba(0,0,0,0.5)'
+      return (
+        `<g opacity="${used || !isGpio ? 1 : 0.82}">` +
+        `<circle cx="${p.x}" cy="${p.y}" r="${PAD_R}" fill="${esc(padFill(p.pad.type))}" stroke="${stroke}" stroke-width="${used ? 2.4 : 0.8}"/>` +
+        (isGpio ? `<circle cx="${p.x}" cy="${p.y}" r="2.6" fill="#5a4a1a"/>` : '') +
+        `<text x="${px}" y="${py}" text-anchor="${anchor}" font-family="monospace" font-size="12" fill="${used ? '#fff' : '#cfe8d4'}"${lt(px, py)}>${esc(p.pad.label)}</text>` +
+        `</g>`
+      )
+    })
+    .join('')
   const board = [
-    `<rect x="${BOARD_X}" y="${boardYTop}" width="${BOARD_W}" height="${boardH}" rx="18" fill="url(#bg-pcb)" stroke="#0c3a23" stroke-width="1.5"/>`,
-    `<rect x="${BOARD_X + 10}" y="${boardYTop + 10}" width="${BOARD_W - 20}" height="${boardH - 20}" rx="12" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="1" stroke-dasharray="2 5"/>`,
-    `<rect x="${cx - 28}" y="${boardYTop - 16}" width="56" height="24" rx="4" fill="url(#bg-silver)" stroke="#6c727b" stroke-width="1"/>`,
-    `<circle cx="${cx + 42}" cy="${ledY}" r="7" fill="#e23b2b"/>`,
-    `<text x="${cx + 20}" y="${ledY + 4}" text-anchor="end" font-family="monospace" font-size="11" fill="#cfe8d4"${lt(cx + 20, ledY + 4)}>3V3</text>`,
-    `<text x="${cx + 42}" y="${ledY + 28}" text-anchor="middle" font-family="monospace" font-size="11" fill="#bcd9c4"${lt(cx + 42, ledY + 28)}>${esc(def.ledLabel ?? 'LED')}</text>`,
-    `<rect x="${cx - 58}" y="${mcuY}" width="116" height="116" rx="7" fill="#1c1d20" stroke="#0c0d0f" stroke-width="1"/>`,
-    `<rect x="${cx - 50}" y="${mcuY + 8}" width="100" height="100" rx="4" fill="#26282c"/>`,
-    `<text x="${cx}" y="${mcuY + 62}" text-anchor="middle" font-family="monospace" font-size="13" font-weight="700" fill="#cfd3d8"${lt(cx, mcuY + 62)}>${esc(def.mcu)}</text>`,
-    `<text x="${cx}" y="${mcuY + 80}" text-anchor="middle" font-family="monospace" font-size="9" fill="#8a8f98"${lt(cx, mcuY + 80)}>MCU</text>`,
-    [firstY, (firstY + lY) / 2, lY]
-      .map(
-        (y) =>
-          `<circle cx="${BOARD_X + BOARD_W - 22}" cy="${y}" r="6.5" fill="url(#bg-gold)" stroke="#9a7a1e" stroke-width="0.7"/>`
-      )
-      .join(''),
-    rows
-      .map(
-        (r) =>
-          `<circle cx="${PAD_X}" cy="${r.y}" r="7" fill="url(#bg-gold)" stroke="#9a7a1e" stroke-width="0.8"/>` +
-          `<circle cx="${PAD_X}" cy="${r.y}" r="2.6" fill="#5a4a1a"/>` +
-          `<text x="${PAD_X + 16}" y="${r.y + 4}" font-family="monospace" font-size="12" fill="#cfe8d4"${lt(PAD_X + 16, r.y + 4)}>${esc(r.padLabel)}</text>`
-      )
-      .join('')
+    `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="18" fill="url(#bg-pcb)" stroke="#0c3a23" stroke-width="1.5"/>`,
+    `<rect x="${box.x + 10}" y="${box.y + 10}" width="${box.w - 20}" height="${box.h - 20}" rx="12" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="1" stroke-dasharray="2 5"/>`,
+    `<rect x="${cx - 28}" y="${box.y - 16}" width="56" height="24" rx="4" fill="url(#bg-silver)" stroke="#6c727b" stroke-width="1"/>`,
+    featureSvg,
+    ledSvg,
+    padSvg
   ].join('')
 
   // Node cards as <foreignObject> HTML so the export matches the live view.
@@ -1145,9 +1351,10 @@ export function buildExportSvg(
     defs +
     `<rect x="0" y="0" width="${outW}" height="${outH}" fill="#161719"/>` +
     `<g${groupTransform ? ` transform="${groupTransform}"` : ''}>` +
+    `<g>${board}</g>` +
+    `<g fill="none" stroke-linecap="round">${buses}</g>` +
     `<g fill="none" stroke-linecap="round" opacity="0.92">${wires}</g>` +
     `<g>${dots}</g>` +
-    `<g>${board}</g>` +
     nodes +
     `</g>` +
     `</svg>`
@@ -1268,14 +1475,9 @@ function buildImagePdf(jpeg: Uint8Array, outW: number, outH: number): Blob {
 }
 
 /** Export the current board view in `fmt`, triggering a download. */
-async function exportView(
-  fmt: ExportFmt,
-  rows: GraphRow[],
-  def: BoardDefinition,
-  stageH: number,
-  rotation: 0 | 90 | 180 | 270
-): Promise<void> {
-  const svg = buildExportSvg(rows, def, stageH, rotation)
+async function exportView(fmt: ExportFmt, args: ExportArgs): Promise<void> {
+  const { stageH, rotation } = args
+  const svg = buildExportSvg(args)
   const swap = rotation === 90 || rotation === 270
   const outW = swap ? stageH : CANVAS_W
   const outH = swap ? CANVAS_W : stageH
