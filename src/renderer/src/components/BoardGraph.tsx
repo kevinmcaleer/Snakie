@@ -24,6 +24,12 @@ import {
   zoomPercent,
   type ViewTransform
 } from './board-viewport'
+import {
+  buildValueProbe,
+  liveValueDisplay,
+  parseProbeOutput,
+  type LiveValue
+} from './board-values'
 import './BoardGraph.css'
 
 /**
@@ -48,10 +54,15 @@ import './BoardGraph.css'
  * SVG/PNG/PDF export). The "PINS IN USE" table stays a normal table below the
  * transformed stage. See {@link ./board-viewport} for the (unit-tested) math.
  *
- * NOTE: node values are **idle placeholders** (a dim dot + `1` for boolean
- * input/output, `—` for bus types). Live device values are a follow-up: it would
- * need the main process to stream the board's actual pin state into this window
- * (device polling) — intentionally not implemented here.
+ * LIVE VALUES (#97): the node value readout + the header LIVE LED can reflect the
+ * REAL board state. Because reading a pin over the REPL enters the **raw REPL**
+ * (which interrupts any running user program — confirmed in the device layer) and
+ * there is no reliable "program is running" signal to gate on, live polling is an
+ * **explicit opt-in toggle** (the LIVE control), default OFF. When OFF the window
+ * never touches the device (current idle behaviour). When ON and connected, it
+ * polls one batched `device.exec` snippet (see {@link ./board-values}) on a gentle
+ * interval, parses it, and merges by source index; every failure (disconnect /
+ * busy / undefined var / timeout) silently falls back to the idle placeholder.
  */
 
 export interface BoardGraphProps {
@@ -119,6 +130,100 @@ interface GraphRow {
   padLabel: string
 }
 
+// --- Live values (#97) ------------------------------------------------------
+/** How often we poll the device for live values while LIVE is ON (ms). */
+const POLL_INTERVAL_MS = 800
+
+/** State the {@link useLiveValues} hook hands back to the view. */
+interface LiveState {
+  /** Live readings by connection source index (empty until a poll succeeds). */
+  values: Map<number, LiveValue>
+  /** True while polling AND a board is connected (drives the LIVE LED). */
+  connected: boolean
+}
+
+/**
+ * Poll the connected board for each connection's live value while `enabled`.
+ *
+ * SAFETY (issue #97 — "must not disrupt Run/Stop or the REPL"): reading a pin
+ * runs `device.exec`, which enters the raw REPL and INTERRUPTS a running user
+ * program. There is no reliable "is a program running" signal to gate on, so
+ * this is gated entirely on the explicit LIVE toggle (`enabled`) — when OFF we
+ * never touch the device. When ON we still keep the cadence gentle and never
+ * overlap two probes (a re-entrancy guard), so the port stays mostly free.
+ *
+ * Each tick: `getStatus()` first (cheap, no REPL); only if `connected` do we run
+ * ONE batched `exec` probe for all connections. We use `exec` (not `eval`)
+ * because `exec` returns `{stdout, stderr}` and never throws on a device
+ * traceback — so a partly-undefined batch still yields the readable lines.
+ * Anything that fails leaves `values` as-is for the next merge and the affected
+ * node falls back to idle. No thrown errors, no console spam.
+ */
+function useLiveValues(conns: UsedPins[], enabled: boolean): LiveState {
+  const [values, setValues] = useState<Map<number, LiveValue>>(new Map())
+  const [connected, setConnected] = useState(false)
+  // Latest connections, read inside the interval without re-arming it each edit.
+  const connsRef = useRef(conns)
+  connsRef.current = conns
+
+  useEffect(() => {
+    // OFF, or nothing to read → never touch the device; show idle placeholders.
+    if (!enabled || conns.length === 0) {
+      setValues(new Map())
+      setConnected(false)
+      return
+    }
+
+    let cancelled = false
+    let inFlight = false // re-entrancy guard: never overlap two probes.
+
+    const tick = async (): Promise<void> => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        const status = await window.api.device.getStatus()
+        if (cancelled) return
+        const isConnected = status?.state === 'connected'
+        setConnected(isConnected)
+        if (!isConnected) {
+          setValues(new Map())
+          return
+        }
+        const snippet = buildValueProbe(connsRef.current)
+        if (!snippet) {
+          setValues(new Map())
+          return
+        }
+        // `exec` never throws on a device traceback; it returns {stdout,stderr}.
+        const { stdout } = await window.api.device.exec(snippet)
+        if (cancelled) return
+        setValues(parseProbeOutput(stdout))
+      } catch {
+        // Disconnect / busy / timeout / any device error → tolerate silently and
+        // drop to idle; the LED follows connection on the next successful tick.
+        if (!cancelled) {
+          setConnected(false)
+          setValues(new Map())
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+
+    void tick() // immediate first read so LIVE feels responsive.
+    const id = window.setInterval(() => void tick(), POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+    }
+    // Re-arm only when the toggle flips or the connection COUNT changes (so the
+    // empty/non-empty branch is correct); per-edit content changes ride
+    // `connsRef` without restarting the interval.
+  }, [enabled, conns.length])
+
+  return { values, connected }
+}
+
 export function BoardGraph({
   source,
   fileName,
@@ -156,6 +261,11 @@ export function BoardGraph({
 
   // Re-parse on every source change → live update.
   const conns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
+
+  // Live device values (#97): OFF by default (the LIVE header LED doubles as the
+  // on/off toggle). When ON + connected we poll the board; OFF never touches it.
+  const [liveOn, setLiveOn] = useState(false)
+  const { values: liveValues, connected: liveConnected } = useLiveValues(conns, liveOn)
 
   // One row per connection, evenly spaced from the 46px pitch — the first pin of
   // each connection owns the row (a bus's other pins ride the same node card).
@@ -353,10 +463,27 @@ export function BoardGraph({
         <span className="boardgraph__chip">{def.mcu}</span>
 
         <div className="boardgraph__actions">
-          <span className="boardgraph__live" title="Updates live as you edit">
+          {/* LIVE doubles as the on/off control for device polling (#97). OFF:
+              dim LED, idle placeholders, device untouched. ON: lit when a board
+              is connected (green, pulsing), amber while connecting/unreadable. */}
+          <button
+            type="button"
+            className={`boardgraph__live ${liveOn ? 'is-on' : 'is-off'} ${
+              liveOn && liveConnected ? 'is-connected' : ''
+            }`}
+            onClick={() => setLiveOn((on) => !on)}
+            aria-pressed={liveOn}
+            title={
+              liveOn
+                ? liveConnected
+                  ? 'Live: reading the connected board — click to stop'
+                  : 'Live: waiting for a connected board — click to stop'
+                : 'Show live pin values from the board (polls the device — interrupts a running program). Click to start.'
+            }
+          >
             <span className="boardgraph__led" aria-hidden="true" />
             LIVE
-          </span>
+          </button>
           {onEnterCreator && (
             <button
               type="button"
@@ -465,7 +592,7 @@ export function BoardGraph({
 
               {/* Node cards (HTML, over the SVG) — one per connection. */}
               {rows.map((r, i) => (
-                <NodeCard key={`node-${i}`} row={r} rotation={rotation} />
+                <NodeCard key={`node-${i}`} row={r} rotation={rotation} live={liveValues.get(i)} />
               ))}
             </div>
 
@@ -797,13 +924,16 @@ function Board({
   )
 }
 
-/** One node card: type tag inline beside the variable + an idle value. */
+/** One node card: type tag inline beside the variable + its value readout. */
 function NodeCard({
   row,
-  rotation
+  rotation,
+  live
 }: {
   row: GraphRow
   rotation: 0 | 90 | 180 | 270
+  /** Live reading for this row's connection, or undefined → idle placeholder. */
+  live?: LiveValue
 }): JSX.Element {
   const { conn, color } = row
   // Counter-rotate the card's TEXT so it's never upside-down: at 180°/270° the
@@ -828,24 +958,25 @@ function NodeCard({
           {PIN_TYPE_TAG[conn.type]}
         </span>
         <span className="boardgraph__node-var">{conn.variable || conn.constructor}</span>
-        <NodeValue type={conn.type} />
+        <NodeValue type={conn.type} live={live} />
       </span>
     </div>
   )
 }
 
 /**
- * The right-hand value on a node card. These are **idle placeholders**: we don't
- * have live device pin state yet (a follow-up — it would need the main process to
- * stream the board's actual values into this window). Boolean input/output show a
- * dim dot + `1`; bus types (pwm/i2c/spi/pio) show a dim dot + `—`.
+ * The right-hand value on a node card. When a live reading is present it shows
+ * the real value with an **asserted** (green + glowing dot) or **rest** (dim
+ * grey) state per {@link liveValueDisplay}'s per-type rule; with no reading it
+ * shows the original idle placeholder (`1` for boolean input/output, `—` for
+ * bus/pwm types) — so disconnected / LIVE-off / unreadable looks like before.
  */
-function NodeValue({ type }: { type: PinType }): JSX.Element {
-  const boolean = type === 'input' || type === 'output'
+function NodeValue({ type, live }: { type: PinType; live?: LiveValue }): JSX.Element {
+  const { text, asserted } = liveValueDisplay(type, live)
   return (
-    <span className="boardgraph__node-val">
-      <span className="boardgraph__node-dot" />
-      {boolean ? '1' : '—'}
+    <span className={`boardgraph__node-val ${asserted ? 'is-asserted' : ''}`}>
+      <span className={`boardgraph__node-dot ${asserted ? 'is-asserted' : ''}`} />
+      {text}
     </span>
   )
 }

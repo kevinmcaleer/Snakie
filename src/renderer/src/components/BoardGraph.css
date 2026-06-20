@@ -201,13 +201,20 @@
   flex: 0 0 auto;
 }
 
+/* LIVE doubles as the device-polling on/off toggle (#97). It's a button now;
+   strip the default chrome so it still reads as the header LIVE badge. */
 .boardgraph__live {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
+  cursor: pointer;
   color: #43c46a;
 }
 
@@ -219,6 +226,33 @@
   box-shadow: 0 0 7px rgba(67, 196, 106, 0.8);
   animation: boardgraph-pulse 1.6s ease-in-out infinite;
 }
+
+/* OFF: device untouched — dim grey, no pulse. */
+.boardgraph__live.is-off {
+  color: #6a7079;
+}
+
+.boardgraph__live.is-off .boardgraph__led {
+  background: #3a3f47;
+  box-shadow: none;
+  animation: none;
+}
+
+.boardgraph__live:hover {
+  filter: brightness(1.1);
+}
+
+/* ON but not (yet) connected — amber "waiting", a slow pulse. */
+.boardgraph__live.is-on:not(.is-connected) {
+  color: #d8a23a;
+}
+
+.boardgraph__live.is-on:not(.is-connected) .boardgraph__led {
+  background: #d8a23a;
+  box-shadow: 0 0 7px rgba(216, 162, 58, 0.7);
+}
+
+/* ON + connected — green, pulsing (the default look already covers this). */
 
 @keyframes boardgraph-pulse {
   0%,
@@ -392,11 +426,22 @@
   flex: 0 0 auto;
 }
 
+/* Asserted/active live value (#97): output high / input high / pwm non-zero /
+   bus active → green text + glowing dot. Rest stays the dim grey above. */
+.boardgraph__node-val.is-asserted {
+  color: #43c46a;
+}
+
 .boardgraph__node-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: #3a3f47;
+}
+
+.boardgraph__node-dot.is-asserted {
+  background: #43c46a;
+  box-shadow: 0 0 7px rgba(67, 196, 106, 0.85);
 }
 
 /* --- Viewport control cluster (#99 zoom/fit/100%/export, #96 rotate) ---
