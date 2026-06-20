@@ -1,0 +1,57 @@
+/*
+ * Instrument host (main window) — positions the Oscilloscope (#101) + Multimeter
+ * (#102) ABOVE the code editor. The float layer overlays the editor region; the
+ * dock rail sits on its right. The layer itself is click-through (so the editor
+ * stays usable between windows) — only the instrument windows capture pointers.
+ */
+
+.instr-host {
+  position: absolute;
+  inset: 0;
+  /* Above the code editor, below app modals/dialogs (settings ≈ 1000). */
+  z-index: 50;
+  display: flex;
+  /* The layer is click-through; its children re-enable pointer events. */
+  pointer-events: none;
+}
+
+/* Hidden by the toolbar's Instruments toggle. Kept mounted (positions survive). */
+.instr-host--hidden {
+  display: none;
+}
+
+/* The floating windows live in a relatively-clipped layer over the editor. */
+.instr-host__floats {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The side dock rail re-captures pointers (it's a real panel, not click-through). */
+.instr-host .instr-dock {
+  pointer-events: auto;
+  /* The rail scrolls itself; keep it within the editor height. */
+  max-height: 100%;
+}
+
+/* Each floating instrument window: absolutely placed (left/top from the drag
+ * offset) and pointer-interactive even though the layer is click-through. */
+.instr--floating {
+  position: absolute;
+  pointer-events: auto;
+  /* A floating window casts a deeper shadow so it reads above the code. */
+  box-shadow:
+    0 22px 50px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+/* The title bar becomes a drag handle in floating mode. */
+.instr__bar--drag {
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.instr__bar--drag:active {
+  cursor: grabbing;
+}

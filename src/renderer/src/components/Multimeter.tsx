@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { InstrumentWindow, SourceSlot } from './InstrumentWindow'
+import { InstrumentWindow, SourceSlot, type FloatProps } from './InstrumentWindow'
 import { adcChannel, ADC_MAX_RAW, type AdcSample, type Stats } from './instrument-data'
 import type { UsedPins } from './parse-pins'
 import './Multimeter.css'
@@ -44,6 +44,8 @@ export interface MultimeterProps {
   onToggleDock?: () => void
   docked?: boolean
   onClose?: () => void
+  /** Floating-placement props (drag handlers + position); absent when docked. */
+  float?: FloatProps
 }
 
 /** A short `GP<pin>` label for a connection's first pin. */
@@ -65,7 +67,8 @@ export function Multimeter({
   onSelectSource,
   onToggleDock,
   docked = true,
-  onClose
+  onClose,
+  float
 }: MultimeterProps): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -83,6 +86,7 @@ export function Multimeter({
       onToggleDock={onToggleDock}
       docked={docked}
       onClose={onClose}
+      {...float}
     >
       <div className="dmm">
         {/* --- Left: the handheld meter --- */}

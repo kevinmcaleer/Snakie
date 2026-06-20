@@ -1,4 +1,12 @@
-import type { ReactNode } from 'react'
+import {
+  useCallback,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode
+} from 'react'
+import { clampOffset, type Offset } from './instrument-host'
 import './InstrumentWindow.css'
 
 /**
@@ -31,6 +39,18 @@ export interface InstrumentWindowProps {
   docked?: boolean
   /** Close this instrument window. */
   onClose?: () => void
+  /**
+   * Start a drag from the title bar (pointer-capture). When set, the title bar
+   * shows a move cursor and the grip is the drag handle — used by the floating
+   * placement in the main window ({@link InstrumentFloat}).
+   */
+  onTitlePointerDown?: (e: ReactPointerEvent<HTMLElement>) => void
+  onTitlePointerMove?: (e: ReactPointerEvent<HTMLElement>) => void
+  onTitlePointerUp?: (e: ReactPointerEvent<HTMLElement>) => void
+  /** Extra class on the root (e.g. `instr--floating`). */
+  className?: string
+  /** Absolute-position style applied to the root (floating placement). */
+  style?: CSSProperties
 }
 
 /** The shared 404px window with its title bar. */
@@ -40,11 +60,23 @@ export function InstrumentWindow({
   children,
   onToggleDock,
   docked = true,
-  onClose
+  onClose,
+  onTitlePointerDown,
+  onTitlePointerMove,
+  onTitlePointerUp,
+  className,
+  style
 }: InstrumentWindowProps): JSX.Element {
+  const draggable = !!onTitlePointerDown
   return (
-    <section className="instr" aria-label={`${name} instrument`}>
-      <header className="instr__bar">
+    <section className={`instr ${className ?? ''}`} aria-label={`${name} instrument`} style={style}>
+      <header
+        className={`instr__bar ${draggable ? 'instr__bar--drag' : ''}`}
+        onPointerDown={onTitlePointerDown}
+        onPointerMove={onTitlePointerMove}
+        onPointerUp={onTitlePointerUp}
+        onPointerCancel={onTitlePointerUp}
+      >
         <span className="instr__grip" aria-hidden="true">
           <span />
           <span />
@@ -87,6 +119,82 @@ export function InstrumentWindow({
       <div className="instr__body">{children}</div>
     </section>
   )
+}
+
+/**
+ * The set of props a draggable {@link InstrumentWindow} needs to be positioned +
+ * dragged: the title-bar pointer handlers and the absolute-position style/class.
+ * Spread straight onto an `<Oscilloscope>` / `<Multimeter>` (they forward these
+ * to {@link InstrumentWindow}).
+ */
+export interface FloatProps {
+  className: string
+  style: CSSProperties
+  onTitlePointerDown: (e: ReactPointerEvent<HTMLElement>) => void
+  onTitlePointerMove: (e: ReactPointerEvent<HTMLElement>) => void
+  onTitlePointerUp: (e: ReactPointerEvent<HTMLElement>) => void
+}
+
+/**
+ * Per-window drag state for the FLOATING placement (#98 pattern, mirrors
+ * FindReplace): a pointer-capture drag by the title-bar grip translates the
+ * window by an (x, y) offset, clamped on-screen against the host box.
+ *
+ * `initial` seeds the cascade start (so stacked windows don't overlap);
+ * `getHostSize` returns the live host box so the clamp tracks editor resizes.
+ * Returns the {@link FloatProps} to spread onto the instrument.
+ */
+export function useFloatPlacement(
+  initial: Offset,
+  getHostSize: () => { w: number; h: number }
+): FloatProps {
+  const [offset, setOffset] = useState<Offset>(initial)
+  // Live drag bookkeeping kept in a ref so the move handler doesn't re-bind.
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(
+    null
+  )
+
+  const onTitlePointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLElement>): void => {
+      // Let the dock/close keys take their click — don't start a drag from them.
+      if ((e.target as HTMLElement).closest('.instr__key')) return
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: offset.x, baseY: offset.y }
+    },
+    [offset]
+  )
+
+  const onTitlePointerMove = useCallback(
+    (e: ReactPointerEvent<HTMLElement>): void => {
+      const drag = dragRef.current
+      if (!drag) return
+      const { w, h } = getHostSize()
+      setOffset(
+        clampOffset(
+          { x: drag.baseX + (e.clientX - drag.startX), y: drag.baseY + (e.clientY - drag.startY) },
+          w,
+          h
+        )
+      )
+    },
+    [getHostSize]
+  )
+
+  const onTitlePointerUp = useCallback((e: ReactPointerEvent<HTMLElement>): void => {
+    dragRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
+  return {
+    className: 'instr--floating',
+    style: { left: offset.x, top: offset.y },
+    onTitlePointerDown,
+    onTitlePointerMove,
+    onTitlePointerUp
+  }
 }
 
 /**

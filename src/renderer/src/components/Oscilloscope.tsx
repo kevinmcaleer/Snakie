@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { InstrumentWindow, PhosphorScreen, SourceSlot } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, SourceSlot, type FloatProps } from './InstrumentWindow'
 import {
   formatDuty,
   formatFreq,
@@ -49,6 +49,8 @@ export interface OscilloscopeProps {
   onToggleDock?: () => void
   docked?: boolean
   onClose?: () => void
+  /** Floating-placement props (drag handlers + position); absent when docked. */
+  float?: FloatProps
 }
 
 /** A short `GP<pin>` label for a connection's first pin (used in pills/labels). */
@@ -65,7 +67,8 @@ export function Oscilloscope({
   onSelectSource,
   onToggleDock,
   docked = true,
-  onClose
+  onClose,
+  float
 }: OscilloscopeProps): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false)
   const [running, setRunning] = useState(true)
@@ -94,6 +97,7 @@ export function Oscilloscope({
       onToggleDock={onToggleDock}
       docked={docked}
       onClose={onClose}
+      {...float}
     >
       <PhosphorScreen className="osc__screen">
         <svg

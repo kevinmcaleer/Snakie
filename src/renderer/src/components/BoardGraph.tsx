@@ -40,19 +40,6 @@ import {
   parseProbeOutput,
   type LiveValue
 } from './board-values'
-import {
-  InstrumentDock,
-  InstrumentOverlay
-} from './InstrumentWindow'
-import { Oscilloscope } from './Oscilloscope'
-import { Multimeter } from './Multimeter'
-import {
-  adcFromU16,
-  emptyStats,
-  foldStat,
-  type AdcSample,
-  type Stats
-} from './instrument-data'
 import './BoardGraph.css'
 
 /**
@@ -162,20 +149,12 @@ interface GraphRow {
 }
 
 // --- Instruments (#101 / #102) ----------------------------------------------
-/** An open instrument window: its kind + the connection variable it tracks. */
-interface OpenInstrument {
-  kind: 'scope' | 'meter'
-  /** The connection's variable (stable id across re-parses); '' for unnamed. */
-  variable: string
-}
-
-/**
- * Minimum board-window width (px) to DOCK instruments in the side rail rather
- * than float them as an overlay. The dock rail is 436px wide; below this the
- * canvas would be squeezed too far, so we overlay instead (per the handoff's
- * responsive rule). Measured on the whole board window.
- */
-const DOCK_MIN_WIDTH = 980
+// The Oscilloscope + Multimeter are NO LONGER hosted in this (board-view) window.
+// They live in the MAIN editor window now (see InstrumentHost.tsx). The PWM/ADC
+// node launchers below fire a cross-window `window.api.instruments.open(...)`
+// request, which the main process relays to the main window. The board view
+// keeps ONLY its own #97 LIVE node readouts (the per-node value placeholders +
+// the LIVE LED), which are unrelated to instrument hosting.
 
 // --- Live values (#97) ------------------------------------------------------
 /** How often we poll the device for live values while LIVE is ON (ms). */
@@ -314,87 +293,16 @@ export function BoardGraph({
   const [liveOn, setLiveOn] = useState(false)
   const { values: liveValues, connected: liveConnected } = useLiveValues(conns, liveOn)
 
-  // --- Open instruments (#101/#102) -----------------------------------------
-  // Keyed by the connection variable so a window survives source edits as long
-  // as its variable stays declared. Opening the same kind for the same pin again
-  // is a no-op (it just stays open / focused).
-  const [instruments, setInstruments] = useState<OpenInstrument[]>([])
-  const openInstrument = useCallback((kind: 'scope' | 'meter', variable: string): void => {
-    setInstruments((cur) =>
-      cur.some((it) => it.kind === kind && it.variable === variable)
-        ? cur
-        : [...cur, { kind, variable }]
-    )
-  }, [])
-  const closeInstrument = useCallback((kind: 'scope' | 'meter', variable: string): void => {
-    setInstruments((cur) => cur.filter((it) => !(it.kind === kind && it.variable === variable)))
-  }, [])
-  const retargetInstrument = useCallback(
-    (kind: 'scope' | 'meter', fromVar: string, toVar: string): void => {
-      setInstruments((cur) => {
-        // Switching to a pin that already has this instrument open → just drop
-        // the old one (avoid a duplicate); else retarget in place.
-        if (cur.some((it) => it.kind === kind && it.variable === toVar)) {
-          return cur.filter((it) => !(it.kind === kind && it.variable === fromVar))
-        }
-        return cur.map((it) =>
-          it.kind === kind && it.variable === fromVar ? { ...it, variable: toVar } : it
-        )
-      })
+  // Open an instrument in the MAIN window (cross-window relay). The scope/meter
+  // are hosted there now; the board view only LAUNCHES them. The payload carries
+  // the connection's kind + variable (+ first pin, advisory); the main window
+  // resolves the full config against its own active file.
+  const openInstrument = useCallback(
+    (kind: 'scope' | 'meter', conn: UsedPins): void => {
+      window.api.instruments.open({ kind, variable: conn.variable, pin: conn.pins[0] })
     },
     []
   )
-
-  // Drop any instrument whose connection variable is no longer present (the user
-  // deleted/renamed the pin), so stale windows don't linger.
-  useEffect(() => {
-    setInstruments((cur) => {
-      const live = new Set(conns.map((c) => c.variable))
-      const next = cur.filter((it) => live.has(it.variable))
-      return next.length === cur.length ? cur : next
-    })
-  }, [conns])
-
-  // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), accumulated from the
-  // live volts samples. Reset when LIVE turns off (a fresh session).
-  const [meterStats, setMeterStats] = useState<Map<string, Stats>>(new Map())
-  useEffect(() => {
-    if (!liveOn) setMeterStats(new Map())
-  }, [liveOn])
-
-  // Fold each new live ADC reading into its variable's running stats.
-  useEffect(() => {
-    if (!liveOn) return
-    setMeterStats((prev) => {
-      let changed = false
-      const next = new Map(prev)
-      conns.forEach((c, i) => {
-        if (c.type !== 'adc') return
-        const live = liveValues.get(i)
-        if (!live || live.value === undefined) return
-        const { volts } = adcFromU16(live.value)
-        const folded = foldStat(next.get(c.variable) ?? emptyStats(), volts)
-        next.set(c.variable, folded)
-        changed = true
-      })
-      return changed ? next : prev
-    })
-  }, [liveValues, conns, liveOn])
-
-  // Dock vs. overlay: measure the whole board window. Wide enough → dock the
-  // instruments in the side rail; otherwise float them as an overlay (handoff).
-  // The dock-to-side key sets an explicit override (null = follow the width).
-  const [winW, setWinW] = useState<number>(() =>
-    typeof window !== 'undefined' ? window.innerWidth : 1180
-  )
-  useEffect(() => {
-    const onResize = (): void => setWinW(window.innerWidth)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  const [dockOverride, setDockOverride] = useState<boolean | null>(null)
-  const dockInstruments = dockOverride ?? winW >= DOCK_MIN_WIDTH
-  const toggleDock = useCallback(() => setDockOverride((d) => !(d ?? winW >= DOCK_MIN_WIDTH)), [winW])
 
   // The node column extent: one card per connection, 46px pitch.
   const nodeBottom = conns.length > 0 ? rowY(conns.length - 1) + NODE_H / 2 : FIRST_Y
@@ -577,61 +485,6 @@ export function BoardGraph({
   const onExport = useCallback((): void => {
     void exportView(exportFmt, { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation })
   }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation])
-
-  // --- Render the open instruments -------------------------------------------
-  // The PWM/ADC connections (sources for the scope/meter selectors).
-  const pwmConns = useMemo(() => conns.filter((c) => c.type === 'pwm'), [conns])
-  const adcConns = useMemo(() => conns.filter((c) => c.type === 'adc'), [conns])
-
-  // Resolve each open instrument to its current connection + live reading and
-  // build the JSX. An instrument whose variable no longer resolves is skipped
-  // (the cleanup effect removes it shortly after).
-  const instrumentEls = instruments
-    .map((it) => {
-      const idx = conns.findIndex((c) => c.variable === it.variable)
-      const conn = idx >= 0 ? conns[idx] : undefined
-      if (!conn) return null
-      const live = liveValues.get(idx)
-      const docked = dockInstruments
-      const onToggleDock = toggleDock
-      if (it.kind === 'scope' && conn.type === 'pwm') {
-        // Live duty fraction from the polled duty_u16 (else parsed/static).
-        const liveDuty = live && live.value !== undefined ? live.value / 65535 : undefined
-        return (
-          <Oscilloscope
-            key={`scope-${it.variable}`}
-            conn={conn}
-            sources={pwmConns}
-            fileSource={source}
-            liveDuty={liveDuty}
-            docked={docked}
-            onSelectSource={(next) => retargetInstrument('scope', it.variable, next.variable)}
-            onToggleDock={onToggleDock}
-            onClose={() => closeInstrument('scope', it.variable)}
-          />
-        )
-      }
-      if (it.kind === 'meter' && conn.type === 'adc') {
-        const sample: AdcSample | undefined =
-          live && live.value !== undefined ? adcFromU16(live.value) : undefined
-        return (
-          <Multimeter
-            key={`meter-${it.variable}`}
-            conn={conn}
-            sources={adcConns}
-            sample={sample}
-            stats={meterStats.get(it.variable)}
-            docked={docked}
-            onSelectSource={(next) => retargetInstrument('meter', it.variable, next.variable)}
-            onToggleDock={onToggleDock}
-            onClose={() => closeInstrument('meter', it.variable)}
-          />
-        )
-      }
-      return null
-    })
-    .filter((el): el is JSX.Element => el !== null)
-  const hasInstruments = instrumentEls.length > 0
 
   return (
     <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
@@ -848,14 +701,10 @@ export function BoardGraph({
                   rotation={rotation}
                   live={liveValues.get(i)}
                   onOpenScope={
-                    r.conn.type === 'pwm'
-                      ? () => openInstrument('scope', r.conn.variable)
-                      : undefined
+                    r.conn.type === 'pwm' ? () => openInstrument('scope', r.conn) : undefined
                   }
                   onOpenMeter={
-                    r.conn.type === 'adc'
-                      ? () => openInstrument('meter', r.conn.variable)
-                      : undefined
+                    r.conn.type === 'adc' ? () => openInstrument('meter', r.conn) : undefined
                   }
                 />
               ))}
@@ -974,15 +823,7 @@ export function BoardGraph({
             </div>
           </>
         )}
-
-        {/* Instruments as an OVERLAY when the window is too narrow to dock. */}
-        {hasInstruments && !dockInstruments && (
-          <InstrumentOverlay onScrim={() => setInstruments([])}>{instrumentEls}</InstrumentOverlay>
-        )}
       </div>
-
-      {/* Instruments DOCKED in the side rail on a wide window. */}
-      {hasInstruments && dockInstruments && <InstrumentDock>{instrumentEls}</InstrumentDock>}
       </div>
 
       <PinsInUse conns={conns} fileName={fileName} />
