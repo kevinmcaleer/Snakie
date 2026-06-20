@@ -168,7 +168,6 @@ export function AppShell(): JSX.Element {
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
   const rightRef = useRef<ImperativePanelHandle>(null)
-  const dockRef = useRef<ImperativePanelHandle>(null)
 
   const toggle = useCallback(
     (
@@ -304,14 +303,15 @@ export function AppShell(): JSX.Element {
   const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
   const [shellCollapsed, setShellCollapsed] = useLocalStorage('snakie.collapsed.shell', false)
   const [rightCollapsed, setRightCollapsed] = useLocalStorage('snakie.collapsed.right', true)
-  const [dockCollapsed, setDockCollapsed] = useLocalStorage('snakie.collapsed.dock', true)
-
-  // The toolbar Instruments button toggles the dock REGION (expand/collapse),
-  // mirroring the Files/Shell/Chat toggles. `instrumentsVisible` = dock open.
-  const instrumentsVisible = !dockCollapsed
+  // The instrument dock is its OWN fixed-width region to the right of the panel
+  // group — NOT a `Panel` in the group — so its show/hide is fully independent of
+  // the chat panel (two collapsible panels in one PanelGroup redistribute each
+  // other's freed space, which made toggling one reveal the other). Plain boolean.
+  const [dockOpen, setDockOpen] = useLocalStorage('snakie.instruments.dockOpen', false)
+  const instrumentsVisible = dockOpen
   const toggleInstruments = useCallback((): void => {
-    toggle(dockRef, dockCollapsed, setDockCollapsed)
-  }, [toggle, dockCollapsed, setDockCollapsed])
+    setDockOpen(!dockOpen)
+  }, [dockOpen, setDockOpen])
 
   // Opening an instrument must RELIABLY reveal it docked. We carry the FULL
   // parsed connection (`conn`) from the board node in the payload, so the
@@ -333,13 +333,9 @@ export function AppShell(): JSX.Element {
       )
       setKindVisible(kind, true)
       redockKind(kind)
-      const panel = dockRef.current
-      if (panel?.isCollapsed()) {
-        panel.expand()
-        setDockCollapsed(false)
-      }
+      setDockOpen(true) // reveal the dock region
     },
-    [setKindVisible, redockKind, setDockCollapsed]
+    [setKindVisible, redockKind, setDockOpen]
   )
   const revealForOpenRef = useRef(revealForOpen)
   revealForOpenRef.current = revealForOpen
@@ -476,33 +472,22 @@ export function AppShell(): JSX.Element {
           >
             <RightPanel />
           </Panel>
+        </PanelGroup>
 
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
-
-          {/* The INSTRUMENT DOCK region — the rightmost panel, to the RIGHT of
-              the chat. Collapsed by default; the toolbar Instruments button (or
-              an incoming `instruments:open`) expands it. `minSize`/`defaultSize`
-              are bumped (24/30) so the revealed dock comfortably fits a 404px
-              instrument window — at the old ~18% a docked instrument got crushed
-              and looked "not shown". `.instr` also reflows to `max-width:100%`
-              inside the dock (InstrumentHost.css) so it never clips. */}
-          <Panel
-            ref={dockRef}
-            order={4}
-            collapsible
-            collapsedSize={0}
-            defaultSize={dockCollapsed ? 0 : 30}
-            minSize={24}
-            onCollapse={() => setDockCollapsed(true)}
-            onExpand={() => setDockCollapsed(false)}
-          >
+        {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region
+            to the right of the chat. Kept out of the group so toggling it (or the
+            chat) never resizes the other (two collapsible panels in one group
+            redistribute each other's freed space). Shown by the toolbar
+            Instruments button or an incoming `instruments:open`. */}
+        {instrumentsVisible && (
+          <aside className="shell__dock" aria-label="Instrument dock">
             <InstrumentDockRegion
               host={instruments}
               vis={visibility}
               onToggleVisible={toggleVisible}
             />
-          </Panel>
-        </PanelGroup>
+          </aside>
+        )}
       </div>
 
       <StatusBar

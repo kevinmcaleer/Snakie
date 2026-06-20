@@ -371,34 +371,6 @@ export function Toolbar({
             )}
           </svg>
         </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}
-          aria-pressed={instrumentsVisible}
-          onClick={onToggleInstruments}
-          title={
-            instrumentCount > 0
-              ? `${instrumentsVisible ? 'Hide' : 'Show'} instruments (${instrumentCount} open)`
-              : 'Toggle instruments — open a scope/meter from a PWM/ADC pin in the Board View'
-          }
-          aria-label="Toggle instruments"
-        >
-          {/* Instrument cluster: a CRT scope screen with a square-wave trace +
-              a gauge tick, marking the oscilloscope/multimeter dock. */}
-          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
-            <rect x="3" y="4.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-            <path
-              d="M5.5 12.5 L8 12.5 L8 9.5 L11 9.5 L11 12.5 L13.5 12.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            <line x1="15" y1="12.5" x2="18" y2="9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-        </button>
       </div>
 
       <div className="toolbar__spacer" />
@@ -433,6 +405,35 @@ export function Toolbar({
           aria-label="Toggle Chat panel"
         >
           {PANEL_RIGHT_ICON}
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}
+          aria-pressed={instrumentsVisible}
+          onClick={onToggleInstruments}
+          title={
+            instrumentCount > 0
+              ? `${instrumentsVisible ? 'Hide' : 'Show'} instruments (${instrumentCount} open)`
+              : 'Toggle instruments — open a scope/meter from a PWM/ADC pin in the Board View'
+          }
+          aria-label="Toggle instruments"
+        >
+          {/* Instrument cluster: a CRT scope screen with a square-wave trace +
+              a gauge tick, marking the oscilloscope/multimeter dock. Placed right
+              of the Chat toggle so the buttons match the panel order on screen. */}
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+            <rect x="3" y="4.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            <path
+              d="M5.5 12.5 L8 12.5 L8 9.5 L11 9.5 L11 12.5 L13.5 12.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            <line x1="15" y1="12.5" x2="18" y2="9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
     </header>

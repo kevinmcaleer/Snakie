@@ -2046,6 +2046,18 @@ body {
   min-width: 0;
 }
 
+/* The instrument dock — a fixed-width region to the right of the panel group
+   (NOT a resizable panel), so its show/hide is independent of the chat panel.
+   It fits a 404px instrument window; capped on narrow windows. */
+.shell__main .shell__dock {
+  flex: 0 0 auto;
+  width: 436px;
+  max-width: 50vw;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
 .activitybar {
   display: flex;
   flex-direction: column;
