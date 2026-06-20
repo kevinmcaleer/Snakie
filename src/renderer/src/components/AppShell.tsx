@@ -16,7 +16,9 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
+import { BoardView } from './BoardView'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
+import { useWorkspace } from '../store/workspace'
 
 /**
  * Wrap a panel that lacks its own region chrome in a scrollable region.
@@ -101,6 +103,13 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
 export function AppShell(): JSX.Element {
   const { theme, toggleTheme } = useTheme()
 
+  // The active file backs the Board View popup. Reading it here (rather than
+  // inside BoardView) means the modal re-renders — and the pin parser re-runs —
+  // on every edit to the active file, so the board updates live while open.
+  const { openFiles, activeId } = useWorkspace()
+  const activeFile = openFiles.find((f) => f.id === activeId) ?? null
+  const [boardOpen, setBoardOpen] = useState(false)
+
   // Persisted collapsed state. Shell is open by default (core REPL tool);
   // the right pane is collapsed by default to keep things uncluttered.
   const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
@@ -162,6 +171,7 @@ export function AppShell(): JSX.Element {
         rightCollapsed={rightCollapsed}
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
         onOpenSettings={() => openSettings('editor')}
+        onOpenBoard={() => setBoardOpen(true)}
       />
 
       <div className="shell__body shell__main">
@@ -244,6 +254,15 @@ export function AppShell(): JSX.Element {
 
       {settingsOpen && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
+      )}
+
+      {boardOpen && (
+        <BoardView
+          source={activeFile?.content ?? ''}
+          fileName={activeFile?.name}
+          isPython={!!activeFile && /\.py$/i.test(activeFile.name)}
+          onClose={() => setBoardOpen(false)}
+        />
       )}
     </div>
   )
