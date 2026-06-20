@@ -294,12 +294,14 @@ export function BoardGraph({
   const { values: liveValues, connected: liveConnected } = useLiveValues(conns, liveOn)
 
   // Open an instrument in the MAIN window (cross-window relay). The scope/meter
-  // are hosted there now; the board view only LAUNCHES them. The payload carries
-  // the connection's kind + variable (+ first pin, advisory); the main window
-  // resolves the full config against its own active file.
+  // are hosted there now; the board view only LAUNCHES them. We already have the
+  // FULL parsed connection in scope (`conn`), so we send it verbatim — the main
+  // window renders the instrument straight from it and does NOT re-resolve
+  // against its own active file (which may not be the file that declares the
+  // pin). This is what makes the scope/meter actually appear in the dock.
   const openInstrument = useCallback(
     (kind: 'scope' | 'meter', conn: UsedPins): void => {
-      window.api.instruments.open({ kind, variable: conn.variable, pin: conn.pins[0] })
+      window.api.instruments.open({ kind, conn })
     },
     []
   )

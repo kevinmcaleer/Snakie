@@ -27,10 +27,11 @@ import type { BoardDefinition } from '../shared/board'
  * INSTRUMENT LAUNCH RELAY (#101 / #102): the Oscilloscope + Multimeter are now
  * hosted in the MAIN editor window (above the code), but their launch buttons
  * live on the board-view window's nodes. The board window `send`s an
- * `instruments:open` payload (`{kind, variable, pin?}`); the main process relays
- * it verbatim to the MAIN window, which resolves the variable against its own
- * active file and mounts/reveals the instrument. It rides this module because
- * `getMainWindow` (the relay target) is already wired here.
+ * `instruments:open` payload (`{kind, conn}` — the FULL parsed connection); the
+ * main process relays it verbatim to the MAIN window, which renders the
+ * instrument straight from `conn` (self-contained, no re-parse of its own active
+ * file) and mounts/reveals it. It rides this module because `getMainWindow` (the
+ * relay target) is already wired here.
  *
  * User-authored boards live as JSON at `<userData>/boards/*.json` (same shape
  * as {@link BoardDefinition}); they are read HERE (the renderer has no fs) and

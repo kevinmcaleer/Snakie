@@ -17,7 +17,13 @@ import {
 import { Oscilloscope } from './Oscilloscope'
 import { Multimeter } from './Multimeter'
 import { Plotter } from './Plotter'
-import { initialOffset, instrumentKey, redockKind as redockKindMap, redockOne } from './instrument-host'
+import {
+  initialOffset,
+  instrumentKey,
+  redockKind as redockKindMap,
+  redockOne,
+  unionByVariable
+} from './instrument-host'
 import './InstrumentHost.css'
 
 /**
@@ -43,12 +49,19 @@ import './InstrumentHost.css'
  *   - {@link InstrumentFloatLayer} — the app-root float layer (`position:fixed`,
  *     click-through) hosting the *undocked* scope/meter windows above everything.
  *
- * RESOLUTION: each open instrument is resolved against the MAIN window's OWN
- * active file (the same `source` AppShell streams to the board window). We
- * `parsePins(source)`, find the connection whose `variable` matches, and build the
- * source lists (PWM connections for the scope, ADC for the meter). A scope reads
- * its freq/duty from `fileSource = source`. An instrument whose variable is no
- * longer declared is dropped.
+ * RESOLUTION: each open instrument is SELF-CONTAINED — it carries the full parsed
+ * connection (`conn`) captured by the board node that launched it. We render the
+ * scope/meter straight from that stored `conn` (its type/pins/variable/
+ * constructor); we do NOT require the pin to be present in the MAIN window's
+ * active file. (The bug this fixes: instruments used to be re-resolved against —
+ * and silently wiped by — the main file's parse, so a scope/meter never appeared
+ * when the editor wasn't showing the exact `.py` that declared the pin.)
+ *
+ * The MAIN window's active file is still parsed, but ONLY to enrich the source
+ * SELECTORS (the "switch this scope to another PWM pin" dropdown) — an
+ * instrument's existence never depends on it. When the active file has no
+ * matching pins we fall back to offering the currently-open instruments of that
+ * kind as the selector options.
  *
  * LIVE VALUES: while ≥1 scope/meter is open AND a board is connected, we poll the
  * device on a gentle interval (reusing the unit-tested `buildValueProbe` /
@@ -63,11 +76,19 @@ import './InstrumentHost.css'
 /** How often we poll the device for the open instruments' values (ms). */
 const POLL_INTERVAL_MS = 800
 
-/** One open instrument: its kind + the connection variable it tracks. */
+/**
+ * One open instrument: its kind + the FULL parsed connection it renders from.
+ *
+ * `conn` is captured (verbatim) from the board node that launched the instrument
+ * and travels in the `instruments:open` payload, so the instrument is
+ * self-contained — it renders from `conn` regardless of what the MAIN editor's
+ * active file currently shows. `conn.variable` remains the stable id for
+ * deduping / keying (with the kind).
+ */
 export interface OpenInstrument {
   kind: 'scope' | 'meter'
-  /** The connection's variable (stable id across re-parses). */
-  variable: string
+  /** The full parsed connection (type/pins/variable/constructor) to render from. */
+  conn: UsedPins
 }
 
 /** Per-kind visibility flags (dock-header SCOPE/METER/PLOT toggles). Default all on. */
@@ -75,6 +96,11 @@ export interface InstrumentVisibility {
   scope: boolean
   meter: boolean
   plotter: boolean
+}
+
+/** The open instruments' OWN connections for one kind (the selector fallback). */
+function openConns(instruments: OpenInstrument[], kind: 'scope' | 'meter'): UsedPins[] {
+  return instruments.filter((it) => it.kind === kind).map((it) => it.conn)
 }
 
 /**
@@ -157,9 +183,13 @@ interface ResolvedInstrument {
  * {@link InstrumentFloatLayer}.
  */
 export interface UseInstrumentsArgs {
-  /** The MAIN window's active-file content (already `.py` when meaningful). */
+  /**
+   * The MAIN window's active-file content (already `.py` when meaningful). Used
+   * ONLY to enrich the source-SELECTOR lists; instruments render from their own
+   * stored `conn`, so this never gates an instrument's existence.
+   */
   source: string
-  /** Whether the active file is Python (gates parsing). */
+  /** Whether the active file is Python (gates the selector-only parse). */
   isPython: boolean
   /** Open scope/meter instruments (lifted to AppShell). */
   instruments: OpenInstrument[]
@@ -200,7 +230,7 @@ export interface UseInstrumentsResult {
   onToggleLive: () => void
   toggleDock: (it: OpenInstrument) => void
   closeInstrument: (kind: 'scope' | 'meter', variable: string) => void
-  retargetInstrument: (kind: 'scope' | 'meter', fromVar: string, toVar: string) => void
+  retargetInstrument: (kind: 'scope' | 'meter', fromVar: string, to: UsedPins) => void
   /**
    * Re-dock every open instrument of one kind (its `docked` overrides → true).
    * AppShell calls this when a SCOPE/METER dock button turns its kind's
@@ -218,18 +248,28 @@ export function useInstruments({
   onToggleLive,
   onHideKind
 }: UseInstrumentsArgs): UseInstrumentsResult {
-  // Re-parse the MAIN window's active file → the connections instruments resolve
-  // against (same parser the board view uses).
-  const conns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
-  const pwmConns = useMemo(() => conns.filter((c) => c.type === 'pwm'), [conns])
-  const adcConns = useMemo(() => conns.filter((c) => c.type === 'adc'), [conns])
+  // Parse the MAIN window's active file ONLY to enrich the source SELECTOR lists
+  // (the "switch this scope to another PWM pin" dropdown). Instruments DO NOT
+  // resolve against this — they render from their own stored `conn` — so an
+  // empty/non-`.py`/mismatched active file no longer wipes them. We union the
+  // in-file connections with the open instruments' own conns (deduped by
+  // variable) so the dropdown always at least lists the open instruments, and a
+  // scope/meter renders even when the active file has zero matching pins.
+  const fileConns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
+  const pwmConns = useMemo(
+    () => unionByVariable(fileConns.filter((c) => c.type === 'pwm'), openConns(instruments, 'scope')),
+    [fileConns, instruments]
+  )
+  const adcConns = useMemo(
+    () => unionByVariable(fileConns.filter((c) => c.type === 'adc'), openConns(instruments, 'meter')),
+    [fileConns, instruments]
+  )
 
-  // Drop any instrument whose variable is no longer declared (renamed/deleted).
-  useEffect(() => {
-    const live = new Set(conns.map((c) => c.variable))
-    const next = instruments.filter((it) => live.has(it.variable))
-    if (next.length !== instruments.length) onChange(next)
-  }, [conns, instruments, onChange])
+  // NOTE: there is deliberately NO "drop instruments whose variable isn't in the
+  // active file" effect any more. Instruments persist (carrying their own `conn`)
+  // until the user closes/hides them via the close→hide→re-dock model. Tying
+  // existence to the main-file parse is exactly the bug that kept the scope/meter
+  // out of the dock.
 
   // Per-instrument docked override (the dock-to-side key). Keyed by kind+variable.
   // Default is DOCKED — opening a scope/meter shows it in the INSTRUMENT DOCK
@@ -241,9 +281,9 @@ export function useInstruments({
   // it HIDES the instrument and RETURNS it to the dock, so the SCOPE/METER button
   // can bring it back. Two coordinated state changes: re-dock THIS instrument
   // (its `docked` override → true, here) and turn its KIND's visibility OFF
-  // (`onHideKind`, in AppShell). The real "remove" from `openInstruments` happens
-  // only when the pin leaves the active file (the resolve cleanup above). This
-  // matches the Plotter ✕, which already hides via its kind visibility.
+  // (`onHideKind`, in AppShell). The instrument STAYS in `openInstruments`
+  // (carrying its `conn`) so the panel button can restore it. This matches the
+  // Plotter ✕, which already hides via its kind visibility.
   const closeInstrument = useCallback(
     (kind: 'scope' | 'meter', variable: string): void => {
       setDocked((d) => redockOne(d, kind, variable))
@@ -252,24 +292,27 @@ export function useInstruments({
     [onHideKind]
   )
 
+  // Retarget a scope/meter to a different pin chosen in its source selector. The
+  // new `conn` comes straight from the picked selector option, so the instrument
+  // keeps rendering from a real connection (no re-parse needed).
   const retargetInstrument = useCallback(
-    (kind: 'scope' | 'meter', fromVar: string, toVar: string): void => {
+    (kind: 'scope' | 'meter', fromVar: string, to: UsedPins): void => {
       // Switching to a pin that already has this instrument open → drop the old
-      // one (avoid a duplicate); else retarget in place.
-      if (instruments.some((it) => it.kind === kind && it.variable === toVar)) {
-        onChange(instruments.filter((it) => !(it.kind === kind && it.variable === fromVar)))
+      // one (avoid a duplicate); else retarget in place (swap its stored conn).
+      if (instruments.some((it) => it.kind === kind && it.conn.variable === to.variable)) {
+        onChange(instruments.filter((it) => !(it.kind === kind && it.conn.variable === fromVar)))
         return
       }
       onChange(
         instruments.map((it) =>
-          it.kind === kind && it.variable === fromVar ? { ...it, variable: toVar } : it
+          it.kind === kind && it.conn.variable === fromVar ? { ...it, conn: to } : it
         )
       )
     },
     [instruments, onChange]
   )
 
-  const keyOf = (it: OpenInstrument): string => instrumentKey(it.kind, it.variable)
+  const keyOf = (it: OpenInstrument): string => instrumentKey(it.kind, it.conn.variable)
   // Toggle against the resolved value (default true) so the very first click
   // flips docked→floating instead of no-opping (`!undefined === true`).
   const toggleDock = useCallback((it: OpenInstrument): void => {
@@ -283,19 +326,25 @@ export function useInstruments({
   const instrumentsRef = useRef(instruments)
   instrumentsRef.current = instruments
   const redockKind = useCallback((kind: 'scope' | 'meter'): void => {
-    const vars = instrumentsRef.current.filter((it) => it.kind === kind).map((it) => it.variable)
+    const vars = instrumentsRef.current
+      .filter((it) => it.kind === kind)
+      .map((it) => it.conn.variable)
     setDocked((d) => redockKindMap(d, kind, vars))
   }, [])
 
-  // Live device values: poll ONLY when LIVE is on AND ≥1 scope/meter is open
-  // (the poll still checks `connected` internally). With LIVE off — the default —
-  // `active` is false, so there is no interval, no raw-REPL probe, and a running
-  // program on the board is never interrupted; instruments fall back to their
-  // static/parsed readings.
-  const liveValues = useInstrumentValues(conns, live && instruments.length > 0)
+  // Live device values: build the probe from the OPEN INSTRUMENTS' OWN conns (not
+  // the main-file parse) so live readings work regardless of the active file. The
+  // values are keyed by instrument index (the same order we resolve below). Poll
+  // ONLY when LIVE is on AND ≥1 scope/meter is open (the poll still checks
+  // `connected` internally). With LIVE off — the default — `active` is false, so
+  // there is no interval, no raw-REPL probe, and a running program on the board is
+  // never interrupted; instruments fall back to their static/parsed readings.
+  const instrumentConns = useMemo(() => instruments.map((it) => it.conn), [instruments])
+  const liveValues = useInstrumentValues(instrumentConns, live && instruments.length > 0)
 
   // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), folded from the live
-  // volts samples; reset when all instruments close (a fresh session).
+  // volts samples; reset when all instruments close (a fresh session). Indexed by
+  // instrument position to match `liveValues`.
   const [meterStats, setMeterStats] = useState<Map<string, Stats>>(new Map())
   useEffect(() => {
     if (instruments.length === 0) setMeterStats(new Map())
@@ -305,33 +354,33 @@ export function useInstruments({
     setMeterStats((prev) => {
       let changed = false
       const next = new Map(prev)
-      conns.forEach((c, i) => {
-        if (c.type !== 'adc') return
+      instruments.forEach((it, i) => {
+        if (it.kind !== 'meter' || it.conn.type !== 'adc') return
         const live = liveValues.get(i)
         if (!live || live.value === undefined) return
         const { volts } = adcFromU16(live.value)
-        next.set(c.variable, foldStat(next.get(c.variable) ?? emptyStats(), volts))
+        next.set(it.conn.variable, foldStat(next.get(it.conn.variable) ?? emptyStats(), volts))
         changed = true
       })
       return changed ? next : prev
     })
-  }, [liveValues, conns, instruments.length])
+  }, [liveValues, instruments])
 
-  // Resolve each open instrument → its connection + live reading. The cascade
-  // index gives floating windows distinct start offsets. Docked vs floating is
-  // decided per-instrument by the override map (default docked).
+  // Resolve each open instrument → its STORED connection + live reading. No
+  // main-file lookup: the conn travels with the instrument. The cascade index
+  // gives floating windows distinct start offsets; docked vs floating is decided
+  // per-instrument by the override map (default docked). We still drop a
+  // mis-kinded conn defensively (a scope must be PWM, a meter ADC).
   const resolved = instruments
     .map((it, i): ResolvedInstrument | null => {
-      const idx = conns.findIndex((c) => c.variable === it.variable)
-      const conn = idx >= 0 ? conns[idx] : undefined
-      if (!conn) return null
+      const conn = it.conn
       if (it.kind === 'scope' && conn.type !== 'pwm') return null
       if (it.kind === 'meter' && conn.type !== 'adc') return null
       return {
         it,
         conn,
-        live: liveValues.get(idx),
-        stats: meterStats.get(it.variable),
+        live: liveValues.get(i),
+        stats: meterStats.get(conn.variable),
         isDocked: docked[keyOf(it)] ?? true,
         cascade: i
       }
@@ -367,7 +416,7 @@ interface RenderArgs {
   float?: FloatProps
   onToggleDock: () => void
   onClose: () => void
-  onRetarget: (toVar: string) => void
+  onRetarget: (to: UsedPins) => void
 }
 
 /** Build the Oscilloscope/Multimeter element for one resolved instrument. */
@@ -390,7 +439,7 @@ function renderInstrument(
         onToggleLive={args.onToggleLive}
         docked={args.docked}
         float={args.float}
-        onSelectSource={(next) => args.onRetarget(next.variable)}
+        onSelectSource={(next) => args.onRetarget(next)}
         onToggleDock={args.onToggleDock}
         onClose={args.onClose}
       />
@@ -408,7 +457,7 @@ function renderInstrument(
       onToggleLive={args.onToggleLive}
       docked={args.docked}
       float={args.float}
-      onSelectSource={(next) => args.onRetarget(next.variable)}
+      onSelectSource={(next) => args.onRetarget(next)}
       onToggleDock={args.onToggleDock}
       onClose={args.onClose}
     />
@@ -431,8 +480,8 @@ function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float
     docked: !float,
     float,
     onToggleDock: () => host.toggleDock(r.it),
-    onClose: () => host.closeInstrument(r.it.kind, r.it.variable),
-    onRetarget: (toVar) => host.retargetInstrument(r.it.kind, r.it.variable, toVar)
+    onClose: () => host.closeInstrument(r.it.kind, r.it.conn.variable),
+    onRetarget: (to) => host.retargetInstrument(r.it.kind, r.it.conn.variable, to)
   })
 }
 
@@ -457,10 +506,10 @@ export function InstrumentDockRegion({
   return (
     <InstrumentDock vis={vis} onToggleVisible={onToggleVisible}>
       {vis.scope && scopeDocked.map((r) => (
-        <DockItem key={`scope:${r.it.variable}`}>{renderResolved(r, host)}</DockItem>
+        <DockItem key={`scope:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
       ))}
       {vis.meter && meterDocked.map((r) => (
-        <DockItem key={`meter:${r.it.variable}`}>{renderResolved(r, host)}</DockItem>
+        <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
       ))}
       {vis.plotter && (
         <DockItem>
@@ -510,7 +559,7 @@ export function InstrumentFloatLayer({
       aria-hidden={!visible}
     >
       {floats.map((r) => (
-        <FloatingInstrument key={`${r.it.kind}:${r.it.variable}`} r={r} host={host} />
+        <FloatingInstrument key={`${r.it.kind}:${r.it.conn.variable}`} r={r} host={host} />
       ))}
     </div>
   )

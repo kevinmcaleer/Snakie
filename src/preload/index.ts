@@ -62,19 +62,43 @@ export interface BoardSourcePayload {
 }
 
 /**
+ * One parsed board connection carried in an {@link InstrumentOpenPayload}.
+ *
+ * A STRUCTURAL mirror of the renderer's `UsedPins` (`parse-pins.ts`). The preload
+ * never imports from the renderer (it only depends on `main`/`shared` types), so
+ * we restate the shape here; the renderer's `UsedPins` is assignable to it. This
+ * is the FULL connection the board node already parsed, so the main window can
+ * render the instrument from the payload alone — without re-parsing (and possibly
+ * not finding) the pin in its own active file. `type` is left as a `string` (the
+ * renderer's `PinType` union) so the preload needn't restate that union too.
+ */
+export interface InstrumentConn {
+  /** Connection type: 'output' | 'input' | 'pwm' | 'adc' | 'i2c' | 'spi' | 'pio'. */
+  type: string
+  /** The pin labels/numbers used, in source order (e.g. `['2']`). */
+  pins: string[]
+  /** The assigned variable name (e.g. `led`), or `''` if not an assignment. */
+  variable: string
+  /** The trimmed constructor source, e.g. `PWM(Pin(2), freq=1000)`. */
+  constructor: string
+}
+
+/**
  * A cross-window "open an instrument" request. Sent from the board-view window
  * (its PWM scope / ADC meter node launchers) and relayed by the main process to
- * the MAIN editor window, where the instruments are hosted (#101 / #102). The
- * main window resolves `variable` against ITS OWN active file (the same source
- * it streams to the board window), so only the variable + kind need to travel.
+ * the MAIN editor window, where the instruments are hosted (#101 / #102).
+ *
+ * The board node already has the FULL parsed connection in scope, so we carry it
+ * verbatim (`conn`). The main window renders the instrument straight from `conn`
+ * — it does NOT re-resolve against its own active file (which may be a different,
+ * empty, or non-`.py` file). This is the fix for the scope/meter never appearing
+ * in the dock when the main editor isn't showing the file that declares the pin.
  */
 export interface InstrumentOpenPayload {
   /** Which instrument to open: an oscilloscope (PWM) or a multimeter (ADC). */
   kind: 'scope' | 'meter'
-  /** The connection's variable name — the stable id the host resolves config by. */
-  variable: string
-  /** The connection's first pin (advisory; the host re-resolves from its file). */
-  pin?: string
+  /** The full parsed connection the instrument renders from (self-contained). */
+  conn: InstrumentConn
 }
 
 /**

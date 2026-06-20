@@ -19,6 +19,7 @@ import {
   type InstrumentVisibility,
   type OpenInstrument
 } from './InstrumentHost'
+import type { UsedPins } from './parse-pins'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
@@ -276,19 +277,23 @@ export function AppShell(): JSX.Element {
     toggle(dockRef, dockCollapsed, setDockCollapsed)
   }, [toggle, dockCollapsed, setDockCollapsed])
 
-  // Opening an instrument must RELIABLY reveal it docked. Three things have to
-  // line up, so we route them through a ref the once-registered IPC listener
-  // reads live (no stale closure): (1) add it to `openInstruments` (default
-  // `docked` is true → it resolves into the DOCK, not the float layer); (2)
-  // re-dock it + turn its KIND's visibility back ON, so an instrument that was
-  // floated/closed (hidden) earlier comes back docked + visible; (3) expand the
-  // dock panel if collapsed so the 404px window actually has room.
+  // Opening an instrument must RELIABLY reveal it docked. We carry the FULL
+  // parsed connection (`conn`) from the board node in the payload, so the
+  // instrument is SELF-CONTAINED — it renders from `conn` regardless of the main
+  // editor's active file (the fix for the scope/meter never reaching the dock).
+  // Three things have to line up, so we route them through a ref the
+  // once-registered IPC listener reads live (no stale closure): (1) add it to
+  // `openInstruments` (deduped by kind+conn.variable; default `docked` is true →
+  // it resolves into the DOCK, not the float layer); (2) re-dock it + turn its
+  // KIND's visibility back ON, so an instrument that was floated/closed (hidden)
+  // earlier comes back docked + visible; (3) expand the dock panel if collapsed
+  // so the 404px window actually has room.
   const revealForOpen = useCallback(
-    (kind: 'scope' | 'meter', variable: string): void => {
+    (kind: 'scope' | 'meter', conn: UsedPins): void => {
       setOpenInstruments((cur) =>
-        cur.some((it) => it.kind === kind && it.variable === variable)
+        cur.some((it) => it.kind === kind && it.conn.variable === conn.variable)
           ? cur
-          : [...cur, { kind, variable }]
+          : [...cur, { kind, conn }]
       )
       setKindVisible(kind, true)
       redockKind(kind)
@@ -305,9 +310,12 @@ export function AppShell(): JSX.Element {
 
   useEffect(() => {
     // Registered once; the handler delegates to the live ref so it never goes
-    // stale across re-renders (the dock reveal can't race the open).
+    // stale across re-renders (the dock reveal can't race the open). The relayed
+    // payload's `conn` is the preload's structural `InstrumentConn`; it's the
+    // same shape as `UsedPins` (the renderer's `PinType` union narrows `type`),
+    // so we cast at the IPC boundary.
     const off = window.api.instruments.onOpen((payload) => {
-      revealForOpenRef.current(payload.kind, payload.variable)
+      revealForOpenRef.current(payload.kind, payload.conn as UsedPins)
     })
     return off
   }, [])
