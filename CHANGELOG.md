@@ -6,6 +6,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Board View popup.** A new editor pop-up that parses the active Python file for
+  pin usage (`Pin`, `PWM`, `I2C`, `SPI`, `StateMachine`) and draws a Raspberry Pi
+  Pico 2 W / RP2350 board with colour-coded wires from each used GPIO to a
+  representative peripheral (LED, SG90 servo, BME280, WS2812, ST7789), plus a
+  "pins in use" table listing the bus, pins, variable and constructor. Opens from a
+  **Board** button in the toolbar and re-wires live as you edit.
+
+### Changed
+- **Packages panel — manila-tag skin (Skeuomorph).** The package manager is
+  reskinned as kraft manila tags on green felt (kraft spine, eyelet, version
+  rubber-stamp, INSTALL gold key / INSTALLED green stamp), with a live **flash
+  usage** readout + meter sourced from the device's `os.statvfs('/')` when
+  connected. Search/install behaviour is unchanged.
+- **Plugins panel — module-rack skin (Skeuomorph).** The Plugins view is reskinned
+  as a eurorack module rack — brushed faceplates with mounting rails, hex screws,
+  per-module accent stripe, knob/LED/patch-jack — where **mounted** modules are
+  plugins that loaded OK (click to patch in and run their commands) and
+  **available** modules are ones that failed to load (gold **GET** retries the
+  load). All plugin actions are preserved.
+- **Find & Replace polish (Skeuomorph).** The Find & Replace panel (#92) becomes a
+  draggable brushed-aluminium floating dialog with **whole-word** and **regex**
+  toggles (invalid patterns are guarded, not thrown) and an **N of M matches**
+  counter. All existing find/replace behaviour and shortcuts are unchanged.
+
 ## [0.7.0] - 2026-06-20
 
 ### Added
