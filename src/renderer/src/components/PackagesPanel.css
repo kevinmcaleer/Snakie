@@ -1,10 +1,12 @@
 /*
  * Styles co-located with PackagesPanel (issue #20).
  *
- * In-app MicroPython package installer: a prominent search box, a discovery
- * list of popular libraries, per-package install controls, and a collapsible
- * Advanced section. Uses the shared design tokens from index.css so it tracks
- * the active theme.
+ * In-app MicroPython package installer: a header with a live flash-usage meter,
+ * a prominent search box, a discovery list of popular libraries (split into
+ * INSTALLED / REGISTRY groups), and a collapsible Advanced section. The base
+ * rules use the shared design tokens from index.css so they track the active
+ * theme; the skeuomorph "manila tags on green felt" treatment (matching Source
+ * Control) lives in index.css under the themed selectors.
  */
 
 .pkgs {
@@ -19,6 +21,45 @@
   padding: 0.7rem 0.85rem;
   color: var(--text-muted);
   line-height: 1.5;
+}
+
+/* --- Header + flash meter -------------------------------------------------- */
+
+.pkgs__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.55rem 0.85rem 0.3rem;
+}
+
+.pkgs__title {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.pkgs__flash-readout {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.pkgs__meter {
+  position: relative;
+  height: 9px;
+  margin: 0 0.85rem 0.5rem;
+  border-radius: 5px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.pkgs__meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--accent, #2f9b4a);
+  border-radius: 5px;
+  transition: width 0.25s ease;
 }
 
 /* --- Search ---------------------------------------------------------------- */
@@ -103,9 +144,9 @@
   font-size: 0.78rem;
 }
 
-/* --- List ------------------------------------------------------------------ */
+/* --- Groups ---------------------------------------------------------------- */
 
-.pkgs__list-head {
+.pkgs__group-head {
   padding: 0.45rem 0.85rem;
   color: var(--text-muted);
   font-size: 0.74rem;
@@ -115,24 +156,37 @@
 
 .pkgs__list {
   margin: 0;
-  padding: 0;
+  padding: 0 0.85rem;
   list-style: none;
 }
 
-.pkgs__item {
+/* --- Package tag ----------------------------------------------------------- */
+
+.pkgs__tag {
+  position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid var(--border);
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem 0.5rem 0.95rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
 }
 
-.pkgs__item-main {
+.pkgs__tag-spine {
+  display: none;
+}
+
+.pkgs__tag-eyelet {
+  display: none;
+}
+
+.pkgs__tag-body {
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.pkgs__item-head {
+.pkgs__tag-head {
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -140,37 +194,48 @@
 }
 
 .pkgs__name {
-  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
   word-break: break-word;
 }
 
 .pkgs__version {
+  padding: 0.02rem 0.28rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
   color: var(--text-muted);
-  font-size: 0.74rem;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.pkgs__desc {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pkgs__tag-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 0.45rem;
 }
 
 .pkgs__src {
-  padding: 0.02rem 0.3rem;
-  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.66rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--text-muted);
-  background: var(--bg-sunken);
 }
 
-.pkgs__src--pypi {
-  color: var(--text);
-}
-
-.pkgs__desc {
-  margin: 0.2rem 0 0;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  line-height: 1.4;
-}
-
-.pkgs__install-btn {
+/* INSTALL / RETRY action — a small button (gold "key" in the skeuomorph skin). */
+.pkgs__key {
   flex: 0 0 auto;
   padding: 0.25rem 0.6rem;
   background: var(--bg-sunken);
@@ -178,17 +243,35 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   cursor: pointer;
 }
 
-.pkgs__install-btn:hover:not(:disabled) {
+.pkgs__key:hover:not(:disabled) {
   background: var(--bg-elevated);
 }
 
-.pkgs__install-btn:disabled {
+.pkgs__key:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* INSTALLED rubber stamp. */
+.pkgs__stamp {
+  flex: 0 0 auto;
+  padding: 0.06rem 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 3px;
+}
+
+.pkgs__stamp--installed {
+  color: var(--success, #2f6b2a);
+  border: 2px solid var(--success, #2f6b2a);
 }
 
 /* --- Result / notes / log -------------------------------------------------- */
