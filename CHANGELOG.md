@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-06-20
+
 ### Added
 - **Plotter alongside the console (#103).** The serial Plotter is now a toggle in
   the Shell header that splits the dock to show the live chart **next to** the
@@ -402,7 +404,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.3...v0.7.0
