@@ -6,7 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Instrument LIVE toggle.** The Oscilloscope/Multimeter now have a **LIVE** toggle
+  (default **off**) that gates the device polling, so opening an instrument no longer
+  interrupts a running program by surprise — instruments show static/parsed readings
+  until you turn LIVE on. While LIVE is on, the **status bar warns** that polling is
+  interrupting the board and offers a one-click **Stop**.
+
+### Fixed
+- **Console no longer shows internal probe traffic.** Live-value polling runs over the
+  raw REPL via `device.exec`; the device layer was broadcasting that to the terminal,
+  so probe lines (`<<SNKV>>…`), raw-REPL banners and interrupts polluted the console.
+  Internal `exec` traffic is now suppressed from the terminal (your typing + Run still
+  stream through).
+
 ### Changed
+- **Stop button doubles as Reset.** Pressing Stop interrupts a running program (Ctrl-C),
+  or — when nothing is running — soft-resets the board (Ctrl-D); the button shows
+  **Stop** or **Reset** accordingly.
 - **Instruments live in the main window.** The Oscilloscope, Multimeter and Plotter
   now live in the main editor window, not the Board View window. Undocked, they are
   **draggable windows that float above the whole window**; docked, they sit in an
