@@ -1,10 +1,11 @@
 /*
  * Styles co-located with ShellPanel (issue #21).
  *
- * Adds the Console / Plotter segmented toggle in the Shell header and the
- * stacked view containers that let both the xterm terminal and the Plotter stay
- * mounted while only one is visible. The shared `.btn` family and panel layout
- * live in index.css; this file only adds what is specific to the toggle.
+ * Adds the Console / Problems segmented toggle in the Shell header and the
+ * stacked view containers that let both the xterm terminal and the Problems
+ * view stay mounted while only one is visible. The shared `.btn` family and
+ * panel layout live in index.css; this file only adds what is specific to the
+ * toggle. (The live Plotter moved to the instrument dock, right of chat.)
  */
 
 .shell-toggle {
@@ -40,46 +41,9 @@
   color: var(--accent-contrast);
 }
 
-/* --- Plotter toggle key (issue #103) -----------------------------------
- * A standalone pressable hardware key (vs. the segmented Console/Problems
- * tabs). Active = pressed-in: it reads as a held-down skeuomorph key so the
- * user can tell the plotter is split alongside the console. */
-.shell-key {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  appearance: none;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  padding: 0.2rem 0.55rem;
-  line-height: 1.4;
-  cursor: pointer;
-}
-
-.shell-key:hover {
-  background: var(--bg);
-  color: var(--text);
-}
-
-.shell-key--active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-  border-color: var(--accent);
-  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
-.shell-key__glyph {
-  font-size: 0.85em;
-  line-height: 1;
-}
-
-/* The shell body. By default a single full-body view fills it; when the Plotter
- * toggle is on, `--plotter` turns it into a split row (console left, plotter
- * right). Either way the inactive views are CSS-hidden so they keep their state
- * (terminal scrollback / plotted data) without painting. */
+/* The shell body. A single full-body view fills it (Console or Problems); the
+ * inactive view is CSS-hidden so it keeps its state (terminal scrollback)
+ * without painting. */
 .shell-split {
   display: flex;
   flex-direction: row;
@@ -97,16 +61,7 @@
   display: none;
 }
 
-/* When the plotter is split alongside the console, it takes the right ~42% of
- * the body (a sensible split — console keeps the majority for scrollback) with a
- * divider between the two panes. */
-.shell-split--plotter .shell-view--plotter {
-  flex: 0 0 42%;
-  max-width: 42%;
-  border-left: 1px solid var(--border);
-}
-
-/* Problems view scrolls independently of the terminal/plotter. */
+/* Problems view scrolls independently of the terminal. */
 .shell-view--problems {
   overflow: auto;
 }

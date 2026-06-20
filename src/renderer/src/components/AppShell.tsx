@@ -12,7 +12,13 @@ import { PluginsPanel } from './PluginsPanel'
 import { InspectPanel } from './InspectPanel'
 import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
-import { InstrumentHost, type OpenInstrument } from './InstrumentHost'
+import {
+  InstrumentDockRegion,
+  InstrumentFloatLayer,
+  useInstruments,
+  type InstrumentVisibility,
+  type OpenInstrument
+} from './InstrumentHost'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
@@ -155,16 +161,77 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
-  // --- Instruments hosted in the MAIN window (#101 / #102) -------------------
-  // The Oscilloscope + Multimeter now float over / dock beside the code editor
-  // in THIS window. The board-view window's node launchers fire a cross-window
-  // `instruments.open(...)` request (relayed by the main process); we receive it
-  // here and add the instrument. `instrumentsVisible` (default true) is toggled
-  // by the toolbar button — false hides the host (kept mounted, positions
-  // survive). Opening an instrument also reveals the host.
-  const [openInstruments, setOpenInstruments] = useState<OpenInstrument[]>([])
-  const [instrumentsVisible, setInstrumentsVisible] = useState(true)
+  // Panel handles + the shared collapse toggle (Files / Shell / Chat / dock).
+  // Defined here (above the instrument wiring) so the toolbar Instruments button
+  // can reuse the same `toggle` helper to expand/collapse the dock region.
+  const filesRef = useRef<ImperativePanelHandle>(null)
+  const shellRef = useRef<ImperativePanelHandle>(null)
+  const rightRef = useRef<ImperativePanelHandle>(null)
+  const dockRef = useRef<ImperativePanelHandle>(null)
 
+  const toggle = useCallback(
+    (
+      ref: React.RefObject<ImperativePanelHandle>,
+      collapsed: boolean,
+      setCollapsed: (v: boolean) => void
+    ): void => {
+      const panel = ref.current
+      if (!panel) return
+      if (collapsed) panel.expand()
+      else panel.collapse()
+      setCollapsed(!collapsed)
+    },
+    []
+  )
+
+  // --- Instruments hosted in the MAIN window (#101 / #102 / #103) ------------
+  // The Oscilloscope + Multimeter + Plotter now live in a dedicated DOCK REGION
+  // (the rightmost panel, to the RIGHT of the chat panel) while *undocked*
+  // scope/meter windows float over the WHOLE window from an app-root layer. The
+  // board-view window's node launchers fire a cross-window `instruments.open(...)`
+  // request (relayed by the main process); we receive it here, add the
+  // instrument, and reveal the dock.
+  //
+  // All the instrument state is lifted here (single source of truth) because the
+  // toolbar (count), the dock region, AND the app-root float layer all read it:
+  //   - `openInstruments` — the open scope/meter list.
+  //   - `visibility` — the SCOPE/METER/PLOT dock-header visibility flags (all on
+  //     by default); orthogonal to each instrument's docked state.
+  //   - the dock panel collapse (the toolbar Instruments button toggles it).
+  const [openInstruments, setOpenInstruments] = useState<OpenInstrument[]>([])
+  const [visibility, setVisibility] = useLocalStorage<InstrumentVisibility>(
+    'snakie.instruments.visibility',
+    { scope: true, meter: true, plotter: true }
+  )
+  const toggleVisible = useCallback(
+    (kind: keyof InstrumentVisibility): void =>
+      setVisibility({ ...visibility, [kind]: !visibility[kind] }),
+    [visibility, setVisibility]
+  )
+
+  const instruments = useInstruments({
+    source: boardSource,
+    isPython: boardIsPython,
+    instruments: openInstruments,
+    onChange: setOpenInstruments
+  })
+
+  // Persisted collapsed state. Shell is open by default (core REPL tool); the
+  // right pane + the instrument dock are collapsed by default to keep things
+  // uncluttered (the dock reveals on toggle or when an instrument opens).
+  const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
+  const [shellCollapsed, setShellCollapsed] = useLocalStorage('snakie.collapsed.shell', false)
+  const [rightCollapsed, setRightCollapsed] = useLocalStorage('snakie.collapsed.right', true)
+  const [dockCollapsed, setDockCollapsed] = useLocalStorage('snakie.collapsed.dock', true)
+
+  // The toolbar Instruments button toggles the dock REGION (expand/collapse),
+  // mirroring the Files/Shell/Chat toggles. `instrumentsVisible` = dock open.
+  const instrumentsVisible = !dockCollapsed
+  const toggleInstruments = useCallback((): void => {
+    toggle(dockRef, dockCollapsed, setDockCollapsed)
+  }, [toggle, dockCollapsed, setDockCollapsed])
+
+  // Opening an instrument (board node launcher) reveals the dock if collapsed.
   useEffect(() => {
     const off = window.api.instruments.onOpen((payload) => {
       const { kind, variable } = payload
@@ -173,20 +240,15 @@ export function AppShell(): JSX.Element {
           ? cur
           : [...cur, { kind, variable }]
       )
-      setInstrumentsVisible(true) // opening reveals the host
+      // Reveal the dock. `dockRef.current` is read live so this isn't stale.
+      const panel = dockRef.current
+      if (panel?.isCollapsed()) {
+        panel.expand()
+        setDockCollapsed(false)
+      }
     })
     return off
-  }, [])
-
-  const toggleInstruments = useCallback((): void => {
-    setInstrumentsVisible((v) => !v)
-  }, [])
-
-  // Persisted collapsed state. Shell is open by default (core REPL tool);
-  // the right pane is collapsed by default to keep things uncluttered.
-  const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
-  const [shellCollapsed, setShellCollapsed] = useLocalStorage('snakie.collapsed.shell', false)
-  const [rightCollapsed, setRightCollapsed] = useLocalStorage('snakie.collapsed.right', true)
+  }, [setDockCollapsed])
 
   // Which view the left sidebar shows, driven by the ActivityBar.
   const [activityView, setActivityView] = useLocalStorage<ActivityView>(
@@ -214,22 +276,6 @@ export function AppShell(): JSX.Element {
     window.addEventListener(OPEN_SETTINGS_EVENT, handler)
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, handler)
   }, [openSettings])
-
-  const filesRef = useRef<ImperativePanelHandle>(null)
-  const shellRef = useRef<ImperativePanelHandle>(null)
-  const rightRef = useRef<ImperativePanelHandle>(null)
-
-  const toggle = (
-    ref: React.RefObject<ImperativePanelHandle>,
-    collapsed: boolean,
-    setCollapsed: (v: boolean) => void
-  ): void => {
-    const panel = ref.current
-    if (!panel) return
-    if (collapsed) panel.expand()
-    else panel.collapse()
-    setCollapsed(!collapsed)
-  }
 
   return (
     <div className="shell">
@@ -290,13 +336,6 @@ export function AppShell(): JSX.Element {
               <Panel order={1} minSize={20}>
                 <div className="shell__editor-region">
                   <EditorArea />
-                  <InstrumentHost
-                    source={boardSource}
-                    isPython={boardIsPython}
-                    visible={instrumentsVisible}
-                    instruments={openInstruments}
-                    onChange={setOpenInstruments}
-                  />
                 </div>
               </Panel>
 
@@ -331,10 +370,36 @@ export function AppShell(): JSX.Element {
           >
             <RightPanel />
           </Panel>
+
+          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+
+          {/* The INSTRUMENT DOCK region — the rightmost panel, to the RIGHT of
+              the chat. Collapsed by default; the toolbar Instruments button (or
+              an incoming `instruments:open`) expands it. */}
+          <Panel
+            ref={dockRef}
+            order={4}
+            collapsible
+            collapsedSize={0}
+            defaultSize={dockCollapsed ? 0 : 26}
+            minSize={18}
+            onCollapse={() => setDockCollapsed(true)}
+            onExpand={() => setDockCollapsed(false)}
+          >
+            <InstrumentDockRegion
+              host={instruments}
+              vis={visibility}
+              onToggleVisible={toggleVisible}
+            />
+          </Panel>
         </PanelGroup>
       </div>
 
       <StatusBar />
+
+      {/* App-root float layer: undocked scope/meter windows float over the WHOLE
+          window (above the panels, below modals). Click-through layer. */}
+      <InstrumentFloatLayer host={instruments} vis={visibility} visible={instrumentsVisible} />
 
       {settingsOpen && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />

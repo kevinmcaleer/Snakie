@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { PanelHeader } from './PanelHeader'
 import { Terminal, type TerminalHandle } from './Terminal'
-import { Plotter } from './Plotter'
 import { Problems } from './Problems'
 import { ConnectionControl } from './ConnectionControl'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -29,22 +28,17 @@ interface ShellPanelProps {
  * default by design (the REPL is core to the tool).
  *
  * The Shell header carries a Console / Problems segmented toggle (mutually
- * exclusive, full-body views) plus an independent **Plotter** toggle key
- * (issue #103). When the Plotter is ON it opens as a *secondary* pane **beside**
- * the console (split: console left, the skeuomorphic strip-chart {@link Plotter}
- * right) so the user sees both the REPL scrollback **and** the live plot at once
- * — rather than swapping the body as the old segmented tab did. The toggle
- * persists in `localStorage` (`snakie.plotterOpen`).
+ * exclusive, full-body views). The live Plotter used to live here as a split
+ * pane; it now lives in the instrument dock (right of chat) so the shell is
+ * Console / Problems only.
  *
- * All three bodies (Terminal, Plotter, Problems) stay mounted; the inactive ones
- * are hidden via CSS so console scrollback and plotted data survive toggling,
- * and the Plotter subscribes independently to the broadcast serial stream.
+ * Both bodies (Terminal, Problems) stay mounted; the inactive one is hidden via
+ * CSS so console scrollback survives toggling.
  */
 export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
   const status = useDeviceStatus()
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
-  const [plotterOpen, setPlotterOpen] = useLocalStorage<boolean>('snakie.plotterOpen', false)
   const { diagnostics } = useDiagnostics()
   const { getSinceRun } = useConsole()
   const [lintingEnabled, setLintingEnabled] = useLocalStorage<boolean>(
@@ -69,11 +63,6 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
   }, [getSinceRun])
 
   const problemsLabel = diagnostics.length > 0 ? `Problems (${diagnostics.length})` : 'Problems'
-
-  // The Plotter shows alongside whichever full-body view is active EXCEPT
-  // Problems, which keeps its own full-body view (the plot pane stays mounted so
-  // its data survives — it just hides while Problems is showing).
-  const plotterVisible = plotterOpen && view !== 'problems'
 
   return (
     <section className="region region--shell" aria-label="Shell">
@@ -101,18 +90,6 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
                 {problemsLabel}
               </button>
             </div>
-            <button
-              type="button"
-              className={`shell-key${plotterOpen ? ' shell-key--active' : ''}`}
-              aria-pressed={plotterOpen}
-              onClick={() => setPlotterOpen(!plotterOpen)}
-              title={plotterOpen ? 'Hide the live plotter' : 'Show the live plotter beside the console'}
-            >
-              <span className="shell-key__glyph" aria-hidden="true">
-                📈
-              </span>
-              <span>Plotter</span>
-            </button>
             {view === 'problems' && (
               <label className="shell-lint-toggle" title="Toggle Python linting">
                 <input
@@ -155,7 +132,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
           </div>
         }
       />
-      <div className={`region__body region__body--terminal shell-split${plotterVisible ? ' shell-split--plotter' : ''}`}>
+      <div className="region__body region__body--terminal shell-split">
         <div
           className={`shell-view${view === 'console' ? '' : ' shell-view--hidden'}`}
           role="tabpanel"
@@ -167,13 +144,6 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
           role="tabpanel"
         >
           <Problems />
-        </div>
-        <div
-          className={`shell-view shell-view--plotter${plotterVisible ? '' : ' shell-view--hidden'}`}
-          role="tabpanel"
-          aria-label="Live plotter"
-        >
-          <Plotter />
         </div>
       </div>
     </section>

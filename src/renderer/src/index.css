@@ -1520,9 +1520,9 @@ body {
   min-height: 0;
 }
 
-/* The editor region hosts the code editor PLUS the floating/docked instruments
- * (#101 / #102) layered above it. Relative so the InstrumentHost overlay
- * (position: absolute; inset: 0) clips to the editor area. */
+/* The editor region hosts the code editor. (The instruments moved out: docked
+ * ones now live in the dock region, right of chat; undocked ones float in an
+ * app-root layer over the whole window.) */
 .shell__editor-region {
   position: relative;
   width: 100%;
