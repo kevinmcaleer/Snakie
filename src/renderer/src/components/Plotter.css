@@ -1,10 +1,13 @@
 /*
- * Styles co-located with Plotter (issue #21).
+ * Styles co-located with Plotter (issue #21; reskinned for #103).
  *
- * The plotter fills the Shell panel body when the Console/Plotter toggle is set
- * to "Plotter". It hand-rolls a canvas line chart (no charting dependency) plus
- * a small control row (pause/resume, clear, window size) and a series legend.
- * Colours are theme-aware via the shared CSS custom properties from index.css.
+ * The plotter is a skeuomorphic strip-chart recorder. The CRT bezel + the
+ * blue-phosphor screen come from the shared `PhosphorScreen` (`.instr__bezel` /
+ * `.instr__screen` + the `--blue` variant) in InstrumentWindow.css; this file
+ * only adds what is specific to the plotter: the canvas fill, the in-screen
+ * legend + samples·Hz readout overlays, and the footer with the `auto-scroll ·
+ * live` label and the single metal CLEAR key. The screen is intrinsically dark,
+ * so it reads identically on light & dark themes.
  */
 
 .plotter {
@@ -13,92 +16,112 @@
   height: 100%;
   min-height: 0;
   box-sizing: border-box;
+  padding: 10px;
+  gap: 10px;
   background: var(--bg-sunken);
-  color: var(--text);
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
 }
 
-.plotter__controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 0 0 auto;
-  padding: 0.35rem 0.45rem;
-  border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
-}
-
-.plotter__window {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-left: auto;
-}
-
-.plotter__window-input {
-  width: 5rem;
-  background: var(--bg-elevated);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.15rem 0.35rem;
-  font-size: 0.8rem;
-}
-
-.plotter__legend {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-  flex: 0 0 auto;
-  padding: 0.3rem 0.45rem;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.78rem;
-  min-height: 1.4rem;
-}
-
-.plotter__legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  color: var(--text);
-}
-
-.plotter__legend-swatch {
-  width: 0.7rem;
-  height: 0.7rem;
-  border-radius: 2px;
-  flex: 0 0 auto;
-}
-
-.plotter__legend-empty {
-  color: var(--text-muted);
-  font-style: italic;
-}
-
-.plotter__canvas-wrap {
-  position: relative;
+/* The CRT bezel + blue screen fill the available space. The shared
+ * `.instr__bezel`/`.instr__screen` have fixed instrument-window sizing; override
+ * them here so the plotter screen flexes to the shell split. */
+.plotter .instr__bezel {
   flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.plotter .instr__screen.plotter__screen {
+  flex: 1;
+  width: 100%;
+  height: auto;
   min-height: 0;
 }
 
 .plotter__canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.plotter__paused-badge {
+/* In-screen legend (top-left), glowing phosphor swatches `■ name`. Sits above
+ * the canvas but below the scanline/vignette/gloss overlays that PhosphorScreen
+ * appends after its children. */
+.plotter__legend {
   position: absolute;
-  top: 0.4rem;
-  right: 0.5rem;
-  padding: 0.1rem 0.45rem;
-  border-radius: var(--radius);
-  background: var(--danger);
-  color: #fff;
-  font-size: 0.7rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  left: 9px;
+  top: 6px;
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 18px);
+  font-size: 10px;
+  font-weight: 600;
   pointer-events: none;
+}
+
+.plotter__legend-item {
+  white-space: nowrap;
+}
+
+.plotter__legend-empty {
+  color: #6f95b0;
+  font-style: italic;
+}
+
+/* `<N> samples · <rate> Hz` readout, bottom-right of the screen. */
+.plotter__readout {
+  position: absolute;
+  right: 9px;
+  bottom: 6px;
+  font-size: 10px;
+  color: #6f95b0;
+  pointer-events: none;
+}
+
+/* Footer: `auto-scroll · live` label (left) + the lone metal CLEAR key. */
+.plotter__footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.plotter__status {
+  font-size: 11px;
+  color: #4a4f57;
+}
+
+.plotter__clear {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #90949b, #74787f);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+  color: #26282c;
+  font-family: inherit;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.plotter__clear:hover {
+  background: linear-gradient(180deg, #9aa0a8, #7e828a);
+}
+
+.plotter__clear:active {
+  background: linear-gradient(180deg, #7e828a, #6a6e75);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.2);
 }
