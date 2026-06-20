@@ -47,7 +47,9 @@
 }
 
 /* …but the interactive controls inside it must NOT drag. */
-.boardview__bar--drag .boardview__select,
+.boardview__bar--drag .boardview__picker-btn,
+.boardview__bar--drag .boardview__picker-menu,
+.boardview__bar--drag .boardview__picker-backdrop,
 .boardview__bar--drag .boardview__folder,
 .boardview__bar--drag .boardview__close {
   -webkit-app-region: no-drag;
@@ -66,15 +68,108 @@
   letter-spacing: 0.08em;
 }
 
-.boardview__select {
+/* --- Board picker (custom dropdown; native <select> popups are unreliable in
+   a frameless always-on-top window, so we roll our own) --- */
+.boardview__picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.boardview__picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 16rem;
   font-family: var(--font-mono);
   font-size: 0.74rem;
+  font-weight: 600;
   color: var(--text);
-  background: var(--bg-sunken);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
-  padding: 0.18rem 0.4rem;
+  padding: 0.22rem 0.5rem;
   cursor: pointer;
+}
+
+.boardview__picker-btn:hover {
+  border-color: var(--text-muted);
+}
+
+.boardview__picker-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.boardview__picker-caret {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+/* Transparent full-window catcher so a click anywhere closes the menu. */
+.boardview__picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.boardview__picker-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 13rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.boardview__picker-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.32rem 0.5rem;
+  font-size: 0.76rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  text-align: left;
+}
+
+.boardview__picker-item:hover {
+  background: var(--bg-sunken);
+}
+
+.boardview__picker-item.is-active {
+  background: var(--accent, #2f6b2a);
+  color: #fff;
+}
+
+.boardview__picker-item-name {
+  font-weight: 600;
+}
+
+.boardview__picker-item-mcu {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.boardview__picker-item.is-active .boardview__picker-item-mcu {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .boardview__subtitle {

@@ -256,8 +256,13 @@ export function BoardView({
   })
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
+  // Custom dropdown open state. We avoid a native <select>: its popup is
+  // unreliable inside a frameless, always-on-top window with a drag region.
+  const [pickerOpen, setPickerOpen] = useState(false)
+
   const selectBoard = (id: string): void => {
     setBoardId(id)
+    setPickerOpen(false)
     try {
       window.localStorage.setItem(STORAGE_KEY, id)
     } catch {
@@ -281,22 +286,47 @@ export function BoardView({
           ⋮⋮
         </span>
         <span className="boardview__title">BOARD VIEW</span>
-        <select
-          className="boardview__select"
-          value={def.id}
-          onChange={(e) => selectBoard(e.target.value)}
-          aria-label="Select board"
-          title="Select board"
-        >
-          {boards.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-        <span className="boardview__subtitle">
-          {def.name} · {def.mcu}
-        </span>
+        <div className="boardview__picker">
+          <button
+            type="button"
+            className="boardview__picker-btn"
+            onClick={() => setPickerOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={pickerOpen}
+            title="Select board"
+          >
+            <span className="boardview__picker-name">{def.name}</span>
+            <span className="boardview__picker-caret" aria-hidden="true">
+              ▾
+            </span>
+          </button>
+          {pickerOpen && (
+            <>
+              <button
+                type="button"
+                className="boardview__picker-backdrop"
+                aria-hidden="true"
+                tabIndex={-1}
+                onClick={() => setPickerOpen(false)}
+              />
+              <ul className="boardview__picker-menu" role="listbox" aria-label="Select board">
+                {boards.map((b) => (
+                  <li key={b.id} role="option" aria-selected={b.id === def.id}>
+                    <button
+                      type="button"
+                      className={`boardview__picker-item ${b.id === def.id ? 'is-active' : ''}`}
+                      onClick={() => selectBoard(b.id)}
+                    >
+                      <span className="boardview__picker-item-name">{b.name}</span>
+                      <span className="boardview__picker-item-mcu">{b.mcu}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
+        <span className="boardview__subtitle">{def.mcu}</span>
         <span className="boardview__live" title="Updates live as you edit">
           <span className="boardview__led" aria-hidden="true" />
           LIVE
