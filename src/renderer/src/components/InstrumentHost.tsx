@@ -17,7 +17,7 @@ import {
 import { Oscilloscope } from './Oscilloscope'
 import { Multimeter } from './Multimeter'
 import { Plotter } from './Plotter'
-import { initialOffset } from './instrument-host'
+import { initialOffset, instrumentKey, redockKind as redockKindMap, redockOne } from './instrument-host'
 import './InstrumentHost.css'
 
 /**
@@ -176,6 +176,14 @@ export interface UseInstrumentsArgs {
   live: boolean
   /** Flip the global live-poll (surfaced as a LIVE toggle on each instrument). */
   onToggleLive: () => void
+  /**
+   * Hide a kind in the dock header (set `visibility[kind] = false`). Lives in
+   * AppShell (which owns the persisted `visibility`); routed in so closing (✕) a
+   * scope/meter can both re-dock it (here, the `docked` map) AND hide its kind —
+   * the close→hide→restore-via-panel-button model. The instrument stays in
+   * `openInstruments` (remembered), just hidden.
+   */
+  onHideKind: (kind: 'scope' | 'meter') => void
 }
 
 export interface UseInstrumentsResult {
@@ -193,6 +201,12 @@ export interface UseInstrumentsResult {
   toggleDock: (it: OpenInstrument) => void
   closeInstrument: (kind: 'scope' | 'meter', variable: string) => void
   retargetInstrument: (kind: 'scope' | 'meter', fromVar: string, toVar: string) => void
+  /**
+   * Re-dock every open instrument of one kind (its `docked` overrides → true).
+   * AppShell calls this when a SCOPE/METER dock button turns its kind's
+   * visibility ON, so a previously-undocked/closed instrument reappears DOCKED.
+   */
+  redockKind: (kind: 'scope' | 'meter') => void
 }
 
 export function useInstruments({
@@ -201,7 +215,8 @@ export function useInstruments({
   instruments,
   onChange,
   live,
-  onToggleLive
+  onToggleLive,
+  onHideKind
 }: UseInstrumentsArgs): UseInstrumentsResult {
   // Re-parse the MAIN window's active file → the connections instruments resolve
   // against (same parser the board view uses).
@@ -216,11 +231,25 @@ export function useInstruments({
     if (next.length !== instruments.length) onChange(next)
   }, [conns, instruments, onChange])
 
+  // Per-instrument docked override (the dock-to-side key). Keyed by kind+variable.
+  // Default is DOCKED — opening a scope/meter shows it in the INSTRUMENT DOCK
+  // (right of chat); the dock-to-side key then floats it above the window.
+  // Declared up here so closeInstrument can re-dock against it.
+  const [docked, setDocked] = useState<Record<string, boolean>>({})
+
+  // Closing (✕) a scope/meter does NOT remove it from `openInstruments`; instead
+  // it HIDES the instrument and RETURNS it to the dock, so the SCOPE/METER button
+  // can bring it back. Two coordinated state changes: re-dock THIS instrument
+  // (its `docked` override → true, here) and turn its KIND's visibility OFF
+  // (`onHideKind`, in AppShell). The real "remove" from `openInstruments` happens
+  // only when the pin leaves the active file (the resolve cleanup above). This
+  // matches the Plotter ✕, which already hides via its kind visibility.
   const closeInstrument = useCallback(
     (kind: 'scope' | 'meter', variable: string): void => {
-      onChange(instruments.filter((it) => !(it.kind === kind && it.variable === variable)))
+      setDocked((d) => redockOne(d, kind, variable))
+      onHideKind(kind)
     },
-    [instruments, onChange]
+    [onHideKind]
   )
 
   const retargetInstrument = useCallback(
@@ -240,15 +269,22 @@ export function useInstruments({
     [instruments, onChange]
   )
 
-  // Per-instrument docked override (the dock-to-side key). Keyed by kind+variable.
-  // Default is DOCKED — opening a scope/meter shows it in the INSTRUMENT DOCK
-  // (right of chat); the dock-to-side key then floats it above the window.
-  const [docked, setDocked] = useState<Record<string, boolean>>({})
-  const keyOf = (it: OpenInstrument): string => `${it.kind}:${it.variable}`
+  const keyOf = (it: OpenInstrument): string => instrumentKey(it.kind, it.variable)
   // Toggle against the resolved value (default true) so the very first click
   // flips docked→floating instead of no-opping (`!undefined === true`).
   const toggleDock = useCallback((it: OpenInstrument): void => {
     setDocked((d) => ({ ...d, [keyOf(it)]: !(d[keyOf(it)] ?? true) }))
+  }, [])
+
+  // Re-dock every open instrument of one kind — AppShell calls this when a
+  // SCOPE/METER dock button turns that kind's visibility ON, so a
+  // previously-undocked/closed instrument of that kind reappears DOCKED (not
+  // floating off-screen). Reads the live `instruments` list for the kind's vars.
+  const instrumentsRef = useRef(instruments)
+  instrumentsRef.current = instruments
+  const redockKind = useCallback((kind: 'scope' | 'meter'): void => {
+    const vars = instrumentsRef.current.filter((it) => it.kind === kind).map((it) => it.variable)
+    setDocked((d) => redockKindMap(d, kind, vars))
   }, [])
 
   // Live device values: poll ONLY when LIVE is on AND ≥1 scope/meter is open
@@ -312,7 +348,8 @@ export function useInstruments({
     onToggleLive,
     toggleDock,
     closeInstrument,
-    retargetInstrument
+    retargetInstrument,
+    redockKind
   }
 }
 

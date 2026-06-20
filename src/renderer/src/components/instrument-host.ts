@@ -66,6 +66,51 @@ function clamp(v: number, lo: number, hi: number): number {
 }
 
 /**
+ * A docked-state override map: `${kind}:${variable}` → docked? (absent = the
+ * default, which IS docked). Owned by {@link useInstruments}; the helpers below
+ * are the pure transitions the close/visibility wiring runs against it.
+ */
+export type DockedMap = Record<string, boolean>
+
+/** The stable key for an open instrument in the {@link DockedMap}. */
+export function instrumentKey(kind: string, variable: string): string {
+  return `${kind}:${variable}`
+}
+
+/**
+ * Re-dock a single instrument. Closing (✕) a scope/meter HIDES it (its kind's
+ * visibility is turned off by the caller) but RETURNS it to the dock so the
+ * SCOPE/METER/PLOT button can bring it back later — so we force its docked
+ * override to `true`. Returns a fresh map (or the same reference when already
+ * docked); never mutates the input.
+ */
+export function redockOne(docked: DockedMap, kind: string, variable: string): DockedMap {
+  const key = instrumentKey(kind, variable)
+  if (docked[key] === true) return docked
+  return { ...docked, [key]: true }
+}
+
+/**
+ * Re-dock EVERY open instrument of one kind. Turning a kind's dock-header
+ * visibility ON re-docks all of that kind so a previously-undocked/closed
+ * instrument reappears IN THE DOCK (not floating off-screen). `variables` is the
+ * list of that kind's currently-open instrument variables. Returns a fresh map;
+ * no-ops (returns the same reference) when nothing changes.
+ */
+export function redockKind(docked: DockedMap, kind: string, variables: string[]): DockedMap {
+  let changed = false
+  const next = { ...docked }
+  for (const variable of variables) {
+    const key = instrumentKey(kind, variable)
+    if (next[key] !== true) {
+      next[key] = true
+      changed = true
+    }
+  }
+  return changed ? next : docked
+}
+
+/**
  * Whether the status-bar "live polling is interrupting the board" warning (+
  * quick-stop link) should show.
  *

@@ -44,8 +44,16 @@
   cursor: grabbing;
 }
 
-/* A docked instrument sits in the dock rail; the rail is wider than the 404px
- * window so the item just left-aligns within it. */
+/* A docked instrument sits in the dock rail. The rail can be NARROWER than the
+ * 404px window (the dock panel min ≈ 24% of the window), so the item stretches
+ * full width and the instrument reflows down to fit — capped at its natural
+ * 404px so it never grows past the design size on a wide dock. Without this the
+ * fixed 404px window overflowed/clipped and read as "not shown". */
 .instr-dock__item {
   display: flex;
+  min-width: 0;
+}
+.instr-dock__item .instr {
+  width: 100%;
+  max-width: 404px;
 }

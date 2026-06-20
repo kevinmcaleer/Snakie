@@ -37,6 +37,16 @@
   min-height: 0;
 }
 
+/* DOCKED plotter — keep a usable screen height when other instruments share the
+ * vertical dock stack. Without a floor the flex plotter collapses to a sliver as
+ * the stack fills; this gives the screen a ~240px minimum so the dock stack
+ * (`.instr-dock`/`.instr-dock__stack` both `overflow:auto`) SCROLLS instead of
+ * crushing the plotter. Scoped to the dock so a future floating plotter keeps
+ * its own sizing; the blue-phosphor treatment is unaffected (size only). */
+.instr-dock__item .plotter .instr__screen.plotter__screen {
+  min-height: 240px;
+}
+
 .plotter__canvas {
   position: absolute;
   inset: 0;

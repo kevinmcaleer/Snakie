@@ -203,10 +203,23 @@ export function AppShell(): JSX.Element {
     'snakie.instruments.visibility',
     { scope: true, meter: true, plotter: true }
   )
-  const toggleVisible = useCallback(
-    (kind: keyof InstrumentVisibility): void =>
-      setVisibility({ ...visibility, [kind]: !visibility[kind] }),
+
+  // Set one kind's dock visibility directly (used by the close→hide flow and the
+  // open→reveal flow below). `useLocalStorage`'s setter takes a value (not a
+  // functional updater — it JSON-serialises whatever it gets), so we spread the
+  // current `visibility` from the closure.
+  const setKindVisible = useCallback(
+    (kind: keyof InstrumentVisibility, value: boolean): void => {
+      if (visibility[kind] === value) return
+      setVisibility({ ...visibility, [kind]: value })
+    },
     [visibility, setVisibility]
+  )
+  // Closing (✕) a scope/meter HIDES its kind (and re-docks the instrument, in
+  // useInstruments) — routed into the host so close can set both pieces of state.
+  const hideKind = useCallback(
+    (kind: 'scope' | 'meter'): void => setKindVisible(kind, false),
+    [setKindVisible]
   )
 
   // The GLOBAL instrument live-poll switch. DEFAULT OFF: opening a scope/meter no
@@ -228,8 +241,25 @@ export function AppShell(): JSX.Element {
     instruments: openInstruments,
     onChange: setOpenInstruments,
     live: instrumentsLive,
-    onToggleLive: toggleInstrumentsLive
+    onToggleLive: toggleInstrumentsLive,
+    onHideKind: hideKind
   })
+
+  // Toggle one kind's dock-header visibility. Turning a kind ON also RE-DOCKS
+  // every instrument of that kind (via the host) so a previously-undocked or
+  // closed instrument reappears DOCKED — float a scope → ✕ (it hides, re-docked)
+  // → press SCOPE → it returns, docked. Plotter has no docked instances to
+  // re-dock, so it just flips visibility. Defined after the host so it can call
+  // `redockKind`.
+  const { redockKind } = instruments
+  const toggleVisible = useCallback(
+    (kind: keyof InstrumentVisibility): void => {
+      const next = !visibility[kind]
+      setVisibility({ ...visibility, [kind]: next })
+      if (next && (kind === 'scope' || kind === 'meter')) redockKind(kind)
+    },
+    [visibility, setVisibility, redockKind]
+  )
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the
   // right pane + the instrument dock are collapsed by default to keep things
@@ -246,24 +276,41 @@ export function AppShell(): JSX.Element {
     toggle(dockRef, dockCollapsed, setDockCollapsed)
   }, [toggle, dockCollapsed, setDockCollapsed])
 
-  // Opening an instrument (board node launcher) reveals the dock if collapsed.
-  useEffect(() => {
-    const off = window.api.instruments.onOpen((payload) => {
-      const { kind, variable } = payload
+  // Opening an instrument must RELIABLY reveal it docked. Three things have to
+  // line up, so we route them through a ref the once-registered IPC listener
+  // reads live (no stale closure): (1) add it to `openInstruments` (default
+  // `docked` is true → it resolves into the DOCK, not the float layer); (2)
+  // re-dock it + turn its KIND's visibility back ON, so an instrument that was
+  // floated/closed (hidden) earlier comes back docked + visible; (3) expand the
+  // dock panel if collapsed so the 404px window actually has room.
+  const revealForOpen = useCallback(
+    (kind: 'scope' | 'meter', variable: string): void => {
       setOpenInstruments((cur) =>
         cur.some((it) => it.kind === kind && it.variable === variable)
           ? cur
           : [...cur, { kind, variable }]
       )
-      // Reveal the dock. `dockRef.current` is read live so this isn't stale.
+      setKindVisible(kind, true)
+      redockKind(kind)
       const panel = dockRef.current
       if (panel?.isCollapsed()) {
         panel.expand()
         setDockCollapsed(false)
       }
+    },
+    [setKindVisible, redockKind, setDockCollapsed]
+  )
+  const revealForOpenRef = useRef(revealForOpen)
+  revealForOpenRef.current = revealForOpen
+
+  useEffect(() => {
+    // Registered once; the handler delegates to the live ref so it never goes
+    // stale across re-renders (the dock reveal can't race the open).
+    const off = window.api.instruments.onOpen((payload) => {
+      revealForOpenRef.current(payload.kind, payload.variable)
     })
     return off
-  }, [setDockCollapsed])
+  }, [])
 
   // Which view the left sidebar shows, driven by the ActivityBar.
   const [activityView, setActivityView] = useLocalStorage<ActivityView>(
@@ -390,14 +437,18 @@ export function AppShell(): JSX.Element {
 
           {/* The INSTRUMENT DOCK region — the rightmost panel, to the RIGHT of
               the chat. Collapsed by default; the toolbar Instruments button (or
-              an incoming `instruments:open`) expands it. */}
+              an incoming `instruments:open`) expands it. `minSize`/`defaultSize`
+              are bumped (24/30) so the revealed dock comfortably fits a 404px
+              instrument window — at the old ~18% a docked instrument got crushed
+              and looked "not shown". `.instr` also reflows to `max-width:100%`
+              inside the dock (InstrumentHost.css) so it never clips. */}
           <Panel
             ref={dockRef}
             order={4}
             collapsible
             collapsedSize={0}
-            defaultSize={dockCollapsed ? 0 : 26}
-            minSize={18}
+            defaultSize={dockCollapsed ? 0 : 30}
+            minSize={24}
             onCollapse={() => setDockCollapsed(true)}
             onExpand={() => setDockCollapsed(false)}
           >
