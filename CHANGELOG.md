@@ -7,13 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
-- **Instruments live in the main window.** The Oscilloscope and Multimeter now
-  open as **draggable floating windows over the code editor** (or docked to a side
-  rail) in the main window instead of inside the Board View window. A new
-  **Instruments** button in the toolbar (right of the light/dark toggle) shows or
-  hides them, the board-view PWM/ADC node buttons open them via IPC, and their
-  live values are polled in the main window while at least one is open. Floating
-  windows can be dragged by their title bar, and the close ✕ works in both modes.
+- **Instruments live in the main window.** The Oscilloscope, Multimeter and Plotter
+  now live in the main editor window, not the Board View window. Undocked, they are
+  **draggable windows that float above the whole window**; docked, they sit in an
+  **INSTRUMENT DOCK** region to the **right of the chat panel**, toggled by a new
+  **Instruments** button in the toolbar (right of the light/dark toggle). The dock
+  header has **SCOPE / METER / PLOT** buttons that show/hide each instrument
+  independently of its docked state. The board-view PWM/ADC node buttons open the
+  scope/meter via IPC; live values are polled in the main window while an instrument
+  is open. The Plotter moved out of the shell into the dock (the shell is now
+  Console / Problems only).
 
 ## [0.10.0] - 2026-06-20
 
