@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './Plotter.css'
 import { parseLine } from './Plotter.parse'
+import { estimateHz, sampleReadout } from './Plotter.readout'
+import { PhosphorScreen } from './InstrumentWindow'
 
 /**
- * Serial Plotter (issue #21) — Arduino-IDE-style live chart of numeric console
- * output.
+ * Serial Plotter (issue #21; reskinned for #103) — a skeuomorphic **strip-chart
+ * recorder** that graphs numeric console output over time.
  *
  * It subscribes to the same raw `device.onData` stream the REPL terminal uses
  * (the device layer broadcasts to every subscriber, so this does not disturb
  * the terminal) and parses each completed text line into one or more numeric
  * samples. Parsed samples feed a hand-rolled canvas line chart — no charting
  * dependency — with a rolling window, auto-scaling Y axis and a sample-index X
- * axis.
+ * axis. Issue #103 keeps that parse + data pipeline unchanged and reskins the
+ * *rendering* to the design handoff's blue-phosphor CRT (the shared
+ * {@link PhosphorScreen} in its `--blue` variant): a faint blue graticule, two
+ * (then a cycling palette of) scrolling traces with a blur-glow, a live-edge
+ * cursor at the right, an in-screen legend and a `<N> samples · <rate> Hz`
+ * readout. Per the spec the only control is a metal CLEAR key.
  *
  * Supported line formats (whitespace is trimmed first):
  *  - single number:                "12.5"
@@ -23,23 +30,27 @@ import { parseLine } from './Plotter.parse'
  * be mixed across lines without colliding.
  */
 
-/** Distinct, theme-neutral series palette (readable on light & dark). */
+/**
+ * Blue-phosphor trace palette. The first two match the handoff exactly
+ * (`#5fb8f0` temp, `#f0b94a` light); further series cycle phosphor-friendly
+ * hues that read on the dark CRT screen.
+ */
 const SERIES_COLORS = [
-  '#3b82f6', // blue
-  '#22c55e', // green
-  '#ef4444', // red
-  '#a855f7', // purple
-  '#eab308', // yellow
-  '#06b6d4', // cyan
-  '#f97316', // orange
-  '#ec4899' // pink
+  '#5fb8f0', // sky blue (primary)
+  '#f0b94a', // amber (secondary)
+  '#7ee787', // phosphor green
+  '#ff7b9c', // pink
+  '#b794f6', // violet
+  '#5fe0d0', // teal
+  '#ffa94d', // orange
+  '#e0e0e0' // white
 ]
 
 const DEFAULT_WINDOW = 200
-const MIN_WINDOW = 10
-const MAX_WINDOW = 5000
 /** Hard cap on series so a noisy stream can't grow memory without bound. */
 const MAX_SERIES = 16
+/** How many recent sample timestamps to keep for the live Hz estimate. */
+const RATE_WINDOW = 40
 
 interface Series {
   name: string
@@ -52,27 +63,24 @@ const decoder = new TextDecoder()
 
 export function Plotter(): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [paused, setPaused] = useState(false)
-  const [windowSize, setWindowSize] = useState(DEFAULT_WINDOW)
   // Legend mirror of the live series (name + colour) for React rendering. The
   // authoritative sample data lives in the ref so high-rate streams don't spam
   // re-renders.
   const [legend, setLegend] = useState<Array<{ name: string; color: string }>>([])
+  // The `<N> samples · <rate> Hz` readout text, refreshed on a low-frequency
+  // timer (not per-sample) so it doesn't thrash React.
+  const [readout, setReadout] = useState('0 samples')
 
-  const pausedRef = useRef(paused)
-  const windowRef = useRef(windowSize)
+  const windowRef = useRef(DEFAULT_WINDOW)
   const seriesRef = useRef<Series[]>([])
   const seriesByName = useRef(new Map<string, Series>())
   const lineBuf = useRef('')
   const dirty = useRef(false)
   const rafRef = useRef<number | null>(null)
-
-  useEffect(() => {
-    pausedRef.current = paused
-  }, [paused])
-  useEffect(() => {
-    windowRef.current = windowSize
-  }, [windowSize])
+  /** Timestamps (ms) of recent samples, for the live Hz estimate. */
+  const sampleTimes = useRef<number[]>([])
+  /** Total samples seen on the widest series (for the readout count). */
+  const sampleCount = useRef(0)
 
   /** Find or lazily create a series for a parsed token. */
   const getSeries = useCallback((key: string, displayName: string): Series | null => {
@@ -119,6 +127,13 @@ export function Plotter(): JSX.Element {
           series.values.splice(0, series.values.length - limit)
         }
       }
+      // Track cadence for the live Hz readout (one tick per ingested line).
+      sampleCount.current += 1
+      const now = performance.now()
+      sampleTimes.current.push(now)
+      if (sampleTimes.current.length > RATE_WINDOW) {
+        sampleTimes.current.splice(0, sampleTimes.current.length - RATE_WINDOW)
+      }
       dirty.current = true
     },
     [getSeries]
@@ -127,7 +142,6 @@ export function Plotter(): JSX.Element {
   // Subscribe to the raw serial stream once.
   useEffect(() => {
     const unsubscribe = window.api.device.onData((chunk) => {
-      if (pausedRef.current) return
       lineBuf.current += decoder.decode(chunk, { stream: true })
       // Normalise CRLF / CR then split out complete lines.
       const normalised = lineBuf.current.replace(/\r\n?/g, '\n')
@@ -137,6 +151,17 @@ export function Plotter(): JSX.Element {
     })
     return unsubscribe
   }, [ingestLine])
+
+  // Low-frequency readout refresh (samples · Hz). Derived from the buffer, not
+  // per-sample, so a fast stream doesn't re-render React every tick.
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const widest = seriesRef.current.reduce((m, s) => Math.max(m, s.values.length), 0)
+      const hz = estimateHz(sampleTimes.current)
+      setReadout(sampleReadout(widest, hz))
+    }, 500)
+    return () => window.clearInterval(id)
+  }, [])
 
   // Render loop — repaints on a rAF whenever data changed or layout resized.
   useEffect(() => {
@@ -151,10 +176,6 @@ export function Plotter(): JSX.Element {
       dirty.current = true
     }
 
-    const styles = getComputedStyle(canvas)
-    const readVar = (name: string, fallback: string): string =>
-      styles.getPropertyValue(name).trim() || fallback
-
     const draw = (): void => {
       const ctx = canvas.getContext('2d')
       if (!ctx) return
@@ -162,20 +183,37 @@ export function Plotter(): JSX.Element {
       const h = canvas.height
       const dpr = window.devicePixelRatio || 1
 
-      const bg = readVar('--bg-sunken', '#101216')
-      const grid = readVar('--border', '#2c3038')
-      const axis = readVar('--text-muted', '#9099a6')
-
       ctx.clearRect(0, 0, w, h)
-      ctx.fillStyle = bg
-      ctx.fillRect(0, 0, w, h)
 
-      const padL = 44 * dpr
-      const padR = 8 * dpr
-      const padT = 8 * dpr
-      const padB = 18 * dpr
-      const plotW = Math.max(1, w - padL - padR)
-      const plotH = Math.max(1, h - padT - padB)
+      // Small inset so traces/cursor don't clip the rounded screen corners. The
+      // screen background (blue-phosphor radial) comes from the PhosphorScreen
+      // CRT treatment behind the canvas; the canvas itself is transparent.
+      const pad = 1 * dpr
+      const plotX = pad
+      const plotY = pad
+      const plotW = Math.max(1, w - pad * 2)
+      const plotH = Math.max(1, h - pad * 2)
+
+      // Faint blue graticule (6 vertical · 4 horizontal divisions), matching the
+      // handoff's `rgba(120,180,230,.12)` grid.
+      ctx.strokeStyle = 'rgba(120,180,230,0.12)'
+      ctx.lineWidth = 1 * dpr
+      const vDiv = 7
+      for (let i = 1; i < vDiv; i++) {
+        const x = plotX + (plotW * i) / vDiv
+        ctx.beginPath()
+        ctx.moveTo(x, plotY)
+        ctx.lineTo(x, plotY + plotH)
+        ctx.stroke()
+      }
+      const hDiv = 5
+      for (let i = 1; i < hDiv; i++) {
+        const y = plotY + (plotH * i) / hDiv
+        ctx.beginPath()
+        ctx.moveTo(plotX, y)
+        ctx.lineTo(plotX + plotW, y)
+        ctx.stroke()
+      }
 
       const series = seriesRef.current
       // Determine Y range across all series (auto-scale).
@@ -190,17 +228,12 @@ export function Plotter(): JSX.Element {
         }
       }
 
-      // Plot frame.
-      ctx.strokeStyle = grid
-      ctx.lineWidth = 1 * dpr
-      ctx.strokeRect(padL, padT, plotW, plotH)
-
       if (!Number.isFinite(min) || !Number.isFinite(max) || maxLen === 0) {
-        ctx.fillStyle = axis
-        ctx.font = `${12 * dpr}px ui-monospace, monospace`
+        ctx.fillStyle = 'rgba(111,149,176,0.85)'
+        ctx.font = `${12 * dpr}px 'JetBrains Mono', ui-monospace, monospace`
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
-        ctx.fillText('waiting for numeric data…', padL + plotW / 2, padT + plotH / 2)
+        ctx.fillText('waiting for numeric data…', plotX + plotW / 2, plotY + plotH / 2)
         return
       }
       if (min === max) {
@@ -208,50 +241,56 @@ export function Plotter(): JSX.Element {
         min -= 1
         max += 1
       }
+      // Leave a little vertical headroom so peaks don't kiss the bezel.
       const range = max - min
+      const padFrac = 0.08
+      const lo = min - range * padFrac
+      const span = range * (1 + padFrac * 2)
 
-      // Y grid lines + labels (5 divisions).
-      ctx.fillStyle = axis
-      ctx.font = `${10 * dpr}px ui-monospace, monospace`
-      ctx.textAlign = 'right'
-      ctx.textBaseline = 'middle'
-      const divisions = 4
-      for (let i = 0; i <= divisions; i++) {
-        const frac = i / divisions
-        const y = padT + plotH - frac * plotH
-        ctx.strokeStyle = grid
-        ctx.globalAlpha = 0.4
-        ctx.beginPath()
-        ctx.moveTo(padL, y)
-        ctx.lineTo(padL + plotW, y)
-        ctx.stroke()
-        ctx.globalAlpha = 1
-        const value = min + frac * range
-        ctx.fillText(value.toFixed(2), padL - 4 * dpr, y)
-      }
-
-      // X scale: map sample index [0, maxLen-1] across plot width.
+      // X scale: map sample index [0, maxLen-1] across plot width, newest at the
+      // right (strip-chart scrolls right-to-left).
       const xStep = maxLen > 1 ? plotW / (maxLen - 1) : 0
-      const xOf = (i: number): number => padL + i * xStep
-      const yOf = (v: number): number => padT + plotH - ((v - min) / range) * plotH
+      const xOf = (i: number): number => plotX + i * xStep
+      const yOf = (v: number): number => plotY + plotH - ((v - lo) / span) * plotH
 
       for (const s of series) {
         if (s.values.length === 0) continue
-        ctx.strokeStyle = s.color
-        ctx.lineWidth = 1.5 * dpr
-        ctx.lineJoin = 'round'
-        ctx.beginPath()
-        // Right-align series to the newest sample so shorter series still track
-        // the live edge.
+        // Blur-glow pass: a fat, soft, translucent stroke under the crisp line.
         const offset = maxLen - s.values.length
-        for (let i = 0; i < s.values.length; i++) {
-          const x = xOf(offset + i)
-          const y = yOf(s.values[i])
-          if (i === 0) ctx.moveTo(x, y)
-          else ctx.lineTo(x, y)
+        const stroke = (): void => {
+          ctx.beginPath()
+          for (let i = 0; i < s.values.length; i++) {
+            const x = xOf(offset + i)
+            const y = yOf(s.values[i])
+            if (i === 0) ctx.moveTo(x, y)
+            else ctx.lineTo(x, y)
+          }
+          ctx.stroke()
         }
-        ctx.stroke()
+        ctx.lineJoin = 'round'
+        ctx.lineCap = 'round'
+        ctx.strokeStyle = s.color
+        ctx.globalAlpha = 0.35
+        ctx.lineWidth = 5 * dpr
+        ctx.shadowColor = s.color
+        ctx.shadowBlur = 6 * dpr
+        stroke()
+        // Crisp top pass.
+        ctx.globalAlpha = 1
+        ctx.lineWidth = 2 * dpr
+        ctx.shadowBlur = 3 * dpr
+        stroke()
+        ctx.shadowBlur = 0
+        ctx.globalAlpha = 1
       }
+
+      // Live-edge cursor at the right (the "pen" of the strip-chart recorder).
+      ctx.strokeStyle = 'rgba(95,184,240,0.5)'
+      ctx.lineWidth = 1.5 * dpr
+      ctx.beginPath()
+      ctx.moveTo(plotX + plotW - 0.75 * dpr, plotY)
+      ctx.lineTo(plotX + plotW - 0.75 * dpr, plotY + plotH)
+      ctx.stroke()
     }
 
     resize()
@@ -277,58 +316,55 @@ export function Plotter(): JSX.Element {
     seriesRef.current = []
     seriesByName.current = new Map()
     lineBuf.current = ''
+    sampleTimes.current = []
+    sampleCount.current = 0
     setLegend([])
+    setReadout('0 samples')
     dirty.current = true
-  }, [])
-
-  const handleWindowChange = useCallback((raw: string) => {
-    const n = Number(raw)
-    if (!Number.isFinite(n)) return
-    setWindowSize(Math.min(MAX_WINDOW, Math.max(MIN_WINDOW, Math.round(n))))
   }, [])
 
   return (
     <div className="plotter">
-      <div className="plotter__controls">
+      <PhosphorScreen className="instr__screen--blue plotter__screen">
+        <canvas ref={canvasRef} className="plotter__canvas" />
+        <div className="plotter__legend" aria-label="Plotted series">
+          {legend.length === 0 ? (
+            <span className="plotter__legend-empty">no data</span>
+          ) : (
+            legend.map((s) => (
+              <span
+                className="plotter__legend-item"
+                key={s.name}
+                style={{ color: s.color, textShadow: `0 0 6px ${s.color}88` }}
+              >
+                ■ {s.name}
+              </span>
+            ))
+          )}
+        </div>
+        <div className="plotter__readout">{readout}</div>
+      </PhosphorScreen>
+      <div className="plotter__footer">
+        <span className="plotter__status">auto-scroll · live</span>
         <button
           type="button"
-          className="btn btn--ghost"
-          onClick={() => setPaused((p) => !p)}
-          aria-pressed={paused}
+          className="plotter__clear"
+          onClick={handleClear}
+          title="Clear the plot buffer"
+          aria-label="Clear the plot buffer"
         >
-          {paused ? '▶ Resume' : '▮▮ Pause'}
+          <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.7"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          CLEAR
         </button>
-        <button type="button" className="btn btn--ghost" onClick={handleClear}>
-          ✕ Clear
-        </button>
-        <label className="plotter__window">
-          Window
-          <input
-            type="number"
-            className="plotter__window-input"
-            min={MIN_WINDOW}
-            max={MAX_WINDOW}
-            step={10}
-            value={windowSize}
-            onChange={(e) => handleWindowChange(e.target.value)}
-          />
-        </label>
-      </div>
-      <div className="plotter__legend">
-        {legend.length === 0 ? (
-          <span className="plotter__legend-empty">No series yet</span>
-        ) : (
-          legend.map((s) => (
-            <span className="plotter__legend-item" key={s.name}>
-              <span className="plotter__legend-swatch" style={{ background: s.color }} />
-              {s.name}
-            </span>
-          ))
-        )}
-      </div>
-      <div className="plotter__canvas-wrap">
-        <canvas ref={canvasRef} className="plotter__canvas" />
-        {paused && <span className="plotter__paused-badge">Paused</span>}
       </div>
     </div>
   )
