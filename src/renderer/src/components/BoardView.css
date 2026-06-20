@@ -48,7 +48,8 @@
 
 /* …but the interactive controls inside it must NOT drag. */
 .boardview__bar--drag .boardview__select,
-.boardview__bar--drag .boardview__folder {
+.boardview__bar--drag .boardview__folder,
+.boardview__bar--drag .boardview__close {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
@@ -131,6 +132,28 @@
 
 .boardview__folder:hover {
   border-color: var(--text-muted);
+}
+
+.boardview__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.boardview__close:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
 }
 
 /* --- Board mat (recessed dark surface + faint grid) --- */

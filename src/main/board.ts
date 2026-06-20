@@ -12,6 +12,7 @@ import type { BoardDefinition } from '../shared/board'
  * IPC so it updates live:
  *
  *   board:open          (renderer → main, invoke)  open/focus the window
+ *   board:close         (renderer → main, send)    close the window
  *   board:update        (renderer → main, send)    relay {source,fileName,...}
  *   board:source        (main → board window, send) the relayed payload
  *   board:closed        (main → main window, send)  window was closed
@@ -108,6 +109,12 @@ function openBoardWindow(getMainWindow: () => BrowserWindow | null): void {
 export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('board:open', () => {
     openBoardWindow(getMainWindow)
+  })
+
+  // Close the window from the renderer (its own ✕/Esc, or the toolbar toggle).
+  // The window's own `closed` handler resets state + notifies the main renderer.
+  ipcMain.on('board:close', () => {
+    if (boardWindow && !boardWindow.isDestroyed()) boardWindow.close()
   })
 
   // Relay the active-file snapshot from the main renderer to the board window.

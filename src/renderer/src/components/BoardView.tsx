@@ -47,6 +47,8 @@ export interface BoardViewProps {
   asWindow?: boolean
   /** Open the user's boards folder (wired in the floating window). */
   onOpenBoardsFolder?: () => void
+  /** Close the view. When set, a ✕ button is shown in the title bar. */
+  onClose?: () => void
 }
 
 // --- Drawing geometry -------------------------------------------------------
@@ -239,7 +241,8 @@ export function BoardView({
   isPython,
   userBoards,
   asWindow = false,
-  onOpenBoardsFolder
+  onOpenBoardsFolder,
+  onClose
 }: BoardViewProps): JSX.Element {
   const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
 
@@ -307,6 +310,17 @@ export function BoardView({
             aria-label="Open boards folder"
           >
             📁
+          </button>
+        )}
+        {onClose && (
+          <button
+            type="button"
+            className="boardview__close"
+            onClick={onClose}
+            title="Close board view (Esc)"
+            aria-label="Close board view"
+          >
+            ✕
           </button>
         )}
       </header>

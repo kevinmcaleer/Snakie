@@ -114,9 +114,14 @@ export function AppShell(): JSX.Element {
   const boardFileName = activeFile?.name
   const boardIsPython = !!activeFile && /\.py$/i.test(activeFile.name)
 
-  // Open (or focus) the floating Board View window, then push the current file
-  // immediately so it isn't blank until the next edit.
-  const openBoard = useCallback((): void => {
+  // Toggle the floating Board View window from the toolbar button: open (and
+  // push the current file immediately so it isn't blank) if closed, or close it
+  // if it's already open. `onClosed` resets `boardOpened` either way.
+  const toggleBoard = useCallback((): void => {
+    if (boardOpened) {
+      window.api.board.close()
+      return
+    }
     setBoardOpened(true)
     window.api.board
       .open()
@@ -129,7 +134,7 @@ export function AppShell(): JSX.Element {
         })
       )
       .catch(() => undefined)
-  }, [boardSource, boardFileName, boardIsPython, theme])
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme])
 
   // While the window is open, stream the active file / content / theme to it on
   // every change so it stays live.
@@ -210,7 +215,7 @@ export function AppShell(): JSX.Element {
         rightCollapsed={rightCollapsed}
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
         onOpenSettings={() => openSettings('editor')}
-        onOpenBoard={openBoard}
+        onOpenBoard={toggleBoard}
       />
 
       <div className="shell__body shell__main">

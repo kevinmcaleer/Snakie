@@ -70,6 +70,15 @@ function BoardWindowApp(): JSX.Element {
     return off
   }, [])
 
+  // Esc closes the window (a frameless window has no native close affordance).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') window.api.board.close()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <BoardView
       source={payload.source}
@@ -78,6 +87,7 @@ function BoardWindowApp(): JSX.Element {
       userBoards={userBoards}
       asWindow
       onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
+      onClose={() => window.api.board.close()}
     />
   )
 }

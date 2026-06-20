@@ -302,8 +302,8 @@ export function Toolbar({
           type="button"
           className="btn btn--ghost btn--icon btn--knob"
           onClick={onOpenBoard}
-          title="Board View — visualise pin wiring"
-          aria-label="Open Board View"
+          title="Board View — visualise pin wiring (toggle)"
+          aria-label="Toggle Board View"
         >
           {/* dev board: outlined PCB with two rows of header pads + a chip */}
           <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">

@@ -428,14 +428,16 @@ const plugins = {
 
 /**
  * Board View API. `open` launches/focuses the separate floating Board View
- * window; `update` relays the active-file snapshot to it (it streams in via
- * `onSource`); `onClosed` fires when the user closes the window;
+ * window; `close` closes it; `update` relays the active-file snapshot to it (it
+ * streams in via `onSource`); `onClosed` fires when the user closes the window;
  * `listUserBoards` returns user-authored board definitions read off disk in the
  * main process; `openBoardsFolder` reveals `<userData>/boards`.
  */
 const board = {
   /** Open (or focus) the floating Board View window. */
   open: (): Promise<void> => ipcRenderer.invoke('board:open'),
+  /** Close the floating Board View window (no-op if not open). Fire-and-forget. */
+  close: (): void => ipcRenderer.send('board:close'),
   /** Relay the active-file snapshot to the board window. Fire-and-forget. */
   update: (payload: BoardSourcePayload): void => ipcRenderer.send('board:update', payload),
   /** Subscribe to the streamed active-file payload. Returns an unsubscribe fn. */

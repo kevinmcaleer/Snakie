@@ -98,6 +98,7 @@ if (!w.api) {
     },
     board: {
       open: P(undefined),
+      close: noop,
       update: noop,
       onSource: unsub,
       onClosed: unsub,
