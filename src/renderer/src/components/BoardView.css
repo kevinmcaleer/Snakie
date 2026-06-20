@@ -1,28 +1,17 @@
 /*
- * Board View popup — a centered modal that visualises the Raspberry Pi Pico 2 W
- * with every parsed pin wired to a peripheral, plus a "pins in use" strip.
+ * Board View — a generic, data-driven board visualiser. Parses the active file
+ * for pin usage and wires every used pad to a connection-type badge
+ * (OUTPUT / INPUT / PWM / I2C / SPI / PIO), with a board selector + a "pins in
+ * use" strip.
  *
+ * It renders both embedded and as the root of the floating Board View window
+ * (`.boardview--window` fills the OS window; its title bar is the drag region).
  * The chrome leans into the skeuomorph skin: a brushed-metal title bar + pins
- * strip framing a recessed dark board mat. Bus wire colours are inlined on the
- * SVG (from `BUS_COLOR`); these rules own the surrounding chrome + layout.
+ * strip framing a recessed dark board mat. Type colours are inlined on the SVG
+ * (from `PIN_TYPE_COLOR`); these rules own the surrounding chrome + layout.
  */
 
-.boardview-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 1100;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-  background: rgba(20, 22, 26, 0.55);
-  backdrop-filter: blur(4px);
-}
-
 .boardview {
-  width: 100%;
-  max-width: 56rem;
-  max-height: 92vh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -30,7 +19,14 @@
   border-radius: calc(var(--radius) + 4px);
   background: var(--bg-elevated);
   color: var(--text);
-  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+
+/* As the window root: fill the OS window, no outer border/radius. */
+.boardview--window {
+  width: 100vw;
+  height: 100vh;
+  border: none;
+  border-radius: 0;
 }
 
 /* --- Brushed-metal title bar --- */
@@ -44,11 +40,23 @@
   user-select: none;
 }
 
+/* In the floating window the whole bar is the OS drag handle… */
+.boardview__bar--drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* …but the interactive controls inside it must NOT drag. */
+.boardview__bar--drag .boardview__select,
+.boardview__bar--drag .boardview__folder {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
 .boardview__grip {
   color: var(--text-muted);
   letter-spacing: -2px;
   font-size: 1rem;
-  cursor: grab;
 }
 
 .boardview__title {
@@ -57,9 +65,23 @@
   letter-spacing: 0.08em;
 }
 
-.boardview__subtitle {
+.boardview__select {
+  font-family: var(--font-mono);
   font-size: 0.74rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.18rem 0.4rem;
+  cursor: pointer;
+}
+
+.boardview__subtitle {
+  font-size: 0.72rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .boardview__live {
@@ -92,25 +114,23 @@
   }
 }
 
-.boardview__close {
+.boardview__folder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 1.7rem;
   height: 1.7rem;
   padding: 0;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   line-height: 1;
-  color: var(--text-muted);
-  background: transparent;
-  border: var(--border-w) solid transparent;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   cursor: pointer;
 }
 
-.boardview__close:hover {
-  color: var(--text);
-  border-color: var(--border);
+.boardview__folder:hover {
+  border-color: var(--text-muted);
 }
 
 /* --- Board mat (recessed dark surface + faint grid) --- */
@@ -132,7 +152,6 @@
 .boardview__svg {
   width: 100%;
   height: 100%;
-  max-height: 60vh;
 }
 
 .boardview__wire {
@@ -145,12 +164,8 @@
 
 .boardview__chip-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
-  fill: #3a3d44;
-}
-
-.boardview__chip-label--dark {
   fill: #b9bdc6;
 }
 
@@ -160,11 +175,17 @@
   fill: #e9edf2;
 }
 
-.boardview__periph-label {
+.boardview__node-type {
   font-family: var(--font-mono);
   font-size: 11px;
-  font-weight: 600;
-  fill: #d8dbe0;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.boardview__node-var {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: #c8ccd3;
 }
 
 .boardview__empty {
@@ -242,7 +263,7 @@
   border: 1px solid rgba(0, 0, 0, 0.25);
 }
 
-.boardview__bus {
+.boardview__type {
   font-weight: 700;
   text-transform: uppercase;
   font-size: 0.7rem;

@@ -96,6 +96,14 @@ if (!w.api) {
       quitAndInstall: P(undefined),
       onStatus: unsub
     },
+    board: {
+      open: P(undefined),
+      update: noop,
+      onSource: unsub,
+      onClosed: unsub,
+      listUserBoards: P([]),
+      openBoardsFolder: P(undefined)
+    },
     git: {
       openRepo: P(null),
       status: P({

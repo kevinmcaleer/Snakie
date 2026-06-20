@@ -16,7 +16,6 @@ import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
-import { BoardView } from './BoardView'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { useWorkspace } from '../store/workspace'
 
@@ -103,12 +102,52 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
 export function AppShell(): JSX.Element {
   const { theme, toggleTheme } = useTheme()
 
-  // The active file backs the Board View popup. Reading it here (rather than
-  // inside BoardView) means the modal re-renders — and the pin parser re-runs —
-  // on every edit to the active file, so the board updates live while open.
+  // The active file feeds the floating Board View window. Reading it here lets
+  // us stream every edit / theme change to that window over IPC so it updates
+  // live. `boardOpened` tracks whether the window has been opened this session
+  // (so we only stream while it's open); it resets when the user closes it.
   const { openFiles, activeId } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
-  const [boardOpen, setBoardOpen] = useState(false)
+  const [boardOpened, setBoardOpened] = useState(false)
+
+  const boardSource = activeFile?.content ?? ''
+  const boardFileName = activeFile?.name
+  const boardIsPython = !!activeFile && /\.py$/i.test(activeFile.name)
+
+  // Open (or focus) the floating Board View window, then push the current file
+  // immediately so it isn't blank until the next edit.
+  const openBoard = useCallback((): void => {
+    setBoardOpened(true)
+    window.api.board
+      .open()
+      .then(() =>
+        window.api.board.update({
+          source: boardSource,
+          fileName: boardFileName,
+          isPython: boardIsPython,
+          theme
+        })
+      )
+      .catch(() => undefined)
+  }, [boardSource, boardFileName, boardIsPython, theme])
+
+  // While the window is open, stream the active file / content / theme to it on
+  // every change so it stays live.
+  useEffect(() => {
+    if (!boardOpened) return
+    window.api.board.update({
+      source: boardSource,
+      fileName: boardFileName,
+      isPython: boardIsPython,
+      theme
+    })
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme])
+
+  // Reset the "opened" flag when the user closes the board window.
+  useEffect(() => {
+    const off = window.api.board.onClosed(() => setBoardOpened(false))
+    return off
+  }, [])
 
   // Persisted collapsed state. Shell is open by default (core REPL tool);
   // the right pane is collapsed by default to keep things uncluttered.
@@ -171,7 +210,7 @@ export function AppShell(): JSX.Element {
         rightCollapsed={rightCollapsed}
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
         onOpenSettings={() => openSettings('editor')}
-        onOpenBoard={() => setBoardOpen(true)}
+        onOpenBoard={openBoard}
       />
 
       <div className="shell__body shell__main">
@@ -254,15 +293,6 @@ export function AppShell(): JSX.Element {
 
       {settingsOpen && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {boardOpen && (
-        <BoardView
-          source={activeFile?.content ?? ''}
-          fileName={activeFile?.name}
-          isPython={!!activeFile && /\.py$/i.test(activeFile.name)}
-          onClose={() => setBoardOpen(false)}
-        />
       )}
     </div>
   )

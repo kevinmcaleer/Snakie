@@ -46,7 +46,9 @@ export default defineConfig({
       chunkSizeWarningLimit: 4000,
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/renderer/index.html')
+          index: resolve(__dirname, 'src/renderer/index.html'),
+          // Second entry: the floating Board View window (issue: Board View v2).
+          board: resolve(__dirname, 'src/renderer/board.html')
         },
         output: {
           manualChunks(id: string) {
