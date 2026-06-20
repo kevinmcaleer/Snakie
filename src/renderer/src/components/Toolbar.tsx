@@ -136,10 +136,10 @@ interface ToolbarProps {
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Also hosts the layout controls — the right cluster of panel-collapse knobs
- * (Files / Shell / Chat) and the light/dark toggle — which render as pressable
- * hardware keys in the Skeuomorph skin (a pressed-in look marks the active /
- * shown panel).
+ * Also hosts the utility knobs next to Run/Stop (Settings / Board View /
+ * light-dark toggle) and the right cluster of panel-collapse knobs (Files /
+ * Shell / Chat), which render as pressable hardware keys in the Skeuomorph skin
+ * (a pressed-in look marks the active / shown panel).
  */
 export function Toolbar({
   theme,
@@ -265,38 +265,22 @@ export function Toolbar({
         </button>
       </div>
 
-      <div className="toolbar__spacer" />
+      <span className="toolbar__divider" aria-hidden="true" />
 
       <div className="toolbar__group">
         <button
           type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${filesCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!filesCollapsed}
-          onClick={onToggleFiles}
-          title="Toggle Files panel"
-          aria-label="Toggle Files panel"
+          className="btn btn--ghost btn--icon btn--knob"
+          onClick={onOpenSettings}
+          title="Settings"
+          aria-label="Open settings"
         >
-          {PANEL_LEFT_ICON}
-        </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${shellCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!shellCollapsed}
-          onClick={onToggleShell}
-          title="Toggle Shell panel"
-          aria-label="Toggle Shell panel"
-        >
-          {PANEL_BOTTOM_ICON}
-        </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!rightCollapsed}
-          onClick={onToggleRight}
-          title="Toggle Chat panel"
-          aria-label="Toggle Chat panel"
-        >
-          {PANEL_RIGHT_ICON}
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+            <path
+              fill="currentColor"
+              d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.13.22.39.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
+            />
+          </svg>
         </button>
         <button
           type="button"
@@ -319,20 +303,6 @@ export function Toolbar({
               <rect x="17" y="11.5" width="1.6" height="1.6" />
               <rect x="17" y="14.5" width="1.6" height="1.6" />
             </g>
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon btn--knob"
-          onClick={onOpenSettings}
-          title="Settings"
-          aria-label="Open settings"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-            <path
-              fill="currentColor"
-              d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.13.22.39.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
-            />
           </svg>
         </button>
         <button
@@ -368,6 +338,41 @@ export function Toolbar({
               <path d="M9.5 2A6 6 0 1 0 14 11 A4.5 4.5 0 0 1 9.5 2Z" fill="currentColor" />
             )}
           </svg>
+        </button>
+      </div>
+
+      <div className="toolbar__spacer" />
+
+      <div className="toolbar__group">
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--knob ${filesCollapsed ? '' : 'is-active'}`}
+          aria-pressed={!filesCollapsed}
+          onClick={onToggleFiles}
+          title="Toggle Files panel"
+          aria-label="Toggle Files panel"
+        >
+          {PANEL_LEFT_ICON}
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--knob ${shellCollapsed ? '' : 'is-active'}`}
+          aria-pressed={!shellCollapsed}
+          onClick={onToggleShell}
+          title="Toggle Shell panel"
+          aria-label="Toggle Shell panel"
+        >
+          {PANEL_BOTTOM_ICON}
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
+          aria-pressed={!rightCollapsed}
+          onClick={onToggleRight}
+          title="Toggle Chat panel"
+          aria-label="Toggle Chat panel"
+        >
+          {PANEL_RIGHT_ICON}
         </button>
       </div>
     </header>
