@@ -224,11 +224,14 @@ export function useInstruments({
   )
 
   // Per-instrument docked override (the dock-to-side key). Keyed by kind+variable.
-  // Default is floating (the primary mode the user asked for).
+  // Default is DOCKED — opening a scope/meter shows it in the INSTRUMENT DOCK
+  // (right of chat); the dock-to-side key then floats it above the window.
   const [docked, setDocked] = useState<Record<string, boolean>>({})
   const keyOf = (it: OpenInstrument): string => `${it.kind}:${it.variable}`
+  // Toggle against the resolved value (default true) so the very first click
+  // flips docked→floating instead of no-opping (`!undefined === true`).
   const toggleDock = useCallback((it: OpenInstrument): void => {
-    setDocked((d) => ({ ...d, [keyOf(it)]: !d[keyOf(it)] }))
+    setDocked((d) => ({ ...d, [keyOf(it)]: !(d[keyOf(it)] ?? true) }))
   }, [])
 
   // Live device values: poll only while ≥1 scope/meter is open (+ connected).
@@ -259,7 +262,7 @@ export function useInstruments({
 
   // Resolve each open instrument → its connection + live reading. The cascade
   // index gives floating windows distinct start offsets. Docked vs floating is
-  // decided per-instrument by the override map (default floating).
+  // decided per-instrument by the override map (default docked).
   const resolved = instruments
     .map((it, i): ResolvedInstrument | null => {
       const idx = conns.findIndex((c) => c.variable === it.variable)
@@ -272,7 +275,7 @@ export function useInstruments({
         conn,
         live: liveValues.get(idx),
         stats: meterStats.get(it.variable),
-        isDocked: docked[keyOf(it)] ?? false,
+        isDocked: docked[keyOf(it)] ?? true,
         cascade: i
       }
     })
