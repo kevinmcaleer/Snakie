@@ -24,6 +24,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Tiny 2040 and Tiny 2350, drawn from a generic, data-driven renderer.
 
 ### Added
+- **Board Creator (#94).** A visual editor for custom boards, entered from a brass
+  knob button in the Board View: set the board name, chip type, PCB colour and
+  aspect; lay out pin headers along any edge (or single pins), each pad assigned a
+  GPIO, name and type (`gpio`/`gnd`/`vcc`/`other`, with power pads drawn
+  distinctly); pick an onboard LED; and represent the board with either an uploaded
+  image or drawn rectangle features — saved as a round-trippable `BoardDefinition`
+  JSON (with a one-way "Export SVG" convenience). Boards are saved to / loaded from
+  / deleted in `<userData>/boards/` and become selectable in the Board View.
 - **Custom board definitions.** Drop a `BoardDefinition` JSON file into
   `<userData>/boards/` to add your own board to the Board View (a user board
   overrides a built-in with the same `id`); an in-view button opens that folder.
