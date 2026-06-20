@@ -304,9 +304,11 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     [handleReplaceFind, onClose]
   )
 
-  // --- Drag the panel by its title-bar grip -------------------------------
-  const onGripPointerDown = useCallback(
-    (e: ReactPointerEvent<HTMLButtonElement>): void => {
+  // --- Drag the panel by its whole title bar (#98) ------------------------
+  const onBarPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>): void => {
+      // Don't start a drag from the close button — let its click through.
+      if ((e.target as HTMLElement).closest('.find-replace__close')) return
       e.preventDefault()
       e.currentTarget.setPointerCapture(e.pointerId)
       dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: offset.x, baseY: offset.y }
@@ -314,7 +316,7 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     [offset]
   )
 
-  const onGripPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>): void => {
+  const onBarPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>): void => {
     const drag = dragRef.current
     if (!drag) return
     setOffset({
@@ -323,7 +325,7 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     })
   }, [])
 
-  const onGripPointerUp = useCallback((e: ReactPointerEvent<HTMLButtonElement>): void => {
+  const onBarPointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>): void => {
     dragRef.current = null
     if (e.currentTarget.hasPointerCapture(e.pointerId)) {
       e.currentTarget.releasePointerCapture(e.pointerId)
@@ -359,17 +361,15 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
       // while the user is typing in this panel.
       onKeyDownCapture={(e) => e.stopPropagation()}
     >
-      <div className="find-replace__titlebar">
-        <button
-          type="button"
-          className="find-replace__grip"
-          aria-label="Drag dialog"
-          title="Drag"
-          onPointerDown={onGripPointerDown}
-          onPointerMove={onGripPointerMove}
-          onPointerUp={onGripPointerUp}
-          onPointerCancel={onGripPointerUp}
-        >
+      <div
+        className="find-replace__titlebar"
+        title="Drag to move"
+        onPointerDown={onBarPointerDown}
+        onPointerMove={onBarPointerMove}
+        onPointerUp={onBarPointerUp}
+        onPointerCancel={onBarPointerUp}
+      >
+        <span className="find-replace__grip" aria-hidden="true">
           <span className="find-replace__grip-dots" aria-hidden="true">
             <i />
             <i />
@@ -378,7 +378,7 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
             <i />
             <i />
           </span>
-        </button>
+        </span>
         <span className="find-replace__title">FIND &amp; REPLACE</span>
         <button
           type="button"

@@ -45,6 +45,7 @@
 }
 
 /* --- Title bar: drag grip · label · close key --------------------------- */
+/* The whole title bar is the drag handle (#98), not just the grip dots. */
 .find-replace__titlebar {
   display: flex;
   align-items: center;
@@ -52,6 +53,18 @@
   padding: 5px 8px;
   background: var(--bg-sunken);
   border-bottom: var(--border-w) solid var(--border);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.find-replace__titlebar:active {
+  cursor: grabbing;
+}
+
+/* The close button stays a normal pointer (and its own click still fires). */
+.find-replace__titlebar .find-replace__close {
+  cursor: pointer;
 }
 
 .find-replace__grip {
@@ -61,12 +74,6 @@
   margin: 0;
   border: 0;
   background: transparent;
-  cursor: grab;
-  touch-action: none;
-}
-
-.find-replace__grip:active {
-  cursor: grabbing;
 }
 
 .find-replace__grip-dots {
