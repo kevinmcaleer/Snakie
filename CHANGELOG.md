@@ -6,6 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-20
+
+### Added
+- **Find & Replace (#92).** A panel for the editor with a **Find** and a
+  **Replace with** box, a **case-sensitive** toggle, an **Up/Down** search
+  direction (Down by default), and **Find / Replace / Replace+Find / Replace all**
+  buttons (Replace-all is a single undo step). Opens with ⌘/Ctrl-F (find) or
+  ⌘/Ctrl-H (replace), plus a toolbar button; Esc closes.
+- **YAML / JSON validation (#93).** `.json`, `.yml` and `.yaml` files are
+  validated as you edit — invalid formats get squiggles and Problems-panel entries
+  with the line/column and reason, plus an **autofix** (format/prettify, and
+  best-effort JSON comment + trailing-comma repair) offered as a lightbulb
+  quick-fix and a Fix/Format button.
+
+### Changed
+- **Dark mode is now a dark Skeuomorph (#91).** Toggling to dark gives a cohesive
+  dark version of the default skin — dark brushed-metal chrome, brass knobs,
+  glossy dark Run/Stop pills, dark green-felt Source Control, a deep-slate
+  ruled-paper editor, the recessed green-phosphor console, and a dark metal status
+  bar — instead of the old flat NES dark theme. The ruled-paper settings and the
+  light⇄dark toggle are unchanged.
+
 ## [0.6.3] - 2026-06-19
 
 ### Fixed
@@ -267,7 +289,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...v0.6.3
 [0.6.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.3.3...v0.5.0
