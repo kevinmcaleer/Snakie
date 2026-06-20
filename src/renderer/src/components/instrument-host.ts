@@ -111,6 +111,29 @@ export function redockKind(docked: DockedMap, kind: string, variables: string[])
 }
 
 /**
+ * Merge two connection lists, deduped by `variable`, FIRST-wins.
+ *
+ * Drives the instrument source-SELECTOR lists: the active-file connections come
+ * first (so their version — with any live `.freq()`/`.duty()` setter calls in the
+ * surrounding program — wins), then any open-instrument conns NOT already present
+ * are appended. The result is why a scope/meter can always be switched to another
+ * in-file pin yet still lists every open instrument even when the main file has
+ * none of them (or isn't a parseable `.py`). Generic over `{ variable }` so it
+ * stays DOM/`UsedPins`-free and unit-testable; preserves order; never mutates.
+ */
+export function unionByVariable<T extends { variable: string }>(primary: T[], extra: T[]): T[] {
+  const seen = new Set(primary.map((c) => c.variable))
+  const out = [...primary]
+  for (const c of extra) {
+    if (!seen.has(c.variable)) {
+      seen.add(c.variable)
+      out.push(c)
+    }
+  }
+  return out
+}
+
+/**
  * Whether the status-bar "live polling is interrupting the board" warning (+
  * quick-stop link) should show.
  *

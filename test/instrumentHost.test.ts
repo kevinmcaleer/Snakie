@@ -5,7 +5,8 @@ import {
   instrumentKey,
   liveWarningVisible,
   redockKind,
-  redockOne
+  redockOne,
+  unionByVariable
 } from '../src/renderer/src/components/instrument-host'
 
 describe('initialOffset', () => {
@@ -135,6 +136,43 @@ describe('redockKind', () => {
     const before = { 'scope:a': false }
     redockKind(before, 'scope', ['a'])
     expect(before['scope:a']).toBe(false)
+  })
+})
+
+describe('unionByVariable', () => {
+  const c = (variable: string, tag = ''): { variable: string; tag: string } => ({ variable, tag })
+
+  it('appends extras not already present (selector lists every open instrument)', () => {
+    const file = [c('pwm0')]
+    const open = [c('pwm0'), c('pwm1')]
+    expect(unionByVariable(file, open)).toEqual([c('pwm0'), c('pwm1')])
+  })
+
+  it('keeps the PRIMARY (file) version of a shared variable — first wins', () => {
+    const file = [c('pwm0', 'from-file')]
+    const open = [c('pwm0', 'from-instrument')]
+    expect(unionByVariable(file, open)).toEqual([c('pwm0', 'from-file')])
+  })
+
+  it('returns ALL open instruments when the active file has none (the bug case)', () => {
+    // Empty/non-.py main file → no file conns, but the open instruments must
+    // still populate the selector so the instrument renders + is switchable.
+    const open = [c('pwm0'), c('pwm1')]
+    expect(unionByVariable([], open)).toEqual(open)
+  })
+
+  it('preserves order (file conns first, then new open conns)', () => {
+    const file = [c('a'), c('b')]
+    const open = [c('b'), c('c'), c('a'), c('d')]
+    expect(unionByVariable(file, open).map((x) => x.variable)).toEqual(['a', 'b', 'c', 'd'])
+  })
+
+  it('does not mutate its inputs', () => {
+    const file = [c('a')]
+    const open = [c('b')]
+    unionByVariable(file, open)
+    expect(file).toEqual([c('a')])
+    expect(open).toEqual([c('b')])
   })
 })
 

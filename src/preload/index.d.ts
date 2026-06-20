@@ -3,7 +3,7 @@ import type { Api } from './index'
 
 // Re-export the Board View payload + shared board-definition types so the
 // renderer can import them from this single UI-facing module.
-export type { BoardSourcePayload, InstrumentOpenPayload } from './index'
+export type { BoardSourcePayload, InstrumentOpenPayload, InstrumentConn } from './index'
 export type {
   BoardDefinition,
   BoardPad,
