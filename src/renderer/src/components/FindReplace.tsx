@@ -15,11 +15,11 @@ import './FindReplace.css'
  * Find & Replace dialog (issue #92, skeuomorph polish).
  *
  * A floating, draggable panel docked top-right over the editor (non-blocking —
- * the editor stays interactive) with a Find box, a Replace-with box, three
- * search-option keys (case `Aa`, whole-word `|ab|`, regex `.*`), an Up/Down
- * search-direction radio (Down is the default), prev/next arrows, and Find /
- * Replace / Replace+Find / Replace all buttons, plus a live `N of M matches`
- * status line.
+ * the editor stays interactive) with a Find box, prev/next arrows (↑ = previous,
+ * ↓ = next), three search-option keys (case `Aa`, whole-word `|ab|`, regex `.*`),
+ * a chevron that reveals/hides the Replace-with row (so Replace is reachable even
+ * from find-only mode), and Replace / Replace+Find / Replace all buttons, plus a
+ * live `N of M matches` status line.
  *
  * It does NOT reimplement search: it drives the live Monaco editor (exposed via
  * `editorBridge`) through `model.findMatches`, `editor.setSelection` and
@@ -35,8 +35,8 @@ import './FindReplace.css'
  *
  * The case / whole-word / regex keys feed Monaco's `matchCase`, `wordSeparators`
  * and `isRegex` args; an invalid regex is caught (no throw) and surfaces as a
- * subtle error state. The direction drives Find / Replace+Find. Opening/closing
- * + keyboard wiring lives in EditorArea.
+ * subtle error state. Enter finds the next match (Shift+Enter the previous).
+ * Opening/closing + keyboard wiring lives in EditorArea.
  */
 
 export interface FindReplaceProps {
@@ -72,7 +72,10 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
   const [matchCase, setMatchCase] = useState(false)
   const [wholeWord, setWholeWord] = useState(false)
   const [useRegex, setUseRegex] = useState(false)
-  const [direction, setDirection] = useState<'up' | 'down'>('down')
+  // Whether the Replace row is revealed. Seeded from `withReplace` (Cmd/Ctrl-H
+  // opens it shown, Cmd/Ctrl-F hidden) but toggleable in-dialog via the chevron,
+  // so Replace is always reachable from find-only mode.
+  const [showReplace, setShowReplace] = useState(withReplace)
   // Live match count + current index for the `N of M matches` status. Recomputed
   // on query/option/content changes and after every navigation/replace.
   const [matchCount, setMatchCount] = useState(0)
@@ -157,6 +160,12 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     }
   }, [open, withReplace])
 
+  // Reveal/hide the Replace row to match the entry point each time the panel
+  // opens (Cmd/Ctrl-F hidden, Cmd/Ctrl-H shown); the chevron can override after.
+  useEffect(() => {
+    if (open) setShowReplace(withReplace)
+  }, [open, withReplace])
+
   // Reset the drag offset when the panel closes so it re-docks top-right next time.
   useEffect(() => {
     if (!open) setOffset({ x: 0, y: 0 })
@@ -212,12 +221,12 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
   )
 
   const handleFind = useCallback(
-    (dir: 'up' | 'down' = direction): void => {
+    (dir: 'up' | 'down' = 'down'): void => {
       findNext(dir)
       syncStatus()
       getActiveEditor()?.focus()
     },
-    [findNext, direction, syncStatus]
+    [findNext, syncStatus]
   )
 
   /**
@@ -241,17 +250,17 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
   const handleReplace = useCallback((): void => {
     // Replace the current match if the selection is on one; else find first so a
     // subsequent Replace lands on a match.
-    if (!replaceCurrent()) findNext(direction)
+    if (!replaceCurrent()) findNext('down')
     syncStatus()
     getActiveEditor()?.focus()
-  }, [replaceCurrent, findNext, direction, syncStatus])
+  }, [replaceCurrent, findNext, syncStatus])
 
   const handleReplaceFind = useCallback((): void => {
     replaceCurrent()
-    findNext(direction)
+    findNext('down')
     syncStatus()
     getActiveEditor()?.focus()
-  }, [replaceCurrent, findNext, direction, syncStatus])
+  }, [replaceCurrent, findNext, syncStatus])
 
   const handleReplaceAll = useCallback((): void => {
     const editor = getActiveEditor()
@@ -384,6 +393,16 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
 
       <div className="find-replace__body">
         <div className="find-replace__row">
+          <button
+            type="button"
+            className="find-replace__expand"
+            aria-label={showReplace ? 'Hide replace' : 'Show replace'}
+            aria-expanded={showReplace}
+            title={showReplace ? 'Hide replace' : 'Show replace'}
+            onClick={() => setShowReplace((v) => !v)}
+          >
+            {showReplace ? '▾' : '▸'}
+          </button>
           <input
             ref={findInputRef}
             className={`find-replace__input${statusIsEmpty ? ' find-replace__input--error' : ''}`}
@@ -447,7 +466,7 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
           </div>
         </div>
 
-        {withReplace && (
+        {showReplace && (
           <div className="find-replace__row">
             <input
               className="find-replace__input"
@@ -486,47 +505,13 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
           </div>
         )}
 
-        <div className="find-replace__row find-replace__row--options">
-          <fieldset className="find-replace__direction">
-            <legend className="find-replace__legend">Direction</legend>
-            <label className="find-replace__option">
-              <input
-                type="radio"
-                name="find-direction"
-                value="up"
-                checked={direction === 'up'}
-                onChange={() => setDirection('up')}
-              />
-              Up
-            </label>
-            <label className="find-replace__option">
-              <input
-                type="radio"
-                name="find-direction"
-                value="down"
-                checked={direction === 'down'}
-                onChange={() => setDirection('down')}
-              />
-              Down
-            </label>
-          </fieldset>
-          <button
-            type="button"
-            className="find-replace__btn"
-            onClick={() => handleFind()}
-            disabled={query.length === 0}
-          >
-            Find
-          </button>
-        </div>
-
         <div className="find-replace__status">
           <span
             className={`find-replace__count${statusIsEmpty ? ' find-replace__count--empty' : ''}`}
           >
             {status}
           </span>
-          <span className="find-replace__keyhint">Esc to close · ↵ Find next</span>
+          <span className="find-replace__keyhint">↵ next · ⇧↵ prev · Esc close</span>
         </div>
       </div>
     </div>

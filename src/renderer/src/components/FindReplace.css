@@ -168,6 +168,7 @@
 
 .find-replace__key,
 .find-replace__arrow,
+.find-replace__expand,
 .find-replace__btn {
   font-family: var(--font-mono);
   color: var(--text);
@@ -178,7 +179,8 @@
 }
 
 .find-replace__key,
-.find-replace__arrow {
+.find-replace__arrow,
+.find-replace__expand {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -186,6 +188,18 @@
   height: 26px;
   padding: 0 5px;
   font-size: 0.75rem;
+}
+
+/* The Replace-row reveal chevron sits at the very left of the find row. */
+.find-replace__expand {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.find-replace__expand:hover {
+  color: var(--text);
 }
 
 .find-replace__btn {

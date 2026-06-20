@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Find & Replace dialog (#95).** Replace is now reachable from find-only mode
+  via a chevron that reveals/hides the Replace row (previously it only appeared
+  when opened with Cmd/Ctrl-H), removed the duplicate prev/next controls (the
+  Up/Down direction radio + extra Find button that duplicated the ↑/↓ arrows), and
+  kept a clear ✕ close button in the title bar.
+
 ### Changed
 - **Board View v2.** The Board View is now its own **floating window** (a real
   always-on-top window fed the active file live over IPC) instead of a modal
