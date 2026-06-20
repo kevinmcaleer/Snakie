@@ -255,6 +255,9 @@ export function MonacoEditor(): JSX.Element {
       lineHeight: metrics.lineHeight,
       letterSpacing: 0,
       scrollBeyondLastLine: false,
+      // Disable sticky scroll: the pinned scope/function header overlaps and
+      // clashes with the code beneath it on the ruled-paper editor (user report).
+      stickyScroll: { enabled: false },
       // AI ghost text (issue #82). The registered provider gates itself on the
       // enable toggle + a stored key, so leaving this on costs nothing when the
       // feature is off.

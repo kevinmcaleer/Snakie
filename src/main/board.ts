@@ -15,6 +15,7 @@ import type { BoardDefinition } from '../shared/board'
  *   board:close         (renderer → main, send)    close the window
  *   board:update        (renderer → main, send)    relay {source,fileName,...}
  *   board:source        (main → board window, send) the relayed payload
+ *   board:requestSource (board window → main, invoke) pull the buffered payload
  *   board:closed        (main → main window, send)  window was closed
  *   board:listUserBoards(renderer → main, invoke)  user JSON board defs
  *   board:openBoardsFolder (renderer → main, invoke) reveal the boards folder
@@ -29,6 +30,15 @@ import type { BoardDefinition } from '../shared/board'
 
 /** The live Board View window, or null when closed. One at a time. */
 let boardWindow: BrowserWindow | null = null
+
+/**
+ * The most recent active-file snapshot relayed via `board:update`. Buffered so a
+ * freshly-opened window can PULL it on mount (`board:requestSource`): the initial
+ * push from `board:open` can arrive before the board renderer has registered its
+ * `board:source` listener, so without this the window would sit blank until the
+ * next edit.
+ */
+let lastBoardPayload: unknown = null
 
 /** Absolute path to the user's boards folder (`<userData>/boards`). */
 function boardsDir(): string {
@@ -132,12 +142,18 @@ export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): voi
     if (boardWindow && !boardWindow.isDestroyed()) boardWindow.close()
   })
 
-  // Relay the active-file snapshot from the main renderer to the board window.
+  // Relay the active-file snapshot from the main renderer to the board window,
+  // and buffer it so a freshly-opened window can pull the latest on mount.
   ipcMain.on('board:update', (_e, payload) => {
+    lastBoardPayload = payload
     if (boardWindow && !boardWindow.isDestroyed()) {
       boardWindow.webContents.send('board:source', payload)
     }
   })
+
+  // The board window pulls the latest snapshot on mount (covers the open-time
+  // race where the first push lands before its `board:source` listener exists).
+  ipcMain.handle('board:requestSource', () => lastBoardPayload)
 
   ipcMain.handle('board:listUserBoards', () => readUserBoards())
 

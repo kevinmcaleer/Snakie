@@ -442,6 +442,8 @@ const board = {
   close: (): void => ipcRenderer.send('board:close'),
   /** Relay the active-file snapshot to the board window. Fire-and-forget. */
   update: (payload: BoardSourcePayload): void => ipcRenderer.send('board:update', payload),
+  /** Pull the latest buffered snapshot on mount (covers the open-time race). */
+  requestSource: (): Promise<BoardSourcePayload | null> => ipcRenderer.invoke('board:requestSource'),
   /** Subscribe to the streamed active-file payload. Returns an unsubscribe fn. */
   onSource: (cb: (payload: BoardSourcePayload) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, payload: BoardSourcePayload): void => cb(payload)

@@ -100,6 +100,7 @@ if (!w.api) {
       open: P(undefined),
       close: noop,
       update: noop,
+      requestSource: P(null),
       onSource: unsub,
       onClosed: unsub,
       listUserBoards: P([]),

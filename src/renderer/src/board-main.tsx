@@ -79,6 +79,21 @@ function BoardWindowApp(): JSX.Element {
     return off
   }, [])
 
+  // Pull the latest snapshot on mount: the initial push from `board:open` can
+  // arrive before the `onSource` listener above is registered, so without this
+  // pull a freshly-opened window stays blank until the next edit.
+  useEffect(() => {
+    window.api.board
+      .requestSource()
+      .then((p) => {
+        if (p) {
+          setPayload(p)
+          if (p.theme) applyTheme(p.theme)
+        }
+      })
+      .catch(() => undefined)
+  }, [])
+
   // Esc closes the window (a frameless window has no native close affordance);
   // in design mode it first backs out to the read-only view so work isn't lost
   // to a stray Esc, and so a focused input's Esc doesn't slam the window shut.
