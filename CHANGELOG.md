@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Instruments live in the main window.** The Oscilloscope and Multimeter now
+  open as **draggable floating windows over the code editor** (or docked to a side
+  rail) in the main window instead of inside the Board View window. A new
+  **Instruments** button in the toolbar (right of the light/dark toggle) shows or
+  hides them, the board-view PWM/ADC node buttons open them via IPC, and their
+  live values are polled in the main window while at least one is open. Floating
+  windows can be dragged by their title bar, and the close ✕ works in both modes.
+
 ## [0.10.0] - 2026-06-20
 
 ### Added
