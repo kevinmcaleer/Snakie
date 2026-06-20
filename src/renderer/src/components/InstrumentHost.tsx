@@ -165,6 +165,17 @@ export interface UseInstrumentsArgs {
   instruments: OpenInstrument[]
   /** Replace the open-instrument list (add / close / dedupe). */
   onChange: (next: OpenInstrument[]) => void
+  /**
+   * The GLOBAL live-poll switch (lifted to AppShell, default OFF). Gates the
+   * device poll: with LIVE off there is NO polling → no raw-REPL probe → no
+   * interruption of a running program; instruments show their static/parsed
+   * readings. With LIVE on the poll runs as before (still internally gated on a
+   * connected board). One switch for all instruments because the poll is a
+   * single batched probe shared across every open scope/meter.
+   */
+  live: boolean
+  /** Flip the global live-poll (surfaced as a LIVE toggle on each instrument). */
+  onToggleLive: () => void
 }
 
 export interface UseInstrumentsResult {
@@ -175,6 +186,10 @@ export interface UseInstrumentsResult {
   source: string
   pwmConns: UsedPins[]
   adcConns: UsedPins[]
+  /** Global live-poll state (mirrored on each instrument's LIVE toggle). */
+  live: boolean
+  /** Flip the global live-poll. */
+  onToggleLive: () => void
   toggleDock: (it: OpenInstrument) => void
   closeInstrument: (kind: 'scope' | 'meter', variable: string) => void
   retargetInstrument: (kind: 'scope' | 'meter', fromVar: string, toVar: string) => void
@@ -184,7 +199,9 @@ export function useInstruments({
   source,
   isPython,
   instruments,
-  onChange
+  onChange,
+  live,
+  onToggleLive
 }: UseInstrumentsArgs): UseInstrumentsResult {
   // Re-parse the MAIN window's active file → the connections instruments resolve
   // against (same parser the board view uses).
@@ -234,8 +251,12 @@ export function useInstruments({
     setDocked((d) => ({ ...d, [keyOf(it)]: !(d[keyOf(it)] ?? true) }))
   }, [])
 
-  // Live device values: poll only while ≥1 scope/meter is open (+ connected).
-  const liveValues = useInstrumentValues(conns, instruments.length > 0)
+  // Live device values: poll ONLY when LIVE is on AND ≥1 scope/meter is open
+  // (the poll still checks `connected` internally). With LIVE off — the default —
+  // `active` is false, so there is no interval, no raw-REPL probe, and a running
+  // program on the board is never interrupted; instruments fall back to their
+  // static/parsed readings.
+  const liveValues = useInstrumentValues(conns, live && instruments.length > 0)
 
   // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), folded from the live
   // volts samples; reset when all instruments close (a fresh session).
@@ -287,6 +308,8 @@ export function useInstruments({
     source,
     pwmConns,
     adcConns,
+    live,
+    onToggleLive,
     toggleDock,
     closeInstrument,
     retargetInstrument
@@ -300,6 +323,9 @@ interface RenderArgs {
   adcConns: UsedPins[]
   live?: LiveValue
   stats?: Stats
+  /** Global live-poll state + toggler for the instrument's LIVE control. */
+  liveOn: boolean
+  onToggleLive: () => void
   docked: boolean
   float?: FloatProps
   onToggleDock: () => void
@@ -323,6 +349,8 @@ function renderInstrument(
         sources={args.pwmConns}
         fileSource={args.source}
         liveDuty={liveDuty}
+        live={args.liveOn}
+        onToggleLive={args.onToggleLive}
         docked={args.docked}
         float={args.float}
         onSelectSource={(next) => args.onRetarget(next.variable)}
@@ -339,6 +367,8 @@ function renderInstrument(
       sources={args.adcConns}
       sample={sample}
       stats={args.stats}
+      live={args.liveOn}
+      onToggleLive={args.onToggleLive}
       docked={args.docked}
       float={args.float}
       onSelectSource={(next) => args.onRetarget(next.variable)}
@@ -359,6 +389,8 @@ function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float
     adcConns: host.adcConns,
     live: r.live,
     stats: r.stats,
+    liveOn: host.live,
+    onToggleLive: host.onToggleLive,
     docked: !float,
     float,
     onToggleDock: () => host.toggleDock(r.it),

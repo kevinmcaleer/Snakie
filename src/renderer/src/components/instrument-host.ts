@@ -64,3 +64,23 @@ function clamp(v: number, lo: number, hi: number): number {
   if (hi < lo) return lo
   return v < lo ? lo : v > hi ? hi : v
 }
+
+/**
+ * Whether the status-bar "live polling is interrupting the board" warning (+
+ * quick-stop link) should show.
+ *
+ * The main-window instrument poll (`useInstrumentValues`) enters the raw REPL and
+ * INTERRUPTS a running program on every tick. The warning is the user's signal
+ * that this is happening and how to stop it, so it must mirror the poll's own
+ * `active` gate exactly: live polling is enabled (`live`) AND a board is
+ * connected AND at least one scope/meter is open. With LIVE off (the default),
+ * nothing is open, or nothing is connected, there is no poll → no interruption →
+ * no warning. Pure so it can be unit-tested without rendering the status bar.
+ */
+export function liveWarningVisible(
+  live: boolean,
+  connected: boolean,
+  openInstrumentCount: number
+): boolean {
+  return live && connected && openInstrumentCount > 0
+}

@@ -209,11 +209,26 @@ export function AppShell(): JSX.Element {
     [visibility, setVisibility]
   )
 
+  // The GLOBAL instrument live-poll switch. DEFAULT OFF: opening a scope/meter no
+  // longer auto-polls the board (which entered the raw REPL and interrupted a
+  // running program every ~800ms). One switch for all instruments because the
+  // poll is a single batched probe shared across every open scope/meter (a
+  // per-instrument toggle would mislead). Persisted so it survives a restart, but
+  // starts off for a fresh user.
+  const [instrumentsLive, setInstrumentsLive] = useLocalStorage('snakie.instruments.live', false)
+  const toggleInstrumentsLive = useCallback(
+    (): void => setInstrumentsLive(!instrumentsLive),
+    [instrumentsLive, setInstrumentsLive]
+  )
+  const stopInstrumentsLive = useCallback((): void => setInstrumentsLive(false), [setInstrumentsLive])
+
   const instruments = useInstruments({
     source: boardSource,
     isPython: boardIsPython,
     instruments: openInstruments,
-    onChange: setOpenInstruments
+    onChange: setOpenInstruments,
+    live: instrumentsLive,
+    onToggleLive: toggleInstrumentsLive
   })
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the
@@ -395,7 +410,11 @@ export function AppShell(): JSX.Element {
         </PanelGroup>
       </div>
 
-      <StatusBar />
+      <StatusBar
+        instrumentsLive={instrumentsLive}
+        instrumentCount={openInstruments.length}
+        onStopLive={stopInstrumentsLive}
+      />
 
       {/* App-root float layer: undocked scope/meter windows float over the WHOLE
           window (above the panels, below modals). Click-through layer. */}

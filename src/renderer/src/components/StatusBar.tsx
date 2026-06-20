@@ -3,6 +3,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { FirmwareFlasher } from './FirmwareFlasher'
 import { updateButtonView } from './updateButton'
+import { liveWarningVisible } from './instrument-host'
 import type { UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
 
@@ -42,7 +43,24 @@ export interface PluginStatusMessage {
 /** Name of the window event the renderer dispatches for plugin status actions. */
 export const PLUGIN_STATUS_EVENT = 'snakie:status'
 
-export function StatusBar(): JSX.Element {
+export interface StatusBarProps {
+  /**
+   * Whether the GLOBAL instrument live-poll is on. When it is (and a board is
+   * connected with ≥1 instrument open) the bar shows a warning that the poll is
+   * interrupting the board, plus a quick-stop link.
+   */
+  instrumentsLive?: boolean
+  /** How many scope/meter instruments are open (gates the warning). */
+  instrumentCount?: number
+  /** Stop the global live-poll (the quick-action behind the warning's link). */
+  onStopLive?: () => void
+}
+
+export function StatusBar({
+  instrumentsLive = false,
+  instrumentCount = 0,
+  onStopLive
+}: StatusBarProps = {}): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -140,6 +158,13 @@ export function StatusBar(): JSX.Element {
 
   const lines = activeFile ? activeFile.content.split('\n').length : null
 
+  // The instrument live-poll warning (+ quick stop). Shows ONLY while live
+  // polling is on AND a board is connected AND ≥1 scope/meter is open — i.e. the
+  // exact condition under which the poll is entering the raw REPL and
+  // interrupting a running program. The gate is the pure, unit-tested
+  // `liveWarningVisible`.
+  const showLiveWarning = liveWarningVisible(instrumentsLive, connected, instrumentCount)
+
   // Update-aware version slot (issue #74). The pure mapping lives in
   // `updateButton.ts` so it can be unit-tested without rendering.
   const updateView = updateButtonView(update, version)
@@ -166,6 +191,25 @@ export function StatusBar(): JSX.Element {
           <span className="statusbar__dot" aria-hidden="true" />
           <span>{connLabel}</span>
         </span>
+
+        {showLiveWarning && (
+          <span
+            className="statusbar__item statusbar__live-warn"
+            title="The instrument live poll enters the REPL and interrupts a running program every ~0.8s"
+          >
+            <span aria-hidden="true">⚡</span>
+            <span>Live polling is interrupting the board</span>
+            <button
+              type="button"
+              className="statusbar__live-stop"
+              onClick={onStopLive}
+              title="Stop live polling"
+              aria-label="Stop live polling"
+            >
+              Stop
+            </button>
+          </span>
+        )}
 
         {pluginMsg &&
           (pluginMsg.href ? (

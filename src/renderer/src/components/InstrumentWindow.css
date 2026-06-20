@@ -94,6 +94,44 @@
   color: #d6dade;
 }
 
+/* --- LIVE toggle (gates the global instrument poll) --- */
+/* Wider than the icon keys (it carries a "LIVE" label + status dot). Grey/sunken
+ * when off (no polling → no interruption); lit green when on. */
+.instr__live {
+  width: auto;
+  gap: 5px;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #6b7079;
+}
+.instr__live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4a4f57;
+  flex: none;
+}
+.instr__live:hover {
+  background: #34373c;
+  color: #c7cbd1;
+}
+.instr__live--on {
+  background: rgba(82, 224, 138, 0.14);
+  color: #86ffb6;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.instr__live--on .instr__live-dot {
+  background: #52e08a;
+  box-shadow: 0 0 6px rgba(82, 224, 138, 0.9);
+}
+.instr__live--on:hover {
+  background: rgba(82, 224, 138, 0.22);
+  color: #adffce;
+}
+
 .instr__body {
   padding: 13px;
   display: flex;
