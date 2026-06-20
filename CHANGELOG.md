@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Oscilloscope instrument (#101).** PWM nodes in the Board View gain a scope
+  launcher that opens a skeuomorphic CRT oscilloscope rendering the pin's square
+  wave from its frequency + duty (FREQ / DUTY / PERIOD readouts, live duty when
+  connected). Opens docked beside the board on wide windows, overlaid on narrow.
+- **Multimeter instrument (#102).** ADC pins (`ADC(Pin(26))` …, a new parsed type)
+  gain a meter launcher that opens a skeuomorphic handheld DMM showing the live
+  voltage on a 7-segment display, with raw count, a 0–3.3 V bargraph and MIN/MAX/AVG.
 - **Board View live pin values (#97).** A **LIVE** toggle in the board view header
   (off by default) reads the connected board over the REPL and shows each node's
   real value — `1`/`0` for digital (green when asserted), PWM duty, and an activity
