@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_LABEL } from '../src/renderer/src/components/parse-pins'
+import {
+  parsePins,
+  PIN_TYPE_COLOR,
+  PIN_TYPE_LABEL,
+  PIN_TYPE_TAG
+} from '../src/renderer/src/components/parse-pins'
 
 describe('parsePins', () => {
   it('returns nothing for empty / pinless source', () => {
@@ -127,6 +132,23 @@ describe('parsePins', () => {
     for (const type of ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'] as const) {
       expect(PIN_TYPE_COLOR[type]).toMatch(/^#[0-9a-f]{6}$/i)
       expect(PIN_TYPE_LABEL[type]).toMatch(/^[A-Z0-9]+$/)
+    }
+  })
+
+  it('exposes a short node-graph tag for every connection type', () => {
+    // Each tag is short (≤3 visible chars) and a non-empty string — these label
+    // the inline type chip on the node-graph Board View cards.
+    const tags = ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'].map(
+      (t) => PIN_TYPE_TAG[t as keyof typeof PIN_TYPE_TAG]
+    )
+    expect(tags).toEqual(['OUT', 'IN', 'PWM', 'I²C', 'SPI', 'PIO'])
+    for (const tag of tags) {
+      expect(tag.length).toBeGreaterThan(0)
+      expect(tag.length).toBeLessThanOrEqual(3)
+    }
+    // The short tags are never longer than the full table labels.
+    for (const type of ['output', 'input', 'pwm', 'i2c', 'spi', 'pio'] as const) {
+      expect(PIN_TYPE_TAG[type].length).toBeLessThanOrEqual(PIN_TYPE_LABEL[type].length)
     }
   })
 })

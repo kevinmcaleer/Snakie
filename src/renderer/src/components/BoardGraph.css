@@ -1,0 +1,472 @@
+/*
+ * Board Graph — the node-graph LIVE Board View.
+ *
+ * One dark node card per parsed connection on the left, each wired by a drooping
+ * "noodle" cable (SVG) to a gold castellated GPIO pad on the board's left edge,
+ * the green PCB on the right, and a light "pins in use" table below.
+ *
+ * Intentionally dark in ALL themes (per the design handoff): every colour here is
+ * self-contained (no theme tokens) so it reads identically in light / skeuomorph
+ * / dark. Fonts use JetBrains Mono (`--font-mono`) for the labels + code.
+ */
+
+.boardgraph {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #1a1b1e;
+  color: #e6e8ec;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* As the window root: fill the OS window. */
+.boardgraph--window {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* --- Header bar --- */
+.boardgraph__bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  height: 62px;
+  padding: 0 22px;
+  background: #1f2024;
+  border-bottom: 1px solid #2c2e33;
+  user-select: none;
+  flex: 0 0 auto;
+}
+
+/* In the floating window the whole bar is the OS drag handle… */
+.boardgraph__bar--drag {
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+/* …but every interactive control inside it must NOT drag. */
+.boardgraph__bar--drag .boardgraph__picker-btn,
+.boardgraph__bar--drag .boardgraph__picker-menu,
+.boardgraph__bar--drag .boardgraph__picker-backdrop,
+.boardgraph__bar--drag .boardgraph__knob,
+.boardgraph__bar--drag .boardgraph__key {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+}
+
+/* 6-dot drag grip (2 columns × 3 rows). */
+.boardgraph__grip {
+  display: grid;
+  grid-template-columns: repeat(2, 3px);
+  grid-auto-rows: 3px;
+  gap: 3px;
+  opacity: 0.5;
+  flex: 0 0 auto;
+}
+
+.boardgraph__grip-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: #7a7f88;
+}
+
+.boardgraph__title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: #cfd3da;
+  flex: 0 0 auto;
+}
+
+/* --- Board picker (custom dropdown — a native <select> is unreliable in a
+   frameless, always-on-top window) --- */
+.boardgraph__picker {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.boardgraph__picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  max-width: 16rem;
+  padding: 0 14px;
+  border-radius: 9px;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  font-family: inherit;
+  font-size: 13px;
+  color: #d3d8de;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.boardgraph__picker-btn:hover {
+  border-color: #565b63;
+}
+
+.boardgraph__picker-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.boardgraph__picker-caret {
+  color: #7a7f88;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* Transparent full-window catcher so a click anywhere closes the menu. */
+.boardgraph__picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.boardgraph__picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 50;
+  min-width: 14rem;
+  margin: 0;
+  padding: 5px;
+  list-style: none;
+  background: #1f2024;
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+}
+
+.boardgraph__picker-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 6px 9px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #d6dade;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.boardgraph__picker-item:hover {
+  background: #26282d;
+}
+
+.boardgraph__picker-item.is-active {
+  background: #2f5f8c;
+  color: #fff;
+}
+
+.boardgraph__picker-item-name {
+  font-weight: 600;
+}
+
+.boardgraph__picker-item-mcu {
+  font-size: 10.5px;
+  color: #7a7f88;
+}
+
+.boardgraph__picker-item.is-active .boardgraph__picker-item-mcu {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.boardgraph__chip {
+  font-size: 13px;
+  color: #6a6f78;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* Right cluster (LIVE + knob + folder + close). */
+.boardgraph__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+}
+
+.boardgraph__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: #43c46a;
+}
+
+.boardgraph__led {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #43c46a;
+  box-shadow: 0 0 7px rgba(67, 196, 106, 0.8);
+  animation: boardgraph-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes boardgraph-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Gold edit knob → Board Creator. */
+.boardgraph__knob {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 32%, #ffe08a, #e6ab30 60%, #c4881d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 2px 5px rgba(0, 0, 0, 0.4);
+  color: #5a3d0e;
+  cursor: pointer;
+}
+
+.boardgraph__knob:hover {
+  filter: brightness(1.06);
+}
+
+/* Metal square keys (folder + close). */
+.boardgraph__key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 9px;
+  color: #aeb4bd;
+  cursor: pointer;
+}
+
+.boardgraph__key:hover {
+  border-color: #565b63;
+  color: #d6dade;
+}
+
+.boardgraph__key--close:hover {
+  background: #c0392b;
+  border-color: #a5281b;
+  color: #fff;
+}
+
+/* --- Canvas (dark mat + faint 28px grid) --- */
+.boardgraph__canvas {
+  flex: 1 1 auto;
+  min-height: 320px;
+  overflow: auto;
+  background-color: #161719;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* The single coordinate-space host: SVG (wires + board) under HTML node cards. */
+.boardgraph__stage {
+  position: relative;
+}
+
+.boardgraph__svg {
+  position: absolute;
+  inset: 0;
+}
+
+.boardgraph__svg-label {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.boardgraph__svg-pad-text text {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.boardgraph__svg-mcu {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.boardgraph__svg-sub {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 9px;
+}
+
+/* --- Node cards (HTML, absolutely positioned over the SVG) --- */
+.boardgraph__node {
+  position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: #1e2127;
+  border: 1px solid #2f5f8c;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.boardgraph__node-tag {
+  flex: 0 0 auto;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #0e2233;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.boardgraph__node-var {
+  font-size: 12.5px;
+  color: #d6dade;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.boardgraph__node-val {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #6a7079;
+  flex: 0 0 auto;
+}
+
+.boardgraph__node-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3a3f47;
+}
+
+/* --- Empty state (no pins / not python) --- */
+.boardgraph__empty {
+  max-width: 28rem;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #8a8f98;
+  line-height: 1.5;
+}
+
+/* --- "Pins in use" table (light) --- */
+.boardgraph__pins {
+  flex: 0 0 auto;
+  max-height: 32vh;
+  overflow: auto;
+  background: #e9e6df;
+  color: #2a2620;
+}
+
+.boardgraph__pins-head {
+  display: flex;
+  align-items: center;
+  padding: 14px 24px 12px;
+  border-bottom: 1px solid #d4cfc3;
+}
+
+.boardgraph__pins-head span:first-child {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5650;
+}
+
+.boardgraph__pins-file {
+  margin-left: auto;
+  font-size: 13px;
+  color: #9a948a;
+}
+
+.boardgraph__pins-empty {
+  margin: 0;
+  padding: 16px 24px;
+  font-size: 13px;
+  color: #9a948a;
+}
+
+.boardgraph__pins-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.boardgraph__pins-row {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e0d6;
+}
+
+.boardgraph__pins-row:nth-child(even) {
+  background: #f5f1e8;
+}
+
+.boardgraph__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  flex: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.boardgraph__pins-type {
+  font-size: 12px;
+  font-weight: 700;
+  color: #4a4640;
+  margin-left: 14px;
+  min-width: 78px;
+}
+
+.boardgraph__pins-num {
+  font-size: 13px;
+  color: #7a756c;
+  min-width: 48px;
+}
+
+.boardgraph__pins-src {
+  font-size: 13.5px;
+  color: #2a2620;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
