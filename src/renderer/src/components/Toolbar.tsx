@@ -121,6 +121,7 @@ interface ToolbarProps {
   rightCollapsed: boolean
   onToggleRight: () => void
   onOpenSettings: () => void
+  onOpenBoard: () => void
 }
 
 /**
@@ -149,7 +150,8 @@ export function Toolbar({
   onToggleShell,
   rightCollapsed,
   onToggleRight,
-  onOpenSettings
+  onOpenSettings,
+  onOpenBoard
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
@@ -295,6 +297,29 @@ export function Toolbar({
           aria-label="Toggle Chat panel"
         >
           {PANEL_RIGHT_ICON}
+        </button>
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon btn--knob"
+          onClick={onOpenBoard}
+          title="Board View — visualise pin wiring"
+          aria-label="Open Board View"
+        >
+          {/* dev board: outlined PCB with two rows of header pads + a chip */}
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+            <rect x="4" y="3" width="16" height="18" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.35" />
+            <g fill="currentColor">
+              <rect x="5.4" y="5.5" width="1.6" height="1.6" />
+              <rect x="5.4" y="8.5" width="1.6" height="1.6" />
+              <rect x="5.4" y="11.5" width="1.6" height="1.6" />
+              <rect x="5.4" y="14.5" width="1.6" height="1.6" />
+              <rect x="17" y="5.5" width="1.6" height="1.6" />
+              <rect x="17" y="8.5" width="1.6" height="1.6" />
+              <rect x="17" y="11.5" width="1.6" height="1.6" />
+              <rect x="17" y="14.5" width="1.6" height="1.6" />
+            </g>
+          </svg>
         </button>
         <button
           type="button"
