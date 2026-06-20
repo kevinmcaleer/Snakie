@@ -11,11 +11,18 @@ import {
   DEFAULT_BOARD_ID,
   mergeBoards,
   type BoardDefinition,
-  type BoardHeader,
   type BoardPad,
   type BoardPadType,
   type BoardFeature
 } from './board-defs'
+import {
+  boardBox,
+  layoutPads,
+  ledPoint,
+  padForToken,
+  type BoardBox,
+  type PadPoint
+} from './board-layout'
 import './BoardView.css'
 
 /**
@@ -77,122 +84,8 @@ const NODE_LEFT_X = 78
 const NODE_RIGHT_X = VIEW_W - 78
 const STORAGE_KEY = 'snakie.board.id'
 
-/** The drawn board outline rect, computed from a definition's aspect. */
-interface BoardBox {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-/** Fit the board into the mat from its aspect ratio, centred. */
-function boardBox(aspect: number): BoardBox {
-  let w = MAX_BOARD_W
-  let h = w / aspect
-  if (h > MAX_BOARD_H) {
-    h = MAX_BOARD_H
-    w = h * aspect
-  }
-  return { x: CX - w / 2, y: CY - h / 2, w, h }
-}
-
-/** A resolved pad with its drawn coordinate + the edge it sits on. */
-interface PadPoint {
-  x: number
-  y: number
-  edge: BoardHeader['edge'] | 'led'
-  pad: BoardPad
-}
-
-/** Compute every pad's drawn coordinate for a board (so they can be drawn + matched). */
-function layoutPads(def: BoardDefinition, box: BoardBox): PadPoint[] {
-  const points: PadPoint[] = []
-  for (const header of def.headers) {
-    const n = header.pins.length
-    if (n === 0) continue
-    header.pins.forEach((pad, i) => {
-      // Spread pads evenly along the edge, inset from the corners.
-      const t = n === 1 ? 0.5 : i / (n - 1)
-      if (header.edge === 'left' || header.edge === 'right') {
-        const y = box.y + 18 + t * (box.h - 36)
-        const x = header.edge === 'left' ? box.x + 12 : box.x + box.w - 12
-        points.push({ x, y, edge: header.edge, pad })
-      } else {
-        const x = box.x + 18 + t * (box.w - 36)
-        const y = header.edge === 'top' ? box.y + 12 : box.y + box.h - 12
-        points.push({ x, y, edge: header.edge, pad })
-      }
-    })
-  }
-  return points
-}
-
-/** The onboard-LED dot position (top-right corner of the board). */
-function ledPoint(box: BoardBox): { x: number; y: number } {
-  return { x: box.x + box.w - 26, y: box.y + 26 }
-}
-
-/**
- * Resolve a parsed pin token to a drawn pad coordinate.
- * Matching: numeric token vs `pad.gpio`; else token vs `pad.label`
- * (case-insensitive, treating `GP12` and `12` as equivalent). The board's
- * `ledLabel` token taps the onboard-LED dot. Out-of-range numeric tokens fall
- * back to the nearest GPIO pad so a wire still draws.
- */
-function padForToken(
-  token: string,
-  def: BoardDefinition,
-  pads: PadPoint[],
-  box: BoardBox
-): PadPoint {
-  const t = token.trim()
-  const lower = t.toLowerCase()
-
-  // Onboard-LED token taps the LED dot.
-  if (def.ledLabel && def.ledLabel.toLowerCase() === lower) {
-    const p = ledPoint(box)
-    return { x: p.x, y: p.y, edge: 'led', pad: { label: def.ledLabel } }
-  }
-
-  const isNum = /^\d+$/.test(t)
-  const num = isNum ? Number(t) : NaN
-
-  // Exact gpio match.
-  if (isNum) {
-    const byGpio = pads.find((p) => p.pad.gpio === num)
-    if (byGpio) return byGpio
-  }
-
-  // Label match, allowing GP12 ↔ 12 equivalence.
-  const norm = (s: string): string => s.toLowerCase().replace(/^gp/, '')
-  const byLabel = pads.find((p) => {
-    const lbl = p.pad.label.toLowerCase()
-    if (lbl === lower) return true
-    if (isNum && norm(p.pad.label) === t) return true
-    return false
-  })
-  if (byLabel) return byLabel
-
-  // Out-of-range numeric: nearest GPIO pad so a wire still draws.
-  if (isNum) {
-    const gpioPads = pads.filter((p) => typeof p.pad.gpio === 'number')
-    if (gpioPads.length > 0) {
-      let best = gpioPads[0]
-      let bestDelta = Math.abs((best.pad.gpio as number) - num)
-      for (const p of gpioPads) {
-        const d = Math.abs((p.pad.gpio as number) - num)
-        if (d < bestDelta) {
-          best = p
-          bestDelta = d
-        }
-      }
-      return best
-    }
-  }
-
-  // Last resort: first pad.
-  return pads[0] ?? { x: box.x, y: box.y, edge: 'left', pad: { label: t } }
-}
+/** This view's box-fitting geometry (centred on the 760×480 mat). */
+const BOX_GEOM = { cx: CX, cy: CY, maxW: MAX_BOARD_W, maxH: MAX_BOARD_H }
 
 /** A drawn connection = its pads resolved + a connection-type badge anchor. */
 interface DrawnWire {
@@ -286,7 +179,7 @@ export function BoardView({
   // Re-parse on every source change → live update.
   const conns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
 
-  const box = useMemo(() => boardBox(def.aspect), [def.aspect])
+  const box = useMemo(() => boardBox(def.aspect, BOX_GEOM), [def.aspect])
   const pads = useMemo(() => layoutPads(def, box), [def, box])
   const wires = useMemo(() => layoutWires(conns, def, pads, box), [conns, def, pads, box])
   const usedPads = useMemo(() => wires.flatMap((w) => w.pads), [wires])
