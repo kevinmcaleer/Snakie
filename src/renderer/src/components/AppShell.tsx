@@ -200,9 +200,13 @@ export function AppShell(): JSX.Element {
   //     by default); orthogonal to each instrument's docked state.
   //   - the dock panel collapse (the toolbar Instruments button toggles it).
   const [openInstruments, setOpenInstruments] = useState<OpenInstrument[]>([])
+  // SCOPE/METER start hidden (nothing is open until you summon one — so the dock
+  // button isn't lit with no instrument behind it); both open paths (the dock
+  // button and the board-view node launcher) turn the kind ON when they open one.
+  // The Plotter is always present, so it starts visible.
   const [visibility, setVisibility] = useLocalStorage<InstrumentVisibility>(
     'snakie.instruments.visibility',
-    { scope: true, meter: true, plotter: true }
+    { scope: false, meter: false, plotter: true }
   )
 
   // Set one kind's dock visibility directly (used by the close→hide flow and the
@@ -263,16 +267,14 @@ export function AppShell(): JSX.Element {
   const { redockKind } = instruments
   const toggleVisible = useCallback(
     (kind: keyof InstrumentVisibility): void => {
-      const next = !visibility[kind]
-      setVisibility({ ...visibility, [kind]: next })
-      if (next && (kind === 'scope' || kind === 'meter')) {
-        redockKind(kind)
-        // Summon an instrument if none of this kind is open yet: pick the first
-        // matching pin from the active file. This makes the dock's SCOPE/METER
-        // buttons a direct way to open an instrument (the board-view node
-        // launchers are the other entry point) — clicking SCOPE/METER now shows
-        // a scope/meter instead of toggling the visibility of nothing.
-        if (!openInstruments.some((it) => it.kind === kind)) {
+      // SCOPE/METER buttons: if NOTHING of this kind is open yet, the click
+      // SUMMONS one (the first matching PWM/ADC pin in the active file) and shows
+      // it docked — regardless of the visibility flag (which defaults ON, so a
+      // naive toggle would just flip it OFF on the first press and open nothing).
+      // This is the in-window twin of the board-view node launchers.
+      if (kind === 'scope' || kind === 'meter') {
+        const hasOpen = openInstruments.some((it) => it.kind === kind)
+        if (!hasOpen) {
           const wantType = kind === 'scope' ? 'pwm' : 'adc'
           const conn = fileConns.find((c) => c.type === wantType)
           if (conn) {
@@ -281,11 +283,19 @@ export function AppShell(): JSX.Element {
                 ? cur
                 : [...cur, { kind, conn }]
             )
+            setKindVisible(kind, true)
+            redockKind(kind)
           }
+          return
         }
       }
+      // Otherwise (an instrument of this kind is already open, or the Plotter):
+      // plain show/hide toggle. Turning a kind back ON re-docks it.
+      const next = !visibility[kind]
+      setVisibility({ ...visibility, [kind]: next })
+      if (next && (kind === 'scope' || kind === 'meter')) redockKind(kind)
     },
-    [visibility, setVisibility, redockKind, openInstruments, fileConns]
+    [visibility, setVisibility, setKindVisible, redockKind, openInstruments, fileConns]
   )
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the
