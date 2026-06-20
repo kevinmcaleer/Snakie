@@ -12,6 +12,7 @@ import { PluginsPanel } from './PluginsPanel'
 import { InspectPanel } from './InspectPanel'
 import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
+import { InstrumentHost, type OpenInstrument } from './InstrumentHost'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
@@ -154,6 +155,33 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
+  // --- Instruments hosted in the MAIN window (#101 / #102) -------------------
+  // The Oscilloscope + Multimeter now float over / dock beside the code editor
+  // in THIS window. The board-view window's node launchers fire a cross-window
+  // `instruments.open(...)` request (relayed by the main process); we receive it
+  // here and add the instrument. `instrumentsVisible` (default true) is toggled
+  // by the toolbar button — false hides the host (kept mounted, positions
+  // survive). Opening an instrument also reveals the host.
+  const [openInstruments, setOpenInstruments] = useState<OpenInstrument[]>([])
+  const [instrumentsVisible, setInstrumentsVisible] = useState(true)
+
+  useEffect(() => {
+    const off = window.api.instruments.onOpen((payload) => {
+      const { kind, variable } = payload
+      setOpenInstruments((cur) =>
+        cur.some((it) => it.kind === kind && it.variable === variable)
+          ? cur
+          : [...cur, { kind, variable }]
+      )
+      setInstrumentsVisible(true) // opening reveals the host
+    })
+    return off
+  }, [])
+
+  const toggleInstruments = useCallback((): void => {
+    setInstrumentsVisible((v) => !v)
+  }, [])
+
   // Persisted collapsed state. Shell is open by default (core REPL tool);
   // the right pane is collapsed by default to keep things uncluttered.
   const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
@@ -216,6 +244,9 @@ export function AppShell(): JSX.Element {
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
         onOpenSettings={() => openSettings('editor')}
         onOpenBoard={toggleBoard}
+        onToggleInstruments={toggleInstruments}
+        instrumentsVisible={instrumentsVisible}
+        instrumentCount={openInstruments.length}
       />
 
       <div className="shell__body shell__main">
@@ -257,7 +288,16 @@ export function AppShell(): JSX.Element {
           <Panel order={2} minSize={30}>
             <PanelGroup direction="vertical" autoSaveId="snakie.layout.vertical">
               <Panel order={1} minSize={20}>
-                <EditorArea />
+                <div className="shell__editor-region">
+                  <EditorArea />
+                  <InstrumentHost
+                    source={boardSource}
+                    isPython={boardIsPython}
+                    visible={instrumentsVisible}
+                    instruments={openInstruments}
+                    onChange={setOpenInstruments}
+                  />
+                </div>
               </Panel>
 
               <PanelResizeHandle className="resize-handle resize-handle--horizontal" />

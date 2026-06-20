@@ -21,6 +21,16 @@ import type { BoardDefinition } from '../shared/board'
  *   board:openBoardsFolder (renderer → main, invoke) reveal the boards folder
  *   board:saveUserBoard (renderer → main, invoke)  write a board def to disk
  *   board:deleteUserBoard(renderer → main, invoke) delete a user board file
+ *   instruments:open    (board window → main, send) relayed verbatim ↓
+ *   instruments:open    (main → MAIN window, send)  open/reveal a scope/meter
+ *
+ * INSTRUMENT LAUNCH RELAY (#101 / #102): the Oscilloscope + Multimeter are now
+ * hosted in the MAIN editor window (above the code), but their launch buttons
+ * live on the board-view window's nodes. The board window `send`s an
+ * `instruments:open` payload (`{kind, variable, pin?}`); the main process relays
+ * it verbatim to the MAIN window, which resolves the variable against its own
+ * active file and mounts/reveals the instrument. It rides this module because
+ * `getMainWindow` (the relay target) is already wired here.
  *
  * User-authored boards live as JSON at `<userData>/boards/*.json` (same shape
  * as {@link BoardDefinition}); they are read HERE (the renderer has no fs) and
@@ -154,6 +164,12 @@ export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): voi
   // The board window pulls the latest snapshot on mount (covers the open-time
   // race where the first push lands before its `board:source` listener exists).
   ipcMain.handle('board:requestSource', () => lastBoardPayload)
+
+  // Relay a board-window instrument launch to the MAIN window, which hosts the
+  // scope/meter and resolves the variable against its own active file (#101/#102).
+  ipcMain.on('instruments:open', (_e, payload) => {
+    getMainWindow()?.webContents.send('instruments:open', payload)
+  })
 
   ipcMain.handle('board:listUserBoards', () => readUserBoards())
 

@@ -62,6 +62,22 @@ export interface BoardSourcePayload {
 }
 
 /**
+ * A cross-window "open an instrument" request. Sent from the board-view window
+ * (its PWM scope / ADC meter node launchers) and relayed by the main process to
+ * the MAIN editor window, where the instruments are hosted (#101 / #102). The
+ * main window resolves `variable` against ITS OWN active file (the same source
+ * it streams to the board window), so only the variable + kind need to travel.
+ */
+export interface InstrumentOpenPayload {
+  /** Which instrument to open: an oscilloscope (PWM) or a multimeter (ADC). */
+  kind: 'scope' | 'meter'
+  /** The connection's variable name — the stable id the host resolves config by. */
+  variable: string
+  /** The connection's first pin (advisory; the host re-resolves from its file). */
+  pin?: string
+}
+
+/**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
  * renderer can use ordinary `try/catch` / promise rejection semantics.
  */
@@ -472,6 +488,33 @@ const board = {
     ipcRenderer.invoke('board:deleteUserBoard', id)
 }
 
+/**
+ * Instruments API (#101 / #102). The Oscilloscope + Multimeter are HOSTED in the
+ * main editor window (above the code editor), but their node launchers live in
+ * the separate board-view window. `open` fires a fire-and-forget request from the
+ * board window; the main process relays it to the main window, where `onOpen`
+ * receives it and mounts/reveals the instrument. Mirrors the `board.onSource`
+ * relay pattern (a `send` one way, an `on` subscription the other).
+ */
+const instruments = {
+  /**
+   * Ask the MAIN window to open an instrument (fire-and-forget). Called from the
+   * board-view window's PWM scope / ADC meter launchers; the main process relays
+   * it to the main window's {@link instruments.onOpen}.
+   */
+  open: (payload: InstrumentOpenPayload): void =>
+    ipcRenderer.send('instruments:open', payload),
+  /**
+   * Subscribe (in the MAIN window) to relayed "open instrument" requests.
+   * Returns an unsubscribe function. Mirrors `board.onSource`.
+   */
+  onOpen: (cb: (payload: InstrumentOpenPayload) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: InstrumentOpenPayload): void => cb(payload)
+    ipcRenderer.on('instruments:open', listener)
+    return () => ipcRenderer.removeListener('instruments:open', listener)
+  }
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -501,7 +544,9 @@ const api = {
   /** Python plugin system layer (spawns snakie.host over JSON-RPC). */
   plugins,
   /** Board View layer: floating window + live active-file relay + user boards. */
-  board
+  board,
+  /** Instrument launch relay: board window → main window scope/meter hosting. */
+  instruments
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

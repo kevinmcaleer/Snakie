@@ -122,6 +122,12 @@ interface ToolbarProps {
   onToggleRight: () => void
   onOpenSettings: () => void
   onOpenBoard: () => void
+  /** Toggle the visibility of the docked/floating instruments (#101 / #102). */
+  onToggleInstruments: () => void
+  /** Whether the instruments are currently shown (drives the pressed look). */
+  instrumentsVisible: boolean
+  /** Number of open instruments (for the button title; 0 ⇒ still toggles). */
+  instrumentCount: number
 }
 
 /**
@@ -151,7 +157,10 @@ export function Toolbar({
   rightCollapsed,
   onToggleRight,
   onOpenSettings,
-  onOpenBoard
+  onOpenBoard,
+  onToggleInstruments,
+  instrumentsVisible,
+  instrumentCount
 }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
@@ -337,6 +346,34 @@ export function Toolbar({
               // crescent moon (currently light → switch to dark)
               <path d="M9.5 2A6 6 0 1 0 14 11 A4.5 4.5 0 0 1 9.5 2Z" fill="currentColor" />
             )}
+          </svg>
+        </button>
+        <button
+          type="button"
+          className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}
+          aria-pressed={instrumentsVisible}
+          onClick={onToggleInstruments}
+          title={
+            instrumentCount > 0
+              ? `${instrumentsVisible ? 'Hide' : 'Show'} instruments (${instrumentCount} open)`
+              : 'Toggle instruments — open a scope/meter from a PWM/ADC pin in the Board View'
+          }
+          aria-label="Toggle instruments"
+        >
+          {/* Instrument cluster: a CRT scope screen with a square-wave trace +
+              a gauge tick, marking the oscilloscope/multimeter dock. */}
+          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
+            <rect x="3" y="4.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
+            <path
+              d="M5.5 12.5 L8 12.5 L8 9.5 L11 9.5 L11 12.5 L13.5 12.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+            <line x1="15" y1="12.5" x2="18" y2="9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            <line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           </svg>
         </button>
       </div>

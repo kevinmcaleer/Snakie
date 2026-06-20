@@ -108,6 +108,10 @@ if (!w.api) {
       saveUserBoard: P({ ok: true }),
       deleteUserBoard: P(undefined)
     },
+    instruments: {
+      open: noop,
+      onOpen: unsub
+    },
     git: {
       openRepo: P(null),
       status: P({

@@ -1520,6 +1520,21 @@ body {
   min-height: 0;
 }
 
+/* The editor region hosts the code editor PLUS the floating/docked instruments
+ * (#101 / #102) layered above it. Relative so the InstrumentHost overlay
+ * (position: absolute; inset: 0) clips to the editor area. */
+.shell__editor-region {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+.shell__editor-region > :first-child {
+  width: 100%;
+  height: 100%;
+}
+
 /* --------------------------------------------------------------------------
  * Toolbar
  * ------------------------------------------------------------------------ */
