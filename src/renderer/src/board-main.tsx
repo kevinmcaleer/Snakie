@@ -8,8 +8,9 @@
  *   - subscribes to the streamed active-file snapshot (`window.api.board.onSource`),
  *   - loads any user-authored board definitions once
  *     (`window.api.board.listUserBoards`),
- *   - renders the generic {@link BoardView} fed by the streamed
- *     `{ source, fileName, isPython, theme }`.
+ *   - renders the node-graph {@link BoardGraph} fed by the streamed
+ *     `{ source, fileName, isPython, theme }` (the generic {@link BoardView}
+ *     drawer is kept for the Board Creator's preview).
  *
  * No scrim/modal chrome — it fills the OS window; the title bar is the draggable
  * region (handled inside BoardView via `asWindow`).
@@ -19,7 +20,7 @@
 import './lib/preloadFallback'
 import { useCallback, useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
-import { BoardView } from './components/BoardView'
+import { BoardGraph } from './components/BoardGraph'
 import { BoardCreator } from './components/BoardCreator'
 import type { BoardDefinition, BoardSourcePayload } from '../../preload/index.d'
 import '@fontsource/jetbrains-mono'
@@ -128,7 +129,7 @@ function BoardWindowApp(): JSX.Element {
   }
 
   return (
-    <BoardView
+    <BoardGraph
       source={payload.source}
       fileName={payload.fileName}
       isPython={payload.isPython}

@@ -69,6 +69,20 @@ export const PIN_TYPE_LABEL: Record<PinType, string> = {
 }
 
 /**
+ * Connection type → the SHORT tag drawn inline on a node-graph card
+ * (the {@link PIN_TYPE_LABEL} full words are too wide for the 36px-tall node).
+ * `output`/`input` shorten to `OUT`/`IN`; `i2c` uses the typographic `I²C`.
+ */
+export const PIN_TYPE_TAG: Record<PinType, string> = {
+  output: 'OUT',
+  input: 'IN',
+  pwm: 'PWM',
+  i2c: 'I²C',
+  spi: 'SPI',
+  pio: 'PIO'
+}
+
+/**
  * Pull every `Pin(<arg>)` reference out of a fragment, returning the first
  * argument of each (the pin number or quoted label). Handles `machine.Pin(...)`
  * and bare `Pin(...)`. Strips quotes from string labels so `Pin("LED")` → `LED`.
