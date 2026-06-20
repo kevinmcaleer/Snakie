@@ -6,7 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-06-20
+
 ### Fixed
+- **Board View now shows on open.** A freshly-opened Board View window could stay
+  blank when a program with `Pin` assignments was already loaded — the active-file
+  snapshot was relayed before the window had subscribed to it, so nothing drew.
+  The window now pulls the latest snapshot on mount (and still updates live as you
+  edit).
+- **Editor sticky scroll disabled.** The pinned scope/function header that stuck to
+  the top of the editor overlapped and clashed with the code beneath it, so it is
+  now turned off.
 - **Find & Replace dialog (#95).** Replace is now reachable from find-only mode
   via a chevron that reveals/hides the Replace row (previously it only appeared
   when opened with Cmd/Ctrl-H), removed the duplicate prev/next controls (the
@@ -14,6 +24,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   kept a clear ✕ close button in the title bar.
 
 ### Changed
+- **Toolbar layout.** The Settings, Board View and light/dark-mode knobs now sit
+  beside the Run/Stop buttons; the Files/Shell/Chat panel-collapse knobs stay
+  aligned to the right.
 - **Board View v2.** The Board View is now its own **floating window** (a real
   always-on-top window fed the active file live over IPC) instead of a modal
   dialog, and it labels each wired pin by **connection type** — `output`, `input`,
@@ -347,7 +360,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.6.0...v0.6.3
