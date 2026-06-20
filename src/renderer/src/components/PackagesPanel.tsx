@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import './PackagesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
@@ -20,6 +20,14 @@ import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
  * Hardware + network can't be exercised in CI, so every async path degrades
  * gracefully: search falls back to the curated set offline, and install surfaces
  * device errors inline rather than throwing.
+ *
+ * VISUALS (skeuomorph "manila tags on green felt"): each package is rendered as
+ * a manila filing tag — kraft spine, silver eyelet, rubber-stamp version, and a
+ * gold-key INSTALL action / green INSTALLED stamp — laid on the same green-felt
+ * panel as Source Control. The behaviour is unchanged; the active list is split
+ * into INSTALLED (packages this session has installed) and REGISTRY groups, and
+ * a flash-usage meter under the header reads `os.statvfs('/')` off the connected
+ * board (placeholder dashes when disconnected).
  */
 
 /** Per-package install UI state, keyed by package name. */
@@ -27,6 +35,12 @@ interface InstallState {
   status: 'installing' | 'done' | 'error'
   log: string
   notes: string[]
+}
+
+/** Live flash-storage figures read off the board, in KB. */
+interface FlashUsage {
+  usedKb: number
+  totalKb: number
 }
 
 export function PackagesPanel(): JSX.Element {
@@ -51,6 +65,9 @@ export function PackagesPanel(): JSX.Element {
   // Install state per package.
   const [installs, setInstalls] = useState<Record<string, InstallState>>({})
 
+  // Flash usage read from the board (null until/unless a board reports it).
+  const [flash, setFlash] = useState<FlashUsage | null>(null)
+
   useEffect(() => {
     let active = true
     window.api.packages
@@ -63,6 +80,43 @@ export function PackagesPanel(): JSX.Element {
       active = false
     }
   }, [])
+
+  // Poll the board's flash usage via os.statvfs('/'). Runs on connect and after
+  // each install (installs land files on /lib). Degrades silently: any error
+  // (no statvfs, busy REPL, disconnect) just clears the figures to dashes.
+  const installCount = Object.values(installs).filter((s) => s.status === 'done').length
+  useEffect(() => {
+    if (!connected) {
+      setFlash(null)
+      return
+    }
+    let active = true
+    // os.statvfs -> (f_bsize, f_frsize, f_blocks, f_bfree, f_bavail, ...).
+    // total = f_frsize * f_blocks; used = total - (f_frsize * free blocks).
+    const snippet =
+      "import os\n" +
+      "s=os.statvfs('/')\n" +
+      "print(s[1]*s[2], s[1]*(s[2]-(s[4] if s[4] else s[3])))"
+    window.api.device
+      .eval(snippet)
+      .then((out) => {
+        if (!active) return
+        const nums = out.trim().split(/\s+/).map(Number)
+        const total = nums[0]
+        const used = nums[1]
+        if (Number.isFinite(total) && Number.isFinite(used) && total > 0) {
+          setFlash({ usedKb: Math.round(used / 1024), totalKb: Math.round(total / 1024) })
+        } else {
+          setFlash(null)
+        }
+      })
+      .catch(() => {
+        if (active) setFlash(null)
+      })
+    return () => {
+      active = false
+    }
+  }, [connected, installCount])
 
   const runSearch = useCallback(async (): Promise<void> => {
     const q = query.trim()
@@ -130,10 +184,97 @@ export function PackagesPanel(): JSX.Element {
   )
 
   const listToShow = results ?? top
-  const listLabel = results ? 'Search results' : 'Popular packages'
+
+  // Split the active list into INSTALLED (this session has installed it) and
+  // REGISTRY. The package layer has no "list installed" call, so "installed"
+  // here means a successful install during this session.
+  const [installed, registry] = useMemo(() => {
+    const inst: PackageInfo[] = []
+    const reg: PackageInfo[] = []
+    for (const pkg of listToShow) {
+      if (installs[pkg.name]?.status === 'done') inst.push(pkg)
+      else reg.push(pkg)
+    }
+    return [inst, reg]
+  }, [listToShow, installs])
+
+  const flashPct = flash ? Math.min(100, Math.round((flash.usedKb / flash.totalKb) * 100)) : 0
+  const flashReadout = flash
+    ? `FLASH ${flash.usedKb} / ${flash.totalKb} KB`
+    : 'FLASH — / — KB'
+
+  const renderTag = (pkg: PackageInfo): JSX.Element => {
+    const st = installs[pkg.name]
+    const isInstalled = st?.status === 'done'
+    let action: JSX.Element
+    if (isInstalled) {
+      action = <span className="pkgs__stamp pkgs__stamp--installed">INSTALLED</span>
+    } else {
+      const installing = st?.status === 'installing'
+      const label = installing ? 'INSTALLING…' : st?.status === 'error' ? 'RETRY' : 'INSTALL'
+      action = (
+        <button
+          type="button"
+          className="pkgs__key"
+          disabled={!connected || installing}
+          title={connected ? `Install ${pkg.name}` : 'Connect a board first'}
+          onClick={() => void install(pkg.name)}
+        >
+          {label}
+        </button>
+      )
+    }
+    return (
+      <li key={`${pkg.source}:${pkg.name}`} className="pkgs__tag">
+        <span className="pkgs__tag-spine" aria-hidden="true" />
+        <span className="pkgs__tag-eyelet" aria-hidden="true" />
+        <div className="pkgs__tag-body">
+          <div className="pkgs__tag-head">
+            <span className="pkgs__name">{pkg.name}</span>
+            {pkg.version && <span className="pkgs__version">v{pkg.version}</span>}
+          </div>
+          {pkg.description && <p className="pkgs__desc">{pkg.description}</p>}
+          {st && (st.notes.length > 0 || st.log) && (
+            <div className="pkgs__result">
+              {st.notes.map((n, i) => (
+                <p key={i} className="pkgs__note">
+                  {n}
+                </p>
+              ))}
+              {st.log && (
+                <pre className={`pkgs__log${st.status === 'error' ? ' pkgs__log--error' : ''}`}>
+                  {st.log}
+                </pre>
+              )}
+            </div>
+          )}
+          <div className="pkgs__tag-foot">
+            <span className="pkgs__src">{pkg.source}</span>
+            {action}
+          </div>
+        </div>
+      </li>
+    )
+  }
 
   return (
     <div className="pkgs">
+      <div className="pkgs__header">
+        <span className="pkgs__title">PACKAGES</span>
+        <span className="pkgs__flash-readout">{flashReadout}</span>
+      </div>
+
+      <div
+        className="pkgs__meter"
+        role="meter"
+        aria-label="Flash storage used"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={flashPct}
+      >
+        <span className="pkgs__meter-fill" style={{ width: `${flashPct}%` }} />
+      </div>
+
       <form
         className="pkgs__search"
         onSubmit={(e) => {
@@ -144,7 +285,7 @@ export function PackagesPanel(): JSX.Element {
         <input
           type="search"
           className="pkgs__search-input"
-          placeholder="Search packages (e.g. urequests, microdot)…"
+          placeholder="Search packages…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Search packages"
@@ -219,54 +360,18 @@ export function PackagesPanel(): JSX.Element {
 
       {searchError != null && <p className="pkgs__error">{searchError}</p>}
 
-      <div className="pkgs__list-head">{listLabel}</div>
+      {installed.length > 0 && (
+        <>
+          <div className="pkgs__group-head">INSTALLED — {installed.length}</div>
+          <ul className="pkgs__list" role="list">
+            {installed.map(renderTag)}
+          </ul>
+        </>
+      )}
+
+      <div className="pkgs__group-head">REGISTRY</div>
       <ul className="pkgs__list" role="list">
-        {listToShow.map((pkg) => {
-          const st = installs[pkg.name]
-          return (
-            <li key={`${pkg.source}:${pkg.name}`} className="pkgs__item">
-              <div className="pkgs__item-main">
-                <div className="pkgs__item-head">
-                  <span className="pkgs__name">{pkg.name}</span>
-                  {pkg.version && <span className="pkgs__version">{pkg.version}</span>}
-                  <span className={`pkgs__src pkgs__src--${pkg.source}`}>{pkg.source}</span>
-                </div>
-                {pkg.description && <p className="pkgs__desc">{pkg.description}</p>}
-                {st && (st.notes.length > 0 || st.log) && (
-                  <div className="pkgs__result">
-                    {st.notes.map((n, i) => (
-                      <p key={i} className="pkgs__note">
-                        {n}
-                      </p>
-                    ))}
-                    {st.log && (
-                      <pre
-                        className={`pkgs__log${st.status === 'error' ? ' pkgs__log--error' : ''}`}
-                      >
-                        {st.log}
-                      </pre>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button
-                type="button"
-                className="pkgs__install-btn"
-                disabled={!connected || st?.status === 'installing'}
-                title={connected ? `Install ${pkg.name}` : 'Connect a board first'}
-                onClick={() => void install(pkg.name)}
-              >
-                {st?.status === 'installing'
-                  ? 'Installing…'
-                  : st?.status === 'done'
-                    ? 'Installed ✓'
-                    : st?.status === 'error'
-                      ? 'Retry'
-                      : 'Install'}
-              </button>
-            </li>
-          )
-        })}
+        {registry.map(renderTag)}
       </ul>
 
       {listToShow.length === 0 && !searching && (

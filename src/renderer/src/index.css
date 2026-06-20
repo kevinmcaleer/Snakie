@@ -458,6 +458,182 @@
   color: #fff;
 }
 
+/* --- Packages: manila tags on green felt --------------------------------- */
+/* The Packages side panel reuses Source Control's green-felt treatment (felt
+ * background + dot texture, dark left border, stitched dashed inner border) and
+ * lays each package out as a manila filing tag: kraft striped spine, silver
+ * eyelet, IBM Plex Mono name, rubber-stamp version, and a gold-key INSTALL
+ * action / green INSTALLED stamp. */
+:root[data-theme='skeuomorph'] .pkgs {
+  position: relative;
+  background-color: #2f5d44;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 3px 3px;
+  color: #e8f1ea;
+  border-left: 3px solid #1c3b2a;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* Stitched-leather inset border framing the felt panel content. */
+:root[data-theme='skeuomorph'] .pkgs::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 2px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__search,
+:root[data-theme='skeuomorph'] .pkgs__advanced {
+  border-color: #1c3b2a;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__title {
+  color: #eef6f0;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+}
+
+/* Engraved felt labels. */
+:root[data-theme='skeuomorph'] .pkgs__flash-readout,
+:root[data-theme='skeuomorph'] .pkgs__group-head,
+:root[data-theme='skeuomorph'] .pkgs__hint,
+:root[data-theme='skeuomorph'] .pkgs__advanced-summary {
+  color: #aecbb8;
+}
+
+/* Recessed flash-usage track with a glossy green fill. */
+:root[data-theme='skeuomorph'] .pkgs__meter {
+  background: #1c3b2a;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__meter-fill {
+  background: linear-gradient(180deg, #7fd98a, #2f9b4a);
+}
+
+/* Cream felt-recessed search field + buttons. */
+:root[data-theme='skeuomorph'] .pkgs__search-input,
+:root[data-theme='skeuomorph'] .pkgs__index-input,
+:root[data-theme='skeuomorph'] .pkgs__search-btn,
+:root[data-theme='skeuomorph'] .pkgs__search-clear {
+  background: #f3efe2;
+  border: 1px solid #1c3b2a;
+  color: #2a3a30;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__search-input::placeholder {
+  color: #8a9489;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__search-btn:hover:not(:disabled),
+:root[data-theme='skeuomorph'] .pkgs__search-clear:hover {
+  background: #fbf8ef;
+}
+
+/* The manila tag itself: aged stock, kraft spine, silver eyelet. */
+:root[data-theme='skeuomorph'] .pkgs__tag {
+  background: linear-gradient(160deg, #ece0b4, #e0d199);
+  border: 1px solid #b59b5e;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__tag-spine {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  background: repeating-linear-gradient(180deg, #cdb877 0 4px, #c2ab66 4px 8px);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__tag-eyelet {
+  display: block;
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #cfd2d6, #8a8d92 60%, #5d6064);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6);
+}
+
+/* Punched hole in the eyelet. */
+:root[data-theme='skeuomorph'] .pkgs__tag-eyelet::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #2f5d44;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__name {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #3a3320;
+}
+
+/* Version: a rotated, outlined rubber-stamp box. */
+:root[data-theme='skeuomorph'] .pkgs__version {
+  color: #7a3326;
+  border: 1.5px solid #7a3326;
+  border-radius: 3px;
+  transform: rotate(-3deg);
+  opacity: 0.82;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__desc {
+  color: #6a5f3e;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__src {
+  color: #9a8a5a;
+}
+
+/* INSTALL / RETRY = gold key. */
+:root[data-theme='skeuomorph'] .pkgs__key {
+  background: linear-gradient(180deg, #f3d488, #d6a23f 55%, #bd8526);
+  border: 1px solid #9a6b1e;
+  color: #3a2708;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+:root[data-theme='skeuomorph'] .pkgs__key:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f6dd9a, #dca945 55%, #c48d28);
+}
+
+/* INSTALLED = green rubber stamp, rotated. */
+:root[data-theme='skeuomorph'] .pkgs__stamp--installed {
+  color: #2f6b2a;
+  border: 2px solid #2f6b2a;
+  transform: rotate(-5deg);
+  opacity: 0.78;
+}
+
+/* Log/notes stay readable on the manila stock. */
+:root[data-theme='skeuomorph'] .pkgs__log {
+  background: #f6f1e0;
+  border: 1px solid #b59b5e;
+  color: #3a3320;
+}
+
+:root[data-theme='skeuomorph'] .pkgs__note {
+  color: #6a5f3e;
+}
+
 /* --- Editor: cream paper tabs ------------------------------------------- */
 :root[data-theme='skeuomorph'] .editor-tabs {
   background: linear-gradient(180deg, #d6cfba, #cabfa3);
@@ -964,6 +1140,168 @@
 :root[data-theme='dark'] .git__icon-btn:hover:not(:disabled) {
   background: rgba(255, 255, 255, 0.08);
   color: #fff;
+}
+
+/* --- Packages: manila tags on dark felt ---------------------------------- */
+/* Same manila-tag layout as the light skeuomorph skin, on the darker felt the
+ * dark Source Control view uses, so the panel reads correctly in dark mode. */
+:root[data-theme='dark'] .pkgs {
+  position: relative;
+  background-color: #1a3326;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 3px 3px;
+  color: #cfe0d4;
+  border-left: 3px solid #0c1c14;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme='dark'] .pkgs::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 2px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+:root[data-theme='dark'] .pkgs__search,
+:root[data-theme='dark'] .pkgs__advanced {
+  border-color: #0c1c14;
+}
+
+:root[data-theme='dark'] .pkgs__title {
+  color: #e2eee7;
+}
+
+:root[data-theme='dark'] .pkgs__flash-readout,
+:root[data-theme='dark'] .pkgs__group-head,
+:root[data-theme='dark'] .pkgs__hint,
+:root[data-theme='dark'] .pkgs__advanced-summary {
+  color: #9bbfa6;
+}
+
+:root[data-theme='dark'] .pkgs__meter {
+  background: #0c1c14;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .pkgs__meter-fill {
+  background: linear-gradient(180deg, #5fc06f, #2f9b4a);
+}
+
+:root[data-theme='dark'] .pkgs__search-input,
+:root[data-theme='dark'] .pkgs__index-input,
+:root[data-theme='dark'] .pkgs__search-btn,
+:root[data-theme='dark'] .pkgs__search-clear {
+  background: #14201a;
+  border: 1px solid #0c1c14;
+  color: #d4e2d9;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='dark'] .pkgs__search-input::placeholder {
+  color: #7e9587;
+}
+
+:root[data-theme='dark'] .pkgs__search-btn:hover:not(:disabled),
+:root[data-theme='dark'] .pkgs__search-clear:hover {
+  background: #1b2a22;
+}
+
+:root[data-theme='dark'] .pkgs__tag {
+  background: linear-gradient(160deg, #d8cba2, #cabb84);
+  border: 1px solid #9a824a;
+  border-radius: 5px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .pkgs__tag-spine {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 5px;
+  background: repeating-linear-gradient(180deg, #bba766 0 4px, #b09a57 4px 8px);
+}
+
+:root[data-theme='dark'] .pkgs__tag-eyelet {
+  display: block;
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #cfd2d6, #8a8d92 60%, #5d6064);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.5);
+}
+
+:root[data-theme='dark'] .pkgs__tag-eyelet::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin: -2px 0 0 -2px;
+  border-radius: 50%;
+  background: #1a3326;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .pkgs__name {
+  font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: #322c1b;
+}
+
+:root[data-theme='dark'] .pkgs__version {
+  color: #7a3326;
+  border: 1.5px solid #7a3326;
+  border-radius: 3px;
+  transform: rotate(-3deg);
+  opacity: 0.82;
+}
+
+:root[data-theme='dark'] .pkgs__desc {
+  color: #5e5436;
+}
+
+:root[data-theme='dark'] .pkgs__src {
+  color: #8a7a4a;
+}
+
+:root[data-theme='dark'] .pkgs__key {
+  background: linear-gradient(180deg, #d6a23f, #b07d1e 55%, #936418);
+  border: 1px solid #6e4a12;
+  color: #2a1d06;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='dark'] .pkgs__key:hover:not(:disabled) {
+  background: linear-gradient(180deg, #e2b04c, #bd8526 55%, #9e6c1a);
+}
+
+:root[data-theme='dark'] .pkgs__stamp--installed {
+  color: #2f6b2a;
+  border: 2px solid #2f6b2a;
+  transform: rotate(-5deg);
+  opacity: 0.82;
+}
+
+:root[data-theme='dark'] .pkgs__log {
+  background: #ece0bf;
+  border: 1px solid #9a824a;
+  color: #322c1b;
+}
+
+:root[data-theme='dark'] .pkgs__note {
+  color: #5e5436;
 }
 
 /* --- Editor: dark "paper" tabs ------------------------------------------- */
