@@ -4,19 +4,22 @@ import {
   useMemo,
   useRef,
   useState,
-  type KeyboardEvent
+  type KeyboardEvent,
+  type PointerEvent as ReactPointerEvent
 } from 'react'
 import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api'
 import { getActiveEditor, subscribeActiveEditor } from './editorBridge'
 import './FindReplace.css'
 
 /**
- * Find & Replace panel (issue #92).
+ * Find & Replace dialog (issue #92, skeuomorph polish).
  *
- * A compact bar mounted over the editor (below the tabs) with a Find box, a
- * Replace-with box, a case-sensitive toggle, an Up/Down search-direction radio
- * (Down is the default), and Find / Replace / Replace+Find / Replace all
- * buttons, plus a live match-count hint.
+ * A floating, draggable panel docked top-right over the editor (non-blocking —
+ * the editor stays interactive) with a Find box, a Replace-with box, three
+ * search-option keys (case `Aa`, whole-word `|ab|`, regex `.*`), an Up/Down
+ * search-direction radio (Down is the default), prev/next arrows, and Find /
+ * Replace / Replace+Find / Replace all buttons, plus a live `N of M matches`
+ * status line.
  *
  * It does NOT reimplement search: it drives the live Monaco editor (exposed via
  * `editorBridge`) through `model.findMatches`, `editor.setSelection` and
@@ -30,8 +33,10 @@ import './FindReplace.css'
  *  - Replace+Find: replace the current match, then Find the next.
  *  - Replace all: replace every match in a single edit (one undo stop).
  *
- * The case-sensitive toggle feeds Monaco's `matchCase` arg; the direction drives
- * Find / Replace+Find. Opening/closing + keyboard wiring lives in EditorArea.
+ * The case / whole-word / regex keys feed Monaco's `matchCase`, `wordSeparators`
+ * and `isRegex` args; an invalid regex is caught (no throw) and surfaces as a
+ * subtle error state. The direction drives Find / Replace+Find. Opening/closing
+ * + keyboard wiring lives in EditorArea.
  */
 
 export interface FindReplaceProps {
@@ -42,6 +47,14 @@ export interface FindReplaceProps {
   /** Close the panel (Esc / the × button) and return focus to the editor. */
   onClose: () => void
 }
+
+/**
+ * Monaco's default word separators (the value its find widget uses for
+ * whole-word matching). Passed as `wordSeparators` to `findMatches` when the
+ * whole-word toggle is on; `null` otherwise. Kept inline to avoid importing a
+ * non-public constant from the monaco bundle.
+ */
+const USUAL_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/?'
 
 /** A Monaco range, compared field-by-field (no reference identity available). */
 function rangesEqual(a: monaco.IRange, b: monaco.IRange): boolean {
@@ -57,35 +70,82 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
   const [query, setQuery] = useState('')
   const [replacement, setReplacement] = useState('')
   const [matchCase, setMatchCase] = useState(false)
+  const [wholeWord, setWholeWord] = useState(false)
+  const [useRegex, setUseRegex] = useState(false)
   const [direction, setDirection] = useState<'up' | 'down'>('down')
-  // Live match count for the hint; recomputed on query/case/content changes.
+  // Live match count + current index for the `N of M matches` status. Recomputed
+  // on query/option/content changes and after every navigation/replace.
   const [matchCount, setMatchCount] = useState(0)
+  const [matchIndex, setMatchIndex] = useState(0)
+  // True when the regex toggle is on but the query doesn't compile — surfaced as
+  // a subtle error state instead of throwing.
+  const [regexError, setRegexError] = useState(false)
   // Bumps whenever the bridge reports a new editor, forcing the count effect to
   // re-run once Monaco's lazy chunk has mounted.
   const [editorTick, setEditorTick] = useState(0)
+  // Drag offset applied to the floating panel (from its top-right dock).
+  const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
 
   const findInputRef = useRef<HTMLInputElement>(null)
+  // Live drag bookkeeping kept in a ref so pointer move handlers don't re-bind.
+  const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(
+    null
+  )
 
   // Track editor availability so the match-count effect re-runs when the lazy
   // Monaco instance appears/disappears.
   useEffect(() => subscribeActiveEditor(() => setEditorTick((t) => t + 1)), [])
 
-  /** All matches for the current query/case in the active model (empty if none). */
+  /** All matches for the current query/options in the active model (empty if none). */
   const findAllMatches = useCallback((): monaco.editor.FindMatch[] => {
     const editor = getActiveEditor()
     const model = editor?.getModel()
     if (!editor || !model || query.length === 0) return []
     // findMatches(searchString, searchOnlyEditableRange, isRegex, matchCase,
     //   wordSeparators, captureMatches)
-    return model.findMatches(query, false, false, matchCase, null, false)
-  }, [query, matchCase])
+    return model.findMatches(
+      query,
+      false,
+      useRegex,
+      matchCase,
+      wholeWord ? USUAL_WORD_SEPARATORS : null,
+      false
+    )
+  }, [query, matchCase, wholeWord, useRegex])
 
-  // Keep the match-count hint in sync. Re-runs on query/case changes and when
-  // the editor instance changes; the cheap recompute is fine for a hint.
+  /**
+   * Like `findAllMatches` but swallows the invalid-regex throw: when the regex
+   * toggle is on and the pattern doesn't compile, Monaco throws — we return no
+   * matches and flag the error so the UI can show it instead of crashing.
+   */
+  const safeFindAllMatches = useCallback((): monaco.editor.FindMatch[] => {
+    try {
+      const matches = findAllMatches()
+      setRegexError(false)
+      return matches
+    } catch {
+      setRegexError(true)
+      return []
+    }
+  }, [findAllMatches])
+
+  /** Index (1-based) of the current selection among `matches`, or 0 if none. */
+  const indexOfSelection = useCallback((matches: monaco.editor.FindMatch[]): number => {
+    const editor = getActiveEditor()
+    const selection = editor?.getSelection()
+    if (!selection) return 0
+    const i = matches.findIndex((m) => rangesEqual(m.range, selection))
+    return i < 0 ? 0 : i + 1
+  }, [])
+
+  // Keep the `N of M matches` status in sync. Re-runs on query/option changes and
+  // when the editor instance changes; the cheap recompute is fine for a status.
   useEffect(() => {
     if (!open) return
-    setMatchCount(findAllMatches().length)
-  }, [open, findAllMatches, editorTick])
+    const matches = safeFindAllMatches()
+    setMatchCount(matches.length)
+    setMatchIndex(indexOfSelection(matches))
+  }, [open, safeFindAllMatches, indexOfSelection, editorTick])
 
   // Focus the Find box whenever the panel opens (or flips between find/replace).
   useEffect(() => {
@@ -97,6 +157,18 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     }
   }, [open, withReplace])
 
+  // Reset the drag offset when the panel closes so it re-docks top-right next time.
+  useEffect(() => {
+    if (!open) setOffset({ x: 0, y: 0 })
+  }, [open])
+
+  /** Recompute count + current index after a navigation/replace. */
+  const syncStatus = useCallback((): void => {
+    const matches = safeFindAllMatches()
+    setMatchCount(matches.length)
+    setMatchIndex(indexOfSelection(matches))
+  }, [safeFindAllMatches, indexOfSelection])
+
   /**
    * Select the next match in `dir` relative to the current selection, wrapping.
    * Returns true if a match was selected.
@@ -105,7 +177,7 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     (dir: 'up' | 'down'): boolean => {
       const editor = getActiveEditor()
       if (!editor) return false
-      const matches = findAllMatches()
+      const matches = safeFindAllMatches()
       if (matches.length === 0) return false
 
       const selection = editor.getSelection()
@@ -136,13 +208,17 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
       editor.revealRangeInCenterIfOutsideViewport(target.range)
       return true
     },
-    [findAllMatches]
+    [safeFindAllMatches]
   )
 
-  const handleFind = useCallback((): void => {
-    findNext(direction)
-    getActiveEditor()?.focus()
-  }, [findNext, direction])
+  const handleFind = useCallback(
+    (dir: 'up' | 'down' = direction): void => {
+      findNext(dir)
+      syncStatus()
+      getActiveEditor()?.focus()
+    },
+    [findNext, direction, syncStatus]
+  )
 
   /**
    * If the current selection exactly matches a found range, replace it in place
@@ -153,32 +229,34 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     if (!editor) return false
     const selection = editor.getSelection()
     if (!selection) return false
-    const matches = findAllMatches()
+    const matches = safeFindAllMatches()
     const hit = matches.find((m) => rangesEqual(m.range, selection))
     if (!hit) return false
     editor.executeEdits('snakie-find-replace', [
       { range: hit.range, text: replacement, forceMoveMarkers: true }
     ])
     return true
-  }, [findAllMatches, replacement])
+  }, [safeFindAllMatches, replacement])
 
   const handleReplace = useCallback((): void => {
     // Replace the current match if the selection is on one; else find first so a
     // subsequent Replace lands on a match.
     if (!replaceCurrent()) findNext(direction)
+    syncStatus()
     getActiveEditor()?.focus()
-  }, [replaceCurrent, findNext, direction])
+  }, [replaceCurrent, findNext, direction, syncStatus])
 
   const handleReplaceFind = useCallback((): void => {
     replaceCurrent()
     findNext(direction)
+    syncStatus()
     getActiveEditor()?.focus()
-  }, [replaceCurrent, findNext, direction])
+  }, [replaceCurrent, findNext, direction, syncStatus])
 
   const handleReplaceAll = useCallback((): void => {
     const editor = getActiveEditor()
     if (!editor) return
-    const matches = findAllMatches()
+    const matches = safeFindAllMatches()
     if (matches.length === 0) return
     // One executeEdits call = one undo stop for the whole replace-all.
     editor.executeEdits(
@@ -186,14 +264,16 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
       matches.map((m) => ({ range: m.range, text: replacement, forceMoveMarkers: true }))
     )
     editor.focus()
-  }, [findAllMatches, replacement])
+    syncStatus()
+  }, [safeFindAllMatches, replacement, syncStatus])
 
-  // Enter in the Find box = Find; Enter in Replace = Replace+Find; Esc closes.
+  // Enter in the Find box = Find (Shift+Enter = previous); Enter in Replace =
+  // Replace+Find; Esc closes either.
   const onFindKeyDown = useCallback(
     (e: KeyboardEvent<HTMLInputElement>): void => {
       if (e.key === 'Enter') {
         e.preventDefault()
-        handleFind()
+        handleFind(e.shiftKey ? 'up' : 'down')
       } else if (e.key === 'Escape') {
         e.preventDefault()
         onClose()
@@ -215,116 +295,239 @@ export function FindReplace({ open, withReplace, onClose }: FindReplaceProps): J
     [handleReplaceFind, onClose]
   )
 
-  const hint = useMemo(() => {
+  // --- Drag the panel by its title-bar grip -------------------------------
+  const onGripPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLButtonElement>): void => {
+      e.preventDefault()
+      e.currentTarget.setPointerCapture(e.pointerId)
+      dragRef.current = { startX: e.clientX, startY: e.clientY, baseX: offset.x, baseY: offset.y }
+    },
+    [offset]
+  )
+
+  const onGripPointerMove = useCallback((e: ReactPointerEvent<HTMLButtonElement>): void => {
+    const drag = dragRef.current
+    if (!drag) return
+    setOffset({
+      x: drag.baseX + (e.clientX - drag.startX),
+      y: drag.baseY + (e.clientY - drag.startY)
+    })
+  }, [])
+
+  const onGripPointerUp = useCallback((e: ReactPointerEvent<HTMLButtonElement>): void => {
+    dragRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }, [])
+
+  const status = useMemo(() => {
     if (query.length === 0) return ''
-    return matchCount === 0 ? 'No results' : `${matchCount} match${matchCount === 1 ? '' : 'es'}`
-  }, [query, matchCount])
+    if (regexError) return 'Invalid regex'
+    if (matchCount === 0) return 'No results'
+    if (matchIndex === 0) return `${matchCount} match${matchCount === 1 ? '' : 'es'}`
+    return `${matchIndex} of ${matchCount} matches`
+  }, [query, regexError, matchCount, matchIndex])
+
+  const statusIsEmpty = query.length > 0 && (regexError || matchCount === 0)
 
   if (!open) return null
 
+  // Drag offset is applied as a translate from the CSS top-right dock so the
+  // panel re-docks cleanly when reopened (offset reset on close).
+  const style =
+    offset.x !== 0 || offset.y !== 0
+      ? { transform: `translate(${offset.x}px, ${offset.y}px)` }
+      : undefined
+
   return (
-    <div className="find-replace" role="search" aria-label="Find and replace">
-      <div className="find-replace__row">
-        <input
-          ref={findInputRef}
-          className="find-replace__input"
-          type="text"
-          placeholder="Find"
-          aria-label="Find"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onFindKeyDown}
-        />
-        <span
-          className={`find-replace__hint${
-            query.length > 0 && matchCount === 0 ? ' find-replace__hint--empty' : ''
-          }`}
-        >
-          {hint}
-        </span>
-        <button type="button" className="btn btn--sm" onClick={handleFind} disabled={query.length === 0}>
-          Find
-        </button>
+    <div
+      className="find-replace"
+      role="search"
+      aria-label="Find and replace"
+      style={style}
+      // Stop the editor's Cmd/Ctrl-F capture handler (in EditorArea) from acting
+      // while the user is typing in this panel.
+      onKeyDownCapture={(e) => e.stopPropagation()}
+    >
+      <div className="find-replace__titlebar">
         <button
           type="button"
-          className="find-replace__close btn btn--sm btn--ghost"
+          className="find-replace__grip"
+          aria-label="Drag dialog"
+          title="Drag"
+          onPointerDown={onGripPointerDown}
+          onPointerMove={onGripPointerMove}
+          onPointerUp={onGripPointerUp}
+          onPointerCancel={onGripPointerUp}
+        >
+          <span className="find-replace__grip-dots" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+            <i />
+          </span>
+        </button>
+        <span className="find-replace__title">FIND &amp; REPLACE</span>
+        <button
+          type="button"
+          className="find-replace__close"
           onClick={onClose}
           aria-label="Close find and replace"
+          title="Close (Esc)"
         >
-          ×
+          ✕
         </button>
       </div>
 
-      {withReplace && (
+      <div className="find-replace__body">
         <div className="find-replace__row">
           <input
-            className="find-replace__input"
+            ref={findInputRef}
+            className={`find-replace__input${statusIsEmpty ? ' find-replace__input--error' : ''}`}
             type="text"
-            placeholder="Replace with"
-            aria-label="Replace with"
-            value={replacement}
-            onChange={(e) => setReplacement(e.target.value)}
-            onKeyDown={onReplaceKeyDown}
+            placeholder="Find"
+            aria-label="Find"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onFindKeyDown}
           />
+          <div className="find-replace__keys" role="group" aria-label="Search options">
+            <button
+              type="button"
+              className={`find-replace__key${matchCase ? ' is-active' : ''}`}
+              aria-pressed={matchCase}
+              onClick={() => setMatchCase((v) => !v)}
+              title="Match case"
+            >
+              Aa
+            </button>
+            <button
+              type="button"
+              className={`find-replace__key${wholeWord ? ' is-active' : ''}`}
+              aria-pressed={wholeWord}
+              onClick={() => setWholeWord((v) => !v)}
+              title="Whole word"
+            >
+              |ab|
+            </button>
+            <button
+              type="button"
+              className={`find-replace__key${useRegex ? ' is-active' : ''}`}
+              aria-pressed={useRegex}
+              onClick={() => setUseRegex((v) => !v)}
+              title="Use regular expression"
+            >
+              .*
+            </button>
+          </div>
+          <div className="find-replace__nav" role="group" aria-label="Navigate matches">
+            <button
+              type="button"
+              className="find-replace__arrow"
+              onClick={() => handleFind('up')}
+              disabled={query.length === 0}
+              aria-label="Previous match"
+              title="Previous match"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="find-replace__arrow"
+              onClick={() => handleFind('down')}
+              disabled={query.length === 0}
+              aria-label="Next match"
+              title="Next match"
+            >
+              ↓
+            </button>
+          </div>
+        </div>
+
+        {withReplace && (
+          <div className="find-replace__row">
+            <input
+              className="find-replace__input"
+              type="text"
+              placeholder="Replace with"
+              aria-label="Replace with"
+              value={replacement}
+              onChange={(e) => setReplacement(e.target.value)}
+              onKeyDown={onReplaceKeyDown}
+            />
+            <button
+              type="button"
+              className="find-replace__btn"
+              onClick={handleReplace}
+              disabled={query.length === 0}
+            >
+              Replace
+            </button>
+            <button
+              type="button"
+              className="find-replace__btn"
+              onClick={handleReplaceFind}
+              disabled={query.length === 0}
+              title="Replace then find next"
+            >
+              Replace+Find
+            </button>
+            <button
+              type="button"
+              className="find-replace__btn find-replace__btn--gold"
+              onClick={handleReplaceAll}
+              disabled={query.length === 0}
+            >
+              Replace all
+            </button>
+          </div>
+        )}
+
+        <div className="find-replace__row find-replace__row--options">
+          <fieldset className="find-replace__direction">
+            <legend className="find-replace__legend">Direction</legend>
+            <label className="find-replace__option">
+              <input
+                type="radio"
+                name="find-direction"
+                value="up"
+                checked={direction === 'up'}
+                onChange={() => setDirection('up')}
+              />
+              Up
+            </label>
+            <label className="find-replace__option">
+              <input
+                type="radio"
+                name="find-direction"
+                value="down"
+                checked={direction === 'down'}
+                onChange={() => setDirection('down')}
+              />
+              Down
+            </label>
+          </fieldset>
           <button
             type="button"
-            className="btn btn--sm"
-            onClick={handleReplace}
+            className="find-replace__btn"
+            onClick={() => handleFind()}
             disabled={query.length === 0}
           >
-            Replace
-          </button>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={handleReplaceFind}
-            disabled={query.length === 0}
-          >
-            Replace+Find
-          </button>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={handleReplaceAll}
-            disabled={query.length === 0}
-          >
-            Replace all
+            Find
           </button>
         </div>
-      )}
 
-      <div className="find-replace__row find-replace__row--options">
-        <label className="find-replace__option">
-          <input
-            type="checkbox"
-            checked={matchCase}
-            onChange={(e) => setMatchCase(e.target.checked)}
-          />
-          Case sensitive
-        </label>
-        <fieldset className="find-replace__direction">
-          <legend className="find-replace__legend">Direction</legend>
-          <label className="find-replace__option">
-            <input
-              type="radio"
-              name="find-direction"
-              value="up"
-              checked={direction === 'up'}
-              onChange={() => setDirection('up')}
-            />
-            Up
-          </label>
-          <label className="find-replace__option">
-            <input
-              type="radio"
-              name="find-direction"
-              value="down"
-              checked={direction === 'down'}
-              onChange={() => setDirection('down')}
-            />
-            Down
-          </label>
-        </fieldset>
+        <div className="find-replace__status">
+          <span
+            className={`find-replace__count${statusIsEmpty ? ' find-replace__count--empty' : ''}`}
+          >
+            {status}
+          </span>
+          <span className="find-replace__keyhint">Esc to close · ↵ Find next</span>
+        </div>
       </div>
     </div>
   )
