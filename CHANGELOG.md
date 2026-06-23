@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-06-23
+
 ### Added
 - **One-click install of the instruments library (#108).** When you open the
   instruments and a connected board doesn't already have `instruments.py`, a manila
@@ -455,7 +457,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.9.0...v0.10.0
