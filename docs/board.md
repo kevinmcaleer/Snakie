@@ -28,8 +28,11 @@ A **board selector** in the title bar switches between the built-in boards
 2350, ESP32 DevKit) and any boards you've authored yourself. Your choice is
 remembered.
 
-The built-in pinouts are **best-effort and recognisable**, not guaranteed
-pin-perfect — and you can override any of them (see below).
+The built-in pinouts follow each board's **published reference pinout** (real
+physical edge order, true power/ground rails, and the USB / MCU / wifi / LED in
+their real positions). The Tiny 2040 / Tiny 2350 are drawn with their pins
+running **vertically** (down the two long edges). You can still override any
+built-in by dropping a JSON file with the same `id` (see below).
 
 ## Authoring a board
 
@@ -135,7 +138,12 @@ plain coloured PCB with your `features` rectangles instead.
 - **Headers** lay their `pins` out **evenly** from one end of the edge to the
   other, in array order. `left`/`right` edges run top→bottom; `top`/`bottom`
   edges run left→right. List a pad for every physical position (including power
-  and ground pads as plain labels) so the spacing matches the real board.
+  and ground pads as plain labels) so the spacing matches the real board. Each
+  pad's silk label is drawn **on its own side, outside the board** — a
+  `left`-edge pad's label sits to its left, a `right`-edge pad's to its right,
+  and `top`/`bottom` labels above/below — so labels never overlap the board.
+  (For a small board with castellations down its long edges, like the Tiny
+  2040/2350, use `left` + `right` so the pins read **vertically**.)
 - **Features** use **normalised** coordinates: `x`/`y` are the top-left corner
   and `w`/`h` the size, each `0..1` **relative to the board outline**. So
   `{ x: 0.32, y: 0.42, w: 0.36, h: 0.18 }` is a chip centred a bit above the

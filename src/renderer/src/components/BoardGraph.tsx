@@ -20,6 +20,7 @@ import {
   layoutPads,
   ledPoint,
   padForToken,
+  padLabelPlacement,
   type BoardBox,
   type PadPoint
 } from './board-layout'
@@ -116,22 +117,46 @@ const NODE_W = 252 // node card width
 const NODE_LEFT = 36 // node card left inset
 const FIRST_Y = 149 // centre Y of the first node row
 const NODE_DOT_X = 288 // node right-edge solder dot X (wire start)
-const SAG = 30 // downward bezier sag for the drooping noodle
+const SAG = 26 // downward bezier sag for the drooping noodle
 
 // The board drawing region (to the right of the node column). The physical
 // board is fitted inside it from its aspect, with margins for the edge labels.
-const BOARD_REGION_X = 470 // left of the board area (after the node dots)
-const BOARD_REGION_W = 600 // width of the board area
+// Shorter wires (#109): the board sits CLOSE to the node column so each used
+// pin's label lands near the board pin, not at the end of a long cable. We keep
+// a small left gutter for the left-edge silk labels (now drawn outside, to the
+// left of the board) + the wire's gentle droop.
+const BOARD_REGION_X = 360 // left of the board area (after the node dots)
+const BOARD_REGION_W = 470 // width of the board area
 const BOARD_MAX_W = 320 // largest board footprint (keeps room for labels)
 const BOARD_MAX_H = 460 // largest board footprint
 const BOARD_REGION_CX = BOARD_REGION_X + BOARD_REGION_W / 2 // board centre X
-const CANVAS_W = BOARD_REGION_X + BOARD_REGION_W + 60 // canvas / SVG width (1130)
+const CANVAS_W = BOARD_REGION_X + BOARD_REGION_W + 90 // canvas / SVG width (920)
 const PAD_R = 7 // drawn pad radius
 const STAGE_PAD = 48 // vertical breathing room above/below the content
 
 /** Centre Y of node row `i`. */
 function rowY(i: number): number {
   return FIRST_Y + i * PITCH
+}
+
+/**
+ * The silver USB-connector nub, placed at the board's REAL connector edge (#109).
+ * If the board declares a `usb` feature we centre the nub on it and dock it just
+ * outside the nearer short edge (top when the feature sits in the upper half,
+ * bottom otherwise — so the ESP32's bottom USB renders correctly). With no `usb`
+ * feature we default to the top-centre (the Pico-family convention).
+ */
+function usbNub(def: BoardDefinition, box: BoardBox): { x: number; y: number; w: number; h: number } {
+  const usb = def.features?.find((f) => f.kind === 'usb')
+  const w = 56
+  const h = 24
+  if (usb) {
+    const x = box.x + (usb.x + usb.w / 2) * box.w - w / 2
+    const bottom = usb.y + usb.h / 2 > 0.5
+    const y = bottom ? box.y + box.h - 8 : box.y - 16
+    return { x, y, w, h }
+  }
+  return { x: box.x + box.w / 2 - w / 2, y: box.y - 16, w, h }
 }
 
 /** One drawable connection row: its node card + the pad its first pin taps. */
@@ -851,8 +876,10 @@ function padKey(p: { x: number; y: number }): string {
  */
 function noodlePath(sx: number, sy: number, pad: PadPoint): string {
   const dx = pad.x - sx
-  // Control 1 leaves the node horizontally to the right, drooping down.
-  const c1x = sx + Math.max(80, dx * 0.45)
+  // Control 1 leaves the node horizontally to the right, drooping down. The
+  // shorter board gap (#109) means a smaller pull keeps a gentle droop without
+  // overshooting the now-nearby board.
+  const c1x = sx + Math.max(54, dx * 0.45)
   const c1y = sy + SAG
   // Control 2 approaches the pad along its edge's inward normal.
   let c2x: number
@@ -860,20 +887,20 @@ function noodlePath(sx: number, sy: number, pad: PadPoint): string {
   switch (pad.edge) {
     case 'right':
       // Enter from the right of the board, swinging past then back in.
-      c2x = pad.x + 90
+      c2x = pad.x + 64
       c2y = pad.y + SAG
       break
     case 'top':
       c2x = pad.x
-      c2y = pad.y - 70
+      c2y = pad.y - 56
       break
     case 'bottom':
       c2x = pad.x
-      c2y = pad.y + 70
+      c2y = pad.y + 56
       break
     default:
       // left / led: approach horizontally from the left with the droop.
-      c2x = pad.x - Math.max(80, dx * 0.45)
+      c2x = pad.x - Math.max(54, dx * 0.45)
       c2y = pad.y + SAG
       break
   }
@@ -992,17 +1019,22 @@ function Board({
         strokeDasharray="2 5"
       />
 
-      {/* USB connector nub on top. */}
-      <rect
-        x={cx - 28}
-        y={box.y - 16}
-        width="56"
-        height="24"
-        rx="4"
-        fill="url(#bg-silver)"
-        stroke="#6c727b"
-        strokeWidth="1"
-      />
+      {/* USB connector nub at the board's REAL connector edge (#109). */}
+      {(() => {
+        const nub = usbNub(def, box)
+        return (
+          <rect
+            x={nub.x}
+            y={nub.y}
+            width={nub.w}
+            height={nub.h}
+            rx="4"
+            fill="url(#bg-silver)"
+            stroke="#6c727b"
+            strokeWidth="1"
+          />
+        )
+      })()}
 
       {/* Declared features (MCU / wifi / chips). When a board defines none we
           still draw an MCU block so the centre never reads empty. */}
@@ -1065,11 +1097,12 @@ function Board({
         {pads.map((p, i) => {
           const isGpio = (p.pad.type ?? 'gpio') === 'gpio'
           const used = isGpio && usedPadKeys.has(padKey(p))
-          const vertical = p.edge === 'left' || p.edge === 'right'
-          const lx = p.edge === 'left' ? p.x + 14 : p.edge === 'right' ? p.x - 14 : p.x
-          const ly = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 12 : p.y + 18
-          const anchor: 'start' | 'middle' | 'end' =
-            p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+          // Side-correct labels (#109): left labels to the LEFT, right to the
+          // RIGHT, top/bottom above/below — see {@link padLabelPlacement}.
+          const place = padLabelPlacement(p.edge)
+          const lx = p.x + place.dx
+          const ly = p.y + place.dy
+          const anchor = place.anchor
           return (
             <g key={`pad-${i}`} opacity={used || !isGpio ? 1 : 0.82}>
               <circle
@@ -1381,10 +1414,11 @@ export function buildExportSvg(args: ExportArgs): string {
     .map((p) => {
       const isGpio = (p.pad.type ?? 'gpio') === 'gpio'
       const used = isGpio && usedPadKeys.has(padKey(p))
-      const vertical = p.edge === 'left' || p.edge === 'right'
-      const px = p.edge === 'left' ? p.x + 14 : p.edge === 'right' ? p.x - 14 : p.x
-      const py = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 12 : p.y + 18
-      const anchor = p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+      // Side-correct labels (#109): see {@link padLabelPlacement}.
+      const place = padLabelPlacement(p.edge)
+      const px = p.x + place.dx
+      const py = p.y + place.dy
+      const anchor = place.anchor
       const stroke = used ? '#fff' : isGpio ? '#9a7a1e' : 'rgba(0,0,0,0.5)'
       return (
         `<g opacity="${used || !isGpio ? 1 : 0.82}">` +
@@ -1395,10 +1429,11 @@ export function buildExportSvg(args: ExportArgs): string {
       )
     })
     .join('')
+  const nub = usbNub(def, box)
   const board = [
     `<rect x="${box.x}" y="${box.y}" width="${box.w}" height="${box.h}" rx="18" fill="url(#bg-pcb)" stroke="#0c3a23" stroke-width="1.5"/>`,
     `<rect x="${box.x + 10}" y="${box.y + 10}" width="${box.w - 20}" height="${box.h - 20}" rx="12" fill="none" stroke="rgba(255,255,255,.32)" stroke-width="1" stroke-dasharray="2 5"/>`,
-    `<rect x="${cx - 28}" y="${box.y - 16}" width="56" height="24" rx="4" fill="url(#bg-silver)" stroke="#6c727b" stroke-width="1"/>`,
+    `<rect x="${nub.x}" y="${nub.y}" width="${nub.w}" height="${nub.h}" rx="4" fill="url(#bg-silver)" stroke="#6c727b" stroke-width="1"/>`,
     featureSvg,
     ledSvg,
     padSvg

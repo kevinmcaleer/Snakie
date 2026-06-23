@@ -6,9 +6,21 @@
  * these, and a parsed `Pin(...)` token is matched to a pad by `gpio` (numeric)
  * or `label` (case-insensitive, `GP12`/`12` equivalent).
  *
- * The pinouts are **best-effort and recognisable**, not guaranteed pin-perfect;
- * users can override any built-in by dropping a JSON file with the same `id`
- * into `<userData>/boards/`.
+ * PINOUT ACCURACY (#109): the headers below follow each board's REAL physical
+ * edge order (so a wire lands on the right castellation), power/ground pads carry
+ * a `type` so they're drawn as rails (never wired), and the `features` are placed
+ * at their true normalised positions (USB connector, MCU, wifi can, LED). The
+ * pinouts are transcribed from the published reference pinouts:
+ *   • Raspberry Pi Pico-series datasheet (the 2×20 header is identical across the
+ *     whole Pico family, including the Pico 2 W) — left = physical pins 1..20,
+ *     right = physical pins 40..21 read top→bottom.
+ *   • Pimoroni Pico Plus 2 (Pico form factor; same 2×20 order + USB-C + a Qw/ST
+ *     STEMMA-QT/Qwiic I²C connector + an SP/E debug connector).
+ *   • Pimoroni Tiny 2040 / Tiny 2350 (tiny castellated boards; pads run down the
+ *     two LONG edges → modelled on `left` + `right`, i.e. VERTICAL pins per #109).
+ *   • Espressif ESP32-DevKitC (ESP32-WROOM-32, the common 30-pin variant).
+ * A user can still override any built-in by dropping a JSON file with the same
+ * `id` into `<userData>/boards/`.
  */
 
 import type { BoardDefinition, BoardPad } from '../../../shared/board'
@@ -26,147 +38,177 @@ function gp(n: number): BoardPad {
   return { gpio: n, label: `GP${n}` }
 }
 
-/** Helper: a power/ground/marker pad with no GPIO. */
-function mark(label: string): BoardPad {
-  return { label }
+/** Helper: a ground pad (`GND`). */
+function gnd(): BoardPad {
+  return { label: 'GND', type: 'gnd' }
+}
+
+/** Helper: a power-rail pad (e.g. `3V3`, `5V`, `VBUS`, `VSYS`, `VIN`). */
+function vcc(label: string): BoardPad {
+  return { label, type: 'vcc' }
+}
+
+/** Helper: a non-GPIO signal pad (e.g. `RUN`, `EN`, `ADC_VREF`). */
+function other(label: string): BoardPad {
+  return { label, type: 'other' }
 }
 
 /**
- * Raspberry Pi Pico 2 W — RP2350, green PCB. The standard 2×20 castellated
- * header: left edge GP0..GP19-ish with power markers, right edge GP28..GP6.
+ * Raspberry Pi Pico 2 W — RP2350 + CYW43439 wifi, green PCB, micro-USB at the
+ * top. The standard Pico 2×20 castellated header (identical pin order across the
+ * Pico family): left edge = physical pins 1..20 (top→bottom), right edge =
+ * physical pins 40..21 (top→bottom). The onboard LED is driven via the CYW43
+ * wireless chip — in MicroPython it's `Pin("LED")`, not a GPIO number.
  */
 const PICO2W: BoardDefinition = {
   id: 'pico2w',
   name: 'Raspberry Pi Pico 2 W',
   mcu: 'RP2350',
   pcbColor: '#0f5a2e',
-  aspect: 0.52,
+  aspect: 0.46,
   ledLabel: 'LED',
   features: [
-    { label: 'RP2350', kind: 'mcu', x: 0.32, y: 0.42, w: 0.36, h: 0.18 },
-    { label: 'CYW43439', kind: 'wifi', x: 0.12, y: 0.08, w: 0.42, h: 0.13 }
+    // micro-USB at the top centre, RP2350 mid-board, CYW43439 wifi can near the
+    // top edge (just below the USB), like the real silk/can placement.
+    { label: 'USB', kind: 'usb', x: 0.36, y: -0.035, w: 0.28, h: 0.05 },
+    { label: 'CYW43439', kind: 'wifi', x: 0.22, y: 0.08, w: 0.56, h: 0.1 },
+    { label: 'RP2350', kind: 'mcu', x: 0.28, y: 0.44, w: 0.44, h: 0.2 }
   ],
   headers: [
     {
+      // Physical pins 1..20 (top→bottom on the left edge).
       edge: 'left',
       pins: [
-        gp(0), gp(1), mark('GND'), gp(2), gp(3), gp(4), gp(5), mark('GND'),
-        gp(6), gp(7), gp(8), gp(9), mark('GND'), gp(10), gp(11), gp(12),
-        gp(13), mark('GND'), gp(14), gp(15)
+        gp(0), gp(1), gnd(), gp(2), gp(3), gp(4), gp(5), gnd(), gp(6), gp(7),
+        gp(8), gp(9), gnd(), gp(10), gp(11), gp(12), gp(13), gnd(), gp(14), gp(15)
       ]
     },
     {
+      // Physical pins 40..21 (top→bottom on the right edge).
       edge: 'right',
       pins: [
-        mark('VBUS'), mark('VSYS'), mark('GND'), mark('3V3_EN'), mark('3V3'),
-        mark('ADC_VREF'), gp(28), mark('GND'), gp(27), gp(26), mark('RUN'),
-        gp(22), mark('GND'), gp(21), gp(20), gp(19), gp(18), mark('GND'),
-        gp(17), gp(16)
+        vcc('VBUS'), vcc('VSYS'), gnd(), other('3V3_EN'), vcc('3V3'),
+        other('ADC_VREF'), gp(28), gnd(), gp(27), gp(26), other('RUN'), gp(22),
+        gnd(), gp(21), gp(20), gp(19), gp(18), gnd(), gp(17), gp(16)
       ]
     }
   ]
 }
 
 /**
- * Pimoroni Pico Plus 2 — RP2350 in the Pico form factor, dark purple/black PCB,
- * USB-C, 8MB flash + 16MB PSRAM, QwST (I2C) + SP/E connectors. Same 2×20 layout
- * as the Pico with extra silk labels.
+ * Pimoroni Pico Plus 2 — RP2350 in the Pico form factor (so the SAME 2×20 header
+ * order as the Pico), dark PCB, but a USB-C connector, 16MB flash + 8MB PSRAM, a
+ * Qw/ST (STEMMA-QT / Qwiic I²C) connector and an SP/E (debug) connector on the
+ * board. Onboard user LED on GP25 (drawn as the LED dot), plus an RGB LED.
  */
 const PICO_PLUS_2: BoardDefinition = {
   id: 'pico-plus-2',
   name: 'Pimoroni Pico Plus 2',
   mcu: 'RP2350',
   pcbColor: '#23202b',
-  aspect: 0.52,
-  ledLabel: 'LED',
+  aspect: 0.46,
+  ledLabel: '25',
   features: [
-    { label: 'RP2350', kind: 'mcu', x: 0.32, y: 0.42, w: 0.36, h: 0.18 },
-    { label: 'USB-C', kind: 'usb', x: 0.36, y: -0.02, w: 0.28, h: 0.06 },
-    { label: 'QwST', kind: 'chip', x: 0.66, y: 0.08, w: 0.26, h: 0.1 },
-    { label: 'SP/EN', kind: 'chip', x: 0.66, y: 0.22, w: 0.26, h: 0.1 }
+    { label: 'USB-C', kind: 'usb', x: 0.34, y: -0.04, w: 0.32, h: 0.055 },
+    { label: 'RP2350', kind: 'mcu', x: 0.28, y: 0.42, w: 0.44, h: 0.2 },
+    // Qw/ST (STEMMA-QT) + SP/E (debug) connectors on the bottom edge area.
+    { label: 'Qw/ST', kind: 'chip', x: 0.18, y: 0.86, w: 0.3, h: 0.08 },
+    { label: 'SP/E', kind: 'chip', x: 0.54, y: 0.86, w: 0.28, h: 0.08 }
   ],
   headers: [
     {
       edge: 'left',
       pins: [
-        gp(0), gp(1), mark('GND'), gp(2), gp(3), gp(4), gp(5), mark('GND'),
-        gp(6), gp(7), gp(8), gp(9), mark('GND'), gp(10), gp(11), gp(12),
-        gp(13), mark('GND'), gp(14), gp(15)
+        gp(0), gp(1), gnd(), gp(2), gp(3), gp(4), gp(5), gnd(), gp(6), gp(7),
+        gp(8), gp(9), gnd(), gp(10), gp(11), gp(12), gp(13), gnd(), gp(14), gp(15)
       ]
     },
     {
       edge: 'right',
       pins: [
-        mark('VBUS'), mark('VSYS'), mark('GND'), mark('3V3_EN'), mark('3V3'),
-        mark('ADC_VREF'), gp(28), mark('GND'), gp(27), gp(26), mark('RUN'),
-        gp(22), mark('GND'), gp(21), gp(20), gp(19), gp(18), mark('GND'),
-        gp(17), gp(16)
+        vcc('VBUS'), vcc('VSYS'), gnd(), other('3V3_EN'), vcc('3V3'),
+        other('ADC_VREF'), gp(28), gnd(), gp(27), gp(26), other('RUN'), gp(22),
+        gnd(), gp(21), gp(20), gp(19), gp(18), gnd(), gp(17), gp(16)
       ]
     }
   ]
 }
 
 /**
- * Pimoroni Tiny 2040 — RP2040 in a tiny ~22.9×18.2mm purple PCB, castellated
- * pads on the top + bottom edges, onboard RGB LED, ~12 broken-out GPIO.
+ * Pimoroni Tiny 2040 — RP2040 in a tiny ~22.9×18.2mm purple PCB with castellated
+ * pads down the two LONG edges and a USB-C on the top short end. Per #109 the
+ * pins run VERTICALLY → modelled as `left` + `right` headers. Breaks out ~12
+ * GPIO + power; onboard RGB LED (R=GP18, G=GP19, B=GP20). The four ADC pads are
+ * the high GPIO (A0=GP29, A1=GP28, A2=GP27, A3=GP26).
+ *
+ * Left edge (USB at top), top→bottom:  5V, GND, 3V3, GP0, GP1, GP2, GP3
+ * Right edge (USB at top), top→bottom: GP7, GP6, GP5, GP4, A3, A2, A1, A0
  */
 const TINY_2040: BoardDefinition = {
   id: 'tiny2040',
   name: 'Pimoroni Tiny 2040',
   mcu: 'RP2040',
   pcbColor: '#3a1d52',
-  aspect: 1.26,
+  aspect: 0.78,
+  // RGB LED — lit when any channel (GP18/19/20) is driven, or the "LED" token.
   ledLabel: 'LED',
   features: [
-    { label: 'RP2040', kind: 'mcu', x: 0.36, y: 0.34, w: 0.28, h: 0.32 },
-    { label: 'USB-C', kind: 'usb', x: 0.4, y: -0.04, w: 0.2, h: 0.08 }
+    { label: 'USB-C', kind: 'usb', x: 0.34, y: -0.06, w: 0.32, h: 0.1 },
+    { label: 'RP2040', kind: 'mcu', x: 0.3, y: 0.36, w: 0.4, h: 0.3 },
+    { label: 'RGB', kind: 'led', x: 0.4, y: 0.74, w: 0.2, h: 0.12 }
   ],
   headers: [
     {
-      edge: 'top',
-      pins: [mark('5V'), mark('GND'), gp(0), gp(1), gp(2), gp(3), gp(4)]
+      edge: 'left',
+      pins: [vcc('5V'), gnd(), vcc('3V3'), gp(0), gp(1), gp(2), gp(3)]
     },
     {
-      edge: 'bottom',
+      edge: 'right',
       pins: [
-        gp(7), gp(6), gp(5),
-        { gpio: 29, label: 'A3' },
-        { gpio: 28, label: 'A2' },
-        { gpio: 27, label: 'A1' },
-        { gpio: 26, label: 'A0' }
+        gp(7), gp(6), gp(5), gp(4),
+        { gpio: 26, label: 'A3' },
+        { gpio: 27, label: 'A2' },
+        { gpio: 28, label: 'A1' },
+        { gpio: 29, label: 'A0' }
       ]
     }
   ]
 }
 
 /**
- * Pimoroni Tiny 2350 — RP2350 in the same tiny castellated form factor as the
- * Tiny 2040, onboard RGB LED, GP0–GP7 + GP26–GP29 analogue.
+ * Pimoroni Tiny 2350 — RP2350 in the same tiny castellated form factor + RGB LED
+ * as the Tiny 2040, USB-C top end, pins running VERTICALLY (`left` + `right`).
+ * Same broken-out pin set as the Tiny 2040 (GP0–GP7 + the four ADC pads
+ * A0=GP29..A3=GP26), RP2350 MCU. RGB LED on GP18/GP19/GP20.
+ *
+ * Left edge (USB at top), top→bottom:  5V, GND, 3V3, GP0, GP1, GP2, GP3
+ * Right edge (USB at top), top→bottom: GP7, GP6, GP5, GP4, A3, A2, A1, A0
  */
 const TINY_2350: BoardDefinition = {
   id: 'tiny2350',
   name: 'Pimoroni Tiny 2350',
   mcu: 'RP2350',
   pcbColor: '#2a1745',
-  aspect: 1.26,
+  aspect: 0.78,
   ledLabel: 'LED',
   features: [
-    { label: 'RP2350', kind: 'mcu', x: 0.36, y: 0.34, w: 0.28, h: 0.32 },
-    { label: 'USB-C', kind: 'usb', x: 0.4, y: -0.04, w: 0.2, h: 0.08 }
+    { label: 'USB-C', kind: 'usb', x: 0.34, y: -0.06, w: 0.32, h: 0.1 },
+    { label: 'RP2350', kind: 'mcu', x: 0.3, y: 0.36, w: 0.4, h: 0.3 },
+    { label: 'RGB', kind: 'led', x: 0.4, y: 0.74, w: 0.2, h: 0.12 }
   ],
   headers: [
     {
-      edge: 'top',
-      pins: [mark('5V'), mark('GND'), gp(0), gp(1), gp(2), gp(3), gp(4)]
+      edge: 'left',
+      pins: [vcc('5V'), gnd(), vcc('3V3'), gp(0), gp(1), gp(2), gp(3)]
     },
     {
-      edge: 'bottom',
+      edge: 'right',
       pins: [
-        gp(7), gp(6), gp(5),
-        { gpio: 29, label: 'A3' },
-        { gpio: 28, label: 'A2' },
-        { gpio: 27, label: 'A1' },
-        { gpio: 26, label: 'A0' }
+        gp(7), gp(6), gp(5), gp(4),
+        { gpio: 26, label: 'A3' },
+        { gpio: 27, label: 'A2' },
+        { gpio: 28, label: 'A1' },
+        { gpio: 29, label: 'A0' }
       ]
     }
   ]
@@ -178,32 +220,47 @@ function io(n: number): BoardPad {
 }
 
 /**
- * ESP32 DevKit (DevKitC) — ESP32, dark-blue/black PCB, two long headers of ~15
- * pins each with the classic DevKitC labels. The `IOxx` pads carry their numeric
- * gpio so a numeric `Pin(23)` matches; IO34..IO39 are input-only.
+ * ESP32-DevKitC (ESP32-WROOM-32) — the common 30-pin DevKit: the WROOM-32 module
+ * (metal can) at the TOP and a micro-USB at the BOTTOM, two long 15-pin headers.
+ * Held USB-down, the labels run top→bottom:
+ *
+ *   Left edge:  3V3, EN, IO36(VP), IO39(VN), IO34, IO35, IO32, IO33, IO25, IO26,
+ *               IO27, IO14, IO12, GND, IO13
+ *   Right edge: VIN, GND, IO23, IO22, IO1(TX0), IO3(RX0), IO21, IO19, IO18, IO5,
+ *               IO17, IO16, IO4, IO0, IO2
+ *
+ * IO34/35/36/39 are input-only. Many DevKitC clones wire an onboard LED to GPIO2
+ * (the on-module LED varies by clone; GPIO2 is the most common).
  */
 const ESP32_DEVKIT: BoardDefinition = {
   id: 'esp32-devkit',
   name: 'ESP32 DevKit',
   mcu: 'ESP32',
   pcbColor: '#1b2733',
-  aspect: 0.46,
+  aspect: 0.42,
+  ledLabel: '2',
   features: [
-    { label: 'ESP32-WROOM', kind: 'wifi', x: 0.18, y: 0.06, w: 0.64, h: 0.2 },
-    { label: 'USB', kind: 'usb', x: 0.36, y: 0.92, w: 0.28, h: 0.07 }
+    { label: 'ESP32-WROOM-32', kind: 'wifi', x: 0.14, y: 0.05, w: 0.72, h: 0.22 },
+    { label: 'USB', kind: 'usb', x: 0.36, y: 0.95, w: 0.28, h: 0.05 }
   ],
   headers: [
     {
       edge: 'left',
       pins: [
-        mark('3V3'), mark('EN'), io(36), io(39), io(34), io(35), io(32),
-        io(33), io(25), io(26), io(27), io(14), io(12), mark('GND'), io(13)
+        vcc('3V3'), other('EN'),
+        { gpio: 36, label: 'IO36' },
+        { gpio: 39, label: 'IO39' },
+        io(34), io(35), io(32), io(33), io(25), io(26), io(27), io(14), io(12),
+        gnd(), io(13)
       ]
     },
     {
       edge: 'right',
       pins: [
-        mark('VIN'), mark('GND'), io(23), io(22), mark('TX0'), mark('RX0'),
+        vcc('VIN'), gnd(),
+        io(23), io(22),
+        { gpio: 1, label: 'TX0' },
+        { gpio: 3, label: 'RX0' },
         io(21), io(19), io(18), io(5), io(17), io(16), io(4), io(0), io(2)
       ]
     }

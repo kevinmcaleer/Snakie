@@ -99,6 +99,42 @@ export function ledPoint(box: BoardBox): { x: number; y: number } {
   return { x: box.x + box.w - 26, y: box.y + 26 }
 }
 
+/** How a pad's silk label is offset + anchored relative to the pad centre. */
+export interface PadLabelPlacement {
+  /** Horizontal offset from the pad centre to the label anchor (px). */
+  dx: number
+  /** Vertical offset from the pad centre to the label baseline (px). */
+  dy: number
+  /** SVG text-anchor so the text reads away from the board. */
+  anchor: 'start' | 'middle' | 'end'
+}
+
+/**
+ * Place a pad's silk label on its OWN side, OUTSIDE the board (#109): a
+ * `left`-edge pad's label sits to its LEFT (anchored at its end), a `right`-edge
+ * pad's to its RIGHT (anchored at its start), and `top`/`bottom`/`led` labels
+ * are centred above/below the pad. `gap` is the horizontal label inset (px).
+ *
+ * Pure so both Board Views (and the SVG export) share — and unit-test — the same
+ * side-correct rule; the renderers add the box-relative pad coordinate.
+ */
+export function padLabelPlacement(
+  edge: PadPoint['edge'],
+  gap = 14
+): PadLabelPlacement {
+  switch (edge) {
+    case 'left':
+      return { dx: -gap, dy: 4, anchor: 'end' }
+    case 'right':
+      return { dx: gap, dy: 4, anchor: 'start' }
+    case 'top':
+      return { dx: 0, dy: -12, anchor: 'middle' }
+    default:
+      // bottom / led: centred below the pad.
+      return { dx: 0, dy: 18, anchor: 'middle' }
+  }
+}
+
 /**
  * Resolve a parsed pin token to a drawn pad coordinate.
  * Matching: numeric token vs `pad.gpio`; else token vs `pad.label`

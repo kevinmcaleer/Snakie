@@ -4,6 +4,7 @@ import {
   layoutPads,
   ledPoint,
   padForToken,
+  padLabelPlacement,
   type BoardBox
 } from '../src/renderer/src/components/board-layout'
 import type { BoardDefinition } from '../src/renderer/src/components/board-defs'
@@ -175,5 +176,78 @@ describe('padForToken', () => {
     expect(p.pad.label).toBe('5')
     expect(p.x).toBe(box.x)
     expect(p.y).toBe(box.y)
+  })
+})
+
+describe('padLabelPlacement (#109 side-correct labels)', () => {
+  it('puts a LEFT-edge pad label to its LEFT, anchored at its end', () => {
+    const p = padLabelPlacement('left')
+    expect(p.dx).toBeLessThan(0) // label sits left of the pad (outside the board)
+    expect(p.anchor).toBe('end')
+  })
+
+  it('puts a RIGHT-edge pad label to its RIGHT, anchored at its start', () => {
+    const p = padLabelPlacement('right')
+    expect(p.dx).toBeGreaterThan(0) // label sits right of the pad (outside)
+    expect(p.anchor).toBe('start')
+  })
+
+  it('mirrors left/right so neither overlaps the board', () => {
+    // Same gap magnitude on each side, opposite signs → symmetric outside labels.
+    expect(padLabelPlacement('left').dx).toBe(-padLabelPlacement('right').dx)
+  })
+
+  it('centres top/bottom labels above/below the pad', () => {
+    const top = padLabelPlacement('top')
+    const bottom = padLabelPlacement('bottom')
+    expect(top.anchor).toBe('middle')
+    expect(bottom.anchor).toBe('middle')
+    expect(top.dx).toBe(0)
+    expect(bottom.dx).toBe(0)
+    expect(top.dy).toBeLessThan(0) // above
+    expect(bottom.dy).toBeGreaterThan(0) // below
+  })
+
+  it('centres the led label below its dot', () => {
+    const p = padLabelPlacement('led')
+    expect(p.anchor).toBe('middle')
+    expect(p.dx).toBe(0)
+    expect(p.dy).toBeGreaterThan(0)
+  })
+
+  it('honours a custom horizontal gap', () => {
+    expect(padLabelPlacement('left', 13).dx).toBe(-13)
+    expect(padLabelPlacement('right', 13).dx).toBe(13)
+  })
+})
+
+describe('vertical-edge layout (#109 Tiny boards)', () => {
+  // A Tiny-style board: pins down the LEFT and RIGHT long edges (no top/bottom),
+  // i.e. the pins run VERTICALLY as the issue requires.
+  const tiny: BoardDefinition = {
+    id: 'tiny',
+    name: 'Tiny',
+    mcu: 'RP2040',
+    pcbColor: '#3a1d52',
+    aspect: 0.78,
+    headers: [
+      { edge: 'left', pins: [{ label: '5V', type: 'vcc' }, { gpio: 0, label: 'GP0' }] },
+      { edge: 'right', pins: [{ gpio: 7, label: 'GP7' }, { gpio: 26, label: 'A3' }] }
+    ]
+  }
+
+  it('lays every pad on a vertical edge (left or right, never top/bottom)', () => {
+    const box = boardBox(tiny.aspect, GEOM)
+    const pads = layoutPads(tiny, box)
+    expect(pads).toHaveLength(4)
+    expect(pads.every((p) => p.edge === 'left' || p.edge === 'right')).toBe(true)
+    // Left column at the left x, right column at the right x.
+    const left = pads.filter((p) => p.edge === 'left')
+    const right = pads.filter((p) => p.edge === 'right')
+    expect(left.every((p) => p.x === box.x + 12)).toBe(true)
+    expect(right.every((p) => p.x === box.x + box.w - 12)).toBe(true)
+    // …and each runs top→bottom (vertical pins).
+    expect(left[0].y).toBeLessThan(left[1].y)
+    expect(right[0].y).toBeLessThan(right[1].y)
   })
 })
