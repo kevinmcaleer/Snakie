@@ -15,10 +15,12 @@ import { EditorArea } from './EditorArea'
 import {
   InstrumentDockRegion,
   InstrumentFloatLayer,
+  normaliseVisibility,
   useInstruments,
   type InstrumentVisibility,
   type OpenInstrument
 } from './InstrumentHost'
+import { defaultVisibility, deriveInUse } from './instruments-registry'
 import { parsePins, type UsedPins } from './parse-pins'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
@@ -209,21 +211,49 @@ export function AppShell(): JSX.Element {
   //     by default); orthogonal to each instrument's docked state.
   //   - the dock panel collapse (the toolbar Instruments button toggles it).
   const [openInstruments, setOpenInstruments] = useState<OpenInstrument[]>([])
+
+  // Which instruments the ACTIVE FILE declares in-use (peripheral types from
+  // `parse-pins` + cheap driver/import hints, #119). Drives the prominent
+  // markers in the dock header AND the default-visible singletons below, so a
+  // file using an OLED lights the I²C-display instrument without the user
+  // hunting for it. Recomputed only when the source/python-ness changes.
+  const inUse = useMemo(
+    () => deriveInUse(boardSource, boardIsPython),
+    [boardSource, boardIsPython]
+  )
+
   // SCOPE/METER start hidden (nothing is open until you summon one — so the dock
   // button isn't lit with no instrument behind it); both open paths (the dock
   // button and the board-view node launcher) turn the kind ON when they open one.
-  // The Plotter is always present, so it starts visible.
-  const [visibility, setVisibility] = useLocalStorage<InstrumentVisibility>(
+  // Singletons default per the in-use rule (in-use ⇒ visible, plus the always-on
+  // Plotter so the dock is never empty); the rest stay discoverable via the
+  // palette. Persisted across restarts, MIGRATED from the old {scope,meter,
+  // plotter} shape via `normaliseVisibility` so a stored value never wipes the
+  // new ids.
+  const [visibilityRaw, setVisibilityRaw] = useLocalStorage<Partial<InstrumentVisibility>>(
     'snakie.instruments.visibility',
-    { scope: false, meter: false, plotter: true }
+    {}
   )
+  // The in-use-derived defaults are only consulted for ids the user hasn't
+  // explicitly toggled (no persisted boolean). Memoised on the first in-use set
+  // so a later edit doesn't yank a singleton the user has open out from under
+  // them; the in-use markers in the header always reflect the LIVE `inUse`.
+  const initialDefaultsRef = useRef<Record<string, boolean> | null>(null)
+  if (initialDefaultsRef.current === null) {
+    initialDefaultsRef.current = defaultVisibility(inUse)
+  }
+  const visibility = useMemo(
+    () => normaliseVisibility(visibilityRaw, initialDefaultsRef.current as Record<string, boolean>),
+    [visibilityRaw]
+  )
+  const setVisibility = setVisibilityRaw as (v: InstrumentVisibility) => void
 
   // Set one kind's dock visibility directly (used by the close→hide flow and the
   // open→reveal flow below). `useLocalStorage`'s setter takes a value (not a
   // functional updater — it JSON-serialises whatever it gets), so we spread the
   // current `visibility` from the closure.
   const setKindVisible = useCallback(
-    (kind: keyof InstrumentVisibility, value: boolean): void => {
+    (kind: string, value: boolean): void => {
       if (visibility[kind] === value) return
       setVisibility({ ...visibility, [kind]: value })
     },
@@ -267,21 +297,20 @@ export function AppShell(): JSX.Element {
     [boardSource, boardIsPython]
   )
 
-  // Toggle one kind's dock-header visibility. Turning a kind ON also RE-DOCKS
-  // every instrument of that kind (via the host) so a previously-undocked or
-  // closed instrument reappears DOCKED — float a scope → ✕ (it hides, re-docked)
-  // → press SCOPE → it returns, docked. Plotter has no docked instances to
-  // re-dock, so it just flips visibility. Defined after the host so it can call
-  // `redockKind`.
+  // Toggle one instrument's dock-header visibility (keyed by registry id, #119).
+  //  - SCOPE/METER (per-pin): if NOTHING of this kind is open yet, the click
+  //    SUMMONS one (the first matching PWM/ADC pin in the active file) and shows
+  //    it docked — the in-window twin of the board-view node launchers. Turning a
+  //    kind back ON also RE-DOCKS every instrument of that kind (via the host) so
+  //    a previously-undocked/closed one reappears DOCKED.
+  //  - Every singleton (Plotter + the #110–#121 placeholders): a plain show/hide
+  //    flip of its boolean — visibility ONLY, never touches docked state.
+  // Defined after the host so it can call `redockKind`.
   const { redockKind } = instruments
   const toggleVisible = useCallback(
-    (kind: keyof InstrumentVisibility): void => {
-      // SCOPE/METER buttons: if NOTHING of this kind is open yet, the click
-      // SUMMONS one (the first matching PWM/ADC pin in the active file) and shows
-      // it docked — regardless of the visibility flag (which defaults ON, so a
-      // naive toggle would just flip it OFF on the first press and open nothing).
-      // This is the in-window twin of the board-view node launchers.
-      if (kind === 'scope' || kind === 'meter') {
+    (id: string): void => {
+      if (id === 'scope' || id === 'meter') {
+        const kind = id
         const hasOpen = openInstruments.some((it) => it.kind === kind)
         if (!hasOpen) {
           const wantType = kind === 'scope' ? 'pwm' : 'adc'
@@ -297,12 +326,13 @@ export function AppShell(): JSX.Element {
           }
           return
         }
+        const next = !visibility[id]
+        setVisibility({ ...visibility, [id]: next })
+        if (next) redockKind(kind)
+        return
       }
-      // Otherwise (an instrument of this kind is already open, or the Plotter):
-      // plain show/hide toggle. Turning a kind back ON re-docks it.
-      const next = !visibility[kind]
-      setVisibility({ ...visibility, [kind]: next })
-      if (next && (kind === 'scope' || kind === 'meter')) redockKind(kind)
+      // A singleton (Plotter or a placeholder): plain show/hide flip.
+      setVisibility({ ...visibility, [id]: !visibility[id] })
     },
     [visibility, setVisibility, setKindVisible, redockKind, openInstruments, fileConns]
   )
@@ -598,6 +628,7 @@ export function AppShell(): JSX.Element {
             <InstrumentDockRegion
               host={instruments}
               vis={visibility}
+              inUse={inUse}
               onToggleVisible={toggleVisible}
             />
           </aside>

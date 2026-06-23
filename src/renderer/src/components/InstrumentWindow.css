@@ -283,7 +283,8 @@
 }
 .instr-dock__head {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
 }
 .instr-dock__title {
@@ -302,13 +303,81 @@
   gap: 16px;
 }
 
-/* SCOPE / METER / PLOT visibility toggle row (dock header, pushed right). */
-.instr-dock__toggles {
-  margin-left: auto;
+/* --- Grouped instrument toggles (Inputs / Outputs) + Add palette (#119) --- */
+.instr-dock__header {
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  gap: 9px;
 }
+.instr-dock__group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* Small engraved group caption. */
+.instr-dock__group-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #4a4f57;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+/* The icon-only toggles wrap so 13+ instruments stay readable in the narrow dock. */
+.instr-dock__group-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+/* Icon-only 16×21 toggle (handoff): radius 6, sunken inactive, accent active. */
 .instr-dock__toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px;
+  height: 21px;
+  padding: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.12s ease;
+  background: #15171a;
+  border: 1px solid #26282b;
+  color: #4a4f57;
+}
+.instr-dock__toggle svg {
+  flex: none;
+}
+.instr-dock__toggle:hover {
+  border-color: #34373c;
+  color: #6b7079;
+}
+.instr-dock__toggle--active {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--toggle-accent-border);
+  color: var(--toggle-accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.instr-dock__toggle--active:hover {
+  border-color: var(--toggle-accent-border);
+  color: var(--toggle-accent);
+}
+/* In-use marker: a small accent dot on a toggle whose peripheral the code uses. */
+.instr-dock__toggle-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--toggle-accent);
+  box-shadow: 0 0 4px var(--toggle-accent);
+}
+
+/* The `+ Add` palette trigger — sits with the toggle rows. */
+.instr-dock__add {
+  align-self: flex-start;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -320,20 +389,143 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   cursor: pointer;
-  user-select: none;
   transition: all 0.12s ease;
   background: #15171a;
+  border: 1px dashed #34373c;
+  color: #6b7079;
+}
+.instr-dock__add:hover,
+.instr-dock__add--open {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: #4a4f57;
+  color: #aeb4bd;
+}
+
+/* --- The Add-instrument palette (grouped catalogue) --- */
+.instr-palette {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 11px;
+  border-radius: 10px;
+  background: #14191a;
   border: 1px solid #26282b;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+}
+.instr-palette__search {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border-radius: 7px;
+  background: #0c0e10;
+  border: 1px solid #26282b;
+  color: #dfe3e8;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.instr-palette__search::placeholder {
   color: #4a4f57;
 }
-.instr-dock__toggle svg {
-  flex: none;
+.instr-palette__search:focus {
+  outline: none;
+  border-color: #4a9fe0;
 }
-.instr-dock__toggle--active {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--toggle-accent-border);
+.instr-palette__groups {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.instr-palette__group-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: #4a4f57;
+}
+.instr-palette__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.instr-palette__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 7px;
+  background: #0f1213;
+  border: 1px solid #1c1f22;
+  color: #c7cbd1;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.instr-palette__row:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: #34373c;
+}
+.instr-palette__row--active {
+  border-color: color-mix(in srgb, var(--toggle-accent) 45%, transparent);
+}
+.instr-palette__icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--toggle-accent) 12%, #0c0e10);
   color: var(--toggle-accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.instr-palette__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.instr-palette__name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #dfe3e8;
+}
+.instr-palette__inuse,
+.instr-palette__shown {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.instr-palette__inuse {
+  color: var(--toggle-accent);
+  background: color-mix(in srgb, var(--toggle-accent) 16%, transparent);
+}
+.instr-palette__shown {
+  color: #6b7079;
+  background: #1c1f22;
+}
+.instr-palette__desc {
+  font-size: 10px;
+  line-height: 1.35;
+  color: #6b7079;
+}
+.instr-palette__empty {
+  margin: 0;
+  padding: 8px;
+  font-size: 11px;
+  color: #4a4f57;
+  text-align: center;
 }
 
 /* --- OVERLAY placement (small board windows) --- */

@@ -9,7 +9,10 @@ import {
   type Stats
 } from './instrument-data'
 import {
+  AddInstrumentButton,
   InstrumentDock,
+  InstrumentToggle,
+  InstrumentToggleGroup,
   InstrumentWindow,
   useFloatPlacement,
   type FloatProps
@@ -17,6 +20,23 @@ import {
 import { Oscilloscope } from './Oscilloscope'
 import { Multimeter } from './Multimeter'
 import { Plotter } from './Plotter'
+import { PlaceholderInstrument } from './PlaceholderInstrument'
+import {
+  SINGLETON_IDS,
+  filterPalette,
+  groupInstruments,
+  instrumentById,
+  isVisible,
+  normaliseVisibility,
+  type InstrumentDef,
+  type InstrumentVisibility
+} from './instruments-registry'
+
+// Re-export the visibility migration helper + type so AppShell (and anything
+// wiring the dock) can import them from this host module alongside the dock
+// components, as it always has.
+export { normaliseVisibility }
+export type { InstrumentVisibility }
 import {
   initialOffset,
   instrumentKey,
@@ -100,12 +120,6 @@ export interface OpenInstrument {
   conn: UsedPins
 }
 
-/** Per-kind visibility flags (dock-header SCOPE/METER/PLOT toggles). Default all on. */
-export interface InstrumentVisibility {
-  scope: boolean
-  meter: boolean
-  plotter: boolean
-}
 
 /** The open instruments' OWN connections for one kind (the selector fallback). */
 function openConns(instruments: OpenInstrument[], kind: 'scope' | 'meter'): UsedPins[] {
@@ -583,32 +597,198 @@ function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float
 }
 
 /**
+ * The grouped header rows + the `+ Add` palette trigger, built off the instrument
+ * registry (#119). Two engraved groups (`INPUTS` / `OUTPUTS`) of icon-only
+ * toggles, so the always-visible row stays readable at 13+ instruments; the
+ * `both`-group I²C display lands in INPUTS (sensible default — it reads a bus).
+ * In-use instruments (declared by the active file) carry an accent dot.
+ */
+function DockHeader({
+  vis,
+  inUse,
+  onToggleVisible,
+  paletteOpen,
+  onTogglePalette
+}: {
+  vis: InstrumentVisibility
+  inUse: Set<string>
+  onToggleVisible: (id: string) => void
+  paletteOpen: boolean
+  onTogglePalette: () => void
+}): JSX.Element {
+  const { input, output } = groupInstruments()
+  const renderToggle = (def: InstrumentDef): JSX.Element => (
+    <InstrumentToggle
+      key={def.id}
+      id={def.id}
+      name={def.name}
+      accent={def.accent}
+      border={def.border}
+      icon={def.icon}
+      active={isVisible(vis, def.id)}
+      inUse={inUse.has(def.id)}
+      onToggle={() => onToggleVisible(def.id)}
+    />
+  )
+  return (
+    <div className="instr-dock__header">
+      <InstrumentToggleGroup label="INPUTS">{input.map(renderToggle)}</InstrumentToggleGroup>
+      <InstrumentToggleGroup label="OUTPUTS">{output.map(renderToggle)}</InstrumentToggleGroup>
+      <AddInstrumentButton open={paletteOpen} onClick={onTogglePalette} />
+    </div>
+  )
+}
+
+/**
+ * The `+ Add instrument` palette: a grouped catalogue (icon + name + one-line
+ * description + in/out group) so EVERY instrument is reachable in ≤2 clicks even
+ * though the always-visible toggle row stays uncluttered. A search box filters
+ * by name/description ({@link filterPalette}); clicking an entry toggles its
+ * visibility and closes the palette. Already-visible entries read as active.
+ */
+function AddInstrumentPalette({
+  vis,
+  inUse,
+  onToggleVisible,
+  onClose
+}: {
+  vis: InstrumentVisibility
+  inUse: Set<string>
+  onToggleVisible: (id: string) => void
+  onClose: () => void
+}): JSX.Element {
+  const [query, setQuery] = useState('')
+  const matches = filterPalette(query)
+  const { input, output } = groupInstruments(matches)
+  const renderRow = (def: InstrumentDef): JSX.Element => {
+    const active = isVisible(vis, def.id)
+    return (
+      <li key={def.id}>
+        <button
+          type="button"
+          className={`instr-palette__row${active ? ' instr-palette__row--active' : ''}`}
+          style={{ '--toggle-accent': def.accent } as React.CSSProperties}
+          onClick={() => {
+            onToggleVisible(def.id)
+            onClose()
+          }}
+        >
+          <span className="instr-palette__icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 24 24" focusable="false">
+              <path
+                d={def.icon}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
+          <span className="instr-palette__text">
+            <span className="instr-palette__name">
+              {def.name}
+              {inUse.has(def.id) && <span className="instr-palette__inuse">in use</span>}
+              {active && <span className="instr-palette__shown">shown</span>}
+            </span>
+            <span className="instr-palette__desc">{def.description}</span>
+          </span>
+        </button>
+      </li>
+    )
+  }
+  return (
+    <div className="instr-palette" role="dialog" aria-label="Add instrument">
+      <input
+        type="text"
+        className="instr-palette__search"
+        placeholder="Search instruments…"
+        value={query}
+        autoFocus
+        onChange={(e) => setQuery(e.target.value)}
+        aria-label="Search instruments"
+      />
+      <div className="instr-palette__groups">
+        {input.length > 0 && (
+          <div className="instr-palette__group">
+            <span className="instr-palette__group-label">INPUTS</span>
+            <ul className="instr-palette__list">{input.map(renderRow)}</ul>
+          </div>
+        )}
+        {output.length > 0 && (
+          <div className="instr-palette__group">
+            <span className="instr-palette__group-label">OUTPUTS</span>
+            <ul className="instr-palette__list">{output.map(renderRow)}</ul>
+          </div>
+        )}
+        {matches.length === 0 && <p className="instr-palette__empty">No instruments match.</p>}
+      </div>
+    </div>
+  )
+}
+
+/**
  * THE DOCK REGION — the rightmost panel content (right of chat). Renders the
- * `INSTRUMENT DOCK` header with the SCOPE / METER / PLOT visibility toggle row,
- * then the visible docked windows and the Plotter. Visibility (`vis`) is
- * orthogonal to each instrument's docked state: a hidden kind is omitted
- * entirely from the stack so the rest reflow up (no empty gap).
+ * `INSTRUMENT DOCK` header (grouped Inputs/Outputs toggle rows + the `+ Add`
+ * palette, all driven by the registry #119), then the visible docked windows:
+ * the per-pin scope/meter, the real Plotter, and a {@link PlaceholderInstrument}
+ * for every other visible singleton (the #110–#121 panels replace those bodies).
+ *
+ * Visibility (`vis`) is orthogonal to each instrument's docked state: a hidden
+ * id is omitted entirely from the stack so the rest reflow up (no empty gap).
  */
 export function InstrumentDockRegion({
   host,
   vis,
+  inUse,
   onToggleVisible
 }: {
   host: UseInstrumentsResult
   vis: InstrumentVisibility
-  onToggleVisible: (kind: keyof InstrumentVisibility) => void
+  /** Instrument ids the active file declares in-use (prominent in the header). */
+  inUse: Set<string>
+  onToggleVisible: (id: string) => void
 }): JSX.Element {
+  const [paletteOpen, setPaletteOpen] = useState(false)
   const scopeDocked = host.dockedItems.filter((r) => r.it.kind === 'scope')
   const meterDocked = host.dockedItems.filter((r) => r.it.kind === 'meter')
+  // Singleton placeholders to render: every VISIBLE singleton id that isn't the
+  // real Plotter (and exists in the registry). Order follows registry order so
+  // the dock stack is stable.
+  const placeholderDefs = SINGLETON_IDS.filter(
+    (id) => id !== 'plotter' && isVisible(vis, id)
+  )
+    .map((id) => instrumentById(id))
+    .filter((d): d is InstrumentDef => d !== undefined)
   return (
-    <InstrumentDock vis={vis} onToggleVisible={onToggleVisible}>
-      {vis.scope && scopeDocked.map((r) => (
-        <DockItem key={`scope:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
-      ))}
-      {vis.meter && meterDocked.map((r) => (
-        <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
-      ))}
-      {vis.plotter && (
+    <InstrumentDock
+      header={
+        <DockHeader
+          vis={vis}
+          inUse={inUse}
+          onToggleVisible={onToggleVisible}
+          paletteOpen={paletteOpen}
+          onTogglePalette={() => setPaletteOpen((o) => !o)}
+        />
+      }
+    >
+      {paletteOpen && (
+        <AddInstrumentPalette
+          vis={vis}
+          inUse={inUse}
+          onToggleVisible={onToggleVisible}
+          onClose={() => setPaletteOpen(false)}
+        />
+      )}
+      {isVisible(vis, 'scope') &&
+        scopeDocked.map((r) => (
+          <DockItem key={`scope:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
+        ))}
+      {isVisible(vis, 'meter') &&
+        meterDocked.map((r) => (
+          <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
+        ))}
+      {isVisible(vis, 'plotter') && (
         <DockItem>
           <InstrumentWindow
             name="PLOTTER"
@@ -620,6 +800,11 @@ export function InstrumentDockRegion({
           </InstrumentWindow>
         </DockItem>
       )}
+      {placeholderDefs.map((def) => (
+        <DockItem key={def.id}>
+          <PlaceholderInstrument def={def} onClose={() => onToggleVisible(def.id)} />
+        </DockItem>
+      ))}
     </InstrumentDock>
   )
 }
@@ -647,7 +832,7 @@ export function InstrumentFloatLayer({
   visible: boolean
 }): JSX.Element | null {
   const floats = host.floatItems.filter((r) =>
-    r.it.kind === 'scope' ? vis.scope : vis.meter
+    isVisible(vis, r.it.kind === 'scope' ? 'scope' : 'meter')
   )
   if (floats.length === 0) return null
   return (
