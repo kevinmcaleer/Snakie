@@ -20,6 +20,7 @@ import {
   layoutPads,
   ledPoint,
   padForToken,
+  padLabelPlacement,
   type BoardBox,
   type PadPoint
 } from './board-layout'
@@ -356,6 +357,26 @@ function padIsGpio(pad: BoardPad): boolean {
   return (pad.type ?? 'gpio') === 'gpio'
 }
 
+/**
+ * The silver USB-nub rect, docked at the board's REAL connector edge (#109): we
+ * centre it on a declared `usb` feature and place it just outside the nearer
+ * short edge (top in the upper half, bottom otherwise — so the ESP32's bottom
+ * USB renders correctly). Falls back to the top centre when no `usb` feature is
+ * declared (the Pico-family convention).
+ */
+function usbNub(def: BoardDefinition, box: BoardBox): { x: number; y: number; w: number; h: number } {
+  const usb = def.features?.find((f) => f.kind === 'usb')
+  const w = 48
+  const h = 22
+  if (usb) {
+    const x = box.x + (usb.x + usb.w / 2) * box.w - w / 2
+    const bottom = usb.y + usb.h / 2 > 0.5
+    const y = bottom ? box.y + box.h - 13 : box.y - 9
+    return { x, y, w, h }
+  }
+  return { x: box.x + box.w / 2 - w / 2, y: box.y - 9, w, h }
+}
+
 /** Inline SVG of a generic board outline: PCB, holes, USB, features + pads. */
 function BoardOutline({
   def,
@@ -435,17 +456,22 @@ function BoardOutline({
         />
       ))}
 
-      {/* USB nub at the top edge. */}
-      <rect
-        x={box.x + box.w / 2 - 24}
-        y={box.y - 9}
-        width="48"
-        height="22"
-        rx="3"
-        fill="url(#bv-usb)"
-        stroke="#7b8088"
-        strokeWidth="1.3"
-      />
+      {/* USB nub at the board's REAL connector edge (#109). */}
+      {(() => {
+        const nub = usbNub(def, box)
+        return (
+          <rect
+            x={nub.x}
+            y={nub.y}
+            width={nub.w}
+            height={nub.h}
+            rx="3"
+            fill="url(#bv-usb)"
+            stroke="#7b8088"
+            strokeWidth="1.3"
+          />
+        )
+      })()}
 
       {/* Decorative features. */}
       {(def.features ?? []).map((f, i) => (
@@ -475,13 +501,12 @@ function BoardOutline({
         const isGpio = padIsGpio(p.pad)
         // Only GPIO pads can be highlighted as "used" (power pads never wire).
         const used = isGpio && usedKeys.has(`${p.x.toFixed(1)},${p.y.toFixed(1)}`)
-        const vertical = p.edge === 'left' || p.edge === 'right'
-        // Label placement: outside the board, anchored away from the edge.
-        const lx =
-          p.edge === 'left' ? p.x + 13 : p.edge === 'right' ? p.x - 13 : p.x
-        const ly = vertical ? p.y + 4 : p.edge === 'top' ? p.y - 11 : p.y + 17
-        const anchor: 'start' | 'middle' | 'end' =
-          p.edge === 'left' ? 'start' : p.edge === 'right' ? 'end' : 'middle'
+        // Label placement (#109): OUTSIDE the board on the pad's own side — see
+        // {@link padLabelPlacement} (shared with the live BoardGraph + export).
+        const place = padLabelPlacement(p.edge, 13)
+        const lx = p.x + place.dx
+        const ly = p.y + place.dy
+        const anchor = place.anchor
         // Power/other pads always show their label so the silk is readable; GPIO
         // pads only label when wired (to avoid a busy board in the live view).
         const showLabel = used || !isGpio
