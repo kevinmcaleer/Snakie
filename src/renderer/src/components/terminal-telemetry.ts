@@ -5,10 +5,11 @@
  *
  * The on-device instruments library prints machine-readable `SNK …` telemetry
  * lines (parsed by {@link ./instrument-telemetry} and routed to the
- * scope/meter/plotter). Those lines would clutter the REPL console, so the
- * Terminal pipes the raw serial stream through {@link makeTelemetryFilter}
- * before writing it to xterm: complete telemetry lines are dropped, everything
- * else passes through unchanged.
+ * scope/meter/plotter), and the IDE writes `SNKCMD …` control lines (issue
+ * #115) the board may echo back. Both are machine data, not console output, so
+ * the Terminal pipes the raw serial stream through {@link makeTelemetryFilter}
+ * before writing it to xterm: complete telemetry AND control lines are dropped,
+ * everything else passes through unchanged.
  *
  * The filter is **streaming + stateful**: serial data arrives in arbitrary
  * chunks (a telemetry line can be split across two `onData` callbacks), so it
@@ -23,25 +24,35 @@
  */
 
 import { isTelemetry, TELEMETRY_SENTINEL } from './instrument-telemetry'
-
-/** The sentinel plus its trailing space — the longest prefix we may still hold. */
-const SENTINEL_PREFIX = `${TELEMETRY_SENTINEL} `
+import { CONTROL_SENTINEL, isControl } from './snakie-control'
 
 /**
- * Could the (newline-less) trailing fragment `tail` still grow into a telemetry
- * line? True only while it is a prefix of `"SNK "` (so we keep buffering it) —
- * once it diverges (e.g. a `>>> ` prompt, or any normal output) it can never be
- * telemetry, so we release it immediately. Leading whitespace is ignored to
- * match {@link isTelemetry}.
+ * The full sentinel headers (token + trailing space) we may still be assembling.
+ * `SNK ` is telemetry; `SNKCMD ` is a control echo (issue #115). Both begin with
+ * `SNK`, so a partial fragment like `SNK` could still grow into EITHER.
+ */
+const SENTINEL_PREFIXES = [`${TELEMETRY_SENTINEL} `, `${CONTROL_SENTINEL} `]
+
+/** Should a complete (de-newlined) line be hidden from the console? */
+function isHidden(line: string): boolean {
+  return isTelemetry(line) || isControl(line)
+}
+
+/**
+ * Could the (newline-less) trailing fragment `tail` still grow into a hidden
+ * (telemetry or control) line? True while it is a prefix of `"SNK "` or
+ * `"SNKCMD "` (keep buffering), OR already past one of those headers but not yet
+ * newline-terminated (wait for the rest). Once it diverges (e.g. a `>>> ` prompt
+ * or `SNKx`) it can never match, so we release it immediately. Leading
+ * whitespace is ignored to match {@link isTelemetry}/{@link isControl}.
  */
 function couldBecomeTelemetry(tail: string): boolean {
   const t = tail.trimStart()
   if (t === '') return true // still only whitespace — wait and see
-  // `t` is a prefix of "SNK " (e.g. "S", "SN", "SNK", "SNK ") → may still match.
-  if (SENTINEL_PREFIX.startsWith(t)) return true
-  // Already a full `SNK ` (or `SNK<x>`) header but no newline yet → wait for the
-  // rest of the telemetry line before deciding.
-  return t.startsWith(SENTINEL_PREFIX)
+  // `t` is a prefix of a header (e.g. "S", "SN", "SNK", "SNK ", "SNKC", "SNKCMD ").
+  if (SENTINEL_PREFIXES.some((p) => p.startsWith(t))) return true
+  // Already a full `SNK `/`SNKCMD ` header but no newline yet → wait for the rest.
+  return SENTINEL_PREFIXES.some((p) => t.startsWith(p))
 }
 
 /**
@@ -72,7 +83,7 @@ export function makeTelemetryFilter(): TelemetryFilter {
         const lineWithNl = buffer.slice(0, nl + 1)
         // Strip a trailing \r (CRLF) only to classify; emit the original bytes.
         const line = lineWithNl.replace(/\r?\n$/, '')
-        if (!isTelemetry(line)) out += lineWithNl
+        if (!isHidden(line)) out += lineWithNl
         buffer = buffer.slice(nl + 1)
         nl = buffer.indexOf('\n')
       }

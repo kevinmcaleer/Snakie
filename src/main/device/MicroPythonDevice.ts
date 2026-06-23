@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 import { SerialPort } from 'serialport'
+import { buildControlLine } from '../../shared/control'
 import type {
   ConnectOptions,
   ConnectionState,
@@ -286,6 +287,21 @@ export class MicroPythonDevice extends EventEmitter {
    */
   async sendData(data: string): Promise<void> {
     await this.write(data)
+  }
+
+  /**
+   * Write an IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
+   *
+   * This is the WRITE counterpart of the `SNK …` telemetry the board prints. The
+   * line is built + sanitised by {@link buildControlLine} (target reduced to a
+   * single token, no embedded newlines that could frame a second command) and
+   * sent verbatim over the friendly REPL, exactly like {@link sendData} — the
+   * on-device `control` helper polls stdin non-blockingly and applies the latest
+   * value per target. No raw-REPL handshake, so it does not interrupt a running
+   * program. Latest-wins is enforced on the DEVICE side (the IDE may send freely).
+   */
+  async sendControl(target: string, payload = ''): Promise<void> {
+    await this.write(buildControlLine(target, payload))
   }
 
   /** Send Ctrl-C to interrupt any running program. */
