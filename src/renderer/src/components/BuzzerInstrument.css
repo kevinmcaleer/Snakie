@@ -1,0 +1,414 @@
+/*
+ * Buzzer / music player body (#113) — co-located styles for BuzzerInstrument.
+ * Reuses the shared `InstrumentWindow` + `PhosphorScreen` chrome (see
+ * `InstrumentWindow.css`); this file styles only the body: a phosphor screen
+ * with a one-octave piano keyboard, a sequencer chip track, an RTTTL paste box,
+ * the pin/octave/tempo/volume controls and a bottom readout + actions strip.
+ *
+ * Dark + self-contained (matches the scope/meter chrome it sits inside), themed
+ * per-instrument via the `--accent` / `--accent-border` custom properties. Fonts:
+ * JetBrains Mono (inherited).
+ */
+
+.buzzer {
+  --accent: #ff7ac2;
+  --accent-border: rgba(255, 122, 194, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* --- The phosphor screen body: live freq + keyboard ---------------------- */
+.buzzer__screen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  min-height: 150px;
+}
+
+.buzzer__readout-now {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  color: var(--accent);
+}
+
+.buzzer__big {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.buzzer__small {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 70%, #8a8f97);
+}
+
+/* --- Piano keyboard (one octave) ----------------------------------------- */
+.buzzer__keys {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  height: 78px;
+  margin-top: 2px;
+}
+
+.buzzer__key {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.buzzer__key--white {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6px;
+  border-radius: 0 0 5px 5px;
+  background: linear-gradient(#f4f1ea, #d7d2c6);
+  border: 1px solid #1c1f22;
+  box-shadow:
+    inset 0 -6px 8px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.buzzer__key--white.is-active {
+  background: linear-gradient(
+    color-mix(in srgb, var(--accent) 35%, #f4f1ea),
+    color-mix(in srgb, var(--accent) 22%, #d7d2c6)
+  );
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.28);
+}
+
+.buzzer__key-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #5a5f67;
+}
+
+/* Black keys overlay the white row. Positioned between the relevant whites. */
+.buzzer__blacks {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.buzzer__key--black {
+  position: absolute;
+  top: 0;
+  width: 9.5%;
+  height: 60%;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(#2a2c30, #0c0e10);
+  border: 1px solid #000;
+  box-shadow:
+    inset 0 -4px 6px rgba(0, 0, 0, 0.6),
+    0 2px 3px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+}
+
+.buzzer__key--black.is-active {
+  background: linear-gradient(
+    color-mix(in srgb, var(--accent) 55%, #2a2c30),
+    color-mix(in srgb, var(--accent) 30%, #0c0e10)
+  );
+}
+
+/* There are 7 white keys; black keys sit at C# D# F# G# A#.
+   Each white occupies ~1/7 of the width; centre a black on the white boundary. */
+.buzzer__key--at-1 {
+  left: calc((1 / 7 * 100%) - 4.75%);
+} /* C# */
+.buzzer__key--at-3 {
+  left: calc((2 / 7 * 100%) - 4.75%);
+} /* D# */
+.buzzer__key--at-6 {
+  left: calc((4 / 7 * 100%) - 4.75%);
+} /* F# */
+.buzzer__key--at-8 {
+  left: calc((5 / 7 * 100%) - 4.75%);
+} /* G# */
+.buzzer__key--at-10 {
+  left: calc((6 / 7 * 100%) - 4.75%);
+} /* A# */
+
+/* --- Sequencer ----------------------------------------------------------- */
+.buzzer__seq,
+.buzzer__rtttl,
+.buzzer__controls,
+.buzzer__bottom {
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.buzzer__seq {
+  padding: 8px 9px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.buzzer__seq-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.buzzer__seq-title,
+.buzzer__rtttl-lbl,
+.buzzer__ctrl-lbl,
+.buzzer__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #5a5f67;
+}
+
+.buzzer__seq-meta {
+  font-size: 9px;
+  color: #6b7079;
+}
+
+.buzzer__seq-track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-height: 26px;
+  padding: 4px;
+  border-radius: 5px;
+  background: #07090b;
+  border: 1px solid #15171a;
+}
+
+.buzzer__seq-empty {
+  font-size: 9px;
+  color: #4a4f57;
+  align-self: center;
+  padding: 2px 4px;
+}
+
+.buzzer__chip {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--accent) 80%, #cfd3da);
+  background: color-mix(in srgb, var(--accent) 14%, #15171a);
+  border: 1px solid var(--accent-border);
+}
+
+.buzzer__chip:hover {
+  background: color-mix(in srgb, var(--accent) 24%, #15171a);
+}
+
+.buzzer__chip--rest {
+  color: #6b7079;
+  background: #15171a;
+  border-color: #26282b;
+}
+
+.buzzer__seq-actions,
+.buzzer__rtttl-actions,
+.buzzer__main-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+/* --- Buttons ------------------------------------------------------------- */
+.buzzer__btn {
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #cfd3da;
+  background: linear-gradient(#26282b, #1a1c1f);
+  border: 1px solid #34373c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+.buzzer__btn:hover:not(:disabled) {
+  background: linear-gradient(#303236, #222427);
+}
+
+.buzzer__btn:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.buzzer__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.buzzer__btn--play {
+  color: #0c0e10;
+  background: linear-gradient(
+    color-mix(in srgb, var(--accent) 92%, #fff),
+    var(--accent)
+  );
+  border-color: var(--accent-border);
+}
+
+.buzzer__btn--play:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
+}
+
+.buzzer__btn--stop {
+  color: #ffd6d6;
+  background: linear-gradient(#5a2326, #3a1518);
+  border-color: #7a2e32;
+}
+
+.buzzer__btn--stop:hover {
+  background: linear-gradient(#6a292d, #45191c);
+}
+
+.buzzer__btn--export {
+  color: color-mix(in srgb, var(--accent) 80%, #cfd3da);
+  border-color: var(--accent-border);
+}
+
+/* --- RTTTL --------------------------------------------------------------- */
+.buzzer__rtttl {
+  padding: 8px 9px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buzzer__rtttl-in {
+  font-family: inherit;
+  font-size: 10px;
+  line-height: 1.5;
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 7px;
+  border-radius: 5px;
+  color: #cfd3da;
+  background: #07090b;
+  border: 1px solid #15171a;
+}
+
+.buzzer__rtttl-in:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.buzzer__rtttl-in::placeholder {
+  color: #4a4f57;
+}
+
+.buzzer__rtttl-info {
+  font-size: 9px;
+  color: #6b7079;
+  margin-left: auto;
+}
+
+/* --- Controls (pin / octave / tempo / volume) ---------------------------- */
+.buzzer__controls {
+  padding: 9px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 9px 12px;
+}
+
+.buzzer__ctrl {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.buzzer__ctrl-lbl {
+  flex: 0 0 56px;
+}
+
+.buzzer__ctrl-val {
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  min-width: 44px;
+  text-align: right;
+}
+
+.buzzer__select {
+  flex: 1;
+  font-family: inherit;
+  font-size: 10px;
+  padding: 3px 5px;
+  border-radius: 4px;
+  color: #cfd3da;
+  background: #07090b;
+  border: 1px solid #26282b;
+}
+
+.buzzer__range {
+  flex: 1;
+  accent-color: var(--accent);
+  height: 4px;
+  cursor: pointer;
+}
+
+/* --- Bottom readout + main actions --------------------------------------- */
+.buzzer__bottom {
+  padding: 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.buzzer__strip {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+
+.buzzer__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.buzzer__cell-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+}
+
+.buzzer__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
+
+.buzzer__main-actions {
+  justify-content: space-between;
+}
+
+.buzzer__main-actions .buzzer__btn {
+  flex: 1;
+}
