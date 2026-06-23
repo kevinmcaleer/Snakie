@@ -1,0 +1,184 @@
+/*
+ * ENCODER INSTRUMENT — skeuomorphic rotary-encoder panel (issue #117).
+ * ===========================================================================
+ * Co-located styles for EncoderInstrument.tsx. The shared chrome
+ * (InstrumentWindow / PhosphorScreen) supplies the title bar + CRT bezel; this
+ * file styles the knurled knob drawn on the phosphor screen and the bottom
+ * 3-column readout strip (COUNT / DIR / BUTTON|RPM), mirroring the
+ * scope/meter readout typography. Fonts: JetBrains Mono via --font-mono.
+ * Accent comes from the panel's --accent / --accent-border custom props (set
+ * inline from the registry def); a sensible lime fallback keeps it standalone.
+ */
+
+.enc {
+  /* Fallbacks so the panel themes correctly even without a def-supplied accent. */
+  --accent: #c8ff86;
+  --accent-border: rgba(170, 224, 82, 0.45);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+/* --- the knob on the phosphor screen ------------------------------------- */
+
+.enc__screen-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.enc__knob {
+  width: 150px;
+  height: 150px;
+  display: block;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.55));
+}
+
+/* detent tick ring (static, around the dial) */
+.enc__tick {
+  stroke: rgba(130, 230, 150, 0.35);
+  stroke-width: 1.4;
+}
+.enc__tick--major {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+/* the rotating dial group spins with the count */
+.enc__dial {
+  transition: transform 0.12s ease-out;
+  transform-box: view-box;
+}
+
+/* knurled outer edge ridges */
+.enc__ridge {
+  stroke: rgba(40, 46, 38, 0.85);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+/* the brass-ish dark dial face + accent ring */
+.enc__face {
+  fill: #262b20;
+}
+.enc__face-ring {
+  fill: none;
+  stroke: var(--accent-border);
+  stroke-width: 2;
+}
+
+/* the pointer + seated indicator dot */
+.enc__pointer {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(170, 224, 82, 0.6));
+}
+.enc__pointer-dot {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 5px rgba(170, 224, 82, 0.7));
+}
+
+/* the hub — lights up ("clicks") on a button press */
+.enc__hub {
+  fill: #1a1e16;
+  stroke: var(--accent-border);
+  stroke-width: 2;
+  transition: fill 0.08s ease, stroke 0.08s ease;
+}
+.enc__knob--pressed .enc__hub {
+  fill: var(--accent);
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 8px rgba(170, 224, 82, 0.85));
+}
+.enc__knob--pressed {
+  /* a subtle "depress" so the click reads even without the hub colour */
+  transform: scale(0.97);
+  transition: transform 0.06s ease-out;
+}
+
+/* --- on-screen overlay: direction lamp + delta -------------------------- */
+
+.enc__overlay {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  pointer-events: none;
+}
+
+.enc__dir-lamp {
+  font-size: 18px;
+  line-height: 1;
+  color: #4a5345;
+  transition: color 0.1s ease, text-shadow 0.1s ease;
+}
+.enc__dir-lamp--cw,
+.enc__dir-lamp--ccw {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(170, 224, 82, 0.65);
+}
+
+.enc__delta {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7de0a0;
+  letter-spacing: 0.04em;
+}
+
+/* --- the bottom 3-column readout strip ---------------------------------- */
+
+.enc__readout {
+  display: flex;
+  gap: 7px;
+}
+
+.enc__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #1c1f24;
+  border: 1px solid #2c2f36;
+  border-radius: 8px;
+  padding: 7px 8px;
+  text-align: center;
+}
+/* the centre DIR cell gets the accent border (a touch of emphasis) */
+.enc__cell--pad {
+  border-color: var(--accent-border);
+}
+
+.enc__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6a7079;
+}
+
+.enc__cell-val {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: #86ffb6;
+  text-shadow: 0 0 6px rgba(82, 224, 138, 0.45);
+}
+
+/* DIR cell: tint the value by sense; BUTTON cell: light up when DOWN */
+.enc__cell[data-state='cw'] .enc__cell-val,
+.enc__cell[data-state='ccw'] .enc__cell-val,
+.enc__cell[data-state='down'] .enc__cell-val {
+  color: var(--accent);
+  text-shadow: 0 0 8px rgba(170, 224, 82, 0.6);
+}
+.enc__cell[data-state='idle'] .enc__cell-val,
+.enc__cell[data-state='up'] .enc__cell-val {
+  color: #6a7079;
+  text-shadow: none;
+}
