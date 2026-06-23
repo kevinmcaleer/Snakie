@@ -25,6 +25,16 @@ import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
+import { InstrumentLibBanner } from './InstrumentLibBanner'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import {
+  INSTRUMENTS_LIB_PATH,
+  INSTRUMENTS_ROOT_PATH,
+  INSTRUMENTS_LIB_DIR,
+  installStateFromProbe,
+  shouldShowBanner,
+  type InstallState
+} from '../lib/instrumentsLib'
 import { useWorkspace } from '../store/workspace'
 
 /**
@@ -313,6 +323,97 @@ export function AppShell(): JSX.Element {
     setDockOpen(!dockOpen)
   }, [dockOpen, setDockOpen])
 
+  // --- Offer to install the instrument library (#108) ------------------------
+  // When the dock opens AND a board is connected, we check (once per connection)
+  // whether the board already has `instruments.py` (#107). If not, a manila
+  // banner at the top of the app offers a one-click install of `/lib/instruments.py`.
+  //
+  //  - `libState` is the per-connection install cache ('unknown' until probed,
+  //    'present'/'absent' after). It RESETS to 'unknown' on every connection
+  //    change (disconnect/reconnect), so a fresh board is re-probed.
+  //  - `libDismissed` hides the banner this open-session; it resets to false when
+  //    the dock CLOSES, so reopening the dock shows it again (per the issue).
+  //  - `libInstalling` / `libError` drive the busy + error states on the banner.
+  //
+  // The detect + install run over the raw REPL (device.stat / mkdir / writeFile),
+  // which momentarily interrupts a running program — so the probe is one-off
+  // (gated on the dock opening, cached) and the install is user-initiated.
+  const deviceStatus = useDeviceStatus()
+  const connected = deviceStatus.state === 'connected'
+  const [libState, setLibState] = useState<InstallState>('unknown')
+  const [libDismissed, setLibDismissed] = useState(false)
+  const [libInstalling, setLibInstalling] = useState(false)
+  const [libError, setLibError] = useState<string | null>(null)
+
+  // Reset the per-connection cache whenever the connection state flips, so a
+  // newly connected (or reconnected) board is re-probed and a disconnect clears
+  // any stale 'absent'/'present' result.
+  useEffect(() => {
+    setLibState('unknown')
+  }, [deviceStatus.state, deviceStatus.path])
+
+  // Reset the per-open-session dismissal when the dock CLOSES, so closing then
+  // reopening the instrument panel surfaces the banner again (per the issue).
+  useEffect(() => {
+    if (!dockOpen) {
+      setLibDismissed(false)
+      setLibError(null)
+    }
+  }, [dockOpen])
+
+  // One-off probe: when the dock is open + connected + not yet probed, stat the
+  // two candidate paths on the board. A resolved stat ⇒ found; a rejected stat
+  // (OSError on a missing path) ⇒ treat as not-found for that path. Tolerant of
+  // any error → 'absent' (offer the install) rather than throwing.
+  useEffect(() => {
+    if (!dockOpen || !connected || libState !== 'unknown') return
+    let active = true
+    const probe = (path: string): Promise<boolean> =>
+      window.api.device
+        .stat(path)
+        .then(() => true)
+        .catch(() => false)
+    void Promise.all([probe(INSTRUMENTS_LIB_PATH), probe(INSTRUMENTS_ROOT_PATH)]).then(
+      ([libFound, rootFound]) => {
+        if (active) setLibState(installStateFromProbe(libFound, rootFound))
+      }
+    )
+    return () => {
+      active = false
+    }
+  }, [dockOpen, connected, libState])
+
+  // Install action: read the bundled source, ensure /lib exists (tolerate
+  // "already exists"), write /lib/instruments.py, then mark present (hiding the
+  // banner). Surfaces a brief error on failure; never crashes.
+  const installInstrumentsLib = useCallback((): void => {
+    if (libInstalling) return
+    setLibInstalling(true)
+    setLibError(null)
+    void (async (): Promise<void> => {
+      try {
+        const source = await window.api.instruments.librarySource()
+        if (!source) throw new Error('library source unavailable')
+        await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
+        await window.api.device.writeFile(INSTRUMENTS_LIB_PATH, source)
+        setLibState('present')
+      } catch (err) {
+        setLibError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setLibInstalling(false)
+      }
+    })()
+  }, [libInstalling])
+
+  const dismissLibBanner = useCallback((): void => setLibDismissed(true), [])
+
+  const showLibBanner = shouldShowBanner({
+    dockOpen,
+    connected,
+    installState: libState,
+    dismissed: libDismissed
+  })
+
   // Opening an instrument must RELIABLY reveal it docked. We carry the FULL
   // parsed connection (`conn`) from the board node in the payload, so the
   // instrument is SELF-CONTAINED — it renders from `conn` regardless of the main
@@ -381,6 +482,19 @@ export function AppShell(): JSX.Element {
 
   return (
     <div className="shell">
+      {/* Top-of-screen manila notification offering a one-click install of the
+          instrument library onto the connected board (#108). Topmost element of
+          `.shell` (a column flex) so it reads as a full-width banner above the
+          toolbar; shown only when the dock is open, a board is connected, the
+          library isn't installed, and it hasn't been dismissed this session. */}
+      {showLibBanner && (
+        <InstrumentLibBanner
+          installing={libInstalling}
+          error={libError}
+          onInstall={installInstrumentsLib}
+          onDismiss={dismissLibBanner}
+        />
+      )}
       <Toolbar
         theme={theme}
         onToggleTheme={toggleTheme}

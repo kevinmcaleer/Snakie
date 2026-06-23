@@ -536,7 +536,15 @@ const instruments = {
     const listener = (_e: IpcRendererEvent, payload: InstrumentOpenPayload): void => cb(payload)
     ipcRenderer.on('instruments:open', listener)
     return () => ipcRenderer.removeListener('instruments:open', listener)
-  }
+  },
+  /**
+   * Return the bundled MicroPython instrument library source (`instruments.py`,
+   * issue #107). Used by the "offer to install it onto the board" banner (issue
+   * #108) to write the file to `/lib/instruments.py`. Resolves to `''` when the
+   * library can't be read (the main handler never throws), which the banner
+   * treats as "unavailable".
+   */
+  librarySource: (): Promise<string> => ipcRenderer.invoke('instruments:librarySource')
 }
 
 // Minimal, typed API exposed to the renderer. This establishes the IPC
