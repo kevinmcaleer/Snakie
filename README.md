@@ -2,9 +2,14 @@
 
 A modern, cross-platform **MicroPython editor**.
 
-Snakie is a clean, uncluttered IDE for writing MicroPython code and working with
-connected MicroPython devices. It is built on Electron so it runs on Windows,
-macOS and Linux, and updates easily.
+Snakie is a clean IDE for writing MicroPython code and working with connected
+microcontrollers, wrapped in a photoreal **Skeuomorph** interface (brushed metal,
+green felt, ruled paper and recessed glass) with a dark mode. It is built on
+Electron so it runs on Windows, macOS and Linux, and updates itself.
+
+Beyond editing and the REPL, it can **visualise your board** — parsing your code
+to draw the actual pinout — and drive on-screen **instruments** (oscilloscope,
+multimeter, plotter) from a running program.
 
 ## Download
 
@@ -21,21 +26,44 @@ Grab the latest installer for your platform from the
 
 ## Features
 
-Everything below ships in **v0.1.0**:
+### Editor
 
-- ✏️ Edit MicroPython code with syntax highlighting and auto-complete
-- 🔌 Connect to a MicroPython device over serial
-- 📤 Upload code to the connected device
-- 🐚 Interactive shell (REPL) for live coding
-- ▶️ Run & Stop buttons, with a one-click Clear Shell
-- 🗂️ Browse files both locally and on the device (Thonny-style)
-- 📁 Create / rename / delete files and folders on the device
-- 🧩 Tabbed interface for editing multiple files at once
-- 📦 Flash MicroPython firmware to a device
-- 🔭 Variables and code-outline panels (collapsible)
+- ✏️ Monaco-based editor with MicroPython syntax highlighting, autocomplete and
+  optional **AI ghost-text** suggestions
+- 🧩 Tabbed multi-file editing
+- 🔍 **Find & Replace** — case / whole-word / regex toggles, live match count,
+  draggable dialog
+- ✅ **YAML / JSON validation** with squiggles, a Problems panel and an autofix
+- 🎨 Skeuomorph **ruled-paper** editor, with a light/dark theme toggle
+
+### Device & REPL
+
+- 🔌 Connect to a MicroPython device over serial (raw-REPL protocol)
+- ▶️ **Run** and **Stop** — Stop also **soft-resets** the board when nothing's
+  running
+- 🐚 Interactive shell (REPL) with a live serial **Plotter** alongside the console
+- 🗂️ Browse / create / rename / delete files locally and on the device
+  (Thonny-style)
+- 📦 Install MicroPython packages (`mip`) and 📡 flash firmware (built-in board
+  catalog)
+
+### Board View & Instruments
+
+- 🔭 A live **Board View** window that parses your code for pin usage and draws the
+  **actual board** — Raspberry Pi Pico 2 W, ESP32, Pimoroni Pico Plus 2 / Tiny 2040
+  / Tiny 2350, plus your own board definitions
+- 🕸️ A **node graph** of every connection by type (input / output / PWM / I²C / SPI
+  / PIO / ADC) with live pin values, **zoom / rotate / export** (SVG · PNG · PDF),
+  and a visual **Board Creator** for custom boards
+- 📟 **Oscilloscope, Multimeter and Plotter** instruments — dockable or floating —
+  fed live and **non-invasively** by a tiny MicroPython telemetry library
+  (`scope()` / `meter()` / `plot()`), one-click installable to your board
+
+### Workflow
+
 - 🌳 Built-in version control (Git, VS Code-style)
 - 🤖 Integrated LLM chat pane
-- 🔔 Update notifications when a new version is ready
+- 🔔 In-app update notifications when a new version is ready
 
 ## Tech stack
 
@@ -111,21 +139,27 @@ Notes on arch coverage:
   prebuild, so this is a CI-infrastructure limitation, not a code one — revisit
   if/when an arm64 Windows runner becomes available.)
 
-> The app icon (`build/icon.png`, source `build/icon.svg`) is a drafted
-> placeholder logo — fine to iterate on or replace with final artwork (#46).
-> Code signing is not yet configured (future work, #47).
+> macOS builds are **code-signed** (Developer ID Application) and **notarized**, so
+> Gatekeeper accepts them and the in-app updater can apply updates (#47); Windows
+> and Linux builds are currently unsigned. The app icon (`build/icon.png`, source
+> `build/icon.svg`) is a drafted placeholder logo — fine to replace with final
+> artwork (#46).
 
 ## Status
 
-🚀 **v0.1.0 released** — the full first build plus the post-v0.1.0 backlog
-(autocomplete, firmware flashing, Git, LLM chat, package installer, serial
-plotter, in-app help, update notifications) are all implemented. See
-[docs/build-plan.md](docs/build-plan.md) for the original plan.
+🚀 **v0.13.0 released** — signed + notarized macOS builds alongside Windows and
+Linux. On top of the original editor / REPL / device tooling, recent releases added
+the **Skeuomorph** redesign, the **Board View** (node-graph pinout, multi-board +
+custom boards, viewport + export, Board Creator), the **Oscilloscope / Multimeter /
+Plotter** instruments, and the **MicroPython instruments telemetry library** that
+feeds them live from a running program. See
+[`CHANGELOG.md`](CHANGELOG.md) for the full history and
+[`docs/`](docs/) for the design + plugin + board + instruments guides.
 
-> ⚠️ Released features are build- and type-verified but have **not yet been
-> exercised against real MicroPython hardware** — first on-device shakedown is
-> the next priority (tracked in the v0.2.0 milestone). The LLM chat needs an
-> Anthropic API key; the package installer needs network access.
+> ⚠️ Many features are build-, type- and unit-test-verified but the **on-device**
+> paths (live values, the instruments, firmware flashing, package install) need a
+> real MicroPython board to fully validate. The LLM chat needs an Anthropic API
+> key; the package installer needs network access.
 
 ## License
 
