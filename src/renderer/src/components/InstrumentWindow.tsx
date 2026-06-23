@@ -254,126 +254,129 @@ export function PhosphorScreen({
   )
 }
 
-/** Per-kind dock visibility flags (the SCOPE/METER/PLOT toggle row). */
-export interface DockVisibility {
-  scope: boolean
-  meter: boolean
-  plotter: boolean
+/**
+ * One icon-only instrument toggle (16×21, radius 6) per the Board View handoff.
+ * Active = accent border + accent icon + a faint fill + inset top highlight;
+ * inactive = sunken `#15171a`/`#26282b`/`#4a4f57`. The accent/border come from
+ * the registry def via the `--toggle-accent` / `--toggle-accent-border` custom
+ * props. `inUse` adds a small accent dot so an instrument the code declares is
+ * visually distinguished from the merely-available ones. Visibility ONLY —
+ * orthogonal to a window's docked/undocked state.
+ */
+export function InstrumentToggle({
+  id,
+  name,
+  accent,
+  border,
+  icon,
+  active,
+  inUse,
+  onToggle
+}: {
+  id: string
+  name: string
+  accent: string
+  border: string
+  /** Inline SVG path `d` string (drawn at 24×24). */
+  icon: string
+  active: boolean
+  inUse?: boolean
+  onToggle: () => void
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`instr-dock__toggle${active ? ' instr-dock__toggle--active' : ''}${
+        inUse ? ' instr-dock__toggle--inuse' : ''
+      }`}
+      style={
+        {
+          '--toggle-accent': accent,
+          '--toggle-accent-border': border
+        } as CSSProperties
+      }
+      aria-pressed={active}
+      onClick={onToggle}
+      title={`${active ? 'Hide' : 'Show'} ${name}${inUse ? ' (used by this file)' : ''}`}
+      aria-label={`${active ? 'Hide' : 'Show'} ${name}`}
+      data-instrument={id}
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d={icon}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+        />
+      </svg>
+      {inUse && <span className="instr-dock__toggle-dot" aria-hidden="true" />}
+    </button>
+  )
 }
 
 /**
- * The dock-header visibility toggle row: three pill buttons (SCOPE · METER ·
- * PLOT) pushed to the right of the `INSTRUMENT DOCK` label. Each flips its
- * kind's `visible` flag — visibility ONLY, orthogonal to docked/undocked state.
- * Defaults to all-on (handled by the caller's default state).
- *
- * Active = accent border + accent text/icon + a faint fill + inset top
- * highlight; inactive = sunken `#15171a`/`#26282b`/`#4a4f57`. Each kind carries
- * its own accent (scope green, meter teal, plot blue) matching the node
- * launchers, applied via the `--accent` / `--accent-border` custom props.
+ * One engraved group of icon-only toggles (`INPUTS` / `OUTPUTS`). The label is a
+ * small engraved caption; the row wraps so 13+ instruments stay readable in the
+ * narrow dock. `children` are {@link InstrumentToggle}s.
  */
-const TOGGLE_META: Record<
-  keyof DockVisibility,
-  { label: string; accent: string; accentBorder: string; icon: ReactNode }
-> = {
-  scope: {
-    label: 'SCOPE',
-    accent: '#86ffb6',
-    accentBorder: 'rgba(82,224,138,.45)',
-    // square wave — same as the PWM-node scope launcher
-    icon: (
-      <path
-        d="M3 15 L3 9 L8 9 L8 15 L13 15 L13 9 L18 9 L18 15 L21 15"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    )
-  },
-  meter: {
-    label: 'METER',
-    accent: '#5fe0c8',
-    accentBorder: 'rgba(70,214,187,.45)',
-    // gauge + needle — same as the ADC-node meter launcher
-    icon: (
-      <g fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 18 A9 9 0 0 1 20 18" />
-        <line x1="12" y1="18" x2="16.6" y2="12.4" />
-        <circle cx="12" cy="18" r="1.7" fill="currentColor" stroke="none" />
-      </g>
-    )
-  },
-  plotter: {
-    label: 'PLOT',
-    accent: '#7fc4f0',
-    accentBorder: 'rgba(95,184,240,.45)',
-    // trend line
-    icon: (
-      <path
-        d="M3 17 L9 11 L13 14.5 L21 6"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-    )
-  }
-}
-
-function DockToggleRow({
-  vis,
-  onToggleVisible
+export function InstrumentToggleGroup({
+  label,
+  children
 }: {
-  vis: DockVisibility
-  onToggleVisible: (kind: keyof DockVisibility) => void
+  label: string
+  children: ReactNode
 }): JSX.Element {
   return (
-    <div className="instr-dock__toggles" role="group" aria-label="Instrument visibility">
-      {(Object.keys(TOGGLE_META) as Array<keyof DockVisibility>).map((kind) => {
-        const meta = TOGGLE_META[kind]
-        const active = vis[kind]
-        return (
-          <button
-            key={kind}
-            type="button"
-            className={`instr-dock__toggle${active ? ' instr-dock__toggle--active' : ''}`}
-            style={
-              {
-                '--toggle-accent': meta.accent,
-                '--toggle-accent-border': meta.accentBorder
-              } as CSSProperties
-            }
-            aria-pressed={active}
-            onClick={() => onToggleVisible(kind)}
-            title={`${active ? 'Hide' : 'Show'} ${meta.label} in the dock`}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              {meta.icon}
-            </svg>
-            <span>{meta.label}</span>
-          </button>
-        )
-      })}
+    <div className="instr-dock__group" role="group" aria-label={`${label} instruments`}>
+      <span className="instr-dock__group-label">{label}</span>
+      <div className="instr-dock__group-row">{children}</div>
     </div>
   )
 }
 
 /**
- * The INSTRUMENT DOCK rail: a fixed 436px column on the right of the main
- * window (now the rightmost panel, right of the chat). Instruments stacked
- * top-to-bottom under a small engraved header that carries the SCOPE/METER/PLOT
- * visibility toggle row.
+ * The `+ Add instrument` palette button — sits at the end of the header rows.
+ * Opens the grouped catalogue ({@link InstrumentDockRegion} renders the popover);
+ * this is just the trigger so the chrome stays in `InstrumentWindow`.
+ */
+export function AddInstrumentButton({
+  open,
+  onClick
+}: {
+  open: boolean
+  onClick: () => void
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className={`instr-dock__add${open ? ' instr-dock__add--open' : ''}`}
+      aria-expanded={open}
+      aria-haspopup="dialog"
+      onClick={onClick}
+      title="Add an instrument"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 5 V19 M5 12 H19" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+      </svg>
+      <span>Add</span>
+    </button>
+  )
+}
+
+/**
+ * The INSTRUMENT DOCK rail: a column on the right of the main window (the
+ * rightmost panel, right of the chat). The `header` slot carries the engraved
+ * `INSTRUMENT DOCK` title + the grouped toggle rows + the Add-instrument palette
+ * (built by {@link InstrumentDockRegion} off the registry); `children` are the
+ * stacked instrument windows.
  */
 export function InstrumentDock({
-  vis,
-  onToggleVisible,
+  header,
   children
 }: {
-  vis: DockVisibility
-  onToggleVisible: (kind: keyof DockVisibility) => void
+  header: ReactNode
   children: ReactNode
 }): JSX.Element {
   return (
@@ -386,7 +389,7 @@ export function InstrumentDock({
           </svg>
           INSTRUMENT DOCK
         </span>
-        <DockToggleRow vis={vis} onToggleVisible={onToggleVisible} />
+        {header}
       </div>
       <div className="instr-dock__stack">{children}</div>
     </aside>
