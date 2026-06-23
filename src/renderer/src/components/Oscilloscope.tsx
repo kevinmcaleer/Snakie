@@ -5,6 +5,7 @@ import {
   formatFreq,
   formatPeriod,
   pwmConfig,
+  sampleWavePath,
   squareWavePath,
   type PwmConfig
 } from './instrument-data'
@@ -24,6 +25,12 @@ import './Oscilloscope.css'
  *
  * All the maths (the wave path, the freq/duty/period formatting) is the pure,
  * unit-tested {@link ./instrument-data}; this component is just the chrome.
+ *
+ * LIVE TELEMETRY (#107): when the board's program PRINTS `SNK SCOPE` samples for
+ * this channel, the host passes them in via {@link OscilloscopeProps.samples} and
+ * we draw the REAL sampled waveform ({@link sampleWavePath}) instead of the
+ * idealised square wave — passive + always-on, so it tracks a running loop with
+ * no REPL interruption. With no telemetry we fall back to the freq/duty picture.
  */
 
 /** Internal screen geometry (matches the handoff's 358×172 green screen). */
@@ -44,6 +51,12 @@ export interface OscilloscopeProps {
    * undefined when not connected → fall back to the parsed/static config.
    */
   liveDuty?: number
+  /**
+   * Live `SNK SCOPE` telemetry samples for this channel (#107), oldest → newest.
+   * When present (non-empty) the scope draws this REAL waveform instead of the
+   * idealised square wave; absent/empty → the freq/duty picture as before.
+   */
+  samples?: number[]
   /** Whether the global instrument live-poll is on (drives the LIVE toggle). */
   live?: boolean
   /** Flip the global live-poll (shared by all open instruments). */
@@ -68,6 +81,7 @@ export function Oscilloscope({
   sources,
   fileSource,
   liveDuty,
+  samples,
   live,
   onToggleLive,
   onSelectSource,
@@ -89,12 +103,18 @@ export function Oscilloscope({
   const duty = cfg.duty ?? 0.5 // a sane default picture when none is parseable
   const gp = gpLabel(conn)
 
-  // The square-wave trace path (pure geometry). When stopped we still draw the
-  // last shape (a real scope holds the trace) — only the RUN dot/label change.
-  const wavePath = useMemo(
-    () => squareWavePath({ width: SCREEN_W, height: SCREEN_H, duty, cycles: CYCLES, padY: PAD_Y }),
-    [duty]
-  )
+  // Are we driving the trace from live `SNK SCOPE` telemetry (#107)?
+  const onTelemetry = !!samples && samples.length > 0
+
+  // The trace path (pure geometry). With telemetry we draw the REAL sampled
+  // waveform; otherwise the idealised PWM square wave. When stopped we still draw
+  // the last shape (a real scope holds the trace) — only the RUN dot/label change.
+  const wavePath = useMemo(() => {
+    if (samples && samples.length > 0) {
+      return sampleWavePath({ width: SCREEN_W, height: SCREEN_H, samples, padY: PAD_Y })
+    }
+    return squareWavePath({ width: SCREEN_W, height: SCREEN_H, duty, cycles: CYCLES, padY: PAD_Y })
+  }, [samples, duty])
 
   return (
     <InstrumentWindow
@@ -179,7 +199,9 @@ export function Oscilloscope({
           {running ? 'RUN' : 'STOP'}
         </span>
         <span className="osc__lbl osc__lbl--div">200µs/div&nbsp;&nbsp;1.0V/div</span>
-        <span className="osc__lbl osc__lbl--trig">T ▲ {formatDuty(duty)}</span>
+        <span className="osc__lbl osc__lbl--trig">
+          {onTelemetry ? 'LIVE ●' : `T ▲ ${formatDuty(duty)}`}
+        </span>
       </PhosphorScreen>
 
       {/* Source selector + RUN pill. */}
@@ -215,16 +237,33 @@ export function Oscilloscope({
         </button>
       </div>
 
-      {/* FREQ / DUTY / PERIOD readout strip. */}
-      <div className="osc__readout">
-        <Cell label="FREQ" value={formatFreq(cfg.freq)} />
-        <span className="osc__div" aria-hidden="true" />
-        <Cell label="DUTY" value={formatDuty(duty)} pad />
-        <span className="osc__div" aria-hidden="true" />
-        <Cell label="PERIOD" value={formatPeriod(cfg.freq)} pad />
-      </div>
+      {/* Readout strip. With live telemetry (#107) show the sampled LAST/MIN/MAX;
+          otherwise the PWM FREQ/DUTY/PERIOD picture. */}
+      {onTelemetry ? (
+        <div className="osc__readout">
+          <Cell label="LAST" value={fmtSample(samples![samples!.length - 1])} />
+          <span className="osc__div" aria-hidden="true" />
+          <Cell label="MIN" value={fmtSample(Math.min(...samples!))} pad />
+          <span className="osc__div" aria-hidden="true" />
+          <Cell label="MAX" value={fmtSample(Math.max(...samples!))} pad />
+        </div>
+      ) : (
+        <div className="osc__readout">
+          <Cell label="FREQ" value={formatFreq(cfg.freq)} />
+          <span className="osc__div" aria-hidden="true" />
+          <Cell label="DUTY" value={formatDuty(duty)} pad />
+          <span className="osc__div" aria-hidden="true" />
+          <Cell label="PERIOD" value={formatPeriod(cfg.freq)} pad />
+        </div>
+      )}
     </InstrumentWindow>
   )
+}
+
+/** Format one telemetry sample for the readout (3 significant digits, finite). */
+function fmtSample(v: number): string {
+  if (!Number.isFinite(v)) return '—'
+  return v.toPrecision(3)
 }
 
 /** One labelled readout cell in the FREQ/DUTY/PERIOD strip. */

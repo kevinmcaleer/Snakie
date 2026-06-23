@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { InstrumentWindow, SourceSlot, type FloatProps } from './InstrumentWindow'
 import { adcChannel, ADC_MAX_RAW, type AdcSample, type Stats } from './instrument-data'
+import type { MeterReading } from './instrument-telemetry-feed'
 import type { UsedPins } from './parse-pins'
 import './Multimeter.css'
 
@@ -33,10 +34,17 @@ export interface MultimeterProps {
   /** All ADC connections in use (for the source selector). */
   sources: UsedPins[]
   /**
-   * The live ADC reading (12-bit raw + volts), or undefined when not connected →
-   * the meter shows an idle placeholder.
+   * The live ADC reading (12-bit raw + volts) from the REPL poll, or undefined
+   * when not connected → the meter shows an idle placeholder.
    */
   sample?: AdcSample
+  /**
+   * A live `SNK METER` telemetry reading for this channel (#107): the value (in
+   * the meter's own unit) + unit. PREFERRED over `sample` when present — passive,
+   * always-on, no REPL interruption. No 12-bit raw count is available from
+   * telemetry, so the raw readout shows `----` in that case.
+   */
+  liveValue?: MeterReading
   /** Rolling MIN/MAX/AVG over the volts samples received, or undefined (idle). */
   stats?: Stats
   /** Whether the global instrument live-poll is on (drives the LIVE toggle). */
@@ -67,6 +75,7 @@ export function Multimeter({
   conn,
   sources,
   sample,
+  liveValue,
   stats,
   live,
   onToggleLive,
@@ -80,8 +89,11 @@ export function Multimeter({
 
   const gp = gpLabel(conn)
   const channel = useMemo(() => adcChannel(conn.pins[0]) ?? 'ADC0', [conn.pins])
-  const volts = sample?.volts
-  const raw = sample?.raw
+  // Prefer the passive telemetry reading (#107) over the REPL-poll sample. The
+  // telemetry value is in its own unit; the poll value is volts with a raw count.
+  const volts = liveValue ? liveValue.value : sample?.volts
+  const unit = liveValue?.unit ?? 'V'
+  const raw = liveValue ? undefined : sample?.raw
   // Bargraph fill is the fraction of the 3.3 V range (0 when idle).
   const pct = volts === undefined ? 0 : Math.max(0, Math.min(1, volts / 3.3)) * 100
 
@@ -173,7 +185,7 @@ export function Multimeter({
 
           <div className="dmm__big">
             <span className="dmm__big-num">{volts === undefined ? '—.———' : volts.toFixed(3)}</span>
-            <span className="dmm__big-unit">V</span>
+            <span className="dmm__big-unit">{unit}</span>
           </div>
 
           <div className="dmm__bar">

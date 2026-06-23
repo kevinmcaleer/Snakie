@@ -222,3 +222,9 @@ Switch the selector to **My Tiny Board** and you'll see GP0 wired to an
   `src/renderer/src/components/board-defs.ts` — copy one as a starting point.
 - Keep `id` stable: it's both the filename convention and the key the selector
   remembers.
+
+## See also
+
+- [Instruments library](instruments-library.md) — make the Oscilloscope,
+  Multimeter and Plotter update live from a running program by **printing**
+  readings (no REPL polling / no loop interruption).

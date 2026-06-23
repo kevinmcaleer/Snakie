@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
+import { makeTelemetryFilter } from './terminal-telemetry'
 
 /**
  * Imperative handle exposed by {@link Terminal}, letting parents drive the
@@ -140,9 +141,15 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
       attributeFilter: ['data-theme']
     })
 
-    // Device -> terminal.
+    // Device -> terminal. Instruments telemetry lines (`SNK …`, issue #107) are
+    // machine data for the scope/meter/plotter, so we filter them out of the
+    // console here — the filter is streaming (a telemetry line can be split
+    // across chunks) and only ever drops WHOLE telemetry lines, so normal device
+    // output (tracebacks, prompts, plain prints) is untouched.
+    const telemetryFilter = makeTelemetryFilter()
     const unsubscribeData = window.api.device.onData((chunk) => {
-      term.write(decoder.decode(chunk, { stream: true }))
+      const visible = telemetryFilter.push(decoder.decode(chunk, { stream: true }))
+      if (visible) term.write(visible)
     })
 
     // Terminal -> device. Forward raw bytes (control chars included).
