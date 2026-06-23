@@ -29,6 +29,52 @@ import './DeviceFileTree.css'
  * board/microcontroller icon marks the device section header.
  */
 
+/**
+ * Inline pixel icons matching the retro toolbar style (16×16, crispEdges),
+ * mirroring the `LocalFileTree` header actions so the two file panes stay
+ * visually consistent (issue #104).
+ */
+const iconProps = {
+  viewBox: '0 0 16 16',
+  width: 14,
+  height: 14,
+  shapeRendering: 'crispEdges' as const,
+  'aria-hidden': true,
+  focusable: false
+}
+
+// circular arrows (refresh) — re-read the device's root listing
+const RefreshIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 3v4H9l1.6-1.6A3 3 0 0 0 5 8z" />
+      <path d="M13 8a5 5 0 0 1-8.5 3.5L3 13V9h4l-1.6 1.6A3 3 0 0 0 11 8z" />
+    </g>
+  </svg>
+)
+
+// page with a `+` (new file)
+const NewFileIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M3 1h6l4 4v10H3z M9 1v4h4" />
+      <rect x="7" y="8" width="2" height="6" />
+      <rect x="5" y="10" width="6" height="2" />
+    </g>
+  </svg>
+)
+
+// folder with a `+` (new folder)
+const NewFolderIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M1 3h5l2 2h7v9H1z" />
+      <rect x="7" y="8" width="2" height="5" fill="var(--bg-elevated)" />
+      <rect x="5.5" y="9.5" width="5" height="2" fill="var(--bg-elevated)" />
+    </g>
+  </svg>
+)
+
 /** Join a device directory path and a child name into a POSIX device path. */
 function joinDevicePath(dir: string, name: string): string {
   return dir === '/' ? `/${name}` : `${dir}/${name}`
@@ -414,55 +460,60 @@ export function DeviceFileTree(): JSX.Element {
         <span className="devicetree__title">
           <span aria-hidden>{'▦'}</span> Device files
         </span>
-        <button
-          className="btn btn--ghost"
-          onClick={() => void refresh()}
-          disabled={loading || busy}
-          title="Refresh device filesystem"
-        >
-          {loading ? '…' : '↻'} Refresh
-        </button>
+        {/* Icon-only header actions mirroring the local section (issue #104):
+            Refresh sits left of New file, then New folder. */}
+        <div className="devicetree__header-actions">
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => void refresh()}
+            disabled={loading || busy}
+            title="Refresh"
+            aria-label="Refresh"
+          >
+            <RefreshIcon />
+          </button>
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => newFileIn(selectedTarget)}
+            disabled={busy}
+            title="New file"
+            aria-label="New file"
+          >
+            <NewFileIcon />
+          </button>
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => newFolderIn(selectedTarget)}
+            disabled={busy}
+            title="New folder"
+            aria-label="New folder"
+          >
+            <NewFolderIcon />
+          </button>
+        </div>
       </div>
 
-      <div className="devicetree__actions">
-        <button
-          className="btn btn--ghost"
-          onClick={() => newFileIn(selectedTarget)}
-          disabled={busy}
-          title="Create a file on the device"
-        >
-          + File
-        </button>
-        <button
-          className="btn btn--ghost"
-          onClick={() => newFolderIn(selectedTarget)}
-          disabled={busy}
-          title="Create a folder on the device"
-        >
-          + Folder
-        </button>
-        {/* Entry-specific actions revealed only when an entry is selected. */}
-        {hasSelection && selectedPath && (
-          <>
-            <button
-              className="btn btn--ghost"
-              onClick={() => renamePath(selectedPath)}
-              disabled={busy}
-              title="Rename the selected item on the device"
-            >
-              Rename
-            </button>
-            <button
-              className="btn btn--ghost btn--danger"
-              onClick={() => deletePath(selectedPath)}
-              disabled={busy}
-              title="Delete the selected item from the device"
-            >
-              Delete
-            </button>
-          </>
-        )}
-      </div>
+      {/* Entry-specific actions revealed only when an entry is selected. */}
+      {hasSelection && selectedPath && (
+        <div className="devicetree__actions">
+          <button
+            className="btn btn--ghost"
+            onClick={() => renamePath(selectedPath)}
+            disabled={busy}
+            title="Rename the selected item on the device"
+          >
+            Rename
+          </button>
+          <button
+            className="btn btn--ghost btn--danger"
+            onClick={() => deletePath(selectedPath)}
+            disabled={busy}
+            title="Delete the selected item from the device"
+          >
+            Delete
+          </button>
+        </div>
+      )}
 
       {error && <div className="devicetree__error">{error}</div>}
 

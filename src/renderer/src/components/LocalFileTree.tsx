@@ -62,6 +62,16 @@ const OpenFolderIcon = (): JSX.Element => (
   </svg>
 )
 
+// circular arrows (refresh) — re-read the current folder's listing
+const RefreshIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M3 8a5 5 0 0 1 8.5-3.5L13 3v4H9l1.6-1.6A3 3 0 0 0 5 8z" />
+      <path d="M13 8a5 5 0 0 1-8.5 3.5L3 13V9h4l-1.6 1.6A3 3 0 0 0 11 8z" />
+    </g>
+  </svg>
+)
+
 interface TreeNodeProps {
   entry: FsEntry
   depth: number
@@ -389,6 +399,15 @@ export function LocalFileTree(): JSX.Element {
           <span aria-hidden>{'▣'}</span> Local files
         </span>
         <div className="localtree__header-actions">
+          <button
+            className="btn btn--ghost btn--icon"
+            onClick={() => void refresh()}
+            title="Refresh"
+            aria-label="Refresh"
+            disabled={!root}
+          >
+            <RefreshIcon />
+          </button>
           <button
             className="btn btn--ghost btn--icon"
             onClick={() => newFileIn(null)}
