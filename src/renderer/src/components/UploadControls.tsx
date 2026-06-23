@@ -6,6 +6,36 @@ import './UploadControls.css'
 
 type Feedback = { kind: 'success' | 'error' | 'info'; message: string } | null
 
+/** Inline pixel arrow icons matching the retro toolbar style (16×16). */
+const iconProps = {
+  viewBox: '0 0 16 16',
+  width: 16,
+  height: 16,
+  shapeRendering: 'crispEdges' as const,
+  'aria-hidden': true,
+  focusable: false
+}
+
+// up arrow — Download to computer (the computer pane is above)
+const ArrowUpIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <rect x="7" y="3" width="2" height="10" />
+      <path d="M8 1l5 5H3z" />
+    </g>
+  </svg>
+)
+
+// down arrow — Upload to device (the board pane is below)
+const ArrowDownIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <rect x="7" y="3" width="2" height="10" />
+      <path d="M8 15l5-5H3z" />
+    </g>
+  </svg>
+)
+
 /** Join a folder and a file name with a single separator (host paths). */
 function joinLocal(folder: string, name: string): string {
   const sep = folder.includes('\\') ? '\\' : '/'
@@ -96,7 +126,7 @@ export function UploadControls(): JSX.Element {
     ? 'Connect a device to upload'
     : !activeFile
       ? 'Open a file to upload'
-      : `Upload ${activeFile.name} to the board`
+      : `Upload ${activeFile.name} to device`
 
   const downloadTitle = !activeFile
     ? 'Open a file to download'
@@ -107,29 +137,28 @@ export function UploadControls(): JSX.Element {
   return (
     <div className="upload-controls" aria-label="Transfer files between computer and board">
       <div className="upload-controls__buttons">
+        {/* Icon-only buttons (issue #105): direction maps to layout — up arrow
+            downloads to the computer (above), down arrow uploads to the device
+            (below). Names live in the tooltip + aria-label only. */}
         <button
           type="button"
-          className="btn btn--ghost upload-controls__btn"
+          className="btn btn--ghost btn--icon upload-controls__btn"
           onClick={() => void handleDownload()}
           disabled={!canDownload}
-          title={downloadTitle}
+          title="Download to computer"
+          aria-label={downloadTitle}
         >
-          <span className="upload-controls__glyph" aria-hidden="true">
-            ↑
-          </span>
-          <span>Download to computer</span>
+          <ArrowUpIcon />
         </button>
         <button
           type="button"
-          className="btn btn--ghost upload-controls__btn"
+          className="btn btn--ghost btn--icon upload-controls__btn"
           onClick={() => void handleUpload()}
           disabled={!canUpload}
-          title={uploadTitle}
+          title="Upload to device"
+          aria-label={uploadTitle}
         >
-          <span className="upload-controls__glyph" aria-hidden="true">
-            ↓
-          </span>
-          <span>Upload to board</span>
+          <ArrowDownIcon />
         </button>
       </div>
       {feedback && (

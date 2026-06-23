@@ -18,9 +18,23 @@
 
 .devicetree__title {
   min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/*
+ * Icon-only header actions (Refresh / New file / New folder), mirroring the
+ * local section's `.localtree__header-actions` so the two file panes match
+ * (issue #104). The shared `.btn.btn--icon` square-button rule lives in
+ * `LocalFileTree.css`.
+ */
+.devicetree__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex: 0 0 auto;
 }
 
 .devicetree__actions {

@@ -14,26 +14,29 @@
 
 .upload-controls__buttons {
   display: flex;
+  justify-content: center;
   gap: 8px;
 }
 
+/*
+ * Icon-only transfer buttons (issue #105): compact square buttons (the shared
+ * `.btn.btn--icon` rule in LocalFileTree.css gives the square padding), centred
+ * between the two file panes. Names live in the tooltip + aria-label.
+ */
 .upload-controls__btn {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  white-space: nowrap;
+}
+
+.upload-controls__btn svg {
+  display: block;
 }
 
 .upload-controls__btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.upload-controls__glyph {
-  font-weight: 700;
-  line-height: 1;
 }
 
 .upload-controls__feedback {
