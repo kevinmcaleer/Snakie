@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **One-click install of the instruments library (#108).** When you open the
+  instruments and a connected board doesn't already have `instruments.py`, a manila
+  banner appears at the top offering **Download & install** — it writes the library
+  to `/lib/instruments.py` on the device. The banner is closable but reappears if
+  you close and reopen the instrument panel, and never shows once the library is
+  installed (the check is cached per connection).
+
 ## [0.12.0] - 2026-06-23
 
 ### Added
