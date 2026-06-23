@@ -1,0 +1,324 @@
+/*
+ * LED instrument body (#114) — the WRITE panel for digital / PWM / RGB / strip
+ * outputs. Reuses the shared `InstrumentWindow` + `PhosphorScreen` chrome (in
+ * `InstrumentWindow.css`); this file styles only the body: mode tabs, a glowing
+ * "bulb" screen reflecting the optimistic output, the per-mode controls (rocker /
+ * slider / colour picker / NeoPixel strip), and the standard 3-column readout
+ * strip (MODE / VALUE / PIXELS).
+ *
+ * Themed to the registry `led` accent via the `--accent` / `--accent-border`
+ * custom properties set on `.ledpanel`; `--glow` carries the live output colour
+ * so the bulb glows the current value. Dark / self-contained (no theme tokens) so
+ * it reads identically in every theme. Fonts: JetBrains Mono.
+ */
+
+.ledpanel {
+  --accent: #ff6b5e;
+  --accent-border: rgba(255, 107, 94, 0.5);
+  --glow: #15171a;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* --- Mode tabs --- */
+.ledpanel__modes {
+  display: flex;
+  gap: 4px;
+}
+
+.ledpanel__mode {
+  flex: 1;
+  padding: 6px 0;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #6b7079;
+  background: #15171a;
+  border: 1px solid #26282b;
+  border-radius: 6px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.ledpanel__mode:hover {
+  color: #aab0b8;
+}
+
+.ledpanel__mode--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 12%, #15171a);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+/* --- The glowing bulb screen --- */
+.ledpanel__screen {
+  min-height: 116px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ledpanel__bulb-wrap {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.ledpanel__bulb {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, color-mix(in srgb, var(--glow) 92%, #fff) 0%, var(--glow) 52%, #07090b 100%);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--glow) 70%, transparent),
+    0 0 6px color-mix(in srgb, var(--glow) 80%, transparent),
+    inset 0 2px 4px rgba(255, 255, 255, 0.18);
+}
+
+.ledpanel__bulb-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--glow) 70%, #cdd2d8);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--glow) 45%, transparent);
+}
+
+/* --- Per-mode controls --- */
+.ledpanel__controls {
+  min-height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Digital rocker switch. */
+.ledpanel__rocker {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ledpanel__rocker-track {
+  position: relative;
+  width: 52px;
+  height: 26px;
+  border-radius: 13px;
+  background: #15171a;
+  border: 1px solid #26282b;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7);
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.ledpanel__rocker--on .ledpanel__rocker-track {
+  background: color-mix(in srgb, var(--accent) 32%, #15171a);
+  border-color: var(--accent-border);
+}
+
+.ledpanel__rocker-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #cdd2d8;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: transform 0.14s ease, background 0.14s ease;
+}
+
+.ledpanel__rocker--on .ledpanel__rocker-knob {
+  transform: translateX(26px);
+  background: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.ledpanel__rocker-lbl {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #6b7079;
+}
+
+.ledpanel__rocker--on .ledpanel__rocker-lbl {
+  color: var(--accent);
+}
+
+/* PWM slider. */
+.ledpanel__slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.ledpanel__slider-lbl,
+.ledpanel__color-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #5a5f67;
+  white-space: nowrap;
+}
+
+.ledpanel__slider input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.ledpanel__slider-val,
+.ledpanel__color-val {
+  font-size: 12px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 75%, #cdd2d8);
+  min-width: 48px;
+  text-align: right;
+}
+
+/* RGB colour picker. */
+.ledpanel__color {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ledpanel__color--inline {
+  gap: 7px;
+}
+
+.ledpanel__color input[type='color'] {
+  width: 38px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid #26282b;
+  border-radius: 6px;
+  background: #15171a;
+  cursor: pointer;
+}
+
+/* --- NeoPixel strip --- */
+.ledpanel__strip {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+
+.ledpanel__pixels {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.ledpanel__px {
+  --px: #1a1d22;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--px);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.12),
+    0 0 5px color-mix(in srgb, var(--px) 55%, transparent);
+  cursor: pointer;
+  transition: transform 0.1s ease, outline-color 0.1s ease;
+  outline: 2px solid transparent;
+  outline-offset: 1px;
+}
+
+.ledpanel__px--sel {
+  outline-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.ledpanel__strip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ledpanel__anims {
+  display: flex;
+  gap: 5px;
+}
+
+.ledpanel__anim {
+  padding: 5px 10px;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6b7079;
+  background: #15171a;
+  border: 1px solid #26282b;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.ledpanel__anim:hover {
+  color: #aab0b8;
+}
+
+.ledpanel__anim--on {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 12%, #15171a);
+}
+
+/* --- Bottom 3-column readout strip (mirrors the placeholder/meter strips) --- */
+.ledpanel__readout {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.ledpanel__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ledpanel__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.ledpanel__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledpanel__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
