@@ -1,0 +1,224 @@
+/*
+ * Styles co-located with ModulesPanel (issue #120 — modular per-component
+ * module installs).
+ *
+ * The Modules manager lists the driver catalog GROUPED BY INSTRUMENT (Range,
+ * IMU, LED, …); each module is a manila tag with an INSTALL gold-key / INSTALLED
+ * stamp, on the same green-felt panel as the Packages tab + Source Control. The
+ * base rules use the shared design tokens from index.css so they track the
+ * active theme; the skeuomorph treatment lives under index.css themed selectors.
+ */
+
+.mods {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* --- Header --------------------------------------------------------------- */
+
+.mods__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0.55rem 0.85rem 0.3rem;
+}
+
+.mods__title {
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+}
+
+.mods__count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.mods__blurb {
+  margin: 0;
+  padding: 0 0.85rem 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border);
+}
+
+.mods__probing {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--accent, #2f9b4a);
+}
+
+.mods__hint {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* --- Instrument groups ---------------------------------------------------- */
+
+.mods__group {
+  display: block;
+}
+
+.mods__group-head {
+  padding: 0.55rem 0.85rem 0.35rem;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mods__list {
+  margin: 0;
+  padding: 0 0.85rem;
+  list-style: none;
+}
+
+/* --- Module tag ----------------------------------------------------------- */
+
+.mods__tag {
+  position: relative;
+  display: flex;
+  margin: 0 0 0.6rem;
+  padding: 0.5rem 0.7rem 0.5rem 0.95rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.mods__tag-spine {
+  display: none;
+}
+
+.mods__tag-eyelet {
+  display: none;
+}
+
+.mods__tag-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mods__tag-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mods__name {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  word-break: break-word;
+}
+
+.mods__import {
+  padding: 0.02rem 0.28rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+
+.mods__desc {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.mods__tag-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 0.45rem;
+}
+
+.mods__src {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-muted);
+}
+
+/* INSTALL / RETRY action — a small button (gold "key" in the skeuomorph skin). */
+.mods__key {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.mods__key:hover:not(:disabled) {
+  background: var(--bg-elevated);
+}
+
+.mods__key:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* INSTALLED rubber stamp. */
+.mods__stamp {
+  flex: 0 0 auto;
+  padding: 0.06rem 0.4rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  border-radius: 3px;
+}
+
+.mods__stamp--installed {
+  color: var(--success, #2f6b2a);
+  border: 2px solid var(--success, #2f6b2a);
+}
+
+/* --- Result / notes / log ------------------------------------------------- */
+
+.mods__result {
+  margin-top: 0.4rem;
+}
+
+.mods__note {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.mods__log {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  max-height: 9rem;
+  overflow: auto;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.74rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mods__log--error {
+  color: var(--danger, #c0392b);
+}

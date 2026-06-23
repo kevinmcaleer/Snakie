@@ -16,6 +16,47 @@
   color: var(--text);
 }
 
+/* --- Packages / Modules tab bar (#120) ------------------------------------ */
+
+.pkgs-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pkgs-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 0.45rem 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.pkgs-tab {
+  flex: 1 1 auto;
+  padding: 0.35rem 0.6rem;
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.pkgs-tab:hover {
+  background: var(--bg-elevated);
+}
+
+.pkgs-tab.is-active {
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-bottom: 1px solid var(--bg-elevated);
+  margin-bottom: -1px;
+}
+
 .pkgs__hint {
   margin: 0;
   padding: 0.7rem 0.85rem;

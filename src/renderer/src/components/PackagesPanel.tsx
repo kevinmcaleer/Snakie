@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './PackagesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { ModulesPanel } from './ModulesPanel'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
 
 /**
@@ -43,7 +44,51 @@ interface FlashUsage {
   totalKb: number
 }
 
+/**
+ * The two views the Packages activity surface hosts. `packages` is the original
+ * mip/PyPI installer (#20); `modules` is the per-component module installer
+ * (#120 — the Modules manager), reached via the tab bar below without adding a
+ * new activity-bar view (which would need an AppShell edit). They sit together
+ * because "modules on the board" is the per-component complement to packages.
+ */
+type PackagesTab = 'packages' | 'modules'
+
+/**
+ * The Packages activity surface: a tab bar switching between the PyPI/mip
+ * package installer and the #120 Modules manager. Keeps both on the existing
+ * Packages view (no AppShell / ActivityBar churn).
+ */
 export function PackagesPanel(): JSX.Element {
+  const [tab, setTab] = useState<PackagesTab>('packages')
+  return (
+    <div className="pkgs-shell">
+      <div className="pkgs-tabs" role="tablist" aria-label="Packages and modules">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'packages'}
+          className={`pkgs-tab${tab === 'packages' ? ' is-active' : ''}`}
+          onClick={() => setTab('packages')}
+        >
+          Packages
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'modules'}
+          className={`pkgs-tab${tab === 'modules' ? ' is-active' : ''}`}
+          onClick={() => setTab('modules')}
+        >
+          Modules
+        </button>
+      </div>
+      {tab === 'packages' ? <PackagesTab /> : <ModulesPanel />}
+    </div>
+  )
+}
+
+/** The original mip/PyPI package installer (#20), now hosted under a tab. */
+function PackagesTab(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
 

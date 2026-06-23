@@ -5,6 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
 import { registerPackagesIpc } from './packages/ipc'
+import { registerModulesIpc } from './modules/ipc'
 import { registerLlmIpc } from './llm/ipc'
 import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
@@ -123,6 +124,14 @@ app.whenReady().then(() => {
   // runs here (main) to satisfy the renderer CSP; installs run `mip` on the
   // device via the renderer's existing device.exec channel.
   registerPackagesIpc()
+
+  // Register the per-module installer layer (issue #120). Generalises the #108
+  // instrument-library install to ANY catalog driver: it enumerates the module
+  // catalog and composes a per-module install plan (bundled `.py` contents or a
+  // `mip` snippet) for the renderer's Modules manager to run over the existing
+  // device channel — so only the drivers a robot uses get written to the board.
+  registerModulesIpc()
+
   // Register the firmware-flashing layer (ESP via esptool, RP2040 via UF2 copy).
   // The file dialog is parented to the live window and progress is routed to it.
   registerFirmwareIpc(() => mainWindow ?? undefined)
