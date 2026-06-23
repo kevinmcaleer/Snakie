@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **MicroPython instruments library + live telemetry (#107).** A new
+  `micropython/instruments.py` lets a running program emit readings with simple
+  commands — `scope(value)`, `meter(value)`, `plot(temp=21.4, …)`, plus
+  `read_adc(adc)` / `read_pwm(pwm)` convenience. The IDE parses these printed
+  readings **passively from the serial stream**, so the Oscilloscope (live sampled
+  waveform), Multimeter (value + min/max/avg) and Plotter update **inside a running
+  loop with no REPL interruption** — the telemetry lines are hidden from the console.
+  See `docs/instruments-library.md`. (The REPL-poll LIVE toggle remains the fallback
+  for programs that don't print telemetry.)
+
 ## [0.11.0] - 2026-06-21
 
 ### Changed
