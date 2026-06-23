@@ -110,7 +110,8 @@ if (!w.api) {
     },
     instruments: {
       open: noop,
-      onOpen: unsub
+      onOpen: unsub,
+      librarySource: P('')
     },
     git: {
       openRepo: P(null),

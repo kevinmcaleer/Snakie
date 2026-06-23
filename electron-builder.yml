@@ -27,6 +27,13 @@ extraResources:
     to: examples/plugins
     filter:
       - '**/*.py'
+  # Ship the MicroPython instrument library (issue #107) so the app can offer
+  # to install it onto the connected board (issue #108). `instruments:librarySource`
+  # reads it from process.resourcesPath when packaged, and the repo root in dev.
+  - from: micropython
+    to: micropython
+    filter:
+      - '**/*.py'
 
 # Rebuild native modules (e.g. serialport) for the Electron ABI.
 # npmRebuild defaults to true; nodeGypRebuild stays false so install-app-deps

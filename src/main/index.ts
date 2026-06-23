@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
+import { existsSync, readFileSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { registerDeviceIpc, disposeDevice } from './device/ipc'
 import { registerFsIpc } from './fs/ipc'
@@ -14,6 +15,27 @@ import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * Resolve the bundled MicroPython instrument library (`micropython/instruments.py`,
+ * issue #107) and return its source text. Mirrors the PluginHost path resolution:
+ * packaged builds read it from `process.resourcesPath` (shipped via the
+ * electron-builder `extraResources` entry); in dev `__dirname` is `out/main`, so
+ * the repo root is two levels up. Never throws — returns `''` on any failure so
+ * the renderer's "offer to install" flow degrades gracefully (issue #108).
+ */
+function readInstrumentsLibrarySource(): string {
+  try {
+    const packaged = join(process.resourcesPath, 'micropython', 'instruments.py')
+    const path =
+      app.isPackaged && existsSync(packaged)
+        ? packaged
+        : join(__dirname, '..', '..', 'micropython', 'instruments.py')
+    return readFileSync(path, 'utf-8')
+  } catch {
+    return ''
+  }
+}
 
 function createWindow(): void {
   // Create the browser window with secure defaults.
@@ -74,6 +96,12 @@ app.whenReady().then(() => {
 
   // App version, surfaced in the status bar.
   ipcMain.handle('app:version', () => app.getVersion())
+
+  // Return the bundled MicroPython instrument library source (issue #108), so the
+  // renderer can offer a one-click "install onto the board" of `instruments.py`
+  // (issue #107). Reads from resources when packaged, the repo in dev; never
+  // throws (returns '' on failure — the renderer treats that as "unavailable").
+  ipcMain.handle('instruments:librarySource', () => readInstrumentsLibrarySource())
 
   // Open an external URL in the user's default browser (used by clickable
   // plugin status-bar links). Only http(s) URLs are honoured.
