@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **More accurate board representations (#109).** The built-in board pinouts were
+  redrawn to match the real boards: the **Pimoroni Tiny 2040 / 2350** now have their
+  pins running **vertically** (left/right edges), the USB connector / MCU / Wi-Fi /
+  onboard-LED features sit at their real positions, the **noodle wires are shorter**
+  so the pin labels sit close to the board, and pad labels are placed on the correct
+  side (left-edge pads labelled left, right-edge labelled right). Pinouts are
+  best-effort from documented sources — verify against the datasheets if precision
+  matters.
+
 ## [0.13.0] - 2026-06-23
 
 ### Added
