@@ -76,6 +76,11 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
 
   ipcMain.handle('device:sendData', (_e, data: string) => wrap(() => dev.sendData(data)))
 
+  // IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
+  ipcMain.handle('device:sendControl', (_e, target: string, payload?: string) =>
+    wrap(() => dev.sendControl(target, payload ?? ''))
+  )
+
   ipcMain.handle('device:interrupt', () => wrap(() => dev.interrupt()))
 
   ipcMain.handle('device:softReset', () => wrap(() => dev.softReset()))

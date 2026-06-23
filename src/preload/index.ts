@@ -132,6 +132,14 @@ const device = {
   eval: (code: string): Promise<string> => unwrap(ipcRenderer.invoke('device:eval', code)),
   /** Send raw keystrokes to the friendly REPL (interactive terminal input). */
   sendData: (data: string): Promise<void> => unwrap(ipcRenderer.invoke('device:sendData', data)),
+  /**
+   * Write an IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
+   * The WRITE counterpart of the `SNK …` telemetry — the on-device `control`
+   * helper polls stdin and applies the latest value per target. Does not
+   * interrupt a running program (no raw-REPL handshake; sent like `sendData`).
+   */
+  sendControl: (target: string, payload?: string): Promise<void> =>
+    unwrap(ipcRenderer.invoke('device:sendControl', target, payload ?? '')),
   /** Send Ctrl-C to interrupt the running program. */
   interrupt: (): Promise<void> => unwrap(ipcRenderer.invoke('device:interrupt')),
   /** Send Ctrl-D to soft-reset the device. */

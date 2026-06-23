@@ -50,6 +50,8 @@ demo in [`examples/instruments_demo.py`](../examples/instruments_demo.py).
 
 ## API
 
+### Core instruments (issue #107)
+
 | Function | Emits | Notes |
 | --- | --- | --- |
 | `scope(value, ch="ch1")` | one oscilloscope sample | call repeatedly in a loop → a live waveform |
@@ -60,6 +62,39 @@ demo in [`examples/instruments_demo.py`](../examples/instruments_demo.py).
 
 `plot` mixes styles: `plot(1, 2, 3)` graphs three positional series, while
 `plot(temp=21.4, light=80)` graphs named ones; you can combine them.
+
+### Robotics emitters (issue #116)
+
+Each is a single cheap, non-blocking `print()` — loop-safe like `scope`/`meter`.
+
+| Function | Emits | Notes |
+| --- | --- | --- |
+| `imu(roll, pitch, yaw, ch="imu")` | Euler-angle orientation (deg) | a 3-D attitude indicator |
+| `imu_quat(w, x, y, z, ch="imu")` | quaternion orientation | drift-/gimbal-lock-free |
+| `distance(mm, angle=None, ch="dist")` | a range reading (mm) | optional bearing for a sweeping sensor |
+| `button(name, state)` | a button up/down | `state` coerced to `1` if truthy |
+| `encoder(count, ch="enc", pressed=None)` | a rotary count | optional integrated push switch |
+| `screen(lines, addr="0x3C")` | a small display's text rows | rows' spaces encoded as `_` on the wire |
+| `screen_fb(data, w, h, addr=…, encoding="b64")` | a packed framebuffer | `b64` (raw 1-bpp) or `rle` |
+
+### Scanners (issue #116)
+
+These **block briefly** to run a scan, then emit the result set — call them
+*occasionally* (emit-on-complete), not inside a tight loop. Each tolerates a
+missing radio (no `network`/`bluetooth` → no output).
+
+| Function | Emits | Notes |
+| --- | --- | --- |
+| `i2c_scan(i2c)` | one `SNK I2C …` result set | `i2c.scan()` addresses as `0x..` hex |
+| `wifi_scan()` | one `SNK WIFI …` per network | `network.WLAN(STA_IF)` scan |
+| `bt_scan(ms=4000)` | one `SNK BT …` per device | presence-gated; use `emit_bt(name, mac, rssi)` from your own BLE scan |
+
+### Receivers (the control channel — issue #115)
+
+Thin actuators driven by IDE → board commands (see **the control protocol**
+below): `teleop(target="teleop")` returns the latest `(axes, payload)`; the
+`buzzer` / `led` / `Screen` helpers act on the latest command. They guard their
+hardware imports, so the module still imports under CPython.
 
 ### The channel label `ch`
 
@@ -79,6 +114,16 @@ sentinel token `SNK`. One reading per line, ASCII, space-delimited:
 SNK SCOPE <ch> <value>            # a scope sample (value: float)
 SNK METER <ch> <value> [<unit>]   # a meter reading (default unit "V")
 SNK PLOT  <tok> [<tok> ...]       # plotter data; each tok is name=value or a number
+SNK IMU   <ch> <roll> <pitch> <yaw>      # Euler-angle orientation (degrees)
+SNK IMUQ  <ch> <w> <x> <y> <z>           # orientation quaternion
+SNK DIST  <ch> <mm> [<angle>]            # range mm, optional bearing (degrees)
+SNK BTN   <name> <0|1>                   # button up(0)/down(1)
+SNK ENC   <ch> <count> [<0|1>]           # encoder count, optional press state
+SNK SCR   <addr> text <row> [<row> ...]  # display text; each row's spaces -> '_'
+SNK SCR   <addr> fb <w> <h> <enc> <data> # display framebuffer; enc in {b64, rle}
+SNK I2C   <addr> [<addr> ...]            # one bus-scan result set (may be empty)
+SNK WIFI  <ssid> <rssi> <ch> <sec>       # one network (one line each); SSID spaces -> '_'
+SNK BT    <name> <mac> <rssi>            # one BLE device (one line each); name spaces -> '_'
 ```
 
 Examples of the exact lines printed:
@@ -88,7 +133,29 @@ SNK SCOPE pwm 0.5
 SNK METER adc0 1.65 V
 SNK PLOT temp=21.4 light=80
 SNK PLOT 1 2 3
+SNK IMU imu 0.0 1.2 90.0
+SNK IMUQ imu 1.0 0.0 0.0 0.0
+SNK DIST lidar 250 45
+SNK BTN a 1
+SNK ENC dial -3 1
+SNK SCR 0x3C text Hello_world Line_2
+SNK SCR 0x3C fb 8 8 b64 AAEC
+SNK I2C 0x3C 0x68
+SNK WIFI My_Network -42 6 WPA2
+SNK BT My_Tag AA:BB:CC -57
 ```
+
+### Packing notes
+
+- **Text rows** (`SNK SCR … text …`): each row is a single ASCII token, so a
+  space inside a row is encoded as `_` (the IDE decodes it back). An empty
+  screen is a bare `SNK SCR <addr> text`.
+- **Framebuffer** (`SNK SCR … fb …`): `<enc>` documents the packing — `b64` is
+  base64 of the raw 1-bpp buffer (row-major, MSB-first within each byte), `rle`
+  is a simple run-length form `<count>x<0|1>` joined by commas.
+- **Scan sets**: `I2C` is **one** line for the whole scan; `WIFI`/`BT` print
+  **one line per network/device**. SSID/name spaces are `_`-encoded so each
+  stays a single token.
 
 The `SNK` sentinel does three jobs in the IDE:
 
@@ -124,6 +191,75 @@ while True:
 
 Open the Oscilloscope, Multimeter and Plotter, run this, and watch all three
 update together — without interrupting the loop.
+
+## The control protocol — IDE → board (issue #115)
+
+Telemetry flows board → IDE. The **control channel** is the reverse: the IDE
+**writes** a command line over the same serial link and the on-device `control`
+helper **polls stdin non-blockingly** in your loop and applies the **latest
+value per target**. One line per command, mirroring the `SNK` sentinel so the
+Terminal hides the echo:
+
+```
+SNKCMD <target> <payload>\n
+```
+
+`<target>` is a single token naming what to drive (`teleop`, `led`, `buzzer`,
+`screen`, or a scan trigger like `scan:i2c`). `<payload>` is the free-form
+remainder for that target's helper. Example wire lines:
+
+```
+SNKCMD led pwm 0.5
+SNKCMD buzzer tone 440 200
+SNKCMD teleop axes=lx:0.5,ly:-0.2 btn:a=1
+SNKCMD scan:i2c
+```
+
+### On the board — poll it in your loop
+
+```python
+import instruments as inst
+
+while True:
+    inst.control.poll()                    # drain pending SNKCMD lines (non-blocking)
+    inst.control.get("led")                # latest raw payload string, or None
+    ax = inst.control.axes("teleop")       # {'lx': 0.5, 'ly': -0.2} from axes=...
+    if inst.control.pressed("teleop", "a"):
+        fire()
+    # ... act on the values, then keep looping ...
+```
+
+`control.poll()` reads whatever is waiting on `sys.stdin` via `uselect.poll`
+(falling back to inert when stdin isn't pollable), so it **never blocks** a
+`while True:` loop, never corrupts your own `print()`/telemetry output, and
+keeps only the **latest** payload per target. Register a callback for triggers
+with `control.on("scan:i2c", do_scan)` — it fires inside `poll()` when that
+command arrives. For tests / custom transports, drive it directly with
+`control.feed("SNKCMD led on\n")`.
+
+The teleop payload grammar (parsed by `control.axes` / `control.pressed`):
+
+```
+axes=<name>:<value>,<name>:<value> btn:<name>=1 btn:<name>=1
+```
+
+i.e. one `axes=` token of comma-separated `name:value` axes, then a `btn:NAME=1`
+token per pressed button (absent ⇒ not pressed).
+
+### In the IDE — send a command
+
+The renderer writes a control line through the device layer:
+
+```ts
+await window.api.device.sendControl('led', 'pwm 0.5')
+// → writes `SNKCMD led pwm 0.5\n` over serial (does NOT interrupt a running program)
+```
+
+The line is built + sanitised by `buildControlLine(target, payload)` (in
+`src/shared/control.ts`): the target is reduced to a single token and embedded
+newlines are stripped so a command can't be injected. `buildTeleopPayload(axes,
+buttons)` assembles the teleop grammar above. The Terminal hides both `SNK …`
+telemetry and `SNKCMD …` control echoes from the console.
 
 ## See also
 

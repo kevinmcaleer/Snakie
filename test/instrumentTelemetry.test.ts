@@ -154,6 +154,187 @@ describe('instrument-telemetry parseTelemetry — PLOT', () => {
   })
 })
 
+describe('instrument-telemetry parseTelemetry — IMU', () => {
+  it('parses Euler angles', () => {
+    expect(parseTelemetry('SNK IMU imu 0 1.2 90')).toEqual({
+      kind: 'imu',
+      ch: 'imu',
+      roll: 0,
+      pitch: 1.2,
+      yaw: 90
+    })
+  })
+
+  it('parses negative angles', () => {
+    expect(parseTelemetry('SNK IMU head -10 -20.5 -3')).toEqual({
+      kind: 'imu',
+      ch: 'head',
+      roll: -10,
+      pitch: -20.5,
+      yaw: -3
+    })
+  })
+
+  it('returns null when an angle is missing', () => {
+    expect(parseTelemetry('SNK IMU imu 1 2')).toBeNull()
+  })
+
+  it('parses a quaternion', () => {
+    expect(parseTelemetry('SNK IMUQ imu 1 0 0 0')).toEqual({
+      kind: 'imuq',
+      ch: 'imu',
+      w: 1,
+      x: 0,
+      y: 0,
+      z: 0
+    })
+  })
+
+  it('returns null for an incomplete quaternion', () => {
+    expect(parseTelemetry('SNK IMUQ imu 1 0 0')).toBeNull()
+  })
+})
+
+describe('instrument-telemetry parseTelemetry — DIST', () => {
+  it('parses a distance with no angle', () => {
+    expect(parseTelemetry('SNK DIST dist 123')).toEqual({
+      kind: 'dist',
+      ch: 'dist',
+      mm: 123
+    })
+  })
+
+  it('parses a distance with a bearing', () => {
+    expect(parseTelemetry('SNK DIST lidar 250 45')).toEqual({
+      kind: 'dist',
+      ch: 'lidar',
+      mm: 250,
+      angle: 45
+    })
+  })
+
+  it('ignores a non-numeric angle (keeps the mm)', () => {
+    expect(parseTelemetry('SNK DIST dist 99 north')).toEqual({
+      kind: 'dist',
+      ch: 'dist',
+      mm: 99
+    })
+  })
+
+  it('returns null when mm is missing', () => {
+    expect(parseTelemetry('SNK DIST dist')).toBeNull()
+  })
+})
+
+describe('instrument-telemetry parseTelemetry — BTN / ENC', () => {
+  it('parses a button down', () => {
+    expect(parseTelemetry('SNK BTN a 1')).toEqual({ kind: 'btn', name: 'a', pressed: true })
+  })
+
+  it('parses a button up', () => {
+    expect(parseTelemetry('SNK BTN start 0')).toEqual({
+      kind: 'btn',
+      name: 'start',
+      pressed: false
+    })
+  })
+
+  it('returns null for a non-binary button state', () => {
+    expect(parseTelemetry('SNK BTN a 2')).toBeNull()
+  })
+
+  it('parses an encoder count only', () => {
+    expect(parseTelemetry('SNK ENC enc 17')).toEqual({ kind: 'enc', ch: 'enc', count: 17 })
+  })
+
+  it('parses an encoder with a press state', () => {
+    expect(parseTelemetry('SNK ENC dial -3 1')).toEqual({
+      kind: 'enc',
+      ch: 'dial',
+      count: -3,
+      pressed: true
+    })
+  })
+
+  it('returns null when the encoder count is non-numeric', () => {
+    expect(parseTelemetry('SNK ENC enc spin')).toBeNull()
+  })
+})
+
+describe('instrument-telemetry parseTelemetry — SCR', () => {
+  it('parses text rows and decodes the space placeholder', () => {
+    expect(parseTelemetry('SNK SCR 0x3C text Hello_world Line_2')).toEqual({
+      kind: 'scr',
+      addr: '0x3C',
+      rows: ['Hello world', 'Line 2']
+    })
+  })
+
+  it('parses an empty text screen', () => {
+    expect(parseTelemetry('SNK SCR 0x3C text')).toEqual({
+      kind: 'scr',
+      addr: '0x3C',
+      rows: []
+    })
+  })
+
+  it('parses a framebuffer', () => {
+    expect(parseTelemetry('SNK SCR 0x3C fb 8 8 b64 AAEC')).toEqual({
+      kind: 'scr',
+      addr: '0x3C',
+      framebuffer: { w: 8, h: 8, encoding: 'b64', data: 'AAEC' }
+    })
+  })
+
+  it('returns null for an incomplete framebuffer', () => {
+    expect(parseTelemetry('SNK SCR 0x3C fb 8 8 b64')).toBeNull()
+  })
+
+  it('returns null for an unknown screen mode', () => {
+    expect(parseTelemetry('SNK SCR 0x3C blink')).toBeNull()
+  })
+})
+
+describe('instrument-telemetry parseTelemetry — scan result sets', () => {
+  it('parses an I2C scan result set', () => {
+    expect(parseTelemetry('SNK I2C 0x3C 0x68')).toEqual({
+      kind: 'i2c',
+      addrs: ['0x3C', '0x68']
+    })
+  })
+
+  it('parses an empty I2C bus', () => {
+    expect(parseTelemetry('SNK I2C')).toEqual({ kind: 'i2c', addrs: [] })
+  })
+
+  it('parses one Wi-Fi network (and decodes the SSID placeholder)', () => {
+    expect(parseTelemetry('SNK WIFI My_Network -42 6 WPA2')).toEqual({
+      kind: 'wifi',
+      ssid: 'My Network',
+      rssi: -42,
+      channel: 6,
+      security: 'WPA2'
+    })
+  })
+
+  it('returns null for a malformed Wi-Fi line', () => {
+    expect(parseTelemetry('SNK WIFI ssid -42 six WPA2')).toBeNull()
+  })
+
+  it('parses one Bluetooth device', () => {
+    expect(parseTelemetry('SNK BT My_Tag AA:BB:CC -57')).toEqual({
+      kind: 'bt',
+      name: 'My Tag',
+      mac: 'AA:BB:CC',
+      rssi: -57
+    })
+  })
+
+  it('returns null for a Bluetooth line with no rssi', () => {
+    expect(parseTelemetry('SNK BT tag AA:BB:CC')).toBeNull()
+  })
+})
+
 describe('instrument-telemetry parseTelemetry — non-telemetry / unknown', () => {
   it('returns null for a plain numeric print', () => {
     expect(parseTelemetry('12.5')).toBeNull()

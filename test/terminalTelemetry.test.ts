@@ -69,6 +69,33 @@ describe('terminal-telemetry makeTelemetryFilter', () => {
     expect(run('the value is SNK-ish\n')).toBe('the value is SNK-ish\n')
   })
 
+  it('drops a SNKCMD control echo (issue #115)', () => {
+    expect(run('SNKCMD led on\n')).toBe('')
+  })
+
+  it('drops a control echo interleaved with normal output', () => {
+    const input = 'go\nSNKCMD teleop axes=lx:0.5\nstop\n'
+    expect(run(input)).toBe('go\nstop\n')
+  })
+
+  it('drops both telemetry and control lines together', () => {
+    const input = 'SNK SCOPE pwm 0.5\nSNKCMD buzzer tone 440 200\nreal\n'
+    expect(run(input)).toBe('real\n')
+  })
+
+  it('holds a partial SNKCMD prefix until decidable, then drops it', () => {
+    const f = makeTelemetryFilter()
+    // "SNKC" diverges from "SNK " but is a prefix of "SNKCMD " → still held.
+    expect(f.push('SNKC')).toBe('')
+    expect(f.push('MD led on\n')).toBe('')
+  })
+
+  it('releases a SNK-prefixed fragment that is neither sentinel', () => {
+    const f = makeTelemetryFilter()
+    // "SNKZ" is a prefix of neither "SNK " nor "SNKCMD " → released immediately.
+    expect(f.push('SNKZ')).toBe('SNKZ')
+  })
+
   it('holds a lone S/SN that could still grow into the sentinel', () => {
     const f = makeTelemetryFilter()
     expect(f.push('S')).toBe('')

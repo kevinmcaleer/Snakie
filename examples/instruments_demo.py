@@ -11,9 +11,12 @@ Wiring (Raspberry Pi Pico):
 
 The PWM duty is swept up and down so the Oscilloscope trace and the Plotter's
 ``duty`` series move; the ADC voltage drives the Multimeter and the Plotter's
-``volts`` series.
+``volts`` series. The loop also emits a synthetic IMU + distance reading and
+polls the IDE → board control channel so you can see ``teleop`` / ``led``
+commands arrive (issue #115/#116).
 """
 
+import math
 import time
 
 from machine import ADC, PWM, Pin
@@ -31,6 +34,7 @@ adc = ADC(26)  # ADC0 on the Pico
 STEP = 4096
 duty = 0
 direction = STEP
+t = 0.0
 
 while True:
     # Move the PWM duty, bouncing at the rails.
@@ -50,4 +54,16 @@ while True:
     # Also push both onto the Plotter as named series so they graph over time.
     inst.plot(duty=round(duty_frac, 3), volts=round(volts, 3))
 
+    # Robotics emitters (#116): a synthetic spinning IMU + a sweeping rangefinder.
+    yaw = (t * 90) % 360
+    inst.imu(roll=0.0, pitch=round(15 * math.sin(t), 1), yaw=round(yaw, 1))
+    inst.distance(round(150 + 100 * math.sin(t)), angle=round(yaw, 1), ch="lidar")
+
+    # Control channel (#115): drain IDE -> board commands, then act on them.
+    inst.control.poll()
+    axes = inst.control.axes("teleop")            # e.g. {'lx': 0.5, 'ly': -0.2}
+    if axes:
+        inst.plot(lx=axes.get("lx", 0.0), ly=axes.get("ly", 0.0))
+
+    t += 0.05
     time.sleep(0.05)
