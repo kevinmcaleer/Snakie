@@ -1,0 +1,205 @@
+/*
+ * I²C detect instrument body (#121) — the i2cdetect 8×16 address grid.
+ * =====================================================================
+ *
+ * Reuses the shared `InstrumentWindow` chrome + `PhosphorScreen` bezel (in
+ * `InstrumentWindow.css`); this file styles only the body: the accent-tinted CRT
+ * screen base, the address grid (column/row headers + cells, detected cells glow
+ * the accent), the SCAN button and the FOUND/SDA/SCL readout strip.
+ *
+ * Themed per-instrument via the `--accent` / `--accent-border` custom properties
+ * set on `.i2cd` from the registry def. Dark/self-contained (no theme tokens) so
+ * it reads identically in every theme, matching the scope/meter chrome it sits
+ * inside. Fonts: JetBrains Mono.
+ */
+
+.i2cd {
+  --accent: #8fe0b8;
+  --accent-border: rgba(143, 224, 184, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+/* Accent-tinted phosphor screen base (overrides the green default). */
+.i2cd .instr__screen--accent {
+  background: radial-gradient(
+    ellipse at 50% 44%,
+    color-mix(in srgb, var(--accent) 16%, #06160b),
+    #04120a 72%,
+    #020a05
+  );
+}
+
+.i2cd__screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+}
+
+.i2cd__hint {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--accent) 70%, #6b7079);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* A small "scanning…" pill shown over an existing grid during a re-scan. */
+.i2cd__scanning {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--accent-border);
+  animation: i2cd-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes i2cd-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- The 8×16 address grid --- */
+.i2cd__grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.i2cd__grid-head,
+.i2cd__grid-row {
+  display: grid;
+  grid-template-columns: 22px repeat(16, 1fr);
+  gap: 2px;
+}
+
+.i2cd__collabel,
+.i2cd__rowlabel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--accent) 55%, #5a5f67);
+}
+
+.i2cd__corner {
+  background: transparent;
+}
+
+.i2cd__cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  border-radius: 2px;
+  font-size: 7px;
+  font-weight: 600;
+  color: #2c3a31;
+  background: color-mix(in srgb, var(--accent) 5%, #07140d);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+/* Detected addresses glow the accent. */
+.i2cd__cell--on {
+  color: #04120a;
+  font-weight: 700;
+  background: var(--accent);
+  box-shadow:
+    0 0 7px color-mix(in srgb, var(--accent) 70%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* --- Controls --- */
+.i2cd__controls {
+  display: flex;
+}
+
+.i2cd__scan {
+  flex: 1;
+  height: 30px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  color: #04120a;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+  border: 1px solid var(--accent-border);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.i2cd__scan:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.i2cd__scan:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) inset;
+}
+
+.i2cd__scan:disabled {
+  cursor: default;
+  opacity: 0.7;
+  filter: saturate(0.7);
+}
+
+/* --- Readout strip (shared shape with the scope/meter) --- */
+.i2cd__readout {
+  display: flex;
+  align-items: stretch;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.i2cd__cell-readout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.i2cd__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.i2cd__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 75%, #9aa0a8);
+}
+
+.i2cd__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
