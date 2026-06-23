@@ -1,0 +1,193 @@
+/*
+ * Button instrument body (#114) — the READ panel for digital inputs. Reuses the
+ * shared `InstrumentWindow` + `PhosphorScreen` chrome (in `InstrumentWindow.css`);
+ * this file styles only the body: a phosphor screen listing each watched button
+ * with a lit PRESSED/released indicator + a rising-edge counter, over the
+ * standard 3-column readout strip (BUTTONS / LAST / EDGES).
+ *
+ * Themed to the registry `button` accent via the `--accent` / `--accent-border`
+ * custom properties set on `.btnpanel`. Dark / self-contained (no theme tokens)
+ * so it reads identically in every theme, matching the scope/meter chrome it sits
+ * inside. Fonts: JetBrains Mono.
+ */
+
+.btnpanel {
+  --accent: #6fb4ee;
+  --accent-border: rgba(111, 180, 238, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* The phosphor screen body — a fixed-height scrollable list of button rows. */
+.btnpanel__screen {
+  min-height: 150px;
+  padding: 8px;
+  color: var(--accent);
+}
+
+/* --- Empty state (no telemetry yet) --- */
+.btnpanel__empty {
+  position: relative;
+  z-index: 1;
+  height: 134px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: color-mix(in srgb, var(--accent) 70%, #6b7079);
+}
+
+.btnpanel__empty-icon {
+  color: var(--accent);
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 55%, transparent));
+  opacity: 0.85;
+}
+
+.btnpanel__empty-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.btnpanel__empty-hint {
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
+}
+
+/* --- The button rows --- */
+.btnpanel__list {
+  position: relative;
+  z-index: 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.btnpanel__row {
+  display: grid;
+  grid-template-columns: 14px 1fr auto auto;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.btnpanel__row--on {
+  background: color-mix(in srgb, var(--accent) 12%, rgba(0, 0, 0, 0.35));
+  border-color: var(--accent-border);
+}
+
+/* The lit/unlit state dot. */
+.btnpanel__led {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #14171b;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+}
+
+.btnpanel__led--on {
+  background: var(--accent);
+  box-shadow:
+    0 0 8px color-mix(in srgb, var(--accent) 80%, transparent),
+    0 0 2px color-mix(in srgb, var(--accent) 90%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.btnpanel__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #cdd2d8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btnpanel__state {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+
+.btnpanel__row--on .btnpanel__state {
+  color: var(--accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.btnpanel__edges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1;
+}
+
+.btnpanel__edges-num {
+  font-size: 13px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 75%, #cdd2d8);
+}
+
+.btnpanel__edges-lbl {
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+
+/* --- Bottom 3-column readout strip (mirrors the placeholder/meter strips) --- */
+.btnpanel__readout {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.btnpanel__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.btnpanel__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.btnpanel__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btnpanel__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
