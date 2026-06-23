@@ -1,0 +1,317 @@
+/*
+ * IMU 3D orientation viewer (#111) — co-located body styles.
+ * =============================================================================
+ *
+ * Reuses the shared `InstrumentWindow` chrome + `PhosphorScreen` (their styles
+ * live in `InstrumentWindow.css`); this file styles ONLY the IMU body: a CSS-3D
+ * board that tilts inside the green phosphor screen, three coloured body-axis
+ * bars, a horizon/level band, a small HUD with LEVEL/RESET, and a numeric
+ * ROLL / PITCH / YAW readout strip (mirrors `placeholder__readout`).
+ *
+ * No three.js / no dependency: the board is a `preserve-3d` cube rotated by a
+ * single transform; the readout uses JetBrains Mono. Dark + self-contained (no
+ * theme tokens) so it reads identically in every theme, like the scope/meter.
+ * Themed per-instrument via the `--accent` / `--accent-border` custom props set
+ * on `.imu` (accent #ff9b7a from the registry def).
+ */
+
+.imu {
+  --accent: #ff9b7a;
+  --accent-border: rgba(255, 155, 122, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+/* The phosphor screen hosts the 3D stage; give it depth + perspective. */
+.imu__screen {
+  position: relative;
+  height: 172px;
+  perspective: 520px;
+  perspective-origin: 50% 42%;
+}
+
+/* --- Horizon / artificial-level band (2D, behind the board) --- */
+.imu__horizon-wrap {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.imu__horizon {
+  position: absolute;
+  left: -40%;
+  top: -40%;
+  width: 180%;
+  height: 180%;
+  display: flex;
+  flex-direction: column;
+  transform-origin: 50% 50%;
+  opacity: 0.32;
+  will-change: transform;
+}
+
+.imu__sky {
+  flex: 1;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 22%, #0b1418), transparent);
+}
+
+.imu__ground {
+  flex: 1;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--accent) 10%, #07100c), transparent);
+}
+
+.imu__horizon-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* The fixed centre crosshair (the "aircraft"), drawn over the moving horizon. */
+.imu__crosshair {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  width: 46px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  background: color-mix(in srgb, var(--accent) 85%, #fff 0%);
+  opacity: 0.55;
+  box-shadow:
+    -26px 0 0 -0.5px color-mix(in srgb, var(--accent) 85%, transparent),
+    26px 0 0 -0.5px color-mix(in srgb, var(--accent) 85%, transparent);
+}
+
+/* --- The CSS-3D board model --- */
+.imu__stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-style: preserve-3d;
+}
+
+.imu__model {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 60ms linear;
+}
+
+/* The board = a thin cube. Dimensions: 96 (X/nose) × 64 (Y) × 10 (Z/thickness). */
+.imu__board {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+}
+
+.imu__face {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  border: 1px solid var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 14%, rgba(8, 12, 14, 0.86));
+  box-shadow: inset 0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+/* top / bottom = the broad board faces (96 × 64), ±5px in Z. */
+.imu__face--top,
+.imu__face--bottom {
+  width: 96px;
+  height: 64px;
+  left: 0;
+  top: 16px;
+}
+.imu__face--top {
+  transform: translateZ(5px);
+  background: color-mix(in srgb, var(--accent) 22%, rgba(8, 12, 14, 0.9));
+}
+.imu__face--bottom {
+  transform: translateZ(-5px) rotateY(180deg);
+  background: color-mix(in srgb, var(--accent) 8%, rgba(6, 9, 11, 0.92));
+}
+
+/* front / back = the 96 × 10 long edges. */
+.imu__face--front,
+.imu__face--back {
+  width: 96px;
+  height: 10px;
+  left: 0;
+  top: 43px;
+}
+.imu__face--front {
+  transform: rotateX(90deg) translateZ(32px);
+}
+.imu__face--back {
+  transform: rotateX(-90deg) translateZ(32px);
+}
+
+/* left / right = the 64 × 10 short edges. */
+.imu__face--left,
+.imu__face--right {
+  width: 10px;
+  height: 64px;
+  left: 43px;
+  top: 16px;
+}
+.imu__face--left {
+  transform: rotateY(-90deg) translateZ(48px);
+}
+.imu__face--right {
+  transform: rotateY(90deg) translateZ(48px);
+}
+
+/* --- Body axes (drawn from the board centre) --- */
+.imu__axis {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-style: preserve-3d;
+  border-radius: 1px;
+}
+
+/* X = nose, along the board length (red). */
+.imu__axis--x {
+  width: 62px;
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(90deg, transparent, #ff6b5e);
+  box-shadow: 0 0 5px rgba(255, 107, 94, 0.8);
+}
+
+/* Y = right, across the board (green). */
+.imu__axis--y {
+  width: 2px;
+  height: 46px;
+  margin-left: -1px;
+  background: linear-gradient(0deg, transparent, #86ffb6);
+  box-shadow: 0 0 5px rgba(134, 255, 182, 0.8);
+}
+
+/* Z = up, out of the board (blue). */
+.imu__axis--z {
+  width: 2px;
+  height: 40px;
+  margin-left: -1px;
+  margin-top: -40px;
+  background: linear-gradient(180deg, #6fb4ee, transparent);
+  box-shadow: 0 0 5px rgba(111, 180, 238, 0.8);
+  transform: rotateX(90deg);
+  transform-origin: 50% 100%;
+}
+
+/* --- HUD: mode + LEVEL/RESET controls --- */
+.imu__hud {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+.imu__mode {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: color-mix(in srgb, var(--accent) 80%, #cdd2d8);
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+.imu__controls {
+  display: flex;
+  gap: 5px;
+}
+
+.imu__btn {
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  padding: 3px 7px;
+  border-radius: 4px;
+  color: #9aa0a8;
+  background: #0c0e10;
+  border: 1px solid #26282b;
+  cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: color 90ms, border-color 90ms, background 90ms;
+}
+
+.imu__btn:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--accent) 75%, #cdd2d8);
+  border-color: var(--accent-border);
+}
+
+.imu__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.imu__btn--active {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 12%, #0c0e10);
+}
+
+/* --- Numeric ROLL / PITCH / YAW readout (mirrors placeholder__readout) --- */
+.imu__readout {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.imu__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.imu__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.imu__cell-val {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--accent) 72%, #cdd2d8);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.imu__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .imu__model {
+    transition: none;
+  }
+}
