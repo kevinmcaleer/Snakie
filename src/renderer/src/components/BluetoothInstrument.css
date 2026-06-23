@@ -1,0 +1,235 @@
+/*
+ * Bluetooth instrument body (#121) — a BLE device list.
+ * =====================================================
+ *
+ * Reuses the shared `InstrumentWindow` chrome + `PhosphorScreen` bezel (in
+ * `InstrumentWindow.css`); this file styles only the body: the accent-tinted CRT
+ * screen base, the scrollable device list (name + MAC + signal bars + RSSI), the
+ * SCAN button and the DEVICES/NEAREST/MODE readout strip.
+ *
+ * Themed per-instrument via the `--accent` / `--accent-border` custom properties
+ * set on `.bscan` from the registry def. Dark/self-contained (no theme tokens) so
+ * it reads identically in every theme. Fonts: JetBrains Mono.
+ */
+
+.bscan {
+  --accent: #6f8cff;
+  --accent-border: rgba(111, 140, 255, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.bscan .instr__screen--accent {
+  background: radial-gradient(
+    ellipse at 50% 44%,
+    color-mix(in srgb, var(--accent) 15%, #0a0e22),
+    #070a1a 72%,
+    #04060f
+  );
+}
+
+.bscan__screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px;
+  overflow: hidden;
+}
+
+.bscan__hint {
+  margin: auto;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--accent) 72%, #6b7079);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.bscan__scanning {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid var(--accent-border);
+  animation: bscan-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes bscan-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- The device list --- */
+.bscan__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.bscan__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 5%, rgba(0, 0, 0, 0.25));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+}
+
+.bscan__dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.bscan__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.bscan__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 80%, #cdd3da);
+  text-shadow: 0 0 5px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.bscan__mac {
+  font-size: 8px;
+  letter-spacing: 0.02em;
+  color: color-mix(in srgb, var(--accent) 50%, #7a8090);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- The 4-bar signal meter (shared shape with the Wi-Fi panel) --- */
+.bscan__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  flex: none;
+  height: 13px;
+}
+
+.bscan__bar {
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.bscan__bar--on {
+  background: var(--accent);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+
+.bscan__rssi {
+  flex: none;
+  width: 30px;
+  text-align: right;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--accent) 60%, #8a9aa8);
+}
+
+/* --- Controls --- */
+.bscan__controls {
+  display: flex;
+}
+
+.bscan__scan {
+  flex: 1;
+  height: 30px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+  color: #060a1a;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+  border: 1px solid var(--accent-border);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35) inset,
+    0 2px 5px rgba(0, 0, 0, 0.4);
+}
+
+.bscan__scan:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.bscan__scan:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) inset;
+}
+
+.bscan__scan:disabled {
+  cursor: default;
+  opacity: 0.7;
+  filter: saturate(0.7);
+}
+
+/* --- Readout strip --- */
+.bscan__readout {
+  display: flex;
+  align-items: stretch;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.bscan__cell-readout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.bscan__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #5a5f67;
+}
+
+.bscan__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 75%, #9aa0a8);
+  white-space: nowrap;
+}
+
+.bscan__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
