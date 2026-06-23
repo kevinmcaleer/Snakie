@@ -235,6 +235,67 @@ function round(v: number): number {
   return Math.round(v * 100) / 100
 }
 
+// --- Oscilloscope sampled-waveform geometry (telemetry, #107) ---------------
+
+/** Inputs for {@link sampleWavePath}: the screen box + the live samples. */
+export interface SampleGeometry {
+  /** Drawable screen width in px. */
+  width: number
+  /** Drawable screen height in px. */
+  height: number
+  /** The live samples (oldest → newest); auto-scaled to fill the height. */
+  samples: number[]
+  /** Vertical inset (px) from the top/bottom edges. */
+  padY?: number
+}
+
+/**
+ * Build the SVG path `d` for a LIVE sampled waveform across the scope screen
+ * (issue #107) — the trace the Oscilloscope draws from printed `SNK SCOPE`
+ * telemetry instead of the idealised square wave.
+ *
+ * Samples map left→right (oldest at x=0, newest at the right edge) and are
+ * auto-scaled vertically to fill `height` minus `padY` (a flat series gets
+ * centred). Returns `''` for an empty series (the caller then shows a
+ * placeholder). Pure geometry, no DOM; mirrors {@link squareWavePath}.
+ */
+export function sampleWavePath(g: SampleGeometry): string {
+  const w = Math.max(1, g.width)
+  const h = Math.max(1, g.height)
+  const pad = g.padY ?? Math.min(h * 0.18, 24)
+  const s = g.samples
+  if (s.length === 0) return ''
+
+  const yTop = pad
+  const yBot = h - pad
+  const usable = Math.max(1, yBot - yTop)
+
+  let min = Infinity
+  let max = -Infinity
+  for (const v of s) {
+    if (!Number.isFinite(v)) continue
+    if (v < min) min = v
+    if (v > max) max = v
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return ''
+  // Flat series → draw a centred horizontal line (avoid divide-by-zero).
+  const span = max - min || 1
+  const flat = max === min
+
+  const xStep = s.length > 1 ? w / (s.length - 1) : 0
+  const yOf = (v: number): number =>
+    flat ? yTop + usable / 2 : yBot - ((v - min) / span) * usable
+
+  const parts: string[] = []
+  for (let i = 0; i < s.length; i++) {
+    const v = s[i]
+    const x = round(i * xStep)
+    const y = round(yOf(Number.isFinite(v) ? v : min))
+    parts.push(`${i === 0 ? 'M' : 'L'}${x} ${y}`)
+  }
+  return parts.join(' ')
+}
+
 // --- Human-readable formatting (frequency / period) -------------------------
 
 /**

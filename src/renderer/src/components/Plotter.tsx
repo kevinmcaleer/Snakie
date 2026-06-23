@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './Plotter.css'
 import { parseLine } from './Plotter.parse'
+import { isTelemetry, parseTelemetry } from './instrument-telemetry'
 import { estimateHz, sampleReadout } from './Plotter.readout'
 import { PhosphorScreen } from './InstrumentWindow'
 
@@ -100,7 +101,20 @@ export function Plotter(): JSX.Element {
 
   const ingestLine = useCallback(
     (rawLine: string) => {
-      const parsed = parseLine(rawLine.trim())
+      const line = rawLine.trim()
+      // Instruments telemetry (issue #107): graph ONLY `SNK PLOT` rows, mapping
+      // each series to a labelled value; SCOPE/METER lines are for the
+      // scope/meter and must NOT be plotted. Any other `SNK …` line is dropped.
+      // Non-telemetry lines fall through to the generic plain-print parser, so a
+      // plain `print(temp, light)` still works exactly as before.
+      let parsed: Array<{ label: string | null; value: number }>
+      if (isTelemetry(line)) {
+        const tel = parseTelemetry(line)
+        if (!tel || tel.kind !== 'plot') return
+        parsed = tel.series.map((s) => ({ label: s.label, value: s.value }))
+      } else {
+        parsed = parseLine(line)
+      }
       if (parsed.length === 0) return
       let autoIndex = 0
       for (const { label, value } of parsed) {

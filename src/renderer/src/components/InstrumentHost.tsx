@@ -24,6 +24,15 @@ import {
   redockOne,
   unionByVariable
 } from './instrument-host'
+import { parseTelemetry } from './instrument-telemetry'
+import {
+  emptyFeed,
+  foldTelemetry,
+  meterReadingFor,
+  scopeSamplesFor,
+  type MeterReading,
+  type TelemetryFeed
+} from './instrument-telemetry-feed'
 import './InstrumentHost.css'
 
 /**
@@ -164,12 +173,68 @@ function useInstrumentValues(conns: UsedPins[], active: boolean): Map<number, Li
   return values
 }
 
+/** How often the passive telemetry feed publishes a snapshot to React (ms). */
+const TELEMETRY_FLUSH_MS = 100
+
+const telemetryDecoder = new TextDecoder()
+
+/**
+ * The PASSIVE, always-on telemetry source (issue #107). Subscribes to the same
+ * broadcast `device.onData` serial stream the Plotter/Terminal use, buffers
+ * partial lines, parses each completed line with {@link parseTelemetry}, and
+ * folds SCOPE/METER readings into a rolling per-channel {@link TelemetryFeed}.
+ *
+ * Crucially this NEVER touches the raw REPL, so — unlike {@link useInstrumentValues}
+ * — it does not interrupt a running program: it works during a `while True:`
+ * loop on the board that simply prints telemetry. To keep a fast stream from
+ * thrashing React, samples accumulate in a ref and we publish a snapshot on a
+ * gentle interval only when something changed.
+ */
+function useTelemetryFeed(): TelemetryFeed {
+  const [snapshot, setSnapshot] = useState<TelemetryFeed>(emptyFeed)
+  const feedRef = useRef<TelemetryFeed>(emptyFeed())
+  const lineBuf = useRef('')
+  const dirty = useRef(false)
+
+  useEffect(() => {
+    const unsubscribe = window.api.device.onData((chunk) => {
+      lineBuf.current += telemetryDecoder.decode(chunk, { stream: true })
+      const normalised = lineBuf.current.replace(/\r\n?/g, '\n')
+      const parts = normalised.split('\n')
+      lineBuf.current = parts.pop() ?? ''
+      for (const line of parts) {
+        const next = foldTelemetry(feedRef.current, parseTelemetry(line))
+        if (next !== feedRef.current) {
+          feedRef.current = next
+          dirty.current = true
+        }
+      }
+    })
+    const id = window.setInterval(() => {
+      if (dirty.current) {
+        dirty.current = false
+        setSnapshot(feedRef.current)
+      }
+    }, TELEMETRY_FLUSH_MS)
+    return () => {
+      unsubscribe()
+      window.clearInterval(id)
+    }
+  }, [])
+
+  return snapshot
+}
+
 /** A resolved scope/meter instrument: its connection + live reading + placement. */
 interface ResolvedInstrument {
   it: OpenInstrument
   conn: UsedPins
   live?: LiveValue
   stats?: Stats
+  /** Passive telemetry scope samples for this channel (issue #107), if any. */
+  telemetrySamples?: number[]
+  /** Passive telemetry meter reading for this channel (issue #107), if any. */
+  telemetryReading?: MeterReading
   isDocked: boolean
   cascade: number
 }
@@ -342,9 +407,15 @@ export function useInstruments({
   const instrumentConns = useMemo(() => instruments.map((it) => it.conn), [instruments])
   const liveValues = useInstrumentValues(instrumentConns, live && instruments.length > 0)
 
-  // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats), folded from the live
-  // volts samples; reset when all instruments close (a fresh session). Indexed by
-  // instrument position to match `liveValues`.
+  // The PASSIVE telemetry feed (issue #107): always-on, REPL-free, fed by the
+  // board PRINTING `SNK …` lines. Preferred over the REPL poll for any channel
+  // that's reporting telemetry, so a running loop drives the scope/meter live
+  // without being interrupted.
+  const telemetry = useTelemetryFeed()
+
+  // Rolling MIN/MAX/AVG per ADC variable (Multimeter stats). Folded from whichever
+  // source feeds that meter — the passive telemetry reading when present, else the
+  // live REPL-poll volts. Reset when all instruments close (a fresh session).
   const [meterStats, setMeterStats] = useState<Map<string, Stats>>(new Map())
   useEffect(() => {
     if (instruments.length === 0) setMeterStats(new Map())
@@ -356,15 +427,23 @@ export function useInstruments({
       const next = new Map(prev)
       instruments.forEach((it, i) => {
         if (it.kind !== 'meter' || it.conn.type !== 'adc') return
-        const live = liveValues.get(i)
-        if (!live || live.value === undefined) return
-        const { volts } = adcFromU16(live.value)
+        // Prefer telemetry (the value is already in volts/native units); else the
+        // REPL-poll u16 → volts. Either way we fold ONE new sample per tick.
+        const reading = meterReadingFor(telemetry, it.conn.variable)
+        let volts: number | undefined
+        if (reading) {
+          volts = reading.value
+        } else {
+          const live = liveValues.get(i)
+          if (live && live.value !== undefined) volts = adcFromU16(live.value).volts
+        }
+        if (volts === undefined) return
         next.set(it.conn.variable, foldStat(next.get(it.conn.variable) ?? emptyStats(), volts))
         changed = true
       })
       return changed ? next : prev
     })
-  }, [liveValues, instruments])
+  }, [liveValues, telemetry, instruments])
 
   // Resolve each open instrument → its STORED connection + live reading. No
   // main-file lookup: the conn travels with the instrument. The cascade index
@@ -376,11 +455,18 @@ export function useInstruments({
       const conn = it.conn
       if (it.kind === 'scope' && conn.type !== 'pwm') return null
       if (it.kind === 'meter' && conn.type !== 'adc') return null
+      // Passive telemetry (#107) for this channel, if the board is printing it.
+      const telemetrySamples =
+        it.kind === 'scope' ? scopeSamplesFor(telemetry, conn.variable) : undefined
+      const telemetryReading =
+        it.kind === 'meter' ? meterReadingFor(telemetry, conn.variable) : undefined
       return {
         it,
         conn,
         live: liveValues.get(i),
         stats: meterStats.get(conn.variable),
+        telemetrySamples: telemetrySamples && telemetrySamples.length > 0 ? telemetrySamples : undefined,
+        telemetryReading,
         isDocked: docked[keyOf(it)] ?? true,
         cascade: i
       }
@@ -409,6 +495,10 @@ interface RenderArgs {
   adcConns: UsedPins[]
   live?: LiveValue
   stats?: Stats
+  /** Passive telemetry scope samples for this channel (#107), if any. */
+  telemetrySamples?: number[]
+  /** Passive telemetry meter reading for this channel (#107), if any. */
+  telemetryReading?: MeterReading
   /** Global live-poll state + toggler for the instrument's LIVE control. */
   liveOn: boolean
   onToggleLive: () => void
@@ -435,6 +525,7 @@ function renderInstrument(
         sources={args.pwmConns}
         fileSource={args.source}
         liveDuty={liveDuty}
+        samples={args.telemetrySamples}
         live={args.liveOn}
         onToggleLive={args.onToggleLive}
         docked={args.docked}
@@ -445,6 +536,9 @@ function renderInstrument(
       />
     )
   }
+  // The REPL-poll ADC sample (raw u16 → volts), or undefined. The passive
+  // telemetry reading (already in volts, no raw u16) is passed separately as
+  // `liveValue`; the Multimeter prefers it when present.
   const sample: AdcSample | undefined =
     args.live && args.live.value !== undefined ? adcFromU16(args.live.value) : undefined
   return (
@@ -452,6 +546,7 @@ function renderInstrument(
       conn={conn}
       sources={args.adcConns}
       sample={sample}
+      liveValue={args.telemetryReading}
       stats={args.stats}
       live={args.liveOn}
       onToggleLive={args.onToggleLive}
@@ -475,6 +570,8 @@ function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float
     adcConns: host.adcConns,
     live: r.live,
     stats: r.stats,
+    telemetrySamples: r.telemetrySamples,
+    telemetryReading: r.telemetryReading,
     liveOn: host.live,
     onToggleLive: host.onToggleLive,
     docked: !float,

@@ -10,6 +10,7 @@ import {
   formatFreq,
   formatPeriod,
   pwmConfig,
+  sampleWavePath,
   squareWavePath
 } from '../src/renderer/src/components/instrument-data'
 
@@ -134,6 +135,33 @@ describe('squareWavePath', () => {
     expect(d).toContain('L25 20')
     expect(d).toContain('L50 20') // the inter-cycle rising edge
     expect(d).toContain('L75 20')
+  })
+})
+
+describe('sampleWavePath', () => {
+  it('returns empty string for no samples', () => {
+    expect(sampleWavePath({ width: 100, height: 100, samples: [] })).toBe('')
+  })
+
+  it('maps samples left to right, auto-scaling min→bottom and max→top', () => {
+    // 3 samples [0,1,2] over width 100, padY 10, height 100 → usable rows 10..90.
+    // min(0)→y90, max(2)→y10, mid(1)→y50. xStep = 100/2 = 50.
+    const d = sampleWavePath({ width: 100, height: 100, samples: [0, 1, 2], padY: 10 })
+    expect(d).toBe('M0 90 L50 50 L100 10')
+  })
+
+  it('centres a flat series (no divide-by-zero)', () => {
+    // All equal → a centred horizontal line at yTop + usable/2 = 10 + 80/2 = 50.
+    const d = sampleWavePath({ width: 100, height: 100, samples: [5, 5, 5], padY: 10 })
+    expect(d).toBe('M0 50 L50 50 L100 50')
+  })
+
+  it('starts the path with a single M for a one-sample series', () => {
+    expect(sampleWavePath({ width: 100, height: 100, samples: [1], padY: 10 })).toBe('M0 50')
+  })
+
+  it('returns empty when every sample is non-finite', () => {
+    expect(sampleWavePath({ width: 100, height: 100, samples: [NaN, Infinity] })).toBe('')
   })
 })
 
