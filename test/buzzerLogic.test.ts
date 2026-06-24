@@ -9,6 +9,13 @@ import {
   buzzerTonePayload,
   buzzerPlayPayload,
   buzzerStopPayload,
+  buzzerSeqPayload,
+  buzzerPinPayload,
+  moveNote,
+  removeNote,
+  insertRest,
+  makeRest,
+  freqToStaff,
   melodyToMicroPython,
   fmtFreq,
   melodyDurationMs,
@@ -237,5 +244,116 @@ describe('buzzer-logic formatting helpers', () => {
       ])
     ).toBe(300)
     expect(melodyDurationMs([])).toBe(0)
+  })
+})
+
+describe('buzzer-logic buzzerSeqPayload (note sequence wire form)', () => {
+  it('renders a list of notes as "seq <freq:ms>,…" with a rest as 0:ms', () => {
+    expect(
+      buzzerSeqPayload([
+        { freq: 440, ms: 200 },
+        { freq: 0, ms: 100 }
+      ])
+    ).toBe('seq 440:200,0:100')
+  })
+
+  it('rounds + clamps freq and ms to whole, non-negative numbers', () => {
+    expect(
+      buzzerSeqPayload([
+        { freq: 440.6, ms: 199.4 },
+        { freq: -5, ms: -5 }
+      ])
+    ).toBe('seq 441:199,0:0')
+  })
+
+  it('frames into a single SNKCMD line', () => {
+    expect(buildControlLine('buzzer', buzzerSeqPayload([{ freq: 262, ms: 250 }]))).toBe(
+      'SNKCMD buzzer seq 262:250\n'
+    )
+  })
+})
+
+describe('buzzer-logic buzzerPinPayload (retarget the PWM pin)', () => {
+  it('renders "pin <n>" rounding + clamping the pin', () => {
+    expect(buzzerPinPayload(15)).toBe('pin 15')
+    expect(buzzerPinPayload(2.7)).toBe('pin 3')
+    expect(buzzerPinPayload(-1)).toBe('pin 0')
+  })
+
+  it('frames into a single SNKCMD line', () => {
+    expect(buildControlLine('buzzer', buzzerPinPayload(16))).toBe('SNKCMD buzzer pin 16\n')
+  })
+})
+
+describe('buzzer-logic editable-melody helpers (part C)', () => {
+  const melody: Tone[] = [
+    { freq: 262, ms: 200, label: 'C4' },
+    { freq: 294, ms: 200, label: 'D4' },
+    { freq: 330, ms: 200, label: 'E4' }
+  ]
+
+  it('moveNote reorders without mutating the input', () => {
+    const out = moveNote(melody, 0, 2)
+    expect(out.map((n) => n.label)).toEqual(['D4', 'E4', 'C4'])
+    // original untouched
+    expect(melody.map((n) => n.label)).toEqual(['C4', 'D4', 'E4'])
+  })
+
+  it('moveNote clamps out-of-range indices and is a no-op on equal indices', () => {
+    expect(moveNote(melody, -5, 99).map((n) => n.label)).toEqual(['D4', 'E4', 'C4'])
+    expect(moveNote(melody, 1, 1).map((n) => n.label)).toEqual(['C4', 'D4', 'E4'])
+    expect(moveNote([], 0, 1)).toEqual([])
+  })
+
+  it('removeNote deletes one note (copy) and ignores a bad index', () => {
+    expect(removeNote(melody, 1).map((n) => n.label)).toEqual(['C4', 'E4'])
+    expect(removeNote(melody, 9).map((n) => n.label)).toEqual(['C4', 'D4', 'E4'])
+    expect(melody).toHaveLength(3) // not mutated
+  })
+
+  it('insertRest adds a freq-0 rest at the index (clamped, appends past end)', () => {
+    const a = insertRest(melody, 1, 120)
+    expect(a.map((n) => `${n.freq}`)).toEqual(['262', '0', '294', '330'])
+    expect(a[1]).toMatchObject({ freq: 0, ms: 120, label: 'P' })
+    const appended = insertRest(melody, 99, 80)
+    expect(appended[appended.length - 1]).toMatchObject({ freq: 0, ms: 80 })
+  })
+
+  it('makeRest builds a canonical rest (freq 0)', () => {
+    expect(makeRest(150)).toEqual({ freq: 0, ms: 150, label: 'P' })
+    expect(makeRest(-10)).toMatchObject({ freq: 0, ms: 0 })
+  })
+
+  it('a rest round-trips into the seq payload as 0:ms', () => {
+    const m = insertRest([{ freq: 440, ms: 200 }], 1, 100)
+    expect(buzzerSeqPayload(m)).toBe('seq 440:200,0:100')
+  })
+})
+
+describe('buzzer-logic freqToStaff (pitch → staff position, part D)', () => {
+  it('anchors B4 on the middle line (step 0, no accidental)', () => {
+    const b4 = noteToFreq('B4')!
+    expect(freqToStaff(b4)).toEqual({ step: 0, accidental: '', rest: false })
+  })
+
+  it('A4 is one step below the middle line; C5 is one above', () => {
+    expect(freqToStaff(noteToFreq('A4')!).step).toBe(-1)
+    expect(freqToStaff(noteToFreq('C5')!).step).toBe(1)
+  })
+
+  it('octaves move by 7 diatonic steps', () => {
+    expect(freqToStaff(noteToFreq('B5')!).step).toBe(7)
+    expect(freqToStaff(noteToFreq('B3')!).step).toBe(-7)
+  })
+
+  it('marks a sharp note with the # accidental, sharing the natural step', () => {
+    const fSharp5 = freqToStaff(noteToFreq('F#5')!)
+    expect(fSharp5.accidental).toBe('#')
+    expect(fSharp5.step).toBe(freqToStaff(noteToFreq('F5')!).step) // same line as F
+  })
+
+  it('treats freq 0 / negative as a rest', () => {
+    expect(freqToStaff(0)).toEqual({ step: 0, accidental: '', rest: true })
+    expect(freqToStaff(-1).rest).toBe(true)
   })
 })

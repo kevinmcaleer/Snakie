@@ -501,7 +501,7 @@ def ready(extra=()):
     print("%s READY %s" % (SENTINEL, " ".join(caps)))
 
 
-def start(i2c=None, hz=50, background=True):
+def start(i2c=None, hz=50, background=True, buzzer_pin=None):
     """Start the Snakie background service so scans run on the SECOND CORE.
 
     Registers the built-in scan triggers on the control channel — ``scan:wifi``
@@ -510,6 +510,11 @@ def start(i2c=None, hz=50, background=True):
     ``background``) spawns a thread on the second core that polls the control
     channel ~``hz``×/sec and re-announces readiness periodically. Your main loop
     no longer needs to call ``control.poll()``.
+
+    Pass ``buzzer_pin=<n>`` to attach the shared :data:`buzzer` to ``PWM(Pin(n))``
+    and register the ``buzzer`` control receiver, so the IDE's Buzzer panel can
+    drive a connected speaker (``tone``/``seq``/``stop``/``pin``) over the control
+    channel — the playback runs on core 1, off your main loop.
 
     Returns immediately. Falls back to registration + announce with NO thread
     when ``_thread`` is unavailable or ``background`` is False — then poll the
@@ -522,6 +527,9 @@ def start(i2c=None, hz=50, background=True):
     if i2c is not None:
         control.on("scan:i2c", lambda payload: i2c_scan(i2c))
         extra = ("scan:i2c",)
+    if buzzer_pin is not None:
+        buzzer.set_pin(buzzer_pin)
+        control.on("buzzer", lambda payload: buzzer_command(payload, buzzer))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
     if not background or _service_running:
@@ -580,13 +588,32 @@ def teleop(target="teleop", ctrl=None):
 class Buzzer:
     """Drive a passive buzzer/speaker from ``buzzer`` control commands.
 
-    ``tone(freq, ms)`` plays a single tone; ``play(rtttl)`` is a stub hook for an
-    RTTTL ringtone string. Pass a ``machine.PWM`` as ``pwm`` to actually sound;
-    with no pin it is a no-op (still importable + testable under CPython).
+    ``tone(freq, ms)`` plays a single tone; ``play_seq(pairs)`` plays a list of
+    ``(freq, ms)`` notes in order (``freq`` 0 = a silent rest); ``stop()``
+    silences immediately; ``set_pin(n)`` (re)targets the PWM pin. Pass a
+    ``machine.PWM`` as ``pwm`` to actually sound, or build one with ``set_pin``;
+    with no PWM every call is a no-op (still importable + testable under CPython).
+
+    The IDE pre-parses melodies/RTTTL and sends a compact ``seq`` note list, so
+    the board needs no RTTTL parser. ``play(rtttl)`` is kept as a thin legacy hook.
     """
 
     def __init__(self, pwm=None):
         self._pwm = pwm
+
+    def set_pin(self, n):
+        """(Re)target the PWM pin: build ``PWM(Pin(n))`` (no-op without hardware).
+
+        Silences any current tone first. Guards the ``machine`` import so the
+        module stays importable/testable under CPython — when ``machine`` is
+        unavailable this is inert and ``_pwm`` is left as-is.
+        """
+        self.stop()
+        try:
+            from machine import Pin, PWM
+        except ImportError:
+            return
+        self._pwm = PWM(Pin(int(n)))
 
     def tone(self, freq, ms=200):
         """Sound ``freq`` Hz for ``ms`` (no-op without a PWM pin)."""
@@ -598,11 +625,107 @@ class Buzzer:
         time.sleep_ms(int(ms)) if hasattr(time, "sleep_ms") else time.sleep(ms / 1000)
         self._pwm.duty_u16(0)
 
+    def stop(self):
+        """Silence the buzzer NOW (duty 0). Safe without a PWM pin."""
+        if self._pwm is not None:
+            self._pwm.duty_u16(0)
+
+    def play_seq(self, pairs):
+        """Play a list of ``(freq, ms)`` notes in order; ``freq`` 0 is a rest.
+
+        Blocking (runs on core 1 in the background service): for each note it
+        sets the frequency + duty and sleeps ``ms``, then briefly silences before
+        the next so adjacent same-pitch notes are distinct. A ``freq`` of 0 sleeps
+        silently for ``ms``. No-op without a PWM pin.
+        """
+        if self._pwm is None:
+            return
+        import time
+        sleep_ms = time.sleep_ms if hasattr(time, "sleep_ms") else (
+            lambda ms: time.sleep(ms / 1000)
+        )
+        for freq, ms in pairs:
+            freq = int(freq)
+            ms = int(ms)
+            if freq > 0:
+                self._pwm.freq(freq)
+                self._pwm.duty_u16(32768)
+            else:
+                self._pwm.duty_u16(0)
+            sleep_ms(ms)
+            self._pwm.duty_u16(0)
+            sleep_ms(20)
+
     def play(self, rtttl):
-        """Play an RTTTL string (illustrative stub — parse + sequence as needed)."""
-        # Left minimal on purpose: the deliverable is the SNKCMD grammar
-        # (`buzzer play <rtttl>`); wire a real RTTTL player here for your bot.
+        """Play an RTTTL string (legacy hook — the IDE prefers ``seq``).
+
+        Left minimal on purpose: the IDE pre-parses RTTTL and sends a ``seq``
+        note list, so a real RTTTL parser on-board is optional. Returns the input.
+        """
         return rtttl
+
+
+def parse_seq(payload):
+    """Parse a ``seq`` payload (``<freq:ms>,<freq:ms>,…``) → ``[(freq, ms), …]``.
+
+    Each pair is ``freq:ms`` (``freq`` 0 = a rest). Whitespace and malformed pairs
+    are tolerated/skipped. Pure + side-effect-free so it is unit-testable under
+    CPython. ``parse_seq("440:200,0:100")`` → ``[(440, 200), (0, 100)]``.
+    """
+    out = []
+    if not payload:
+        return out
+    for tok in payload.replace(" ", "").split(","):
+        if not tok or ":" not in tok:
+            continue
+        fs, _, ds = tok.partition(":")
+        try:
+            out.append((int(fs), int(ds)))
+        except (ValueError, TypeError):
+            continue
+    return out
+
+
+def buzzer_command(payload, buz=None):
+    """Drive ``buz`` (a :class:`Buzzer`) from one ``buzzer`` control payload.
+
+    Parses the ``<verb> <args>`` grammar and actuates:
+
+      * ``tone <freq> <ms>`` → ``buz.tone(freq, ms)``
+      * ``seq <freq:ms>,…``  → ``buz.play_seq([...])`` (``freq`` 0 = rest)
+      * ``stop``             → ``buz.stop()``
+      * ``pin <n>``          → ``buz.set_pin(n)``
+
+    Defaults ``buz`` to the shared :data:`buzzer` singleton. Never raises on a
+    malformed payload (it is fed from the IDE). Returns the verb it handled (or
+    ``None``), which keeps it easy to unit-test against a fake PWM.
+    """
+    buz = buz if buz is not None else buzzer
+    if not payload:
+        return None
+    payload = payload.strip()
+    sp = payload.find(" ")
+    if sp == -1:
+        verb, args = payload, ""
+    else:
+        verb, args = payload[:sp], payload[sp + 1:].strip()
+    try:
+        if verb == "tone":
+            parts = args.split()
+            freq = int(parts[0]) if len(parts) >= 1 else 0
+            ms = int(parts[1]) if len(parts) >= 2 else 200
+            buz.tone(freq, ms)
+        elif verb == "seq":
+            buz.play_seq(parse_seq(args))
+        elif verb == "stop":
+            buz.stop()
+        elif verb == "pin":
+            buz.set_pin(int(args.split()[0]))
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
 
 
 class Led:

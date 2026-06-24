@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
+import { useSnakiePresence } from './snakie-presence'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import { BUZZER_DEMO, BUZZER_DEMO_NAME } from './buzzer-demo'
 import {
   CHROMATIC,
-  buzzerPlayPayload,
+  buzzerPinPayload,
+  buzzerSeqPayload,
   buzzerStopPayload,
   buzzerTonePayload,
   fmtFreq,
+  freqToStaff,
+  insertRest,
   melodyDurationMs,
   melodyToMicroPython,
+  moveNote,
   parseRtttl,
+  removeNote,
   stepFreq,
+  type StaffPos,
   type Tone
 } from './buzzer-logic'
 import './BuzzerInstrument.css'
@@ -26,21 +36,27 @@ import './BuzzerInstrument.css'
  *   - a small PIANO KEYBOARD (one octave) — clicking a key sounds the note live
  *     (a WebAudio preview in the IDE) AND writes a `buzzer tone …` control line
  *     so a connected board plays it;
- *   - a NOTE/MELODY SEQUENCER — append clicked keys into a short melody, scrub
- *     it, clear it, and PLAY it back (timed tones, local + on-device);
- *   - an RTTTL paste box — paste a ringtone, PLAY it (parsed → timed tones), or
- *     send a single `buzzer play <rtttl>` line for an on-device RTTTL player;
- *   - TEMPO (note length) + VOLUME (PWM duty) sliders, a buzzer PIN picker, a
- *     STOP that silences the buzzer, and an EXPORT that copies a runnable
- *     `Pin`/`PWM` MicroPython melody to the clipboard.
+ *   - an EDITABLE NOTE/MELODY SEQUENCER — append clicked keys, DRAG chips to
+ *     reorder, CLICK a chip to remove it, insert rests, and PLAY it back as one
+ *     compact `buzzer seq …` line (local WebAudio + on-device);
+ *   - a MUSICAL STAFF row that, during Play, places each note on a 5-line staff
+ *     and highlights the currently-playing note;
+ *   - an RTTTL paste box — paste a ringtone, PLAY it (parsed → a `seq` line), or
+ *     load it into the editable sequencer;
+ *   - TEMPO (note length) + VOLUME (PWM duty) sliders, a buzzer PIN picker (a
+ *     `buzzer pin <n>` line on change), a STOP that silences the buzzer, and an
+ *     EXPORT that copies a runnable `Pin`/`PWM` MicroPython melody to clipboard.
+ *
+ * Presence-aware (mirrors {@link WifiScanInstrument}): when a Snakie program is
+ * live (`SNK READY` heartbeat via {@link useSnakiePresence}) the panel drives it
+ * over the control channel; when none is, ▶ Play offers to open + run the bundled
+ * `buzzer_demo.py` (which does `inst.start(buzzer_pin=15)`), or Dismiss. The
+ * local WebAudio preview always plays so keys click audibly in the IDE.
  *
  * The on-device receiver (`micropython/instruments.py` `Buzzer` +
  * `docs/instruments-library.md`) attests the grammar this writes:
- * `tone <freq> <ms>`, `play <rtttl>`, `stop` — built by `buzzer-logic`'s payload
- * helpers and sent via `window.api.device.sendControl('buzzer', payload)`.
- *
- * All audible IDE feedback is generated locally with the built-in WebAudio API
- * (no dependency); the board is driven purely over the existing control channel.
+ * `tone <freq> <ms>`, `seq <freq:ms>,…`, `stop`, `pin <n>` — built by
+ * `buzzer-logic`'s payload helpers and sent via `sendControl('buzzer', payload)`.
  */
 
 export interface BuzzerInstrumentProps {
@@ -81,6 +97,11 @@ export function BuzzerInstrument({
   onToggleDock,
   float
 }: BuzzerInstrumentProps): JSX.Element {
+  const deviceStatus = useDeviceStatus()
+  const connected = deviceStatus.state === 'connected'
+  const { present } = useSnakiePresence()
+  const { openBuffer } = useWorkspace()
+
   // --- Controls --------------------------------------------------------------
   const [pin, setPin] = useState(15)
   const [octave, setOctave] = useState(KEYBOARD_OCTAVE_DEFAULT)
@@ -92,6 +113,17 @@ export function BuzzerInstrument({
   const [lastFreq, setLastFreq] = useState<number | null>(null)
   const [activeKey, setActiveKey] = useState<number | null>(null)
   const [copied, setCopied] = useState(false)
+  // Shown when ▶ Play can't reach a live program (offer to run the demo).
+  const [prompt, setPrompt] = useState(false)
+  // True while opening + running the demo (disables the prompt buttons).
+  const [busy, setBusy] = useState(false)
+  // The melody index currently sounding during Play (drives the staff highlight
+  // + the chip "playing" state); null when idle.
+  const [playingIdx, setPlayingIdx] = useState<number | null>(null)
+  // The melody snapshot shown on the staff (set when Play starts).
+  const [staffNotes, setStaffNotes] = useState<Tone[]>([])
+  // Drag-reorder state: the index being dragged (HTML5 drag).
+  const [dragIdx, setDragIdx] = useState<number | null>(null)
 
   // --- WebAudio preview (lazy, single shared context) ------------------------
   const audioRef = useRef<AudioContext | null>(null)
@@ -159,6 +191,7 @@ export function BuzzerInstrument({
     sendBuzzer(buzzerStopPayload())
     setStatus('standby')
     setActiveKey(null)
+    setPlayingIdx(null)
   }, [previewOff])
 
   // Tear the audio graph down on unmount.
@@ -212,56 +245,126 @@ export function BuzzerInstrument({
   )
 
   // --- Sequencer playback ----------------------------------------------------
-  /** Play a list of timed tones back-to-back (local + on-device), then idle. */
+  /**
+   * Play a list of timed tones back-to-back: locally via WebAudio AND on-device
+   * as ONE compact `buzzer seq …` line (the board plays the pairs on core 1). The
+   * staff highlights the currently-playing note as the local schedule advances.
+   */
   const playSequence = useCallback(
     (notes: Tone[]): void => {
       if (notes.length === 0) return
       stopAll()
       setStatus('playing')
+      setStaffNotes(notes)
+      // On-device: hand the whole melody over in a single seq command.
+      sendBuzzer(buzzerSeqPayload(notes))
+      // Locally: schedule the parsed notes for an audible IDE preview + highlight.
       let when = 0
-      for (const n of notes) {
+      notes.forEach((n, i) => {
         const at = when
         const t = setTimeout(() => {
           setLastFreq(n.freq > 0 ? n.freq : null)
+          setPlayingIdx(i)
           previewOn(n.freq)
-          sendBuzzer(buzzerTonePayload(n.freq, n.ms))
         }, at)
         timersRef.current.push(t)
         when += n.ms
-      }
+      })
       const done = setTimeout(() => {
         previewOff()
         setStatus('standby')
+        setPlayingIdx(null)
       }, when)
       timersRef.current.push(done)
     },
     [previewOn, previewOff, stopAll]
   )
 
+  /**
+   * ▶ Play the melody. Presence-aware: when no Snakie program is live, surface
+   * the prompt to open + run the demo instead of sending into the void. The local
+   * preview + staff still play regardless once a program is present (or after the
+   * demo starts).
+   */
+  const onPlayMelody = useCallback((): void => {
+    if (melody.length === 0) return
+    if (!connected || !present) {
+      setPrompt(true)
+      return
+    }
+    setPrompt(false)
+    playSequence(melody)
+  }, [melody, connected, present, playSequence])
+
+  // --- Editable melody (drag reorder / click remove / insert rest) -----------
   const addRest = useCallback((): void => {
-    setMelody((m) => [...m, { freq: 0, ms: noteMs, label: 'P' }])
+    setMelody((m) => insertRest(m, m.length, noteMs))
   }, [noteMs])
 
   const clearMelody = useCallback((): void => setMelody([]), [])
 
   const removeLast = useCallback((): void => setMelody((m) => m.slice(0, -1)), [])
 
+  /** Click a chip → remove that note from the melody. */
+  const onChipRemove = useCallback((index: number): void => {
+    setMelody((m) => removeNote(m, index))
+  }, [])
+
+  /** HTML5 drag-drop reorder: drop the dragged chip onto another chip's slot. */
+  const onChipDrop = useCallback(
+    (to: number): void => {
+      setMelody((m) => (dragIdx === null ? m : moveNote(m, dragIdx, to)))
+      setDragIdx(null)
+    },
+    [dragIdx]
+  )
+
   // --- RTTTL -----------------------------------------------------------------
   const parsedRtttl = useMemo(() => (rtttl.trim() ? parseRtttl(rtttl) : null), [rtttl])
 
-  /** Play the pasted RTTTL: locally as timed tones, on-device as one play line. */
+  /** Play the pasted RTTTL: locally as timed tones + a single on-device seq line. */
   const playRtttl = useCallback((): void => {
     if (!parsedRtttl || parsedRtttl.notes.length === 0) return
-    // On-device: hand the whole ringtone to the board's RTTTL player.
-    sendBuzzer(buzzerPlayPayload(rtttl))
-    // Locally: schedule the parsed notes for an audible IDE preview.
+    if (!connected || !present) {
+      setPrompt(true)
+      return
+    }
+    setPrompt(false)
     playSequence(parsedRtttl.notes)
-  }, [parsedRtttl, rtttl, playSequence])
+  }, [parsedRtttl, connected, present, playSequence])
 
   /** Load the parsed RTTTL into the editable sequencer melody. */
   const rtttlToMelody = useCallback((): void => {
     if (parsedRtttl) setMelody(parsedRtttl.notes)
   }, [parsedRtttl])
+
+  // --- Demo fallback (mirror WifiScanInstrument.runDemo) ---------------------
+  /**
+   * Open the buzzer demo in a new tab and run it: interrupt any running program
+   * (back to a REPL prompt), drop the demo in the editor, then paste-run it. The
+   * demo's `inst.start(buzzer_pin=15)` brings the control service up (→ READY →
+   * present) so the panel's keys/melody drive the speaker.
+   */
+  const runDemo = useCallback(async (): Promise<void> => {
+    setBusy(true)
+    try {
+      await window.api.device.interrupt().catch(() => undefined)
+      openBuffer(BUZZER_DEMO_NAME, BUZZER_DEMO)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      await window.api.device.sendData(`\x05${BUZZER_DEMO}\x04`)
+      setPrompt(false)
+    } catch {
+      /* offline — the prompt stays dismissable; local preview still works */
+    } finally {
+      setBusy(false)
+    }
+  }, [openBuffer])
+
+  // --- PIN selector: retarget the on-device PWM pin --------------------------
+  const onPinChange = useCallback((next: number): void => {
+    setPin(next)
+    sendBuzzer(buzzerPinPayload(next))
+  }, [])
 
   // --- Export ----------------------------------------------------------------
   const exportCode = useMemo(
@@ -361,7 +464,55 @@ export function BuzzerInstrument({
           </div>
         </PhosphorScreen>
 
-        {/* Sequencer strip — the built melody as scrubbable chips. */}
+        {/* Demo prompt — shown when ▶ Play can't reach a live Snakie program. */}
+        {prompt && (
+          <div className="buzzer__prompt" role="alert">
+            {connected ? (
+              <>
+                <p className="buzzer__prompt-msg">
+                  No Snakie program is running to drive the buzzer.
+                </p>
+                <div className="buzzer__prompt-actions">
+                  <button
+                    type="button"
+                    className="buzzer__btn buzzer__btn--play"
+                    onClick={() => void runDemo()}
+                    disabled={busy}
+                  >
+                    {busy ? 'STARTING…' : '▶ Run buzzer demo'}
+                  </button>
+                  <button
+                    type="button"
+                    className="buzzer__btn"
+                    onClick={() => setPrompt(false)}
+                    disabled={busy}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="buzzer__prompt-hint">
+                  Opens a demo that plays on the 2nd core — or run your own program
+                  that calls <code>inst.start(buzzer_pin={pin})</code>.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="buzzer__prompt-msg">Connect a board to sound the buzzer.</p>
+                <div className="buzzer__prompt-actions">
+                  <button
+                    type="button"
+                    className="buzzer__btn"
+                    onClick={() => setPrompt(false)}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Sequencer strip — the editable melody as draggable, removable chips. */}
         <div className="buzzer__seq" aria-label="Melody sequencer">
           <div className="buzzer__seq-head">
             <span className="buzzer__seq-title">MELODY</span>
@@ -379,9 +530,17 @@ export function BuzzerInstrument({
                 <button
                   key={i}
                   type="button"
-                  className={`buzzer__chip${n.freq === 0 ? ' buzzer__chip--rest' : ''}`}
-                  onClick={() => playNote(n.freq, n.ms)}
-                  title={`${n.label ?? fmtFreq(n.freq)} · ${n.ms} ms — click to preview`}
+                  draggable
+                  onDragStart={() => setDragIdx(i)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => onChipDrop(i)}
+                  onDragEnd={() => setDragIdx(null)}
+                  className={`buzzer__chip${n.freq === 0 ? ' buzzer__chip--rest' : ''}${
+                    playingIdx === i ? ' is-playing' : ''
+                  }${dragIdx === i ? ' is-dragging' : ''}`}
+                  onClick={() => onChipRemove(i)}
+                  title={`${n.label ?? fmtFreq(n.freq)} · ${n.ms} ms — drag to reorder, click to remove`}
+                  aria-label={`${n.label ?? fmtFreq(n.freq)} — click to remove`}
                 >
                   {n.label ?? (n.freq === 0 ? 'P' : `${Math.round(n.freq)}`)}
                 </button>
@@ -392,7 +551,7 @@ export function BuzzerInstrument({
             <button
               type="button"
               className="buzzer__btn buzzer__btn--play"
-              onClick={() => playSequence(melody)}
+              onClick={onPlayMelody}
               disabled={melody.length === 0}
             >
               ▶ Play
@@ -405,6 +564,7 @@ export function BuzzerInstrument({
               className="buzzer__btn"
               onClick={removeLast}
               disabled={melody.length === 0}
+              title="Remove the last note"
             >
               ⌫
             </button>
@@ -418,6 +578,11 @@ export function BuzzerInstrument({
             </button>
           </div>
         </div>
+
+        {/* Musical staff — shows the playing melody, highlighting the live note. */}
+        {staffNotes.length > 0 && (
+          <Staff notes={staffNotes} playingIdx={playingIdx} />
+        )}
 
         {/* RTTTL paste + play. */}
         <div className="buzzer__rtttl">
@@ -463,7 +628,7 @@ export function BuzzerInstrument({
             <select
               className="buzzer__select"
               value={pin}
-              onChange={(e) => setPin(Number(e.target.value))}
+              onChange={(e) => onPinChange(Number(e.target.value))}
             >
               {Array.from({ length: 29 }, (_, i) => i).map((p) => (
                 <option key={p} value={p}>
@@ -553,6 +718,104 @@ function Cell({ label, value }: { label: string; value: string }): JSX.Element {
     <div className="buzzer__cell">
       <span className="buzzer__cell-lbl">{label}</span>
       <span className="buzzer__cell-val">{value}</span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Musical staff (#113 part D) — a lightweight SVG 5-line staff that lays out the
+// melody's notes by pitch (via the pure {@link freqToStaff} mapping) and
+// highlights the currently-playing note. No new dependency: plain SVG + CSS.
+// ---------------------------------------------------------------------------
+
+/** Vertical pixels between adjacent staff positions (a line→space step). */
+const STAFF_STEP_PX = 5
+/** Horizontal pixels between successive noteheads. */
+const STAFF_NOTE_DX = 22
+/** SVG viewport height; the 5 lines sit centred in it. */
+const STAFF_H = 70
+/** The y of the staff's MIDDLE line (B4, `step` 0) — our vertical anchor. */
+const STAFF_MID_Y = STAFF_H / 2
+
+/** y-coordinate of a {@link StaffPos} step (higher pitch → smaller y → higher up). */
+function staffY(step: number): number {
+  return STAFF_MID_Y - step * STAFF_STEP_PX
+}
+
+function Staff({
+  notes,
+  playingIdx
+}: {
+  notes: ReadonlyArray<Tone>
+  playingIdx: number | null
+}): JSX.Element {
+  const positions: StaffPos[] = useMemo(() => notes.map((n) => freqToStaff(n.freq)), [notes])
+  const width = Math.max(120, notes.length * STAFF_NOTE_DX + STAFF_NOTE_DX)
+  // The 5 staff lines straddle the middle (B4) line: 2 above, the middle, 2 below.
+  const lineYs = [-4, -2, 0, 2, 4].map((s) => staffY(s))
+
+  return (
+    <div className="buzzer__staff" aria-label="Musical staff">
+      <div className="buzzer__staff-head">
+        <span className="buzzer__seq-title">STAFF</span>
+      </div>
+      <div className="buzzer__staff-scroll">
+        <svg
+          className="buzzer__staff-svg"
+          width={width}
+          height={STAFF_H}
+          viewBox={`0 0 ${width} ${STAFF_H}`}
+          role="img"
+          aria-label={`${notes.length} notes on a staff`}
+        >
+          {/* 5 staff lines */}
+          {lineYs.map((y, i) => (
+            <line
+              key={i}
+              className="buzzer__staff-line"
+              x1={4}
+              x2={width - 4}
+              y1={y}
+              y2={y}
+            />
+          ))}
+          {positions.map((pos, i) => {
+            const x = STAFF_NOTE_DX * (i + 1)
+            const on = playingIdx === i
+            if (pos.rest) {
+              return (
+                <text
+                  key={i}
+                  className={`buzzer__staff-rest${on ? ' is-playing' : ''}`}
+                  x={x}
+                  y={STAFF_MID_Y + 4}
+                  textAnchor="middle"
+                >
+                  𝄽
+                </text>
+              )
+            }
+            const y = staffY(pos.step)
+            return (
+              <g key={i} className={`buzzer__staff-note${on ? ' is-playing' : ''}`}>
+                {pos.accidental === '#' && (
+                  <text className="buzzer__staff-acc" x={x - 9} y={y + 3} textAnchor="middle">
+                    ♯
+                  </text>
+                )}
+                <ellipse className="buzzer__staff-head-el" cx={x} cy={y} rx={3.4} ry={2.6} />
+                {/* Ledger line for notes far below/above the staff. */}
+                {pos.step <= -6 && (
+                  <line className="buzzer__staff-line" x1={x - 6} x2={x + 6} y1={y} y2={y} />
+                )}
+                {pos.step >= 6 && (
+                  <line className="buzzer__staff-line" x1={x - 6} x2={x + 6} y1={y} y2={y} />
+                )}
+              </g>
+            )
+          })}
+        </svg>
+      </div>
     </div>
   )
 }

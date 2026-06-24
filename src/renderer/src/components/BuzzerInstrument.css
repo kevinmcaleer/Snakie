@@ -223,6 +223,127 @@
   border-color: #26282b;
 }
 
+/* The chip currently sounding during Play — lit the accent. */
+.buzzer__chip.is-playing {
+  color: #0c0e10;
+  background: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 92%, #fff);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* The chip being dragged to reorder — dimmed + grabbing cursor. */
+.buzzer__chip[draggable='true'] {
+  cursor: grab;
+}
+
+.buzzer__chip.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+/* --- Demo prompt (no Snakie program running) ----------------------------- */
+.buzzer__prompt {
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid var(--accent-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.buzzer__prompt-msg {
+  margin: 0;
+  font-size: 11px;
+  color: #cfd3da;
+}
+
+.buzzer__prompt-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.buzzer__prompt-hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #6b7079;
+}
+
+.buzzer__prompt-hint code {
+  font-family: inherit;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+}
+
+/* --- Musical staff -------------------------------------------------------- */
+.buzzer__staff {
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  padding: 8px 9px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.buzzer__staff-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.buzzer__staff-scroll {
+  overflow-x: auto;
+  border-radius: 5px;
+  background: #07090b;
+  border: 1px solid #15171a;
+  padding: 2px 4px;
+}
+
+.buzzer__staff-svg {
+  display: block;
+}
+
+.buzzer__staff-line {
+  stroke: #34373c;
+  stroke-width: 1;
+}
+
+.buzzer__staff-head-el {
+  fill: color-mix(in srgb, var(--accent) 80%, #cfd3da);
+  stroke: var(--accent-border);
+  stroke-width: 0.5;
+}
+
+.buzzer__staff-acc {
+  fill: #9aa0a8;
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.buzzer__staff-rest {
+  fill: #6b7079;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* The currently-playing note/rest pops to the accent + a soft glow. */
+.buzzer__staff-note.is-playing .buzzer__staff-head-el {
+  fill: var(--accent);
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 70%, transparent));
+}
+
+.buzzer__staff-note.is-playing .buzzer__staff-acc {
+  fill: var(--accent);
+}
+
+.buzzer__staff-rest.is-playing {
+  fill: var(--accent);
+}
+
 .buzzer__seq-actions,
 .buzzer__rtttl-actions,
 .buzzer__main-actions {
