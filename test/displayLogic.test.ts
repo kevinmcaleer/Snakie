@@ -8,11 +8,17 @@ import {
   decodeFramebuffer,
   decodeRleBits,
   encodeRowToken,
+  findScreenPinsInCode,
   fitLine,
   fpsFromIntervalMs,
   geometryById,
+  i2cBlockForPins,
+  i2cPinsValid,
   layoutText,
-  readingToView
+  readingToView,
+  screenAddrPayload,
+  screenPinsPayload,
+  setScreenPinsInCode
 } from '../src/renderer/src/components/display-logic'
 import type { ScreenTelemetry } from '../src/renderer/src/components/instrument-telemetry'
 
@@ -228,5 +234,124 @@ describe('fpsFromIntervalMs', () => {
   it('returns a dash for non-positive/non-finite intervals', () => {
     expect(fpsFromIntervalMs(0)).toBe('——')
     expect(fpsFromIntervalMs(NaN)).toBe('——')
+  })
+})
+
+describe('i2cBlockForPins (RP2040 I²C pin mux — matches _i2c_block_for_pins)', () => {
+  it('returns block 0 for a valid I2C0 pair', () => {
+    // SDA∈{0,4,8,12,16,20}, SCL∈{1,5,9,13,17,21}.
+    expect(i2cBlockForPins(0, 1)).toBe(0)
+    expect(i2cBlockForPins(4, 5)).toBe(0)
+    expect(i2cBlockForPins(20, 21)).toBe(0)
+    // Any SDA + any SCL WITHIN the block is valid.
+    expect(i2cBlockForPins(0, 13)).toBe(0)
+  })
+  it('returns block 1 for a valid I2C1 pair', () => {
+    // SDA∈{2,6,10,14,18,26}, SCL∈{3,7,11,15,19,27}.
+    expect(i2cBlockForPins(2, 3)).toBe(1)
+    expect(i2cBlockForPins(6, 7)).toBe(1)
+    expect(i2cBlockForPins(26, 27)).toBe(1)
+    expect(i2cBlockForPins(14, 3)).toBe(1)
+  })
+  it('returns null for a cross-block pair', () => {
+    expect(i2cBlockForPins(0, 3)).toBeNull() // SDA b0, SCL b1
+    expect(i2cBlockForPins(2, 1)).toBeNull() // SDA b1, SCL b0
+    expect(i2cBlockForPins(1, 0)).toBeNull() // roles swapped
+  })
+  it('returns null for an unknown / non-I²C pin', () => {
+    expect(i2cBlockForPins(28, 22)).toBeNull()
+    expect(i2cBlockForPins(22, 23)).toBeNull()
+  })
+})
+
+describe('i2cPinsValid', () => {
+  it('is true only for a valid pair', () => {
+    expect(i2cPinsValid(0, 1)).toBe(true)
+    expect(i2cPinsValid(2, 3)).toBe(true)
+    expect(i2cPinsValid(0, 3)).toBe(false)
+    expect(i2cPinsValid(7, 7)).toBe(false)
+  })
+})
+
+describe('screenPinsPayload (retarget the I²C SDA/SCL pins)', () => {
+  it('builds a `pins <sda> <scl>` payload', () => {
+    expect(screenPinsPayload(0, 1)).toBe('pins 0 1')
+  })
+  it('rounds + clamps each pin to a whole non-negative GPIO', () => {
+    expect(screenPinsPayload(2.7, 4.2)).toBe('pins 3 4')
+    expect(screenPinsPayload(-1, -5)).toBe('pins 0 0')
+  })
+  it('coerces non-finite pins to 0', () => {
+    expect(screenPinsPayload(NaN, Infinity)).toBe('pins 0 0')
+  })
+})
+
+describe('screenAddrPayload (set the I²C address)', () => {
+  it('normalises a 0xNN address to a clean lowercase literal', () => {
+    expect(screenAddrPayload('0x3C')).toBe('addr 0x3c')
+    expect(screenAddrPayload('0X3D')).toBe('addr 0x3d')
+  })
+  it('accepts a bare hex address (a missing 0x prefix is added)', () => {
+    expect(screenAddrPayload('3C')).toBe('addr 0x3c')
+    expect(screenAddrPayload('60')).toBe('addr 0x60') // a bare token is parsed as hex
+  })
+  it('falls back to 0x3c on a bad address', () => {
+    expect(screenAddrPayload('')).toBe('addr 0x3c')
+    expect(screenAddrPayload('zz')).toBe('addr 0x3c')
+  })
+})
+
+describe('findScreenPinsInCode (read declared SCREEN_SDA / SCREEN_SCL)', () => {
+  it('reads UPPERCASE constants (the demo form)', () => {
+    expect(findScreenPinsInCode('SCREEN_SDA = 0\nSCREEN_SCL = 1')).toEqual({ sda: 0, scl: 1 })
+  })
+  it('reads the lowercase kwarg form, whitespace-tolerant', () => {
+    expect(findScreenPinsInCode('inst.start(screen_sda=2,  screen_scl = 3)')).toEqual({
+      sda: 2,
+      scl: 3
+    })
+  })
+  it('returns the FIRST match per role', () => {
+    expect(findScreenPinsInCode('SCREEN_SDA=0\nSCREEN_SDA=8\nSCREEN_SCL=1')).toEqual({
+      sda: 0,
+      scl: 1
+    })
+  })
+  it('returns null for a role the code declares no numeric value for', () => {
+    expect(findScreenPinsInCode('SCREEN_SDA = 0')).toEqual({ sda: 0, scl: null })
+    expect(findScreenPinsInCode('screen_scl=SCREEN_SCL')).toEqual({ sda: null, scl: null })
+    expect(findScreenPinsInCode('print("no pins here")')).toEqual({ sda: null, scl: null })
+    expect(findScreenPinsInCode('')).toEqual({ sda: null, scl: null })
+  })
+})
+
+describe('setScreenPinsInCode (one-click sync of both pins)', () => {
+  it('rewrites both UPPERCASE constants, preserving spacing', () => {
+    expect(setScreenPinsInCode('SCREEN_SDA = 0\nSCREEN_SCL = 1', 4, 5)).toBe(
+      'SCREEN_SDA = 4\nSCREEN_SCL = 5'
+    )
+  })
+  it('rewrites the lowercase kwarg form', () => {
+    expect(setScreenPinsInCode('inst.start(screen_sda=0, screen_scl=1)', 2, 3)).toBe(
+      'inst.start(screen_sda=2, screen_scl=3)'
+    )
+  })
+  it('only the FIRST match of each role is rewritten', () => {
+    expect(setScreenPinsInCode('SCREEN_SDA=0\nSCREEN_SDA=8\nSCREEN_SCL=1', 4, 5)).toBe(
+      'SCREEN_SDA=4\nSCREEN_SDA=8\nSCREEN_SCL=5'
+    )
+  })
+  it('leaves a role with no numeric match untouched', () => {
+    expect(setScreenPinsInCode('SCREEN_SDA = 0', 4, 5)).toBe('SCREEN_SDA = 4')
+    expect(setScreenPinsInCode('no pins here', 4, 5)).toBe('no pins here')
+  })
+  it('rounds + clamps each new pin', () => {
+    expect(setScreenPinsInCode('SCREEN_SDA=0\nSCREEN_SCL=0', 2.7, -1)).toBe(
+      'SCREEN_SDA=3\nSCREEN_SCL=0'
+    )
+  })
+  it('round-trips with findScreenPinsInCode', () => {
+    const updated = setScreenPinsInCode('SCREEN_SDA = 0\nSCREEN_SCL = 1', 26, 27)
+    expect(findScreenPinsInCode(updated)).toEqual({ sda: 26, scl: 27 })
   })
 })

@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.4.3"
+__version__ = "0.5.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -603,7 +603,9 @@ def ready(extra=()):
     print("%s READY %s" % (SENTINEL, " ".join(caps)))
 
 
-def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None, background=False, hz=50):
+def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
+          screen_sda=None, screen_scl=None, screen_addr=0x3C,
+          background=False, hz=50):
     """Register the built-in control handlers + attach the buzzer, then announce.
 
     Then call ``control.poll()`` in your main loop to SERVICE commands — it drains
@@ -618,6 +620,10 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None, backgroun
         attaches the shared :data:`ranger` to an HC-SR04 so the IDE's Range panel
         can retarget the wiring (``pins <trig> <echo>``); call ``inst.ranger.read()``
         in your loop + ``inst.distance(mm)`` to feed the radar,
+      * the ``screen`` receiver when you pass BOTH ``screen_sda`` and ``screen_scl``
+        — builds the shared :data:`display` on an I²C SSD1306 OLED so the IDE's
+        Display panel can retarget the SDA/SCL pins + address and push text
+        (``pins <sda> <scl>`` / ``addr <0xNN>`` / ``text <row> …``),
       * ``ping`` → an immediate ``SNK READY`` reply.
 
     The typical loop::
@@ -644,6 +650,9 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None, backgroun
     if range_trig is not None and range_echo is not None:
         ranger.set_pins(range_trig, range_echo)
         control.on("range", lambda payload: range_command(payload, ranger))
+    if screen_sda is not None and screen_scl is not None:
+        display.set_pins(screen_sda, screen_scl, screen_addr)
+        control.on("screen", lambda payload: screen_command(payload, display))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
     if background:
@@ -1044,9 +1053,205 @@ class Screen:
         screen(rows, addr=addr)
 
 
+# ---------------------------------------------------------------------------
+# I²C display (SSD1306 OLED) — pin mux + a real driver + the `screen` receiver.
+# ---------------------------------------------------------------------------
+
+# The RP2040 (Pico) I²C pin mux: each block exposes SDA/SCL on a fixed set of
+# GPIOs. A pair is valid iff BOTH pins belong to the SAME block (SDA from its SDA
+# set AND SCL from its SCL set). These tables back :func:`_i2c_block_for_pins` and
+# the IDE's invalid-pin warning, so keep them in lock-step with the panel's mux.
+_I2C0_SDA = (0, 4, 8, 12, 16, 20)
+_I2C0_SCL = (1, 5, 9, 13, 17, 21)
+_I2C1_SDA = (2, 6, 10, 14, 18, 26)
+_I2C1_SCL = (3, 7, 11, 15, 19, 27)
+
+
+def _i2c_block_for_pins(sda, scl):
+    """Return the RP2040 I²C block (0 or 1) a ``(sda, scl)`` pair selects, or None.
+
+    A pair is valid only when both pins live in the SAME block's SDA/SCL sets
+    (see the mux tables above): block 0 wants SDA∈{0,4,8,12,16,20} & SCL∈{1,5,9,
+    13,17,21}; block 1 wants SDA∈{2,6,10,14,18,26} & SCL∈{3,7,11,15,19,27}. Any
+    cross-block pair or an unknown pin yields ``None`` (the IDE then warns and the
+    driver falls back to block 0). Pure + side-effect-free for unit tests.
+    """
+    try:
+        sda = int(sda)
+        scl = int(scl)
+    except (TypeError, ValueError):
+        return None
+    if sda in _I2C0_SDA and scl in _I2C0_SCL:
+        return 0
+    if sda in _I2C1_SDA and scl in _I2C1_SCL:
+        return 1
+    return None
+
+
+# The standard SSD1306 init sequence (matches the canonical MicroPython driver).
+_SSD1306_INIT = (
+    0xAE, 0x20, 0x00, 0x40, 0xA1, 0xA8, 0x3F, 0xC8, 0xD3, 0x00,
+    0xDA, 0x12, 0xD5, 0x80, 0xD9, 0xF1, 0xDB, 0x20, 0x81, 0xFF,
+    0xA4, 0xA6, 0x8D, 0x14, 0xAF,
+)
+
+
+class _SSD1306:
+    """A minimal bundled SSD1306 I²C OLED driver (fallback for no ``ssd1306``).
+
+    Uses ``framebuf`` (MONO_VLSB, the SSD1306 page format) for ``fill``/``text``
+    and pushes the buffer with ``i2c.writeto`` in the standard init + addressing
+    sequence. Built ONLY when both ``framebuf`` and a working ``machine.I2C`` are
+    present (guarded by the caller), so the module still imports under CPython.
+    """
+
+    def __init__(self, w, h, i2c, addr=0x3C):
+        import framebuf
+        self.w = w
+        self.h = h
+        self._i2c = i2c
+        self._addr = addr
+        self._buf = bytearray((h // 8) * w)
+        self._fb = framebuf.FrameBuffer(self._buf, w, h, framebuf.MONO_VLSB)
+        for cmd in _SSD1306_INIT:
+            self._cmd(cmd)
+        self.fill(0)
+        self.show()
+
+    def _cmd(self, c):
+        self._i2c.writeto(self._addr, bytes((0x80, c)))
+
+    def fill(self, c):
+        self._fb.fill(c)
+
+    def text(self, s, x, y, c=1):
+        self._fb.text(s, x, y, c)
+
+    def show(self):
+        # Window the column/page address to the full panel, then stream the buffer.
+        for c in (0x21, 0, self.w - 1, 0x22, 0, (self.h // 8) - 1):
+            self._cmd(c)
+        self._i2c.writeto(self._addr, b"\x40" + self._buf)
+
+
+class Display:
+    """Drive a real I²C SSD1306 OLED from ``screen`` commands + echo to the IDE.
+
+    ``set_pins(sda, scl, addr=0x3C, w=128, h=64)`` derives the RP2040 I²C block
+    from the pins (via :func:`_i2c_block_for_pins`, block 0 if the pair is invalid
+    — the IDE warns), builds ``I2C(block, sda=Pin(sda), scl=Pin(scl))``, then a
+    panel: the installed ``ssd1306.SSD1306_I2C`` if present, else the bundled
+    :class:`_SSD1306`. ``text(lines)`` draws each row (``y = i*10``) on the real
+    panel AND emits a ``SNK SCR <addr> text …`` line so the IDE mirrors it.
+
+    Every hardware import is guarded so the module stays importable/testable under
+    CPython — with no ``machine``/``framebuf`` ``set_pins`` is inert (no panel) and
+    ``text`` is purely the telemetry echo (exactly like the legacy :class:`Screen`).
+    """
+
+    def __init__(self, addr="0x3C"):
+        self._i2c = None
+        self._oled = None
+        self._addr = addr  # the bus-address LABEL for the SCR echo (e.g. "0x3C")
+
+    def set_pins(self, sda, scl, addr=0x3C, w=128, h=64):
+        """(Re)build the I²C bus + the SSD1306 panel on ``sda``/``scl``.
+
+        Derives the I²C block from the pins (block 0 when the pair is invalid).
+        Prefers an installed ``ssd1306`` driver, falling back to the bundled
+        :class:`_SSD1306`. Guards every hardware import so it is inert under
+        CPython (the panel is left unbuilt; ``text`` still echoes telemetry).
+        """
+        self._addr = "0x%02X" % int(addr) if isinstance(addr, int) else str(addr)
+        block = _i2c_block_for_pins(sda, scl)
+        if block is None:
+            block = 0  # invalid pair → fall back to block 0 (the IDE warns)
+        try:
+            from machine import Pin, I2C
+        except ImportError:
+            return  # no hardware (CPython) — inert; text() still echoes telemetry
+        self._i2c = I2C(block, sda=Pin(int(sda)), scl=Pin(int(scl)))
+        try:
+            import ssd1306
+            self._oled = ssd1306.SSD1306_I2C(w, h, self._i2c, int(addr))
+            return
+        except Exception:
+            pass
+        try:
+            self._oled = _SSD1306(w, h, self._i2c, int(addr))
+        except Exception:
+            self._oled = None  # no framebuf / panel — telemetry-only
+
+    def set_addr(self, addr):
+        """Set the bus-address label used in the ``SNK SCR`` echo (e.g. ``0x3D``)."""
+        self._addr = "0x%02X" % int(addr) if isinstance(addr, int) else str(addr)
+
+    def text(self, lines):
+        """Draw + echo ``lines`` (an iterable of row strings).
+
+        Renders each row at ``y = i*10`` on the real SSD1306 (``fill(0)`` →
+        ``text`` per row → ``show``) when a panel is attached, then ALWAYS emits a
+        ``SNK SCR <addr> text …`` line so the IDE mirrors it. No-op on the panel
+        without hardware; never raises.
+        """
+        rows = list(lines)
+        oled = self._oled
+        if oled is not None:
+            try:
+                oled.fill(0)
+                for i, row in enumerate(rows):
+                    oled.text(str(row), 0, i * 10)
+                oled.show()
+            except Exception:
+                pass
+        screen(rows, addr=self._addr)
+
+
+def screen_command(payload, disp=None):
+    """Drive ``disp`` (a :class:`Display`) from one ``screen`` control payload.
+
+    Parses the ``<verb> <args>`` grammar and actuates:
+
+      * ``pins <sda> <scl>`` → ``disp.set_pins(sda, scl)`` (retarget the I²C bus)
+      * ``addr <0xNN>``      → ``disp.set_addr(addr)`` (the SCR echo address)
+      * ``text <row> [<row> …]`` → ``disp.text(rows)`` (each row is ``_``-encoded ↔
+        spaces, matching the ``SNK SCR text`` packing)
+
+    Defaults ``disp`` to the shared :data:`display` singleton. Never raises on a
+    malformed payload (it is fed from the IDE). Returns the verb it handled (or
+    ``None``), which keeps it easy to unit-test against a fake/real Display.
+    """
+    disp = disp if disp is not None else display
+    if not payload:
+        return None
+    payload = payload.strip()
+    sp = payload.find(" ")
+    if sp == -1:
+        verb, args = payload, ""
+    else:
+        verb, args = payload[:sp], payload[sp + 1:].strip()
+    try:
+        if verb == "pins":
+            parts = args.split()
+            disp.set_pins(int(parts[0]), int(parts[1]))
+        elif verb == "addr":
+            if not args:
+                return None
+            disp.set_addr(int(args, 0) if args[:2].lower() == "0x" else int(args))
+        elif verb == "text":
+            rows = [tok.replace("_", " ") for tok in args.split(" ")] if args else []
+            disp.text(rows)
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
+
+
 # Shared, ready-to-use (hardware-less) singletons — attach hardware as needed,
 # e.g. ``inst.led = inst.Led(pwm=PWM(Pin(15)))``. NOTE: the rangefinder singleton
 # is ``ranger`` (NOT ``range`` — that would shadow the Python builtin).
 buzzer = Buzzer()
 led = Led()
 ranger = Rangefinder()
+display = Display()

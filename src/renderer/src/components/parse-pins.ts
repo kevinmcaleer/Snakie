@@ -184,25 +184,28 @@ export interface InstrumentPin {
  * Detect pins the program hands to the `instruments` library rather than wiring
  * directly — so they still light up on the board. We match a `<owner>_<role>=<int>`
  * shape ANYWHERE in the source, where `<role>` is `pin` (single-pin devices like
- * the buzzer) OR `trig` / `echo` (the two pins of an HC-SR04 rangefinder). This
- * matches both the `inst.start(buzzer_pin=15)` / `inst.start(range_trig=3, …)`
- * keywords AND a module constant like `BUZZER_PIN = 0` / `RANGE_TRIG = 3` that the
- * program then passes by name (common in the demos, where the kwarg value isn't a
- * literal so only the constant carries the number).
+ * the buzzer), `trig` / `echo` (the two pins of an HC-SR04 rangefinder), OR
+ * `sda` / `scl` (the two pins of an I²C display). This matches both the
+ * `inst.start(buzzer_pin=15)` / `inst.start(range_trig=3, …)` /
+ * `inst.start(screen_sda=0, …)` keywords AND a module constant like
+ * `BUZZER_PIN = 0` / `RANGE_TRIG = 3` / `SCREEN_SDA = 0` that the program then
+ * passes by name (common in the demos, where the kwarg value isn't a literal so
+ * only the constant carries the number).
  *
- * The **owner** stem before `_pin` / `_trig` / `_echo` names the instrument
- * (`buzzer_pin`/`BUZZER_PIN` ⇒ `buzzer`; `range_trig`/`RANGE_ECHO` ⇒ `range`),
- * matched case-insensitively and lower-cased. The value must be a bare **integer**
- * — a `Pin(15)` / variable expression isn't a library-owned raw pin and is skipped
- * (the normal `machine`-constructor scan handles real `Pin`s). Results are de-duped
- * by instrument+pin, so a rangefinder's distinct trig + echo pins both surface.
- * Pure + DOM-free for unit tests.
+ * The **owner** stem before `_pin` / `_trig` / `_echo` / `_sda` / `_scl` names the
+ * instrument (`buzzer_pin`/`BUZZER_PIN` ⇒ `buzzer`; `range_trig`/`RANGE_ECHO` ⇒
+ * `range`; `screen_sda`/`SCREEN_SCL` ⇒ `screen`), matched case-insensitively and
+ * lower-cased. The value must be a bare **integer** — a `Pin(15)` / variable
+ * expression isn't a library-owned raw pin and is skipped (the normal
+ * `machine`-constructor scan handles real `Pin`s). Results are de-duped by
+ * instrument+pin, so a rangefinder's distinct trig + echo (and a display's SDA +
+ * SCL) pins both surface. Pure + DOM-free for unit tests.
  */
 export function parseInstrumentPins(source: string): InstrumentPin[] {
   if (!source) return []
   const out: InstrumentPin[] = []
   const seen = new Set<string>()
-  const re = /\b([A-Za-z_]\w*?)_(?:pin|trig|echo)\s*=\s*(\d+)\b/gi
+  const re = /\b([A-Za-z_]\w*?)_(?:pin|trig|echo|sda|scl)\s*=\s*(\d+)\b/gi
   let m: RegExpExecArray | null
   while ((m = re.exec(source)) !== null) {
     const instrument = m[1].toLowerCase()
