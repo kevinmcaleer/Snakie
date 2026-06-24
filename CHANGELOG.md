@@ -91,6 +91,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   best-effort from documented sources — verify against the datasheets if precision
   matters.
 
+### Fixed
+- **Instrument panels no longer spam the REPL or leave a thread running.** The
+  panels now only write `SNKCMD` control lines when a Snakie program is actually
+  running and servicing the channel — previously the buzzer keyboard / STOP / pin
+  controls and the presence probe could write to a bare REPL, which echoed back as
+  a stream of `SyntaxError`s. The bundled demos now stop the **second-core service
+  cleanly** when you press Stop (`inst.stop()` on `KeyboardInterrupt`), and
+  `inst.stop()` silences the buzzer and aborts an in-progress melody.
+
 ## [0.13.0] - 2026-06-23
 
 ### Added

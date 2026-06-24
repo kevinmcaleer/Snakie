@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -569,9 +569,19 @@ def _service_loop(hz, extra):
 
 
 def stop():
-    """Stop the background service (the core-1 thread exits on its next tick)."""
+    """Stop the background service + silence the buzzer.
+
+    Sets the run flag false (the core-1 thread exits on its next tick) and aborts
+    any in-progress buzzer sequence. Safe to call from the main loop's
+    ``KeyboardInterrupt`` handler so Snakie's Stop button leaves the board quiet
+    and the REPL usable.
+    """
     global _service_running
     _service_running = False
+    try:
+        buzzer.stop()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +616,9 @@ class Buzzer:
 
     def __init__(self, pwm=None):
         self._pwm = pwm
+        # Set by stop() (possibly from the OTHER core) to abort an in-progress
+        # play_seq between notes — so Snakie's Stop silences a long melody at once.
+        self._abort = False
 
     def set_pin(self, n):
         """(Re)target the PWM pin: build ``PWM(Pin(n))`` (no-op without hardware).
@@ -632,7 +645,13 @@ class Buzzer:
         self._pwm.duty_u16(0)
 
     def stop(self):
-        """Silence the buzzer NOW (duty 0). Safe without a PWM pin."""
+        """Silence the buzzer NOW (duty 0) and abort any running sequence.
+
+        Safe without a PWM pin, and safe to call from the OTHER core (it only
+        flips a flag + zeroes the duty), so the main loop's Ctrl-C handler can
+        cut a melody that's mid-play on the service core.
+        """
+        self._abort = True
         if self._pwm is not None:
             self._pwm.duty_u16(0)
 
@@ -650,7 +669,10 @@ class Buzzer:
         sleep_ms = time.sleep_ms if hasattr(time, "sleep_ms") else (
             lambda ms: time.sleep(ms / 1000)
         )
+        self._abort = False
         for freq, ms in pairs:
+            if self._abort:  # stop() was called (maybe from the other core)
+                break
             freq = int(freq)
             ms = int(ms)
             if freq > 0:

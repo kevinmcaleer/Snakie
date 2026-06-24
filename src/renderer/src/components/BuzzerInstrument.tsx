@@ -102,6 +102,18 @@ export function BuzzerInstrument({
   const { present } = useSnakiePresence()
   const { openBuffer } = useWorkspace()
 
+  // Only WRITE to the board when a Snakie program is actually running AND
+  // servicing the control channel; otherwise the SNKCMD line lands on the bare
+  // REPL, which evaluates it as Python and spams `SyntaxError`. The local
+  // WebAudio preview is separate and always plays, so the keyboard still sounds
+  // in the IDE regardless of what's on the board.
+  const txBuzzer = useCallback(
+    (payload: string): void => {
+      if (connected && present) sendBuzzer(payload)
+    },
+    [connected, present]
+  )
+
   // --- Controls --------------------------------------------------------------
   const [pin, setPin] = useState(15)
   const [octave, setOctave] = useState(KEYBOARD_OCTAVE_DEFAULT)
@@ -188,11 +200,11 @@ export function BuzzerInstrument({
     for (const t of timersRef.current) clearTimeout(t)
     timersRef.current = []
     previewOff()
-    sendBuzzer(buzzerStopPayload())
+    txBuzzer(buzzerStopPayload())
     setStatus('standby')
     setActiveKey(null)
     setPlayingIdx(null)
-  }, [previewOff])
+  }, [previewOff, txBuzzer])
 
   // Tear the audio graph down on unmount.
   useEffect(() => {
@@ -214,11 +226,11 @@ export function BuzzerInstrument({
     (freq: number, ms: number): void => {
       setLastFreq(freq > 0 ? freq : null)
       previewOn(freq)
-      sendBuzzer(buzzerTonePayload(freq, ms))
+      txBuzzer(buzzerTonePayload(freq, ms))
       const off = setTimeout(() => previewOff(), ms)
       timersRef.current.push(off)
     },
-    [previewOn, previewOff]
+    [previewOn, previewOff, txBuzzer]
   )
 
   const onKeyDown = useCallback(
@@ -257,7 +269,7 @@ export function BuzzerInstrument({
       setStatus('playing')
       setStaffNotes(notes)
       // On-device: hand the whole melody over in a single seq command.
-      sendBuzzer(buzzerSeqPayload(notes))
+      txBuzzer(buzzerSeqPayload(notes))
       // Locally: schedule the parsed notes for an audible IDE preview + highlight.
       let when = 0
       notes.forEach((n, i) => {
@@ -277,7 +289,7 @@ export function BuzzerInstrument({
       }, when)
       timersRef.current.push(done)
     },
-    [previewOn, previewOff, stopAll]
+    [previewOn, previewOff, stopAll, txBuzzer]
   )
 
   /**
@@ -361,10 +373,13 @@ export function BuzzerInstrument({
   }, [openBuffer])
 
   // --- PIN selector: retarget the on-device PWM pin --------------------------
-  const onPinChange = useCallback((next: number): void => {
-    setPin(next)
-    sendBuzzer(buzzerPinPayload(next))
-  }, [])
+  const onPinChange = useCallback(
+    (next: number): void => {
+      setPin(next)
+      txBuzzer(buzzerPinPayload(next))
+    },
+    [txBuzzer]
+  )
 
   // --- Export ----------------------------------------------------------------
   const exportCode = useMemo(

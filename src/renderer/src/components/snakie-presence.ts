@@ -41,9 +41,10 @@ export interface SnakiePresence {
 }
 
 /**
- * Track whether a Snakie program is live on the board. Sends a `SNKCMD ping` on
- * mount so a running service answers at once (no wait for the next heartbeat),
- * then keeps `present` fresh on a 1 s tick.
+ * Track whether a Snakie program is live on the board, PASSIVELY — it only
+ * listens for the `SNK READY` heartbeat and keeps `present` fresh on a 1 s tick.
+ * It never writes to the board (a probe `SNKCMD` would error on a bare REPL), so
+ * detection of an already-running program can lag up to one heartbeat (~2 s).
  */
 export function useSnakiePresence(): SnakiePresence {
   const lastReady = useRef(0)
@@ -60,8 +61,11 @@ export function useSnakiePresence(): SnakiePresence {
   )
 
   useEffect(() => {
-    // Prompt an immediate READY from any already-running service.
-    window.api.device.sendControl('ping').catch(() => undefined)
+    // Detection is PASSIVE — we listen for the `SNK READY` heartbeat the
+    // background service prints (~every 2 s). We deliberately do NOT send a
+    // `ping` to prompt one: when no program is running, that SNKCMD line lands on
+    // the bare REPL and shows up as a `SyntaxError`. A freshly-opened panel just
+    // waits for the next heartbeat (≤ ~2 s) instead.
     const id = window.setInterval(() => {
       setPresent(isPresent(lastReady.current, Date.now()))
     }, 1000)
