@@ -415,9 +415,8 @@ export function AppShell(): JSX.Element {
         return
       }
       // Present — compare the installed version against the bundled one to decide
-      // present vs OUTDATED. Read both sources; any read failure → stay 'present'
-      // (never nag on a transient error). A legacy copy with no `__version__`
-      // parses to null → differs from the bundled version → 'outdated'.
+      // present vs OUTDATED. A legacy copy with no `__version__` parses to null →
+      // differs from the bundled version → 'outdated'.
       //
       // PREFER the ROOT copy when present: `''` (cwd `/`) sits BEFORE `/lib` on
       // MicroPython's sys.path, so `/instruments.py` SHADOWS `/lib` — it's the
@@ -429,8 +428,18 @@ export function AppShell(): JSX.Element {
         window.api.instruments.librarySource().catch(() => null)
       ])
       if (!active) return
-      if (boardSrc == null || bundledSrc == null) {
+      if (bundledSrc == null) {
+        // Can't read our OWN bundled library (shouldn't happen) → can't compare.
         setLibState('present')
+        return
+      }
+      if (boardSrc == null) {
+        // A library exists but we couldn't read its version — typically the board
+        // is BUSY (running a program over the same serial link the read uses). Do
+        // NOT assume it's current: OFFER the update. The install just (re)writes
+        // the file, so a needless offer is harmless, but a real out-of-date copy
+        // (e.g. an old `read(64)`-blocking 0.3.x) is no longer silently missed.
+        setLibState('outdated')
         return
       }
       setLibState(
