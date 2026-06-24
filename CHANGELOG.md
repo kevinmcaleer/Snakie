@@ -15,6 +15,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Wi-Fi scan** panel now uses that: when a Snakie program is running it drives
   the scan directly; when none is, SCAN offers to **open + run a Wi-Fi demo** in a
   new tab (stopping any running program first) instead of doing nothing.
+- **Buzzer plays on the real board + an editable melody and a staff.** The Buzzer
+  instrument now actually drives a connected speaker: a device-side `buzzer`
+  receiver (`tone` / `seq` / `stop` / `pin`), wired by `inst.start(buzzer_pin=…)`
+  and played on the second core, with a one-click **buzzer demo** when no program
+  is running. The melody row is now editable — **drag notes to reorder, click to
+  remove, and insert rests** — and a new **musical-staff row** shows the melody
+  and highlights the playing note when you press Play.
+- **Dock-to-side on every instrument.** All the new dock instruments (Wi-Fi scan,
+  Button, IMU, buzzer, …) now have an **undock key** in their title bar and float
+  freely over the window, like the oscilloscope and multimeter already did.
 - **Robotics instrument dock (#119).** The instrument dock grew from 3 to a full
   set of instruments, organised so it stays usable: icon-only toggles grouped into
   **Inputs** and **Outputs**, an **in-use vs available** distinction (instruments
