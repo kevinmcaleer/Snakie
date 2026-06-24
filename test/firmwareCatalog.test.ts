@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { buildCatalog } from '../src/main/firmware/catalog'
+import { buildCatalog, flashTargetForFamily } from '../src/main/firmware/catalog'
 import { fileNameFromUrl } from '../src/main/firmware/download'
 
 /**
- * Unit tests for the firmware-catalog reshaping (issue #64). `buildCatalog`
- * turns Thonny's flat `micropython-variants-uf2.json` array into the
- * Family → Model → Variant → Version cascade the flash dialog renders, and is
- * the load-bearing pure logic worth pinning. `fileNameFromUrl` derives the temp
- * download filename.
+ * Unit tests for the firmware-catalog reshaping (issues #64, #125).
+ * `buildCatalog` turns Thonny's flat UF2 (`.uf2`) + esptool (`.bin`) variant
+ * arrays into the Family → Model → Variant → Version cascade the flash dialog
+ * renders, and is the load-bearing pure logic worth pinning.
+ * `flashTargetForFamily` maps a catalog family to its flash `{ board, offset }`
+ * (the per-chip esptool offset must be exact). `fileNameFromUrl` derives the
+ * temp download filename.
  */
 
 const SAMPLE = [
@@ -61,11 +63,14 @@ describe('buildCatalog', () => {
     expect(pico.variants[0].versions[0].url).toContain('RPI_PICO-v1.28.0.uf2')
   })
 
-  it('skips entries with no family/model or no .uf2 downloads', () => {
+  it('skips entries with no family/model or no flashable (.uf2/.bin) downloads', () => {
     const cat = buildCatalog([
-      { family: 'rp2', model: 'X', downloads: [{ version: 'v1', url: 'https://x/firmware.bin' }] },
+      // A non-firmware extension (not .uf2 / .bin) is skipped.
+      { family: 'rp2', model: 'X', downloads: [{ version: 'v1', url: 'https://x/firmware.zip' }] },
+      // Missing model.
       { family: 'rp2', downloads: [{ version: 'v1', url: 'https://x/y.uf2' }] },
-      { family: '', model: 'Z', downloads: [{ version: 'v1', url: 'https://x/z.uf2' }] }
+      // Missing family.
+      { family: '', model: 'Z', downloads: [{ version: 'v1', url: 'https://x/z.bin' }] }
     ])
     expect(cat.families).toHaveLength(0)
   })
@@ -96,6 +101,102 @@ describe('buildCatalog', () => {
     expect(buildCatalog({}).families).toEqual([])
     expect(buildCatalog('nope').families).toEqual([])
   })
+
+  // --- issue #125: ESP `.bin` catalog + merging two sources + dedupe ---
+
+  it('keeps `.bin` (esptool) downloads and builds the esp families', () => {
+    const cat = buildCatalog([
+      {
+        vendor: 'Espressif',
+        model: 'ESP32',
+        family: 'esp32',
+        title: 'ESP32 / WROOM',
+        downloads: [{ version: 'v1.28.0', url: 'https://micropython.org/.../ESP32_GENERIC-v1.28.0.bin' }]
+      },
+      {
+        vendor: 'Espressif',
+        model: 'ESP32-S3',
+        family: 'esp32s3',
+        title: 'ESP32-S3',
+        downloads: [{ version: 'v1.28.0', url: 'https://micropython.org/.../ESP32_S3-v1.28.0.bin' }]
+      }
+    ])
+    expect(cat.families.map((f) => f.family)).toEqual(['esp32', 'esp32s3'])
+    const esp32 = cat.families.find((f) => f.family === 'esp32')!
+    expect(esp32.models[0].variants[0].versions[0].url).toMatch(/\.bin$/)
+  })
+
+  it('merges the UF2 (.uf2) and esptool (.bin) source arrays into one cascade', () => {
+    // Mirrors `fetchFirmwareCatalog` concatenating the two raw arrays.
+    const uf2 = [
+      {
+        vendor: 'Raspberry Pi',
+        model: 'Pico',
+        family: 'rp2',
+        downloads: [{ version: 'v1.28.0', url: 'https://x/RPI_PICO-v1.28.0.uf2' }]
+      }
+    ]
+    const esptool = [
+      {
+        vendor: 'Espressif',
+        model: 'ESP32',
+        family: 'esp32',
+        downloads: [{ version: 'v1.28.0', url: 'https://x/ESP32-v1.28.0.bin' }]
+      }
+    ]
+    const cat = buildCatalog([...uf2, ...esptool])
+    expect(cat.families.map((f) => f.family)).toEqual(['esp32', 'rp2'])
+  })
+
+  it('de-dupes versions by url within a variant when sources overlap', () => {
+    const dup = {
+      vendor: 'Espressif',
+      model: 'ESP32',
+      family: 'esp32',
+      title: 'ESP32',
+      downloads: [
+        { version: 'v1.28.0', url: 'https://x/ESP32-v1.28.0.bin' },
+        { version: 'v1.27.0', url: 'https://x/ESP32-v1.27.0.bin' }
+      ]
+    }
+    // The exact same entry appears in both merged arrays.
+    const cat = buildCatalog([dup, { ...dup }])
+    const variant = cat.families[0].models[0].variants[0]
+    expect(variant.versions.map((v) => v.url)).toEqual([
+      'https://x/ESP32-v1.28.0.bin',
+      'https://x/ESP32-v1.27.0.bin'
+    ])
+  })
+})
+
+describe('flashTargetForFamily', () => {
+  it('maps esp32 to esp32 board at 0x1000', () => {
+    expect(flashTargetForFamily('esp32')).toEqual({ board: 'esp32', offset: '0x1000' })
+  })
+
+  it('maps every other esp32* chip to esp32 board at 0x0', () => {
+    for (const fam of ['esp32s2', 'esp32s3', 'esp32c2', 'esp32c3', 'esp32c5', 'esp32c6', 'esp32p4']) {
+      expect(flashTargetForFamily(fam)).toEqual({ board: 'esp32', offset: '0x0' })
+    }
+  })
+
+  it('maps esp8266 to esp8266 board at 0x0', () => {
+    expect(flashTargetForFamily('esp8266')).toEqual({ board: 'esp8266', offset: '0x0' })
+  })
+
+  it('maps rp2 to rp2040 board with NO offset (UF2 copy)', () => {
+    const target = flashTargetForFamily('rp2')
+    expect(target.board).toBe('rp2040')
+    expect(target.offset).toBeUndefined()
+  })
+
+  it('treats an unknown family as a UF2 copy (rp2040, no offset)', () => {
+    expect(flashTargetForFamily('mimxrt')).toEqual({ board: 'rp2040' })
+  })
+
+  it('is case/whitespace tolerant', () => {
+    expect(flashTargetForFamily('  ESP32  ')).toEqual({ board: 'esp32', offset: '0x1000' })
+  })
 })
 
 describe('fileNameFromUrl', () => {
@@ -105,12 +206,19 @@ describe('fileNameFromUrl', () => {
     )
   })
 
-  it('drops a query string', () => {
-    expect(fileNameFromUrl('https://x/y/FW-v1.uf2?token=abc')).toBe('FW-v1.uf2')
+  it('extracts the .bin basename from a URL (issue #125)', () => {
+    expect(
+      fileNameFromUrl('https://micropython.org/resources/firmware/ESP32_GENERIC-v1.28.0.bin')
+    ).toBe('ESP32_GENERIC-v1.28.0.bin')
   })
 
-  it('falls back to a generated name when the URL has no .uf2 basename', () => {
-    expect(fileNameFromUrl('https://x/y/')).toMatch(/^micropython-\d+\.uf2$/)
-    expect(fileNameFromUrl('not a url')).toMatch(/^micropython-\d+\.uf2$/)
+  it('drops a query string', () => {
+    expect(fileNameFromUrl('https://x/y/FW-v1.uf2?token=abc')).toBe('FW-v1.uf2')
+    expect(fileNameFromUrl('https://x/y/FW-v1.bin?token=abc')).toBe('FW-v1.bin')
+  })
+
+  it('falls back to a generated .bin name when the URL has no firmware basename', () => {
+    expect(fileNameFromUrl('https://x/y/')).toMatch(/^micropython-\d+\.bin$/)
+    expect(fileNameFromUrl('not a url')).toMatch(/^micropython-\d+\.bin$/)
   })
 })

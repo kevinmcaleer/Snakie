@@ -146,12 +146,25 @@ export interface FirmwareCatalog {
   families: FirmwareFamily[]
 }
 
-/** Request to download a `.uf2` from a URL and flash it onto a boot drive. */
+/**
+ * Request to download a firmware file from a catalog URL and flash it onto a
+ * device. Supports BOTH catalog paths (issues #64, #125):
+ *  - **UF2 / RP2040** — downloads a `.uf2` and copies it onto `mountPath`.
+ *  - **ESP (`.bin`)** — downloads a `.bin` and flashes it via esptool on `port`
+ *    at `offset` (per-chip; see {@link FlashOptions.offset}).
+ *
+ * The extra fields are forwarded straight to {@link flash}, which dispatches by
+ * `board`, so only the fields relevant to the target board need be supplied.
+ */
 export interface DownloadAndFlashOptions {
-  /** Absolute URL of the `.uf2` to download (from the catalog). */
+  /** Absolute URL of the `.uf2` (RP2040) or `.bin` (ESP) to download. */
   url: string
   /** Board family for the flash dispatch (UF2 copy uses `rp2040`). */
   board: BoardType
-  /** Mounted UF2 boot-drive path to copy the firmware onto. */
-  mountPath: string
+  /** Mounted UF2 boot-drive path to copy the firmware onto (RP2040 only). */
+  mountPath?: string
+  /** Serial port path for the esptool flash (ESP only). */
+  port?: string
+  /** Flash offset for the esptool `write_flash` (ESP only; per-chip). */
+  offset?: string
 }

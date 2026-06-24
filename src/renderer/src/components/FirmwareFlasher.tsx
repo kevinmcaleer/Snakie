@@ -26,20 +26,42 @@ const DEFAULT_OFFSET: Record<BoardType, string> = {
   rp2040: ''
 }
 
-/** Where the `.uf2` to flash comes from. */
+/** Where the firmware to flash comes from (`.uf2` or `.bin`). */
 type Source = 'local' | 'catalog'
 
 /**
- * FIRMWARE FLASHER MODAL (issues #14, #64).
+ * Map a catalog `family` to the flash `{ board, offset }` for a catalog flash
+ * (issue #125). MUST match `flashTargetForFamily` in
+ * `src/main/firmware/catalog.ts` (the canonical, unit-tested copy); replicated
+ * here — rather than imported from `src/main` — so the renderer bundle stays
+ * free of main-only modules, mirroring `sanitiseBoardId`.
+ */
+function flashTargetForFamily(family: string): { board: BoardType; offset?: string } {
+  const fam = family.trim().toLowerCase()
+  if (fam.startsWith('rp2')) return { board: 'rp2040' }
+  if (fam === 'esp8266') return { board: 'esp8266', offset: '0x0' }
+  if (fam.startsWith('esp')) return { board: 'esp32', offset: fam === 'esp32' ? '0x1000' : '0x0' }
+  return { board: 'rp2040' }
+}
+
+/**
+ * FIRMWARE FLASHER MODAL (issues #14, #64, #125).
  *
  * Lets the user flash MicroPython firmware to a device without leaving Snakie:
  *  - auto-detects board candidates (serial VID/PID for ESP, RPI-RP2 UF2 drive),
- *  - for UF2 boards, picks the firmware EITHER by browsing a local `.uf2`
- *    file OR by downloading one from MicroPython.org via Thonny's curated
- *    catalog (Family → Model → Variant → Version cascade) — issue #64,
- *  - for ESP boards, picks the `.bin` file and flashes via esptool,
- *  - streams a live log + a % progress bar (download then copy), with a Done
- *    button once the flash finishes (success or failure).
+ *  - for ANY board, picks the firmware EITHER by browsing a local file
+ *    (`.bin` for ESP, `.uf2` for RP2040) OR by downloading one from
+ *    MicroPython.org via Thonny's curated catalog (Family → Model → Variant →
+ *    Version cascade) — issue #64 (UF2) + issue #125 (ESP `.bin` via esptool),
+ *  - flashes RP2040 by copying the UF2 onto the boot drive, ESP via esptool at
+ *    the per-chip offset,
+ *  - streams a live log + a % progress bar (download then copy/flash), with a
+ *    Done button once the flash finishes (success or failure).
+ *
+ * For a CATALOG flash the selected *family* is authoritative for the flash
+ * target: picking a family syncs the Board type + offset via
+ * {@link flashTargetForFamily}, so the right inputs (port/offset for ESP, boot
+ * drive for RP2040) surface automatically.
  *
  * All heavy lifting happens in the main process via `window.api.firmware`; this
  * component is purely presentational state + orchestration.
@@ -117,8 +139,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const handleBoardChange = useCallback((next: BoardType): void => {
     setBoard(next)
     setOffset(DEFAULT_OFFSET[next])
-    // The catalog source only applies to UF2 boards; snap ESP back to local.
-    if (next === 'esp32' || next === 'esp8266') setSource('local')
+    // The catalog now serves ESP (`.bin`) and RP2040 (`.uf2`) alike (issue
+    // #125), so the source is no longer gated by board.
   }, [])
 
   const handlePickFile = useCallback(async (): Promise<void> => {
@@ -146,8 +168,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     }
   }, [])
 
-  // When the user switches to the catalog source for a UF2 board, fetch it once
-  // and pre-select a sensible family (rp2 for RP2040) + the detected boot drive.
+  // When the user switches to the catalog source (any board), fetch it once.
   useEffect(() => {
     if (source !== 'catalog') return
     if (!catalog && !catalogLoading && !catalogError) void loadCatalog()
@@ -170,13 +191,16 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   )
   const versions = useMemo(() => variant?.versions ?? [], [variant])
 
-  // Pre-select Family (rp2 if present, else first) once the catalog arrives.
+  // Pre-select a sensible Family once the catalog arrives: prefer one whose
+  // flash target matches the currently selected board (so an ESP user lands on
+  // an ESP family), then `rp2`, then the first family.
   useEffect(() => {
     if (families.length === 0) return
     if (selFamily && families.some((f) => f.family === selFamily)) return
-    const preferred = families.find((f) => f.family === 'rp2') ?? families[0]
+    const matchesBoard = families.find((f) => flashTargetForFamily(f.family).board === board)
+    const preferred = matchesBoard ?? families.find((f) => f.family === 'rp2') ?? families[0]
     setSelFamily(preferred.family)
-  }, [families, selFamily])
+  }, [families, selFamily, board])
 
   // Reset downstream selections whenever the upstream selection changes.
   useEffect(() => {
@@ -195,20 +219,36 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     else setSelVersionUrl('')
   }, [versions])
 
+  // For a CATALOG flash the selected family is authoritative: sync the Board
+  // type to its flash target and pre-fill the offset (still user-editable in the
+  // Flash offset field) per chip (issue #125). This surfaces the right inputs
+  // (port/offset for ESP, boot drive for RP2040) automatically.
+  useEffect(() => {
+    if (source !== 'catalog' || !selFamily) return
+    const target = flashTargetForFamily(selFamily)
+    setBoard(target.board)
+    setOffset(target.offset ?? DEFAULT_OFFSET[target.board])
+  }, [source, selFamily])
+
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive')
 
-  const usingCatalog = !isEsp && source === 'catalog'
+  const usingCatalog = source === 'catalog'
+
+  // The firmware to flash: a catalog URL (download) or a picked local path.
+  const haveFirmware = usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
 
   const canFlash = useMemo(() => {
     if (flashing) return false
+    if (!haveFirmware) return false
     if (isEsp) {
-      return port.length > 0 && esptool?.available === true && firmwarePath.length > 0
+      // ESP needs a serial port + esptool, whether the `.bin` is local or from
+      // the catalog (issue #125).
+      return port.length > 0 && esptool?.available === true
     }
-    // UF2 boards: need the boot drive plus either a local file or a chosen URL.
-    if (mountPath.length === 0) return false
-    return usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
-  }, [flashing, isEsp, port, esptool, firmwarePath, mountPath, usingCatalog, selVersionUrl])
+    // RP2040 needs the boot drive to copy the `.uf2` onto.
+    return mountPath.length > 0
+  }, [flashing, haveFirmware, isEsp, port, esptool, mountPath])
 
   const resetRun = useCallback((): void => {
     setLog([])
@@ -221,10 +261,17 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     resetRun()
     try {
       if (usingCatalog) {
+        // Derive the flash target from the selected family (authoritative for a
+        // catalog flash); the user may have edited the offset, so prefer the
+        // field value over the family default (issue #125).
+        const target = flashTargetForFamily(selFamily)
         await window.api.firmware.downloadAndFlash({
           url: selVersionUrl,
-          board,
-          mountPath
+          board: target.board,
+          // ESP: serial port + offset; RP2040: boot drive.
+          port: target.board === 'rp2040' ? undefined : port,
+          offset: target.board === 'rp2040' ? undefined : offset || target.offset,
+          mountPath: target.board === 'rp2040' ? mountPath : undefined
         })
       } else {
         await window.api.firmware.flash({
@@ -244,7 +291,18 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       setFlashing(false)
       setOutcome('error')
     }
-  }, [resetRun, usingCatalog, selVersionUrl, board, mountPath, firmwarePath, isEsp, port, offset])
+  }, [
+    resetRun,
+    usingCatalog,
+    selFamily,
+    selVersionUrl,
+    board,
+    mountPath,
+    firmwarePath,
+    isEsp,
+    port,
+    offset
+  ])
 
   const finished = outcome === 'success' || outcome === 'error'
 
@@ -286,7 +344,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 id="firmware-board"
                 className="firmware-select"
                 value={board}
-                disabled={flashing}
+                // In catalog mode the selected Family drives the board (issue
+                // #125), so the dropdown reflects it read-only.
+                disabled={flashing || usingCatalog}
                 onChange={(e) => handleBoardChange(e.target.value as BoardType)}
               >
                 {(Object.keys(BOARD_LABELS) as BoardType[]).map((b) => (
@@ -305,6 +365,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 ⟳ Detect
               </button>
             </div>
+            {usingCatalog && (
+              <p className="firmware-hint">
+                Board type follows the catalog Family you pick below.
+              </p>
+            )}
             {candidates.length > 0 && (
               <p className="firmware-hint">
                 Detected: {candidates.map((c) => c.label).join('; ')}
@@ -398,34 +463,34 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
             </div>
           )}
 
-          {/* Firmware source: local file (always) or, for UF2 boards, the catalog. */}
-          {!isEsp && (
-            <div className="firmware-field">
-              <span className="firmware-field__label">Firmware source</span>
-              <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={source === 'catalog'}
-                  className={`firmware-source-tab ${source === 'catalog' ? 'is-active' : ''}`}
-                  onClick={() => setSource('catalog')}
-                  disabled={flashing}
-                >
-                  Download from MicroPython.org
-                </button>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={source === 'local'}
-                  className={`firmware-source-tab ${source === 'local' ? 'is-active' : ''}`}
-                  onClick={() => setSource('local')}
-                  disabled={flashing}
-                >
-                  Local file
-                </button>
-              </div>
+          {/* Firmware source: download from the catalog or browse a local file.
+              Available for every board — ESP (`.bin`) and RP2040 (`.uf2`) alike
+              (issue #125). */}
+          <div className="firmware-field">
+            <span className="firmware-field__label">Firmware source</span>
+            <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={source === 'catalog'}
+                className={`firmware-source-tab ${source === 'catalog' ? 'is-active' : ''}`}
+                onClick={() => setSource('catalog')}
+                disabled={flashing}
+              >
+                Download from MicroPython.org
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={source === 'local'}
+                className={`firmware-source-tab ${source === 'local' ? 'is-active' : ''}`}
+                onClick={() => setSource('local')}
+                disabled={flashing}
+              >
+                Local file
+              </button>
             </div>
-          )}
+          </div>
 
           {usingCatalog ? (
             <div className="firmware-field">
@@ -624,19 +689,17 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 onClick={() => void handleFlash()}
                 disabled={!canFlash}
                 title={
-                  isEsp && !port
-                    ? 'Select a serial port'
-                    : isEsp && esptool?.available !== true
-                      ? 'esptool is required to flash ESP boards'
-                      : isEsp && !firmwarePath
-                        ? 'Choose a firmware file first'
-                        : !isEsp && !mountPath
-                          ? 'Select the RP2040 boot drive'
-                          : usingCatalog && !selVersionUrl
-                            ? 'Choose a firmware version to download'
-                            : !usingCatalog && !firmwarePath
-                              ? 'Choose a firmware file first'
-                              : 'Flash the firmware to the device'
+                  usingCatalog && !selVersionUrl
+                    ? 'Choose a firmware version to download'
+                    : !usingCatalog && !firmwarePath
+                      ? 'Choose a firmware file first'
+                      : isEsp && !port
+                        ? 'Select a serial port'
+                        : isEsp && esptool?.available !== true
+                          ? 'esptool is required to flash ESP boards'
+                          : !isEsp && !mountPath
+                            ? 'Select the RP2040 boot drive'
+                            : 'Flash the firmware to the device'
                 }
               >
                 {flashing ? 'Flashing…' : usingCatalog ? 'Download & Flash' : 'Flash'}
