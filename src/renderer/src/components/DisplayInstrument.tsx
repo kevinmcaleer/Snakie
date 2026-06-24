@@ -243,6 +243,15 @@ export function DisplayInstrument({
   }, [activeFile, sda, scl, updateContent])
 
   const onPush = useCallback(async (): Promise<void> => {
+    // Push needs a LIVE Snakie program to read the control channel via
+    // inst.control.poll(); with the board at a bare REPL the raw
+    // `SNKCMD screen …` line is fed to the prompt and fails with
+    // `SyntaxError: invalid syntax`. Gate exactly like txScreen and surface the
+    // "run the demo" prompt instead of blindly transmitting.
+    if (!(connected && (present || everPresent.current))) {
+      setPrompt(true)
+      return
+    }
     const rows = draft.split('\n')
     const cols = geo.type === 'char' ? geo.cols : undefined
     const payload = buildScreenPayload(rows, { cols })
@@ -255,7 +264,7 @@ export function DisplayInstrument({
       setPushState('error')
       window.setTimeout(() => setPushState(''), 2200)
     }
-  }, [draft, geo])
+  }, [draft, geo, connected, present])
 
   // The address shown in the readout / source pill: the live wire address wins,
   // else the panel's configured address.
