@@ -111,14 +111,16 @@
 }
 
 .i2cd__px-svg {
-  display: block;
+  /* MUST be absolutely positioned within the relative `.i2cd__panel` (the same
+     as `.range__svg`). An in-flow (static) <svg> with width/height:100% + a
+     viewBox sizes against the wrong containing block in Chromium and renders at
+     full VIEWPORT width pinned to the top of the window (escaping the 404px
+     instrument). `inset:0` anchors it to the panel. Note: do NOT add a CSS
+     `filter` here either — the lit-pixel glow is an in-SVG <filter>. */
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-  image-rendering: pixelated;
-  /* NOTE: do NOT put a CSS `filter` here — a CSS filter on a percentage-sized
-     <svg> with a viewBox composites it onto a separate layer that Chromium can
-     mis-position to the top-left of the window (escaping the screen's
-     overflow:hidden). The lit-pixel glow lives in an in-SVG <filter> instead. */
 }
 
 .i2cd__px-bg {
