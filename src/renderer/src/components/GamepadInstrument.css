@@ -1,0 +1,446 @@
+/*
+ * Gamepad / Teleop instrument body (#110) — drive a robot live from a gamepad or
+ * the on-screen sticks. Reuses the shared `InstrumentWindow` chrome + phosphor
+ * screen (`InstrumentWindow.css`); this file styles only the body: the screen
+ * inner (status + virtual stick + mapped-output bars), the safety controls
+ * (HOLD-TO-DRIVE deadman + E-STOP), the mapping editor and the 3-column readout.
+ *
+ * Dark / self-contained (no theme tokens) so it reads identically in every
+ * theme, matching the scope/meter/plotter chrome it sits inside. Themed
+ * per-instrument via the `--accent` / `--accent-border` custom properties set on
+ * `.gp`. Font: JetBrains Mono (inherited).
+ */
+
+.gp {
+  --accent: #b18cf0;
+  --accent-border: rgba(177, 140, 240, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--accent);
+}
+
+/* --- Screen --- */
+.gp__screen {
+  --screen-accent: var(--accent);
+}
+
+.gp__screen-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 12px;
+  min-height: 150px;
+}
+
+.gp__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gp__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a3f47;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
+.gp__dot--on {
+  background: var(--accent);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.gp__status-text {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 75%, #9aa0a8);
+}
+
+.gp__live {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+}
+
+/* --- Virtual stick --- */
+.gp__stick {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #16191d, #0a0c0e 72%, #060809);
+  border: 1px solid var(--accent-border);
+  box-shadow:
+    inset 0 3px 9px rgba(0, 0, 0, 0.85),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  cursor: grab;
+  touch-action: none;
+}
+
+.gp__stick--off {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gp__stick-cross {
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  border: 1px dashed color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.gp__stick-knob {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 40% 35%, color-mix(in srgb, var(--accent) 75%, #fff), var(--accent) 70%, #5a4690);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    0 0 9px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+/* --- Mapped outputs --- */
+.gp__outputs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.gp__empty {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  color: #5a5f67;
+}
+
+.gp__out {
+  display: grid;
+  grid-template-columns: 46px 1fr 38px;
+  align-items: center;
+  gap: 6px;
+}
+
+.gp__out-name {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gp__out-track {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: #0a0c0e;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+/* centre tick */
+.gp__out-track::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #2a2e33;
+}
+
+.gp__out-fill {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 60%, transparent);
+  border-radius: 2px;
+}
+
+.gp__out-val {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: right;
+  color: color-mix(in srgb, var(--accent) 78%, #cfd3d8);
+  font-variant-numeric: tabular-nums;
+}
+
+.gp__btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 2px;
+}
+
+.gp__btn {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #6b7079;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+}
+
+.gp__btn--on {
+  color: #07090b;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+/* --- Safety controls --- */
+.gp__safety {
+  display: flex;
+  gap: 10px;
+}
+
+.gp__deadman {
+  flex: 1;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--accent) 80%, #cfd3d8);
+  background: linear-gradient(180deg, #1a1d21, #101316);
+  border: 1px solid var(--accent-border);
+  box-shadow:
+    0 2px 0 #050708,
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+}
+
+.gp__deadman:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.gp__deadman--held {
+  color: #07090b;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 90%, #fff), var(--accent));
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.4),
+    0 0 12px color-mix(in srgb, var(--accent) 55%, transparent);
+  transform: translateY(1px);
+}
+
+.gp__estop {
+  flex: 0 0 96px;
+  padding: 12px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  color: #fff;
+  background: radial-gradient(circle at 50% 35%, #ff5a4a, #c5281c 75%, #8e1810);
+  border: 2px solid #7a140c;
+  box-shadow:
+    0 3px 0 #4a0d07,
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+}
+
+.gp__estop--latched {
+  background: radial-gradient(circle at 50% 35%, #ffd24a, #f0a81c 75%, #b87a08);
+  border-color: #8a6206;
+  color: #2a1c00;
+  text-shadow: none;
+  box-shadow:
+    inset 0 2px 5px rgba(0, 0, 0, 0.4),
+    0 0 14px rgba(240, 168, 28, 0.6);
+  transform: translateY(2px);
+  animation: gp-estop-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes gp-estop-pulse {
+  50% {
+    box-shadow:
+      inset 0 2px 5px rgba(0, 0, 0, 0.4),
+      0 0 22px rgba(240, 168, 28, 0.85);
+  }
+}
+
+/* --- Mapping editor --- */
+.gp__editor-toggle {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 65%, #8b9099);
+  cursor: pointer;
+}
+
+.gp__editor {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.gp__editor-head,
+.gp__editor-row {
+  display: grid;
+  grid-template-columns: 1fr 64px 44px 44px 44px 22px 18px;
+  gap: 4px;
+  align-items: center;
+}
+
+.gp__editor-head {
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #5a5f67;
+  padding: 0 2px 2px;
+}
+
+.gp__src {
+  display: flex;
+  gap: 3px;
+}
+
+.gp__editor-sub {
+  margin-top: 6px;
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #5a5f67;
+  border-top: 1px solid #1c1f22;
+  padding-top: 5px;
+}
+
+.gp__editor-brow {
+  display: grid;
+  grid-template-columns: 1fr 44px 18px;
+  gap: 4px;
+  align-items: center;
+}
+
+.gp__in {
+  font-family: inherit;
+  font-size: 9px;
+  color: color-mix(in srgb, var(--accent) 78%, #cfd3d8);
+  background: #15181b;
+  border: 1px solid #26282b;
+  border-radius: 4px;
+  padding: 3px 4px;
+  min-width: 0;
+}
+
+.gp__in:focus {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+.gp__in--idx {
+  width: 28px;
+}
+
+.gp__in--kind {
+  width: 30px;
+  padding: 3px 2px;
+}
+
+.gp__in--chk {
+  width: 14px;
+  height: 14px;
+  accent-color: var(--accent);
+  justify-self: center;
+}
+
+.gp__del,
+.gp__add {
+  font-family: inherit;
+  cursor: pointer;
+  color: #9aa0a8;
+  background: #15181b;
+  border: 1px solid #26282b;
+  border-radius: 4px;
+}
+
+.gp__del {
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px;
+}
+
+.gp__add {
+  margin-top: 4px;
+  align-self: flex-start;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 4px 8px;
+  color: color-mix(in srgb, var(--accent) 70%, #cfd3d8);
+}
+
+.gp__del:hover,
+.gp__add:hover {
+  border-color: var(--accent-border);
+}
+
+/* --- Bottom readout strip (mirrors scope/meter) --- */
+.gp__readout {
+  display: flex;
+  align-items: stretch;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.gp__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.gp__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.gp__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 72%, #9aa0a8);
+  font-variant-numeric: tabular-nums;
+}
+
+.gp__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
