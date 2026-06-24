@@ -4,7 +4,7 @@ import { type InstrumentDef } from './instruments-registry'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
-import { BUZZER_DEMO, BUZZER_DEMO_NAME } from './buzzer-demo'
+import { buzzerDemo, BUZZER_DEMO_NAME } from './buzzer-demo'
 import {
   CHROMATIC,
   buzzerPinPayload,
@@ -310,12 +310,11 @@ export function BuzzerInstrument({
    */
   const onPlayMelody = useCallback((): void => {
     if (melody.length === 0) return
-    if (!connected || !present) {
-      setPrompt(true)
-      return
-    }
-    setPrompt(false)
+    // Always play the local WebAudio preview + staff; the board send inside
+    // playSequence is gated on presence (txBuzzer). If no program is live, also
+    // surface the "run the demo" prompt — but the melody still plays in the IDE.
     playSequence(melody)
+    setPrompt(connected ? !present : false)
   }, [melody, connected, present, playSequence])
 
   // --- Editable melody (drag reorder / click remove / insert rest) -----------
@@ -347,12 +346,8 @@ export function BuzzerInstrument({
   /** Play the pasted RTTTL: locally as timed tones + a single on-device seq line. */
   const playRtttl = useCallback((): void => {
     if (!parsedRtttl || parsedRtttl.notes.length === 0) return
-    if (!connected || !present) {
-      setPrompt(true)
-      return
-    }
-    setPrompt(false)
     playSequence(parsedRtttl.notes)
+    setPrompt(connected ? !present : false)
   }, [parsedRtttl, connected, present, playSequence])
 
   /** Load the parsed RTTTL into the editable sequencer melody. */
@@ -370,17 +365,18 @@ export function BuzzerInstrument({
   const runDemo = useCallback(async (): Promise<void> => {
     setBusy(true)
     try {
+      const src = buzzerDemo(pin) // wire the demo to the panel's selected pin
       await window.api.device.interrupt().catch(() => undefined)
-      openBuffer(BUZZER_DEMO_NAME, BUZZER_DEMO)
+      openBuffer(BUZZER_DEMO_NAME, src)
       await new Promise((resolve) => setTimeout(resolve, 200))
-      await window.api.device.sendData(`\x05${BUZZER_DEMO}\x04`)
+      await window.api.device.sendData(`\x05${src}\x04`)
       setPrompt(false)
     } catch {
       /* offline — the prompt stays dismissable; local preview still works */
     } finally {
       setBusy(false)
     }
-  }, [openBuffer])
+  }, [openBuffer, pin])
 
   // --- PIN selector: retarget the on-device PWM pin --------------------------
   const onPinChange = useCallback(
@@ -550,8 +546,9 @@ export function BuzzerInstrument({
                   </button>
                 </div>
                 <p className="buzzer__prompt-hint">
-                  Opens a demo that plays on the 2nd core — or run your own program
-                  that calls <code>inst.start(buzzer_pin={pin})</code>.
+                  Plays in the IDE now; to drive the board, open the demo (or run your
+                  own program calling <code>inst.start(buzzer_pin={pin})</code> +{' '}
+                  <code>inst.control.poll()</code>).
                 </p>
               </>
             ) : (

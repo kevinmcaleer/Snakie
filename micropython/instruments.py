@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -382,6 +382,7 @@ class Control:
         self._buf = ""           # partial trailing line between polls
         self._poll = None        # uselect.poll() over stdin, when available
         self._handlers = {}      # target -> callable(payload) registry
+        self._last_beat = None   # ticks of the last SNK READY heartbeat
         self._setup_poll()
 
     def _setup_poll(self):
@@ -398,16 +399,21 @@ class Control:
             self._poll = None
 
     def _read_available(self):
-        """Return any bytes/str currently waiting on stdin, or '' (never blocks)."""
+        """Return any bytes/str currently waiting on stdin, or '' (never blocks).
+
+        Reads ONE byte at a time, gated by ``poll(0)`` each iteration. This is
+        the critical bit on a Pico: ``stream.read(64)`` on USB-CDC stdin BLOCKS
+        until 64 bytes arrive (there's no EOF), which would wedge the polling
+        loop; ``read(1)`` after ``poll(0)`` confirms a byte is ready returns at
+        once, so a burst is drained byte-by-byte without ever blocking.
+        """
         if self._poll is None:
             return ""
         uselect, poller, stream = self._poll
         chunks = []
-        # poll(0) returns immediately; loop while data is ready so a burst of
-        # commands is drained in one poll() call.
         while poller.poll(0):
             try:
-                data = stream.read(64)
+                data = stream.read(1)
             except Exception:
                 break
             if not data:
@@ -444,10 +450,37 @@ class Control:
                     pass
 
     def poll(self):
-        """Drain pending control lines from stdin (non-blocking). Call each loop."""
+        """Service the control channel: drain pending commands + heartbeat.
+
+        Call once per main-loop iteration. It reads any waiting ``SNKCMD`` lines
+        (non-blocking) AND emits a ``SNK READY`` heartbeat ~every 2 s so the IDE
+        knows this program is alive and servicing control. Safe inside a tight
+        ``while True:`` — it never blocks.
+        """
         text = self._read_available()
         if text:
             self.feed(text)
+        self._beat()
+
+    def _beat(self):
+        """Emit a ``SNK READY`` heartbeat ~every 2 s (the IDE's presence signal).
+
+        Caps are the registered handler targets (``scan:wifi``, ``buzzer``, …).
+        Hidden from the console like all ``SNK …`` lines.
+        """
+        try:
+            import time
+            now = time.ticks_ms() if hasattr(time, "ticks_ms") else int(time.time() * 1000)
+            if self._last_beat is not None:
+                if hasattr(time, "ticks_diff"):
+                    if time.ticks_diff(now, self._last_beat) < 2000:
+                        return
+                elif (now - self._last_beat) < 2000:
+                    return
+            self._last_beat = now
+            print("%s READY %s" % (SENTINEL, " ".join(self._handlers)))
+        except Exception:
+            pass
 
     def get(self, target):
         """The latest payload string for ``target``, or ``None`` if none yet."""
@@ -507,26 +540,31 @@ def ready(extra=()):
     print("%s READY %s" % (SENTINEL, " ".join(caps)))
 
 
-def start(i2c=None, hz=50, background=True, buzzer_pin=None):
-    """Start the Snakie background service so scans run on the SECOND CORE.
+def start(i2c=None, buzzer_pin=None, background=False, hz=50):
+    """Register the built-in control handlers + attach the buzzer, then announce.
 
-    Registers the built-in scan triggers on the control channel — ``scan:wifi``
-    and ``scan:bt`` always, plus ``scan:i2c`` when you pass an ``i2c`` bus —
-    wires a ``ping`` → ``SNK READY`` reply, announces readiness, then (when
-    ``background``) spawns a thread on the second core that polls the control
-    channel ~``hz``×/sec and re-announces readiness periodically. Your main loop
-    no longer needs to call ``control.poll()``.
+    Then call ``control.poll()`` in your main loop to SERVICE commands — it drains
+    the control channel non-blockingly AND emits the ``SNK READY`` heartbeat the
+    IDE uses to detect a running program. Registers:
 
-    Pass ``buzzer_pin=<n>`` to attach the shared :data:`buzzer` to ``PWM(Pin(n))``
-    and register the ``buzzer`` control receiver, so the IDE's Buzzer panel can
-    drive a connected speaker (``tone``/``seq``/``stop``/``pin``) over the control
-    channel — the playback runs on core 1, off your main loop.
+      * ``scan:wifi`` / ``scan:bt`` (and ``scan:i2c`` when you pass an ``i2c`` bus),
+      * the ``buzzer`` receiver when you pass ``buzzer_pin`` — attaches the shared
+        :data:`buzzer` to ``PWM(Pin(n))`` so the IDE's Buzzer panel can drive a
+        speaker (``tone``/``seq``/``stop``/``pin``),
+      * ``ping`` → an immediate ``SNK READY`` reply.
 
-    Returns immediately. Falls back to registration + announce with NO thread
-    when ``_thread`` is unavailable or ``background`` is False — then poll the
-    control channel yourself each loop.
+    The typical loop::
+
+        inst.start(buzzer_pin=0)
+        while True:
+            inst.control.poll()
+            time.sleep(0.02)
+
+    ``background=True`` is EXPERIMENTAL: it spawns a second-core thread that polls
+    for you, so the main loop needn't call ``control.poll()``. It is UNRELIABLE on
+    RP2040 — the thread shares stdin with the REPL, which can wedge the board on
+    Stop / soft-reset — so it is OFF by default. Prefer main-loop polling above.
     """
-    global _service_running
     extra = ()
     control.on("scan:wifi", lambda payload: wifi_scan())
     control.on("scan:bt", lambda payload: bt_scan())
@@ -538,33 +576,32 @@ def start(i2c=None, hz=50, background=True, buzzer_pin=None):
         control.on("buzzer", lambda payload: buzzer_command(payload, buzzer))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
-    if not background or _service_running:
+    if background:
+        _start_thread(hz)
+
+
+def _start_thread(hz):
+    """EXPERIMENTAL: poll the control channel on the second core (see ``start``)."""
+    global _service_running
+    if _service_running:
         return
     try:
         import _thread
     except ImportError:
         return  # no second core here — call control.poll() in your own loop
     _service_running = True
-    _thread.start_new_thread(_service_loop, (hz, extra))
+    _thread.start_new_thread(_service_loop, (hz,))
 
 
-def _service_loop(hz, extra):
-    """Core-1 loop: drain the control channel + heartbeat readiness."""
+def _service_loop(hz):
+    """Core-1 loop: just poll() (which drains commands + heartbeats) until stop()."""
     delay = max(1, int(1000 / hz)) if hz else 20
-    beat = 0
     while _service_running:
         try:
             control.poll()
         except Exception:
             pass
-        # Re-announce ~every 2 s so a panel opened AFTER start() still detects us.
-        beat += delay
-        if beat >= 2000:
-            beat = 0
-            try:
-                ready(extra)
-            except Exception:
-                pass
+        _sleep_ms(delay)
         _sleep_ms(delay)
 
 

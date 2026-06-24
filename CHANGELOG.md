@@ -103,6 +103,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matters.
 
 ### Fixed
+- **The buzzer plays reliably and the board no longer wedges.** The control
+  channel now runs on the **main loop** (`inst.control.poll()`), not a second-core
+  thread — the old `_thread` polled `stdin` with a blocking 64-byte read that could
+  hang core 1 and wedge the Pico on Stop/soft-reset (needing a replug). `poll()`
+  reads one byte at a time (never blocks) and emits the `SNK READY` heartbeat, and
+  `start()` defaults to main-loop polling (the second-core mode is now an
+  experimental opt-in). The Buzzer panel's ▶ Play always sounds the **local
+  preview** even when no board program is running, "Run buzzer demo" uses the
+  pin you've selected, and the demos poll + stop cleanly. Library bumped to 0.4.0.
 - **Instrument panels no longer spam the REPL or leave a thread running.** The
   panels now only write `SNKCMD` control lines when a Snakie program is actually
   running and servicing the channel — previously the buzzer keyboard / STOP / pin

@@ -101,7 +101,7 @@ plays one tone, `play_seq([(freq, ms), …])` plays a note list (`freq` 0 = a
 rest), `stop()` silences (duty 0), and `set_pin(n)` (re)targets `PWM(Pin(n))`.
 `start(buzzer_pin=<n>)` attaches the shared `buzzer` to GP`<n>` and registers the
 `buzzer` control receiver, so the IDE's Buzzer panel can drive a speaker over the
-control channel — playback runs on the second core, off your main loop. The IDE
+control channel — serviced by `inst.control.poll()` in your loop. The IDE
 pre-parses melodies/RTTTL and sends a compact `seq` line, so the board needs no
 RTTTL parser.
 
@@ -256,33 +256,39 @@ with `control.on("scan:i2c", do_scan)` — it fires inside `poll()` when that
 command arrives. For tests / custom transports, drive it directly with
 `control.feed("SNKCMD led on\n")`.
 
-### Run it in the background — on the second core
+### Let the IDE drive it — `inst.start()` + poll your loop
 
-`inst.start()` runs the control channel **on the board's second core** (via
-MicroPython's `_thread`, e.g. core 1 on the RP2040) so your main loop never has
-to call `control.poll()` and a blocking scan doesn't stall it:
+`inst.start()` registers the built-in control handlers + attaches the buzzer, and
+then you call `inst.control.poll()` once per loop iteration to service the IDE's
+commands:
 
 ```python
+import time
 import instruments as inst
 
-inst.start()                 # spawns the control/service loop on the 2nd core
-inst.start(i2c=i2c)          # …also registers the scan:i2c trigger for that bus
-inst.start(buzzer_pin=15)    # …also attaches the buzzer to GP15 + the buzzer receiver
+inst.start(buzzer_pin=15)    # attach the buzzer to GP15 + register the receiver
+# inst.start(i2c=i2c)        # …also register the scan:i2c trigger for that bus
 
 while True:
-    ...             # your robot's main loop on core 0; scans run on core 1
+    inst.control.poll()      # drain SNKCMD commands + emit the SNK READY heartbeat
+    time.sleep(0.02)
 ```
 
-`start()` automatically registers the built-in scan triggers (`scan:wifi`,
-`scan:bt`, and `scan:i2c` when you pass a bus), wires a `ping` → readiness reply,
-and **announces readiness** to the IDE as a `SNK READY <caps...>` line — printed
-once on `start()`, then ~every 2 s from the background loop. The IDE listens for
-this so an instrument (e.g. the **Wi-Fi scan** panel) knows a Snakie program is
-live and can drive its SCAN button directly; when no `SNK READY` is seen, the
-panel offers to open + run a demo program instead. `stop()` ends the service; on
-a port without `_thread` (or `start(background=False)`) it just registers +
-announces and you poll yourself. The `SNK READY` line is hidden from the console
-like all `SNK …` telemetry.
+`start()` registers the built-in scan triggers (`scan:wifi`, `scan:bt`, and
+`scan:i2c` when you pass a bus), the `buzzer` receiver (with `buzzer_pin`), and a
+`ping` → readiness reply, then announces a first `SNK READY <caps...>`. From then
+on **`control.poll()` itself emits the `SNK READY` heartbeat** (~every 2 s) — that
+is the IDE's presence signal: an instrument (e.g. the **Wi-Fi scan** or **Buzzer**
+panel) knows a Snakie program is live and drives it directly; with no `SNK READY`
+it offers to open + run a demo instead. `stop()` silences the buzzer (handy from a
+`KeyboardInterrupt` handler so Snakie's Stop leaves the board quiet). The
+`SNK READY` line is hidden from the console like all `SNK …` telemetry.
+
+> **Second core (`background=True`) — experimental.** `inst.start(background=True)`
+> spawns a `_thread` to poll for you, so your main loop needn't call
+> `control.poll()`. It is **off by default and unreliable on the RP2040**: the
+> thread shares `stdin` with the REPL, which can wedge the board on Stop /
+> soft-reset (needing a replug). Prefer the main-loop poll above.
 
 The teleop payload grammar (parsed by `control.axes` / `control.pressed`):
 

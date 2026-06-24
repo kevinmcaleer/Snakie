@@ -540,5 +540,37 @@ class LibraryVersion(unittest.TestCase):
         self.assertTrue(all(p.isdigit() for p in parts), inst.__version__)
 
 
+class ControlHeartbeat(unittest.TestCase):
+    """poll() emits a SNK READY heartbeat (the IDE's presence signal)."""
+
+    def test_poll_emits_ready_with_handler_caps(self):
+        c = inst.Control()
+        c.on("buzzer", lambda p: None)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            c.poll()
+        self.assertIn("SNK READY", buf.getvalue())
+        self.assertIn("buzzer", buf.getvalue())
+
+    def test_poll_does_not_heartbeat_twice_immediately(self):
+        c = inst.Control()
+        with redirect_stdout(io.StringIO()):
+            c.poll()  # first beat
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            c.poll()  # within 2 s -> no second beat (and no stdin on CPython)
+        self.assertEqual(buf.getvalue(), "")
+
+
+class StartNoThread(unittest.TestCase):
+    """start() defaults to main-loop polling — it must NOT spawn a thread."""
+
+    def test_start_does_not_run_background_by_default(self):
+        with redirect_stdout(io.StringIO()):
+            inst.start(buzzer_pin=15)
+        self.assertFalse(inst._service_running)
+        self.assertIn("buzzer", inst.control._handlers)
+
+
 if __name__ == "__main__":
     unittest.main()
