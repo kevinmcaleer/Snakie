@@ -281,6 +281,21 @@ describe('parseInstrumentPins', () => {
       { instrument: 'buzzer', pin: '15' }
     ])
   })
+
+  it('surfaces a display SDA + SCL via _sda / _scl kwargs', () => {
+    expect(parseInstrumentPins('inst.start(screen_sda=0, screen_scl=1)')).toEqual([
+      { instrument: 'screen', pin: '0' },
+      { instrument: 'screen', pin: '1' }
+    ])
+  })
+
+  it('surfaces UPPERCASE SCREEN_SDA / SCREEN_SCL constants (the demo form)', () => {
+    const src = ['SCREEN_SDA = 0', 'SCREEN_SCL = 1', 'inst.start(screen_sda=SCREEN_SDA)'].join('\n')
+    expect(parseInstrumentPins(src)).toEqual([
+      { instrument: 'screen', pin: '0' },
+      { instrument: 'screen', pin: '1' }
+    ])
+  })
 })
 
 describe('parsePins — rangefinder instrument pins (board view bonus)', () => {
@@ -289,6 +304,13 @@ describe('parsePins — rangefinder instrument pins (board view bonus)', () => {
     expect(conns.map((c) => c.type)).toEqual(['instrument', 'instrument'])
     expect(conns.map((c) => c.pins[0])).toEqual(['3', '2'])
     expect(conns.every((c) => c.instrument === 'range')).toBe(true)
+  })
+
+  it('surfaces a screen_sda / screen_scl pair as instrument-typed connections', () => {
+    const conns = parsePins('import instruments as inst\ninst.start(screen_sda=0, screen_scl=1)')
+    expect(conns.map((c) => c.type)).toEqual(['instrument', 'instrument'])
+    expect(conns.map((c) => c.pins[0])).toEqual(['0', '1'])
+    expect(conns.every((c) => c.instrument === 'screen')).toBe(true)
   })
 })
 

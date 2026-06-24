@@ -697,5 +697,141 @@ class BluetoothScan(unittest.TestCase):
         self.assertEqual(buf.getvalue(), "")
 
 
+class _FakeDisplay:
+    """Stand-in for ``Display`` recording the last set_pins/set_addr/text call."""
+
+    def __init__(self):
+        self.pins = None       # the (sda, scl) of the last set_pins call
+        self.addr = None       # the last set_addr argument
+        self.rows = None       # the rows of the last text() call
+
+    def set_pins(self, sda, scl):
+        self.pins = (int(sda), int(scl))
+
+    def set_addr(self, addr):
+        self.addr = int(addr)
+
+    def text(self, lines):
+        self.rows = list(lines)
+
+
+class I2CPinMux(unittest.TestCase):
+    """The RP2040 I²C SDA/SCL pin mux backing the IDE's invalid-pin warning."""
+
+    def test_valid_block0_pairs(self):
+        # Block 0: SDA∈{0,4,8,12,16,20}, SCL∈{1,5,9,13,17,21}.
+        self.assertEqual(inst._i2c_block_for_pins(0, 1), 0)
+        self.assertEqual(inst._i2c_block_for_pins(4, 5), 0)
+        self.assertEqual(inst._i2c_block_for_pins(20, 21), 0)
+        # Cross-pairs WITHIN the block are still valid (any SDA + any SCL of block).
+        self.assertEqual(inst._i2c_block_for_pins(0, 13), 0)
+
+    def test_valid_block1_pairs(self):
+        # Block 1: SDA∈{2,6,10,14,18,26}, SCL∈{3,7,11,15,19,27}.
+        self.assertEqual(inst._i2c_block_for_pins(2, 3), 1)
+        self.assertEqual(inst._i2c_block_for_pins(6, 7), 1)
+        self.assertEqual(inst._i2c_block_for_pins(26, 27), 1)
+        self.assertEqual(inst._i2c_block_for_pins(14, 3), 1)
+
+    def test_cross_block_pairs_are_invalid(self):
+        # A block-0 SDA with a block-1 SCL (and vice versa) is NOT a valid pair.
+        self.assertIsNone(inst._i2c_block_for_pins(0, 3))   # SDA b0, SCL b1
+        self.assertIsNone(inst._i2c_block_for_pins(2, 1))   # SDA b1, SCL b0
+        # Same-role swap (SCL pin used as SDA) is invalid too.
+        self.assertIsNone(inst._i2c_block_for_pins(1, 0))
+
+    def test_unknown_pins_are_invalid(self):
+        self.assertIsNone(inst._i2c_block_for_pins(28, 22))  # not an I²C pin
+        self.assertIsNone(inst._i2c_block_for_pins("a", "b"))  # non-numeric
+        self.assertIsNone(inst._i2c_block_for_pins(None, None))
+
+
+class DisplayDevice(unittest.TestCase):
+    """The on-device SSD1306 display: set_pins fallback, the `screen` receiver."""
+
+    def test_set_pins_inert_without_machine(self):
+        # No `machine`/`framebuf` under CPython -> set_pins is inert (no panel),
+        # but never raises and the address label is still updated.
+        disp = inst.Display()
+        disp.set_pins(0, 1, addr=0x3D)
+        self.assertIsNone(disp._i2c)
+        self.assertIsNone(disp._oled)
+        self.assertEqual(disp._addr, "0x3D")
+
+    def test_text_echoes_telemetry_without_hardware(self):
+        # With no panel attached, text() is purely the SNK SCR telemetry echo.
+        line = _emit(inst.Display().text, ["Hello world", "Line 2"])
+        self.assertEqual(line, "SNK SCR 0x3C text Hello_world Line_2")
+
+    def test_screen_command_pins_parsing(self):
+        disp = _FakeDisplay()
+        self.assertEqual(inst.screen_command("pins 0 1", disp), "pins")
+        self.assertEqual(disp.pins, (0, 1))
+
+    def test_screen_command_addr_parsing(self):
+        disp = _FakeDisplay()
+        self.assertEqual(inst.screen_command("addr 0x3D", disp), "addr")
+        self.assertEqual(disp.addr, 0x3D)
+        # A decimal address parses too.
+        self.assertEqual(inst.screen_command("addr 60", disp), "addr")
+        self.assertEqual(disp.addr, 60)
+
+    def test_screen_command_text_decodes_rows(self):
+        disp = _FakeDisplay()
+        # Underscores decode back to spaces (matching the SNK SCR text packing).
+        self.assertEqual(inst.screen_command("text Hello_world Line_2", disp), "text")
+        self.assertEqual(disp.rows, ["Hello world", "Line 2"])
+        # A bare `text` clears the display (no rows).
+        self.assertEqual(inst.screen_command("text", disp), "text")
+        self.assertEqual(disp.rows, [])
+
+    def test_screen_command_against_real_display(self):
+        # A real Display under CPython: set_pins is inert (no machine), but the
+        # command must still parse + dispatch + return the verb without raising.
+        disp = inst.Display()
+        self.assertEqual(inst.screen_command("pins 2 3", disp), "pins")
+
+    def test_screen_command_text_emits_scr_without_machine(self):
+        # text via the receiver still emits SNK SCR even with no hardware (graceful
+        # degrade — the IDE mirror keeps working on a board with no panel attached).
+        disp = inst.Display()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.screen_command("text Hi_there", disp)
+        self.assertEqual(buf.getvalue().rstrip("\n"), "SNK SCR 0x3C text Hi_there")
+
+    def test_screen_command_unknown_empty_and_malformed(self):
+        disp = _FakeDisplay()
+        self.assertIsNone(inst.screen_command("wat", disp))
+        self.assertIsNone(inst.screen_command("", disp))
+        self.assertIsNone(inst.screen_command("pins 0", disp))     # missing scl
+        self.assertIsNone(inst.screen_command("pins a b", disp))   # non-numeric
+        self.assertIsNone(inst.screen_command("addr", disp))       # missing addr
+        self.assertIsNone(disp.pins)  # nothing actuated on a bad payload
+
+    def test_screen_command_defaults_to_display_singleton(self):
+        # No `disp` -> defaults to the shared `display` (inert set_pins under
+        # CPython, but the dispatch + verb return must work).
+        self.assertEqual(inst.screen_command("pins 0 1"), "pins")
+
+    def test_screen_receiver_via_control_feed(self):
+        # Feed a real SNKCMD screen line through a Control wired to a fake Display.
+        disp = _FakeDisplay()
+        ctrl = inst.Control()
+        ctrl._poll = None  # feed-only
+        ctrl.on("screen", lambda payload: inst.screen_command(payload, disp))
+        ctrl.feed("SNKCMD screen pins 2 3\n")
+        self.assertEqual(disp.pins, (2, 3))
+
+    def test_start_with_screen_pins_registers_receiver(self):
+        # start(screen_sda=, screen_scl=) must register the `screen` handler
+        # (set_pins stays inert under CPython, but the receiver is wired).
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False, screen_sda=0, screen_scl=1)
+        self.assertIn("screen", inst.control._handlers)
+        # The wired handler dispatches a `screen pins …` line to the singleton.
+        self.assertEqual(inst.screen_command("pins 4 5"), "pins")
+
+
 if __name__ == "__main__":
     unittest.main()

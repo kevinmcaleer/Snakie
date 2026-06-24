@@ -285,3 +285,125 @@ export function fpsFromIntervalMs(ms: number): string {
   if (fps >= 100) return String(Math.round(fps))
   return fps.toFixed(1)
 }
+
+// ---------------------------------------------------------------------------
+// RP2040 I²C SDA/SCL pin mux — the basis for the panel's INVALID-PIN warning.
+// Mirrors `micropython/instruments.py::_i2c_block_for_pins` exactly: each I²C
+// block exposes SDA/SCL on a fixed set of GPIOs, and a pair is VALID iff BOTH
+// pins live in the SAME block (SDA from its SDA set AND SCL from its SCL set):
+//
+//   I2C0 — SDA ∈ {0,4,8,12,16,20},  SCL ∈ {1,5,9,13,17,21}
+//   I2C1 — SDA ∈ {2,6,10,14,18,26}, SCL ∈ {3,7,11,15,19,27}
+// ---------------------------------------------------------------------------
+
+const I2C0_SDA = new Set([0, 4, 8, 12, 16, 20])
+const I2C0_SCL = new Set([1, 5, 9, 13, 17, 21])
+const I2C1_SDA = new Set([2, 6, 10, 14, 18, 26])
+const I2C1_SCL = new Set([3, 7, 11, 15, 19, 27])
+
+/**
+ * The RP2040 I²C block (`0` or `1`) a `(sda, scl)` pair selects, or `null` when
+ * the pair is invalid. A pair is valid only when both pins belong to the SAME
+ * block's SDA/SCL sets; any cross-block pair or an unknown pin yields `null`.
+ * Pure — backs both {@link i2cPinsValid} and the panel's pin warning.
+ */
+export function i2cBlockForPins(sda: number, scl: number): 0 | 1 | null {
+  if (I2C0_SDA.has(sda) && I2C0_SCL.has(scl)) return 0
+  if (I2C1_SDA.has(sda) && I2C1_SCL.has(scl)) return 1
+  return null
+}
+
+/** Whether `(sda, scl)` is a valid RP2040 I²C pin pair (see {@link i2cBlockForPins}). */
+export function i2cPinsValid(sda: number, scl: number): boolean {
+  return i2cBlockForPins(sda, scl) !== null
+}
+
+// ---------------------------------------------------------------------------
+// Screen control payload + code-sync (mirrors range-logic's pin sync) — the
+// on-device receiver (`micropython/instruments.py` `Display` + `screen_command`)
+// attests the `screen` control grammar the panel WRITES:
+//
+//     SNKCMD screen pins <sda> <scl>           # retarget the I²C SDA/SCL pins
+//     SNKCMD screen addr <0xNN>                # set the I²C address
+//
+// `screenPinsPayload(sda, scl)` produces the `<payload>` half;
+// `sendControl('screen', payload)` frames the `SNKCMD screen …` line. The two
+// code-sync helpers read/rewrite the demo's `SCREEN_SDA`/`SCREEN_SCL` (or a
+// `screen_sda=`/`screen_scl=` kwarg) so the panel can warn on + fix a mismatch.
+// ---------------------------------------------------------------------------
+
+/** An SDA/SCL pin pair read out of source code; `null` for an absent/symbolic one. */
+export interface ScreenPins {
+  sda: number | null
+  scl: number | null
+}
+
+/**
+ * The `<payload>` that retargets the display's SDA/SCL pins: `pins <sda> <scl>`.
+ * Each pin is rounded to a whole, non-negative GPIO number. Pass to
+ * `sendControl('screen', screenPinsPayload(0, 1))` → the device sees
+ * `SNKCMD screen pins 0 1`.
+ */
+export function screenPinsPayload(sda: number, scl: number): string {
+  const s = Math.max(0, Math.round(Number.isFinite(sda) ? sda : 0))
+  const c = Math.max(0, Math.round(Number.isFinite(scl) ? scl : 0))
+  return `pins ${s} ${c}`
+}
+
+/**
+ * The `<payload>` that sets the display's I²C address: `addr <0xNN>` (the address
+ * is normalised to a clean lowercase `0xNN` literal). Pass to
+ * `sendControl('screen', screenAddrPayload('0x3C'))` → `SNKCMD screen addr 0x3c`.
+ */
+export function screenAddrPayload(addr: string): string {
+  const parsed = addr ? Number(/^0x/i.test(addr) ? addr : `0x${addr}`) : NaN
+  const n = Number.isFinite(parsed) ? parsed : 0x3c
+  return `addr 0x${n.toString(16)}`
+}
+
+/**
+ * The regex matching a `SCREEN_SDA = <digits>` (or `screen_sda=<digits>`)
+ * declaration, with the value captured. Case-insensitive, whitespace-tolerant.
+ * Built per-role so {@link findScreenPinsInCode} / {@link setScreenPinsInCode}
+ * agree on the grammar. Not `/g` — both helpers act on the FIRST match of each role.
+ */
+const SCREEN_SDA_RE = /screen_sda\s*=\s*([0-9]+)/i
+const SCREEN_SCL_RE = /screen_scl\s*=\s*([0-9]+)/i
+
+/**
+ * Find the numeric SDA + SCL pins declared by `SCREEN_SDA = <digits>` /
+ * `SCREEN_SCL = <digits>` (or the lowercase `screen_sda=`/`screen_scl=` kwarg) in
+ * `source`. Case-insensitive; tolerant of whitespace around the `=`. Returns the
+ * FIRST such pin per role as a number, or `null` for a role the code declares no
+ * numeric value for (including symbolic values like `screen_sda=SCREEN_SDA`).
+ * Pure, never throws.
+ */
+export function findScreenPinsInCode(source: string): ScreenPins {
+  if (!source) return { sda: null, scl: null }
+  const s = SCREEN_SDA_RE.exec(source)
+  const c = SCREEN_SCL_RE.exec(source)
+  return {
+    sda: s ? Number(s[1]) : null,
+    scl: c ? Number(c[1]) : null
+  }
+}
+
+/**
+ * Rewrite the FIRST `SCREEN_SDA = <digits>` AND `SCREEN_SCL = <digits>` assignments
+ * in `source` to `sda` / `scl`, preserving the surrounding text (and the author's
+ * spacing + casing around each `=`). A role with no numeric match is left untouched
+ * (nothing to sync). Each new pin is rounded to a whole, non-negative GPIO number.
+ * Pure, never mutates — backs the panel's one-click "Update code". Mirrors
+ * {@link setRangePinsInCode}.
+ */
+export function setScreenPinsInCode(source: string, sda: number, scl: number): string {
+  const s = Math.max(0, Math.round(Number.isFinite(sda) ? sda : 0))
+  const c = Math.max(0, Math.round(Number.isFinite(scl) ? scl : 0))
+  const replaceValue = (value: number) => (matched: string, digits: string): string => {
+    const numStart = matched.lastIndexOf(digits)
+    return matched.slice(0, numStart) + String(value)
+  }
+  let out = source.replace(SCREEN_SDA_RE, replaceValue(s))
+  out = out.replace(SCREEN_SCL_RE, replaceValue(c))
+  return out
+}

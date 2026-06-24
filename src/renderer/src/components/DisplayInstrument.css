@@ -257,3 +257,199 @@
   align-self: stretch;
   background: #1c1f22;
 }
+
+/* --- Display wiring (SDA / SCL / ADDR selectors + live status pill) --------- */
+.i2cd__wiring {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.i2cd__wiring-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.i2cd__wiring-title {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #7a7d84;
+}
+.i2cd__pins {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.i2cd__field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.i2cd__field-lbl {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #7a7d84;
+}
+.i2cd__select--pin {
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid #34373c;
+  border-radius: 7px;
+  background: linear-gradient(180deg, #26282b, #15171a);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6);
+  color: #d7dbe0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.i2cd__select--pin:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+/* The valid-pair I²C-block badge sitting next to the pins. */
+.i2cd__bus {
+  align-self: center;
+  margin-bottom: 1px;
+  padding: 3px 7px;
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, #0c0e10);
+  border: 1px solid var(--accent-border);
+}
+
+/* Live program status pill (mirrors the range/buzzer panels). */
+.i2cd__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+.i2cd__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+}
+.i2cd__live--on {
+  color: #86ffb6;
+}
+.i2cd__live--idle {
+  color: var(--accent);
+}
+.i2cd__live--off {
+  color: #5a5f67;
+}
+.i2cd__live--off .i2cd__live-dot {
+  box-shadow: none;
+}
+
+/* --- Buttons (shared by the demo prompt + the pin-sync strip) -------------- */
+.i2cd__btn {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #cfd3da;
+  background: linear-gradient(#26282b, #1a1c1f);
+  border: 1px solid #34373c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.i2cd__btn:hover:not(:disabled) {
+  background: linear-gradient(#303236, #222427);
+}
+.i2cd__btn:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.i2cd__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.i2cd__btn--play {
+  color: #0c0e10;
+  background: linear-gradient(color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
+  border-color: var(--accent-border);
+}
+.i2cd__btn--play:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
+}
+
+/* --- Pin warning strips (invalid-pin alert + code-mismatch sync) ------------ */
+.i2cd__pinwarn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 12%, #07090b);
+  border: 1px solid var(--accent-border);
+}
+/* The hard "invalid I²C pair" alert reads in a warm warning red. */
+.i2cd__pinwarn--bad {
+  background: color-mix(in srgb, #ff6b6b 14%, #07090b);
+  border-color: rgba(255, 107, 107, 0.55);
+}
+.i2cd__pinwarn-msg {
+  flex: 1;
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--accent) 70%, #cfd3da);
+}
+.i2cd__pinwarn--bad .i2cd__pinwarn-msg {
+  color: #ffb0a8;
+}
+.i2cd__pinwarn-btn {
+  flex: 0 0 auto;
+  font-size: 9px;
+  padding: 3px 7px;
+  color: #0c0e10;
+  background: linear-gradient(color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
+  border-color: var(--accent-border);
+}
+.i2cd__pinwarn-btn:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
+}
+
+/* --- Demo prompt (no Snakie program running) ------------------------------- */
+.i2cd__prompt {
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid var(--accent-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.i2cd__prompt-msg {
+  margin: 0;
+  font-size: 11px;
+  color: #cfd3da;
+}
+.i2cd__prompt-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.i2cd__prompt-hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #6b7079;
+}
+.i2cd__prompt-hint code {
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+}
