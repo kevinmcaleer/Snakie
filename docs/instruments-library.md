@@ -87,7 +87,7 @@ missing radio (no `network`/`bluetooth` → no output).
 | --- | --- | --- |
 | `i2c_scan(i2c)` | one `SNK I2C …` result set | `i2c.scan()` addresses as `0x..` hex |
 | `wifi_scan()` | one `SNK WIFI …` per network | `network.WLAN(STA_IF)` scan |
-| `bt_scan(ms=4000)` | one `SNK BT …` per device | presence-gated; use `emit_bt(name, mac, rssi)` from your own BLE scan |
+| `bt_scan(ms=4000)` | one `SNK BT …` per device | runs an active BLE `gap_scan` for ~`ms` (IRQ-collected), emits each device; needs the `bluetooth` module |
 
 ### Receivers (the control channel — issue #115)
 

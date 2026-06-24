@@ -109,6 +109,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matters.
 
 ### Fixed
+- **The Bluetooth scanner actually scans.** `bt_scan()` was a stub that returned
+  nothing, so the panel's SCAN did nothing. It now runs a real active BLE
+  `gap_scan` (IRQ-collected, names decoded from the advertising data) and emits
+  each device, so the Bluetooth instrument lists nearby devices like the Wi-Fi
+  one does. (Library 0.4.2.)
 - **Buzzer tempo / octave / volume are now live, and reach the speaker.** The
   VOLUME slider now sets the board's PWM **duty** (a `vol` control command) — not
   just the IDE preview — and OCTAVE (transpose) + TEMPO (time-scale) are applied

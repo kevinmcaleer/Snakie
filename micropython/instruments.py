@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.4.1"
+__version__ = "0.4.2"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -252,24 +252,87 @@ def wifi_scan():
     return out
 
 
-def bt_scan(ms=4000):
-    """Scan for Bluetooth (BLE) devices for ``ms`` and emit one line per device.
+def _decode_adv_name(adv_data):
+    """Extract the local name from BLE advertising data, or ``''``.
 
-    Prefers ``aioble`` if present; prints one ``SNK BT <name> <mac> <rssi>`` per
-    device (name spaces -> ``_``; missing name/mac -> ``?``). Degrades to no
-    output (returns ``[]``) when no BLE stack is available — running a real scan
-    needs an async context, so the default no-op keeps this importable + safe to
-    call from synchronous code; pass results in via :func:`emit_bt` if you scan
-    yourself.
+    Advertising data is a run of AD structures ``<len><type><payload…>``; AD type
+    ``0x09`` is the Complete Local Name and ``0x08`` the Shortened Local Name.
+    Pure + side-effect-free so it is unit-testable under CPython.
     """
     try:
-        import bluetooth  # noqa: F401  (presence check only)
+        i = 0
+        n = len(adv_data)
+        while i + 1 < n:
+            length = adv_data[i]
+            if length == 0:
+                break
+            ad_type = adv_data[i + 1]
+            if ad_type in (0x09, 0x08):
+                return bytes(adv_data[i + 2:i + 1 + length]).decode("utf-8", "replace")
+            i += 1 + length
+    except Exception:
+        pass
+    return ""
+
+
+def bt_scan(ms=4000):
+    """Scan for Bluetooth (BLE) devices for ~``ms`` and emit one line per device.
+
+    Uses the low-level ``bluetooth`` module: actives the radio, registers a scan
+    IRQ that collects each advertisement's (address, rssi, payload), runs an
+    ACTIVE ``gap_scan`` for ``ms`` (active so devices return their names), then
+    emits one ``SNK BT <name> <mac> <rssi>`` per unique device (strongest RSSI
+    kept). Blocks for ~``ms`` — call it on demand, not in a tight loop. Degrades
+    to no output (returns ``[]``) when ``bluetooth`` / the BLE radio is absent.
+    """
+    try:
+        import bluetooth
     except ImportError:
         return []
-    # A real BLE scan is async (aioble) / IRQ-driven (ubluetooth); we don't drive
-    # it here to stay synchronous + non-blocking-by-default. Use emit_bt() to
-    # report each device you discover from your own scan loop.
-    return []
+    import time
+
+    _IRQ_SCAN_RESULT = 5
+    _IRQ_SCAN_DONE = 6
+    found = {}        # addr bytes -> (rssi, adv payload bytes)
+    done = [False]
+
+    def _irq(event, data):
+        # Scheduled (soft) callback, so small allocations are OK. Copy the addr +
+        # payload (they're only valid during the call); keep the strongest RSSI.
+        if event == _IRQ_SCAN_RESULT:
+            addr_type, addr, adv_type, rssi, adv_data = data
+            key = bytes(addr)
+            prev = found.get(key)
+            if prev is None or rssi > prev[0]:
+                found[key] = (rssi, bytes(adv_data))
+        elif event == _IRQ_SCAN_DONE:
+            done[0] = True
+
+    try:
+        ble = bluetooth.BLE()
+        ble.active(True)
+        ble.irq(_irq)
+        # gap_scan(duration_ms, interval_us, window_us, active=True): active scan
+        # solicits scan responses so we get device names where advertised.
+        ble.gap_scan(int(ms), 30000, 30000, True)
+    except Exception:
+        return []
+
+    t0 = time.ticks_ms()
+    while not done[0] and time.ticks_diff(time.ticks_ms(), t0) < int(ms) + 1500:
+        time.sleep_ms(50)
+    try:
+        ble.gap_scan(None)  # stop scanning if it's still going
+    except Exception:
+        pass
+
+    out = []
+    for addr, (rssi, adv) in found.items():
+        mac = ":".join("%02X" % b for b in addr)
+        name = _decode_adv_name(adv) or "?"
+        emit_bt(name, mac, rssi)
+        out.append((name, mac, rssi))
+    return out
 
 
 def emit_bt(name, mac, rssi):

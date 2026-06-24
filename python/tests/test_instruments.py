@@ -590,5 +590,33 @@ class StartNoThread(unittest.TestCase):
         self.assertIn("buzzer", inst.control._handlers)
 
 
+class BluetoothScan(unittest.TestCase):
+    """BLE advertising-name decode + bt_scan's graceful no-radio degradation."""
+
+    def test_decode_complete_local_name(self):
+        adv = bytes([0x05, 0x09]) + b"Tag1"  # len=5 (type+4 name), 0x09 = complete
+        self.assertEqual(inst._decode_adv_name(adv), "Tag1")
+
+    def test_decode_shortened_local_name(self):
+        adv = bytes([0x03, 0x08]) + b"Hi"  # 0x08 = shortened
+        self.assertEqual(inst._decode_adv_name(adv), "Hi")
+
+    def test_decode_skips_other_ad_structures(self):
+        adv = bytes([0x02, 0x01, 0x06]) + bytes([0x04, 0x09]) + b"Bob"  # flags, then name
+        self.assertEqual(inst._decode_adv_name(adv), "Bob")
+
+    def test_decode_no_name_is_empty(self):
+        self.assertEqual(inst._decode_adv_name(b""), "")
+        self.assertEqual(inst._decode_adv_name(bytes([0x02, 0x01, 0x06])), "")
+
+    def test_bt_scan_degrades_without_radio(self):
+        # No usable BLE radio under CPython -> no SNK output, returns a list.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            result = inst.bt_scan(1)
+        self.assertEqual(result, [])
+        self.assertEqual(buf.getvalue(), "")
+
+
 if __name__ == "__main__":
     unittest.main()
