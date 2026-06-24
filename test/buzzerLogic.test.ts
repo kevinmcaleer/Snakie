@@ -17,6 +17,9 @@ import {
   makeRest,
   freqToStaff,
   melodyToMicroPython,
+  melodyToCodeSnippet,
+  findBuzzerPinInCode,
+  setBuzzerPinInCode,
   fmtFreq,
   melodyDurationMs,
   type Tone
@@ -327,6 +330,110 @@ describe('buzzer-logic editable-melody helpers (part C)', () => {
   it('a rest round-trips into the seq payload as 0:ms', () => {
     const m = insertRest([{ freq: 440, ms: 200 }], 1, 100)
     expect(buzzerSeqPayload(m)).toBe('seq 440:200,0:100')
+  })
+})
+
+describe('buzzer-logic melodyToCodeSnippet (part C — paste to code)', () => {
+  const melody: Tone[] = [
+    { freq: 440, ms: 200, label: 'A4' },
+    { freq: 0, ms: 100, label: 'P' },
+    { freq: 523.25, ms: 200, label: 'C5' }
+  ]
+
+  it('emits a melody literal with rounded (freq, ms) pairs', () => {
+    const snippet = melodyToCodeSnippet(melody, 0)
+    expect(snippet).toContain('melody = [')
+    expect(snippet).toContain('(440, 200),')
+    expect(snippet).toContain('(0, 100),') // rest
+    expect(snippet).toContain('(523, 200),') // freq rounded
+    expect(snippet).toContain(']')
+  })
+
+  it('documents the Snakie library recipe with the chosen pin', () => {
+    const snippet = melodyToCodeSnippet(melody, 7)
+    expect(snippet).toContain('import instruments as inst')
+    expect(snippet).toContain('#   inst.start(buzzer_pin=7)')
+    expect(snippet).toContain('inst.buzzer.play_seq(melody)')
+  })
+
+  it('includes a runnable plain-MicroPython PWM loop on the same pin', () => {
+    const snippet = melodyToCodeSnippet(melody, 7)
+    expect(snippet).toContain('from machine import Pin, PWM')
+    expect(snippet).toContain('import time')
+    expect(snippet).toContain('_buz = PWM(Pin(7))')
+    expect(snippet).toContain('for _freq, _ms in melody:')
+    expect(snippet).toContain('_buz.duty_u16(32768 if _freq else 0)')
+    expect(snippet).toContain('time.sleep_ms(_ms)')
+  })
+
+  it('rounds + clamps the pin into both recipe and loop', () => {
+    const snippet = melodyToCodeSnippet([], 2.7)
+    expect(snippet).toContain('inst.start(buzzer_pin=3)')
+    expect(snippet).toContain('_buz = PWM(Pin(3))')
+    expect(melodyToCodeSnippet([], -4)).toContain('_buz = PWM(Pin(0))')
+  })
+
+  it('the snippet declares a numeric buzzer pin that the sync helpers find', () => {
+    // Round-trip: the snippet we paste is itself recognised by findBuzzerPinInCode.
+    expect(findBuzzerPinInCode(melodyToCodeSnippet(melody, 11))).toBe(11)
+  })
+})
+
+describe('buzzer-logic findBuzzerPinInCode (part E — read code pin)', () => {
+  it('finds a plain buzzer_pin = N declaration', () => {
+    expect(findBuzzerPinInCode('inst.start(buzzer_pin = 15)')).toBe(15)
+  })
+
+  it('tolerates no spaces and is case-insensitive', () => {
+    expect(findBuzzerPinInCode('buzzer_pin=0')).toBe(0)
+    expect(findBuzzerPinInCode('BUZZER_PIN = 15')).toBe(15)
+  })
+
+  it('returns the FIRST match when several are present', () => {
+    expect(findBuzzerPinInCode('a buzzer_pin=4\nb buzzer_pin=9')).toBe(4)
+  })
+
+  it('returns null when there is no buzzer pin declared', () => {
+    expect(findBuzzerPinInCode('print("no pin here")')).toBeNull()
+    expect(findBuzzerPinInCode('')).toBeNull()
+  })
+
+  it('ignores a non-numeric (symbolic) assignment', () => {
+    expect(findBuzzerPinInCode('buzzer_pin=BUZZER_PIN')).toBeNull()
+  })
+})
+
+describe('buzzer-logic setBuzzerPinInCode (part E — one-click sync)', () => {
+  it('rewrites the first numeric buzzer pin, preserving spacing', () => {
+    expect(setBuzzerPinInCode('inst.start(buzzer_pin = 15)', 2)).toBe(
+      'inst.start(buzzer_pin = 2)'
+    )
+    expect(setBuzzerPinInCode('buzzer_pin=0', 13)).toBe('buzzer_pin=13')
+  })
+
+  it('preserves the original casing of the identifier', () => {
+    expect(setBuzzerPinInCode('BUZZER_PIN = 15', 3)).toBe('BUZZER_PIN = 3')
+  })
+
+  it('only rewrites the FIRST match', () => {
+    expect(setBuzzerPinInCode('buzzer_pin=4\nbuzzer_pin=9', 1)).toBe(
+      'buzzer_pin=1\nbuzzer_pin=9'
+    )
+  })
+
+  it('returns the source unchanged when there is no numeric match', () => {
+    expect(setBuzzerPinInCode('no pin here', 5)).toBe('no pin here')
+    expect(setBuzzerPinInCode('buzzer_pin=BUZZER_PIN', 5)).toBe('buzzer_pin=BUZZER_PIN')
+  })
+
+  it('rounds + clamps the new pin', () => {
+    expect(setBuzzerPinInCode('buzzer_pin=0', 2.7)).toBe('buzzer_pin=3')
+    expect(setBuzzerPinInCode('buzzer_pin=0', -1)).toBe('buzzer_pin=0')
+  })
+
+  it('round-trips with findBuzzerPinInCode', () => {
+    const updated = setBuzzerPinInCode('inst.start(buzzer_pin=15)', 22)
+    expect(findBuzzerPinInCode(updated)).toBe(22)
   })
 })
 

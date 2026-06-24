@@ -405,7 +405,8 @@
   background: linear-gradient(#6a292d, #45191c);
 }
 
-.buzzer__btn--export {
+.buzzer__btn--export,
+.buzzer__btn--paste {
   color: color-mix(in srgb, var(--accent) 80%, #cfd3da);
   border-color: var(--accent-border);
 }
@@ -500,6 +501,44 @@
   accent-color: var(--accent);
   height: 4px;
   cursor: pointer;
+}
+
+/* --- Pin-mismatch strip (a thin warning near the PIN control) ------------- */
+/* Spans both control columns; sits just under the PIN select. Unobtrusive: a
+   slim accent-tinted bar with the message + a one-click "update code" button. */
+.buzzer__pinwarn {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 12%, #07090b);
+  border: 1px solid var(--accent-border);
+}
+
+.buzzer__pinwarn-msg {
+  flex: 1;
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--accent) 70%, #cfd3da);
+}
+
+.buzzer__pinwarn-btn {
+  flex: 0 0 auto;
+  font-size: 9px;
+  padding: 3px 7px;
+  color: #0c0e10;
+  background: linear-gradient(
+    color-mix(in srgb, var(--accent) 92%, #fff),
+    var(--accent)
+  );
+  border-color: var(--accent-border);
+}
+
+.buzzer__pinwarn-btn:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
 }
 
 /* --- Bottom readout + main actions --------------------------------------- */

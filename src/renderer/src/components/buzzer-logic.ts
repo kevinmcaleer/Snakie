@@ -361,6 +361,99 @@ export function melodyToMicroPython(notes: Tone[], opts: ExportOptions): string 
 }
 
 // ---------------------------------------------------------------------------
+// Melody → editor SNIPPET (#113 part C — "Paste to code")
+// ---------------------------------------------------------------------------
+
+/**
+ * Render a melody as a compact, paste-into-your-program SNIPPET that balances
+ * Snakie's library with vanilla MicroPython. Unlike {@link melodyToMicroPython}
+ * (a standalone, runnable file), this is a fragment dropped INTO the user's
+ * editor buffer: a `melody = [(freq, ms), …]` literal, a commented recipe for
+ * playing it with the Snakie `instruments` library, then a runnable plain-PWM
+ * loop. The `pin` (the panel's current PWM pin) appears in both the commented
+ * `inst.start(buzzer_pin=…)` and the `PWM(Pin(…))`. Pure, deterministic,
+ * `\n`-joined.
+ */
+export function melodyToCodeSnippet(melody: Tone[], pin: number): string {
+  const p = Math.max(0, Math.round(pin))
+  const lines: string[] = []
+  lines.push('# Melody from the Snakie Buzzer instrument — (freq_hz, ms); freq 0 = a rest')
+  lines.push('melody = [')
+  for (const n of melody) {
+    const f = Math.max(0, Math.round(n.freq))
+    const ms = Math.max(0, Math.round(n.ms))
+    const comment = n.label ? `  # ${n.label}` : ''
+    lines.push(`    (${f}, ${ms}),${comment}`)
+  }
+  lines.push(']')
+  lines.push('')
+  lines.push('# Play it with the Snakie library (needs instruments.py on the board):')
+  lines.push('#   import instruments as inst')
+  lines.push(`#   inst.start(buzzer_pin=${p})`)
+  lines.push('#   inst.buzzer.play_seq(melody)')
+  lines.push('')
+  lines.push('# …or with plain MicroPython (no library):')
+  lines.push('from machine import Pin, PWM')
+  lines.push('import time')
+  lines.push(`_buz = PWM(Pin(${p}))`)
+  lines.push('for _freq, _ms in melody:')
+  lines.push('    if _freq:')
+  lines.push('        _buz.freq(_freq)')
+  lines.push('    _buz.duty_u16(32768 if _freq else 0)')
+  lines.push('    time.sleep_ms(_ms)')
+  lines.push('    _buz.duty_u16(0)')
+  return lines.join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Buzzer pin ⟷ code sync (#113 part E — pin-mismatch warning + one-click update)
+// ---------------------------------------------------------------------------
+
+/**
+ * The regex matching a `buzzer_pin = <number>` declaration in source code, with
+ * its numeric value captured. Case-insensitive (so `BUZZER_PIN = 15` matches),
+ * tolerant of surrounding whitespace (`buzzer_pin=15` and `buzzer_pin = 15`).
+ * The value group `([0-9]+)` only matches digits, so a non-numeric assignment
+ * like `buzzer_pin=BUZZER_PIN` does NOT match (the panel can't sync a symbolic
+ * pin). Defined once so {@link findBuzzerPinInCode} and {@link setBuzzerPinInCode}
+ * agree on the grammar. Not `/g` — both helpers act on the FIRST match.
+ */
+const BUZZER_PIN_RE = /buzzer_pin\s*=\s*([0-9]+)/i
+
+/**
+ * Find the numeric pin declared by a `buzzer_pin = <digits>` assignment in
+ * `source` (e.g. the demo's `inst.start(buzzer_pin=15)` or a snippet's
+ * `inst.start(buzzer_pin=0)`). Case-insensitive; tolerant of whitespace around
+ * the `=`. Returns the FIRST such pin as a number, or `null` when the code
+ * declares no numeric buzzer pin (including symbolic values like
+ * `buzzer_pin=BUZZER_PIN`). Pure, never throws.
+ */
+export function findBuzzerPinInCode(source: string): number | null {
+  const m = BUZZER_PIN_RE.exec(source)
+  if (!m) return null
+  return Number(m[1])
+}
+
+/**
+ * Rewrite the FIRST `buzzer_pin = <digits>` assignment in `source` to `pin`,
+ * preserving the surrounding text (and the author's spacing around `=`). Returns
+ * the source UNCHANGED when there's no numeric `buzzer_pin` match (nothing to
+ * sync). The new pin is rounded to a whole, non-negative GPIO number. Pure,
+ * never mutates — backs the panel's one-click "Update code to GP{pin}". Only the
+ * first match is rewritten (mirrors {@link findBuzzerPinInCode}).
+ */
+export function setBuzzerPinInCode(source: string, pin: number): string {
+  const p = Math.max(0, Math.round(pin))
+  return source.replace(BUZZER_PIN_RE, (matched: string, digits: string) => {
+    // Rebuild the matched text with the new number, keeping the original prefix
+    // (`buzzer_pin`, the author's casing + spacing, `=`, spacing) intact so only
+    // the value changes.
+    const numStart = matched.lastIndexOf(digits)
+    return matched.slice(0, numStart) + String(p)
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Small formatting helpers shared by the body's readout strip.
 // ---------------------------------------------------------------------------
 
