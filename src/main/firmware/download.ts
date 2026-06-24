@@ -1,13 +1,16 @@
 /**
- * UF2 firmware download → flash orchestration (issue #64).
+ * Firmware download → flash orchestration (issues #64, #125).
  *
- * The catalog hands the renderer a `.uf2` URL on micropython.org. To flash it
- * we (1) stream the file to a temp path under `app.getPath('temp')`, emitting
- * download `percent` as it arrives, then (2) hand that local path to the
- * existing {@link flash} engine (which copies the UF2 onto the boot drive,
- * emitting its own copy `percent`). The whole thing is ONE progress stream:
- * download %, then copy %, then a terminal `done` — exactly what the dialog's
- * % bar + Done button consume.
+ * The catalog hands the renderer a firmware URL: a `.uf2` (RP2040) or a `.bin`
+ * (ESP). To flash it we (1) stream the file to a temp path under
+ * `app.getPath('temp')`, emitting download `percent` as it arrives, then (2)
+ * hand that local path to the existing {@link flash} engine, which dispatches
+ * by `board` — copying the UF2 onto the boot drive (RP2040) OR shelling out to
+ * esptool with `{ port, offset }` (ESP) — emitting its own phase `percent`. The
+ * whole thing is ONE progress stream: download %, then copy/flash, then a
+ * terminal `done` — exactly what the dialog's % bar + Done button consume. The
+ * download itself is format-agnostic (it's just bytes); only the temp filename
+ * and the downstream `flash` dispatch differ per board.
  *
  * All network access lives in the MAIN process (the renderer CSP blocks
  * outbound requests). The global `fetch` follows redirects, so the download
@@ -23,7 +26,12 @@ import type { Emit } from './flasher'
 import { flash } from './flasher'
 import type { DownloadAndFlashOptions, FlashResult } from './types'
 
-/** Derive a safe `.uf2` filename from the download URL (fallback included). */
+/**
+ * Derive a safe firmware filename from the download URL (fallback included).
+ * Keeps a real `.uf2` (RP2040) or `.bin` (ESP) basename; otherwise generates a
+ * `.bin` name (esptool doesn't care about the extension, and a UF2 fallback
+ * would never reach here for a real catalog URL).
+ */
 export function fileNameFromUrl(url: string): string {
   let name = ''
   try {
@@ -31,10 +39,11 @@ export function fileNameFromUrl(url: string): string {
   } catch {
     name = ''
   }
-  // Strip query junk and keep it a plausible .uf2 name.
+  // Strip query junk and keep it a plausible .uf2 / .bin name.
   name = name.split('?')[0]
-  if (!name || !name.toLowerCase().endsWith('.uf2')) {
-    name = `micropython-${Date.now()}.uf2`
+  const lower = name.toLowerCase()
+  if (!name || !(lower.endsWith('.uf2') || lower.endsWith('.bin'))) {
+    name = `micropython-${Date.now()}.bin`
   }
   return name
 }
@@ -50,10 +59,11 @@ function tempDir(): string {
 
 /**
  * Stream `url` to a temp file, emitting `percent` download progress. Resolves
- * with the local temp path. Throws (with the temp file cleaned up) on a non-OK
- * response, a missing body, or a stream error.
+ * with the local temp path. Format-agnostic — works for `.uf2` and `.bin`
+ * firmware alike (it's just bytes). Throws (with the temp file cleaned up) on a
+ * non-OK response, a missing body, or a stream error.
  */
-export async function downloadUf2(url: string, emit: Emit): Promise<string> {
+export async function downloadFirmware(url: string, emit: Emit): Promise<string> {
   emit({ kind: 'log', message: `Downloading ${url}`, percent: 0 })
 
   const res = await fetch(url, { headers: { Accept: 'application/octet-stream' } })
@@ -100,9 +110,12 @@ export async function downloadUf2(url: string, emit: Emit): Promise<string> {
 }
 
 /**
- * Download a catalog `.uf2` to a temp file then flash it onto the selected boot
- * drive, producing a single combined progress stream (download %, copy %,
- * `done`). The temp file is removed afterwards. Always emits a terminal `done`
+ * Download a catalog firmware file (`.uf2` or `.bin`) to a temp file then flash
+ * it onto the selected target, producing a single combined progress stream
+ * (download %, copy/flash, `done`). The board-specific fields are forwarded
+ * straight to {@link flash}, which dispatches by `board`: RP2040 copies the UF2
+ * onto `mountPath`; ESP shells out to esptool on `port` at `offset` (issue
+ * #125). The temp file is removed afterwards. Always emits a terminal `done`
  * (delegated to {@link flash} on success; emitted here if the download fails).
  */
 export async function downloadAndFlash(
@@ -111,7 +124,7 @@ export async function downloadAndFlash(
 ): Promise<FlashResult> {
   let tempPath: string
   try {
-    tempPath = await downloadUf2(opts.url, emit)
+    tempPath = await downloadFirmware(opts.url, emit)
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     emit({ kind: 'error', message: msg })
@@ -120,9 +133,16 @@ export async function downloadAndFlash(
   }
 
   try {
-    // `flash` validates the file, copies it, and emits the terminal `done`.
+    // `flash` validates the file, dispatches by board (UF2 copy / esptool), and
+    // emits the terminal `done`.
     return await flash(
-      { board: opts.board, firmwarePath: tempPath, mountPath: opts.mountPath },
+      {
+        board: opts.board,
+        firmwarePath: tempPath,
+        mountPath: opts.mountPath,
+        port: opts.port,
+        offset: opts.offset
+      },
       emit
     )
   } finally {
