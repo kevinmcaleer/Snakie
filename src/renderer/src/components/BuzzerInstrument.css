@@ -183,6 +183,42 @@
   color: #6b7079;
 }
 
+/* Live status: whether a Snakie program is detected to drive the board. */
+.buzzer__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+
+.buzzer__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+}
+
+.buzzer__live--on {
+  color: #86ffb6;
+}
+
+.buzzer__live--idle {
+  color: #f0b94a;
+}
+
+.buzzer__live--off {
+  color: #5a5f67;
+}
+
+.buzzer__live--off .buzzer__live-dot {
+  box-shadow: none;
+}
+
 .buzzer__seq-track {
   display: flex;
   flex-wrap: wrap;

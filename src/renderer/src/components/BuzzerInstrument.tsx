@@ -116,14 +116,26 @@ export function BuzzerInstrument({
     [openFiles, activeId]
   )
 
-  // Only WRITE to the board when a Snakie program is actually running AND
-  // servicing the control channel; otherwise the SNKCMD line lands on the bare
-  // REPL, which evaluates it as Python and spams `SyntaxError`. The local
-  // WebAudio preview is separate and always plays, so the keyboard still sounds
-  // in the IDE regardless of what's on the board.
+  // Sticky "a Snakie program has serviced control this session" flag. Presence
+  // is detected from the `SNK READY` heartbeat, which can briefly lapse (a busy
+  // loop, a slow tick) — and a hard `present` gate would then silently DROP a ▶
+  // Play even though the program is running. So once we've seen a program, we
+  // keep sending; a board that has NEVER run one (a bare REPL) still gets
+  // nothing (a SNKCMD there just SyntaxErrors). Reset on disconnect.
+  const everPresent = useRef(false)
+  useEffect(() => {
+    if (present) everPresent.current = true
+  }, [present])
+  useEffect(() => {
+    if (!connected) everPresent.current = false
+  }, [connected])
+
+  // Only WRITE to the board when connected AND a Snakie program has serviced the
+  // control channel (now, or earlier this session). The local WebAudio preview
+  // is separate and always plays, so the keyboard still sounds in the IDE.
   const txBuzzer = useCallback(
     (payload: string): void => {
-      if (connected && present) sendBuzzer(payload)
+      if (connected && (present || everPresent.current)) sendBuzzer(payload)
     },
     [connected, present]
   )
@@ -593,6 +605,25 @@ export function BuzzerInstrument({
         <div className="buzzer__seq" aria-label="Melody sequencer">
           <div className="buzzer__seq-head">
             <span className="buzzer__seq-title">MELODY</span>
+            <span
+              className={`buzzer__live ${
+                !connected
+                  ? 'buzzer__live--off'
+                  : present
+                    ? 'buzzer__live--on'
+                    : 'buzzer__live--idle'
+              }`}
+              title={
+                !connected
+                  ? 'No board connected — ▶ Play sounds in the IDE only.'
+                  : present
+                    ? 'A Snakie program is running and servicing the buzzer — ▶ Play drives the board.'
+                    : 'No Snakie program detected. Run the buzzer demo (or a program that calls inst.start(buzzer_pin=…) + inst.control.poll()), then ▶ Play.'
+              }
+            >
+              <span className="buzzer__live-dot" aria-hidden="true" />
+              {!connected ? 'no board' : present ? 'program live' : 'no program'}
+            </span>
             <span className="buzzer__seq-meta">
               {melody.length} note{melody.length === 1 ? '' : 's'} · {totalMs} ms
             </span>
