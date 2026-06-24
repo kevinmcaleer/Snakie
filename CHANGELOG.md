@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Ultrasonic rangefinder (HC-SR04) for the Range instrument.** A real on-device
+  driver (`inst.ranger`) triggers the sensor and times the echo into a distance,
+  and the Range panel gains **TRIG + ECHO pin dropdowns** that retarget the board
+  live (`SNKCMD range pins …`), a **code-mismatch warning with one-click "Update
+  code"** (matching the buzzer), and a "Run range demo" fallback — the radar/gauge
+  then fills from the live readings. The Board View also surfaces a sensor's
+  `*_trig`/`*_echo` pins. (Library 0.4.3.)
 - **Online ESP32 firmware in the flasher (#125).** The firmware flasher's
   "Download from MicroPython.org" source now covers **ESP32** boards too (it was
   RP2040/UF2-only). Pick the family / model / variant / version from Thonny's
