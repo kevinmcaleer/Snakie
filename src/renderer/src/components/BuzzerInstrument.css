@@ -331,7 +331,11 @@
 .buzzer__controls {
   padding: 9px;
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* minmax(0, 1fr) (not the default 1fr = minmax(auto, 1fr)) so a column can
+     shrink below its content's intrinsic width — otherwise the fixed label +
+     a range input's default min-width force the right column (OCTAVE/VOLUME)
+     past the panel's right edge. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 9px 12px;
 }
 
@@ -339,6 +343,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0; /* allow this grid item (a flex row) to shrink to its column */
 }
 
 .buzzer__ctrl-lbl {
@@ -354,7 +359,10 @@
 }
 
 .buzzer__select {
-  flex: 1;
+  /* Size to the pin title (e.g. "GP15") rather than filling the cell, so the PIN
+     control stays compact and the row fits. */
+  flex: 0 1 auto;
+  min-width: 0;
   font-family: inherit;
   font-size: 10px;
   padding: 3px 5px;
@@ -366,6 +374,8 @@
 
 .buzzer__range {
   flex: 1;
+  min-width: 0; /* a range input has an intrinsic min width; let it shrink to fit */
+  width: 100%;
   accent-color: var(--accent);
   height: 4px;
   cursor: pointer;
