@@ -1,5 +1,5 @@
 import { useCallback, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
@@ -32,6 +32,9 @@ export interface I2cDetectInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** The on-device scan trigger token for the I²C bus (documented `scan:<kind>`). */
@@ -40,7 +43,9 @@ const SCAN_TRIGGER = 'scan:i2c'
 export function I2cDetectInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: I2cDetectInstrumentProps): JSX.Element {
   // `grid` is undefined until the first result lands; `scanning` lights the
   // "scanning…" state on SCAN and clears on the first reading.
@@ -77,6 +82,8 @@ export function I2cDetectInstrument({
       source="I2C0"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="i2cd"

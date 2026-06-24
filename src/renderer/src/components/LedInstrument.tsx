@@ -1,5 +1,5 @@
 import { useCallback, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import {
   LED_TARGET,
@@ -49,6 +49,9 @@ export interface LedInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** Number of pixels in the demo NeoPixel strip. */
@@ -56,13 +59,21 @@ const STRIP_LEN = 8
 /** The default per-pixel colour for a fresh strip. */
 const STRIP_DEFAULT = '#1a1d22'
 
-export function LedInstrument({ def, onClose, docked = true }: LedInstrumentProps): JSX.Element {
+export function LedInstrument({
+  def,
+  onClose,
+  docked = true,
+  onToggleDock,
+  float
+}: LedInstrumentProps): JSX.Element {
   const [mode, setMode] = useState<LedMode>('digital')
   // Optimistic output state, one slice per mode.
   const [on, setOn] = useState(false)
   const [level, setLevel] = useState(0.5)
   const [color, setColor] = useState('#ff6b5e')
-  const [pixels, setPixels] = useState<string[]>(() => Array.from({ length: STRIP_LEN }, () => STRIP_DEFAULT))
+  const [pixels, setPixels] = useState<string[]>(() =>
+    Array.from({ length: STRIP_LEN }, () => STRIP_DEFAULT)
+  )
   const [selPixel, setSelPixel] = useState(0)
   const [anim, setAnim] = useState<string | null>(null)
 
@@ -124,9 +135,13 @@ export function LedInstrument({ def, onClose, docked = true }: LedInstrumentProp
     mode === 'rgb'
       ? color
       : mode === 'strip'
-        ? pixels[selPixel] ?? STRIP_DEFAULT
+        ? (pixels[selPixel] ?? STRIP_DEFAULT)
         : mode === 'pwm'
-          ? rgbToHex({ r: Math.round(level * 255), g: Math.round(level * 70), b: Math.round(level * 50) })
+          ? rgbToHex({
+              r: Math.round(level * 255),
+              g: Math.round(level * 70),
+              b: Math.round(level * 50)
+            })
           : on
             ? def.accent
             : '#15171a'
@@ -152,6 +167,8 @@ export function LedInstrument({ def, onClose, docked = true }: LedInstrumentProp
       source="DIGITAL · PWM · RGB"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="ledpanel"
@@ -280,7 +297,10 @@ export function LedInstrument({ def, onClose, docked = true }: LedInstrumentProp
 
         {/* Standard bottom 3-column readout strip: MODE / VALUE / PIXELS. */}
         <div className="ledpanel__readout">
-          <Cell label="MODE" value={mode === 'pwm' ? 'PWM' : mode === 'rgb' ? 'RGB' : mode.toUpperCase()} />
+          <Cell
+            label="MODE"
+            value={mode === 'pwm' ? 'PWM' : mode === 'rgb' ? 'RGB' : mode.toUpperCase()}
+          />
           <span className="ledpanel__div" aria-hidden="true" />
           <Cell label="VALUE" value={valueText} />
           <span className="ledpanel__div" aria-hidden="true" />

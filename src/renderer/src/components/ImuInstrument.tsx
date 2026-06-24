@@ -1,11 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type CSSProperties
-} from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import {
   applyCalibration,
@@ -79,9 +73,18 @@ export interface ImuInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
-export function ImuInstrument({ def, onClose, docked = true }: ImuInstrumentProps): JSX.Element {
+export function ImuInstrument({
+  def,
+  onClose,
+  docked = true,
+  onToggleDock,
+  float
+}: ImuInstrumentProps): JSX.Element {
   // The LATEST raw orientation (last channel wins) + whether any data has arrived.
   const [raw, setRaw] = useState<Euler>(NEUTRAL_EULER)
   const [hasData, setHasData] = useState(false)
@@ -134,7 +137,14 @@ export function ImuInstrument({ def, onClose, docked = true }: ImuInstrumentProp
   const source = `IMU · 9-DOF${channel ? ` · ${channel}` : ''}`
 
   return (
-    <InstrumentWindow name={def.name.toUpperCase()} source={source} docked={docked} onClose={onClose}>
+    <InstrumentWindow
+      name={def.name.toUpperCase()}
+      source={source}
+      docked={docked}
+      onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
+    >
       <div
         className="imu"
         style={

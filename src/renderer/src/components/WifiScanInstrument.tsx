@@ -1,5 +1,5 @@
 import { useCallback, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useSnakiePresence } from './snakie-presence'
@@ -48,6 +48,9 @@ export interface WifiScanInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** The on-device scan trigger token for Wi-Fi (documented `scan:<kind>`). */
@@ -62,7 +65,9 @@ function isOpen(security: string): boolean {
 export function WifiScanInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: WifiScanInstrumentProps): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
@@ -141,6 +146,8 @@ export function WifiScanInstrument({
       source="WLAN0"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="wscan"
@@ -174,15 +181,13 @@ export function WifiScanInstrument({
                       </button>
                     </div>
                     <p className="wscan__prompt-hint">
-                      Opens a demo that scans on the 2nd core — or run your own program
-                      that calls <code>inst.start()</code>.
+                      Opens a demo that scans on the 2nd core — or run your own program that calls{' '}
+                      <code>inst.start()</code>.
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className="wscan__prompt-msg">
-                      Connect a board to scan for Wi-Fi networks.
-                    </p>
+                    <p className="wscan__prompt-msg">Connect a board to scan for Wi-Fi networks.</p>
                     <div className="wscan__prompt-actions">
                       <button
                         type="button"
@@ -227,7 +232,10 @@ export function WifiScanInstrument({
         </div>
 
         <div className="wscan__readout">
-          <Cell label="NETWORKS" value={scanning && nets.length === 0 ? '··' : String(nets.length)} />
+          <Cell
+            label="NETWORKS"
+            value={scanning && nets.length === 0 ? '··' : String(nets.length)}
+          />
           <span className="wscan__div" aria-hidden="true" />
           <Cell label="BEST" value={best ? `${best.rssi}` : '—'} />
           <span className="wscan__div" aria-hidden="true" />
@@ -244,11 +252,7 @@ function WifiRow({ net, open }: { net: WifiTelemetry; open: boolean }): JSX.Elem
   return (
     <li className="wscan__row">
       <span className="wscan__lock" aria-hidden="true">
-        {open ? (
-          <OpenIcon />
-        ) : (
-          <LockIcon />
-        )}
+        {open ? <OpenIcon /> : <LockIcon />}
       </span>
       <span className="wscan__ssid" title={ssidLabel(net.ssid)}>
         {ssidLabel(net.ssid)}
@@ -262,11 +266,7 @@ function WifiRow({ net, open }: { net: WifiTelemetry; open: boolean }): JSX.Elem
 /** A 4-bar signal meter; `level` (0–4) bars are lit the accent. */
 function SignalBars({ level }: { level: number }): JSX.Element {
   return (
-    <span
-      className="wscan__bars"
-      role="img"
-      aria-label={`Signal ${level} of ${MAX_SIGNAL_BARS}`}
-    >
+    <span className="wscan__bars" role="img" aria-label={`Signal ${level} of ${MAX_SIGNAL_BARS}`}>
       {Array.from({ length: MAX_SIGNAL_BARS }, (_, i) => (
         <span
           key={i}
@@ -290,7 +290,16 @@ function LockIcon(): JSX.Element {
 function OpenIcon(): JSX.Element {
   return (
     <svg width="9" height="9" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-      <rect x="5" y="11" width="14" height="9" rx="1.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <rect
+        x="5"
+        y="11"
+        width="14"
+        height="9"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
       <path d="M8 11V8a4 4 0 0 1 7.5-1.9" fill="none" stroke="currentColor" strokeWidth="2" />
     </svg>
   )

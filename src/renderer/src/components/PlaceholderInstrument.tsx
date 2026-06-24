@@ -1,5 +1,5 @@
 import { type CSSProperties } from 'react'
-import { InstrumentWindow } from './InstrumentWindow'
+import { InstrumentWindow, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import './PlaceholderInstrument.css'
 
@@ -43,6 +43,9 @@ export interface PlaceholderInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** A short in/out tag for the accent pill, derived from the group. */
@@ -55,7 +58,9 @@ function groupTag(group: InstrumentDef['group']): string {
 export function PlaceholderInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: PlaceholderInstrumentProps): JSX.Element {
   return (
     <InstrumentWindow
@@ -63,6 +68,8 @@ export function PlaceholderInstrument({
       source={`${groupTag(def.group)} · coming soon`}
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="placeholder"

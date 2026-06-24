@@ -327,6 +327,14 @@ export interface UseInstrumentsResult {
    * visibility ON, so a previously-undocked/closed instrument reappears DOCKED.
    */
   redockKind: (kind: 'scope' | 'meter') => void
+  /**
+   * Per-SINGLETON docked override (keyed by registry id, e.g. `wifi-scan`),
+   * default docked. A singleton whose value is `false` floats over the window
+   * (the float layer renders it) instead of sitting in the dock rail.
+   */
+  singletonDocked: Record<string, boolean>
+  /** Flip a singleton between docked and floating (the dock-to-side key). */
+  toggleSingletonDock: (id: string) => void
 }
 
 export function useInstruments({
@@ -422,6 +430,14 @@ export function useInstruments({
     setDocked((d) => redockKindMap(d, kind, vars))
   }, [])
 
+  // Per-singleton docked override (keyed by registry id), default docked. The
+  // dock-to-side key on a singleton window flips it; an undocked singleton is
+  // rendered by the float layer instead of the dock rail.
+  const [singletonDocked, setSingletonDocked] = useState<Record<string, boolean>>({})
+  const toggleSingletonDock = useCallback((id: string): void => {
+    setSingletonDocked((d) => ({ ...d, [id]: !(d[id] ?? true) }))
+  }, [])
+
   // Live device values: build the probe from the OPEN INSTRUMENTS' OWN conns (not
   // the main-file parse) so live readings work regardless of the active file. The
   // values are keyed by instrument index (the same order we resolve below). Poll
@@ -509,7 +525,9 @@ export function useInstruments({
     toggleDock,
     closeInstrument,
     retargetInstrument,
-    redockKind
+    redockKind,
+    singletonDocked,
+    toggleSingletonDock
   }
 }
 
@@ -811,9 +829,16 @@ export function InstrumentDockRegion({
           </InstrumentWindow>
         </DockItem>
       )}
-      {placeholderDefs.map((def) => (
-        <DockItem key={def.id}>{renderSingleton(def, () => onToggleVisible(def.id))}</DockItem>
-      ))}
+      {placeholderDefs
+        .filter((def) => host.singletonDocked[def.id] !== false)
+        .map((def) => (
+          <DockItem key={def.id}>
+            {renderSingleton(def, () => onToggleVisible(def.id), {
+              onToggleDock: () => host.toggleSingletonDock(def.id),
+              docked: true
+            })}
+          </DockItem>
+        ))}
     </InstrumentDock>
   )
 }
@@ -830,32 +855,43 @@ function DockItem({ children }: { children: JSX.Element }): JSX.Element {
  * panel shares the prop shape `{ def, onClose, docked }` (see PlaceholderInstrument),
  * so this switch is the single integration seam the panel issues plug into.
  */
-function renderSingleton(def: InstrumentDef, onClose: () => void): JSX.Element {
+function renderSingleton(
+  def: InstrumentDef,
+  onClose: () => void,
+  chrome?: { onToggleDock?: () => void; docked?: boolean; float?: FloatProps }
+): JSX.Element {
+  const p = {
+    def,
+    onClose,
+    onToggleDock: chrome?.onToggleDock,
+    docked: chrome?.docked ?? true,
+    float: chrome?.float
+  }
   switch (def.id) {
     case 'gamepad':
-      return <GamepadInstrument def={def} onClose={onClose} />
+      return <GamepadInstrument {...p} />
     case 'range':
-      return <RangeInstrument def={def} onClose={onClose} />
+      return <RangeInstrument {...p} />
     case 'imu':
-      return <ImuInstrument def={def} onClose={onClose} />
+      return <ImuInstrument {...p} />
     case 'led':
-      return <LedInstrument def={def} onClose={onClose} />
+      return <LedInstrument {...p} />
     case 'button':
-      return <ButtonInstrument def={def} onClose={onClose} />
+      return <ButtonInstrument {...p} />
     case 'buzzer':
-      return <BuzzerInstrument def={def} onClose={onClose} />
+      return <BuzzerInstrument {...p} />
     case 'encoder':
-      return <EncoderInstrument def={def} onClose={onClose} />
+      return <EncoderInstrument {...p} />
     case 'i2c-display':
-      return <DisplayInstrument def={def} onClose={onClose} />
+      return <DisplayInstrument {...p} />
     case 'wifi-scan':
-      return <WifiScanInstrument def={def} onClose={onClose} />
+      return <WifiScanInstrument {...p} />
     case 'bluetooth':
-      return <BluetoothInstrument def={def} onClose={onClose} />
+      return <BluetoothInstrument {...p} />
     case 'i2c-detect':
-      return <I2cDetectInstrument def={def} onClose={onClose} />
+      return <I2cDetectInstrument {...p} />
     default:
-      return <PlaceholderInstrument def={def} onClose={onClose} />
+      return <PlaceholderInstrument {...p} />
   }
 }
 
@@ -870,16 +906,26 @@ function renderSingleton(def: InstrumentDef, onClose: () => void): JSX.Element {
 export function InstrumentFloatLayer({
   host,
   vis,
-  visible
+  visible,
+  onToggleVisible
 }: {
   host: UseInstrumentsResult
   vis: InstrumentVisibility
   visible: boolean
+  /** Close (hide) a singleton floated here — same close→hide model as the dock. */
+  onToggleVisible: (id: string) => void
 }): JSX.Element | null {
   const floats = host.floatItems.filter((r) =>
     isVisible(vis, r.it.kind === 'scope' ? 'scope' : 'meter')
   )
-  if (floats.length === 0) return null
+  // Undocked singletons (every visible non-plotter singleton whose dock override
+  // is off) float here alongside the scope/meter floats.
+  const singletonFloats = SINGLETON_IDS.filter(
+    (id) => id !== 'plotter' && isVisible(vis, id) && host.singletonDocked[id] === false
+  )
+    .map((id) => instrumentById(id))
+    .filter((d): d is InstrumentDef => d !== undefined)
+  if (floats.length === 0 && singletonFloats.length === 0) return null
   return (
     <div
       className={`instr-floats ${visible ? '' : 'instr-floats--hidden'}`}
@@ -888,8 +934,46 @@ export function InstrumentFloatLayer({
       {floats.map((r) => (
         <FloatingInstrument key={`${r.it.kind}:${r.it.conn.variable}`} r={r} host={host} />
       ))}
+      {singletonFloats.map((def, i) => (
+        <FloatingSingleton
+          key={def.id}
+          def={def}
+          cascade={floats.length + i}
+          host={host}
+          onClose={() => onToggleVisible(def.id)}
+        />
+      ))}
     </div>
   )
+}
+
+/**
+ * One floating SINGLETON instrument (e.g. an undocked Wi-Fi scan): owns its drag
+ * offset via {@link useFloatPlacement} and renders the panel with float chrome +
+ * the dock-to-side key. Mirrors {@link FloatingInstrument} for the scope/meter.
+ */
+function FloatingSingleton({
+  def,
+  cascade,
+  host,
+  onClose
+}: {
+  def: InstrumentDef
+  cascade: number
+  host: UseInstrumentsResult
+  onClose: () => void
+}): JSX.Element {
+  const getHostSize = useCallback((): { w: number; h: number } => {
+    const el = document.querySelector('.shell') as HTMLElement | null
+    if (!el) return { w: window.innerWidth, h: window.innerHeight }
+    return { w: el.clientWidth, h: el.clientHeight }
+  }, [])
+  const float = useFloatPlacement(initialOffset(cascade), getHostSize)
+  return renderSingleton(def, onClose, {
+    onToggleDock: () => host.toggleSingletonDock(def.id),
+    docked: false,
+    float
+  })
 }
 
 /**

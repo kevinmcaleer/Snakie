@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import {
@@ -42,12 +42,17 @@ export interface ButtonInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 export function ButtonInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: ButtonInstrumentProps): JSX.Element {
   const [map, setMap] = useState<ButtonMap>(emptyButtonMap)
 
@@ -71,6 +76,8 @@ export function ButtonInstrument({
       source="DIGITAL IN"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="btnpanel"

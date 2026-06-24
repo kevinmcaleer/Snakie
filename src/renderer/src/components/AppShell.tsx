@@ -643,7 +643,12 @@ export function AppShell(): JSX.Element {
 
       {/* App-root float layer: undocked scope/meter windows float over the WHOLE
           window (above the panels, below modals). Click-through layer. */}
-      <InstrumentFloatLayer host={instruments} vis={visibility} visible={instrumentsVisible} />
+      <InstrumentFloatLayer
+        host={instruments}
+        vis={visibility}
+        visible={instrumentsVisible}
+        onToggleVisible={toggleVisible}
+      />
 
       {settingsOpen && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />

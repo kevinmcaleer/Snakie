@@ -6,7 +6,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent
 } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { buildTeleopPayload } from './snakie-control'
 import {
@@ -73,6 +73,9 @@ export interface GamepadInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** Read the first connected gamepad as a flat, serialisable snapshot. */
@@ -109,7 +112,9 @@ function readGamepad(preferredIndex: number | null): {
 export function GamepadInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: GamepadInstrumentProps): JSX.Element {
   // --- Mappings (the mapping editor's state) --------------------------------
   const initial = defaultMapping()
@@ -271,6 +276,8 @@ export function GamepadInstrument({
       source={source}
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="gp"
@@ -285,9 +292,13 @@ export function GamepadInstrument({
           <div className="gp__screen-inner">
             {/* Connection / driving status row */}
             <div className="gp__status">
-              <span className={`gp__dot ${snap.connected ? 'gp__dot--on' : ''}`} aria-hidden="true" />
+              <span
+                className={`gp__dot ${snap.connected ? 'gp__dot--on' : ''}`}
+                aria-hidden="true"
+              />
               <span className="gp__status-text">
-                {padId ? 'gamepad' : 'on-screen'} · {driving ? 'DRIVING' : estop ? 'E-STOP' : 'held off'}
+                {padId ? 'gamepad' : 'on-screen'} ·{' '}
+                {driving ? 'DRIVING' : estop ? 'E-STOP' : 'held off'}
               </span>
             </div>
 
@@ -385,7 +396,9 @@ export function GamepadInstrument({
                     className="gp__in gp__in--kind"
                     value={m.kind}
                     aria-label={`Output ${i + 1} source kind`}
-                    onChange={(e) => updateAxis(i, { kind: e.target.value as OutputMapping['kind'] })}
+                    onChange={(e) =>
+                      updateAxis(i, { kind: e.target.value as OutputMapping['kind'] })
+                    }
                   >
                     <option value="axis">ax</option>
                     <option value="button">btn</option>
@@ -407,7 +420,9 @@ export function GamepadInstrument({
                   max={1}
                   value={m.deadzone}
                   aria-label={`Output ${i + 1} deadzone`}
-                  onChange={(e) => updateAxis(i, { deadzone: clamp(Number(e.target.value) || 0, 0, 1) })}
+                  onChange={(e) =>
+                    updateAxis(i, { deadzone: clamp(Number(e.target.value) || 0, 0, 1) })
+                  }
                 />
                 <input
                   className="gp__in gp__in--num"

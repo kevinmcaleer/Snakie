@@ -1,12 +1,5 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type CSSProperties
-} from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import {
   CHROMATIC,
@@ -57,6 +50,9 @@ export interface BuzzerInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** The single octave of keys the on-screen keyboard renders. */
@@ -67,8 +63,7 @@ const MIN_NOTE_MS = 80
 const MAX_NOTE_MS = 600
 
 /** A short, recognisable RTTTL placeholder so the box reads as "paste here". */
-const RTTTL_PLACEHOLDER =
-  'Nokia:d=4,o=5,b=125:8e6,8d6,4f#,4g#,8c#6,8b,4d,4e,8b,8a,4c#,4e,2a'
+const RTTTL_PLACEHOLDER = 'Nokia:d=4,o=5,b=125:8e6,8d6,4f#,4g#,8c#6,8b,4d,4e,8b,8a,4c#,4e,2a'
 
 /** Fire-and-forget a control line; swallow errors so the UI never throws. */
 function sendBuzzer(payload: string): void {
@@ -82,7 +77,9 @@ function sendBuzzer(payload: string): void {
 export function BuzzerInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: BuzzerInstrumentProps): JSX.Element {
   // --- Controls --------------------------------------------------------------
   const [pin, setPin] = useState(15)
@@ -295,6 +292,8 @@ export function BuzzerInstrument({
       source={source}
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="buzzer"
@@ -308,7 +307,9 @@ export function BuzzerInstrument({
         <PhosphorScreen className="buzzer__screen">
           <div className="buzzer__readout-now" aria-hidden="true">
             <span className="buzzer__big">{fmtFreq(lastFreq)}</span>
-            <span className="buzzer__small">{status === 'playing' ? '▶ playing' : '■ standby'}</span>
+            <span className="buzzer__small">
+              {status === 'playing' ? '▶ playing' : '■ standby'}
+            </span>
           </div>
 
           {/* The piano keyboard — one octave. White keys are the row; black keys

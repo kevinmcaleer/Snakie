@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import type { InstrumentDef } from './range-instrument-def'
 import { useTelemetryStream, type DistanceTelemetry } from './range-telemetry'
 import {
@@ -58,9 +58,21 @@ const MAX_PRESETS: { mm: number; label: string }[] = [
 ]
 
 /** A short, theme-able cell in the bottom readout strip. */
-function Cell({ label, value, pad, alert }: { label: string; value: string; pad?: boolean; alert?: boolean }): JSX.Element {
+function Cell({
+  label,
+  value,
+  pad,
+  alert
+}: {
+  label: string
+  value: string
+  pad?: boolean
+  alert?: boolean
+}): JSX.Element {
   return (
-    <div className={`range__cell ${pad ? 'range__cell--pad' : ''} ${alert ? 'range__cell--alert' : ''}`}>
+    <div
+      className={`range__cell ${pad ? 'range__cell--pad' : ''} ${alert ? 'range__cell--alert' : ''}`}
+    >
       <span className="range__cell-lbl">{label}</span>
       <span className="range__cell-val">{value}</span>
     </div>
@@ -70,11 +82,16 @@ function Cell({ label, value, pad, alert }: { label: string; value: string; pad?
 export function RangeInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: {
   def: InstrumentDef
   onClose?: () => void
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }): JSX.Element {
   // --- user configuration ---------------------------------------------------
   const [maxMm, setMaxMm] = useState<number>(2000)
@@ -123,7 +140,8 @@ export function RangeInstrument({
   const accent = alert ? '#ff6b6b' : def.accent
 
   const rangeText = latest === null ? '—' : formatRange(mm, unit, maxMm)
-  const angleText = latest?.angle !== undefined ? `${Math.round(latest.angle)}°` : swept ? '—' : 'FIXED'
+  const angleText =
+    latest?.angle !== undefined ? `${Math.round(latest.angle)}°` : swept ? '—' : 'FIXED'
   const minText = minMm === null ? '—' : formatRange(minMm, unit, maxMm)
 
   // --- radar / gauge geometry (pure) ----------------------------------------
@@ -161,6 +179,8 @@ export function RangeInstrument({
       source="ToF · ULTRASONIC"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="range"
@@ -290,11 +310,15 @@ export function RangeInstrument({
 
           {/* On-screen labels (HTML over the SVG). */}
           <span className="range__lbl range__lbl--mode">{swept ? 'RADAR' : 'GAUGE'}</span>
-          <span className={`range__lbl range__lbl--state ${alert ? 'is-alert' : ''} ${noEcho ? 'is-idle' : ''}`}>
+          <span
+            className={`range__lbl range__lbl--state ${alert ? 'is-alert' : ''} ${noEcho ? 'is-idle' : ''}`}
+          >
             <span className="range__state-dot" />
             {noEcho ? 'NO ECHO' : alert ? 'ALERT' : 'CLEAR'}
           </span>
-          <span className="range__lbl range__lbl--max">MAX {formatRange(clampRange(maxMm, maxMm), unit, maxMm + 1)}</span>
+          <span className="range__lbl range__lbl--max">
+            MAX {formatRange(clampRange(maxMm, maxMm), unit, maxMm + 1)}
+          </span>
         </PhosphorScreen>
 
         {/* Controls: max-range presets, units toggle, threshold stepper. */}

@@ -1,5 +1,5 @@
 import { useCallback, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import {
@@ -38,6 +38,9 @@ export interface BluetoothInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** The on-device scan trigger token for Bluetooth (documented `scan:<kind>`). */
@@ -46,7 +49,9 @@ const SCAN_TRIGGER = 'scan:bt'
 export function BluetoothInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: BluetoothInstrumentProps): JSX.Element {
   const [devices, setDevices] = useState<BluetoothTelemetry[]>([])
   const [scanning, setScanning] = useState(false)
@@ -82,6 +87,8 @@ export function BluetoothInstrument({
       source="BLE"
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="bscan"
@@ -156,11 +163,7 @@ function BtRow({ dev }: { dev: BluetoothTelemetry }): JSX.Element {
 /** A 4-bar signal meter; `level` (0–4) bars are lit the accent. */
 function SignalBars({ level }: { level: number }): JSX.Element {
   return (
-    <span
-      className="bscan__bars"
-      role="img"
-      aria-label={`Signal ${level} of ${MAX_SIGNAL_BARS}`}
-    >
+    <span className="bscan__bars" role="img" aria-label={`Signal ${level} of ${MAX_SIGNAL_BARS}`}>
       {Array.from({ length: MAX_SIGNAL_BARS }, (_, i) => (
         <span
           key={i}

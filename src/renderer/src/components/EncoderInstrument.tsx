@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import {
   buttonLabel,
   DEFAULT_COUNTS_PER_REV,
@@ -287,11 +287,16 @@ function Cell({
 export function EncoderInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: {
   def: InstrumentDef
   onClose?: () => void
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }): JSX.Element {
   const tick = useEncoderTelemetry()
   const countsPerRev = def.countsPerRev ?? DEFAULT_COUNTS_PER_REV
@@ -314,7 +319,14 @@ export function EncoderInstrument({
   } as CSSProperties
 
   return (
-    <InstrumentWindow name={def.name.toUpperCase()} source="A·B · SW" docked={docked} onClose={onClose}>
+    <InstrumentWindow
+      name={def.name.toUpperCase()}
+      source="A·B · SW"
+      docked={docked}
+      onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
+    >
       <div className="enc" style={themeStyle}>
         <PhosphorScreen>
           <div className="enc__screen-inner">

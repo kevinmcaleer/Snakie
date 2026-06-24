@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type CSSProperties } from 'react'
-import { InstrumentWindow, PhosphorScreen } from './InstrumentWindow'
+import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import {
@@ -44,6 +44,9 @@ export interface DisplayInstrumentProps {
   onClose?: () => void
   /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
+  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
+  onToggleDock?: () => void
+  float?: FloatProps
 }
 
 /** The two panel modes. */
@@ -55,7 +58,9 @@ const DEFAULT_ADDR = '0x3C'
 export function DisplayInstrument({
   def,
   onClose,
-  docked = true
+  docked = true,
+  onToggleDock,
+  float
 }: DisplayInstrumentProps): JSX.Element {
   const [mode, setMode] = useState<Mode>('mirror')
   const [geoId, setGeoId] = useState<string>(DISPLAY_GEOMETRIES[0].id)
@@ -110,6 +115,8 @@ export function DisplayInstrument({
       source={`${addr} · SDA/SCL`}
       docked={docked}
       onClose={onClose}
+      onToggleDock={onToggleDock}
+      {...float}
     >
       <div
         className="i2cd"
@@ -278,14 +285,7 @@ function PixelScreen({ grid, standby }: { grid: PixelGrid; standby?: boolean }):
       >
         <rect className="i2cd__px-bg" x="0" y="0" width={Math.max(1, w)} height={Math.max(1, h)} />
         {on.map((p) => (
-          <rect
-            key={`${p.x},${p.y}`}
-            className="i2cd__px"
-            x={p.x}
-            y={p.y}
-            width="1"
-            height="1"
-          />
+          <rect key={`${p.x},${p.y}`} className="i2cd__px" x={p.x} y={p.y} width="1" height="1" />
         ))}
       </svg>
       {standby && <span className="i2cd__standby">awaiting framebuffer…</span>}
