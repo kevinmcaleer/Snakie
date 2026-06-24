@@ -75,6 +75,39 @@
   text-shadow: 0 0 5px rgba(240, 185, 74, 0.5);
 }
 
+/* The headline current distance — big + right-aligned over the gauge (mockup). */
+.range__big {
+  position: absolute;
+  right: 11px;
+  bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  color: #86ffb6;
+  text-shadow: 0 0 10px rgba(82, 224, 138, 0.7);
+  pointer-events: none;
+}
+.range__big-num {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+.range__big-unit {
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.range__big.is-alert {
+  color: #ff6b6b;
+  text-shadow: 0 0 12px rgba(255, 107, 107, 0.8);
+}
+.range__big.is-idle {
+  color: #6b7079;
+  text-shadow: none;
+}
+
 /* Config controls row (max-range select · units toggle · alert stepper). */
 .range__controls {
   display: flex;

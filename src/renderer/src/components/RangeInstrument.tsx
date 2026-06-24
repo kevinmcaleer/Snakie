@@ -204,6 +204,11 @@ export function RangeInstrument({
   const accent = alert ? '#ff6b6b' : def.accent
 
   const rangeText = latest === null ? '—' : formatRange(mm, unit, maxMm)
+  // Split "<number> <unit>" so the big on-screen readout can size the number and
+  // unit independently (matches the mockup's prominent right-aligned figure).
+  const [rangeNum, rangeUnit] = rangeText.includes(' ')
+    ? [rangeText.slice(0, rangeText.indexOf(' ')), rangeText.slice(rangeText.indexOf(' ') + 1)]
+    : [rangeText, '']
   const angleText =
     latest?.angle !== undefined ? `${Math.round(latest.angle)}°` : swept ? '—' : 'FIXED'
   const minText = minMm === null ? '—' : formatRange(minMm, unit, maxMm)
@@ -449,6 +454,14 @@ export function RangeInstrument({
           <span className="range__lbl range__lbl--max">
             MAX {formatRange(clampRange(maxMm, maxMm), unit, maxMm + 1)}
           </span>
+
+          {/* The current distance as a big, right-aligned figure (per the mockup).
+              For a fixed sensor this is the headline reading; it sits over the
+              gauge and turns the alert colour when an obstacle is within range. */}
+          <div className={`range__big ${alert ? 'is-alert' : ''} ${noEcho ? 'is-idle' : ''}`}>
+            <span className="range__big-num">{rangeNum}</span>
+            {rangeUnit && <span className="range__big-unit">{rangeUnit}</span>}
+          </div>
         </PhosphorScreen>
 
         {/* Demo prompt — shown when a TRIG/ECHO retarget can't reach a live program. */}
