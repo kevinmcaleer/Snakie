@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { FirmwareFlasher } from './FirmwareFlasher'
+import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
 import type { UpdateStatus } from '../../../preload/index.d'
@@ -286,6 +287,7 @@ export function StatusBar({
               {updateView.label}
             </button>
           ))}
+        <CoffeeLink />
         <button
           type="button"
           className="statusbar__item statusbar__flash"

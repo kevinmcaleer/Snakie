@@ -1,0 +1,94 @@
+.coffee {
+  position: relative;
+  display: inline-flex;
+}
+
+/* The quiet, always-present coffee cup in the status bar. */
+.coffee__link {
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.6;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
+}
+
+.coffee__link:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+/* First-launch nudge — a small callout that rises above the cup. */
+.coffee__nudge {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  white-space: nowrap;
+  border-radius: 8px;
+  background: #2a2d33;
+  border: 1px solid #45494f;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  font-size: 11px;
+  color: #d7dbe0;
+  animation: coffee-rise 0.28s ease both;
+}
+
+/* A little pointer down toward the cup. */
+.coffee__nudge::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 12px;
+  border: 5px solid transparent;
+  border-top-color: #45494f;
+}
+
+.coffee__nudge-text {
+  letter-spacing: 0.02em;
+}
+
+.coffee__nudge-cta {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 9px;
+  border-radius: 6px;
+  color: #2a1c08;
+  background: linear-gradient(180deg, #ffd479, #f5b62e);
+  border: 1px solid #c98f1e;
+}
+
+.coffee__nudge-cta:hover {
+  filter: brightness(1.06);
+}
+
+.coffee__nudge-close {
+  font-size: 10px;
+  cursor: pointer;
+  color: #9aa0a8;
+  background: transparent;
+  border: none;
+  padding: 2px 4px;
+}
+
+.coffee__nudge-close:hover {
+  color: #d7dbe0;
+}
+
+@keyframes coffee-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

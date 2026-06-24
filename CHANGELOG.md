@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Buy me a coffee (#126).** A subtle `☕` link in the status bar opens the
+  project's Buy Me a Coffee page; on your first launch a small, dismissible nudge
+  appears beside it after a couple of seconds (shown once, never nags again).
 - **Ultrasonic rangefinder (HC-SR04) for the Range instrument.** A real on-device
   driver (`inst.ranger`) triggers the sensor and times the echo into a distance,
   and the Range panel gains **TRIG + ECHO pin dropdowns** that retarget the board
