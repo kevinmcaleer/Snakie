@@ -6,6 +6,7 @@ import {
   cmToMm,
   convertUnit,
   DEFAULT_MAX_MM,
+  findRangePinsInCode,
   formatRange,
   historyPath,
   HISTORY_CAP,
@@ -14,6 +15,8 @@ import {
   polarToPoint,
   pushBlip,
   pushHistory,
+  rangePinsPayload,
+  setRangePinsInCode,
   SWEEP_TRAIL,
   type RadarBlip
 } from '../src/renderer/src/components/range-logic'
@@ -217,5 +220,73 @@ describe('parseDistance (SNK DIST telemetry, single vs swept)', () => {
   })
   it('ignores a non-numeric angle token (falls back to single-sensor)', () => {
     expect(parseDistance('SNK DIST tof 500 NaNish')).toEqual({ kind: 'dist', ch: 'tof', mm: 500 })
+  })
+})
+
+describe('rangePinsPayload (retarget the HC-SR04 trig/echo pins)', () => {
+  it('builds a `pins <trig> <echo>` payload', () => {
+    expect(rangePinsPayload(3, 2)).toBe('pins 3 2')
+  })
+  it('rounds + clamps each pin to a whole non-negative GPIO', () => {
+    expect(rangePinsPayload(2.7, 4.2)).toBe('pins 3 4')
+    expect(rangePinsPayload(-1, -5)).toBe('pins 0 0')
+  })
+  it('coerces non-finite pins to 0', () => {
+    expect(rangePinsPayload(NaN, Infinity)).toBe('pins 0 0')
+  })
+})
+
+describe('findRangePinsInCode (read declared RANGE_TRIG / RANGE_ECHO)', () => {
+  it('reads UPPERCASE constants (the demo form)', () => {
+    expect(findRangePinsInCode('RANGE_TRIG = 3\nRANGE_ECHO = 2')).toEqual({ trig: 3, echo: 2 })
+  })
+  it('reads the lowercase kwarg form, whitespace-tolerant', () => {
+    expect(findRangePinsInCode('inst.start(range_trig=5,  range_echo = 6)')).toEqual({
+      trig: 5,
+      echo: 6
+    })
+  })
+  it('returns the FIRST match per role', () => {
+    expect(findRangePinsInCode('RANGE_TRIG=1\nRANGE_TRIG=9\nRANGE_ECHO=0')).toEqual({
+      trig: 1,
+      echo: 0
+    })
+  })
+  it('returns null for a role the code declares no numeric value for', () => {
+    expect(findRangePinsInCode('RANGE_TRIG = 3')).toEqual({ trig: 3, echo: null })
+    expect(findRangePinsInCode('range_echo=RANGE_ECHO')).toEqual({ trig: null, echo: null })
+    expect(findRangePinsInCode('print("no pins here")')).toEqual({ trig: null, echo: null })
+    expect(findRangePinsInCode('')).toEqual({ trig: null, echo: null })
+  })
+})
+
+describe('setRangePinsInCode (one-click sync of both pins)', () => {
+  it('rewrites both UPPERCASE constants, preserving spacing', () => {
+    expect(setRangePinsInCode('RANGE_TRIG = 3\nRANGE_ECHO = 2', 7, 6)).toBe(
+      'RANGE_TRIG = 7\nRANGE_ECHO = 6'
+    )
+  })
+  it('rewrites the lowercase kwarg form', () => {
+    expect(setRangePinsInCode('inst.start(range_trig=3, range_echo=2)', 10, 11)).toBe(
+      'inst.start(range_trig=10, range_echo=11)'
+    )
+  })
+  it('only the FIRST match of each role is rewritten', () => {
+    expect(setRangePinsInCode('RANGE_TRIG=1\nRANGE_TRIG=9\nRANGE_ECHO=0', 4, 5)).toBe(
+      'RANGE_TRIG=4\nRANGE_TRIG=9\nRANGE_ECHO=5'
+    )
+  })
+  it('leaves a role with no numeric match untouched', () => {
+    expect(setRangePinsInCode('RANGE_TRIG = 3', 7, 6)).toBe('RANGE_TRIG = 7')
+    expect(setRangePinsInCode('no pins here', 7, 6)).toBe('no pins here')
+  })
+  it('rounds + clamps each new pin', () => {
+    expect(setRangePinsInCode('RANGE_TRIG=0\nRANGE_ECHO=0', 2.7, -1)).toBe(
+      'RANGE_TRIG=3\nRANGE_ECHO=0'
+    )
+  })
+  it('round-trips with findRangePinsInCode', () => {
+    const updated = setRangePinsInCode('RANGE_TRIG = 3\nRANGE_ECHO = 2', 22, 21)
+    expect(findRangePinsInCode(updated)).toEqual({ trig: 22, echo: 21 })
   })
 })

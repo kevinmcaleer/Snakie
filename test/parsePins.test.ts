@@ -260,6 +260,36 @@ describe('parseInstrumentPins', () => {
       { instrument: 'led', pin: '5' }
     ])
   })
+
+  it('surfaces a rangefinder TRIG + ECHO via _trig / _echo kwargs', () => {
+    expect(parseInstrumentPins('inst.start(range_trig=3, range_echo=2)')).toEqual([
+      { instrument: 'range', pin: '3' },
+      { instrument: 'range', pin: '2' }
+    ])
+  })
+
+  it('surfaces UPPERCASE RANGE_TRIG / RANGE_ECHO constants (the demo form)', () => {
+    const src = ['RANGE_TRIG = 3', 'RANGE_ECHO = 2', 'inst.start(range_trig=RANGE_TRIG)'].join('\n')
+    expect(parseInstrumentPins(src)).toEqual([
+      { instrument: 'range', pin: '3' },
+      { instrument: 'range', pin: '2' }
+    ])
+  })
+
+  it('still surfaces single-pin _pin devices (no regression)', () => {
+    expect(parseInstrumentPins('inst.start(buzzer_pin=15)')).toEqual([
+      { instrument: 'buzzer', pin: '15' }
+    ])
+  })
+})
+
+describe('parsePins — rangefinder instrument pins (board view bonus)', () => {
+  it('surfaces a range_trig / range_echo pair as instrument-typed connections', () => {
+    const conns = parsePins('import instruments as inst\ninst.start(range_trig=3, range_echo=2)')
+    expect(conns.map((c) => c.type)).toEqual(['instrument', 'instrument'])
+    expect(conns.map((c) => c.pins[0])).toEqual(['3', '2'])
+    expect(conns.every((c) => c.instrument === 'range')).toBe(true)
+  })
 })
 
 describe('parsePins — instrument pins', () => {

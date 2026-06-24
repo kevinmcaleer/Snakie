@@ -462,6 +462,85 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIn("buzzer", inst.control._handlers)
 
 
+class _FakeRangefinder:
+    """Stand-in for ``Rangefinder`` recording the last ``set_pins`` call."""
+
+    def __init__(self):
+        self.pins = None       # the (trig, echo) of the last set_pins call
+
+    def set_pins(self, trig, echo):
+        self.pins = (int(trig), int(echo))
+
+
+class RangefinderDevice(unittest.TestCase):
+    """The on-device HC-SR04 rangefinder: _us_to_mm, read(), the `range` receiver."""
+
+    def test_us_to_mm_halves_the_round_trip(self):
+        # 343 m/s -> 0.343 mm/µs, halved for the round trip -> 0.1715 mm/µs.
+        self.assertEqual(inst._us_to_mm(0), 0)
+        self.assertEqual(inst._us_to_mm(1000), int(1000 * 0.1715))  # 171
+        # A ~58 µs round trip ≈ 1 cm (the classic HC-SR04 rule of thumb).
+        self.assertEqual(inst._us_to_mm(58), int(58 * 0.1715))  # 9 mm
+        # Always an int (cheap to print + stable for the radar).
+        self.assertIsInstance(inst._us_to_mm(2000), int)
+
+    def test_read_without_pins_returns_none(self):
+        # A fresh Rangefinder has no pins -> read() degrades to None (no crash).
+        self.assertIsNone(inst.Rangefinder().read())
+
+    def test_read_without_machine_returns_none(self):
+        # No `machine` module under CPython -> set_pins is inert (no pins set), so
+        # read() returns None and never raises.
+        rf = inst.Rangefinder()
+        rf.set_pins(3, 2)  # inert under CPython
+        self.assertIsNone(rf.read())
+        self.assertIsNone(rf._trig)
+        self.assertIsNone(rf._echo)
+
+    def test_range_command_pins_parsing(self):
+        rf = _FakeRangefinder()
+        self.assertEqual(inst.range_command("pins 3 2", rf), "pins")
+        self.assertEqual(rf.pins, (3, 2))
+
+    def test_range_command_against_real_rangefinder(self):
+        # A real Rangefinder under CPython: set_pins is inert (no machine), but the
+        # command must still parse + dispatch + return the verb without raising.
+        rf = inst.Rangefinder()
+        self.assertEqual(inst.range_command("pins 5 4", rf), "pins")
+
+    def test_range_command_unknown_empty_and_malformed(self):
+        rf = _FakeRangefinder()
+        self.assertIsNone(inst.range_command("wat", rf))
+        self.assertIsNone(inst.range_command("", rf))
+        self.assertIsNone(inst.range_command("pins 3", rf))      # missing echo
+        self.assertIsNone(inst.range_command("pins a b", rf))    # non-numeric
+        self.assertIsNone(rf.pins)  # nothing actuated on a bad payload
+
+    def test_range_command_defaults_to_ranger_singleton(self):
+        # No `rf` -> defaults to the shared `ranger` (inert set_pins under CPython,
+        # but the dispatch + verb return must work).
+        self.assertEqual(inst.range_command("pins 1 0"), "pins")
+
+    def test_range_receiver_via_control_feed(self):
+        # Feed a real SNKCMD range line through a Control wired to a fake Rangefinder
+        # — the registered handler must actuate it (end-to-end protocol).
+        rf = _FakeRangefinder()
+        ctrl = inst.Control()
+        ctrl._poll = None  # feed-only
+        ctrl.on("range", lambda payload: inst.range_command(payload, rf))
+        ctrl.feed("SNKCMD range pins 3 2\n")
+        self.assertEqual(rf.pins, (3, 2))
+
+    def test_start_with_range_pins_registers_receiver(self):
+        # start(range_trig=, range_echo=) must register the `range` handler (set_pins
+        # stays inert under CPython, but the receiver is wired). Suppress READY.
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False, range_trig=3, range_echo=2)
+        self.assertIn("range", inst.control._handlers)
+        # The wired handler dispatches a `range pins …` line to the singleton.
+        self.assertEqual(inst.range_command("pins 7 6"), "pins")
+
+
 class Protocol(unittest.TestCase):
     def test_every_line_starts_with_sentinel(self):
         self.assertEqual(inst.SENTINEL, "SNK")
@@ -502,7 +581,7 @@ class BackgroundService(unittest.TestCase):
     def test_ready_announces_default_caps(self):
         self.assertEqual(
             _emit(inst.ready),
-            "SNK READY scan:wifi scan:bt teleop led buzzer screen",
+            "SNK READY scan:wifi scan:bt teleop led buzzer range screen",
         )
 
     def test_ready_includes_extra_caps(self):
