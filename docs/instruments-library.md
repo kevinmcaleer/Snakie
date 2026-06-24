@@ -96,6 +96,15 @@ below): `teleop(target="teleop")` returns the latest `(axes, payload)`; the
 `buzzer` / `led` / `Screen` helpers act on the latest command. They guard their
 hardware imports, so the module still imports under CPython.
 
+The **`Buzzer`** drives a passive buzzer/speaker on a PWM pin: `tone(freq, ms)`
+plays one tone, `play_seq([(freq, ms), …])` plays a note list (`freq` 0 = a
+rest), `stop()` silences (duty 0), and `set_pin(n)` (re)targets `PWM(Pin(n))`.
+`start(buzzer_pin=<n>)` attaches the shared `buzzer` to GP`<n>` and registers the
+`buzzer` control receiver, so the IDE's Buzzer panel can drive a speaker over the
+control channel — playback runs on the second core, off your main loop. The IDE
+pre-parses melodies/RTTTL and sends a compact `seq` line, so the board needs no
+RTTTL parser.
+
 ### The channel label `ch`
 
 `<ch>` is a label you choose (e.g. `pwm`, `adc0`, the variable name). Snakie uses
@@ -212,9 +221,18 @@ remainder for that target's helper. Example wire lines:
 ```
 SNKCMD led pwm 0.5
 SNKCMD buzzer tone 440 200
+SNKCMD buzzer seq 440:200,0:100,523:200
+SNKCMD buzzer stop
+SNKCMD buzzer pin 15
 SNKCMD teleop axes=lx:0.5,ly:-0.2 btn:a=1
 SNKCMD scan:i2c
 ```
+
+The `buzzer` target's payload verbs: `tone <freq> <ms>` (one tone), `seq
+<freq:ms>,<freq:ms>,…` (a melody/ringtone; `freq` 0 = a rest), `stop` (silence
+now), and `pin <n>` (retarget the PWM pin). The IDE builds these with
+`buzzerTonePayload` / `buzzerSeqPayload` / `buzzerStopPayload` / `buzzerPinPayload`
+and the board actuates them via `buzzer_command(payload)`.
 
 ### On the board — poll it in your loop
 
@@ -247,8 +265,9 @@ to call `control.poll()` and a blocking scan doesn't stall it:
 ```python
 import instruments as inst
 
-inst.start()        # spawns the control/service loop on the 2nd core
-inst.start(i2c=i2c) # …also registers the scan:i2c trigger for that bus
+inst.start()                 # spawns the control/service loop on the 2nd core
+inst.start(i2c=i2c)          # …also registers the scan:i2c trigger for that bus
+inst.start(buzzer_pin=15)    # …also attaches the buzzer to GP15 + the buzzer receiver
 
 while True:
     ...             # your robot's main loop on core 0; scans run on core 1
@@ -294,3 +313,6 @@ telemetry and `SNKCMD …` control echoes from the console.
 - [`docs/board.md`](board.md) — the Board View and its scope/meter launchers.
 - [`micropython/instruments.py`](../micropython/instruments.py) — the library.
 - [`examples/instruments_demo.py`](../examples/instruments_demo.py) — runnable demo.
+- [`examples/buzzer_demo.py`](../examples/buzzer_demo.py) — the Buzzer panel's demo
+  (`inst.start(buzzer_pin=15)`); the Wi-Fi panel's is
+  [`examples/wifi_scan_demo.py`](../examples/wifi_scan_demo.py).

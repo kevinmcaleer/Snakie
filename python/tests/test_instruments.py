@@ -325,6 +325,8 @@ class Receivers(unittest.TestCase):
     def test_buzzer_and_led_are_noop_without_hardware(self):
         # Hardware-less singletons: calls must not raise.
         inst.buzzer.tone(440, 50)
+        inst.buzzer.stop()
+        inst.buzzer.play_seq([(440, 10), (0, 5)])
         self.assertEqual(inst.buzzer.play("c4"), "c4")
         inst.led.set(True)
         inst.led.pwm(0.5)
@@ -345,6 +347,101 @@ class Receivers(unittest.TestCase):
     def test_screen_text_echoes_telemetry(self):
         line = _emit(inst.Screen().text, ["Hi there"])
         self.assertEqual(line, "SNK SCR 0x3C text Hi_there")
+
+
+class _RecordingPWM:
+    """Stand-in for ``machine.PWM`` that records freq()/duty_u16() write calls."""
+
+    def __init__(self):
+        self.freqs = []        # every freq(n) written, in order
+        self.duties = []       # every duty_u16(n) written, in order
+
+    def freq(self, n):
+        self.freqs.append(int(n))
+
+    def duty_u16(self, n):
+        self.duties.append(int(n))
+
+
+class BuzzerDevice(unittest.TestCase):
+    """The on-device Buzzer: stop/set_pin/play_seq + the ``buzzer`` receiver."""
+
+    def test_stop_sets_duty_zero(self):
+        pwm = _RecordingPWM()
+        inst.Buzzer(pwm).stop()
+        self.assertEqual(pwm.duties, [0])
+
+    def test_stop_without_pwm_is_noop(self):
+        # No hardware → no crash, nothing recorded (there's nothing to record on).
+        inst.Buzzer().stop()  # must not raise
+
+    def test_set_pin_without_machine_is_inert(self):
+        # No `machine` module under CPython → set_pin silences then stays inert,
+        # leaving the existing pwm untouched (here None).
+        buz = inst.Buzzer()
+        buz.set_pin(15)  # must not raise
+        self.assertIsNone(buz._pwm)
+
+    def test_play_seq_drives_notes_and_rests(self):
+        pwm = _RecordingPWM()
+        inst.Buzzer(pwm).play_seq([(440, 5), (0, 5), (262, 5)])
+        # Two real tones set a frequency; the rest (freq 0) sets none.
+        self.assertEqual(pwm.freqs, [440, 262])
+        # Each note: duty on (32768) then off (0); the rest: off only. Plus the
+        # trailing inter-note 0s — every entry ends at duty 0.
+        self.assertIn(32768, pwm.duties)
+        self.assertEqual(pwm.duties[-1], 0)
+
+    def test_parse_seq_pairs(self):
+        self.assertEqual(inst.parse_seq("440:200,0:100"), [(440, 200), (0, 100)])
+        # tolerates spaces + skips malformed pairs
+        self.assertEqual(inst.parse_seq(" 440:200 , junk , 262:50 "), [(440, 200), (262, 50)])
+        self.assertEqual(inst.parse_seq(""), [])
+
+    def test_buzzer_command_tone(self):
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        self.assertEqual(inst.buzzer_command("tone 440 50", buz), "tone")
+        self.assertEqual(pwm.freqs, [440])
+
+    def test_buzzer_command_seq(self):
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        self.assertEqual(inst.buzzer_command("seq 440:5,0:5,262:5", buz), "seq")
+        self.assertEqual(pwm.freqs, [440, 262])
+
+    def test_buzzer_command_stop(self):
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        # prime a duty, then stop must drive it to 0
+        pwm.duty_u16(32768)
+        self.assertEqual(inst.buzzer_command("stop", buz), "stop")
+        self.assertEqual(pwm.duties[-1], 0)
+
+    def test_buzzer_command_unknown_and_empty(self):
+        self.assertIsNone(inst.buzzer_command("wat", inst.Buzzer(_RecordingPWM())))
+        self.assertIsNone(inst.buzzer_command("", inst.Buzzer(_RecordingPWM())))
+
+    def test_buzzer_receiver_via_control_feed(self):
+        # Feed real SNKCMD buzzer lines through a Control wired to a fake-PWM
+        # Buzzer — the registered handler must actuate it (end-to-end protocol).
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        ctrl = inst.Control()
+        ctrl._poll = None  # feed-only
+        ctrl.on("buzzer", lambda payload: inst.buzzer_command(payload, buz))
+        ctrl.feed("SNKCMD buzzer tone 440 5\n")
+        ctrl.feed("SNKCMD buzzer seq 262:5,0:5,330:5\n")
+        ctrl.feed("SNKCMD buzzer stop\n")
+        self.assertEqual(pwm.freqs, [440, 262, 330])
+        self.assertEqual(pwm.duties[-1], 0)
+
+    def test_start_with_buzzer_pin_registers_receiver(self):
+        # start(buzzer_pin=...) must register the `buzzer` handler (set_pin stays
+        # inert under CPython, but the receiver is wired). Suppress the READY line.
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False, buzzer_pin=15)
+        self.assertIn("buzzer", inst.control._handlers)
 
 
 class Protocol(unittest.TestCase):

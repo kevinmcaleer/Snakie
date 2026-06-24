@@ -12,13 +12,18 @@
  * The on-device receiver (`micropython/instruments.py` `Buzzer`, and
  * `docs/instruments-library.md`) attests the `buzzer` control grammar:
  *
- *     SNKCMD buzzer tone <freq> <ms>      # play one tone, freq Hz for ms
- *     SNKCMD buzzer play <rtttl>          # play an RTTTL ringtone string
- *     SNKCMD buzzer stop                  # silence the buzzer
+ *     SNKCMD buzzer tone <freq> <ms>            # play one tone, freq Hz for ms
+ *     SNKCMD buzzer seq <freq:ms>,<freq:ms>,…   # play a note sequence (freq 0 = rest)
+ *     SNKCMD buzzer play <rtttl>                # play an RTTTL ringtone string
+ *     SNKCMD buzzer stop                        # silence the buzzer
+ *     SNKCMD buzzer pin <n>                     # retarget the PWM pin
  *
- * So {@link buzzerTonePayload}/{@link buzzerPlayPayload}/{@link buzzerStopPayload}
- * produce exactly the `<payload>` half — `sendControl('buzzer', payload)` frames
- * the `SNKCMD buzzer …` line via the shared `buildControlLine`.
+ * The IDE pre-parses melodies/RTTTL (its tested {@link parseRtttl}) and sends a
+ * compact `seq` note list, so the board needs no RTTTL parser. So
+ * {@link buzzerTonePayload}/{@link buzzerSeqPayload}/{@link buzzerStopPayload}/
+ * {@link buzzerPinPayload} (+ the legacy {@link buzzerPlayPayload}) produce exactly
+ * the `<payload>` half — `sendControl('buzzer', payload)` frames the
+ * `SNKCMD buzzer …` line via the shared `buildControlLine`.
  */
 
 // ---------------------------------------------------------------------------
@@ -257,9 +262,27 @@ export function buzzerTonePayload(freq: number, ms: number): string {
 }
 
 /**
+ * The `<payload>` for a melody/ringtone as a compact NOTE SEQUENCE:
+ * `seq <freq:ms>,<freq:ms>,…`. Each note is `freq:ms` (both rounded to whole,
+ * non-negative numbers); a rest is `0:<ms>` (freq 0). The board plays the pairs
+ * in order with no RTTTL parser of its own. Pass to
+ * `sendControl('buzzer', buzzerSeqPayload([{freq:440,ms:200},{freq:0,ms:100}]))`
+ * → the device sees `SNKCMD buzzer seq 440:200,0:100`.
+ */
+export function buzzerSeqPayload(notes: ReadonlyArray<Tone>): string {
+  const pairs = notes.map((n) => {
+    const f = Math.max(0, Math.round(n.freq))
+    const d = Math.max(0, Math.round(n.ms))
+    return `${f}:${d}`
+  })
+  return `seq ${pairs.join(',')}`
+}
+
+/**
  * The `<payload>` for an RTTTL ringtone: `play <rtttl>`. Internal whitespace in
  * the RTTTL string is collapsed (RTTTL has no significant spaces) so the line
- * stays one clean `SNKCMD buzzer play …` command.
+ * stays one clean `SNKCMD buzzer play …` command. (Kept for the on-device RTTTL
+ * fallback; the panel now prefers the pre-parsed {@link buzzerSeqPayload}.)
  */
 export function buzzerPlayPayload(rtttl: string): string {
   return `play ${rtttl.replace(/\s+/g, '')}`
@@ -268,6 +291,15 @@ export function buzzerPlayPayload(rtttl: string): string {
 /** The `<payload>` that silences the buzzer: `stop`. */
 export function buzzerStopPayload(): string {
   return 'stop'
+}
+
+/**
+ * The `<payload>` that retargets the buzzer's PWM pin: `pin <n>`. The pin is
+ * rounded to a whole, non-negative GPIO number. Pass to
+ * `sendControl('buzzer', buzzerPinPayload(15))` → `SNKCMD buzzer pin 15`.
+ */
+export function buzzerPinPayload(pin: number): string {
+  return `pin ${Math.max(0, Math.round(pin))}`
 }
 
 // ---------------------------------------------------------------------------
@@ -341,4 +373,120 @@ export function fmtFreq(freq: number | null): string {
 /** Total duration (ms) of a melody, summing every note + rest. */
 export function melodyDurationMs(notes: Tone[]): number {
   return notes.reduce((sum, n) => sum + Math.max(0, n.ms), 0)
+}
+
+// ---------------------------------------------------------------------------
+// Editable-melody helpers (#113 part C) — pure list ops for the sequencer row.
+// Each returns a NEW array (never mutates) so React state updates stay clean.
+// ---------------------------------------------------------------------------
+
+/**
+ * Move the note at index `from` to index `to`, shifting the others — for the
+ * drag-to-reorder interaction. Out-of-range indices are clamped into the list;
+ * a no-op move returns an (equal) copy. Pure, never mutates the input.
+ */
+export function moveNote(notes: ReadonlyArray<Tone>, from: number, to: number): Tone[] {
+  const out = notes.slice()
+  if (out.length === 0) return out
+  const f = Math.max(0, Math.min(out.length - 1, Math.trunc(from)))
+  const t = Math.max(0, Math.min(out.length - 1, Math.trunc(to)))
+  if (f === t) return out
+  const [moved] = out.splice(f, 1)
+  out.splice(t, 0, moved)
+  return out
+}
+
+/**
+ * Remove the note at `index` (click-to-delete). An out-of-range index leaves the
+ * list unchanged (a copy). Pure, never mutates the input.
+ */
+export function removeNote(notes: ReadonlyArray<Tone>, index: number): Tone[] {
+  if (index < 0 || index >= notes.length) return notes.slice()
+  const out = notes.slice()
+  out.splice(index, 1)
+  return out
+}
+
+/** A rest is a note with `freq: 0`; this is the canonical rest `Tone`. */
+export function makeRest(ms: number): Tone {
+  return { freq: 0, ms: Math.max(0, Math.round(ms)), label: 'P' }
+}
+
+/**
+ * Insert a rest (`freq: 0`) of `ms` at `index` (clamped to `[0, length]` so
+ * `index >= length` appends). Used by the `+ rest` control and gap-drops. Pure.
+ */
+export function insertRest(notes: ReadonlyArray<Tone>, index: number, ms: number): Tone[] {
+  const out = notes.slice()
+  const at = Math.max(0, Math.min(out.length, Math.trunc(index)))
+  out.splice(at, 0, makeRest(ms))
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Pitch → musical-staff position (#113 part D) — pure mapping for the staff row.
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a note sits on a 5-line treble staff + whether it needs an accidental.
+ *
+ * `step` is the DIATONIC step index counting up from a reference, used as the
+ * vertical coordinate: every whole increment is one staff position (a line→space
+ * or space→line move). We anchor `step: 0` at **B4** — the MIDDLE LINE of the
+ * treble staff — so the common keyboard octave straddles the staff nicely.
+ * Higher pitches get a larger `step` (drawn higher up). `accidental` is `'#'`
+ * for a sharp note (a black key), else `''`. `rest` flags a freq-0 rest, which
+ * has no pitch (`step: 0`) and is drawn as a rest glyph instead of a notehead.
+ */
+export interface StaffPos {
+  /** Diatonic position; 0 = B4 (middle line), +1 per line/space upward. */
+  step: number
+  /** `'#'` when the pitch is a sharp/black key, else `''`. */
+  accidental: '' | '#'
+  /** True for a rest (`freq` 0) — no pitch, draw a rest glyph. */
+  rest: boolean
+}
+
+/** Diatonic step offset (within an octave) for each chromatic semitone, C-based. */
+const SEMITONE_TO_DIATONIC: ReadonlyArray<{ dia: number; sharp: boolean }> = [
+  { dia: 0, sharp: false }, // C
+  { dia: 0, sharp: true }, // C#
+  { dia: 1, sharp: false }, // D
+  { dia: 1, sharp: true }, // D#
+  { dia: 2, sharp: false }, // E
+  { dia: 3, sharp: false }, // F
+  { dia: 3, sharp: true }, // F#
+  { dia: 4, sharp: false }, // G
+  { dia: 4, sharp: true }, // G#
+  { dia: 5, sharp: false }, // A
+  { dia: 5, sharp: true }, // A#
+  { dia: 6, sharp: false } // B
+]
+
+/** The diatonic step of B4, our staff anchor: octave 4 * 7 + 6 (B) = 34. */
+const B4_DIATONIC = 4 * 7 + 6
+
+/**
+ * Map a frequency (Hz) to a {@link StaffPos}. `freq <= 0` is a rest. Otherwise
+ * we find the nearest 12-TET semitone (A4 = 440 ⇒ MIDI 69), split it into octave
+ * + chromatic index, look up the diatonic step + sharp flag, and express the
+ * position RELATIVE to B4 (the treble middle line). Deterministic + DOM-free.
+ *
+ * Examples (treble clef): B4 → step 0; A4 → −1; C5 → +1; F#5 → +4 with `'#'`.
+ */
+export function freqToStaff(freq: number): StaffPos {
+  if (!Number.isFinite(freq) || freq <= 0) {
+    return { step: 0, accidental: '', rest: true }
+  }
+  // Nearest MIDI note number (A4 = 440 Hz = MIDI 69).
+  const midi = Math.round(69 + 12 * Math.log2(freq / 440))
+  const octave = Math.floor(midi / 12) - 1 // MIDI octave (C-1 = 0)
+  const chroma = ((midi % 12) + 12) % 12
+  const { dia, sharp } = SEMITONE_TO_DIATONIC[chroma]
+  const diatonic = octave * 7 + dia
+  return {
+    step: diatonic - B4_DIATONIC,
+    accidental: sharp ? '#' : '',
+    rest: false
+  }
 }
