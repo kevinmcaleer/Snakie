@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Buzzer "Paste to code" + pin-mismatch warning.** The Buzzer instrument can now
+  **paste the melody you built into your program** — as a `melody = [(freq, ms), …]`
+  array with a runnable plain-MicroPython player and a commented Snakie-library
+  one-liner (so it works with or without the library). And when the panel's pin
+  differs from a `buzzer_pin = …` declared in your open code, a small warning
+  offers a one-click **update code to match** (the dial already retargets the
+  running board live).
+- **Board View shows instrument-library pins.** A pin handed to the instrument
+  library — e.g. `inst.start(buzzer_pin=15)` — is now surfaced in the Board View
+  (an amber "instrument" pin), so you can see at a glance that a pin is in use by
+  an instrument, not just by a direct `Pin(...)`.
 - **Resizable file-panel split (#124).** The boundary between the **Local files**
   and **Device files** trees is now a draggable splitter — drag it to give the
   device files more room (they used to be capped at a fixed fraction of the
