@@ -6,6 +6,53 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Robotics instrument dock (#119).** The instrument dock grew from 3 to a full
+  set of instruments, organised so it stays usable: icon-only toggles grouped into
+  **Inputs** and **Outputs**, an **in-use vs available** distinction (instruments
+  your code declares are surfaced prominently), and an **“＋ Add instrument”
+  palette** so every instrument is reachable in a couple of clicks without
+  crowding the header. A single registry drives the dock, the toggles and the
+  palette.
+- **Bidirectional control channel + library toolkit (#115, #116).** Alongside the
+  read-only `SNK …` telemetry (#107), the IDE can now **write** to a running
+  program over a compact `SNKCMD …` control line (`device.sendControl`). The
+  `micropython/instruments.py` library gained matching emitters (IMU, distance,
+  button, encoder, screen) and scanners (I²C / Wi-Fi / Bluetooth) plus receivers
+  (`teleop`, `buzzer`, `led`, `screen`) and a non-blocking `control` poll helper —
+  the foundation the panels below build on.
+- **Teleop / gamepad panel (#110).** Drive a robot live from a USB/Bluetooth
+  **gamepad** (or on-screen sticks/sliders), with a mapping editor
+  (scale / deadzone / invert / trim per output) and safety: a **deadman**
+  (hold-to-drive), a big **E-STOP**, and connection-loss → stop.
+- **IMU 3D orientation viewer (#111).** A live 3-D model rotates from roll/pitch/yaw
+  or a quaternion, with body axes, a horizon/level indicator and numeric RPY
+  (lightweight CSS-3D — no new dependencies).
+- **Distance-sensor radar (#112).** A range gauge + rolling history for a fixed
+  sensor, and a polar **radar sweep** (distance vs angle, fading trails) for a
+  servo-swept one — with units, max-range and a proximity-alert threshold.
+- **Buzzer / music player (#113).** A piano keyboard, a melody sequencer and
+  **RTTTL** ringtone playback for a PWM buzzer, with tempo/volume, a Stop, and
+  export to runnable MicroPython.
+- **Button & LED panels (#114).** Watch input pins (pressed/released + edge
+  counters) and drive outputs from the UI — digital, **PWM brightness**, an **RGB**
+  colour picker, and a **NeoPixel/WS2812** strip.
+- **Rotary encoder panel (#117).** A knurled dial turns live to the encoder count,
+  with direction (CW/CCW), optional RPM and the push-switch state.
+- **I²C display mirror & output (#118).** A skeuomorphic OLED/LCD module that
+  **mirrors** the device’s framebuffer/text live, or lets you **push** text to the
+  real display — SSD1306 / SH1106 and HD44780 character LCDs.
+- **Scanner instruments (#121).** On-demand **I²C detect** (the classic 8×16
+  address grid), **Wi-Fi scan** (signal-bar network list) and **Bluetooth scan**
+  (BLE device list), each triggered by a SCAN button over the control channel.
+- **Modular per-component module installs (#120).** A **Modules** manager (in the
+  Packages view) installs only the device drivers a robot actually uses
+  (ssd1306/sh1106, hcsr04/vl53l0x, mpu6050/bno055/lsm6ds, neopixel, …), mapped to
+  the instrument each one powers, with installed-vs-available state.
+- **File-panel buttons (#104, #105).** Refresh buttons on both the local and device
+  file trees, a **new-folder** button on the device tree, and the upload/download
+  transfer controls reduced to clear icon-only buttons.
+
 ### Changed
 - **More accurate board representations (#109).** The built-in board pinouts were
   redrawn to match the real boards: the **Pimoroni Tiny 2040 / 2350** now have their
