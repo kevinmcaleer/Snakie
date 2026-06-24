@@ -36,7 +36,15 @@ Wire an SSD1306 OLED: SDA to the SDA pin below, SCL to the SCL pin, VCC to 3V3, 
 to GND. The pins MUST be a valid RP2040 I²C pair (this matches the panel's SDA /
 SCL selectors + its invalid-pin warning). Press Stop in Snakie to halt cleanly.
 """
+import sys
 import time
+
+# Drop any stale cached \`instruments\` before importing, so a freshly UPDATED
+# library on disk is actually used. MicroPython caches imports in sys.modules;
+# updating the .py does NOT refresh an already-imported module — without this you
+# can hit \`TypeError: unexpected keyword argument 'screen_sda'\` against an old
+# 0.4.x copy even though the file on disk is 0.5.0.
+sys.modules.pop("instruments", None)
 import instruments as inst
 
 SCREEN_SDA = ${s}  # GPIO the SSD1306 SDA is wired to (from the panel's selector)
