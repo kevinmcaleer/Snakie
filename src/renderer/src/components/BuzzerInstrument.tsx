@@ -333,11 +333,11 @@ export function BuzzerInstrument({
    */
   const onPlayMelody = useCallback((): void => {
     if (melody.length === 0) return
-    // Always play the local WebAudio preview + staff; the board send inside
-    // playSequence is gated on presence (txBuzzer). If no program is live, also
-    // surface the "run the demo" prompt — but the melody still plays in the IDE.
+    // Always play the local WebAudio preview + staff; playSequence's sticky send
+    // drives the board. Only nudge to run the demo if we've NEVER seen a Snakie
+    // program — otherwise the send handles it and a "no program" prompt is wrong.
     playSequence(melody)
-    setPrompt(connected ? !present : false)
+    setPrompt(connected && !present && !everPresent.current)
   }, [melody, connected, present, playSequence])
 
   // --- Editable melody (drag reorder / click remove / insert rest) -----------
@@ -370,7 +370,7 @@ export function BuzzerInstrument({
   const playRtttl = useCallback((): void => {
     if (!parsedRtttl || parsedRtttl.notes.length === 0) return
     playSequence(parsedRtttl.notes)
-    setPrompt(connected ? !present : false)
+    setPrompt(connected && !present && !everPresent.current)
   }, [parsedRtttl, connected, present, playSequence])
 
   /** Load the parsed RTTTL into the editable sequencer melody. */
