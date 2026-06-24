@@ -1,0 +1,259 @@
+/*
+ * I²C DISPLAY (#118) — mirror & output panel body.
+ * =============================================================================
+ * Reuses the shared `InstrumentWindow` chrome + `PhosphorScreen` bezel; this file
+ * styles only the body: a mode switch (MIRROR / PUSH), a configurable size
+ * picker, the monochrome OLED/LCD render (faint pixel-grid lattice + accent
+ * phosphor glow for lit pixels, or a monospace character grid), a small push
+ * editor, and the ADDR / SIZE / FPS readout strip.
+ *
+ * Dark + self-contained (no theme tokens) so it reads identically in every theme,
+ * matching the scope/meter chrome it sits inside. Themed per-instrument via the
+ * `--accent` / `--accent-border` custom properties on `.i2cd`. Fonts: JetBrains
+ * Mono (inherited from the app).
+ */
+
+.i2cd {
+  --accent: #5fd6f0;
+  --accent-border: rgba(95, 214, 240, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* --- Mode switch + size picker --------------------------------------------- */
+.i2cd__modes {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.i2cd__spacer {
+  flex: 1;
+}
+
+.i2cd__mode {
+  appearance: none;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #8b9099;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.i2cd__mode--on {
+  color: var(--accent);
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--accent) 10%, #0c0e10);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.i2cd__size {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.i2cd__size-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.i2cd__select {
+  appearance: none;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+}
+
+.i2cd__select:focus-visible {
+  outline: 1px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+/* --- The screen render inside the phosphor bezel --------------------------- */
+.i2cd__screen {
+  /* Tint the shared green phosphor screen toward this instrument's accent. */
+  color: var(--accent);
+}
+
+.i2cd__panel {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Pixel (OLED) render: a crisp SVG of lit accent pixels over a dark glass. */
+.i2cd__panel--px {
+  padding: 8px 10px;
+}
+
+.i2cd__px-svg {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+.i2cd__px-bg {
+  fill: #060809;
+}
+
+.i2cd__px {
+  fill: var(--accent);
+  /* A faint phosphor bloom so lit pixels glow like a real OLED. */
+}
+
+/* Character (LCD) render: padded monospace rows on a faint tinted glass. */
+.i2cd__panel--char {
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.i2cd__char-row {
+  margin: 0;
+  font-family: inherit;
+  font-size: clamp(10px, calc(360px / (var(--cols, 16) * 1.05)), 16px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  white-space: pre;
+  color: var(--accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.i2cd__standby {
+  position: absolute;
+  bottom: 8px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--accent) 50%, #6b7079);
+}
+
+.i2cd__standby--char {
+  bottom: 6px;
+}
+
+/* --- Push editor ----------------------------------------------------------- */
+.i2cd__push {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.i2cd__editor {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #d4d8de;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.i2cd__editor:focus-visible {
+  outline: none;
+  border-color: var(--accent-border);
+}
+
+.i2cd__push-key {
+  appearance: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  align-self: stretch;
+  padding: 0 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, #0c0e10);
+  border: 1px solid var(--accent-border);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.i2cd__push-key:hover {
+  background: color-mix(in srgb, var(--accent) 16%, #0c0e10);
+}
+
+.i2cd__push-key--sending {
+  color: #8b9099;
+  cursor: default;
+}
+
+.i2cd__push-key--sent {
+  color: #86ffb6;
+  border-color: rgba(82, 224, 138, 0.5);
+}
+
+.i2cd__push-key--error {
+  color: #ff8d7a;
+  border-color: rgba(255, 107, 94, 0.5);
+}
+
+/* --- Readout strip (ADDR / SIZE / FPS) ------------------------------------- */
+.i2cd__readout {
+  display: flex;
+  align-items: stretch;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.i2cd__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.i2cd__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.i2cd__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+}
+
+.i2cd__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}
