@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Online ESP32 firmware in the flasher (#125).** The firmware flasher's
+  "Download from MicroPython.org" source now covers **ESP32** boards too (it was
+  RP2040/UF2-only). Pick the family / model / variant / version from Thonny's
+  curated esptool catalog and Snakie downloads the `.bin` and flashes it via
+  esptool at the right per-chip offset (`0x1000` for the classic ESP32, `0x0` for
+  the S/C/P series and ESP8266) — the same cascade the Pico UF2 source uses.
 - **Buzzer "Paste to code" + pin-mismatch warning.** The Buzzer instrument can now
   **paste the melody you built into your program** — as a `melody = [(freq, ms), …]`
   array with a runnable plain-MicroPython player and a commented Snakie-library
