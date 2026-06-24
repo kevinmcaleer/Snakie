@@ -10,6 +10,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Buy me a coffee (#126).** A subtle `☕` link in the status bar opens the
   project's Buy Me a Coffee page; on your first launch a small, dismissible nudge
   appears beside it after a couple of seconds (shown once, never nags again).
+- **I²C display (SSD1306) actually drives the panel.** The I²C display instrument
+  gained **SDA + SCL pin dropdowns** and an address picker (you couldn't pick the
+  pins before), with a **warning when the pins aren't a valid RP2040 I²C pair**
+  (I2C0 = GP0/1, 4/5, …; I2C1 = GP2/3, 6/7, …). The board now has a real SSD1306
+  driver (`inst.display`, bundled or the `ssd1306` module) so pushing text from
+  the panel shows on the screen; plus the buzzer-style live retarget, code-sync
+  ("Update code"), and a "Run display demo". (Library 0.5.0.)
 - **Ultrasonic rangefinder (HC-SR04) for the Range instrument.** A real on-device
   driver (`inst.ranger`) triggers the sensor and times the echo into a distance,
   and the Range panel gains **TRIG + ECHO pin dropdowns** that retarget the board
