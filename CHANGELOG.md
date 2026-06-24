@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-24
+
 ### Added
 - **Buy me a coffee (#126).** A subtle `☕` link in the status bar opens the
   project's Buy Me a Coffee page; on your first launch a small, dismissible nudge
@@ -608,7 +610,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.10.0...v0.11.0
