@@ -693,3 +693,33 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+/* Instrument-owned pin marker (e.g. buzzer_pin=15) in the "pins in use" table:
+   a small amber-gold pill naming the instrument that drives the pin. */
+.boardgraph__pins-inst {
+  flex: 0 0 auto;
+  margin-left: 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #4a3a12;
+  background: #e8b34a;
+  border: 1px solid #c79a3a;
+  border-radius: 4px;
+  padding: 1px 6px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Instrument marker on a node-graph card: a tiny "inst" chip after the name. */
+.boardgraph__node-inst {
+  flex: 0 0 auto;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #4a3a12;
+  background: #e8b34a;
+  border-radius: 3px;
+  padding: 1px 4px;
+  text-transform: uppercase;
+}

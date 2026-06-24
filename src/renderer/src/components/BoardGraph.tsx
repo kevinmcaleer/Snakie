@@ -1203,6 +1203,14 @@ function NodeCard({
           {PIN_TYPE_TAG[conn.type]}
         </span>
         <span className="boardgraph__node-var">{conn.variable || conn.constructor}</span>
+        {conn.instrument && (
+          <span
+            className="boardgraph__node-inst"
+            title={`Pin used by the ${conn.instrument} instrument`}
+          >
+            inst
+          </span>
+        )}
         <NodeValue type={conn.type} live={live} />
         {onOpenScope && <ScopeLauncher onClick={onOpenScope} />}
         {onOpenMeter && <MeterLauncher onClick={onOpenMeter} />}
@@ -1301,6 +1309,14 @@ function PinsInUse({ conns, fileName }: { conns: UsedPins[]; fileName?: string }
                 {c.variable ? `${c.variable} = ` : ''}
                 {c.constructor}
               </span>
+              {c.instrument && (
+                <span
+                  className="boardgraph__pins-inst"
+                  title={`Used by the ${c.instrument} instrument library`}
+                >
+                  {c.instrument} instrument
+                </span>
+              )}
             </li>
           ))}
         </ul>

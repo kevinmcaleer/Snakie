@@ -414,3 +414,19 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Instrument-owned pin marker (e.g. buzzer_pin=15): an amber-gold pill naming
+   the instrument library that drives the pin. */
+.boardview__pin-inst {
+  margin-left: 0.5rem;
+  font-weight: 700;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #4a3a12;
+  background: #e8b34a;
+  border: 1px solid #c79a3a;
+  border-radius: 4px;
+  padding: 0 0.4rem;
+  white-space: nowrap;
+}
