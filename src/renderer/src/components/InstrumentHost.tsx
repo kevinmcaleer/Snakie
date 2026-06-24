@@ -21,6 +21,17 @@ import { Oscilloscope } from './Oscilloscope'
 import { Multimeter } from './Multimeter'
 import { Plotter } from './Plotter'
 import { PlaceholderInstrument } from './PlaceholderInstrument'
+import { GamepadInstrument } from './GamepadInstrument'
+import { RangeInstrument } from './RangeInstrument'
+import { ImuInstrument } from './ImuInstrument'
+import { LedInstrument } from './LedInstrument'
+import { ButtonInstrument } from './ButtonInstrument'
+import { BuzzerInstrument } from './BuzzerInstrument'
+import { EncoderInstrument } from './EncoderInstrument'
+import { DisplayInstrument } from './DisplayInstrument'
+import { WifiScanInstrument } from './WifiScanInstrument'
+import { BluetoothInstrument } from './BluetoothInstrument'
+import { I2cDetectInstrument } from './I2cDetectInstrument'
 import {
   SINGLETON_IDS,
   filterPalette,
@@ -801,9 +812,7 @@ export function InstrumentDockRegion({
         </DockItem>
       )}
       {placeholderDefs.map((def) => (
-        <DockItem key={def.id}>
-          <PlaceholderInstrument def={def} onClose={() => onToggleVisible(def.id)} />
-        </DockItem>
+        <DockItem key={def.id}>{renderSingleton(def, () => onToggleVisible(def.id))}</DockItem>
       ))}
     </InstrumentDock>
   )
@@ -812,6 +821,42 @@ export function InstrumentDockRegion({
 /** A docked instrument fills the dock rail width (the rail is wider than the window). */
 function DockItem({ children }: { children: JSX.Element }): JSX.Element {
   return <div className="instr-dock__item">{children}</div>
+}
+
+/**
+ * Render a docked SINGLETON instrument body for `def`, switching on its registry
+ * id to the real robotics panel (#110–#121). Any id whose body isn't built yet
+ * falls back to {@link PlaceholderInstrument} so the dock still shows it. Each
+ * panel shares the prop shape `{ def, onClose, docked }` (see PlaceholderInstrument),
+ * so this switch is the single integration seam the panel issues plug into.
+ */
+function renderSingleton(def: InstrumentDef, onClose: () => void): JSX.Element {
+  switch (def.id) {
+    case 'gamepad':
+      return <GamepadInstrument def={def} onClose={onClose} />
+    case 'range':
+      return <RangeInstrument def={def} onClose={onClose} />
+    case 'imu':
+      return <ImuInstrument def={def} onClose={onClose} />
+    case 'led':
+      return <LedInstrument def={def} onClose={onClose} />
+    case 'button':
+      return <ButtonInstrument def={def} onClose={onClose} />
+    case 'buzzer':
+      return <BuzzerInstrument def={def} onClose={onClose} />
+    case 'encoder':
+      return <EncoderInstrument def={def} onClose={onClose} />
+    case 'i2c-display':
+      return <DisplayInstrument def={def} onClose={onClose} />
+    case 'wifi-scan':
+      return <WifiScanInstrument def={def} onClose={onClose} />
+    case 'bluetooth':
+      return <BluetoothInstrument def={def} onClose={onClose} />
+    case 'i2c-detect':
+      return <I2cDetectInstrument def={def} onClose={onClose} />
+    default:
+      return <PlaceholderInstrument def={def} onClose={onClose} />
+  }
 }
 
 /**
