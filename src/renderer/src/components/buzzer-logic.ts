@@ -302,6 +302,37 @@ export function buzzerPinPayload(pin: number): string {
   return `pin ${Math.max(0, Math.round(pin))}`
 }
 
+/**
+ * The `<payload>` to set the board's VOLUME (PWM duty): `vol <0..1>` (clamped,
+ * 2 decimals). The device maps it to `duty_u16` for sounding notes. Pass to
+ * `sendControl('buzzer', buzzerVolPayload(0.7))` → `SNKCMD buzzer vol 0.7`.
+ */
+export function buzzerVolPayload(volume: number): string {
+  const v = Math.max(0, Math.min(1, Number.isFinite(volume) ? volume : 0.5))
+  return `vol ${Math.round(v * 100) / 100}`
+}
+
+/**
+ * Apply the live OCTAVE transpose + TEMPO time-scale to a melody at PLAYBACK
+ * time, so the panel's sliders affect an already-built melody (both the local
+ * preview and the on-device `seq`). `octaveShift` shifts every pitched note by
+ * whole octaves (×2^shift); rests (freq 0) stay rests. `tempoScale` multiplies
+ * each note's duration (clamped to ≥1 ms). Pure + non-mutating.
+ */
+export function transposeAndScale(
+  notes: ReadonlyArray<Tone>,
+  octaveShift: number,
+  tempoScale: number
+): Tone[] {
+  const factor = Math.pow(2, octaveShift)
+  const scale = tempoScale > 0 ? tempoScale : 1
+  return notes.map((n) => ({
+    ...n,
+    freq: n.freq > 0 ? Math.round(n.freq * factor) : 0,
+    ms: Math.max(1, Math.round(n.ms * scale))
+  }))
+}
+
 // ---------------------------------------------------------------------------
 // Melody → MicroPython code export
 // ---------------------------------------------------------------------------

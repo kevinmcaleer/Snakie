@@ -11,6 +11,8 @@ import {
   buzzerStopPayload,
   buzzerSeqPayload,
   buzzerPinPayload,
+  buzzerVolPayload,
+  transposeAndScale,
   moveNote,
   removeNote,
   insertRest,
@@ -462,5 +464,55 @@ describe('buzzer-logic freqToStaff (pitch → staff position, part D)', () => {
   it('treats freq 0 / negative as a rest', () => {
     expect(freqToStaff(0)).toEqual({ step: 0, accidental: '', rest: true })
     expect(freqToStaff(-1).rest).toBe(true)
+  })
+})
+
+describe('buzzerVolPayload', () => {
+  it('formats a 0..1 volume as a vol command', () => {
+    expect(buzzerVolPayload(0.5)).toBe('vol 0.5')
+    expect(buzzerVolPayload(0.7)).toBe('vol 0.7')
+    expect(buzzerVolPayload(1)).toBe('vol 1')
+    expect(buzzerVolPayload(0)).toBe('vol 0')
+  })
+
+  it('clamps out-of-range + non-finite to [0,1] / a default', () => {
+    expect(buzzerVolPayload(2)).toBe('vol 1')
+    expect(buzzerVolPayload(-1)).toBe('vol 0')
+    expect(buzzerVolPayload(Number.NaN)).toBe('vol 0.5')
+  })
+
+  it('frames to the wire line', () => {
+    expect(buildControlLine('buzzer', buzzerVolPayload(0.25))).toBe('SNKCMD buzzer vol 0.25\n')
+  })
+})
+
+describe('transposeAndScale', () => {
+  const m: Tone[] = [
+    { freq: 440, ms: 200, label: 'A4' },
+    { freq: 0, ms: 100, label: 'rest' }
+  ]
+
+  it('is identity at shift 0, scale 1', () => {
+    expect(transposeAndScale(m, 0, 1)).toEqual(m)
+  })
+
+  it('transposes pitched notes by octaves (×2^shift) and leaves rests', () => {
+    const up = transposeAndScale(m, 1, 1)
+    expect(up[0].freq).toBe(880)
+    expect(up[1].freq).toBe(0)
+    expect(transposeAndScale(m, -1, 1)[0].freq).toBe(220)
+  })
+
+  it('scales every note duration by tempoScale (≥1ms)', () => {
+    const slow = transposeAndScale(m, 0, 2)
+    expect(slow.map((n) => n.ms)).toEqual([400, 200])
+    expect(transposeAndScale(m, 0, 0)[0].ms).toBeGreaterThanOrEqual(1) // guards /0
+  })
+
+  it('does not mutate the input + preserves labels', () => {
+    const copy = JSON.parse(JSON.stringify(m))
+    transposeAndScale(m, 2, 0.5)
+    expect(m).toEqual(copy)
+    expect(transposeAndScale(m, 1, 1)[0].label).toBe('A4')
   })
 })

@@ -371,6 +371,24 @@ class BuzzerDevice(unittest.TestCase):
         inst.Buzzer(pwm).stop()
         self.assertEqual(pwm.duties, [0])
 
+    def test_set_volume_changes_sounding_duty(self):
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        buz.set_volume(1.0)
+        buz.tone(440, 1)
+        self.assertIn(65535, pwm.duties)  # full volume drives full duty
+        pwm.duties = []
+        buz.set_volume(0.0)
+        buz.tone(440, 1)
+        self.assertNotIn(65535, pwm.duties)  # silent: never raises the duty
+
+    def test_buzzer_command_vol(self):
+        pwm = _RecordingPWM()
+        buz = inst.Buzzer(pwm)
+        self.assertEqual(inst.buzzer_command("vol 0.5", buz), "vol")
+        buz.tone(440, 1)
+        self.assertIn(32767, pwm.duties)  # 0.5 * 65535 -> 32767
+
     def test_stop_without_pwm_is_noop(self):
         # No hardware → no crash, nothing recorded (there's nothing to record on).
         inst.Buzzer().stop()  # must not raise

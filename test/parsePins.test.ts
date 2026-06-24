@@ -247,6 +247,19 @@ describe('parseInstrumentPins', () => {
       { instrument: 'led', pin: '2' }
     ])
   })
+
+  it('detects a *_PIN constant passed to the library by name (the demo pattern)', () => {
+    // The demo writes `BUZZER_PIN = 0` then `inst.start(buzzer_pin=BUZZER_PIN)`;
+    // the kwarg value is a name (no literal), so the constant carries the pin.
+    const src = ['BUZZER_PIN = 0', 'inst.start(buzzer_pin=BUZZER_PIN)'].join('\n')
+    expect(parseInstrumentPins(src)).toEqual([{ instrument: 'buzzer', pin: '0' }])
+  })
+
+  it('de-dupes the same instrument pin seen in both the constant and the call', () => {
+    expect(parseInstrumentPins('LED_PIN = 5\ninst.start(led_pin=5)')).toEqual([
+      { instrument: 'led', pin: '5' }
+    ])
+  })
 })
 
 describe('parsePins — instrument pins', () => {

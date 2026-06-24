@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -656,6 +656,16 @@ class Buzzer:
         # Set by stop() (possibly from the OTHER core) to abort an in-progress
         # play_seq between notes — so Snakie's Stop silences a long melody at once.
         self._abort = False
+        # PWM duty (0..65535) used while a note sounds — the IDE's VOLUME slider
+        # sets it via the `vol` command (set_volume); 32768 = 50% by default.
+        self._duty = 32768
+
+    def set_volume(self, level):
+        """Set the sounding duty from a 0..1 ``level`` (the IDE VOLUME slider)."""
+        try:
+            self._duty = max(0, min(65535, int(float(level) * 65535)))
+        except (ValueError, TypeError):
+            pass
 
     def set_pin(self, n):
         """(Re)target the PWM pin: build ``PWM(Pin(n))`` (no-op without hardware).
@@ -677,7 +687,7 @@ class Buzzer:
             return
         import time
         self._pwm.freq(int(freq))
-        self._pwm.duty_u16(32768)
+        self._pwm.duty_u16(self._duty)
         time.sleep_ms(int(ms)) if hasattr(time, "sleep_ms") else time.sleep(ms / 1000)
         self._pwm.duty_u16(0)
 
@@ -714,7 +724,7 @@ class Buzzer:
             ms = int(ms)
             if freq > 0:
                 self._pwm.freq(freq)
-                self._pwm.duty_u16(32768)
+                self._pwm.duty_u16(self._duty)
             else:
                 self._pwm.duty_u16(0)
             sleep_ms(ms)
@@ -760,6 +770,7 @@ def buzzer_command(payload, buz=None):
       * ``seq <freq:ms>,…``  → ``buz.play_seq([...])`` (``freq`` 0 = rest)
       * ``stop``             → ``buz.stop()``
       * ``pin <n>``          → ``buz.set_pin(n)``
+      * ``vol <0..1>``       → ``buz.set_volume(level)`` (PWM duty)
 
     Defaults ``buz`` to the shared :data:`buzzer` singleton. Never raises on a
     malformed payload (it is fed from the IDE). Returns the verb it handled (or
@@ -786,6 +797,8 @@ def buzzer_command(payload, buz=None):
             buz.stop()
         elif verb == "pin":
             buz.set_pin(int(args.split()[0]))
+        elif verb == "vol":
+            buz.set_volume(float(args.split()[0]))
         else:
             return None
     except (ValueError, IndexError, TypeError):

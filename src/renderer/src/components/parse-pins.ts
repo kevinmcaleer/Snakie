@@ -182,44 +182,31 @@ export interface InstrumentPin {
 
 /**
  * Detect pins the program hands to the `instruments` library rather than wiring
- * directly — chiefly `inst.start(...)`'s `*_pin=<int>` keyword arguments (e.g.
- * `inst.start(buzzer_pin=15)` ⇒ the library owns `PWM(Pin(15))` for the buzzer).
+ * directly — so they still light up on the board. We match a `<owner>_pin=<int>`
+ * shape ANYWHERE in the source: both the `inst.start(buzzer_pin=15)` keyword AND
+ * a module constant like `BUZZER_PIN = 0` that the program then passes by name
+ * (`inst.start(buzzer_pin=BUZZER_PIN)` — common in the demos, where the kwarg
+ * value isn't a literal so only the constant carries the number).
  *
- * These never appear as a `machine` constructor, so {@link parsePins}' scan
- * misses them — yet the pin is genuinely IN USE and should light up on the
- * board. We match the keyword **owner** before `_pin=` (so `buzzer_pin=15`
- * yields instrument `buzzer`) and require an **integer** value (a `Pin(15)` /
- * variable expression isn't an instrument-owned raw pin and is left to the
- * normal scan / ignored).
- *
- * Tolerant of the import alias (`instruments`, `inst`, or any name bound to the
- * library) and of whitespace: the scan is over the whole `start(...)` argument
- * span, and the `*_pin=<int>` shape is matched anywhere a `start(` call opens —
- * so `inst.start(`, `instruments.start(`, `svc.start(` and multi-kwarg calls
- * (`start(hz=50, buzzer_pin = 9)`) all resolve. Pure + DOM-free for unit tests.
+ * The **owner** stem before `_pin` names the instrument (`buzzer_pin`/`BUZZER_PIN`
+ * ⇒ `buzzer`), matched case-insensitively and lower-cased. The value must be a
+ * bare **integer** — a `Pin(15)` / variable expression isn't a library-owned raw
+ * pin and is skipped (the normal `machine`-constructor scan handles real `Pin`s).
+ * Results are de-duped by instrument+pin. Pure + DOM-free for unit tests.
  */
 export function parseInstrumentPins(source: string): InstrumentPin[] {
   if (!source) return []
   const out: InstrumentPin[] = []
-  // Find each `<alias>.start(` call opening; the alias is any identifier (we
-  // don't pin it to a specific import name — `inst`/`instruments`/`svc`/…).
-  const startRe = /\b[A-Za-z_]\w*\s*\.\s*start\s*\(/g
-  let call: RegExpExecArray | null
-  while ((call = startRe.exec(source)) !== null) {
-    const openIdx = source.indexOf('(', call.index)
-    if (openIdx < 0) continue
-    const closeIdx = matchParen(source, openIdx)
-    const args = closeIdx > openIdx ? source.slice(openIdx + 1, closeIdx) : source.slice(openIdx + 1)
-    // Each `<owner>_pin = <int>` kwarg → one instrument pin. The owner is the
-    // kwarg-name stem before `_pin` (`buzzer_pin` ⇒ `buzzer`); the value must be
-    // a bare integer (a `Pin(...)`/variable isn't a library-owned raw pin).
-    const kwRe = /\b([A-Za-z_]\w*?)_pin\s*=\s*(\d+)\b/g
-    let kw: RegExpExecArray | null
-    while ((kw = kwRe.exec(args)) !== null) {
-      out.push({ instrument: kw[1], pin: kw[2] })
-    }
-    // Resume the outer scan past this call so nested parens aren't re-walked.
-    if (closeIdx > openIdx) startRe.lastIndex = closeIdx + 1
+  const seen = new Set<string>()
+  const re = /\b([A-Za-z_]\w*?)_pin\s*=\s*(\d+)\b/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(source)) !== null) {
+    const instrument = m[1].toLowerCase()
+    const pin = m[2]
+    const key = `${instrument}:${pin}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push({ instrument, pin })
   }
   return out
 }

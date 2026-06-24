@@ -109,6 +109,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   matters.
 
 ### Fixed
+- **Buzzer tempo / octave / volume are now live, and reach the speaker.** The
+  VOLUME slider now sets the board's PWM **duty** (a `vol` control command) — not
+  just the IDE preview — and OCTAVE (transpose) + TEMPO (time-scale) are applied
+  at **playback** so they change an already-built melody on both the IDE preview
+  and the device. ▶ Play also re-targets the selected pin + volume before sending
+  the notes. (Library 0.4.1.)
+- **Board View shows a pin the instrument library uses even via a constant.** It
+  now detects `BUZZER_PIN = 0` (and any `*_PIN = <int>`) that a program passes to
+  `inst.start(...)` by name — the demo pattern — not only literal kwargs.
 - **The buzzer plays reliably and the board no longer wedges.** The control
   channel now runs on the **main loop** (`inst.control.poll()`), not a second-core
   thread — the old `_thread` polled `stdin` with a blocking 64-byte read that could

@@ -11,6 +11,8 @@ import {
   buzzerSeqPayload,
   buzzerStopPayload,
   buzzerTonePayload,
+  buzzerVolPayload,
+  transposeAndScale,
   findBuzzerPinInCode,
   fmtFreq,
   freqToStaff,
@@ -80,6 +82,8 @@ const KEYBOARD_OCTAVE_DEFAULT = 4
 /** Tempo presets (note length in ms for a sequencer step) the slider spans. */
 const MIN_NOTE_MS = 80
 const MAX_NOTE_MS = 600
+/** The tempo at which a built melody plays unchanged (the default note length). */
+const BASE_TEMPO_MS = 220
 
 /** A short, recognisable RTTTL placeholder so the box reads as "paste here". */
 const RTTTL_PLACEHOLDER = 'Nokia:d=4,o=5,b=125:8e6,8d6,4f#,4g#,8c#6,8b,4d,4e,8b,8a,4c#,4e,2a'
@@ -276,13 +280,20 @@ export function BuzzerInstrument({
     (notes: Tone[]): void => {
       if (notes.length === 0) return
       stopAll()
+      // Apply the live OCTAVE (transpose) + TEMPO (time-scale) controls AT PLAYBACK
+      // so the sliders affect an already-built melody — both the local preview and
+      // the on-device seq.
+      const eff = transposeAndScale(notes, octave - KEYBOARD_OCTAVE_DEFAULT, noteMs / BASE_TEMPO_MS)
       setStatus('playing')
-      setStaffNotes(notes)
-      // On-device: hand the whole melody over in a single seq command.
-      txBuzzer(buzzerSeqPayload(notes))
-      // Locally: schedule the parsed notes for an audible IDE preview + highlight.
+      setStaffNotes(eff)
+      // On-device: (re)target the pin + set the VOLUME (duty), then hand the whole
+      // melody over in one seq command.
+      txBuzzer(buzzerPinPayload(pin))
+      txBuzzer(buzzerVolPayload(volume))
+      txBuzzer(buzzerSeqPayload(eff))
+      // Locally: schedule the (transformed) notes for an audible IDE preview.
       let when = 0
-      notes.forEach((n, i) => {
+      eff.forEach((n, i) => {
         const at = when
         const t = setTimeout(() => {
           setLastFreq(n.freq > 0 ? n.freq : null)
@@ -299,7 +310,7 @@ export function BuzzerInstrument({
       }, when)
       timersRef.current.push(done)
     },
-    [previewOn, previewOff, stopAll, txBuzzer]
+    [octave, noteMs, pin, volume, previewOn, previewOff, stopAll, txBuzzer]
   )
 
   /**
@@ -383,6 +394,16 @@ export function BuzzerInstrument({
     (next: number): void => {
       setPin(next)
       txBuzzer(buzzerPinPayload(next))
+    },
+    [txBuzzer]
+  )
+
+  // VOLUME sets both the local WebAudio gain (via `volume` in previewOn) and the
+  // board's PWM duty (sent live so it applies to the next key/▶ Play too).
+  const onVolumeChange = useCallback(
+    (next: number): void => {
+      setVolume(next)
+      txBuzzer(buzzerVolPayload(next))
     },
     [txBuzzer]
   )
@@ -755,7 +776,7 @@ export function BuzzerInstrument({
               max={1}
               step={0.05}
               value={volume}
-              onChange={(e) => setVolume(Number(e.target.value))}
+              onChange={(e) => onVolumeChange(Number(e.target.value))}
             />
             <span className="buzzer__ctrl-val">{Math.round(volume * 100)}%</span>
           </label>
