@@ -418,7 +418,12 @@ export function AppShell(): JSX.Element {
       // present vs OUTDATED. Read both sources; any read failure → stay 'present'
       // (never nag on a transient error). A legacy copy with no `__version__`
       // parses to null → differs from the bundled version → 'outdated'.
-      const path = libFound ? INSTRUMENTS_LIB_PATH : INSTRUMENTS_ROOT_PATH
+      //
+      // PREFER the ROOT copy when present: `''` (cwd `/`) sits BEFORE `/lib` on
+      // MicroPython's sys.path, so `/instruments.py` SHADOWS `/lib` — it's the
+      // copy actually imported, so its freshness is what matters (otherwise a
+      // current /lib masks a stale root copy and we'd never offer the update).
+      const path = rootFound ? INSTRUMENTS_ROOT_PATH : INSTRUMENTS_LIB_PATH
       const [boardSrc, bundledSrc] = await Promise.all([
         window.api.device.readFile(path).catch(() => null),
         window.api.instruments.librarySource().catch(() => null)
@@ -450,6 +455,18 @@ export function AppShell(): JSX.Element {
         if (!source) throw new Error('library source unavailable')
         await window.api.device.mkdir(INSTRUMENTS_LIB_DIR).catch(() => undefined)
         await window.api.device.writeFile(INSTRUMENTS_LIB_PATH, source)
+        // A legacy copy at the FS root (`/instruments.py`) shadows `/lib` on
+        // MicroPython's sys.path, so updating only `/lib` would leave the OLD
+        // root copy being imported. If one is there, overwrite it with the same
+        // new source so `import instruments` gets the current code wherever it
+        // resolves from.
+        const rootShadow = await window.api.device
+          .stat(INSTRUMENTS_ROOT_PATH)
+          .then(() => true)
+          .catch(() => false)
+        if (rootShadow) {
+          await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
+        }
         setLibState('present')
       } catch (err) {
         setLibError(err instanceof Error ? err.message : String(err))
