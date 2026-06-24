@@ -11,14 +11,17 @@ import {
   buzzerSeqPayload,
   buzzerStopPayload,
   buzzerTonePayload,
+  findBuzzerPinInCode,
   fmtFreq,
   freqToStaff,
   insertRest,
   melodyDurationMs,
+  melodyToCodeSnippet,
   melodyToMicroPython,
   moveNote,
   parseRtttl,
   removeNote,
+  setBuzzerPinInCode,
   stepFreq,
   type StaffPos,
   type Tone
@@ -100,7 +103,14 @@ export function BuzzerInstrument({
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
   const { present } = useSnakiePresence()
-  const { openBuffer } = useWorkspace()
+  const { openBuffer, openFiles, activeId, updateContent } = useWorkspace()
+
+  // The active editor buffer (if any) — the target for "Paste to code" + the
+  // source we scan for a declared buzzer pin to warn on a mismatch.
+  const activeFile = useMemo(
+    () => openFiles.find((f) => f.id === activeId) ?? null,
+    [openFiles, activeId]
+  )
 
   // Only WRITE to the board when a Snakie program is actually running AND
   // servicing the control channel; otherwise the SNKCMD line lands on the bare
@@ -381,6 +391,40 @@ export function BuzzerInstrument({
     [txBuzzer]
   )
 
+  // --- Paste to code: drop a melody snippet into the active editor buffer -----
+  /**
+   * Insert a generated melody snippet ({@link melodyToCodeSnippet}) into the
+   * user's program so the tune lives in their code (Snakie-library recipe +
+   * runnable plain-MicroPython loop, both on the panel's current `pin`). Appends
+   * to the active buffer with a blank-line separator; if no file is open, opens a
+   * fresh `buzzer_melody.py` buffer with the snippet. No-op on an empty melody.
+   */
+  const onPasteToCode = useCallback((): void => {
+    if (melody.length === 0) return
+    const snippet = melodyToCodeSnippet(melody, pin)
+    if (activeFile) {
+      updateContent(activeFile.id, `${activeFile.content}\n\n${snippet}`)
+    } else {
+      openBuffer('buzzer_melody.py', snippet)
+    }
+  }, [melody, pin, activeFile, updateContent, openBuffer])
+
+  // --- Pin mismatch: warn when the open code targets a different pin ----------
+  // The numeric buzzer pin declared in the active editor buffer, or null when the
+  // code declares none (no warning then). When it differs from the panel's pin we
+  // surface a one-click "update code" to retarget the code to the panel's pin.
+  const codePin = useMemo(
+    () => (activeFile ? findBuzzerPinInCode(activeFile.content) : null),
+    [activeFile]
+  )
+  const pinMismatch = codePin !== null && codePin !== pin
+
+  /** Rewrite the active buffer's buzzer pin to the panel's current pin. */
+  const onUpdateCodePin = useCallback((): void => {
+    if (!activeFile) return
+    updateContent(activeFile.id, setBuzzerPinInCode(activeFile.content, pin))
+  }, [activeFile, pin, updateContent])
+
   // --- Export ----------------------------------------------------------------
   const exportCode = useMemo(
     () => melodyToMicroPython(melody, { pin, duty: volume }),
@@ -576,6 +620,15 @@ export function BuzzerInstrument({
             </button>
             <button
               type="button"
+              className="buzzer__btn buzzer__btn--paste"
+              onClick={onPasteToCode}
+              disabled={melody.length === 0}
+              title="Insert this melody as MicroPython into your editor (library + plain-PWM recipes)"
+            >
+              ↧ Paste to code
+            </button>
+            <button
+              type="button"
               className="buzzer__btn"
               onClick={removeLast}
               disabled={melody.length === 0}
@@ -652,6 +705,24 @@ export function BuzzerInstrument({
               ))}
             </select>
           </label>
+          {/* Pin-mismatch strip: the panel retargets the board live (onPinChange),
+              but the open code may still declare a different buzzer_pin. Offer a
+              one-click sync to rewrite the code to match the panel. */}
+          {pinMismatch && (
+            <div className="buzzer__pinwarn" role="status">
+              <span className="buzzer__pinwarn-msg">
+                Panel pin GP{pin} differs from your code (GP{codePin})
+              </span>
+              <button
+                type="button"
+                className="buzzer__btn buzzer__pinwarn-btn"
+                onClick={onUpdateCodePin}
+                title={`Rewrite buzzer_pin in your code to GP${pin}`}
+              >
+                Update code to GP{pin}
+              </button>
+            </div>
+          )}
           <label className="buzzer__ctrl">
             <span className="buzzer__ctrl-lbl">OCTAVE</span>
             <input
