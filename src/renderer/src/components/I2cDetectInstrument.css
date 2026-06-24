@@ -8,12 +8,12 @@
  * the accent), the SCAN button and the FOUND/SDA/SCL readout strip.
  *
  * Themed per-instrument via the `--accent` / `--accent-border` custom properties
- * set on `.i2cd` from the registry def. Dark/self-contained (no theme tokens) so
+ * set on `.i2cdet` from the registry def. Dark/self-contained (no theme tokens) so
  * it reads identically in every theme, matching the scope/meter chrome it sits
  * inside. Fonts: JetBrains Mono.
  */
 
-.i2cd {
+.i2cdet {
   --accent: #8fe0b8;
   --accent-border: rgba(143, 224, 184, 0.5);
   display: flex;
@@ -22,7 +22,7 @@
 }
 
 /* Accent-tinted phosphor screen base (overrides the green default). */
-.i2cd .instr__screen--accent {
+.i2cdet .instr__screen--accent {
   background: radial-gradient(
     ellipse at 50% 44%,
     color-mix(in srgb, var(--accent) 16%, #06160b),
@@ -31,7 +31,7 @@
   );
 }
 
-.i2cd__screen {
+.i2cdet__screen {
   position: absolute;
   inset: 0;
   display: flex;
@@ -40,7 +40,7 @@
   padding: 10px;
 }
 
-.i2cd__hint {
+.i2cdet__hint {
   margin: 0;
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -49,7 +49,7 @@
 }
 
 /* A small "scanning…" pill shown over an existing grid during a re-scan. */
-.i2cd__scanning {
+.i2cdet__scanning {
   position: absolute;
   top: 6px;
   right: 8px;
@@ -62,10 +62,10 @@
   color: var(--accent);
   background: rgba(0, 0, 0, 0.55);
   border: 1px solid var(--accent-border);
-  animation: i2cd-pulse 1.1s ease-in-out infinite;
+  animation: i2cdet-pulse 1.1s ease-in-out infinite;
 }
 
-@keyframes i2cd-pulse {
+@keyframes i2cdet-pulse {
   0%,
   100% {
     opacity: 0.55;
@@ -76,22 +76,22 @@
 }
 
 /* --- The 8×16 address grid --- */
-.i2cd__grid {
+.i2cdet__grid {
   display: flex;
   flex-direction: column;
   gap: 2px;
   font-variant-numeric: tabular-nums;
 }
 
-.i2cd__grid-head,
-.i2cd__grid-row {
+.i2cdet__grid-head,
+.i2cdet__grid-row {
   display: grid;
   grid-template-columns: 22px repeat(16, 1fr);
   gap: 2px;
 }
 
-.i2cd__collabel,
-.i2cd__rowlabel {
+.i2cdet__collabel,
+.i2cdet__rowlabel {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -101,11 +101,11 @@
   color: color-mix(in srgb, var(--accent) 55%, #5a5f67);
 }
 
-.i2cd__corner {
+.i2cdet__corner {
   background: transparent;
 }
 
-.i2cd__cell {
+.i2cdet__cell {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -120,7 +120,7 @@
 }
 
 /* Detected addresses glow the accent. */
-.i2cd__cell--on {
+.i2cdet__cell--on {
   color: #04120a;
   font-weight: 700;
   background: var(--accent);
@@ -130,11 +130,11 @@
 }
 
 /* --- Controls --- */
-.i2cd__controls {
+.i2cdet__controls {
   display: flex;
 }
 
-.i2cd__scan {
+.i2cdet__scan {
   flex: 1;
   height: 30px;
   border-radius: 7px;
@@ -151,23 +151,23 @@
     0 2px 5px rgba(0, 0, 0, 0.4);
 }
 
-.i2cd__scan:hover:not(:disabled) {
+.i2cdet__scan:hover:not(:disabled) {
   filter: brightness(1.06);
 }
 
-.i2cd__scan:active:not(:disabled) {
+.i2cdet__scan:active:not(:disabled) {
   transform: translateY(1px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) inset;
 }
 
-.i2cd__scan:disabled {
+.i2cdet__scan:disabled {
   cursor: default;
   opacity: 0.7;
   filter: saturate(0.7);
 }
 
 /* --- Readout strip (shared shape with the scope/meter) --- */
-.i2cd__readout {
+.i2cdet__readout {
   display: flex;
   align-items: stretch;
   padding: 9px 4px;
@@ -177,7 +177,7 @@
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-.i2cd__cell-readout {
+.i2cdet__cell-readout {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -185,20 +185,20 @@
   gap: 3px;
 }
 
-.i2cd__cell-lbl {
+.i2cdet__cell-lbl {
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.14em;
   color: #5a5f67;
 }
 
-.i2cd__cell-val {
+.i2cdet__cell-val {
   font-size: 13px;
   font-weight: 600;
   color: color-mix(in srgb, var(--accent) 75%, #9aa0a8);
 }
 
-.i2cd__div {
+.i2cdet__div {
   width: 1px;
   align-self: stretch;
   background: #1c1f22;

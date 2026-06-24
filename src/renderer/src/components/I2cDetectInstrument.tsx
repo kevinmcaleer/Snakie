@@ -86,26 +86,26 @@ export function I2cDetectInstrument({
       {...float}
     >
       <div
-        className="i2cd"
+        className="i2cdet"
         style={{ '--accent': def.accent, '--accent-border': def.border } as CSSProperties}
       >
         <PhosphorScreen className="instr__screen--accent">
-          <div className="i2cd__screen">
+          <div className="i2cdet__screen">
             {grid ? (
               <I2cGrid grid={grid} />
             ) : (
-              <p className="i2cd__hint">
+              <p className="i2cdet__hint">
                 {scanning ? 'scanning…' : 'Press SCAN to probe the I²C bus'}
               </p>
             )}
-            {scanning && grid && <div className="i2cd__scanning">scanning…</div>}
+            {scanning && grid && <div className="i2cdet__scanning">scanning…</div>}
           </div>
         </PhosphorScreen>
 
-        <div className="i2cd__controls">
+        <div className="i2cdet__controls">
           <button
             type="button"
-            className="i2cd__scan"
+            className="i2cdet__scan"
             onClick={() => void scan()}
             disabled={scanning}
             title="Run an I²C bus scan on the connected board"
@@ -114,11 +114,11 @@ export function I2cDetectInstrument({
           </button>
         </div>
 
-        <div className="i2cd__readout">
+        <div className="i2cdet__readout">
           <Cell label="FOUND" value={foundText} />
-          <span className="i2cd__div" aria-hidden="true" />
+          <span className="i2cdet__div" aria-hidden="true" />
           <Cell label="SDA" value="—" />
-          <span className="i2cd__div" aria-hidden="true" />
+          <span className="i2cdet__div" aria-hidden="true" />
           <Cell label="SCL" value="—" />
         </div>
       </div>
@@ -129,24 +129,24 @@ export function I2cDetectInstrument({
 /** The 8×16 i2cdetect grid: a column-header row, then 8 labelled rows of cells. */
 function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
   return (
-    <div className="i2cd__grid" role="grid" aria-label="I²C address grid">
-      <div className="i2cd__grid-head" role="row">
-        <span className="i2cd__rowlabel i2cd__corner" aria-hidden="true" />
+    <div className="i2cdet__grid" role="grid" aria-label="I²C address grid">
+      <div className="i2cdet__grid-head" role="row">
+        <span className="i2cdet__rowlabel i2cdet__corner" aria-hidden="true" />
         {Array.from({ length: 16 }, (_, c) => (
-          <span key={c} className="i2cd__collabel" role="columnheader">
+          <span key={c} className="i2cdet__collabel" role="columnheader">
             {c.toString(16).toUpperCase()}
           </span>
         ))}
       </div>
       {grid.rows.map((row, r) => (
-        <div className="i2cd__grid-row" role="row" key={r}>
-          <span className="i2cd__rowlabel" role="rowheader">
+        <div className="i2cdet__grid-row" role="row" key={r}>
+          <span className="i2cdet__rowlabel" role="rowheader">
             {(r * 16).toString(16).toUpperCase().padStart(2, '0')}
           </span>
           {row.map((cell) => (
             <span
               key={cell.addr}
-              className={`i2cd__cell${cell.detected ? ' i2cd__cell--on' : ''}`}
+              className={`i2cdet__cell${cell.detected ? ' i2cdet__cell--on' : ''}`}
               role="gridcell"
               title={cell.detected ? `Device at ${cell.label}` : cell.label}
               aria-label={cell.detected ? `${cell.label} detected` : cell.label}
@@ -163,9 +163,9 @@ function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
 /** One labelled readout cell, mirroring the scope/meter readout strips. */
 function Cell({ label, value }: { label: string; value: string }): JSX.Element {
   return (
-    <div className="i2cd__cell-readout">
-      <span className="i2cd__cell-lbl">{label}</span>
-      <span className="i2cd__cell-val">{value}</span>
+    <div className="i2cdet__cell-readout">
+      <span className="i2cdet__cell-lbl">{label}</span>
+      <span className="i2cdet__cell-val">{value}</span>
     </div>
   )
 }
