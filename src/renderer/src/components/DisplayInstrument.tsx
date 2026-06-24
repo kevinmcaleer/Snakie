@@ -586,10 +586,23 @@ function PixelScreen({ grid, standby }: { grid: PixelGrid; standby?: boolean }):
         role="img"
         aria-label={`${w} by ${h} pixel display`}
       >
+        <defs>
+          {/* OLED bloom on lit pixels — an IN-SVG filter (the CSS-filter-on-svg
+              equivalent mis-composites to the window's top-left in Chromium). */}
+          <filter id="i2cd-px-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="0.4" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
         <rect className="i2cd__px-bg" x="0" y="0" width={Math.max(1, w)} height={Math.max(1, h)} />
-        {on.map((p) => (
-          <rect key={`${p.x},${p.y}`} className="i2cd__px" x={p.x} y={p.y} width="1" height="1" />
-        ))}
+        <g filter="url(#i2cd-px-glow)">
+          {on.map((p) => (
+            <rect key={`${p.x},${p.y}`} className="i2cd__px" x={p.x} y={p.y} width="1" height="1" />
+          ))}
+        </g>
       </svg>
       {standby && <span className="i2cd__standby">awaiting framebuffer…</span>}
     </div>
