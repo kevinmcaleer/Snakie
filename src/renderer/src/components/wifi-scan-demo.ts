@@ -18,13 +18,17 @@ this loop. Needs a Wi-Fi-capable board (Pico W / ESP32).
 import time
 import instruments as inst
 
-inst.start()        # register the scan triggers + the control receiver
-inst.wifi_scan()    # one scan now so the panel fills immediately
+inst.start(background=False)  # register scan triggers; no 2nd-core thread
+inst.wifi_scan()             # one scan now so the panel fills immediately
 
+_beat = time.ticks_ms()
 try:
     while True:
-        inst.control.poll()  # service SCAN commands from the IDE + heartbeat
-        time.sleep(0.02)
+        inst.control.poll()  # service SCAN commands from the IDE
+        if time.ticks_diff(time.ticks_ms(), _beat) >= 1500:
+            _beat = time.ticks_ms()
+            inst.ready()  # tell the IDE we're live (works on any library version)
+        time.sleep_ms(20)
 except KeyboardInterrupt:
-    inst.stop()     # Stop pressed (Ctrl-C) -> silence + clear
+    inst.stop()  # Stop pressed (Ctrl-C) -> silence + clear
 `
