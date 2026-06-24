@@ -1836,21 +1836,30 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
-.filepanel__local {
+/* Each split pane (#124): a flex column that fills its resizable share, letting
+   the tree inside (`.localtree`/`.devicetree`, height:100%) own its own scroll.
+   The draggable `.resize-handle--horizontal` between the two panes is the
+   divider — so the device tree is no longer capped at a fixed fraction. */
+.filepanel__pane {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
   min-height: 0;
-  border-bottom: var(--border-w) solid var(--border);
+  overflow: hidden;
 }
 
-.filepanel__device {
+/* The transfer bridge keeps its natural height at the top of the device pane. */
+.filepanel__pane > .upload-controls {
   flex: 0 0 auto;
-  min-height: 120px;
-  max-height: 40%;
-  overflow: auto;
+}
+
+/* The device tree fills the space below the transfer bridge in its pane. */
+.filepanel__device {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .localtree {

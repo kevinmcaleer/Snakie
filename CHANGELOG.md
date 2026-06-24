@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Resizable file-panel split (#124).** The boundary between the **Local files**
+  and **Device files** trees is now a draggable splitter — drag it to give the
+  device files more room (they used to be capped at a fixed fraction of the
+  height). The split position is remembered across sessions.
 - **One-click library updates.** The instrument library now carries a
   `__version__`, and the install banner detects when the copy on your board is
   **older than the one Snakie bundles** — offering **Update library** (previously
