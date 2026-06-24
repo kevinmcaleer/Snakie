@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **One-click library updates.** The instrument library now carries a
+  `__version__`, and the install banner detects when the copy on your board is
+  **older than the one Snakie bundles** — offering **Update library** (previously
+  it only noticed a *missing* library, so a board with an out-of-date copy silently
+  ran old code). This is how you pick up new device features like the buzzer
+  receiver and scanners.
 - **Background service on the second core + smarter scanning.** The `snakie`
   library gained `inst.start()`, which runs the control channel and the built-in
   scan triggers (`scan:wifi` / `scan:bt` / `scan:i2c`) **on the board's second

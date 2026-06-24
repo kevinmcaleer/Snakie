@@ -26,13 +26,15 @@ export const INSTRUMENTS_ROOT_PATH = '/instruments.py'
 export const INSTRUMENTS_LIB_DIR = '/lib'
 
 /**
- * Tri-state install detection, cached per connection so we don't re-poll the raw
- * REPL on every dock open:
- *  - `'unknown'`  — not probed yet (or reset on disconnect); a probe is due.
- *  - `'present'`  — the library is on the board; never show the banner.
- *  - `'absent'`   — the library is NOT on the board; the banner may show.
+ * Install detection, cached per connection so we don't re-poll the raw REPL on
+ * every dock open:
+ *  - `'unknown'`   — not probed yet (or reset on disconnect); a probe is due.
+ *  - `'present'`   — the library is on the board and up to date; no banner.
+ *  - `'outdated'`  — the library is on the board but an OLDER version than the one
+ *                    Snakie bundles; the banner offers a one-click UPDATE.
+ *  - `'absent'`    — the library is NOT on the board; the banner offers Install.
  */
-export type InstallState = 'unknown' | 'present' | 'absent'
+export type InstallState = 'unknown' | 'present' | 'outdated' | 'absent'
 
 /**
  * Decide installed-ness from the outcome of probing the two candidate paths.
@@ -42,10 +44,38 @@ export type InstallState = 'unknown' | 'present' | 'absent'
  * if EITHER candidate (`/lib/instruments.py` or `/instruments.py`) is found.
  * Any probe error is tolerated upstream by passing `false` for that path, so an
  * all-errors outcome reads as `'absent'` (offer the install) rather than
- * throwing.
+ * throwing. (Version freshness is a SEPARATE step — see {@link installStateFromVersions}.)
  */
 export function installStateFromProbe(libFound: boolean, rootFound: boolean): InstallState {
   return libFound || rootFound ? 'present' : 'absent'
+}
+
+/**
+ * Extract the `__version__ = "X.Y.Z"` literal from instrument-library source, or
+ * `null` if absent (a legacy copy predating versioning). Pure + side-effect-free
+ * so the freshness check can be unit-tested. Tolerates single or double quotes.
+ */
+export function parseLibVersion(source: string | null | undefined): string | null {
+  if (!source) return null
+  const m = source.match(/__version__\s*=\s*['"]([^'"]+)['"]/)
+  return m ? m[1] : null
+}
+
+/**
+ * Refine a `'present'` board into `'present'` vs `'outdated'` by comparing the
+ * board's installed version against the bundled one. Outdated when we KNOW the
+ * bundled version and the board's differs (including a legacy copy with no
+ * `__version__` → `null`). When the bundled version is unknown (couldn't read the
+ * bundled source), we can't judge — stay `'present'` so we never nag wrongly.
+ */
+export function installStateFromVersions(
+  found: boolean,
+  boardVersion: string | null,
+  bundledVersion: string | null
+): InstallState {
+  if (!found) return 'absent'
+  if (bundledVersion !== null && boardVersion !== bundledVersion) return 'outdated'
+  return 'present'
 }
 
 /** Inputs that decide whether the manila banner should be on screen. */
@@ -73,7 +103,7 @@ export function shouldShowBanner(input: BannerVisibilityInput): boolean {
   return (
     input.dockOpen &&
     input.connected &&
-    input.installState === 'absent' &&
+    (input.installState === 'absent' || input.installState === 'outdated') &&
     !input.dismissed
   )
 }

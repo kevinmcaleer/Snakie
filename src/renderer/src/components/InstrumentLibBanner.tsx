@@ -16,6 +16,7 @@ import './InstrumentLibBanner.css'
 export function InstrumentLibBanner({
   installing,
   error,
+  outdated = false,
   onInstall,
   onDismiss
 }: {
@@ -23,7 +24,12 @@ export function InstrumentLibBanner({
   installing: boolean
   /** A short error message to show if the last install attempt failed. */
   error?: string | null
-  /** Install the library onto the board (writes `/lib/instruments.py`). */
+  /**
+   * The library is on the board but an OLDER version than Snakie bundles — show
+   * "update" copy rather than "install" (the action overwrites either way).
+   */
+  outdated?: boolean
+  /** Install / update the library onto the board (writes `/lib/instruments.py`). */
   onInstall: () => void
   /** Dismiss the banner for this open-session (re-shows on reopen). */
   onDismiss: () => void
@@ -34,8 +40,13 @@ export function InstrumentLibBanner({
       <div className="inst-lib-banner__text">
         {error ? (
           <span className="inst-lib-banner__error">
-            Couldn&rsquo;t install the library: {error}
+            Couldn&rsquo;t {outdated ? 'update' : 'install'} the library: {error}
           </span>
+        ) : outdated ? (
+          <>
+            A newer Snakie instrument library is available — update your board to get
+            the latest instruments (buzzer, scanners, …) and fixes.
+          </>
         ) : (
           <>
             The Snakie instrument library isn&rsquo;t on your board — install it to
@@ -49,7 +60,15 @@ export function InstrumentLibBanner({
         onClick={onInstall}
         disabled={installing}
       >
-        {installing ? 'Installing…' : error ? 'Retry install' : 'Download & install'}
+        {installing
+          ? outdated
+            ? 'Updating…'
+            : 'Installing…'
+          : error
+            ? 'Retry'
+            : outdated
+              ? 'Update library'
+              : 'Download & install'}
       </button>
       <button
         type="button"

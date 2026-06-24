@@ -33,7 +33,8 @@ import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
   INSTRUMENTS_LIB_DIR,
-  installStateFromProbe,
+  installStateFromVersions,
+  parseLibVersion,
   shouldShowBanner,
   type InstallState
 } from '../lib/instrumentsLib'
@@ -403,11 +404,34 @@ export function AppShell(): JSX.Element {
         .stat(path)
         .then(() => true)
         .catch(() => false)
-    void Promise.all([probe(INSTRUMENTS_LIB_PATH), probe(INSTRUMENTS_ROOT_PATH)]).then(
-      ([libFound, rootFound]) => {
-        if (active) setLibState(installStateFromProbe(libFound, rootFound))
+    void (async (): Promise<void> => {
+      const [libFound, rootFound] = await Promise.all([
+        probe(INSTRUMENTS_LIB_PATH),
+        probe(INSTRUMENTS_ROOT_PATH)
+      ])
+      if (!active) return
+      if (!libFound && !rootFound) {
+        setLibState('absent')
+        return
       }
-    )
+      // Present — compare the installed version against the bundled one to decide
+      // present vs OUTDATED. Read both sources; any read failure → stay 'present'
+      // (never nag on a transient error). A legacy copy with no `__version__`
+      // parses to null → differs from the bundled version → 'outdated'.
+      const path = libFound ? INSTRUMENTS_LIB_PATH : INSTRUMENTS_ROOT_PATH
+      const [boardSrc, bundledSrc] = await Promise.all([
+        window.api.device.readFile(path).catch(() => null),
+        window.api.instruments.librarySource().catch(() => null)
+      ])
+      if (!active) return
+      if (boardSrc == null || bundledSrc == null) {
+        setLibState('present')
+        return
+      }
+      setLibState(
+        installStateFromVersions(true, parseLibVersion(boardSrc), parseLibVersion(bundledSrc))
+      )
+    })()
     return () => {
       active = false
     }
@@ -521,6 +545,7 @@ export function AppShell(): JSX.Element {
         <InstrumentLibBanner
           installing={libInstalling}
           error={libError}
+          outdated={libState === 'outdated'}
           onInstall={installInstrumentsLib}
           onDismiss={dismissLibBanner}
         />

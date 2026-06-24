@@ -528,5 +528,17 @@ class BackgroundService(unittest.TestCase):
         self.assertEqual(buf.getvalue(), "")
 
 
+class LibraryVersion(unittest.TestCase):
+    """The IDE parses `__version__ = "X.Y.Z"` to offer board-library updates."""
+
+    def test_has_string_version(self):
+        self.assertIsInstance(inst.__version__, str)
+        self.assertTrue(inst.__version__)
+
+    def test_version_is_dotted_numeric(self):
+        parts = inst.__version__.split(".")
+        self.assertTrue(all(p.isdigit() for p in parts), inst.__version__)
+
+
 if __name__ == "__main__":
     unittest.main()
