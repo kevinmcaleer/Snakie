@@ -635,6 +635,14 @@ function PinsInUse({ conns, fileName }: { conns: UsedPins[]; fileName?: string }
                 {c.variable ? `${c.variable} = ` : ''}
                 {c.constructor}
               </span>
+              {c.instrument && (
+                <span
+                  className="boardview__pin-inst"
+                  title={`Used by the ${c.instrument} instrument library`}
+                >
+                  {c.instrument} instrument
+                </span>
+              )}
             </li>
           ))}
         </ul>

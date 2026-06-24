@@ -34,8 +34,15 @@
  * (mirrors `Plotter.parse.ts`, `OutlinePanel`'s `parseOutline`, etc.).
  */
 
-/** The kind of connection a wired pin is — drives the wire colour + badge. */
-export type PinType = 'output' | 'input' | 'pwm' | 'adc' | 'i2c' | 'spi' | 'pio'
+/**
+ * The kind of connection a wired pin is — drives the wire colour + badge.
+ *
+ * `instrument` is a pin the program does NOT wire directly with a `machine`
+ * constructor but instead HANDS to the `instruments` library (e.g.
+ * `inst.start(buzzer_pin=15)`), so the library owns the `PWM(Pin(...))` for it.
+ * It still resolves to a real header pad and is surfaced as "in use".
+ */
+export type PinType = 'output' | 'input' | 'pwm' | 'adc' | 'i2c' | 'spi' | 'pio' | 'instrument'
 
 /** One parsed connection: a variable wired to one or more pins. */
 export interface UsedPins {
@@ -47,6 +54,12 @@ export interface UsedPins {
   variable: string
   /** The (trimmed) constructor source for the table, e.g. `Pin(2, Pin.OUT)`. */
   constructor: string
+  /**
+   * For an `instrument`-type connection, WHICH instrument owns the pin (e.g.
+   * `buzzer` from `buzzer_pin=15`). Lets the Board View badge name the device.
+   * Absent for ordinary `machine`-module connections.
+   */
+  instrument?: string
 }
 
 /** Connection type → wire/badge colour (matches the skeuomorph palette). */
@@ -57,7 +70,9 @@ export const PIN_TYPE_COLOR: Record<PinType, string> = {
   adc: '#34c0a8',
   i2c: '#33c6d6',
   spi: '#b06be0',
-  pio: '#ff5ca8'
+  pio: '#ff5ca8',
+  // A warm amber-gold, distinct from PWM's orange — instrument-owned pins.
+  instrument: '#e8b34a'
 }
 
 /** Connection type → the UPPERCASE label drawn on the badge + in the table. */
@@ -68,7 +83,8 @@ export const PIN_TYPE_LABEL: Record<PinType, string> = {
   adc: 'ADC',
   i2c: 'I2C',
   spi: 'SPI',
-  pio: 'PIO'
+  pio: 'PIO',
+  instrument: 'INST'
 }
 
 /**
@@ -83,7 +99,8 @@ export const PIN_TYPE_TAG: Record<PinType, string> = {
   adc: 'ADC',
   i2c: 'I²C',
   spi: 'SPI',
-  pio: 'PIO'
+  pio: 'PIO',
+  instrument: '⚙'
 }
 
 /**
@@ -151,6 +168,60 @@ function classifyPin(args: string, variable: string, source: string): 'output' |
   if (/\bPin\.OUT\b|\bmode\s*=\s*(?:\w+\.)?OUT\b|,\s*(?:\w+\.)?OUT\b/.test(args)) return 'output'
   if (/\bPin\.IN\b|\bmode\s*=\s*(?:\w+\.)?IN\b|,\s*(?:\w+\.)?IN\b/.test(args)) return 'input'
   return inferDirection(variable, source)
+}
+
+// --- Instrument-library pins ------------------------------------------------
+
+/** One instrument-owned pin: which GPIO number, and which instrument drives it. */
+export interface InstrumentPin {
+  /** The GPIO/pin number the kwarg names (e.g. `15` from `buzzer_pin=15`). */
+  pin: string
+  /** The instrument the pin powers (e.g. `buzzer` from `buzzer_pin=15`). */
+  instrument: string
+}
+
+/**
+ * Detect pins the program hands to the `instruments` library rather than wiring
+ * directly — chiefly `inst.start(...)`'s `*_pin=<int>` keyword arguments (e.g.
+ * `inst.start(buzzer_pin=15)` ⇒ the library owns `PWM(Pin(15))` for the buzzer).
+ *
+ * These never appear as a `machine` constructor, so {@link parsePins}' scan
+ * misses them — yet the pin is genuinely IN USE and should light up on the
+ * board. We match the keyword **owner** before `_pin=` (so `buzzer_pin=15`
+ * yields instrument `buzzer`) and require an **integer** value (a `Pin(15)` /
+ * variable expression isn't an instrument-owned raw pin and is left to the
+ * normal scan / ignored).
+ *
+ * Tolerant of the import alias (`instruments`, `inst`, or any name bound to the
+ * library) and of whitespace: the scan is over the whole `start(...)` argument
+ * span, and the `*_pin=<int>` shape is matched anywhere a `start(` call opens —
+ * so `inst.start(`, `instruments.start(`, `svc.start(` and multi-kwarg calls
+ * (`start(hz=50, buzzer_pin = 9)`) all resolve. Pure + DOM-free for unit tests.
+ */
+export function parseInstrumentPins(source: string): InstrumentPin[] {
+  if (!source) return []
+  const out: InstrumentPin[] = []
+  // Find each `<alias>.start(` call opening; the alias is any identifier (we
+  // don't pin it to a specific import name — `inst`/`instruments`/`svc`/…).
+  const startRe = /\b[A-Za-z_]\w*\s*\.\s*start\s*\(/g
+  let call: RegExpExecArray | null
+  while ((call = startRe.exec(source)) !== null) {
+    const openIdx = source.indexOf('(', call.index)
+    if (openIdx < 0) continue
+    const closeIdx = matchParen(source, openIdx)
+    const args = closeIdx > openIdx ? source.slice(openIdx + 1, closeIdx) : source.slice(openIdx + 1)
+    // Each `<owner>_pin = <int>` kwarg → one instrument pin. The owner is the
+    // kwarg-name stem before `_pin` (`buzzer_pin` ⇒ `buzzer`); the value must be
+    // a bare integer (a `Pin(...)`/variable isn't a library-owned raw pin).
+    const kwRe = /\b([A-Za-z_]\w*?)_pin\s*=\s*(\d+)\b/g
+    let kw: RegExpExecArray | null
+    while ((kw = kwRe.exec(args)) !== null) {
+      out.push({ instrument: kw[1], pin: kw[2] })
+    }
+    // Resume the outer scan past this call so nested parens aren't re-walked.
+    if (closeIdx > openIdx) startRe.lastIndex = closeIdx + 1
+  }
+  return out
 }
 
 /**
@@ -235,6 +306,20 @@ export function parsePins(source: string): UsedPins[] {
 
     if (pins.length === 0) continue
     out.push({ type, pins, variable, constructor: ctorSrc })
+  }
+
+  // Append pins the program hands to the `instruments` library (e.g.
+  // `inst.start(buzzer_pin=15)`) — they never appear as a `machine` constructor
+  // above, but the pin is in use and should surface on the board as an
+  // instrument-owned connection.
+  for (const ip of parseInstrumentPins(source)) {
+    out.push({
+      type: 'instrument',
+      pins: [ip.pin],
+      variable: ip.instrument,
+      constructor: `${ip.instrument}_pin=${ip.pin}`,
+      instrument: ip.instrument
+    })
   }
 
   return out

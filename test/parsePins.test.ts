@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  parseInstrumentPins,
   parsePins,
   PIN_TYPE_COLOR,
   PIN_TYPE_LABEL,
@@ -161,7 +162,16 @@ describe('parsePins', () => {
   })
 
   it('exposes a colour + label for every connection type', () => {
-    for (const type of ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'] as const) {
+    for (const type of [
+      'output',
+      'input',
+      'pwm',
+      'adc',
+      'i2c',
+      'spi',
+      'pio',
+      'instrument'
+    ] as const) {
       expect(PIN_TYPE_COLOR[type]).toMatch(/^#[0-9a-f]{6}$/i)
       expect(PIN_TYPE_LABEL[type]).toMatch(/^[A-Z0-9]+$/)
     }
@@ -169,15 +179,18 @@ describe('parsePins', () => {
     expect(PIN_TYPE_COLOR.adc).toBe('#34c0a8')
     expect(PIN_TYPE_LABEL.adc).toBe('ADC')
     expect(PIN_TYPE_TAG.adc).toBe('ADC')
+    // Instrument-owned pins get their own amber-gold accent + INST label.
+    expect(PIN_TYPE_COLOR.instrument).toBe('#e8b34a')
+    expect(PIN_TYPE_LABEL.instrument).toBe('INST')
   })
 
   it('exposes a short node-graph tag for every connection type', () => {
     // Each tag is short (≤3 visible chars) and a non-empty string — these label
     // the inline type chip on the node-graph Board View cards.
-    const tags = ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'].map(
+    const tags = ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio', 'instrument'].map(
       (t) => PIN_TYPE_TAG[t as keyof typeof PIN_TYPE_TAG]
     )
-    expect(tags).toEqual(['OUT', 'IN', 'PWM', 'ADC', 'I²C', 'SPI', 'PIO'])
+    expect(tags).toEqual(['OUT', 'IN', 'PWM', 'ADC', 'I²C', 'SPI', 'PIO', '⚙'])
     for (const tag of tags) {
       expect(tag.length).toBeGreaterThan(0)
       expect(tag.length).toBeLessThanOrEqual(3)
@@ -186,5 +199,86 @@ describe('parsePins', () => {
     for (const type of ['output', 'input', 'pwm', 'adc', 'i2c', 'spi', 'pio'] as const) {
       expect(PIN_TYPE_TAG[type].length).toBeLessThanOrEqual(PIN_TYPE_LABEL[type].length)
     }
+  })
+})
+
+describe('parseInstrumentPins', () => {
+  it('returns nothing for empty / instrument-free source', () => {
+    expect(parseInstrumentPins('')).toEqual([])
+    expect(parseInstrumentPins('led = Pin(25, Pin.OUT)\nled.on()')).toEqual([])
+  })
+
+  it('detects a buzzer_pin kwarg on inst.start(...)', () => {
+    expect(parseInstrumentPins('inst.start(buzzer_pin=15)')).toEqual([
+      { instrument: 'buzzer', pin: '15' }
+    ])
+  })
+
+  it('tolerates the `instruments` alias and whitespace around the kwarg', () => {
+    expect(parseInstrumentPins('instruments.start(  buzzer_pin = 9  )')).toEqual([
+      { instrument: 'buzzer', pin: '9' }
+    ])
+    // Any identifier bound to the library works (alias-agnostic).
+    expect(parseInstrumentPins('svc . start( buzzer_pin=2 )')).toEqual([
+      { instrument: 'buzzer', pin: '2' }
+    ])
+  })
+
+  it('captures multiple *_pin kwargs in one call, in order', () => {
+    expect(
+      parseInstrumentPins('inst.start(hz=50, buzzer_pin=9, led_pin=25)')
+    ).toEqual([
+      { instrument: 'buzzer', pin: '9' },
+      { instrument: 'led', pin: '25' }
+    ])
+  })
+
+  it('ignores a non-numeric pin value (Pin(...) / variable expressions)', () => {
+    expect(parseInstrumentPins('inst.start(buzzer_pin=PWM(Pin(15)))')).toEqual([])
+    expect(parseInstrumentPins('inst.start(buzzer_pin=PIN)')).toEqual([])
+    // A `start(` with no *_pin kwarg at all → no instrument pins.
+    expect(parseInstrumentPins('inst.start(i2c=i2c, hz=50)')).toEqual([])
+  })
+
+  it('handles multiple start() calls across the source', () => {
+    const src = ['a.start(buzzer_pin=1)', 'b.start(led_pin=2)'].join('\n')
+    expect(parseInstrumentPins(src)).toEqual([
+      { instrument: 'buzzer', pin: '1' },
+      { instrument: 'led', pin: '2' }
+    ])
+  })
+})
+
+describe('parsePins — instrument pins', () => {
+  it('surfaces a buzzer_pin as an instrument-typed connection', () => {
+    const conns = parsePins('import instruments as inst\ninst.start(buzzer_pin=15)')
+    expect(conns).toHaveLength(1)
+    expect(conns[0]).toMatchObject({
+      type: 'instrument',
+      pins: ['15'],
+      instrument: 'buzzer'
+    })
+  })
+
+  it('keeps direct machine pins AND appends instrument pins together', () => {
+    const src = [
+      'from machine import Pin',
+      'import instruments as inst',
+      'led = Pin(25, Pin.OUT)',
+      'inst.start(buzzer_pin=15)'
+    ].join('\n')
+    const conns = parsePins(src)
+    expect(conns.map((c) => c.type)).toEqual(['output', 'instrument'])
+    expect(conns.map((c) => c.pins[0])).toEqual(['25', '15'])
+    // The instrument tag rides only on the instrument-owned connection.
+    expect(conns[0].instrument).toBeUndefined()
+    expect(conns[1].instrument).toBe('buzzer')
+  })
+
+  it('does not regress when no instrument call is present', () => {
+    const conns = parsePins('servo = PWM(Pin(16))')
+    expect(conns).toEqual([
+      { type: 'pwm', pins: ['16'], variable: 'servo', constructor: 'PWM(Pin(16))' }
+    ])
   })
 })
