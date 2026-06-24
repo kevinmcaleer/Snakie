@@ -27,6 +27,13 @@ import type {
   InstallResult,
   PackageInfo
 } from '../main/packages/types'
+import type { ModuleInstallPlan } from '../main/modules/resolve'
+import {
+  importProbeSnippet,
+  MODULE_PRESENT,
+  MODULES_LIB_DIR,
+  type ModuleDef
+} from '../shared/modules-catalog'
 import type {
   CopilotDeviceCode,
   CopilotPollResult
@@ -316,6 +323,144 @@ const packages = {
   }
 }
 
+/** Lifecycle event for a per-module install (#120). Mirrors `InstallProgress`. */
+export interface ModuleInstallProgress {
+  /** The catalog module id being installed. */
+  id: string
+  /** Lifecycle state. */
+  state: 'started' | 'running' | 'note' | 'done' | 'error'
+  /** A human-readable message for `note` / status states. */
+  message?: string
+}
+
+/** The resolved outcome of a per-module install (#120). Mirrors `InstallResult`. */
+export interface ModuleInstallResult {
+  /** The catalog module id. */
+  id: string
+  /** Did the install succeed? */
+  ok: boolean
+  /** Combined device log (cleaned of sentinel markers) or the error text. */
+  log: string
+  /** Non-fatal notes surfaced during the install (provenance / mip hints). */
+  notes: string[]
+}
+
+/**
+ * Per-module installer API (issue #120) — the renderer-facing half of the
+ * "modular installs" subsystem.
+ *
+ * `catalog` is a pure main-process call (the static module registry). `install`
+ * is orchestrated HERE in the preload (exactly like `packages.install`): it asks
+ * main for the {@link ModuleInstallPlan}, then runs the privileged-free device
+ * step over the SAME serialized `device:*` channel the rest of the app uses —
+ * for a `bundled` module that's `device.mkdir('/lib')` + `device.writeFile`
+ * (the #108 path, generalised); for a `mip` module it's `device.exec(snippet)`
+ * with the same sentinel parsing as `packages.install`. `probeInstalled` runs a
+ * cheap `import <name>` probe per module so the manager can show installed-vs-
+ * available without a "list packages" API the firmware doesn't provide.
+ */
+const modules = {
+  /** The full installable-module catalog (offline-safe), grouped by the UI. */
+  catalog: (): Promise<ModuleDef[]> => unwrap(ipcRenderer.invoke('modules:catalog')),
+  /** Resolve one module id to its install plan (bundled contents or mip snippet). */
+  installPlan: (id: string): Promise<ModuleInstallPlan> =>
+    unwrap(ipcRenderer.invoke('modules:installPlan', id)),
+  /**
+   * Install module `id` onto the connected device. Requires an active
+   * connection. `onProgress` receives lifecycle events; the resolved
+   * {@link ModuleInstallResult} also carries the log + notes.
+   */
+  install: async (
+    id: string,
+    onProgress?: (p: ModuleInstallProgress) => void
+  ): Promise<ModuleInstallResult> => {
+    const emit = (p: ModuleInstallProgress): void => onProgress?.(p)
+    emit({ id, state: 'started' })
+
+    const plan = await unwrap<ModuleInstallPlan>(
+      ipcRenderer.invoke('modules:installPlan', id)
+    )
+    for (const note of plan.notes) emit({ id, state: 'note', message: note })
+
+    if (plan.mechanism === 'writeFile' && plan.writeFile) {
+      // Bundled stub: ensure /lib then write the file (the #108 path).
+      emit({ id, state: 'running', message: `Writing ${plan.writeFile.path}…` })
+      try {
+        await unwrap<void>(ipcRenderer.invoke('device:mkdir', MODULES_LIB_DIR)).catch(
+          () => undefined
+        )
+        await unwrap<void>(
+          ipcRenderer.invoke('device:writeFile', plan.writeFile.path, plan.writeFile.contents)
+        )
+        emit({ id, state: 'done', message: `Installed ${id}` })
+        return { id, ok: true, log: `Wrote ${plan.writeFile.path}`, notes: plan.notes }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        emit({ id, state: 'error', message: `Failed to install ${id}` })
+        return { id, ok: false, log: msg, notes: plan.notes }
+      }
+    }
+
+    // mip mechanism: run the snippet over device.exec, parse the sentinels (same
+    // markers + cleaning as packages.install).
+    emit({ id, state: 'running', message: `Installing ${id} with mip…` })
+    const exec = await unwrap<{ stdout: string; stderr: string }>(
+      ipcRenderer.invoke('device:exec', plan.snippet ?? '')
+    )
+    const out = `${exec.stdout ?? ''}\n${exec.stderr ?? ''}`.trim()
+    const failed =
+      out.includes(INSTALL_ERR) ||
+      (exec.stderr != null && exec.stderr.includes('Traceback'))
+    const ok = out.includes(INSTALL_OK) && !failed
+    const log = out
+      .split(/\r?\n/)
+      .filter((l) => !l.includes(INSTALL_START) && !l.includes(INSTALL_OK))
+      .map((l) => l.replace(INSTALL_ERR, '').trim())
+      .filter((l) => l.length > 0)
+      .join('\n')
+      .trim()
+    emit({
+      id,
+      state: ok ? 'done' : 'error',
+      message: ok ? `Installed ${id}` : `Failed to install ${id}`
+    })
+    return { id, ok, log: log || out, notes: plan.notes }
+  },
+  /**
+   * Probe which of `importNames` are importable on the connected board. Runs one
+   * batched `import` probe per name over `device.exec` and returns the SUBSET
+   * that printed the {@link MODULE_PRESENT} sentinel. Tolerant of any device
+   * error (resolves to an empty array) so the manager degrades gracefully when a
+   * board is busy / disconnected mid-probe.
+   */
+  probeInstalled: async (importNames: string[]): Promise<string[]> => {
+    if (importNames.length === 0) return []
+    // Build one snippet that probes each name and prints `<sentinel> <name>` for
+    // the ones that import — a single raw-REPL round-trip for the whole catalog.
+    const lines: string[] = []
+    for (const name of importNames) {
+      const safe = name.replace(/[^A-Za-z0-9_]/g, '')
+      lines.push(importProbeSnippet(safe).replace(MODULE_PRESENT, `${MODULE_PRESENT} ${safe}`))
+    }
+    try {
+      const exec = await unwrap<{ stdout: string; stderr: string }>(
+        ipcRenderer.invoke('device:exec', lines.join('\n'))
+      )
+      const out = `${exec.stdout ?? ''}`
+      const present = new Set<string>()
+      for (const line of out.split(/\r?\n/)) {
+        const m = line.trim()
+        if (m.startsWith(`${MODULE_PRESENT} `)) {
+          present.add(m.slice(MODULE_PRESENT.length + 1).trim())
+        }
+      }
+      return importNames.filter((n) => present.has(n.replace(/[^A-Za-z0-9_]/g, '')))
+    } catch {
+      return []
+    }
+  }
+}
+
 /**
  * LLM chat API (issue #77). Mirrors the main-process `llm:*` IPC handlers and
  * unwraps their typed results. All provider API calls run in the main process
@@ -573,6 +718,8 @@ const api = {
   fs,
   /** MicroPython package installer (mip/PyPI) + discovery layer. */
   packages,
+  /** Per-component module installer + catalog (issue #120). */
+  modules,
   /** In-app MicroPython firmware flashing layer (ESP via esptool, RP2040 via UF2). */
   firmware,
   /** Auto-update check + status + restart layer. */

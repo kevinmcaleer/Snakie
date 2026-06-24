@@ -30,6 +30,10 @@ extraResources:
   # Ship the MicroPython instrument library (issue #107) so the app can offer
   # to install it onto the connected board (issue #108). `instruments:librarySource`
   # reads it from process.resourcesPath when packaged, and the repo root in dev.
+  # The recursive `**/*.py` glob ALSO ships the per-component driver stubs under
+  # `micropython/modules/` (issue #120); the main process resolves them the same
+  # way (process.resourcesPath when packaged, repo root in dev) — see
+  # src/main/modules/resolve.ts. No extra entry is needed.
   - from: micropython
     to: micropython
     filter:

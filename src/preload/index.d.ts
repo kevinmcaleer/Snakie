@@ -58,6 +58,20 @@ export type {
   InstallProgress,
   InstallResult
 } from '../main/packages/types'
+
+// Re-export the per-module installer types (issue #120) so the Modules manager
+// can import them from this single UI-facing module. The progress/result types
+// are defined inline in the preload (`./index`); the catalog types come from the
+// dependency-free shared catalog.
+export type { ModuleInstallProgress, ModuleInstallResult } from './index'
+export type { ModuleInstallPlan } from '../main/modules/resolve'
+export type {
+  ModuleDef,
+  ModuleSource,
+  ModuleGroup,
+  ModuleStatus,
+  InstrumentId
+} from '../shared/modules-catalog'
 // Re-export the LLM chat types so the renderer's chat panel can import them
 // from the UI-facing preload module rather than reaching into `src/main`.
 export type {

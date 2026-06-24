@@ -91,6 +91,12 @@ if (!w.api) {
       search: P([]),
       install: P({ name: '', ok: false, log: '', notes: [] })
     },
+    modules: {
+      catalog: P([]),
+      installPlan: P({ id: '', importName: '', mechanism: 'mip', notes: [] }),
+      install: P({ id: '', ok: false, log: '', notes: [] }),
+      probeInstalled: P([])
+    },
     updates: {
       check: P(undefined),
       quitAndInstall: P(undefined),
