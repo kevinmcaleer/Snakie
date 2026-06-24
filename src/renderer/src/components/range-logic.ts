@@ -260,3 +260,84 @@ export function blipOpacity(blipSeq: number, newestSeq: number, window = SWEEP_T
   if (t <= floor) return floor
   return t > 1 ? 1 : t
 }
+
+// ---------------------------------------------------------------------------
+// Range control payload + code-sync (mirrors buzzer-logic's pin sync) — the
+// on-device receiver (`micropython/instruments.py` `Rangefinder` + `range_command`)
+// attests the `range` control grammar the panel WRITES:
+//
+//     SNKCMD range pins <trig> <echo>          # retarget the HC-SR04 trig/echo pins
+//
+// `rangePinsPayload(trig, echo)` produces the `<payload>` half;
+// `sendControl('range', payload)` frames the `SNKCMD range …` line. The two
+// code-sync helpers read/rewrite the demo's `RANGE_TRIG`/`RANGE_ECHO` (or a
+// `range_trig=`/`range_echo=` kwarg) so the panel can warn on + fix a mismatch.
+// ---------------------------------------------------------------------------
+
+/** A trig/echo pin pair read out of source code; `null` for an absent/symbolic one. */
+export interface RangePins {
+  trig: number | null
+  echo: number | null
+}
+
+/**
+ * The `<payload>` that retargets the rangefinder's trig/echo pins:
+ * `pins <trig> <echo>`. Each pin is rounded to a whole, non-negative GPIO number.
+ * Pass to `sendControl('range', rangePinsPayload(3, 2))` → the device sees
+ * `SNKCMD range pins 3 2`.
+ */
+export function rangePinsPayload(trig: number, echo: number): string {
+  const t = Math.max(0, Math.round(Number.isFinite(trig) ? trig : 0))
+  const e = Math.max(0, Math.round(Number.isFinite(echo) ? echo : 0))
+  return `pins ${t} ${e}`
+}
+
+/**
+ * The regex matching a `RANGE_TRIG = <digits>` (or `range_trig=<digits>`)
+ * declaration, with the value captured. Case-insensitive, whitespace-tolerant.
+ * Built per-role so {@link findRangePinsInCode} / {@link setRangePinsInCode} agree
+ * on the grammar. Not `/g` — both helpers act on the FIRST match of each role.
+ */
+const RANGE_TRIG_RE = /range_trig\s*=\s*([0-9]+)/i
+const RANGE_ECHO_RE = /range_echo\s*=\s*([0-9]+)/i
+
+/**
+ * Find the numeric trig + echo pins declared by `RANGE_TRIG = <digits>` /
+ * `RANGE_ECHO = <digits>` (or the lowercase `range_trig=`/`range_echo=` kwarg) in
+ * `source`. Case-insensitive; tolerant of whitespace around the `=`. Returns the
+ * FIRST such pin per role as a number, or `null` for a role the code declares no
+ * numeric value for (including symbolic values like `range_trig=RANGE_TRIG`). Pure,
+ * never throws.
+ */
+export function findRangePinsInCode(source: string): RangePins {
+  if (!source) return { trig: null, echo: null }
+  const t = RANGE_TRIG_RE.exec(source)
+  const e = RANGE_ECHO_RE.exec(source)
+  return {
+    trig: t ? Number(t[1]) : null,
+    echo: e ? Number(e[1]) : null
+  }
+}
+
+/**
+ * Rewrite the FIRST `RANGE_TRIG = <digits>` AND `RANGE_ECHO = <digits>` assignments
+ * in `source` to `trig` / `echo`, preserving the surrounding text (and the author's
+ * spacing + casing around each `=`). A role with no numeric match is left untouched
+ * (nothing to sync). Each new pin is rounded to a whole, non-negative GPIO number.
+ * Pure, never mutates — backs the panel's one-click "Update code". Mirrors
+ * {@link setBuzzerPinInCode}.
+ */
+export function setRangePinsInCode(source: string, trig: number, echo: number): string {
+  const t = Math.max(0, Math.round(Number.isFinite(trig) ? trig : 0))
+  const e = Math.max(0, Math.round(Number.isFinite(echo) ? echo : 0))
+  // Rebuild the matched text with the new number, keeping the original prefix
+  // (`RANGE_TRIG`, the author's casing + spacing, `=`, spacing) intact so only the
+  // value changes.
+  const replaceValue = (value: number) => (matched: string, digits: string): string => {
+    const numStart = matched.lastIndexOf(digits)
+    return matched.slice(0, numStart) + String(value)
+  }
+  let out = source.replace(RANGE_TRIG_RE, replaceValue(t))
+  out = out.replace(RANGE_ECHO_RE, replaceValue(e))
+  return out
+}

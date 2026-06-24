@@ -207,3 +207,158 @@
   background: rgba(255, 255, 255, 0.08);
   margin: 1px 0;
 }
+
+/* --- Buttons (shared by the demo prompt + the pin-sync strip) -------------- */
+.range__btn {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 5px 9px;
+  border-radius: 5px;
+  cursor: pointer;
+  color: #cfd3da;
+  background: linear-gradient(#26282b, #1a1c1f);
+  border: 1px solid #34373c;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.range__btn:hover:not(:disabled) {
+  background: linear-gradient(#303236, #222427);
+}
+.range__btn:active:not(:disabled) {
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+.range__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.range__btn--play {
+  color: #0c0e10;
+  background: linear-gradient(color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
+  border-color: var(--accent-border);
+}
+.range__btn--play:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
+}
+
+/* --- Demo prompt (no Snakie program running) ------------------------------ */
+.range__prompt {
+  margin-top: 11px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid var(--accent-border);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+  padding: 9px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.range__prompt-msg {
+  margin: 0;
+  font-size: 11px;
+  color: #cfd3da;
+}
+.range__prompt-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.range__prompt-hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #6b7079;
+}
+.range__prompt-hint code {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+}
+
+/* --- Sensor wiring (TRIG / ECHO selectors + live status pill) -------------- */
+.range__wiring {
+  margin-top: 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.range__wiring-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.range__wiring-title {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #7a7d84;
+}
+.range__pins {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Live program status pill (mirrors the buzzer's). */
+.range__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+.range__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 4px currentColor;
+}
+.range__live--on {
+  color: #86ffb6;
+}
+.range__live--idle {
+  color: var(--accent);
+}
+.range__live--off {
+  color: #5a5f67;
+}
+.range__live--off .range__live-dot {
+  box-shadow: none;
+}
+
+/* --- Pin-mismatch strip (a thin warning under the TRIG/ECHO selectors) ----- */
+.range__pinwarn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--accent) 12%, #07090b);
+  border: 1px solid var(--accent-border);
+}
+.range__pinwarn-msg {
+  flex: 1;
+  min-width: 0;
+  font-size: 9px;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--accent) 70%, #cfd3da);
+}
+.range__pinwarn-btn {
+  flex: 0 0 auto;
+  font-size: 9px;
+  padding: 3px 7px;
+  color: #0c0e10;
+  background: linear-gradient(color-mix(in srgb, var(--accent) 92%, #fff), var(--accent));
+  border-color: var(--accent-border);
+}
+.range__pinwarn-btn:hover:not(:disabled) {
+  background: linear-gradient(#fff, color-mix(in srgb, var(--accent) 88%, #fff));
+}

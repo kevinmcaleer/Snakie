@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.4.2"
+__version__ = "0.4.3"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -578,7 +578,7 @@ control = Control()
 
 # What the board can do, announced to the IDE as ``SNK READY <caps...>`` so a
 # panel knows a Snakie program is live (and which triggers it services).
-READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "screen")
+READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen")
 
 _service_running = False
 
@@ -603,7 +603,7 @@ def ready(extra=()):
     print("%s READY %s" % (SENTINEL, " ".join(caps)))
 
 
-def start(i2c=None, buzzer_pin=None, background=False, hz=50):
+def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None, background=False, hz=50):
     """Register the built-in control handlers + attach the buzzer, then announce.
 
     Then call ``control.poll()`` in your main loop to SERVICE commands — it drains
@@ -614,6 +614,10 @@ def start(i2c=None, buzzer_pin=None, background=False, hz=50):
       * the ``buzzer`` receiver when you pass ``buzzer_pin`` — attaches the shared
         :data:`buzzer` to ``PWM(Pin(n))`` so the IDE's Buzzer panel can drive a
         speaker (``tone``/``seq``/``stop``/``pin``),
+      * the ``range`` receiver when you pass BOTH ``range_trig`` and ``range_echo`` —
+        attaches the shared :data:`ranger` to an HC-SR04 so the IDE's Range panel
+        can retarget the wiring (``pins <trig> <echo>``); call ``inst.ranger.read()``
+        in your loop + ``inst.distance(mm)`` to feed the radar,
       * ``ping`` → an immediate ``SNK READY`` reply.
 
     The typical loop::
@@ -637,6 +641,9 @@ def start(i2c=None, buzzer_pin=None, background=False, hz=50):
     if buzzer_pin is not None:
         buzzer.set_pin(buzzer_pin)
         control.on("buzzer", lambda payload: buzzer_command(payload, buzzer))
+    if range_trig is not None and range_echo is not None:
+        ranger.set_pins(range_trig, range_echo)
+        control.on("range", lambda payload: range_command(payload, ranger))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
     if background:
@@ -869,6 +876,112 @@ def buzzer_command(payload, buz=None):
     return verb
 
 
+def _us_to_mm(us):
+    """Convert an HC-SR04 echo pulse width (µs) to a distance in mm.
+
+    Sound travels ~343 m/s ≈ 0.343 mm/µs; the echo pulse times the round trip
+    (out + back), so halve it: ``0.343 / 2 = 0.1715`` mm per µs. Pure + integer
+    result so it is cheap to call in a loop and easy to unit-test under CPython.
+    """
+    return int(us * 0.1715)
+
+
+class Rangefinder:
+    """Read an HC-SR04 ultrasonic distance sensor from ``range`` control commands.
+
+    Two pins: ``trig`` (an OUTPUT the board pulses ~10 µs high to fire a ping) and
+    ``echo`` (an INPUT that goes high for the round-trip flight time). ``read()``
+    fires a ping and times the echo with ``machine.time_pulse_us``, returning the
+    distance in **mm** (or ``None`` on a timeout / no pins). ``set_pins(trig, echo)``
+    (re)targets the wiring; the IDE's Range panel sends ``range pins <trig> <echo>``
+    when its TRIG/ECHO selectors change. Guards the ``machine`` import so the module
+    stays importable/testable under CPython — with no hardware ``read()`` returns
+    ``None`` and every call is a safe no-op.
+    """
+
+    def __init__(self, trig=None, echo=None):
+        self._trig = None
+        self._echo = None
+        if trig is not None and echo is not None:
+            self.set_pins(trig, echo)
+
+    def set_pins(self, trig, echo):
+        """(Re)target the trig (OUT) + echo (IN) pins; idle trig low.
+
+        Builds ``Pin(int(trig), Pin.OUT)`` + ``Pin(int(echo), Pin.IN)`` and drops
+        trig low so the next ``read()`` starts from a clean state. Guards the
+        ``machine`` import so the module stays importable under CPython — when
+        ``machine`` is unavailable this is inert and the pins are left as-is.
+        """
+        try:
+            from machine import Pin
+        except ImportError:
+            return
+        self._trig = Pin(int(trig), Pin.OUT)
+        self._echo = Pin(int(echo), Pin.IN)
+        self._trig.value(0)
+
+    def read(self):
+        """Fire one ping and return the distance in mm, or ``None``.
+
+        Pulses trig high ~10 µs to launch a burst, then times the echo pulse with
+        ``machine.time_pulse_us(echo, 1, 30000)`` (a 30 ms ≈ 5 m timeout). Returns
+        ``None`` when there are no pins, ``machine`` is unavailable, or the pulse
+        times out (``time_pulse_us`` returns a negative value); otherwise converts
+        the round-trip µs to mm via :func:`_us_to_mm`. Safe to call in a loop.
+        """
+        if self._trig is None or self._echo is None:
+            return None
+        try:
+            import machine
+            import time
+        except ImportError:
+            return None
+        self._trig.value(0)
+        time.sleep_us(2) if hasattr(time, "sleep_us") else time.sleep(0.000002)
+        self._trig.value(1)
+        time.sleep_us(10) if hasattr(time, "sleep_us") else time.sleep(0.00001)
+        self._trig.value(0)
+        try:
+            dur = machine.time_pulse_us(self._echo, 1, 30000)
+        except Exception:
+            return None
+        if dur < 0:
+            return None
+        return _us_to_mm(dur)
+
+
+def range_command(payload, rf=None):
+    """Drive ``rf`` (a :class:`Rangefinder`) from one ``range`` control payload.
+
+    Parses the ``<verb> <args>`` grammar and actuates:
+
+      * ``pins <trig> <echo>`` → ``rf.set_pins(trig, echo)`` (retarget the wiring)
+
+    Defaults ``rf`` to the shared :data:`ranger` singleton. Never raises on a
+    malformed payload (it is fed from the IDE). Returns the verb it handled (or
+    ``None``), which keeps it easy to unit-test against a fake/real Rangefinder.
+    """
+    rf = rf if rf is not None else ranger
+    if not payload:
+        return None
+    payload = payload.strip()
+    sp = payload.find(" ")
+    if sp == -1:
+        verb, args = payload, ""
+    else:
+        verb, args = payload[:sp], payload[sp + 1:].strip()
+    try:
+        if verb == "pins":
+            parts = args.split()
+            rf.set_pins(int(parts[0]), int(parts[1]))
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
+
+
 class Led:
     """Drive an LED (on/off, PWM brightness, or RGB) from ``led`` commands.
 
@@ -932,6 +1045,8 @@ class Screen:
 
 
 # Shared, ready-to-use (hardware-less) singletons — attach hardware as needed,
-# e.g. ``inst.led = inst.Led(pwm=PWM(Pin(15)))``.
+# e.g. ``inst.led = inst.Led(pwm=PWM(Pin(15)))``. NOTE: the rangefinder singleton
+# is ``ranger`` (NOT ``range`` — that would shadow the Python builtin).
 buzzer = Buzzer()
 led = Led()
+ranger = Rangefinder()

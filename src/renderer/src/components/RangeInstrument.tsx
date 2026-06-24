@@ -1,12 +1,17 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import type { InstrumentDef } from './range-instrument-def'
 import { useTelemetryStream, type DistanceTelemetry } from './range-telemetry'
+import { useSnakiePresence } from './snakie-presence'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import { rangeDemo, RANGE_DEMO_NAME } from './range-demo'
 import {
   blipOpacity,
   classifyProximity,
   clampRange,
   DEFAULT_MAX_MM,
+  findRangePinsInCode,
   formatRange,
   historyPath,
   HISTORY_CAP,
@@ -14,6 +19,8 @@ import {
   polarToPoint,
   pushBlip,
   pushHistory,
+  rangePinsPayload,
+  setRangePinsInCode,
   SWEEP_TRAIL,
   type RadarBlip,
   type RangeUnit
@@ -79,6 +86,18 @@ function Cell({
   )
 }
 
+/** GPIO numbers the TRIG / ECHO selectors offer (GP0–GP28, the Pico range). */
+const GP_PINS = Array.from({ length: 29 }, (_, i) => i)
+
+/** Fire-and-forget a `range` control line; swallow errors so the UI never throws. */
+function sendRange(payload: string): void {
+  try {
+    void window.api?.device?.sendControl?.('range', payload)
+  } catch {
+    /* offline / no device — the radar still renders any telemetry it has. */
+  }
+}
+
 export function RangeInstrument({
   def,
   onClose,
@@ -93,6 +112,51 @@ export function RangeInstrument({
   onToggleDock?: () => void
   float?: FloatProps
 }): JSX.Element {
+  const deviceStatus = useDeviceStatus()
+  const connected = deviceStatus.state === 'connected'
+  const { present } = useSnakiePresence()
+  const { openBuffer, openFiles, activeId, updateContent } = useWorkspace()
+
+  // The active editor buffer (if any) — the target for the code-sync update + the
+  // source we scan for declared RANGE_TRIG / RANGE_ECHO pins to warn on a mismatch.
+  const activeFile = useMemo(
+    () => openFiles.find((f) => f.id === activeId) ?? null,
+    [openFiles, activeId]
+  )
+
+  // Sticky "a Snakie program has serviced control this session" flag (mirrors the
+  // Buzzer panel): presence is detected from the `SNK READY` heartbeat, which can
+  // briefly lapse — and a hard `present` gate would then silently DROP a retarget
+  // even though the program is running. So once we've seen a program, we keep
+  // sending; a board that has NEVER run one (a bare REPL) still gets nothing (a
+  // SNKCMD there just SyntaxErrors). Reset on disconnect.
+  const everPresent = useRef(false)
+  useEffect(() => {
+    if (present) everPresent.current = true
+  }, [present])
+  useEffect(() => {
+    if (!connected) everPresent.current = false
+  }, [connected])
+
+  // Only WRITE to the board when connected AND a Snakie program has serviced the
+  // control channel (now, or earlier this session).
+  const txRange = useCallback(
+    (payload: string): void => {
+      if (connected && (present || everPresent.current)) sendRange(payload)
+    },
+    [connected, present]
+  )
+
+  // --- pin selectors --------------------------------------------------------
+  // The HC-SR04 trig (OUT) + echo (IN) pins the panel drives. Defaults match the
+  // demo's RANGE_TRIG / RANGE_ECHO so "Run range demo" lines up out of the box.
+  const [trig, setTrig] = useState<number>(3)
+  const [echo, setEcho] = useState<number>(2)
+  // Shown when a retarget can't reach a live program (offer to run the demo).
+  const [prompt, setPrompt] = useState(false)
+  // True while opening + running the demo (disables the prompt buttons).
+  const [busy, setBusy] = useState(false)
+
   // --- user configuration ---------------------------------------------------
   const [maxMm, setMaxMm] = useState<number>(2000)
   const [unit, setUnit] = useState<RangeUnit>('cm')
@@ -172,6 +236,72 @@ export function RangeInstrument({
   )
 
   const newestSeq = seqRef.current
+
+  // --- pin retarget: send `range pins <trig> <echo>` to the board live ---------
+  // Both selectors share one send (the receiver takes the pair atomically); a
+  // retarget that can't reach a live program surfaces the demo prompt.
+  const retarget = useCallback(
+    (t: number, e: number): void => {
+      txRange(rangePinsPayload(t, e))
+      setPrompt(connected && !present && !everPresent.current)
+    },
+    [txRange, connected, present]
+  )
+
+  const onTrigChange = useCallback(
+    (next: number): void => {
+      setTrig(next)
+      retarget(next, echo)
+    },
+    [echo, retarget]
+  )
+
+  const onEchoChange = useCallback(
+    (next: number): void => {
+      setEcho(next)
+      retarget(trig, next)
+    },
+    [trig, retarget]
+  )
+
+  // --- demo fallback (mirror BuzzerInstrument.runDemo) ------------------------
+  // Open the range demo in a new tab and run it: interrupt any running program
+  // (back to a REPL prompt), drop the demo in the editor, then paste-run it. The
+  // demo's inst.start(range_trig=…, range_echo=…) brings the control service up
+  // (→ READY → present) so the panel's selectors retarget the live sensor.
+  const runDemo = useCallback(async (): Promise<void> => {
+    setBusy(true)
+    try {
+      const src = rangeDemo(trig, echo) // wire the demo to the panel's pins
+      await window.api.device.interrupt().catch(() => undefined)
+      openBuffer(RANGE_DEMO_NAME, src)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      await window.api.device.sendData(`\x05${src}\x04`)
+      setPrompt(false)
+    } catch {
+      /* offline — the prompt stays dismissable; the radar still renders. */
+    } finally {
+      setBusy(false)
+    }
+  }, [openBuffer, trig, echo])
+
+  // --- pin mismatch: warn when the open code targets different trig/echo pins --
+  // The numeric RANGE_TRIG / RANGE_ECHO declared in the active editor buffer, or
+  // null when the code declares none (no warning for that role). When either
+  // differs from the panel's pin we surface a one-click sync.
+  const codePins = useMemo(
+    () => (activeFile ? findRangePinsInCode(activeFile.content) : { trig: null, echo: null }),
+    [activeFile]
+  )
+  const trigMismatch = codePins.trig !== null && codePins.trig !== trig
+  const echoMismatch = codePins.echo !== null && codePins.echo !== echo
+  const pinsMismatch = trigMismatch || echoMismatch
+
+  /** Rewrite the active buffer's RANGE_TRIG / RANGE_ECHO to the panel's pins. */
+  const onUpdateCodePins = useCallback((): void => {
+    if (!activeFile) return
+    updateContent(activeFile.id, setRangePinsInCode(activeFile.content, trig, echo))
+  }, [activeFile, trig, echo, updateContent])
 
   return (
     <InstrumentWindow
@@ -320,6 +450,133 @@ export function RangeInstrument({
             MAX {formatRange(clampRange(maxMm, maxMm), unit, maxMm + 1)}
           </span>
         </PhosphorScreen>
+
+        {/* Demo prompt — shown when a TRIG/ECHO retarget can't reach a live program. */}
+        {prompt && (
+          <div className="range__prompt" role="alert">
+            {connected ? (
+              <>
+                <p className="range__prompt-msg">
+                  No Snakie program is running to drive the rangefinder.
+                </p>
+                <div className="range__prompt-actions">
+                  <button
+                    type="button"
+                    className="range__btn range__btn--play"
+                    onClick={() => void runDemo()}
+                    disabled={busy}
+                  >
+                    {busy ? 'STARTING…' : '▶ Run range demo'}
+                  </button>
+                  <button
+                    type="button"
+                    className="range__btn"
+                    onClick={() => setPrompt(false)}
+                    disabled={busy}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="range__prompt-hint">
+                  The radar reads any board printing <code>SNK DIST</code>; to retarget the
+                  sensor&apos;s pins, open the demo (or run your own program calling{' '}
+                  <code>
+                    inst.start(range_trig={trig}, range_echo={echo})
+                  </code>{' '}
+                  + <code>inst.control.poll()</code>).
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="range__prompt-msg">Connect a board to drive the rangefinder.</p>
+                <div className="range__prompt-actions">
+                  <button type="button" className="range__btn" onClick={() => setPrompt(false)}>
+                    Dismiss
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Sensor wiring: TRIG / ECHO pin selectors + a live program status pill. The
+            selectors send `SNKCMD range pins <trig> <echo>` to retarget the board. */}
+        <div className="range__wiring">
+          <div className="range__wiring-head">
+            <span className="range__wiring-title">HC-SR04</span>
+            <span
+              className={`range__live ${
+                !connected
+                  ? 'range__live--off'
+                  : present
+                    ? 'range__live--on'
+                    : 'range__live--idle'
+              }`}
+              title={
+                !connected
+                  ? 'No board connected — the radar shows only telemetry it has received.'
+                  : present
+                    ? 'A Snakie program is running and servicing the rangefinder — the selectors retarget the board.'
+                    : 'No Snakie program detected. Run the range demo (or a program that calls inst.start(range_trig=…, range_echo=…) + inst.control.poll()).'
+              }
+            >
+              <span className="range__live-dot" aria-hidden="true" />
+              {!connected ? 'no board' : present ? 'program live' : 'no program'}
+            </span>
+          </div>
+          <div className="range__pins">
+            <label className="range__field">
+              <span className="range__field-lbl">TRIG</span>
+              <select
+                className="range__select"
+                value={trig}
+                onChange={(e) => onTrigChange(Number(e.target.value))}
+                aria-label="HC-SR04 trigger pin"
+              >
+                {GP_PINS.map((p) => (
+                  <option key={p} value={p}>
+                    GP{p}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="range__field">
+              <span className="range__field-lbl">ECHO</span>
+              <select
+                className="range__select"
+                value={echo}
+                onChange={(e) => onEchoChange(Number(e.target.value))}
+                aria-label="HC-SR04 echo pin"
+              >
+                {GP_PINS.map((p) => (
+                  <option key={p} value={p}>
+                    GP{p}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {/* Pin-mismatch strip: the panel retargets the board live (onTrig/EchoChange),
+              but the open code may still declare different RANGE_TRIG / RANGE_ECHO. Offer
+              a one-click sync to rewrite the code to match the panel. */}
+          {pinsMismatch && (
+            <div className="range__pinwarn" role="status">
+              <span className="range__pinwarn-msg">
+                Panel pins (TRIG GP{trig} · ECHO GP{echo}) differ from your code
+                {trigMismatch ? ` (TRIG GP${codePins.trig})` : ''}
+                {echoMismatch ? ` (ECHO GP${codePins.echo})` : ''}
+              </span>
+              <button
+                type="button"
+                className="range__btn range__pinwarn-btn"
+                onClick={onUpdateCodePins}
+                title={`Rewrite RANGE_TRIG / RANGE_ECHO in your code to GP${trig} / GP${echo}`}
+              >
+                Update code
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Controls: max-range presets, units toggle, threshold stepper. */}
         <div className="range__controls">
