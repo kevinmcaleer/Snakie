@@ -47,6 +47,81 @@
   text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
+/* The "no Snakie program running" prompt — offers to open + run the demo. */
+.wscan__prompt {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  text-align: center;
+}
+
+.wscan__prompt-msg {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--accent) 78%, #cdd3da);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.wscan__prompt-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.wscan__demo {
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: #04101a;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+}
+
+.wscan__demo:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.wscan__demo:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.wscan__dismiss {
+  font-family: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  padding: 5px 10px;
+  cursor: pointer;
+  color: color-mix(in srgb, var(--accent) 60%, #9aa0a8);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid color-mix(in srgb, var(--accent) 25%, #26282b);
+  border-radius: 4px;
+}
+
+.wscan__dismiss:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--accent) 80%, #cdd3da);
+}
+
+.wscan__prompt-hint {
+  margin: 0;
+  font-size: 9.5px;
+  line-height: 1.4;
+  color: #6b7079;
+}
+
+.wscan__prompt-hint code {
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  font-size: 9.5px;
+}
+
 .wscan__scanning {
   position: absolute;
   top: 6px;

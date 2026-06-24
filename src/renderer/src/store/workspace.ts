@@ -88,6 +88,12 @@ export interface WorkspaceStore {
   saveFile: (id: string) => Promise<void>
   newFile: () => void
   /**
+   * Open a NEW untitled tab pre-filled with `content` (named `name`) and make it
+   * active. Used to drop a generated program — e.g. the Wi-Fi scan demo — into
+   * the editor ready to run. The buffer is unsaved (Save prompts for a path).
+   */
+  openBuffer: (name: string, content: string) => void
+  /**
    * Open the native folder picker and, on a non-null result, set it as the
    * current working folder (the local file browser lists it).
    */
@@ -298,6 +304,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     })
   }, [])
 
+  const openBuffer = useCallback((name: string, content: string): void => {
+    untitledCounter += 1
+    const id = `local:untitled-${untitledCounter}`
+    dispatch({
+      type: 'add',
+      file: { id, source: 'local', path: '', name, content, dirty: false }
+    })
+  }, [])
+
   const store = useMemo<WorkspaceStore>(
     () => ({
       openFiles: state.openFiles,
@@ -310,6 +325,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       updateContent,
       saveFile,
       newFile,
+      openBuffer,
       openFolder,
       openFolderPath,
       revealLine
@@ -325,6 +341,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       updateContent,
       saveFile,
       newFile,
+      openBuffer,
       openFolder,
       openFolderPath,
       revealLine

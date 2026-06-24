@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Background service on the second core + smarter scanning.** The `snakie`
+  library gained `inst.start()`, which runs the control channel and the built-in
+  scan triggers (`scan:wifi` / `scan:bt` / `scan:i2c`) **on the board's second
+  core** (`_thread`), so a robot's main loop stays responsive while the IDE drives
+  a scan, and announces itself to the IDE with a `SNK READY` heartbeat. The
+  **Wi-Fi scan** panel now uses that: when a Snakie program is running it drives
+  the scan directly; when none is, SCAN offers to **open + run a Wi-Fi demo** in a
+  new tab (stopping any running program first) instead of doing nothing.
 - **Robotics instrument dock (#119).** The instrument dock grew from 3 to a full
   set of instruments, organised so it stays usable: icon-only toggles grouped into
   **Inputs** and **Outputs**, an **in-use vs available** distinction (instruments

@@ -381,5 +381,55 @@ class Protocol(unittest.TestCase):
             self.assertEqual(buf.getvalue().count("\n"), 1, fn.__name__)
 
 
+class BackgroundService(unittest.TestCase):
+    """The 2nd-core service: readiness announce, ping reply, scan handlers."""
+
+    def test_ready_announces_default_caps(self):
+        self.assertEqual(
+            _emit(inst.ready),
+            "SNK READY scan:wifi scan:bt teleop led buzzer screen",
+        )
+
+    def test_ready_includes_extra_caps(self):
+        line = _emit(inst.ready, ("scan:i2c",))
+        self.assertTrue(line.startswith("SNK READY "))
+        self.assertIn("scan:i2c", line.split())
+
+    def test_start_registers_handlers_and_announces(self):
+        out = _emit(inst.start, background=False)
+        self.assertIn("SNK READY", out)
+        for target in ("scan:wifi", "scan:bt", "ping"):
+            self.assertIn(target, inst.control._handlers)
+        self.assertNotIn("scan:i2c", inst.control._handlers)
+
+    def test_start_with_i2c_registers_i2c_scan(self):
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False, i2c=_FakeI2C([0x3C]))
+        self.assertIn("scan:i2c", inst.control._handlers)
+        # The scan:i2c trigger runs the bus scan and emits its result set.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.control.feed("SNKCMD scan:i2c\n")
+        self.assertIn("SNK I2C 0x3C", buf.getvalue())
+
+    def test_ping_command_triggers_ready(self):
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.control.feed("SNKCMD ping\n")
+        self.assertIn("SNK READY", buf.getvalue())
+
+    def test_scan_wifi_command_fires_handler_without_radio(self):
+        # No `network` module under CPython → wifi_scan emits nothing, but the
+        # registered handler must run without raising.
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.control.feed("SNKCMD scan:wifi\n")
+        self.assertEqual(buf.getvalue(), "")
+
+
 if __name__ == "__main__":
     unittest.main()

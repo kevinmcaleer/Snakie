@@ -124,6 +124,7 @@ SNK SCR   <addr> fb <w> <h> <enc> <data> # display framebuffer; enc in {b64, rle
 SNK I2C   <addr> [<addr> ...]            # one bus-scan result set (may be empty)
 SNK WIFI  <ssid> <rssi> <ch> <sec>       # one network (one line each); SSID spaces -> '_'
 SNK BT    <name> <mac> <rssi>            # one BLE device (one line each); name spaces -> '_'
+SNK READY <caps ...>                     # the background service is alive (inst.start())
 ```
 
 Examples of the exact lines printed:
@@ -236,6 +237,33 @@ keeps only the **latest** payload per target. Register a callback for triggers
 with `control.on("scan:i2c", do_scan)` — it fires inside `poll()` when that
 command arrives. For tests / custom transports, drive it directly with
 `control.feed("SNKCMD led on\n")`.
+
+### Run it in the background — on the second core
+
+`inst.start()` runs the control channel **on the board's second core** (via
+MicroPython's `_thread`, e.g. core 1 on the RP2040) so your main loop never has
+to call `control.poll()` and a blocking scan doesn't stall it:
+
+```python
+import instruments as inst
+
+inst.start()        # spawns the control/service loop on the 2nd core
+inst.start(i2c=i2c) # …also registers the scan:i2c trigger for that bus
+
+while True:
+    ...             # your robot's main loop on core 0; scans run on core 1
+```
+
+`start()` automatically registers the built-in scan triggers (`scan:wifi`,
+`scan:bt`, and `scan:i2c` when you pass a bus), wires a `ping` → readiness reply,
+and **announces readiness** to the IDE as a `SNK READY <caps...>` line — printed
+once on `start()`, then ~every 2 s from the background loop. The IDE listens for
+this so an instrument (e.g. the **Wi-Fi scan** panel) knows a Snakie program is
+live and can drive its SCAN button directly; when no `SNK READY` is seen, the
+panel offers to open + run a demo program instead. `stop()` ends the service; on
+a port without `_thread` (or `start(background=False)`) it just registers +
+announces and you poll yourself. The `SNK READY` line is hidden from the console
+like all `SNK …` telemetry.
 
 The teleop payload grammar (parsed by `control.axes` / `control.pressed`):
 

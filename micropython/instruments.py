@@ -469,6 +469,98 @@ control = Control()
 
 
 # ---------------------------------------------------------------------------
+# Background service — run the control channel + built-in scan triggers on the
+# SECOND CORE, so a robot's main loop stays responsive while the IDE drives
+# scans / teleop. Built on MicroPython's ``_thread`` (RP2040 runs it on core 1).
+# ---------------------------------------------------------------------------
+
+# What the board can do, announced to the IDE as ``SNK READY <caps...>`` so a
+# panel knows a Snakie program is live (and which triggers it services).
+READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "screen")
+
+_service_running = False
+
+
+def _sleep_ms(ms):
+    """Sleep ``ms`` milliseconds on MicroPython (``sleep_ms``) or CPython."""
+    import time
+    if hasattr(time, "sleep_ms"):
+        time.sleep_ms(ms)
+    else:
+        time.sleep(ms / 1000.0)
+
+
+def ready(extra=()):
+    """Announce readiness to the IDE: ``SNK READY <caps...>``.
+
+    The IDE listens for this to know a Snakie program is running and servicing
+    the control channel — so a SCAN button can drive it instead of asking you to
+    run a program. ``extra`` adds capability tokens (e.g. ``scan:i2c``).
+    """
+    caps = list(READY_CAPS) + list(extra)
+    print("%s READY %s" % (SENTINEL, " ".join(caps)))
+
+
+def start(i2c=None, hz=50, background=True):
+    """Start the Snakie background service so scans run on the SECOND CORE.
+
+    Registers the built-in scan triggers on the control channel — ``scan:wifi``
+    and ``scan:bt`` always, plus ``scan:i2c`` when you pass an ``i2c`` bus —
+    wires a ``ping`` → ``SNK READY`` reply, announces readiness, then (when
+    ``background``) spawns a thread on the second core that polls the control
+    channel ~``hz``×/sec and re-announces readiness periodically. Your main loop
+    no longer needs to call ``control.poll()``.
+
+    Returns immediately. Falls back to registration + announce with NO thread
+    when ``_thread`` is unavailable or ``background`` is False — then poll the
+    control channel yourself each loop.
+    """
+    global _service_running
+    extra = ()
+    control.on("scan:wifi", lambda payload: wifi_scan())
+    control.on("scan:bt", lambda payload: bt_scan())
+    if i2c is not None:
+        control.on("scan:i2c", lambda payload: i2c_scan(i2c))
+        extra = ("scan:i2c",)
+    control.on("ping", lambda payload: ready(extra))
+    ready(extra)
+    if not background or _service_running:
+        return
+    try:
+        import _thread
+    except ImportError:
+        return  # no second core here — call control.poll() in your own loop
+    _service_running = True
+    _thread.start_new_thread(_service_loop, (hz, extra))
+
+
+def _service_loop(hz, extra):
+    """Core-1 loop: drain the control channel + heartbeat readiness."""
+    delay = max(1, int(1000 / hz)) if hz else 20
+    beat = 0
+    while _service_running:
+        try:
+            control.poll()
+        except Exception:
+            pass
+        # Re-announce ~every 2 s so a panel opened AFTER start() still detects us.
+        beat += delay
+        if beat >= 2000:
+            beat = 0
+            try:
+                ready(extra)
+            except Exception:
+                pass
+        _sleep_ms(delay)
+
+
+def stop():
+    """Stop the background service (the core-1 thread exits on its next tick)."""
+    global _service_running
+    _service_running = False
+
+
+# ---------------------------------------------------------------------------
 # Receiver helpers — thin actuators driven by the control channel. The protocol
 # (the SNKCMD payload grammar) is the deliverable; actuation is minimal/illustrative
 # and guards its hardware import so the module still imports under CPython.

@@ -24,6 +24,7 @@
  *   SNK I2C   <addr> [<addr> ...]             → an I²C bus scan result set
  *   SNK WIFI  <ssid> <rssi> <ch> <sec>        → one Wi-Fi network (one line each)
  *   SNK BT    <name> <mac> <rssi>             → one Bluetooth device (one line each)
+ *   SNK READY <caps ...>                      → the background service is alive
  *
  * `<ch>` is a user label (e.g. `pwm`, `adc0`, a variable name) used to match a
  * reading to an open instrument.
@@ -141,6 +142,17 @@ export interface BluetoothTelemetry {
   mac: string
   rssi: number
 }
+/**
+ * A presence/readiness announcement from the on-device `snakie` background
+ * service (`SNK READY <caps...>`). The IDE listens for it to know a Snakie
+ * program is running and servicing the control channel — so e.g. a SCAN button
+ * can drive it directly instead of asking the user to run a program.
+ */
+export interface ReadyTelemetry {
+  kind: 'ready'
+  /** Capability tokens the program services (e.g. `scan:wifi`, `teleop`). */
+  caps: string[]
+}
 
 export type Telemetry =
   | ScopeTelemetry
@@ -155,6 +167,7 @@ export type Telemetry =
   | I2cTelemetry
   | WifiTelemetry
   | BluetoothTelemetry
+  | ReadyTelemetry
 
 /**
  * Is `line` an instruments-telemetry line? True when its first whitespace token
@@ -325,6 +338,11 @@ export function parseTelemetry(line: string): Telemetry | null {
     const rssi = Number(parts[4])
     if (!name || !mac || !Number.isFinite(rssi)) return null
     return { kind: 'bt', name: name.replace(/_/g, ' '), mac, rssi }
+  }
+
+  if (kind === 'READY') {
+    // SNK READY <caps...> — a presence/readiness heartbeat (caps may be empty).
+    return { kind: 'ready', caps: parts.slice(2) }
   }
 
   // Unknown SNK sub-command — ignore it (still hidden from the console because
