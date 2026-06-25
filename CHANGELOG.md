@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Parts Library — portable, community-authored & version-controlled (#129).**
+  A new **Parts** view in the activity bar browses your installed parts libraries
+  and the parts inside them. Parts are **no longer hard-coded** into Snakie:
+  each part lives in its own folder as a human-readable `parts.yml` (+ image
+  asset), grouped into libraries (modelled on Fusion 360's electronics
+  libraries) under `<userData>/parts/<library>/<part>/`. Search across every part
+  by name / tag / family, drill into a part's **footprint + pinout table +
+  metadata**, and manage **community libraries from a master registry**
+  (browse → install via `git clone` → one-click **update** when a newer version
+  is published). Versioning is SemVer; Snakie flags installed libraries that have
+  a newer registry version. See `docs/parts-library.md`.
+- **Part Editor — author parts (schematic, breadboard, parts.yml) (#130).** A
+  full-screen visual editor (launched from the Parts view's **+ New part** or a
+  part's **Edit**) authors the exact `parts.yml` the library stores. Flip between
+  a **Schematic** view (a line-drawing symbol with the pads ↔ pins table) and a
+  **Breadboard** view (board meta, dimensions, image upload, the pin headers with
+  **pin number / GPIO name / type pwr·gnd·io / IO capabilities digital·pwm·adc·
+  spi·i2c / castellated-or-regular**, **mounting holes**, **buttons**, and
+  **2.54 mm grid snap**). The live preview toggles between the engineering
+  **footprint** and the **life-like** full-colour rendering (the latter reuses the
+  Board View renderer). The YAML round-trips, so a saved part re-opens unchanged.
+  See `docs/part-editor.md`.
+
 ## [0.14.0] - 2026-06-24
 
 ### Added

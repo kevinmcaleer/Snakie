@@ -13,6 +13,7 @@ import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
+import { registerPartsIpc } from './parts/ipc'
 import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
@@ -168,6 +169,11 @@ app.whenReady().then(() => {
   // Register the Find & Replace layer (issue #146): a separate frameless,
   // always-on-top window that drives the main editor's find/replace over IPC.
   registerFindIpc(() => mainWindow)
+
+  // Register the Parts Library + Part Editor layer (#129 / #130): portable,
+  // community-authored parts on disk (<userData>/parts/<lib>/<part>/parts.yml)
+  // plus the master community registry (fetch + install + update checks).
+  registerPartsIpc()
 
   createWindow()
 

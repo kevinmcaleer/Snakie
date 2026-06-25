@@ -1,0 +1,426 @@
+/*
+ * Parts Library panel (#129) — the activity-bar "Parts" view.
+ *
+ * Browses installed libraries + parts with search, a registry browser, and a
+ * part-detail card (footprint + metadata + pinout). Unique `pl__` BEM prefix so
+ * it never collides with the global instrument/preview CSS.
+ */
+
+.pl {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  color: var(--text);
+}
+
+.pl__toolbar {
+  display: flex;
+  gap: 0.35rem;
+  padding: 0.5rem 0.6rem 0.35rem;
+}
+
+.pl__btn {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.28rem 0.55rem;
+  cursor: pointer;
+}
+
+.pl__btn:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.pl__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pl__btn--primary {
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+  color: #fff;
+}
+
+:root[data-theme='skeuomorph'] .pl__btn--primary {
+  background: radial-gradient(circle at 50% 30%, #fff4b8, #f6d572 40%, #e6ab30 80%, #c4881d);
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
+.pl__btn--small {
+  font-size: 0.68rem;
+  padding: 0.2rem 0.45rem;
+}
+
+.pl__btn--danger:hover:not(:disabled) {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+.pl__search {
+  padding: 0 0.6rem 0.4rem;
+}
+
+.pl__search-input {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: #2a2c30;
+  background: var(--paper, #fbf7ec);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.32rem 0.45rem;
+}
+
+.pl__note {
+  margin: 0 0.6rem 0.4rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.7rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+
+.pl__muted {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.pl__link {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--accent-2, #46e06a);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+/* --- Registry browser --- */
+.pl__registry {
+  margin: 0 0.6rem 0.5rem;
+  padding: 0.4rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+}
+
+.pl__reg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.pl__reg-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0;
+  border-top: 1px dashed var(--border);
+}
+
+.pl__reg-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pl__reg-name {
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.pl__reg-ver {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+}
+
+.pl__reg-desc {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+/* --- Library list --- */
+.pl__list {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 0 0.6rem 0.6rem;
+}
+
+.pl__empty {
+  padding: 1rem 0.4rem;
+  text-align: center;
+}
+
+.pl__empty p {
+  margin: 0.3rem 0;
+  font-size: 0.76rem;
+}
+
+.pl__lib {
+  margin-bottom: 0.5rem;
+}
+
+.pl__lib-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.pl__lib-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0.25rem 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.pl__caret {
+  color: var(--text-muted);
+  width: 0.8rem;
+}
+
+.pl__lib-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pl__lib-count {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+}
+
+.pl__badge {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.08rem 0.35rem;
+  cursor: pointer;
+}
+
+.pl__badge--update {
+  color: #5a3d0e;
+  background: #e6ab30;
+  border-color: #9a6b1e;
+}
+
+.pl__parts {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 0.9rem;
+}
+
+.pl__parts-empty {
+  padding: 0.2rem 0;
+}
+
+.pl__part-btn {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.28rem 0.4rem;
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+}
+
+.pl__part-btn:hover {
+  background: var(--bg-sunken);
+}
+
+.pl__part.is-active .pl__part-btn {
+  background: var(--bg-sunken);
+  outline: 1px solid var(--text-muted);
+}
+
+.pl__part-name {
+  font-size: 0.74rem;
+}
+
+.pl__part-fam {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.pl__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.pl__icon:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.pl__icon--danger:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+/* --- Part detail card --- */
+.pl__detail {
+  border-top: var(--border-w) solid var(--border);
+  padding: 0.5rem 0.6rem 0.8rem;
+  background: var(--bg-sunken);
+  max-height: 55%;
+  overflow: auto;
+}
+
+.pl__detail-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.pl__detail-title {
+  flex: 1 1 auto;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.pl__detail-actions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.pl__detail-desc {
+  margin: 0 0 0.5rem;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.pl__detail-fp {
+  height: 180px;
+  background: var(--bc-mat, #0c0f12);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.pl__meta {
+  margin: 0 0 0.6rem;
+}
+
+.pl__meta-row {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  padding: 0.12rem 0;
+}
+
+.pl__meta-row dt {
+  width: 6.5rem;
+  flex: 0 0 auto;
+  color: var(--text-muted);
+}
+
+.pl__meta-row dd {
+  margin: 0;
+}
+
+.pl__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pl__tag {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: 999px;
+  padding: 0.02rem 0.4rem;
+}
+
+.pl__pinout-h {
+  margin: 0.4rem 0 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.pl__pinout {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.68rem;
+}
+
+.pl__pinout th,
+.pl__pinout td {
+  text-align: left;
+  padding: 0.18rem 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.pl__pinout th {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.pl__pin-name {
+  font-family: var(--font-mono);
+}
+
+.pl__pin-caps {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}

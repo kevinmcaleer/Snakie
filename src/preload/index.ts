@@ -59,6 +59,14 @@ import type {
   RunCommandResult
 } from '../main/plugins/types'
 import type { BoardDefinition } from '../shared/board'
+import type {
+  LibraryUpdate,
+  PartDefinition,
+  PartLibrary,
+  PartLibraryWithParts,
+  PartRegistry,
+  RegistryEntry
+} from '../shared/part'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -759,6 +767,58 @@ const find = {
   }
 }
 
+/**
+ * Result of a parts write (save/delete/install/createLibrary). Mirrors the
+ * main process `WriteResult` — never rejects, so the UI shows errors inline.
+ */
+export interface PartsWriteResult {
+  ok: boolean
+  error?: string
+  id?: string
+  libraryId?: string
+}
+
+/**
+ * Parts Library + Part Editor API (#129 / #130). All filesystem + network
+ * access lives in the main process; the renderer drives it through these
+ * invokes. `listLibraries` returns every installed library (image assets inlined
+ * as data URLs); `savePart`/`deletePart` author parts on disk; the registry
+ * calls (`fetchRegistry`/`installLibrary`/`checkUpdates`) speak to the master
+ * community index. Write-style calls resolve to {@link PartsWriteResult}.
+ */
+const parts = {
+  /** Installed libraries + their parts (image assets inlined as data URLs). */
+  listLibraries: (): Promise<PartLibraryWithParts[]> =>
+    ipcRenderer.invoke('parts:listLibraries'),
+  /** Reveal `<userData>/parts` in the OS file manager (creates it if missing). */
+  openPartsFolder: (): Promise<void> => ipcRenderer.invoke('parts:openPartsFolder'),
+  /**
+   * Persist a part to `<parts>/<libraryId>/<part.id>/parts.yml` (+ image asset).
+   * Defaults to the auto-created local "my-parts" library when `libraryId` is
+   * omitted. Resolves to {@link PartsWriteResult} — never rejects.
+   */
+  savePart: (libraryId: string | undefined, part: PartDefinition): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:savePart', { libraryId, part }),
+  /** Delete a part folder (no-op if it doesn't exist). */
+  deletePart: (libraryId: string, partId: string): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:deletePart', { libraryId, partId }),
+  /** Create a new (empty) library from its manifest. */
+  createLibrary: (meta: PartLibrary): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:createLibrary', meta),
+  /** Delete a whole library folder (no-op if it doesn't exist). */
+  deleteLibrary: (libraryId: string): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:deleteLibrary', libraryId),
+  /** Fetch the master community registry (optionally from a custom URL). */
+  fetchRegistry: (url?: string): Promise<PartRegistry> =>
+    ipcRenderer.invoke('parts:fetchRegistry', url),
+  /** Install (clone) a registry library into the parts folder. */
+  installLibrary: (entry: RegistryEntry): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:installLibrary', entry),
+  /** Which installed libraries have a newer version available in the registry. */
+  checkUpdates: (url?: string): Promise<LibraryUpdate[]> =>
+    ipcRenderer.invoke('parts:checkUpdates', url)
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -794,7 +854,9 @@ const api = {
   /** Instrument launch relay: board window → main window scope/meter hosting. */
   instruments,
   /** Find & Replace window: native window ↔ main editor find/replace relay. */
-  find
+  find,
+  /** Parts Library + Part Editor layer: on-disk parts + community registry. */
+  parts
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

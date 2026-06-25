@@ -19,6 +19,7 @@ export type ActivityView =
   | 'source-control'
   | 'packages'
   | 'plugins'
+  | 'parts'
   | 'inspect'
   | 'help'
 
@@ -61,6 +62,13 @@ const ICONS: Record<ActivityView, JSX.Element> = {
       d="M6 1h4v2a1 1 0 0 0 2 0V2h3v3h-1a1 1 0 0 0 0 2h1v4h-2a1 1 0 0 1-1-1 1 1 0 0 0-2 0 1 1 0 0 1-1 1H6v-3a1 1 0 0 0-2 0v3H1V8h1a1 1 0 0 0 0-2H1V3h3a1 1 0 0 0 2 0z"
     />
   ),
+  // IC chip with legs (a hardware "part")
+  parts: SVG(
+    <g fill="none" stroke="currentColor" strokeWidth="1.4">
+      <rect x="4.5" y="4.5" width="7" height="7" fill="currentColor" stroke="none" />
+      <path d="M2 6h2.5M2 9h2.5M11.5 6H14M11.5 9H14M6 2v2.5M9 2v2.5M6 11.5V14M9 11.5V14" />
+    </g>
+  ),
   // magnifier
   inspect: SVG(
     <g fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -87,6 +95,7 @@ const TOP_ITEMS: ActivityItem[] = [
   { id: 'source-control', label: 'Source' },
   { id: 'packages', label: 'Packages' },
   { id: 'plugins', label: 'Plugins' },
+  { id: 'parts', label: 'Parts' },
   { id: 'inspect', label: 'Inspect' }
 ]
 

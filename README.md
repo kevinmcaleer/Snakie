@@ -59,6 +59,15 @@ Grab the latest installer for your platform from the
   fed live and **non-invasively** by a tiny MicroPython telemetry library
   (`scope()` / `meter()` / `plot()`), one-click installable to your board
 
+### Parts Library & Part Editor
+
+- 🧩 A **Parts Library** of portable, community-authored parts — each a folder with
+  a human-readable `parts.yml` — browsable, searchable, and installable/updatable
+  from a master **community registry** ([`docs/parts-library.md`](docs/parts-library.md))
+- 🛠️ A visual **Part Editor** (schematic ⇄ breadboard) to author parts: pins with
+  type + capabilities, castellated/regular pads, mounting holes, buttons, 2.54 mm
+  grid snap, and a footprint + life-like preview ([`docs/part-editor.md`](docs/part-editor.md))
+
 ### Workflow
 
 - 🌳 Built-in version control (Git, VS Code-style)

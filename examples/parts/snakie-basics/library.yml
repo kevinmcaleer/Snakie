@@ -1,0 +1,6 @@
+id: snakie-basics
+name: Snakie Basics
+description: A small starter library of common MicroPython parts.
+author: Snakie
+homepage: https://github.com/kevinmcaleer/snakie-parts
+version: 1.0.0

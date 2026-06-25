@@ -1,0 +1,49 @@
+id: pico-2w
+name: Raspberry Pi Pico 2 W
+description: RP2350 microcontroller board with CYW43439 wireless.
+manufacturer: Raspberry Pi
+family: Microcontroller
+tags:
+  - rp2350
+  - wifi
+  - pico
+package: THT
+pinSpacing: 2.54
+voltage: 1.8–5.5V
+partNumber: SC0918
+version: 1.0.0
+mcu: RP2350
+pcbColor: "#0f5a2e"
+aspect: 0.46
+dimensions:
+  width: 21
+  height: 51
+ledLabel: LED
+features:
+  - label: RP2350
+    kind: mcu
+    x: 0.28
+    y: 0.44
+    w: 0.44
+    h: 0.2
+  - label: USB
+    kind: usb
+    x: 0.36
+    y: 0
+    w: 0.28
+    h: 0.05
+headers:
+  - edge: left
+    pins:
+      - { name: GP0, type: io, number: 1, gpio: 0, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP1, type: io, number: 2, gpio: 1, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 3 }
+      - { name: GP2, type: io, number: 4, gpio: 2, capabilities: [digital, pwm, i2c] }
+      - { name: GP3, type: io, number: 5, gpio: 3, capabilities: [digital, pwm, i2c] }
+  - edge: right
+    pins:
+      - { name: VBUS, type: pwr, number: 40 }
+      - { name: VSYS, type: pwr, number: 39 }
+      - { name: GND, type: gnd, number: 38 }
+      - { name: 3V3, type: pwr, number: 36 }
+      - { name: GP28, type: io, number: 34, gpio: 28, capabilities: [digital, adc] }

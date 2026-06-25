@@ -1,0 +1,52 @@
+id: vl53l0x
+name: VL53L0X ToF
+description: Time-of-flight distance sensor breakout (I²C).
+manufacturer: STMicroelectronics
+family: Sensor
+tags:
+  - i2c
+  - distance
+  - tof
+package: SMD
+pinSpacing: 2.54
+voltage: 2.8–5V
+partNumber: VL53L0X
+properties:
+  range: 2m
+  interface: I²C
+version: 1.0.0
+pcbColor: "#101820"
+aspect: 1.4
+dimensions:
+  width: 25
+  height: 18
+headers:
+  - edge: bottom
+    pins:
+      - name: VIN
+        type: pwr
+        number: 1
+      - name: GND
+        type: gnd
+        number: 2
+      - name: SCL
+        type: io
+        number: 3
+        gpio: 5
+        capabilities:
+          - i2c
+          - digital
+      - name: SDA
+        type: io
+        number: 4
+        gpio: 4
+        capabilities:
+          - i2c
+          - digital
+mountingHoles:
+  - x: 0.12
+    y: 0.5
+    diameter: 2.5
+  - x: 0.88
+    y: 0.5
+    diameter: 2.5
