@@ -3,6 +3,7 @@ import {
   boardBox,
   layoutPads,
   ledPoint,
+  nodeSide,
   padForToken,
   padLabelPlacement,
   type BoardBox
@@ -218,6 +219,19 @@ describe('padLabelPlacement (#109 side-correct labels)', () => {
   it('honours a custom horizontal gap', () => {
     expect(padLabelPlacement('left', 13).dx).toBe(-13)
     expect(padLabelPlacement('right', 13).dx).toBe(13)
+  })
+})
+
+describe('nodeSide (#148 mirrored right-column cards)', () => {
+  it('docks right-edge and bottom-edge connections on the RIGHT', () => {
+    expect(nodeSide('right')).toBe('right')
+    expect(nodeSide('bottom')).toBe('right')
+  })
+
+  it('keeps left / top / led connections on the LEFT', () => {
+    expect(nodeSide('left')).toBe('left')
+    expect(nodeSide('top')).toBe('left')
+    expect(nodeSide('led')).toBe('left')
   })
 })
 

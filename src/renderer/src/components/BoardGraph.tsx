@@ -19,6 +19,7 @@ import {
   boardBox,
   layoutPads,
   ledPoint,
+  nodeSide,
   padForToken,
   padLabelPlacement,
   type BoardBox,
@@ -134,6 +135,15 @@ const CANVAS_W = BOARD_REGION_X + BOARD_REGION_W + 90 // canvas / SVG width (920
 const PAD_R = 7 // drawn pad radius
 const STAGE_PAD = 48 // vertical breathing room above/below the content
 
+// Right column (#148): connections whose pad sits on the board's RIGHT/BOTTOM
+// edge dock to the RIGHT of the board, MIRRORED — the solder dot sits on the
+// card's LEFT edge (toward the board) and the wire leaves leftward. Cards extend
+// rightward from RIGHT_NODE_LEFT. The canvas only widens to RIGHT_CANVAS_W when
+// such a row exists, so the common all-left layout stays byte-for-byte CANVAS_W.
+const RIGHT_DOT_X = BOARD_REGION_X + BOARD_REGION_W + 4 // right card's left-edge dot (just past the board area)
+const RIGHT_NODE_LEFT = RIGHT_DOT_X + 12 // right card left inset (extends rightward)
+const RIGHT_CANVAS_W = RIGHT_NODE_LEFT + NODE_W + 36 // canvas width WHEN right rows exist
+
 /** Centre Y of node row `i`. */
 function rowY(i: number): number {
   return FIRST_Y + i * PITCH
@@ -164,7 +174,9 @@ interface GraphRow {
   conn: UsedPins
   /** Source index (for live-value merge). */
   index: number
-  /** Node row centre Y. */
+  /** Which column the card docks in — `right` mirrors toward the board (#148). */
+  side: 'left' | 'right'
+  /** Node row centre Y (per-column slot). */
   y: number
   color: string
   /** The resolved real pad coordinate for the connection's FIRST pin. */
@@ -353,24 +365,27 @@ export function BoardGraph({
 
   // One row per connection: its node card + its FIRST pin's REAL pad coordinate
   // (which may be on any edge). A bus's remaining pins become faint extra pads.
-  const rows = useMemo<GraphRow[]>(
-    () =>
-      conns.map((conn, i) => {
-        const pad = padForToken(conn.pins[0] ?? '', def, pads, box)
-        const extraPads = conn.pins
-          .slice(1)
-          .map((tok) => padForToken(tok, def, pads, box))
-        return {
-          conn,
-          index: i,
-          y: rowY(i),
-          color: PIN_TYPE_COLOR[conn.type],
-          pad,
-          extraPads
-        }
-      }),
-    [conns, def, pads, box]
-  )
+  const rows = useMemo<GraphRow[]>(() => {
+    // Each column stacks independently from FIRST_Y; a connection docks right
+    // when its first pin's pad is on the board's right/bottom edge (#148).
+    let leftN = 0
+    let rightN = 0
+    return conns.map((conn, i) => {
+      const pad = padForToken(conn.pins[0] ?? '', def, pads, box)
+      const extraPads = conn.pins.slice(1).map((tok) => padForToken(tok, def, pads, box))
+      const side = nodeSide(pad.edge)
+      const slot = side === 'left' ? leftN++ : rightN++
+      return {
+        conn,
+        index: i,
+        side,
+        y: rowY(slot),
+        color: PIN_TYPE_COLOR[conn.type],
+        pad,
+        extraPads
+      }
+    })
+  }, [conns, def, pads, box])
 
   // The set of drawn pad coordinates that a connection resolves to → "used".
   const usedPadKeys = useMemo(() => {
@@ -387,9 +402,18 @@ export function BoardGraph({
   // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
   // Derived from geometry, NOT the connection count — so large N grows the node
   // column and the board stays put, and an empty board still has a sane size.
+  // The node column now splits into two; the TALLER column drives the extent so
+  // nothing clips (for the all-left case this equals the old single-column
+  // height, keeping that layout identical). #148.
+  const leftCount = rows.reduce((n, r) => (r.side === 'left' ? n + 1 : n), 0)
+  const rightCount = rows.length - leftCount
+  const colCount = Math.max(leftCount, rightCount)
+  const colBottom = colCount > 0 ? rowY(colCount - 1) + NODE_H / 2 : FIRST_Y
   const contentTop = Math.min(FIRST_Y - NODE_H / 2, box.y - 24)
-  const contentBottom = Math.max(nodeBottom, box.y + box.h + 28)
+  const contentBottom = Math.max(colBottom, box.y + box.h + 28)
   const stageH = Math.max(680, contentBottom - Math.min(0, contentTop) + STAGE_PAD)
+  // Widen the canvas only when a right column exists; otherwise stay at CANVAS_W.
+  const stageW = rightCount > 0 ? RIGHT_CANVAS_W : CANVAS_W
 
   const hasRows = rows.length > 0
 
@@ -424,9 +448,9 @@ export function BoardGraph({
   useEffect(() => {
     if (touchedRef.current) return
     if (!hasRows || vp.w === 0 || vp.h === 0) return
-    setView(fitTransform(CANVAS_W, stageH, vp.w, vp.h, rotation))
+    setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
     setIsOneToOne(false)
-  }, [hasRows, vp.w, vp.h, stageH, rotation, def.id])
+  }, [hasRows, vp.w, vp.h, stageW, stageH, rotation, def.id])
 
   const onZoomIn = useCallback((): void => {
     touchedRef.current = true
@@ -443,22 +467,22 @@ export function BoardGraph({
   const onFit = useCallback((): void => {
     touchedRef.current = true
     if (vp.w === 0 || vp.h === 0) return
-    setView(fitTransform(CANVAS_W, stageH, vp.w, vp.h, rotation))
+    setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
     setIsOneToOne(false)
-  }, [vp.w, vp.h, stageH, rotation])
+  }, [vp.w, vp.h, stageW, stageH, rotation])
 
   // 100% button: toggles between a centred 1:1 view and zoom-to-fit.
   const onToggleOneToOne = useCallback((): void => {
     touchedRef.current = true
     if (vp.w === 0 || vp.h === 0) return
     if (isOneToOne) {
-      setView(fitTransform(CANVAS_W, stageH, vp.w, vp.h, rotation))
+      setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(false)
     } else {
-      setView(oneToOneTransform(CANVAS_W, stageH, vp.w, vp.h, rotation))
+      setView(oneToOneTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(true)
     }
-  }, [isOneToOne, vp.w, vp.h, stageH, rotation])
+  }, [isOneToOne, vp.w, vp.h, stageW, stageH, rotation])
 
   const onRotate = useCallback((): void => {
     touchedRef.current = true
@@ -466,10 +490,10 @@ export function BoardGraph({
     setRotation(next)
     // Re-fit for the new rotation so the rotated board stays fully framed.
     if (vp.w !== 0 && vp.h !== 0) {
-      setView(fitTransform(CANVAS_W, stageH, vp.w, vp.h, next))
+      setView(fitTransform(stageW, stageH, vp.w, vp.h, next))
       setIsOneToOne(false)
     }
-  }, [rotation, vp.w, vp.h, stageH])
+  }, [rotation, vp.w, vp.h, stageW, stageH])
 
   // Wheel-zoom (inside the fixed viewport) — a nice-to-have on top of the buttons.
   const onWheel = useCallback((e: React.WheelEvent): void => {
@@ -510,8 +534,8 @@ export function BoardGraph({
   // A <select> picks the format; the button triggers a download in that format.
   const [exportFmt, setExportFmt] = useState<ExportFmt>('svg')
   const onExport = useCallback((): void => {
-    void exportView(exportFmt, { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation })
-  }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation])
+    void exportView(exportFmt, { rows, def, box, pads, usedPadKeys, ledLit, stageW, stageH, rotation })
+  }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageW, stageH, rotation])
 
   return (
     <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
@@ -655,7 +679,7 @@ export function BoardGraph({
             <div
               className="boardgraph__stage"
               style={{
-                width: CANVAS_W,
+                width: stageW,
                 height: stageH,
                 transform: `translate(${view.panX}px, ${view.panY}px) scale(${view.zoom}) rotate(${rotation}deg)`,
                 transformOrigin: '0 0'
@@ -664,9 +688,9 @@ export function BoardGraph({
               <svg
                 className="boardgraph__svg"
                 xmlns="http://www.w3.org/2000/svg"
-                width={CANVAS_W}
+                width={stageW}
                 height={stageH}
-                viewBox={`0 0 ${CANVAS_W} ${stageH}`}
+                viewBox={`0 0 ${stageW} ${stageH}`}
                 role="img"
                 aria-label={`${def.name}: ${rows.length} pin connection${
                   rows.length === 1 ? '' : 's'
@@ -691,7 +715,7 @@ export function BoardGraph({
                     r.extraPads.map((p, j) => (
                       <path
                         key={`bus-${i}-${j}`}
-                        d={noodlePath(NODE_DOT_X, r.y, p)}
+                        d={wirePathFor(r.side, r.y, p)}
                         stroke={r.color}
                         strokeWidth="1.4"
                         strokeDasharray="3 4"
@@ -705,7 +729,7 @@ export function BoardGraph({
                   {rows.map((r, i) => (
                     <path
                       key={`wire-${i}`}
-                      d={noodlePath(NODE_DOT_X, r.y, r.pad)}
+                      d={wirePathFor(r.side, r.y, r.pad)}
                       stroke={r.color}
                       strokeWidth="2.6"
                     />
@@ -714,7 +738,7 @@ export function BoardGraph({
                 {/* Node-side solder dots. */}
                 <g>
                   {rows.map((r, i) => (
-                    <circle key={`dot-${i}`} cx={NODE_DOT_X} cy={r.y} r="4.5" fill={r.color} />
+                    <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
                   ))}
                 </g>
               </svg>
@@ -905,6 +929,46 @@ function noodlePath(sx: number, sy: number, pad: PadPoint): string {
       break
   }
   return `M${sx} ${sy} C ${c1x} ${c1y} ${c2x} ${c2y} ${pad.x} ${pad.y}`
+}
+
+/**
+ * Mirror of {@link noodlePath} for a RIGHT-column node (#148): the solder dot
+ * `(sx, sy)` sits to the RIGHT of the board, so the wire leaves horizontally to
+ * the LEFT and docks into the pad's edge. Right-column cards only target right-
+ * or bottom-edge pads.
+ */
+function noodlePathRight(sx: number, sy: number, pad: PadPoint): string {
+  const dx = pad.x - sx // negative: the pad is to the LEFT of the dot
+  const c1x = sx + Math.min(-54, dx * 0.45)
+  const c1y = sy + SAG
+  let c2x: number
+  let c2y: number
+  switch (pad.edge) {
+    case 'bottom':
+      c2x = pad.x
+      c2y = pad.y + 56
+      break
+    case 'top':
+      c2x = pad.x
+      c2y = pad.y - 56
+      break
+    default:
+      // right (and any fallback): approach from just outside the right edge.
+      c2x = pad.x + Math.max(54, -dx * 0.45)
+      c2y = pad.y + SAG
+      break
+  }
+  return `M${sx} ${sy} C ${c1x} ${c1y} ${c2x} ${c2y} ${pad.x} ${pad.y}`
+}
+
+/** The node's solder-dot X (wire start) for its column (#148). */
+function dotXFor(side: 'left' | 'right'): number {
+  return side === 'right' ? RIGHT_DOT_X : NODE_DOT_X
+}
+
+/** The drooping wire from a node's dot to `pad`, routed for the node's column. */
+function wirePathFor(side: 'left' | 'right', sy: number, pad: PadPoint): string {
+  return side === 'right' ? noodlePathRight(RIGHT_DOT_X, sy, pad) : noodlePath(NODE_DOT_X, sy, pad)
 }
 
 /**
@@ -1184,11 +1248,14 @@ function NodeCard({
   // Counter-rotate the card's TEXT so it's never upside-down: at 180°/270° the
   // inner content flips 180° back to an upright (0°/90° net) reading.
   const { counter } = labelCounterRotation(rotation)
+  // Right-column cards dock to the RIGHT of the board and mirror their content
+  // (dot/wire on their LEFT edge, toward the board) via the `--right` modifier.
+  const right = row.side === 'right'
   return (
     <div
-      className="boardgraph__node"
+      className={`boardgraph__node${right ? ' boardgraph__node--right' : ''}`}
       style={{
-        left: NODE_LEFT,
+        left: right ? RIGHT_NODE_LEFT : NODE_LEFT,
         top: row.y - NODE_H / 2,
         width: NODE_W,
         height: NODE_H,
@@ -1346,6 +1413,7 @@ interface ExportArgs {
   pads: PadPoint[]
   usedPadKeys: Set<string>
   ledLit: boolean
+  stageW: number
   stageH: number
   rotation: 0 | 90 | 180 | 270
 }
@@ -1363,8 +1431,8 @@ interface ExportArgs {
  * drawing: the full pinout from `pads`, used pads highlighted, plus the wires.
  */
 export function buildExportSvg(args: ExportArgs): string {
-  const { rows, def, box, pads, usedPadKeys, ledLit, stageH, rotation } = args
-  const W = CANVAS_W
+  const { rows, def, box, pads, usedPadKeys, ledLit, stageW, stageH, rotation } = args
+  const W = stageW
   const H = stageH
   // Rotated canvas dimensions (90/270 swap W/H).
   const swap = rotation === 90 || rotation === 270
@@ -1386,18 +1454,18 @@ export function buildExportSvg(args: ExportArgs): string {
     .flatMap((r) =>
       r.extraPads.map(
         (p) =>
-          `<path d="${noodlePath(NODE_DOT_X, r.y, p)}" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="3 4" fill="none" opacity="0.5"/>`
+          `<path d="${wirePathFor(r.side, r.y, p)}" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="3 4" fill="none" opacity="0.5"/>`
       )
     )
     .join('')
   const wires = rows
     .map(
       (r) =>
-        `<path d="${noodlePath(NODE_DOT_X, r.y, r.pad)}" stroke="${r.color}" stroke-width="2.6" fill="none"/>`
+        `<path d="${wirePathFor(r.side, r.y, r.pad)}" stroke="${r.color}" stroke-width="2.6" fill="none"/>`
     )
     .join('')
   const dots = rows
-    .map((r) => `<circle cx="${NODE_DOT_X}" cy="${r.y}" r="4.5" fill="${r.color}"/>`)
+    .map((r) => `<circle cx="${dotXFor(r.side)}" cy="${r.y}" r="4.5" fill="${r.color}"/>`)
     .join('')
 
   // Board pieces (mirrors <Board/> but as a string): PCB, USB, features, LED,
@@ -1462,14 +1530,20 @@ export function buildExportSvg(args: ExportArgs): string {
       const tag = PIN_TYPE_TAG[r.conn.type]
       const label = esc(r.conn.variable || r.conn.constructor)
       const val = r.conn.type === 'input' || r.conn.type === 'output' ? '1' : '—'
+      // Right-column cards mirror: row-reversed, value pushed to the OUTER edge,
+      // label right-aligned — matching the live `.boardgraph__node--right` (#148).
+      const right = r.side === 'right'
+      const dir = right ? 'row-reverse' : 'row'
+      const valMargin = right ? 'margin-right:auto' : 'margin-left:auto'
+      const varAlign = right ? 'text-align:right;' : ''
       const inner =
-        `<div style="display:flex;align-items:center;gap:9px;width:100%;height:100%;box-sizing:border-box;padding:0 12px;transform:rotate(${counter}deg)">` +
+        `<div style="display:flex;flex-direction:${dir};align-items:center;gap:9px;width:100%;height:100%;box-sizing:border-box;padding:0 12px;transform:rotate(${counter}deg)">` +
         `<span style="font-size:9.5px;font-weight:700;color:#0e2233;border-radius:4px;padding:2px 6px;background:${c}">${esc(tag)}</span>` +
-        `<span style="font-size:12.5px;color:#d6dade;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${label}</span>` +
-        `<span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#6a7079"><span style="width:7px;height:7px;border-radius:50%;background:#3a3f47"></span>${val}</span>` +
+        `<span style="font-size:12.5px;color:#d6dade;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;${varAlign}">${label}</span>` +
+        `<span style="${valMargin};display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;color:#6a7079"><span style="width:7px;height:7px;border-radius:50%;background:#3a3f47"></span>${val}</span>` +
         `</div>`
       return (
-        `<foreignObject x="${NODE_LEFT}" y="${r.y - NODE_H / 2}" width="${NODE_W}" height="${NODE_H}">` +
+        `<foreignObject x="${right ? RIGHT_NODE_LEFT : NODE_LEFT}" y="${r.y - NODE_H / 2}" width="${NODE_W}" height="${NODE_H}">` +
         `<div xmlns="http://www.w3.org/1999/xhtml" style="box-sizing:border-box;width:${NODE_W}px;height:${NODE_H}px;border-radius:9px;background:#1e2127;border:1px solid ${c};font-family:monospace">${inner}</div>` +
         `</foreignObject>`
       )
@@ -1613,11 +1687,11 @@ function buildImagePdf(jpeg: Uint8Array, outW: number, outH: number): Blob {
 
 /** Export the current board view in `fmt`, triggering a download. */
 async function exportView(fmt: ExportFmt, args: ExportArgs): Promise<void> {
-  const { stageH, rotation } = args
+  const { stageW, stageH, rotation } = args
   const svg = buildExportSvg(args)
   const swap = rotation === 90 || rotation === 270
-  const outW = swap ? stageH : CANVAS_W
-  const outH = swap ? CANVAS_W : stageH
+  const outW = swap ? stageH : stageW
+  const outH = swap ? stageW : stageH
   try {
     if (fmt === 'svg') {
       downloadBlob(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }), 'board-view.svg')
