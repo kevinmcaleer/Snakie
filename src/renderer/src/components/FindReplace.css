@@ -1,38 +1,25 @@
 /*
- * Find & Replace dialog (FindReplace.tsx, issue #92 + skeuomorph polish).
+ * Find & Replace window (FindReplace.tsx, issue #92 + skeuomorph polish).
  *
- * A floating, draggable panel docked top-right over the editor. It is
- * non-blocking — the editor stays interactive underneath. The base look uses
+ * Since issue #146 this is its OWN frameless OS window (`find.html`), so the
+ * panel FILLS the window instead of docking over the editor. The base look uses
  * the shared design tokens (so it reads on the dark theme); the
  * `:root[data-theme='skeuomorph']` block layers on the brushed-aluminium frame,
  * metal keys and gold Replace-all key from the handoff.
+ *
+ * The Find affordance that opens this window lives in the editor tab header —
+ * see `.editor-header__actions` in EditorTabs.css (issue #137).
  */
 
-/* The editor section is the positioning context for the floating panel. The
-   base `.region` is overflow:hidden, so the panel stays docked just inside the
-   top-right corner. */
-.region--editor {
-  position: relative;
-}
-
-/* The Find affordance (a visible way to open this panel without the keyboard
-   shortcut) lives in the editor tab header — see `.editor-header__actions` in
-   EditorTabs.css (issue #137). */
-
 .find-replace {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 20;
-  width: 380px;
-  max-width: calc(100% - 24px);
   display: flex;
   flex-direction: column;
+  width: 100vw;
+  height: 100vh;
   color: var(--text);
   background: var(--bg-elevated);
-  border: var(--border-w) solid var(--border);
-  border-radius: 9px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
+  /* No fixed width / clip any more (#146): the window sizes the panel, so every
+     button — including the gold "Replace all" — is fully visible. */
   overflow: hidden;
 }
 
@@ -45,18 +32,15 @@
   padding: 5px 8px;
   background: var(--bg-sunken);
   border-bottom: var(--border-w) solid var(--border);
-  cursor: grab;
-  touch-action: none;
   user-select: none;
+  /* The title bar is the native window drag region (frameless window, #146). */
+  -webkit-app-region: drag;
 }
 
-.find-replace__titlebar:active {
-  cursor: grabbing;
-}
-
-/* The close button stays a normal pointer (and its own click still fires). */
+/* The close button stays clickable (and its own click still fires). */
 .find-replace__titlebar .find-replace__close {
   cursor: pointer;
+  -webkit-app-region: no-drag;
 }
 
 .find-replace__grip {
@@ -167,7 +151,6 @@
 
 .find-replace__key,
 .find-replace__arrow,
-.find-replace__expand,
 .find-replace__btn {
   font-family: var(--font-mono);
   color: var(--text);
@@ -178,8 +161,7 @@
 }
 
 .find-replace__key,
-.find-replace__arrow,
-.find-replace__expand {
+.find-replace__arrow {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -187,18 +169,6 @@
   height: 26px;
   padding: 0 5px;
   font-size: 0.75rem;
-}
-
-/* The Replace-row reveal chevron sits at the very left of the find row. */
-.find-replace__expand {
-  flex: 0 0 auto;
-  min-width: 22px;
-  padding: 0;
-  color: var(--text-muted);
-}
-
-.find-replace__expand:hover {
-  color: var(--text);
 }
 
 .find-replace__btn {
@@ -295,9 +265,6 @@
  * ===================================================================== */
 :root[data-theme='skeuomorph'] .find-replace {
   background: linear-gradient(180deg, #f3f4f7, #d3d7de 55%, #c2c6ce);
-  border: 1px solid #8d9099;
-  border-radius: 9px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
   color: #34373d;
 }
 

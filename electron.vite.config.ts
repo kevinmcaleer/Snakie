@@ -48,7 +48,9 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/renderer/index.html'),
           // Second entry: the floating Board View window (issue: Board View v2).
-          board: resolve(__dirname, 'src/renderer/board.html')
+          board: resolve(__dirname, 'src/renderer/board.html'),
+          // Third entry: the floating Find & Replace window (issue #146).
+          find: resolve(__dirname, 'src/renderer/find.html')
         },
         output: {
           manualChunks(id: string) {

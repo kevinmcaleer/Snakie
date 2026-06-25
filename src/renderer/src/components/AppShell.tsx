@@ -22,6 +22,7 @@ import {
 } from './InstrumentHost'
 import { defaultVisibility, deriveInUse } from './instruments-registry'
 import { parsePins, type UsedPins } from './parse-pins'
+import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
@@ -529,6 +530,17 @@ export function AppShell(): JSX.Element {
     // so we cast at the IPC boundary.
     const off = window.api.instruments.onOpen((payload) => {
       revealForOpenRef.current(payload.kind, payload.conn as UsedPins)
+    })
+    return off
+  }, [])
+
+  // Drive the Find & Replace window (issue #146): it has no editor access, so it
+  // relays find/replace commands here; we run them against the live Monaco editor
+  // (`findController`) and push the match status back to the window.
+  useEffect(() => {
+    const off = window.api.find.onCommand((cmd) => {
+      const status = runFindCommand(cmd as Parameters<typeof runFindCommand>[0])
+      window.api.find.sendStatus(status)
     })
     return off
   }, [])
