@@ -14,7 +14,9 @@
  *
  * Detected forms (per logical line):
  *   - `X = I2C(id, sda=Pin(a), scl=Pin(b))`             → i2c   (pins a, b)
+ *   - `X = I2C(id, sda=a, scl=b)`  (bare pin numbers)   → i2c   (pins a, b)
  *   - `X = SPI(id, sck=Pin(..), mosi=Pin(..), ...)`     → spi   (+ cs/dc Pins)
+ *   - `X = SPI(id, sck=a, mosi=b, miso=c, ...)`  (bare) → spi
  *   - `X = PWM(Pin(n), ...)`                            → pwm
  *   - `X = ADC(Pin(n))` / `ADC(n)` / `machine.ADC(...)` → adc   (analog input)
  *   - `X = StateMachine(n, prog, ...Pin(..))`           → pio
@@ -116,6 +118,29 @@ function extractPins(fragment: string): string[] {
     // Prefer the captured (unquoted) string body; else the raw first token.
     const label = m[2] ?? m[3] ?? m[1]
     pins.push(label.trim())
+  }
+  return pins
+}
+
+/**
+ * Extract bus pins given as BARE kwargs — `sda=4, scl=5` (I²C) or
+ * `sck=2, mosi=3, ...` (SPI) — rather than wrapped in `Pin(...)`. Many
+ * MicroPython ports accept a raw pin number for these keywords, and the demos
+ * use that form
+ * (see `examples/board_view_test.py`). Returns one pin per named `role` present,
+ * in `roles` order, so the bus's pins stay grouped under their one connection.
+ *
+ * Only used as a fallback when {@link extractPins} found no `Pin(...)` form, so a
+ * `sda=Pin(0)` line is still read by the (richer) Pin scanner and never double
+ * counted. `id=`/`freq=`/`baudrate=` and other non-pin kwargs are ignored
+ * because they aren't in `roles`.
+ */
+function extractKwargPins(fragment: string, roles: string[]): string[] {
+  const pins: string[] = []
+  for (const role of roles) {
+    const re = new RegExp(`\\b${role}\\s*=\\s*("([^"]*)"|'([^']*)'|\\d+)`, 'i')
+    const m = re.exec(fragment)
+    if (m) pins.push((m[2] ?? m[3] ?? m[1]).trim())
   }
   return pins
 }
@@ -259,12 +284,18 @@ export function parsePins(source: string): UsedPins[] {
     switch (name) {
       case 'I2C':
         type = 'i2c'
+        // `sda=Pin(a)/scl=Pin(b)` first; else the bare `sda=4, scl=5` form.
         pins = extractPins(args)
+        if (pins.length === 0) pins = extractKwargPins(args, ['sda', 'scl'])
         break
       case 'SPI':
         type = 'spi'
-        // SPI plus any trailing cs=Pin(..)/dc=Pin(..) on the same line.
+        // SPI plus any trailing cs=Pin(..)/dc=Pin(..) on the same line; else the
+        // bare `sck=2, mosi=3, ...` form.
         pins = extractPins(rhs.slice(openIdx))
+        if (pins.length === 0) {
+          pins = extractKwargPins(rhs.slice(openIdx), ['sck', 'mosi', 'miso', 'cs', 'dc'])
+        }
         break
       case 'PWM':
         type = 'pwm'

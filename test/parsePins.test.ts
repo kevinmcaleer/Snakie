@@ -76,6 +76,23 @@ describe('parsePins', () => {
     expect(conn.constructor).toBe('I2C(0, sda=Pin(0), scl=Pin(1))')
   })
 
+  it('parses an I2C bus given bare pin numbers (sda=4, scl=5)', () => {
+    // The `sda=Pin(..)` form is common but ports also accept raw numbers — and
+    // the demos use that (examples/board_view_test.py). Both pins must surface
+    // so the bus shows up grouped on the board (#147).
+    const [conn] = parsePins('i2c = I2C(id=0, sda=4, scl=5)')
+    expect(conn.type).toBe('i2c')
+    expect(conn.pins).toEqual(['4', '5'])
+    expect(conn.variable).toBe('i2c')
+    expect(conn.constructor).toBe('I2C(id=0, sda=4, scl=5)')
+  })
+
+  it('does not mistake the I2C id for a pin', () => {
+    // `id=0` is the bus id, not a pad — only sda/scl are pins.
+    const [conn] = parsePins('i2c = I2C(id=1, sda=2, scl=3)')
+    expect(conn.pins).toEqual(['2', '3'])
+  })
+
   it('parses an SPI bus including trailing cs/dc pins', () => {
     const [conn] = parsePins(
       'tft = SPI(1, sck=Pin(10), mosi=Pin(11), cs=Pin(13), dc=Pin(8))'
@@ -83,6 +100,13 @@ describe('parsePins', () => {
     expect(conn.type).toBe('spi')
     expect(conn.pins).toEqual(['10', '11', '13', '8'])
     expect(conn.variable).toBe('tft')
+  })
+
+  it('parses an SPI bus given bare pin numbers (sck=2, mosi=3, miso=4)', () => {
+    const [conn] = parsePins('spi = SPI(0, sck=2, mosi=3, miso=4)')
+    expect(conn.type).toBe('spi')
+    expect(conn.pins).toEqual(['2', '3', '4'])
+    expect(conn.variable).toBe('spi')
   })
 
   it('parses an ADC wrapping a Pin', () => {
