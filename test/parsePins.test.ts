@@ -68,10 +68,12 @@ describe('parsePins', () => {
     ])
   })
 
-  it('parses an I2C bus with sda/scl pins', () => {
+  it('parses an I2C bus with sda/scl pins, roles and bus id', () => {
     const [conn] = parsePins('i2c = I2C(0, sda=Pin(0), scl=Pin(1))')
     expect(conn.type).toBe('i2c')
     expect(conn.pins).toEqual(['0', '1'])
+    expect(conn.roles).toEqual(['SDA', 'SCL'])
+    expect(conn.bus).toBe(0)
     expect(conn.variable).toBe('i2c')
     expect(conn.constructor).toBe('I2C(0, sda=Pin(0), scl=Pin(1))')
   })
@@ -83,22 +85,32 @@ describe('parsePins', () => {
     const [conn] = parsePins('i2c = I2C(id=0, sda=4, scl=5)')
     expect(conn.type).toBe('i2c')
     expect(conn.pins).toEqual(['4', '5'])
-    expect(conn.variable).toBe('i2c')
+    expect(conn.roles).toEqual(['SDA', 'SCL'])
+    expect(conn.bus).toBe(0)
     expect(conn.constructor).toBe('I2C(id=0, sda=4, scl=5)')
   })
 
-  it('does not mistake the I2C id for a pin', () => {
-    // `id=0` is the bus id, not a pad — only sda/scl are pins.
+  it('reads the I2C bus number from id= (bus 1) without mistaking it for a pin', () => {
+    // `id=1` is the hardware bus (Pico I2C1), not a pad — only sda/scl are pins.
     const [conn] = parsePins('i2c = I2C(id=1, sda=2, scl=3)')
     expect(conn.pins).toEqual(['2', '3'])
+    expect(conn.bus).toBe(1)
   })
 
-  it('parses an SPI bus including trailing cs/dc pins', () => {
+  it('reads the I2C bus number from the first positional arg', () => {
+    const [conn] = parsePins('i2c = I2C(1, sda=Pin(2), scl=Pin(3))')
+    expect(conn.bus).toBe(1)
+  })
+
+  it('parses an SPI bus including trailing cs/dc pins, with roles and bus id', () => {
     const [conn] = parsePins(
       'tft = SPI(1, sck=Pin(10), mosi=Pin(11), cs=Pin(13), dc=Pin(8))'
     )
     expect(conn.type).toBe('spi')
     expect(conn.pins).toEqual(['10', '11', '13', '8'])
+    // miso is absent → its role is skipped, roles stay parallel to pins.
+    expect(conn.roles).toEqual(['SCK', 'MOSI', 'CS', 'DC'])
+    expect(conn.bus).toBe(1)
     expect(conn.variable).toBe('tft')
   })
 
@@ -106,7 +118,20 @@ describe('parsePins', () => {
     const [conn] = parsePins('spi = SPI(0, sck=2, mosi=3, miso=4)')
     expect(conn.type).toBe('spi')
     expect(conn.pins).toEqual(['2', '3', '4'])
-    expect(conn.variable).toBe('spi')
+    expect(conn.roles).toEqual(['SCK', 'MOSI', 'MISO'])
+    expect(conn.bus).toBe(0)
+  })
+
+  it('labels positional I2C Pin() args by role', () => {
+    const [conn] = parsePins('i2c = I2C(0, Pin(0), Pin(1))')
+    expect(conn.pins).toEqual(['0', '1'])
+    expect(conn.roles).toEqual(['SDA', 'SCL'])
+  })
+
+  it('leaves non-bus connections without roles/bus', () => {
+    const [conn] = parsePins('led = Pin(15, Pin.OUT)')
+    expect(conn.roles).toBeUndefined()
+    expect(conn.bus).toBeUndefined()
   })
 
   it('parses an ADC wrapping a Pin', () => {

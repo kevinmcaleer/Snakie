@@ -62,6 +62,19 @@ export interface UsedPins {
    * Absent for ordinary `machine`-module connections.
    */
   instrument?: string
+  /**
+   * For a bus connection (`i2c`/`spi`), the per-pin ROLE label parallel to
+   * {@link pins} — e.g. `['SDA', 'SCL']` or `['SCK', 'MOSI', 'MISO']`. Lets the
+   * Board View label each pad with what it does in the bus. Absent for non-bus
+   * connections (and may be shorter than `pins` if a role couldn't be named).
+   */
+  roles?: string[]
+  /**
+   * For a bus connection (`i2c`/`spi`), the BUS NUMBER from the constructor `id`
+   * — `0` from `I2C(id=0, …)` or `I2C(0, …)` (Pico I2C0 vs I2C1). Lets the Board
+   * View show which hardware bus the pins belong to. Absent when not given.
+   */
+  bus?: number
 }
 
 /** Connection type → wire/badge colour (matches the skeuomorph palette). */
@@ -122,27 +135,58 @@ function extractPins(fragment: string): string[] {
   return pins
 }
 
+/** Canonical pin roles per bus type, in the order they're labelled/grouped. */
+const I2C_ROLES = ['sda', 'scl']
+const SPI_ROLES = ['sck', 'mosi', 'miso', 'cs', 'dc']
+
+/** Strip surrounding quotes from a `Pin("LED")`-style string arg. */
+function unquote(s: string): string {
+  const m = s.match(/^(?:"([^"]*)"|'([^']*)')$/)
+  return (m ? (m[1] ?? m[2]) : s).trim()
+}
+
 /**
- * Extract bus pins given as BARE kwargs — `sda=4, scl=5` (I²C) or
- * `sck=2, mosi=3, ...` (SPI) — rather than wrapped in `Pin(...)`. Many
- * MicroPython ports accept a raw pin number for these keywords, and the demos
- * use that form
- * (see `examples/board_view_test.py`). Returns one pin per named `role` present,
- * in `roles` order, so the bus's pins stay grouped under their one connection.
+ * Extract a bus's pins WITH their roles. For each canonical `roleNames` role
+ * (e.g. `sda`/`scl`), find `role=Pin(x)` OR the bare `role=x` form and record
+ * (ROLE, pin) in canonical order — so `I2C(id=0, sda=4, scl=5)` and
+ * `I2C(0, sda=Pin(0), scl=Pin(1))` both yield pins+roles, and an absent role
+ * (e.g. a 3-wire SPI with no `miso`) is simply skipped.
  *
- * Only used as a fallback when {@link extractPins} found no `Pin(...)` form, so a
- * `sda=Pin(0)` line is still read by the (richer) Pin scanner and never double
- * counted. `id=`/`freq=`/`baudrate=` and other non-pin kwargs are ignored
- * because they aren't in `roles`.
+ * Falls back to POSITIONAL `Pin(...)` args (no keyword names) when no role kwarg
+ * is present — assigning the canonical roles by position — so `I2C(0, Pin(0),
+ * Pin(1))` still labels SDA/SCL. Non-pin kwargs (`id`/`freq`/`baudrate`) are
+ * never in `roleNames`, so they're ignored.
  */
-function extractKwargPins(fragment: string, roles: string[]): string[] {
+function extractBusPins(fragment: string, roleNames: string[]): { pins: string[]; roles: string[] } {
   const pins: string[] = []
-  for (const role of roles) {
-    const re = new RegExp(`\\b${role}\\s*=\\s*("([^"]*)"|'([^']*)'|\\d+)`, 'i')
+  const roles: string[] = []
+  const VAL = `"[^"]*"|'[^']*'|[^,)\\s]+`
+  for (const role of roleNames) {
+    const re = new RegExp(`\\b${role}\\s*=\\s*(?:(?:machine\\.)?Pin\\(\\s*(${VAL})\\s*\\)|(${VAL}))`, 'i')
     const m = re.exec(fragment)
-    if (m) pins.push((m[2] ?? m[3] ?? m[1]).trim())
+    if (m) {
+      pins.push(unquote(m[1] ?? m[2]))
+      roles.push(role.toUpperCase())
+    }
   }
-  return pins
+  if (pins.length > 0) return { pins, roles }
+  // No keyword roles → positional Pin() args, roles assigned by position.
+  const positional = extractPins(fragment)
+  return {
+    pins: positional,
+    roles: positional.map((_, i) => (roleNames[i] ?? '').toUpperCase())
+  }
+}
+
+/**
+ * The hardware BUS NUMBER from a bus constructor's `id` — `id=0` (kwarg) or the
+ * first bare positional integer (`I2C(0, …)`). Returns `undefined` when absent.
+ */
+function extractBusId(args: string): number | undefined {
+  const kw = args.match(/\bid\s*=\s*(\d+)/i)
+  if (kw) return Number(kw[1])
+  const pos = args.match(/^\s*(\d+)\s*(?:,|\)|$)/)
+  return pos ? Number(pos[1]) : undefined
 }
 
 /** Find the matched closing `)` for the `(` immediately after `openIdx`. */
@@ -280,23 +324,28 @@ export function parsePins(source: string): UsedPins[] {
 
     let type: PinType
     let pins: string[]
+    // Bus-only extras (i2c/spi): per-pin role labels + the hardware bus number.
+    let roles: string[] | undefined
+    let bus: number | undefined
 
     switch (name) {
-      case 'I2C':
+      case 'I2C': {
         type = 'i2c'
-        // `sda=Pin(a)/scl=Pin(b)` first; else the bare `sda=4, scl=5` form.
-        pins = extractPins(args)
-        if (pins.length === 0) pins = extractKwargPins(args, ['sda', 'scl'])
+        const bp = extractBusPins(args, I2C_ROLES)
+        pins = bp.pins
+        roles = bp.roles
+        bus = extractBusId(args)
         break
-      case 'SPI':
+      }
+      case 'SPI': {
         type = 'spi'
-        // SPI plus any trailing cs=Pin(..)/dc=Pin(..) on the same line; else the
-        // bare `sck=2, mosi=3, ...` form.
-        pins = extractPins(rhs.slice(openIdx))
-        if (pins.length === 0) {
-          pins = extractKwargPins(rhs.slice(openIdx), ['sck', 'mosi', 'miso', 'cs', 'dc'])
-        }
+        // Scan the whole RHS so trailing `cs=Pin(..)/dc=Pin(..)` are caught too.
+        const bp = extractBusPins(rhs.slice(openIdx), SPI_ROLES)
+        pins = bp.pins
+        roles = bp.roles
+        bus = extractBusId(args)
         break
+      }
       case 'PWM':
         type = 'pwm'
         pins = extractPins(args)
@@ -330,7 +379,12 @@ export function parsePins(source: string): UsedPins[] {
     }
 
     if (pins.length === 0) continue
-    out.push({ type, pins, variable, constructor: ctorSrc })
+    const entry: UsedPins = { type, pins, variable, constructor: ctorSrc }
+    // Only attach bus extras when meaningful, so non-bus connections keep their
+    // exact shape (and any role couldn't-be-named entries are dropped).
+    if (roles && roles.some((r) => r)) entry.roles = roles
+    if (bus !== undefined) entry.bus = bus
+    out.push(entry)
   }
 
   // Append pins the program hands to the `instruments` library (e.g.
