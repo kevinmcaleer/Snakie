@@ -17,10 +17,12 @@ import {
 } from './board-defs'
 import {
   boardBox,
+  busLabel,
   layoutPads,
   ledPoint,
   padForToken,
   padLabelPlacement,
+  padsBounds,
   type BoardBox,
   type PadPoint
 } from './board-layout'
@@ -300,7 +302,12 @@ export function BoardView({
           >
             <BoardOutline def={def} box={box} pads={pads} usedPads={usedPads} ledLit={ledLit} />
 
-            {/* Wires first (under the badges). */}
+            {/* Bus groups (#147): outline + bus tag + per-pin roles, under wires. */}
+            {wires.map((w, i) => (
+              <BusGroup key={`bus-${i}`} wire={w} />
+            ))}
+
+            {/* Wires (under the badges). */}
             {wires.map((w, i) =>
               w.pads.map((pad, j) => (
                 <path
@@ -317,6 +324,7 @@ export function BoardView({
               <TypeNode
                 key={`node-${i}`}
                 type={w.conn.type}
+                bus={w.conn.bus}
                 variable={w.conn.variable}
                 x={w.px}
                 y={w.py}
@@ -567,12 +575,15 @@ function Feature({ feature, box }: { feature: BoardFeature; box: BoardBox }): JS
 /** A connection-type badge: a coloured rounded rect + UPPERCASE type + variable. */
 function TypeNode({
   type,
+  bus,
   variable,
   x,
   y,
   color
 }: {
   type: PinType
+  /** Hardware bus number for i2c/spi — appended to the label (I2C0, SPI1). */
+  bus?: number
   variable: string
   x: number
   y: number
@@ -580,6 +591,8 @@ function TypeNode({
 }): JSX.Element {
   const w = 96
   const h = 38
+  // i2c/spi show the bus number (I2C0/I2C1); everything else its plain type.
+  const label = type === 'i2c' || type === 'spi' ? busLabel(type, bus) : PIN_TYPE_LABEL[type]
   return (
     <g>
       <rect
@@ -594,13 +607,74 @@ function TypeNode({
       />
       <rect x={x - w / 2} y={y - h / 2} width={w} height="9" rx="8" fill={color} opacity="0.9" />
       <text x={x} y={y + 1} className="boardview__node-type" textAnchor="middle" style={{ fill: color }}>
-        {PIN_TYPE_LABEL[type]}
+        {label}
       </text>
       {variable && (
         <text x={x} y={y + 14} className="boardview__node-var" textAnchor="middle">
           {variable}
         </text>
       )}
+    </g>
+  )
+}
+
+/**
+ * Bus group (#147): for an i2c/spi connection with ≥2 pads, frame the bus's pads
+ * with a dashed rounded rect in the bus colour, tag it with the bus label
+ * (I2C0…), and label each pad with its role (SDA/SCL) just OUTSIDE the board,
+ * stacked above the silk GPIO label — so the pair reads as one bus. Non-bus (or
+ * single-pad) connections draw nothing.
+ */
+function BusGroup({ wire }: { wire: DrawnWire }): JSX.Element | null {
+  const { conn, color, pads } = wire
+  if ((conn.type !== 'i2c' && conn.type !== 'spi') || pads.length < 2) return null
+  const bounds = padsBounds(pads, 13)
+  if (!bounds) return null
+  const tag = busLabel(conn.type, conn.bus)
+  const tagW = 13 + tag.length * 7
+  return (
+    <g className="boardview__bus" aria-hidden="true">
+      <rect
+        x={bounds.x}
+        y={bounds.y}
+        width={bounds.w}
+        height={bounds.h}
+        rx="9"
+        fill={color}
+        fillOpacity="0.06"
+        stroke={color}
+        strokeWidth="1.5"
+        strokeDasharray="4 3"
+        opacity="0.85"
+      />
+      {/* Bus tag, pinned to the group's top-left with a solid chip for contrast. */}
+      <rect x={bounds.x + 6} y={bounds.y - 9} width={tagW} height="16" rx="5" fill={color} />
+      <text
+        x={bounds.x + 6 + tagW / 2}
+        y={bounds.y + 2}
+        className="boardview__bus-tag"
+        textAnchor="middle"
+      >
+        {tag}
+      </text>
+      {/* Per-pin role labels (SDA/SCL …), stacked above each pad's silk label. */}
+      {pads.map((pad, i) => {
+        const role = conn.roles?.[i]
+        if (!role) return null
+        const place = padLabelPlacement(pad.edge, 13)
+        return (
+          <text
+            key={`role-${i}`}
+            x={pad.x + place.dx}
+            y={pad.y + place.dy - 9}
+            className="boardview__bus-role"
+            textAnchor={place.anchor}
+            style={{ fill: color }}
+          >
+            {role}
+          </text>
+        )
+      })}
     </g>
   )
 }

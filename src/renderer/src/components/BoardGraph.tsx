@@ -17,11 +17,13 @@ import {
 } from './board-defs'
 import {
   boardBox,
+  busLabel,
   layoutPads,
   ledPoint,
   nodeSide,
   padForToken,
   padLabelPlacement,
+  padsBounds,
   type BoardBox,
   type PadPoint
 } from './board-layout'
@@ -709,6 +711,13 @@ export function BoardGraph({
                   rotation={rotation}
                 />
 
+                {/* Bus groups (#147): outline + bus tag + per-pin roles. */}
+                <g className="boardgraph__bus">
+                  {rows.map((r, i) => (
+                    <BusGroup key={`busg-${i}`} row={r} />
+                  ))}
+                </g>
+
                 {/* Faint bus links (a multi-pin connection's other pins). */}
                 <g fill="none" strokeLinecap="round" opacity="0.5">
                   {rows.flatMap((r, i) =>
@@ -1227,6 +1236,65 @@ function Feature({
   )
 }
 
+/**
+ * Bus group (#147): frame an i2c/spi connection's pads with a dashed rounded
+ * rect in the bus colour, tag it with the bus label (I2C0…), and label each pad
+ * with its role (SDA/SCL) above the silk label. Nothing for non-bus / single-pad
+ * connections. Kept in parity with the SVG export (`busGroupSvg`).
+ */
+function BusGroup({ row }: { row: GraphRow }): JSX.Element | null {
+  const { conn, color } = row
+  if (conn.type !== 'i2c' && conn.type !== 'spi') return null
+  const groupPads = [row.pad, ...row.extraPads]
+  const bounds = padsBounds(groupPads, 12)
+  if (!bounds) return null
+  const tag = busLabel(conn.type, conn.bus)
+  const tagW = 12 + tag.length * 7
+  return (
+    <g aria-hidden="true">
+      <rect
+        x={bounds.x}
+        y={bounds.y}
+        width={bounds.w}
+        height={bounds.h}
+        rx="9"
+        fill={color}
+        fillOpacity="0.07"
+        stroke={color}
+        strokeWidth="1.4"
+        strokeDasharray="4 3"
+        opacity="0.85"
+      />
+      <rect x={bounds.x + 6} y={bounds.y - 9} width={tagW} height="16" rx="5" fill={color} />
+      <text
+        x={bounds.x + 6 + tagW / 2}
+        y={bounds.y + 2}
+        className="boardgraph__bus-tag"
+        textAnchor="middle"
+      >
+        {tag}
+      </text>
+      {groupPads.map((p, i) => {
+        const role = conn.roles?.[i]
+        if (!role) return null
+        const place = padLabelPlacement(p.edge)
+        return (
+          <text
+            key={`role-${i}`}
+            x={p.x + place.dx}
+            y={p.y + place.dy - 9}
+            className="boardgraph__bus-role"
+            textAnchor={place.anchor}
+            style={{ fill: color }}
+          >
+            {role}
+          </text>
+        )
+      })}
+    </g>
+  )
+}
+
 /** One node card: type tag inline beside the variable + its value readout. */
 function NodeCard({
   row,
@@ -1268,6 +1336,7 @@ function NodeCard({
       >
         <span className="boardgraph__node-tag" style={{ background: color }}>
           {PIN_TYPE_TAG[conn.type]}
+          {(conn.type === 'i2c' || conn.type === 'spi') && conn.bus !== undefined ? conn.bus : ''}
         </span>
         <span className="boardgraph__node-var">{conn.variable || conn.constructor}</span>
         {conn.instrument && (
@@ -1468,6 +1537,39 @@ export function buildExportSvg(args: ExportArgs): string {
     .map((r) => `<circle cx="${dotXFor(r.side)}" cy="${r.y}" r="4.5" fill="${r.color}"/>`)
     .join('')
 
+  // Bus groups (#147): outline + bus tag + per-pin roles — mirrors <BusGroup/>.
+  const busGroups = rows
+    .map((r) => {
+      if (r.conn.type !== 'i2c' && r.conn.type !== 'spi') return ''
+      const groupPads = [r.pad, ...r.extraPads]
+      const bounds = padsBounds(groupPads, 12)
+      if (!bounds) return ''
+      const tag = busLabel(r.conn.type, r.conn.bus)
+      const tagW = 12 + tag.length * 7
+      const tagX = bounds.x + 6
+      const tagCx = tagX + tagW / 2
+      const tagTextY = bounds.y + 2
+      const roleTexts = groupPads
+        .map((p, i) => {
+          const role = r.conn.roles?.[i]
+          if (!role) return ''
+          const place = padLabelPlacement(p.edge)
+          const rx = p.x + place.dx
+          const ry = p.y + place.dy - 9
+          return `<text x="${rx}" y="${ry}" text-anchor="${place.anchor}" font-family="monospace" font-size="8" font-weight="700" fill="${r.color}"${lt(rx, ry)}>${esc(role)}</text>`
+        })
+        .join('')
+      return (
+        `<g>` +
+        `<rect x="${bounds.x}" y="${bounds.y}" width="${bounds.w}" height="${bounds.h}" rx="9" fill="${r.color}" fill-opacity="0.07" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="4 3" opacity="0.85"/>` +
+        `<rect x="${tagX}" y="${bounds.y - 9}" width="${tagW}" height="16" rx="5" fill="${r.color}"/>` +
+        `<text x="${tagCx}" y="${tagTextY}" text-anchor="middle" font-family="monospace" font-size="9" font-weight="700" fill="#0c0e10"${lt(tagCx, tagTextY)}>${esc(tag)}</text>` +
+        roleTexts +
+        `</g>`
+      )
+    })
+    .join('')
+
   // Board pieces (mirrors <Board/> but as a string): PCB, USB, features, LED,
   // then EVERY pad of the physical pinout at its real edge position.
   const cx = box.x + box.w / 2
@@ -1527,7 +1629,11 @@ export function buildExportSvg(args: ExportArgs): string {
   const nodes = rows
     .map((r) => {
       const c = r.color
-      const tag = PIN_TYPE_TAG[r.conn.type]
+      const tag =
+        PIN_TYPE_TAG[r.conn.type] +
+        ((r.conn.type === 'i2c' || r.conn.type === 'spi') && r.conn.bus !== undefined
+          ? String(r.conn.bus)
+          : '')
       const label = esc(r.conn.variable || r.conn.constructor)
       const val = r.conn.type === 'input' || r.conn.type === 'output' ? '1' : '—'
       // Right-column cards mirror: row-reversed, value pushed to the OUTER edge,
@@ -1563,6 +1669,7 @@ export function buildExportSvg(args: ExportArgs): string {
     `<rect x="0" y="0" width="${outW}" height="${outH}" fill="#161719"/>` +
     `<g${groupTransform ? ` transform="${groupTransform}"` : ''}>` +
     `<g>${board}</g>` +
+    `<g>${busGroups}</g>` +
     `<g fill="none" stroke-linecap="round">${buses}</g>` +
     `<g fill="none" stroke-linecap="round" opacity="0.92">${wires}</g>` +
     `<g>${dots}</g>` +

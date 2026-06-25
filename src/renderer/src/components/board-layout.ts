@@ -145,6 +145,42 @@ export function nodeSide(edge: PadPoint['edge']): 'left' | 'right' {
   return edge === 'right' || edge === 'bottom' ? 'right' : 'left'
 }
 
+/** An axis-aligned box `{x, y, w, h}` in SVG coordinates. */
+export interface Bounds {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/**
+ * The bounding box around a set of pad coordinates, grown by `pad` px on every
+ * side — used to draw the group outline that frames a bus's pins (#147) so a
+ * `sda`/`scl` (or `sck`/`mosi`/…) set reads as one connection. Returns `null`
+ * for fewer than two points (nothing to group). Pure + DOM-free for unit tests.
+ */
+export function padsBounds(points: { x: number; y: number }[], pad = 14): Bounds | null {
+  if (points.length < 2) return null
+  const xs = points.map((p) => p.x)
+  const ys = points.map((p) => p.y)
+  const minX = Math.min(...xs)
+  const minY = Math.min(...ys)
+  const maxX = Math.max(...xs)
+  const maxY = Math.max(...ys)
+  return { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 }
+}
+
+/**
+ * The label for a bus connection — the type word plus its hardware bus number
+ * when known: `I2C0`, `I2C1`, `SPI0`… For a non-bus type (or no `bus`) it's just
+ * the uppercase type. Shared by both Board Views + the SVG export so the badge,
+ * the group tag and the export all read the same.
+ */
+export function busLabel(type: string, bus: number | undefined): string {
+  const base = type.toUpperCase()
+  return bus === undefined ? base : `${base}${bus}`
+}
+
 /**
  * Resolve a parsed pin token to a drawn pad coordinate.
  * Matching: numeric token vs `pad.gpio`; else token vs `pad.label`
