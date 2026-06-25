@@ -12,6 +12,7 @@ import { registerGitIpc } from './git/ipc'
 import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, disposeBoard } from './board'
+import { registerFindIpc, disposeFind } from './find'
 import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
@@ -164,6 +165,10 @@ app.whenReady().then(() => {
   // resolver lets it notify the main window when it closes.
   registerBoardIpc(() => mainWindow)
 
+  // Register the Find & Replace layer (issue #146): a separate frameless,
+  // always-on-top window that drives the main editor's find/replace over IPC.
+  registerFindIpc(() => mainWindow)
+
   createWindow()
 
   app.on('activate', () => {
@@ -186,4 +191,5 @@ app.on('before-quit', () => {
   void disposeDevice()
   void disposePlugins()
   disposeBoard()
+  disposeFind()
 })

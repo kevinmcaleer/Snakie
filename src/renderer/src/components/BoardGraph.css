@@ -378,6 +378,23 @@
   font-weight: 700;
 }
 
+/* Bus group (#147): tag chip text + per-pin role labels. */
+.boardgraph__bus-tag {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  fill: #0c0e10;
+}
+
+.boardgraph__bus-role {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+}
+
 .boardgraph__svg-sub {
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 9px;
@@ -442,6 +459,22 @@
    bus active → green text + glowing dot. Rest stays the dim grey above. */
 .boardgraph__node-val.is-asserted {
   color: #43c46a;
+}
+
+/* Right-column cards (#148) mirror the left ones: the dot/wire leave the card's
+   LEFT edge (toward the board), so the content is row-reversed — tag on the far
+   (right) edge, the value pushed to the inner (left) edge, label right-aligned. */
+.boardgraph__node--right .boardgraph__node-inner {
+  flex-direction: row-reverse;
+}
+
+.boardgraph__node--right .boardgraph__node-var {
+  text-align: right;
+}
+
+.boardgraph__node--right .boardgraph__node-val {
+  margin-left: 0;
+  margin-right: auto;
 }
 
 .boardgraph__node-dot {

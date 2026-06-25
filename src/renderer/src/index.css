@@ -635,9 +635,39 @@
 }
 
 /* --- Editor: cream paper tabs ------------------------------------------- */
-:root[data-theme='skeuomorph'] .editor-tabs {
+/* The cream surface is painted on the whole header row so the tab strip and
+   the Find button share one continuous background (issue #137). */
+:root[data-theme='skeuomorph'] .editor-header {
   background: linear-gradient(180deg, #d6cfba, #cabfa3);
   border-bottom: 1px solid #b3a888;
+}
+
+:root[data-theme='skeuomorph'] .editor-tabs {
+  background: transparent;
+  border-bottom: none;
+}
+
+/* Find button: flat on the cream paper, with the tab's text colour and
+   hover/active treatment so it reads as part of the tab bar. (Higher
+   specificity than the themed `.btn`/`.btn--ghost` pill so it strips the
+   gradient, border and shadow.) */
+:root[data-theme='skeuomorph'] .editor-header__actions .btn {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #6a6450;
+  text-shadow: none;
+}
+
+:root[data-theme='skeuomorph'] .editor-header__actions .btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: transparent;
+}
+
+:root[data-theme='skeuomorph'] .editor-header__actions .btn[aria-pressed='true'] {
+  background: #f6f1e3;
+  border-color: transparent;
+  color: #4a4636;
 }
 
 :root[data-theme='skeuomorph'] .editor-tab {
@@ -1305,9 +1335,33 @@
 }
 
 /* --- Editor: dark "paper" tabs ------------------------------------------- */
-:root[data-theme='dark'] .editor-tabs {
+/* Surface painted on the header row so tabs + Find button share it (issue #137). */
+:root[data-theme='dark'] .editor-header {
   background: linear-gradient(180deg, #26282e, #1d1f24);
   border-bottom: 1px solid #131418;
+}
+
+:root[data-theme='dark'] .editor-tabs {
+  background: transparent;
+  border-bottom: none;
+}
+
+:root[data-theme='dark'] .editor-header__actions .btn {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: #9398a1;
+}
+
+:root[data-theme='dark'] .editor-header__actions .btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: transparent;
+}
+
+:root[data-theme='dark'] .editor-header__actions .btn[aria-pressed='true'] {
+  background: var(--editor-paper-band);
+  border-color: transparent;
+  color: #d8dce3;
 }
 
 :root[data-theme='dark'] .editor-tab {

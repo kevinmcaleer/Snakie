@@ -73,6 +73,75 @@
   }
 }
 
+/* --- "Not ready" prompt: offer to run the BLE demo (#149) --- */
+.bscan__prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 9px;
+  margin: auto;
+  max-width: 230px;
+  text-align: center;
+}
+
+.bscan__prompt-msg {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--accent) 78%, #cfd3d8);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.bscan__prompt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bscan__demo,
+.bscan__dismiss {
+  height: 26px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+}
+
+.bscan__demo {
+  color: #04120a;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 88%, #fff), var(--accent));
+  border: 1px solid var(--accent-border);
+}
+
+.bscan__demo:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.bscan__dismiss {
+  color: color-mix(in srgb, var(--accent) 55%, #9aa0a8);
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid #1c1f22;
+}
+
+.bscan__demo:disabled,
+.bscan__dismiss:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.bscan__prompt-hint {
+  margin: 0;
+  font-size: 9px;
+  line-height: 1.5;
+  color: #6b7079;
+}
+
+.bscan__prompt-hint code {
+  color: color-mix(in srgb, var(--accent) 60%, #9aa0a8);
+}
+
 /* --- The device list --- */
 .bscan__list {
   list-style: none;

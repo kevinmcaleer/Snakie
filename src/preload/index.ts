@@ -109,6 +109,29 @@ export interface InstrumentOpenPayload {
 }
 
 /**
+ * A find/replace request sent from the Find & Replace window to the MAIN editor
+ * window (issue #146). The find window has no editor access, so it ships the full
+ * query + options; the main window runs it against Monaco. `action` is the
+ * renderer's `FindAction` union, left as a string so the preload needn't restate it.
+ */
+export interface FindCommandPayload {
+  /** 'count' | 'next' | 'prev' | 'replace' | 'replaceFind' | 'replaceAll'. */
+  action: string
+  query: string
+  replacement: string
+  matchCase: boolean
+  wholeWord: boolean
+}
+
+/** The match status the MAIN window pushes back to the find window (#146). */
+export interface FindStatusPayload {
+  /** 1-based index of the current selection among the matches, or 0. */
+  matchIndex: number
+  /** Total matches in the active model. */
+  matchCount: number
+}
+
+/**
  * Unwrap an {@link IpcResult} into a resolved value or a thrown Error, so the
  * renderer can use ordinary `try/catch` / promise rejection semantics.
  */
@@ -700,6 +723,42 @@ const instruments = {
   librarySource: (): Promise<string> => ipcRenderer.invoke('instruments:librarySource')
 }
 
+/**
+ * Find & Replace API (issue #146). The dialog is HOSTED in its own native window
+ * (`find.html`), which can't reach the Monaco editor (a main-window singleton).
+ * So the find window `sendCommand`s; the main process relays it to the MAIN
+ * window, which runs it and `sendStatus`es the result back (relayed here as
+ * `onStatus`). Mirrors the `board`/`instruments` relay pattern.
+ */
+const find = {
+  /** Open (or focus) the Find & Replace window. */
+  open: (): Promise<void> => ipcRenderer.invoke('find:open'),
+  /** Close the Find & Replace window (no-op if not open). Fire-and-forget. */
+  close: (): void => ipcRenderer.send('find:close'),
+  /** Subscribe (in the MAIN window) to the find window closing. Returns unsubscribe. */
+  onClosed: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('find:closed', listener)
+    return () => ipcRenderer.removeListener('find:closed', listener)
+  },
+  /** Send a find/replace command (from the find window) to the editor. */
+  sendCommand: (payload: FindCommandPayload): void => ipcRenderer.send('find:command', payload),
+  /** Subscribe (in the MAIN window) to relayed find/replace commands. Returns unsubscribe. */
+  onCommand: (cb: (payload: FindCommandPayload) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: FindCommandPayload): void => cb(payload)
+    ipcRenderer.on('find:command', listener)
+    return () => ipcRenderer.removeListener('find:command', listener)
+  },
+  /** Push the match status (from the MAIN window) back to the find window. */
+  sendStatus: (payload: FindStatusPayload): void => ipcRenderer.send('find:status', payload),
+  /** Subscribe (in the find window) to the relayed match status. Returns unsubscribe. */
+  onStatus: (cb: (payload: FindStatusPayload) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: FindStatusPayload): void => cb(payload)
+    ipcRenderer.on('find:status', listener)
+    return () => ipcRenderer.removeListener('find:status', listener)
+  }
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -733,7 +792,9 @@ const api = {
   /** Board View layer: floating window + live active-file relay + user boards. */
   board,
   /** Instrument launch relay: board window → main window scope/meter hosting. */
-  instruments
+  instruments,
+  /** Find & Replace window: native window ↔ main editor find/replace relay. */
+  find
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

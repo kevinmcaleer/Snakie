@@ -2,6 +2,10 @@ import { useCallback, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import { useSnakiePresence } from './snakie-presence'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import { BT_SCAN_DEMO, BT_SCAN_DEMO_NAME } from './bt-scan-demo'
 import {
   MAX_SIGNAL_BARS,
   addBt,
@@ -53,9 +57,19 @@ export function BluetoothInstrument({
   onToggleDock,
   float
 }: BluetoothInstrumentProps): JSX.Element {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const { present } = useSnakiePresence()
+  const { openBuffer } = useWorkspace()
+
   const [devices, setDevices] = useState<BluetoothTelemetry[]>([])
   const [scanning, setScanning] = useState(false)
   const [scanned, setScanned] = useState(false)
+  // Shown when SCAN can't drive a scan — no board, or no Snakie program running
+  // to service the trigger (then we offer to run the BLE demo). #149.
+  const [prompt, setPrompt] = useState(false)
+  // True while opening + running the demo (disables the prompt buttons).
+  const [busy, setBusy] = useState(false)
 
   // One device per reading: accumulate (dedupe by MAC), and the first result
   // clears the scanning flag.
@@ -67,7 +81,15 @@ export function BluetoothInstrument({
     }, [])
   )
 
+  // Kick a scan only when a Snakie program is live to service the `scan:bt`
+  // trigger; otherwise surface a prompt offering to run the BLE demo (#149)
+  // rather than spinning on "scanning…" that never resolves.
   const scan = useCallback(async () => {
+    if (!connected || !present) {
+      setPrompt(true)
+      return
+    }
+    setPrompt(false)
     setDevices([]) // RESET on SCAN press — a fresh sweep.
     setScanning(true)
     setScanned(true)
@@ -76,7 +98,28 @@ export function BluetoothInstrument({
     } catch {
       setScanning(false)
     }
-  }, [])
+  }, [connected, present])
+
+  // Open the BLE demo in a new tab and run it: interrupt any running program,
+  // drop the demo in the editor, then paste-run it. Its `inst.start()` brings the
+  // background service up (→ READY → present) and the initial scan fills the list.
+  const runDemo = useCallback(async () => {
+    setBusy(true)
+    try {
+      await window.api.device.interrupt().catch(() => undefined)
+      openBuffer(BT_SCAN_DEMO_NAME, BT_SCAN_DEMO)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      await window.api.device.sendData(`\x05${BT_SCAN_DEMO}\x04`)
+      setPrompt(false)
+      setDevices([])
+      setScanning(true)
+      setScanned(true)
+    } catch {
+      setScanning(false)
+    } finally {
+      setBusy(false)
+    }
+  }, [openBuffer])
 
   const sorted = sortBtByStrength(devices)
   const nearest = nearestBt(devices)
@@ -96,7 +139,52 @@ export function BluetoothInstrument({
       >
         <PhosphorScreen className="instr__screen--accent">
           <div className="bscan__screen">
-            {sorted.length > 0 ? (
+            {prompt ? (
+              <div className="bscan__prompt">
+                {connected ? (
+                  <>
+                    <p className="bscan__prompt-msg">
+                      No Snakie program is running to service the scan.
+                    </p>
+                    <div className="bscan__prompt-actions">
+                      <button
+                        type="button"
+                        className="bscan__demo"
+                        onClick={() => void runDemo()}
+                        disabled={busy}
+                      >
+                        {busy ? 'STARTING…' : '▶ Run BLE demo'}
+                      </button>
+                      <button
+                        type="button"
+                        className="bscan__dismiss"
+                        onClick={() => setPrompt(false)}
+                        disabled={busy}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <p className="bscan__prompt-hint">
+                      Opens a demo that scans on the 2nd core — or run your own program that calls{' '}
+                      <code>inst.start()</code>.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="bscan__prompt-msg">Connect a board to scan for BLE devices.</p>
+                    <div className="bscan__prompt-actions">
+                      <button
+                        type="button"
+                        className="bscan__dismiss"
+                        onClick={() => setPrompt(false)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : sorted.length > 0 ? (
               <ul className="bscan__list" aria-label="Bluetooth devices">
                 {sorted.map((d, i) => (
                   <BtRow key={`${d.mac}-${i}`} dev={d} />

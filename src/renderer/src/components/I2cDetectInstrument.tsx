@@ -2,6 +2,10 @@ import { useCallback, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import { useSnakiePresence } from './snakie-presence'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import { I2C_DETECT_DEMO, I2C_DETECT_DEMO_NAME } from './i2c-detect-demo'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
 import './I2cDetectInstrument.css'
 
@@ -47,10 +51,20 @@ export function I2cDetectInstrument({
   onToggleDock,
   float
 }: I2cDetectInstrumentProps): JSX.Element {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const { present } = useSnakiePresence()
+  const { openBuffer } = useWorkspace()
+
   // `grid` is undefined until the first result lands; `scanning` lights the
   // "scanning…" state on SCAN and clears on the first reading.
   const [grid, setGrid] = useState<I2cGridModel | undefined>(undefined)
   const [scanning, setScanning] = useState(false)
+  // Shown when SCAN can't reach the bus — no board, or no Snakie program running
+  // an I²C bus to service the trigger (then we offer to run the demo). #149.
+  const [prompt, setPrompt] = useState(false)
+  // True while opening + running the demo (disables the prompt buttons).
+  const [busy, setBusy] = useState(false)
 
   // The whole address set arrives in ONE `kind:'i2c'` reading, so we just rebuild
   // the grid from it and drop the scanning flag.
@@ -62,7 +76,16 @@ export function I2cDetectInstrument({
     }, [])
   )
 
+  // Kick a scan. The on-device `scan:i2c` trigger only exists when a Snakie
+  // program called `inst.start(i2c=…)`; without a live program the SCAN can't
+  // reach the bus, so — instead of a misleading "scanning…" that never resolves
+  // (#149) — surface a prompt offering to run the I²C demo.
   const scan = useCallback(async () => {
+    if (!connected || !present) {
+      setPrompt(true)
+      return
+    }
+    setPrompt(false)
     setScanning(true)
     try {
       await window.api.device.sendControl(SCAN_TRIGGER)
@@ -71,7 +94,27 @@ export function I2cDetectInstrument({
       // panel doesn't hang on "scanning…". The grid keeps its last result.
       setScanning(false)
     }
-  }, [])
+  }, [connected, present])
+
+  // Open the I²C demo in a new tab and run it: interrupt any running program,
+  // drop the demo in the editor, then paste-run it. Its `inst.start(i2c=…)`
+  // registers the scan trigger (→ READY → present) and the initial scan fills the
+  // grid. Mirrors the Wi-Fi scanner's demo flow.
+  const runDemo = useCallback(async () => {
+    setBusy(true)
+    try {
+      await window.api.device.interrupt().catch(() => undefined)
+      openBuffer(I2C_DETECT_DEMO_NAME, I2C_DETECT_DEMO)
+      await new Promise((resolve) => setTimeout(resolve, 200))
+      await window.api.device.sendData(`\x05${I2C_DETECT_DEMO}\x04`)
+      setPrompt(false)
+      setScanning(true)
+    } catch {
+      setScanning(false)
+    } finally {
+      setBusy(false)
+    }
+  }, [openBuffer])
 
   const found = grid?.found ?? []
   const foundText = scanning && !grid ? '··' : String(found.length)
@@ -91,7 +134,52 @@ export function I2cDetectInstrument({
       >
         <PhosphorScreen className="instr__screen--accent">
           <div className="i2cdet__screen">
-            {grid ? (
+            {prompt ? (
+              <div className="i2cdet__prompt">
+                {connected ? (
+                  <>
+                    <p className="i2cdet__prompt-msg">
+                      No Snakie program is running an I²C bus to scan.
+                    </p>
+                    <div className="i2cdet__prompt-actions">
+                      <button
+                        type="button"
+                        className="i2cdet__demo"
+                        onClick={() => void runDemo()}
+                        disabled={busy}
+                      >
+                        {busy ? 'STARTING…' : '▶ Run I²C demo'}
+                      </button>
+                      <button
+                        type="button"
+                        className="i2cdet__dismiss"
+                        onClick={() => setPrompt(false)}
+                        disabled={busy}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                    <p className="i2cdet__prompt-hint">
+                      Opens a demo that sets up an I²C bus and scans on the 2nd core — or run your
+                      own program that calls <code>inst.start(i2c=…)</code>.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="i2cdet__prompt-msg">Connect a board to scan the I²C bus.</p>
+                    <div className="i2cdet__prompt-actions">
+                      <button
+                        type="button"
+                        className="i2cdet__dismiss"
+                        onClick={() => setPrompt(false)}
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : grid ? (
               <I2cGrid grid={grid} />
             ) : (
               <p className="i2cdet__hint">

@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
   boardBox,
+  busLabel,
   layoutPads,
   ledPoint,
+  nodeSide,
   padForToken,
   padLabelPlacement,
+  padsBounds,
   type BoardBox
 } from '../src/renderer/src/components/board-layout'
 import type { BoardDefinition } from '../src/renderer/src/components/board-defs'
@@ -221,6 +224,19 @@ describe('padLabelPlacement (#109 side-correct labels)', () => {
   })
 })
 
+describe('nodeSide (#148 mirrored right-column cards)', () => {
+  it('docks right-edge and bottom-edge connections on the RIGHT', () => {
+    expect(nodeSide('right')).toBe('right')
+    expect(nodeSide('bottom')).toBe('right')
+  })
+
+  it('keeps left / top / led connections on the LEFT', () => {
+    expect(nodeSide('left')).toBe('left')
+    expect(nodeSide('top')).toBe('left')
+    expect(nodeSide('led')).toBe('left')
+  })
+})
+
 describe('vertical-edge layout (#109 Tiny boards)', () => {
   // A Tiny-style board: pins down the LEFT and RIGHT long edges (no top/bottom),
   // i.e. the pins run VERTICALLY as the issue requires.
@@ -249,5 +265,34 @@ describe('vertical-edge layout (#109 Tiny boards)', () => {
     // …and each runs top→bottom (vertical pins).
     expect(left[0].y).toBeLessThan(left[1].y)
     expect(right[0].y).toBeLessThan(right[1].y)
+  })
+})
+
+describe('padsBounds (bus group outline, #147)', () => {
+  it('returns null for fewer than two points', () => {
+    expect(padsBounds([])).toBeNull()
+    expect(padsBounds([{ x: 10, y: 10 }])).toBeNull()
+  })
+
+  it('frames the points padded on every side', () => {
+    const b = padsBounds([{ x: 20, y: 30 }, { x: 50, y: 30 }], 10)
+    expect(b).toEqual({ x: 10, y: 20, w: 50, h: 20 })
+  })
+
+  it('spans the min/max across more than two points', () => {
+    const b = padsBounds([{ x: 20, y: 30 }, { x: 50, y: 80 }, { x: 35, y: 10 }], 5)
+    expect(b).toEqual({ x: 15, y: 5, w: 40, h: 80 })
+  })
+})
+
+describe('busLabel (#147)', () => {
+  it('appends the bus number when known', () => {
+    expect(busLabel('i2c', 0)).toBe('I2C0')
+    expect(busLabel('i2c', 1)).toBe('I2C1')
+    expect(busLabel('spi', 0)).toBe('SPI0')
+  })
+
+  it('falls back to the bare type when the bus is unknown', () => {
+    expect(busLabel('i2c', undefined)).toBe('I2C')
   })
 })

@@ -1,10 +1,50 @@
+/* Header row: the tab strip shares one line with the right-aligned editor
+   actions (e.g. the Find button, issue #137). The tabs grow and scroll; the
+   actions stay pinned to the right. The bottom border lives here so it spans
+   the whole row, not just the tabs. */
+.editor-header {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-header__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+/* The Find button reads as part of the tab bar (issue #137): no pill
+   background, border or shadow of its own — it shows the shared header surface
+   behind it. Theme-specific colours live in index.css. */
+.editor-header__actions .btn {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.editor-header__actions .btn:hover {
+  border-color: var(--accent);
+}
+
+.editor-header__actions .btn[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .editor-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   gap: 1px;
   min-height: 34px;
-  background: var(--bg-sunken);
-  border-bottom: 1px solid var(--border);
+  /* Transparent so the whole row shows the single `.editor-header` surface —
+     the tab strip and the Find button then share the same background. */
+  background: transparent;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
