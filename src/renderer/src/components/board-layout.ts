@@ -136,6 +136,16 @@ export function padLabelPlacement(
 }
 
 /**
+ * Which column a connection's node card docks in for the node-graph Board View
+ * (#148): a pad on the board's RIGHT or BOTTOM edge docks on the RIGHT (mirrors
+ * BoardView's badge `docksLeft` rule), everything else (left / top / led) on the
+ * LEFT. Pure so the live node-graph and its SVG export share one rule.
+ */
+export function nodeSide(edge: PadPoint['edge']): 'left' | 'right' {
+  return edge === 'right' || edge === 'bottom' ? 'right' : 'left'
+}
+
+/**
  * Resolve a parsed pin token to a drawn pad coordinate.
  * Matching: numeric token vs `pad.gpio`; else token vs `pad.label`
  * (case-insensitive, treating `GP12` and `12` as equivalent). The board's
