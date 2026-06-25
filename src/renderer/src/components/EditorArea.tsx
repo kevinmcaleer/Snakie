@@ -85,20 +85,22 @@ export function EditorArea(): JSX.Element {
       aria-label="Editor"
       onKeyDownCapture={onKeyDownCapture}
     >
-      <EditorTabs />
-      {hasFiles && (
-        <div className="region__editor-toolbar">
-          <button
-            type="button"
-            className="btn btn--sm btn--ghost"
-            onClick={() => (findOpen ? closeFind() : openFind(findWithReplace))}
-            aria-pressed={findOpen}
-            title="Find & Replace (Ctrl/Cmd-F, Ctrl/Cmd-H)"
-          >
-            Find
-          </button>
-        </div>
-      )}
+      <div className="editor-header">
+        <EditorTabs />
+        {hasFiles && (
+          <div className="editor-header__actions">
+            <button
+              type="button"
+              className="btn btn--sm btn--ghost"
+              onClick={() => (findOpen ? closeFind() : openFind(findWithReplace))}
+              aria-pressed={findOpen}
+              title="Find & Replace (Ctrl/Cmd-F, Ctrl/Cmd-H)"
+            >
+              Find
+            </button>
+          </div>
+        )}
+      </div>
       {hasFiles && (
         <FindReplace open={findOpen} withReplace={findWithReplace} onClose={closeFind} />
       )}

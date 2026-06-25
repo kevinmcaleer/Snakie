@@ -15,17 +15,9 @@
   position: relative;
 }
 
-/* Slim toolbar above the editor that hosts the Find affordance (a visible way
-   to open the panel without the keyboard shortcut). */
-.region__editor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
-  padding: 3px 8px;
-  background: var(--bg-sunken);
-  border-bottom: var(--border-w) solid var(--border);
-}
+/* The Find affordance (a visible way to open this panel without the keyboard
+   shortcut) lives in the editor tab header — see `.editor-header__actions` in
+   EditorTabs.css (issue #137). */
 
 .find-replace {
   position: absolute;

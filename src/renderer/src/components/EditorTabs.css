@@ -1,10 +1,30 @@
+/* Header row: the tab strip shares one line with the right-aligned editor
+   actions (e.g. the Find button, issue #137). The tabs grow and scroll; the
+   actions stay pinned to the right. The bottom border lives here so it spans
+   the whole row, not just the tabs. */
+.editor-header {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-header__actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+}
+
 .editor-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   align-items: stretch;
   gap: 1px;
   min-height: 34px;
   background: var(--bg-sunken);
-  border-bottom: 1px solid var(--border);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
