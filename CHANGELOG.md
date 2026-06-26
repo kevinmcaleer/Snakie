@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   SCL** dropdowns of the connected board's valid I²C pins (the RP2040/RP2350
   mapping — invalid combinations can't be chosen), and SCAN runs a one-shot probe
   on those exact pins (no running program needed).
+- **Link a MicroPython library to a part (#166).** A part can carry a **Code
+  library** — its import **module** name, a **library URL** (mip/git) and a
+  **docs/README URL** (authored in the Part Editor). The Parts Library shows the
+  module + a docs link, and adding the part to a project offers to **install the
+  library onto the connected board** (via `mip`). *(Checking a project's imports
+  against its parts on connect/open is the next slice.)*
 - **Parts Library — portable, community-authored & version-controlled (#129).**
   A new **Parts** view (in the Board Viewer — see below) browses your installed
   parts libraries and the parts inside them. Parts are **no longer hard-coded** into Snakie:

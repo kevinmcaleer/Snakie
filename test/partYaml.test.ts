@@ -153,3 +153,27 @@ describe('library.yml round-trip', () => {
     expect(libraryFromYaml(libraryToYaml(lib))).toEqual(lib)
   })
 })
+
+describe('library link (#166) round-trips', () => {
+  it('keeps module / url / docs through normalise + YAML', () => {
+    const part = normalisePart({
+      id: 'tof',
+      name: 'ToF',
+      headers: [{ edge: 'left', pins: [{ name: 'SDA', type: 'io' }] }],
+      library: { module: 'vl53l0x', url: 'github:org/vl53l0x', docs: 'https://example.com/readme' }
+    })
+    expect(part.library).toEqual({ module: 'vl53l0x', url: 'github:org/vl53l0x', docs: 'https://example.com/readme' })
+    const back = partFromYaml(partToYaml(part))
+    expect(back.library).toEqual(part.library)
+  })
+
+  it('drops a fully-empty library object', () => {
+    const part = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }],
+      library: { module: '   ', url: '', docs: undefined }
+    })
+    expect(part.library).toBeUndefined()
+  })
+})

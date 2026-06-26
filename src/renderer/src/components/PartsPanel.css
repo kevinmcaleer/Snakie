@@ -497,3 +497,14 @@
   color: var(--text-muted);
 }
 
+
+/* Linked-library docs link in the part detail (#166). */
+.pl__doclink {
+  margin-left: 0.4rem;
+  font-size: 0.66rem;
+  color: var(--accent, #4ea1ff);
+  text-decoration: none;
+}
+.pl__doclink:hover {
+  text-decoration: underline;
+}

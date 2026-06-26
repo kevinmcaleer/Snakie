@@ -200,7 +200,8 @@ export function partToYaml(part: PartDefinition): string {
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
     imageLayer: part.imageLayer,
-    schematic: part.schematic
+    schematic: part.schematic,
+    library: part.library
   })
   return stringify(obj, { lineWidth: 0 })
 }
@@ -365,6 +366,18 @@ export function partFromYaml(text: string): PartDefinition {
         if (aspect !== undefined) part.schematic.aspect = aspect
       }
     }
+  }
+
+  if (raw.library && typeof raw.library === 'object' && !Array.isArray(raw.library)) {
+    const l = raw.library as Record<string, unknown>
+    const lib: NonNullable<PartDefinition['library']> = {}
+    const mod = str(l.module)
+    const url = str(l.url)
+    const docs = str(l.docs)
+    if (mod !== undefined) lib.module = mod
+    if (url !== undefined) lib.url = url
+    if (docs !== undefined) lib.docs = docs
+    if (Object.keys(lib).length) part.library = lib
   }
 
   return part

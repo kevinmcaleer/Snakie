@@ -455,6 +455,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       }))
     }
   }
+  if (part.library) {
+    const lib: NonNullable<PartDefinition['library']> = {}
+    const mod = text(part.library.module)
+    const url = text(part.library.url)
+    const docs = text(part.library.docs)
+    if (mod !== undefined) lib.module = mod
+    if (url !== undefined) lib.url = url
+    if (docs !== undefined) lib.docs = docs
+    if (Object.keys(lib).length) out.library = lib
+  }
 
   return out
 }

@@ -1264,6 +1264,35 @@ function DetailsFields({
         </label>
       </div>
 
+      <h4 className="pe__subh">Code library</h4>
+      <label className="pe__field">
+        <span>Module (import name)</span>
+        <input
+          type="text"
+          value={part.library?.module ?? ''}
+          onChange={(e) => patch({ library: { ...part.library, module: e.target.value } })}
+          placeholder="vl53l0x"
+        />
+      </label>
+      <label className="pe__field">
+        <span>Library URL (mip / git)</span>
+        <input
+          type="text"
+          value={part.library?.url ?? ''}
+          onChange={(e) => patch({ library: { ...part.library, url: e.target.value } })}
+          placeholder="github:org/repo or https://…"
+        />
+      </label>
+      <label className="pe__field">
+        <span>Docs / README URL</span>
+        <input
+          type="text"
+          value={part.library?.docs ?? ''}
+          onChange={(e) => patch({ library: { ...part.library, docs: e.target.value } })}
+          placeholder="https://…"
+        />
+      </label>
+
       <h4 className="pe__subh">
         Properties
         <button type="button" className="pe__add" onClick={() => setProps([...propRows, ['', '']])}>

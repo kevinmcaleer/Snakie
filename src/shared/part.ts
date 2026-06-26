@@ -312,6 +312,24 @@ export interface PartDefinition {
   // --- Schematic (Part Editor, #130) ---------------------------------------
   /** Optional schematic symbol (line-drawing) for the schematic view. */
   schematic?: PartSchematic
+
+  // --- Code library (#166) -------------------------------------------------
+  /** A MicroPython driver/library linked to this part. */
+  library?: PartLibraryLink
+}
+
+/**
+ * A MicroPython library/module linked to a part (#166): the import name, where to
+ * install it from, and where its docs live. Lets Snakie offer to install the
+ * driver when the part is added to a project, and check a project's imports.
+ */
+export interface PartLibraryLink {
+  /** The import/module name the code uses (e.g. `"vl53l0x"`). */
+  module?: string
+  /** Where to install it from — a `mip` spec, package name, or git/file URL. */
+  url?: string
+  /** URL of the library's docs / README. */
+  docs?: string
 }
 
 /**

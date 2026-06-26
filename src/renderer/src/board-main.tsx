@@ -200,6 +200,19 @@ function BoardWindowApp(): JSX.Element {
         ...robot,
         parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
       })
+      // #166: offer to install the part's linked MicroPython library onto the board.
+      const lib = part.library
+      if (lib?.url) {
+        const mod = lib.module || part.name
+        if (window.confirm(`Install the "${mod}" MicroPython library for "${part.name}" onto the connected board?`)) {
+          void window.api.packages
+            .install(lib.url)
+            .then((r) => {
+              if (!r.ok) window.alert(`Couldn't install ${mod}.\n${r.log || 'Open the Packages panel for details.'}`)
+            })
+            .catch(() => window.alert(`Couldn't install ${mod} — is a board connected?`))
+        }
+      }
     },
     [robot, saveRobot]
   )

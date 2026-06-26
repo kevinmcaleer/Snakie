@@ -503,6 +503,19 @@ function PartDetail({
             </dd>
           </div>
         )}
+        {part.library && (part.library.module || part.library.docs) && (
+          <div className="pl__meta-row">
+            <dt>Library</dt>
+            <dd>
+              {part.library.module && <code className="pl__pin-name">{part.library.module}</code>}
+              {part.library.docs && (
+                <a className="pl__doclink" href={part.library.docs} target="_blank" rel="noreferrer">
+                  docs ↗
+                </a>
+              )}
+            </dd>
+          </div>
+        )}
       </dl>
 
       <h4 className="pl__pinout-h">Pinout</h4>
