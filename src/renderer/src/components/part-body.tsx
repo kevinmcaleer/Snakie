@@ -8,8 +8,49 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import type { PartDefinition, PartPinType } from '../../../shared/part'
+import type { PartDefinition, PartPinCapability, PartPinType } from '../../../shared/part'
 import './PartCanvas.css'
+
+/** Capability → hover-badge text + pastel colour (#…). Shared by the Part Editor
+ *  and the Board Viewer breadboard. */
+export const CAP_BADGE: Record<PartPinCapability, { text: string; color: string }> = {
+  digital: { text: 'GPIO', color: '#d9dee4' },
+  pwm: { text: 'PWM', color: '#cfe8a9' },
+  adc: { text: 'ADC', color: '#a9f0ec' },
+  i2c: { text: 'I2C', color: '#a9d3f5' },
+  spi: { text: 'SPI', color: '#f7b6d2' },
+  uart: { text: 'UART', color: '#cdb4f0' }
+}
+
+/** A row of pastel capability badges centred above (cx, cy), sized to the pin
+ *  labels. Returns null when there are no capabilities to show. */
+export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability[] | undefined): JSX.Element | null {
+  const badges = (caps ?? []).map((c) => CAP_BADGE[c]).filter(Boolean)
+  if (badges.length === 0) return null
+  const fs = 11
+  const h = 16
+  const gap = 3
+  const widths = badges.map((b) => b.text.length * 6.2 + 8)
+  const total = widths.reduce((a, w) => a + w, 0) + gap * Math.max(0, badges.length - 1)
+  const by = cy - 13 - h
+  let acc = cx - total / 2
+  return (
+    <g className="pcv__badges" style={{ pointerEvents: 'none' }} aria-hidden="true">
+      {badges.map((b, i) => {
+        const x = acc
+        acc += widths[i] + gap
+        return (
+          <g key={i}>
+            <rect x={x} y={by} width={widths[i]} height={h} rx={3} fill={b.color} />
+            <text x={x + widths[i] / 2} y={by + h - 5} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#1a1d20" fontFamily="var(--font-mono)">
+              {b.text}
+            </text>
+          </g>
+        )
+      })}
+    </g>
+  )
+}
 
 /**
  * PART BODY (#130/#139) — the static, layered life-like scene of a part.

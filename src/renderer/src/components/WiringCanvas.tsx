@@ -18,9 +18,10 @@ import {
 } from '../../../shared/robot'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
+import type { PartPinCapability } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody } from './part-body'
-import { pinPositions, schematicSymbolLayout, type Box } from './part-editor.util'
+import { capabilityBadges, partBodyBox, PartBody } from './part-body'
+import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
 import { Board, BoardDefs, padKey } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toRoundedPath, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
@@ -74,6 +75,8 @@ interface PlacedPin {
   primary?: boolean
   /** All pin indices sharing this terminal (a rail) — its dot shows if ANY is wired. */
   railIndices?: number[]
+  /** Pin capabilities (for the breadboard hover badges); part pins only. */
+  caps?: PartPinCapability[]
 }
 /** Board pads used by the parsed code, keyed by board pad index (combine view). */
 export type UsedByCode = Map<number, { color: string; label: string }>
@@ -156,12 +159,14 @@ function boardLifelikePins(pads: PadPoint[]): PlacedPin[] {
 
 /** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint order). */
 function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
+  const rps = resolvedPins(def)
   return pinPositions(def, box).map((pp) => ({
     name: pp.name,
     net: partPinNet(pp.type),
     index: pp.index,
     anchors: [{ x: pp.x, y: pp.y, ox: pp.ox, oy: pp.oy }],
-    label: { x: pp.x, y: pp.y, anchor: 'middle' as const } // label drawn by PartBody
+    label: { x: pp.x, y: pp.y, anchor: 'middle' as const }, // label drawn by PartBody
+    caps: rps[pp.index]?.pin.capabilities
   }))
 }
 
@@ -243,6 +248,8 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, renderMode,
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
+  // The pin under the pointer — shows its capability badges (breadboard view).
+  const [hover, setHover] = useState<{ key: string; index: number } | null>(null)
 
   const resolvePart = (lib: string, part: string): PartDefinition | null =>
     libraries.find((l) => l.id === lib)?.parts.find((p) => p.id === part) ?? null
@@ -710,8 +717,25 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, renderMode,
 
             {/* Subjects (the MCU + placed parts). */}
             {subjects.map((s) => (
-              <SubjectBody key={s.key} subject={s} onRemove={s.kind === 'part' ? () => removePart(s.key) : undefined} />
+              <SubjectBody
+                key={s.key}
+                subject={s}
+                onRemove={s.kind === 'part' ? () => removePart(s.key) : undefined}
+                onHoverPin={(idx) => setHover(idx == null ? null : { key: s.key, index: idx })}
+              />
             ))}
+
+            {/* Hover capability badges (breadboard) — over everything. */}
+            {renderMode === 'lifelike' &&
+              hover &&
+              !dragRef.current &&
+              (() => {
+                const s = subjByKey.get(hover.key)
+                const p = s?.pins.find((pp) => pp.index === hover.index)
+                if (!s || !p || !p.caps?.length) return null
+                const a = p.anchors[0]
+                return capabilityBadges(s.x + a.x, s.y + a.y, p.caps)
+              })()}
           </g>
         </svg>
 
@@ -789,7 +813,15 @@ function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: n
 /** Render one subject (MCU or part) in its own translated group. The body is the
  *  REAL renderer for its mode (Board / PartBody / McuSymbol / PartSchematicSymbol);
  *  the wiring canvas draws the connectable dots + combine labels on top. */
-function SubjectBody({ subject: s, onRemove }: { subject: Subject; onRemove?: () => void }): JSX.Element {
+function SubjectBody({
+  subject: s,
+  onRemove,
+  onHoverPin
+}: {
+  subject: Subject
+  onRemove?: () => void
+  onHoverPin?: (index: number | null) => void
+}): JSX.Element {
   const removeY = s.mode === 'schematic' ? 10 : -7
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
   return (
@@ -848,7 +880,17 @@ function SubjectBody({ subject: s, onRemove }: { subject: Subject; onRemove?: ()
         s.pins.map((p) => {
           if (p.primary === false) return null
           const a = p.anchors[0]
-          return <circle key={p.index} cx={a.x} cy={a.y} r={DOT_R} className={`wc__dot wc__dot--${p.net}`} />
+          return (
+            <circle
+              key={p.index}
+              cx={a.x}
+              cy={a.y}
+              r={DOT_R}
+              className={`wc__dot wc__dot--${p.net}`}
+              onPointerEnter={onHoverPin ? () => onHoverPin(p.index) : undefined}
+              onPointerLeave={onHoverPin ? () => onHoverPin(null) : undefined}
+            />
+          )
         })}
 
       {onRemove && (

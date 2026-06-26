@@ -41,8 +41,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and a plated **half-hole** at the board edge (ground pads square, others
   rounded); the half-hole defaults to the nearer left/right edge and a pin's
   **rotate / flip** icons aim it any of the four ways. A **Background** colour well
-  sets the PCB colour. Hovering a pin shows **capability badges** (GPIO / PWM /
-  ADC / I²C / SPI / UART) in pastel colours.
+  sets the PCB colour. Hovering a pin (in the Part Editor **and** the Board
+  Viewer's Breadboard) shows **capability badges** (GPIO / PWM / ADC / I²C / SPI /
+  UART) in pastel colours.
 - **I²C-detect: pick the bus + pins (#165).** The instrument now has **Bus / SDA /
   SCL** dropdowns of the connected board's valid I²C pins (the RP2040/RP2350
   mapping — invalid combinations can't be chosen), and SCAN runs a one-shot probe
