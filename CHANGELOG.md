@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Promote a board to the Standard Boards library (developer).** In a dev build, a
+  microcontroller board part shows a **Promote to Standard / Update Standard** button
+  in the Parts Library: it copies the board into the bundled `snakie-standard` library
+  (runtime copy + the repo copy so it commits and ships). Re-promoting updates it.
 - **Author boards in the Part Editor.** A board is just a part with the
   **Microcontroller** family — the Part Editor has a "this part is a microcontroller
   board" toggle (and a family picker) that makes it appear in the Board Viewer's

@@ -337,6 +337,50 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
   }
 }
 
+/**
+ * DEV workflow (#52/issue-3): promote a microcontroller board part into the
+ * "Standard Boards" library so it becomes a shipped default. Writes it into the
+ * runtime `<userData>/parts/snakie-standard` (so it shows immediately) AND, when
+ * running unpackaged (dev), mirrors it into the bundled repo copy so it commits +
+ * ships. Re-promoting an existing id is an UPDATE (overwrites). Returns whether the
+ * repo copy was written (`shipped`).
+ */
+export async function promoteToStandard(
+  sourceLibraryId: string,
+  partId: string
+): Promise<WriteResult & { shipped?: boolean }> {
+  const srcLib = sanitiseId(sourceLibraryId) || LOCAL_LIBRARY_ID
+  const part = await readPart(join(partsDir(), srcLib), sanitiseId(partId))
+  if (!part) return { ok: false, error: 'Source part not found.' }
+  if ((part.family ?? '').trim().toLowerCase() !== 'microcontroller') {
+    return { ok: false, error: 'Only Microcontroller-family parts can be promoted to a board.' }
+  }
+  // 1) Runtime copy (shows in the board selector immediately).
+  const res = await writePart(STANDARD_LIBRARY_ID, part)
+  if (!res.ok) return res
+  // 2) Dev only: mirror into the bundled repo library so it's committed + shipped.
+  let shipped = false
+  if (!app.isPackaged) {
+    try {
+      const repoDir = bundledStandardLibraryDir()
+      const id = sanitiseId(part.id)
+      await fsp.mkdir(repoDir, { recursive: true })
+      const manifest = join(repoDir, 'library.yml')
+      if (!existsSync(manifest)) {
+        const runtimeManifest = join(partsDir(), STANDARD_LIBRARY_ID, 'library.yml')
+        if (existsSync(runtimeManifest)) await fsp.copyFile(runtimeManifest, manifest)
+      }
+      const repoPartDir = join(repoDir, id)
+      await fsp.rm(repoPartDir, { recursive: true, force: true })
+      await fsp.cp(join(partsDir(), STANDARD_LIBRARY_ID, id), repoPartDir, { recursive: true })
+      shipped = true
+    } catch {
+      // Repo not writable → the runtime promote still succeeded.
+    }
+  }
+  return { ...res, shipped }
+}
+
 /** Delete a part folder (and its assets). A missing folder is a success. */
 export async function deletePart(libraryId: string, partId: string): Promise<WriteResult> {
   try {

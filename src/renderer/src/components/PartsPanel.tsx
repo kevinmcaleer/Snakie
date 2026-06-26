@@ -36,6 +36,9 @@ export const OPEN_PART_EDITOR_EVENT = 'snakie:open-part-editor'
 /** Window CustomEvent AppShell fires after the editor saves/closes → refresh. */
 export const PARTS_CHANGED_EVENT = 'snakie:parts-changed'
 
+/** The bundled "Standard Boards" library id (promote target). */
+const STANDARD_LIBRARY_ID = 'snakie-standard'
+
 /** Detail payload for {@link OPEN_PART_EDITOR_EVENT}. */
 export interface OpenPartEditorDetail {
   libraryId: string
@@ -92,6 +95,20 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     window.addEventListener(PARTS_CHANGED_EVENT, handler)
     return () => window.removeEventListener(PARTS_CHANGED_EVENT, handler)
   }, [refresh])
+
+  // DEV: promote a microcontroller board part into the Standard Boards library.
+  const promote = useCallback(
+    async (libraryId: string, part: PartDefinition): Promise<void> => {
+      const res = await window.api.parts.promoteToStandard(libraryId, part.id)
+      if (res.ok) {
+        setNote(`Promoted "${part.name}" to Standard Boards${res.shipped ? ' + bundled repo copy' : ''}.`)
+        await refresh()
+      } else {
+        setNote(res.error ?? 'Promote failed.')
+      }
+    },
+    [refresh]
+  )
 
   // Quietly check for updates once libraries are known.
   useEffect(() => {
@@ -390,6 +407,21 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                 onAddToProject={
                   onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
                 }
+                onPromote={
+                  // DEV-only: a Microcontroller part that isn't already the standard one.
+                  import.meta.env.DEV &&
+                  (selectedPart.part.family ?? '').trim().toLowerCase() === 'microcontroller' &&
+                  selectedPart.libraryId !== STANDARD_LIBRARY_ID
+                    ? () => void promote(selectedPart.libraryId, selectedPart.part)
+                    : undefined
+                }
+                promoteLabel={
+                  libraries.some(
+                    (l) => l.id === STANDARD_LIBRARY_ID && l.parts.some((p) => p.id === selectedPart.part.id)
+                  )
+                    ? 'Update Standard'
+                    : 'Promote to Standard'
+                }
                 onClose={() => setSelected(null)}
               />
             </Panel>
@@ -406,6 +438,8 @@ function PartDetail({
   onEdit,
   onDelete,
   onAddToProject,
+  onPromote,
+  promoteLabel,
   onClose
 }: {
   libraryId: string
@@ -413,6 +447,9 @@ function PartDetail({
   onEdit: () => void
   onDelete: () => void
   onAddToProject?: () => void
+  /** DEV-only: promote this microcontroller board into the Standard Boards library. */
+  onPromote?: () => void
+  promoteLabel?: string
   onClose: () => void
 }): JSX.Element {
   const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
@@ -446,6 +483,11 @@ function PartDetail({
           <button type="button" className="pl__btn pl__btn--small" onClick={onEdit}>
             Edit
           </button>
+          {onPromote && (
+            <button type="button" className="pl__btn pl__btn--small" onClick={onPromote} title="Copy this board into the Standard Boards library (developer)">
+              {promoteLabel ?? 'Promote to Standard'}
+            </button>
+          )}
           <button type="button" className="pl__btn pl__btn--small pl__btn--danger" onClick={onDelete}>
             Delete
           </button>

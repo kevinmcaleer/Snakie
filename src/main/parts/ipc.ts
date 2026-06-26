@@ -26,6 +26,7 @@ import {
   deletePart,
   ensureLibrary,
   partsDir,
+  promoteToStandard,
   readLibraries,
   seedStandardLibrary,
   writePart
@@ -83,6 +84,10 @@ export function registerPartsIpc(): void {
 
   ipcMain.handle('parts:deletePart', (_e, args: DeletePartArgs) =>
     deletePart(args?.libraryId ?? '', args?.partId ?? '')
+  )
+
+  ipcMain.handle('parts:promoteToStandard', (_e, args: { libraryId: string; partId: string }) =>
+    promoteToStandard(args?.libraryId ?? '', args?.partId ?? '')
   )
 
   ipcMain.handle('parts:createLibrary', (_e, meta: PartLibrary) => createLibrary(meta))

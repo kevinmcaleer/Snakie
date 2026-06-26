@@ -805,6 +805,10 @@ const parts = {
   /** Delete a part folder (no-op if it doesn't exist). */
   deletePart: (libraryId: string, partId: string): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:deletePart', { libraryId, partId }),
+  /** DEV: promote a microcontroller board part into the Standard Boards library
+   *  (and, when unpackaged, mirror it into the bundled repo copy so it ships). */
+  promoteToStandard: (libraryId: string, partId: string): Promise<PartsWriteResult & { shipped?: boolean }> =>
+    ipcRenderer.invoke('parts:promoteToStandard', { libraryId, partId }),
   /** Create a new (empty) library from its manifest. */
   createLibrary: (meta: PartLibrary): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:createLibrary', meta),
