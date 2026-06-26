@@ -81,7 +81,9 @@ Whatever you select shows its editable fields in the **inspector**:
 - **Image layer** — x/y/w/h, opacity, and a **Lock aspect ratio** toggle (keeps
   the photo from being stretched while you resize it).
 
-A **Delete** button on the inspector removes the selected object.
+Remove the selected object with the inspector's **Delete** button, the **−**
+button on its layer row (Pins / Mounting holes / Components), or the **Delete** /
+**Backspace** key.
 
 #### Grid & snap
 

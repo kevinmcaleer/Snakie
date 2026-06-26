@@ -22,8 +22,8 @@
 
 /* Pin-label backing plate so labels stay legible over the board image. */
 .pcv__label-bg {
-  fill: var(--bc-mat, #0c0f12);
-  fill-opacity: 0.72;
+  fill: #ffffff;
+  fill-opacity: 0.9;
 }
 
 /* Zoom controls overlay (bottom-right of the canvas). */
@@ -105,7 +105,8 @@
 .pcv__pin-label {
   font-family: var(--font-mono);
   font-size: 11px;
-  fill: var(--text, #e9edf1);
+  /* Dark text on the white backing plate, so labels read over any board/image. */
+  fill: #16191d;
 }
 
 .pcv__feat-label {

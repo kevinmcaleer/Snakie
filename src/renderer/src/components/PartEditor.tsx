@@ -329,6 +329,22 @@ export function PartEditor({
     setSelection(null)
   }
 
+  // Delete / Backspace removes the selected object — but not while typing in a
+  // field (so editing a name/number isn't hijacked).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (!selection) return
+      const el = document.activeElement as HTMLElement | null
+      const tag = el?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      e.preventDefault()
+      deleteSelection()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
   // --- persistence ----------------------------------------------------------
   const newPart = (): void => {
     setPart(withShapesFromFeatures(withPinPositions(blankPart())))
@@ -499,6 +515,7 @@ export function PartEditor({
                 setTool={setTool}
                 selection={selection}
                 setSelection={setSelection}
+                onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}
                 patch={patch}
@@ -554,6 +571,7 @@ interface LayersPanelProps {
   setTool: (t: CanvasTool) => void
   selection: CanvasSelection
   setSelection: (s: CanvasSelection) => void
+  onDeleteSelected: () => void
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
   patch: (p: Partial<PartDefinition>) => void
@@ -572,6 +590,7 @@ function LayersPanel({
   setTool,
   selection,
   setSelection,
+  onDeleteSelected,
   fileInputRef,
   onPickImage,
   patch
@@ -605,6 +624,19 @@ function LayersPanel({
     </button>
   )
   const selEq = (a: CanvasSelection): boolean => JSON.stringify(a) === JSON.stringify(selection)
+  /** A `−` button that deletes the selected item, enabled when `active`. */
+  const delBtn = (active: boolean): JSX.Element => (
+    <button
+      type="button"
+      className="pe__chip pe__chip--del"
+      disabled={!active}
+      onClick={onDeleteSelected}
+      title={active ? 'Delete the selected item' : 'Select an item to delete it'}
+      aria-label="Delete selected item"
+    >
+      −
+    </button>
+  )
   const setShape = (kind: 'rect' | 'polygon'): void => {
     if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
       patch({
@@ -633,6 +665,7 @@ function LayersPanel({
           {eye('components')}
           <span className="pe__layer-name">Components</span>
           <span className="pe__layer-count">{counts.components}</span>
+          {delBtn(selection?.type === 'shape' || selection?.type === 'shape-vertex' || selection?.type === 'label')}
         </div>
         {isOpen('components') && (
           <ul className="pe__layer-list">
@@ -672,6 +705,7 @@ function LayersPanel({
           <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
             ＋
           </button>
+          {delBtn(selection?.type === 'pin')}
         </div>
         {isOpen('pins') && (
           <ul className="pe__layer-list">
@@ -698,6 +732,7 @@ function LayersPanel({
           <button type="button" className={`pe__chip pe__chip--add${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
             ＋
           </button>
+          {delBtn(selection?.type === 'hole')}
         </div>
         {isOpen('holes') && (
           <ul className="pe__layer-list">

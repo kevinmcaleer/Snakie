@@ -874,6 +874,21 @@
   padding: 0.06rem 0.4rem;
 }
 
+.pe__chip--del {
+  padding: 0.06rem 0.45rem;
+}
+
+.pe__chip--del:not(:disabled):hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+.pe__chip--del:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .pe__layer-list {
   list-style: none;
   margin: 0.3rem 0 0;
