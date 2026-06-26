@@ -1,0 +1,389 @@
+import { useId, type JSX } from 'react'
+import {
+  DEFAULT_SHAPE_FILL,
+  DEFAULT_SHAPE_STROKE,
+  DEFAULT_SHAPE_STROKE_WIDTH,
+  pinShapeOf,
+  resolvedPins,
+  type Box,
+  type ResolvedPin
+} from './part-editor.util'
+import type { PartDefinition, PartPinType } from '../../../shared/part'
+import './PartCanvas.css'
+
+/**
+ * PART BODY (#130/#139) — the static, layered life-like scene of a part.
+ * =====================================================================
+ *
+ * Extracted from {@link PartCanvas} so the SAME drawing (PCB outline + image
+ * clipped to it + holes masked through + pads by shape + component shapes +
+ * labels) can be rendered BOTH by the interactive Part Editor and, read-only, at
+ * an arbitrary `box` inside the wiring canvas — so a placed part looks identical
+ * to how it was authored (accurate pin positions + background image).
+ *
+ * It is a pure `<g>` (defs + the four layers) in `box` coordinates: no `<svg>`,
+ * no pan/zoom transform, no pointer handlers. Per-object SELECTION styling is
+ * driven by the optional `selection` prop (null ⇒ no highlights, for embeds); the
+ * interactive selection CHROME (resize/vertex handles) stays in {@link PartCanvas}.
+ */
+
+export type { Box } from './part-editor.util'
+
+/** Pad fill by electrical role (kept close to the Board View's palette). */
+export const PAD_FILL: Record<PartPinType, string> = {
+  io: '#d6a531',
+  pwr: '#c0392b',
+  gnd: '#3a3f44',
+  other: '#8a8f96'
+}
+
+/**
+ * A Raspberry-Pi-style castellated pad: a GOLD pad with the **main hole centred on
+ * the pin** and a plated **half-hole** at the nearest board edge. Ground pads are
+ * square; signal/power pads are rounded (a stadium from the main hole to the edge).
+ * `nx`/`ny` are the pin's normalised position (to pick the nearest edge).
+ */
+export function castellatedPad(
+  cx: number,
+  cy: number,
+  size: number,
+  nx: number,
+  ny: number,
+  isGnd: boolean,
+  stroke: string,
+  sw: number
+): JSX.Element {
+  const GOLD = '#f0ce5c'
+  const hR = size * 0.28 // hole radius
+  const half = hR + 2.5 // pad half-thickness (perpendicular to the run)
+  const ext = size * 0.95 // distance from the main hole out to the edge half-hole
+  const dL = nx
+  const dR = 1 - nx
+  const dT = ny
+  const dB = 1 - ny
+  const m = Math.min(dL, dR, dT, dB)
+  const ox = m === dL ? -1 : m === dR ? 1 : 0
+  const oy = m === dT ? -1 : m === dB ? 1 : 0
+  let rx2: number
+  let ry2: number
+  let rw: number
+  let rh: number
+  let ex: number
+  let ey: number
+  if (ox !== 0) {
+    const inner = cx - ox * half
+    ex = cx + ox * ext // half-hole centre sits ON the pad's outer edge (bisected)
+    ey = cy
+    rx2 = Math.min(inner, ex)
+    rw = Math.abs(ex - inner)
+    ry2 = cy - half
+    rh = 2 * half
+  } else {
+    const inner = cy - oy * half
+    ex = cx
+    ey = cy + oy * ext
+    ry2 = Math.min(inner, ey)
+    rh = Math.abs(ey - inner)
+    rx2 = cx - half
+    rw = 2 * half
+  }
+  return (
+    <>
+      <rect x={rx2} y={ry2} width={rw} height={rh} rx={isGnd ? 2 : half} fill={GOLD} stroke={stroke} strokeWidth={sw} />
+      <circle cx={cx} cy={cy} r={hR} fill="var(--bc-mat, #0c0f12)" />
+      <circle cx={ex} cy={ey} r={hR} fill="var(--bc-mat, #0c0f12)" />
+    </>
+  )
+}
+
+/** Which layers are currently shown (driven by the Layers panel). */
+export interface LayerVisibility {
+  image: boolean
+  holes: boolean
+  pins: boolean
+  components: boolean
+}
+
+export const DEFAULT_LAYERS: LayerVisibility = { image: true, holes: true, pins: true, components: true }
+
+/** What is currently selected (drives the editor's contextual inspector). */
+export type CanvasSelection =
+  | { type: 'pin'; hi: number; pi: number }
+  | { type: 'hole'; index: number }
+  | { type: 'shape'; index: number }
+  | { type: 'shape-vertex'; index: number; vi: number }
+  | { type: 'label'; index: number }
+  | { type: 'vertex'; index: number }
+  | { type: 'image' }
+  | null
+
+/** The part's outline aspect (w/h): physical dimensions win, else `aspect`. */
+export function boardAspect(part: PartDefinition): number {
+  if (part.dimensions && part.dimensions.width > 0 && part.dimensions.height > 0) {
+    return part.dimensions.width / part.dimensions.height
+  }
+  if (typeof part.aspect === 'number' && part.aspect > 0) return part.aspect
+  return 0.6
+}
+
+/**
+ * Fit a board of the part's aspect into a `maxW`×`maxH` footprint. When `viewW`/
+ * `viewH` are given the box is CENTRED within that mat (the Part Editor's 460×460);
+ * otherwise it sits at the origin (the wiring canvas, where the caller translates).
+ */
+export function partBodyBox(
+  part: PartDefinition,
+  opts: { maxW: number; maxH: number; viewW?: number; viewH?: number }
+): Box {
+  const aspect = boardAspect(part)
+  let w = opts.maxW
+  let h = w / aspect
+  if (h > opts.maxH) {
+    h = opts.maxH
+    w = h * aspect
+  }
+  const vw = opts.viewW ?? w
+  const vh = opts.viewH ?? h
+  return { x: (vw - w) / 2, y: (vh - h) / 2, w, h }
+}
+
+export interface PartBodyProps {
+  part: PartDefinition
+  /** Where to draw the board outline (the pads/image scale to this). */
+  box: Box
+  /** Per-layer visibility. Defaults to all visible. */
+  visible?: LayerVisibility
+  /** Draw the pin-spacing grid behind the board. */
+  showGrid?: boolean
+  /** Current selection — per-object highlights. Null/omitted ⇒ none (embeds). */
+  selection?: CanvasSelection
+  /** Override the clip/mask id prefix (defaults to a per-instance useId). */
+  idPrefix?: string
+}
+
+/** The static life-like scene of a part, drawn into `box`. */
+export function PartBody({
+  part,
+  box,
+  visible = DEFAULT_LAYERS,
+  showGrid = false,
+  selection = null,
+  idPrefix
+}: PartBodyProps): JSX.Element {
+  const rawId = useId()
+  const uid = idPrefix ?? rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
+  const clipId = `pcb-clip-${uid}`
+  const maskId = `pcb-holes-${uid}`
+
+  const pins = resolvedPins(part)
+  const holes = part.mountingHoles ?? []
+  const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
+  const shapes = part.shapes ?? []
+  const labels = part.labels ?? []
+  const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
+  const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+
+  const px = (nx: number): number => box.x + nx * box.w
+  const py = (ny: number): number => box.y + ny * box.h
+  const holeR = (diameter: number): number =>
+    part.dimensions && part.dimensions.width > 0
+      ? Math.max(3, (diameter / part.dimensions.width) * box.w)
+      : 6
+  const gridSteps = (axis: 'x' | 'y'): number => {
+    const sizeMm = axis === 'x' ? part.dimensions?.width : part.dimensions?.height
+    const n = sizeMm && sizeMm > 0 ? Math.round(sizeMm / spacing) : axis === 'x' ? 8 : 16
+    return Math.min(axis === 'x' ? 60 : 80, Math.max(2, n))
+  }
+
+  const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
+  const cornerR = part.shape?.cornerRadius != null ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
+
+  const shapeEl = (props: Record<string, unknown>): JSX.Element =>
+    usePolygon ? (
+      <polygon points={polyPoints} {...props} />
+    ) : (
+      <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={cornerR} {...props} />
+    )
+
+  const cutHoles = visible.holes && holes.length > 0
+
+  const gridLines: JSX.Element[] = []
+  if (showGrid) {
+    const cols = gridSteps('x')
+    const rows = gridSteps('y')
+    for (let c = 1; c < cols; c++)
+      gridLines.push(<line key={`gc${c}`} x1={px(c / cols)} y1={box.y} x2={px(c / cols)} y2={box.y + box.h} stroke="var(--bc-grid, #ffffff30)" strokeWidth={0.5} />)
+    for (let r = 1; r < rows; r++)
+      gridLines.push(<line key={`gr${r}`} x1={box.x} y1={py(r / rows)} x2={box.x + box.w} y2={py(r / rows)} stroke="var(--bc-grid, #ffffff30)" strokeWidth={0.5} />)
+  }
+
+  const isSel = (s: CanvasSelection): boolean => !!selection && JSON.stringify(selection) === JSON.stringify(s)
+
+  return (
+    <g>
+      <defs>
+        {/* Clip the image to the board outline (image sits ON the PCB). */}
+        <clipPath id={clipId}>{shapeEl({})}</clipPath>
+        {/* Punch the mounting holes through the PCB + image. */}
+        {cutHoles && (
+          <mask id={maskId}>
+            {shapeEl({ fill: 'white' })}
+            {holes.map((h, i) => (
+              <circle key={i} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+            ))}
+          </mask>
+        )}
+      </defs>
+
+      {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
+      <g mask={cutHoles ? `url(#${maskId})` : undefined}>
+        {shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
+        {visible.image && part.imageData && (
+          <image
+            href={part.imageData}
+            x={px(layer.x)}
+            y={py(layer.y)}
+            width={layer.w * box.w}
+            height={layer.h * box.h}
+            opacity={layer.opacity ?? 1}
+            preserveAspectRatio="none"
+            clipPath={`url(#${clipId})`}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+      </g>
+
+      {/* The pin-pitch grid, on top of the image so you can align to it. */}
+      {showGrid && (
+        <g aria-hidden="true" clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+          {gridLines}
+        </g>
+      )}
+
+      {/* Layer 2: hole plating rings (on top of the cutout) */}
+      {visible.holes &&
+        holes.map((h, i) => (
+          <circle
+            key={`h${i}`}
+            cx={px(h.x)}
+            cy={py(h.y)}
+            r={holeR(h.diameter)}
+            fill="none"
+            stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'}
+            strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
+          />
+        ))}
+
+      {/* Layer 3: pins (square / round / castellated / header) */}
+      {visible.pins &&
+        pins.map((rp: ResolvedPin, i) => {
+          const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
+          const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
+          const size = 12
+          const cx = px(rp.x)
+          const cy = py(rp.y)
+          const stroke = sel ? '#fff' : '#0008'
+          const sw = sel ? 3 : 1
+          const shape = pinShapeOf(rp.pin)
+          let pad: JSX.Element
+          if (shape === 'round') {
+            pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
+          } else if (shape === 'castellated') {
+            pad = castellatedPad(cx, cy, size, rp.x, rp.y, rp.pin.type === 'gnd', stroke, sw)
+          } else if (shape === 'header') {
+            pad = (
+              <>
+                <circle cx={cx} cy={cy} r={size / 2} fill="#c79a4e" stroke={stroke} strokeWidth={sw} />
+                <circle cx={cx} cy={cy} r={size / 2 - 3.5} fill="var(--bc-mat, #0c0f12)" />
+              </>
+            )
+          } else {
+            pad = (
+              <>
+                <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
+                <circle cx={cx} cy={cy} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+              </>
+            )
+          }
+          const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
+          const anchor = rp.x < 0.5 ? 'start' : 'end'
+          const ldx = rp.x < 0.5 ? size : -size
+          const lx = cx + ldx
+          const tw = text.length * 6.2 + 6 // approx width of the mono label
+          const bgX = anchor === 'start' ? lx - 3 : lx - tw + 3
+          return (
+            <g key={`p${i}`}>
+              {pad}
+              {text && (
+                <>
+                  <rect x={bgX} y={cy - 8} width={tw} height={16} rx={2} className="pcv__label-bg" />
+                  <text x={lx} y={cy + 4} className="pcv__pin-label" textAnchor={anchor}>
+                    {text}
+                  </text>
+                </>
+              )}
+            </g>
+          )
+        })}
+
+      {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
+      {visible.components &&
+        features.map((f, i) => (
+          <g key={`f${i}`} style={{ pointerEvents: 'none' }}>
+            <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke="#0006" />
+            <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
+              {f.label}
+            </text>
+          </g>
+        ))}
+
+      {/* Layer 4b: component shapes (rect / circle / polygon) */}
+      {visible.components &&
+        shapes.map((s, i) => {
+          const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
+          const fill = s.fill ?? DEFAULT_SHAPE_FILL
+          const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
+          const sw = (s.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH) + (isSel({ type: 'shape', index: i }) ? 1.5 : 0)
+          let el: JSX.Element
+          let lcx: number
+          let lcy: number
+          if (s.kind === 'circle') {
+            const r = (s.r ?? 0.08) * box.w
+            el = <circle cx={px(s.x)} cy={py(s.y)} r={r} fill={fill} stroke={stroke} strokeWidth={sw} />
+            lcx = px(s.x)
+            lcy = py(s.y)
+          } else if (s.kind === 'polygon') {
+            const pts = s.points ?? []
+            el = <polygon points={pts.map((p) => `${px(p.x)},${py(p.y)}`).join(' ')} fill={fill} stroke={stroke} strokeWidth={sw} />
+            lcx = pts.length ? px(pts.reduce((a, p) => a + p.x, 0) / pts.length) : px(s.x)
+            lcy = pts.length ? py(pts.reduce((a, p) => a + p.y, 0) / pts.length) : py(s.y)
+          } else {
+            const w = (s.w ?? 0.2) * box.w
+            const h = (s.h ?? 0.15) * box.h
+            el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={3} fill={fill} stroke={stroke} strokeWidth={sw} />
+            lcx = px(s.x) + w / 2
+            lcy = py(s.y) + h / 2
+          }
+          return (
+            <g key={`s${i}`}>
+              {el}
+              {s.label && (
+                <text x={lcx} y={lcy} className="pcv__feat-label">
+                  {s.label}
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+      {/* Layer 4c: text labels */}
+      {visible.components &&
+        labels.map((l, i) => (
+          <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+            {l.text}
+          </text>
+        ))}
+    </g>
+  )
+}

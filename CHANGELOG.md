@@ -7,15 +7,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Robot definition + Wiring mode (#128 / #139 / #140).** The Board Viewer gains
-  a **Wiring** mode (the wires button in its title bar): pick a microcontroller,
-  **add parts from the library** (a part's **+ Add to project** button), and drag
-  **node-RED-style noodle wires** between any two pins. Power wires are red,
-  ground white, and signal wires take a palette colour (or one you pick per wire).
-  Every wire is mirrored in a **connections table** beneath the canvas. The whole
-  project — chosen board, placed parts and their placements, and the pin-to-pin
+- **Robot definition + wiring, merged into the Board View (#128 / #139 / #140).**
+  The Board Viewer gains **Breadboard** and **Schematic** view tabs alongside the
+  node graph (top-left toggle). The **Breadboard** view draws the chosen
+  microcontroller as its **real PCB** (the same accurate pinout the node graph
+  uses) and each placed part with its **real Part-Editor appearance** — background
+  image + accurate pin positions — wired with **node-RED-style noodles**. The
+  **Schematic** view draws each part as its **real schematic symbol** and the MCU
+  as a generic **IC block** following standard conventions — **power rails on top,
+  a single combined GND at the bottom**, signals on the sides, and **plain pin
+  stubs** (no negation-bubble circles). Pads on the same rail collapse to one
+  terminal (every `GND`, every `3V3`, …) in Schematic but stay individual in
+  Breadboard. Wires are **orthogonal,
+  auto-routed** to step around components and keep a margin between parallel runs
+  (a Hanan-grid A\* router); Breadboard wires use the same obstacle-avoiding route
+  rounded into a noodle, so they **route around parts rather than behind them**.
+  Both views **overlay the pins your code uses** (combining the node-graph data
+  onto the same canvas) and **auto-zoom-to-fit**. Parts are added from a **slim
+  right-side library dock** (collapsible) instead of a separate screen; power wires
+  are red, ground white, and signal wires take a palette colour (or one you pick
+  per wire). Every wire is mirrored in a **connections table** beneath the canvas.
+  The whole project — chosen board, placed parts + placements, and the pin-to-pin
   connections — is saved as a human-readable **`robot.yml`** in the project folder
-  (round-trips). See `docs/robot-definition.md`.
+  (round-trips). Switching views never breaks a wire (index-based pin identity).
+  See `docs/robot-definition.md`.
+- **Part Editor — fast, accurate pin placement (#130).** Select a pin to get a
+  faint **ghost array** (a 2.54 mm cross, four each way): drag a nearby pin and it
+  **snaps to that grid**, or drag *from* the selected pin to **lay down a whole row
+  of evenly-spaced pins** in one gesture. **Multi-select** pins (rubber-band drag
+  or shift-click) to get an **alignment toolbar** — align left / right / top /
+  bottom and distribute horizontally / vertically. Castellated pads are redrawn
+  **Raspberry-Pi-style** — a **gold** pad with the **main hole centred on the pin**
+  and a plated **half-hole** at the board edge (ground pads square, others
+  rounded). A **Background** colour well sets the PCB colour.
 - **Parts Library — portable, community-authored & version-controlled (#129).**
   A new **Parts** view (in the Board Viewer — see below) browses your installed
   parts libraries and the parts inside them. Parts are **no longer hard-coded** into Snakie:
@@ -63,6 +87,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   data:` to the renderer Content-Security-Policy so `data:`-URL images (the Part
   Editor's board photo and the Board View's uploaded board image) actually paint —
   previously they were silently blocked by the `default-src 'self'` fallback.
+
+### Changed
+- **The Board View is a normal window** now (no longer always-on-top), so it can
+  sit behind the editor like any other window.
+
+### Fixed
+- **Schematic view: one terminal per rail, no stray pin circles.** A placed part's
+  (or the MCU's) multiple grounds and same-label power pads now collapse to a single
+  schematic terminal (they stay individual in Breadboard), and pins draw as plain
+  stubs — a circle on a pin means logic inversion, not a connection — so connections
+  are just where a wire meets the stub.
+- **Board View close button no longer clips when the window is narrowed.** The
+  title bar's right-docked controls (ending in the close ✕) are pinned and the
+  middle items now shrink/truncate, and the Board View window has a sensible
+  minimum size — so the close button is always reachable.
 
 ## [0.14.0] - 2026-06-24
 

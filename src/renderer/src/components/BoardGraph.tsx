@@ -44,6 +44,10 @@ import {
   parseProbeOutput,
   type LiveValue
 } from './board-values'
+import { WiringCanvas, type WiringRenderMode } from './WiringCanvas'
+import { PartsPanel } from './PartsPanel'
+import type { RobotDefinition } from '../../../shared/robot'
+import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './BoardGraph.css'
 
 /**
@@ -99,12 +103,19 @@ export interface BoardGraphProps {
   onClose?: () => void
   /** Enter the Board Creator. When set, the gold edit knob is shown. */
   onEnterCreator?: () => void
-  /** Open the Parts Library (the user's parts). When set, a chip button shows. */
-  onOpenParts?: () => void
-  /** Open the Wiring mode (place parts + wire pins). When set, a button shows. */
-  onOpenWiring?: () => void
   /** Open the user's boards folder (wired in the floating window). */
   onOpenBoardsFolder?: () => void
+  // --- Wiring + Parts (merged into this view, #139/#140). When `robot` +
+  // `onChangeRobot` are provided, the Life-like / Schematic view tabs and the
+  // right-side library dock appear; otherwise this is a graph-only board view.
+  /** The project's robot definition (placed parts + pin wiring). */
+  robot?: RobotDefinition
+  /** Persist a changed robot definition (writes robot.yml). */
+  onChangeRobot?: (next: RobotDefinition) => void
+  /** Installed part libraries (to resolve placed parts' pins). */
+  libraries?: PartLibraryWithParts[]
+  /** Append a library part to the project. When set, the library dock shows. */
+  onAddToProject?: (libraryId: string, part: PartDefinition) => void
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -301,20 +312,43 @@ export function BoardGraph({
   asWindow = false,
   onClose,
   onEnterCreator,
-  onOpenParts,
-  onOpenWiring,
-  onOpenBoardsFolder
+  onOpenBoardsFolder,
+  robot,
+  onChangeRobot,
+  libraries,
+  onAddToProject
 }: BoardGraphProps): JSX.Element {
   const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
 
-  // Persisted board selection (shared with BoardView); default when stale.
+  // The view representation (#139/#140): the node-graph (parsed pin usage), or
+  // the Life-like / Schematic wiring canvas. Wiring is only available when the
+  // host supplies a robot definition + a persist callback (the board window).
+  const wiringEnabled = !!(robot && onChangeRobot)
+  const [viewType, setViewType] = useState<'graph' | WiringRenderMode>('graph')
+  const [dockOpen, setDockOpen] = useState(true)
+  // If wiring gets disabled (e.g. props change), never strand a wiring view.
+  const effectiveView = wiringEnabled ? viewType : 'graph'
+
+  // Board selection. Seed from the project's authored board (robot.yml) when it
+  // has one — so persisted `board.<pin>#<index>` wires resolve against the SAME
+  // board they were wired on — else the shared BoardView pick / default.
   const [boardId, setBoardId] = useState<string>(() => {
     try {
-      return window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_BOARD_ID
+      return robot?.board ?? window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_BOARD_ID
     } catch {
-      return DEFAULT_BOARD_ID
+      return robot?.board ?? DEFAULT_BOARD_ID
     }
   })
+  // robot.yml loads asynchronously (board-main starts from a blank robot), so
+  // adopt its board when it arrives/changes. This makes robot.board the source of
+  // truth for the wiring views; an explicit picker change still wins (it sets
+  // boardId AND robot.board together, so this no-ops). Guarded to a known board.
+  useEffect(() => {
+    if (robot?.board && robot.board !== boardId && boards.some((b) => b.id === robot.board)) {
+      setBoardId(robot.board)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [robot?.board, boards])
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
   // Custom dropdown open state — a native <select> popup is unreliable inside a
@@ -327,6 +361,12 @@ export function BoardGraph({
       window.localStorage.setItem(STORAGE_KEY, id)
     } catch {
       // Ignore write failures (storage disabled / quota).
+    }
+    // In a wiring-enabled window, record the chosen board in robot.yml too, so the
+    // selection takes effect immediately (not only as a side-effect of a later
+    // wire edit) and the picker, drawn board and file never diverge.
+    if (wiringEnabled && robot && onChangeRobot && robot.board !== id) {
+      onChangeRobot({ ...robot, board: id })
     }
   }
 
@@ -405,6 +445,22 @@ export function BoardGraph({
     return keys
   }, [rows])
   const ledLit = useMemo(() => rows.some((r) => r.pad.edge === 'led'), [rows])
+
+  // Combine view (#139/#140): which board pads the parsed code uses, keyed by the
+  // canonical pad INDEX (== layoutPads order == the wiring endpoint index), with a
+  // colour + a short label (the variable name) — the wiring canvas overlays these.
+  const usedByCode = useMemo<Map<number, { color: string; label: string }>>(() => {
+    const m = new Map<number, { color: string; label: string }>()
+    const mark = (pad: PadPoint, r: GraphRow): void => {
+      const idx = pads.indexOf(pad)
+      if (idx >= 0 && !m.has(idx)) m.set(idx, { color: r.color, label: r.conn.variable || PIN_TYPE_TAG[r.conn.type] })
+    }
+    for (const r of rows) {
+      mark(r.pad, r)
+      for (const ep of r.extraPads) mark(ep, r)
+    }
+    return m
+  }, [rows, pads])
 
   // Stage extent spans BOTH the node column and the physical board (with its
   // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
@@ -556,6 +612,29 @@ export function BoardGraph({
         </span>
         <span className="boardgraph__title">BOARD&nbsp;VIEW</span>
 
+        {wiringEnabled && (
+          <div className="boardgraph__viewtabs" role="tablist" aria-label="Board view type">
+            {(
+              [
+                ['graph', 'Node graph'],
+                ['lifelike', 'Breadboard'],
+                ['schematic', 'Schematic']
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={effectiveView === id}
+                className={`boardgraph__viewtab ${effectiveView === id ? 'is-active' : ''}`}
+                onClick={() => setViewType(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="boardgraph__picker">
           <button
             type="button"
@@ -601,25 +680,28 @@ export function BoardGraph({
         <div className="boardgraph__actions">
           {/* LIVE doubles as the on/off control for device polling (#97). OFF:
               dim LED, idle placeholders, device untouched. ON: lit when a board
-              is connected (green, pulsing), amber while connecting/unreadable. */}
-          <button
-            type="button"
-            className={`boardgraph__live ${liveOn ? 'is-on' : 'is-off'} ${
-              liveOn && liveConnected ? 'is-connected' : ''
-            }`}
-            onClick={() => setLiveOn((on) => !on)}
-            aria-pressed={liveOn}
-            title={
-              liveOn
-                ? liveConnected
-                  ? 'Live: reading the connected board — click to stop'
-                  : 'Live: waiting for a connected board — click to stop'
-                : 'Show live pin values from the board (polls the device — interrupts a running program). Click to start.'
-            }
-          >
-            <span className="boardgraph__led" aria-hidden="true" />
-            LIVE
-          </button>
+              is connected (green, pulsing), amber while connecting/unreadable.
+              Only the node-graph shows per-pin values, so LIVE hides elsewhere. */}
+          {effectiveView === 'graph' && (
+            <button
+              type="button"
+              className={`boardgraph__live ${liveOn ? 'is-on' : 'is-off'} ${
+                liveOn && liveConnected ? 'is-connected' : ''
+              }`}
+              onClick={() => setLiveOn((on) => !on)}
+              aria-pressed={liveOn}
+              title={
+                liveOn
+                  ? liveConnected
+                    ? 'Live: reading the connected board — click to stop'
+                    : 'Live: waiting for a connected board — click to stop'
+                  : 'Show live pin values from the board (polls the device — interrupts a running program). Click to start.'
+              }
+            >
+              <span className="boardgraph__led" aria-hidden="true" />
+              LIVE
+            </button>
+          )}
           {onEnterCreator && (
             <button
               type="button"
@@ -636,39 +718,6 @@ export function BoardGraph({
                   strokeWidth="1.8"
                   strokeLinejoin="round"
                 />
-              </svg>
-            </button>
-          )}
-          {onOpenWiring && (
-            <button
-              type="button"
-              className="boardgraph__key"
-              onClick={onOpenWiring}
-              title="Open Wiring (place parts + connect pins)"
-              aria-label="Open Wiring"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <g fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <circle cx="3" cy="4" r="1.6" fill="currentColor" stroke="none" />
-                  <circle cx="13" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                  <path d="M3 4c5 0 5 8 10 8" />
-                </g>
-              </svg>
-            </button>
-          )}
-          {onOpenParts && (
-            <button
-              type="button"
-              className="boardgraph__key"
-              onClick={onOpenParts}
-              title="Open your Parts Library (browse + author parts)"
-              aria-label="Open the Parts Library"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <g fill="none" stroke="currentColor" strokeWidth="1.4">
-                  <rect x="4.5" y="4.5" width="7" height="7" fill="currentColor" stroke="none" />
-                  <path d="M2 6h2.5M2 9h2.5M11.5 6H14M11.5 9H14M6 2v2.5M9 2v2.5M6 11.5V14M9 11.5V14" />
-                </g>
               </svg>
             </button>
           )}
@@ -700,6 +749,50 @@ export function BoardGraph({
       </header>
 
       <div className="boardgraph__body">
+      {effectiveView !== 'graph' ? (
+        <>
+          <div className="boardgraph__wiring">
+            <WiringCanvas
+              boardDef={def}
+              renderMode={effectiveView}
+              robot={robot as RobotDefinition}
+              onChange={onChangeRobot as (next: RobotDefinition) => void}
+              libraries={libraries ?? []}
+              usedByCode={usedByCode}
+            />
+          </div>
+          {onAddToProject &&
+            (dockOpen ? (
+              <aside className="boardgraph__dock" aria-label="Parts library">
+                <div className="boardgraph__dock-head">
+                  <span>Library</span>
+                  <button
+                    type="button"
+                    className="boardgraph__dock-toggle"
+                    onClick={() => setDockOpen(false)}
+                    title="Hide the library panel"
+                    aria-label="Hide the library panel"
+                  >
+                    ›
+                  </button>
+                </div>
+                <div className="boardgraph__dock-body">
+                  <PartsPanel onAddToProject={onAddToProject} />
+                </div>
+              </aside>
+            ) : (
+              <button
+                type="button"
+                className="boardgraph__dock-tab"
+                onClick={() => setDockOpen(true)}
+                title="Show the library panel"
+                aria-label="Show the library panel"
+              >
+                Library
+              </button>
+            ))}
+        </>
+      ) : (
       <div
         className="boardgraph__canvas"
         ref={canvasRef}
@@ -923,9 +1016,10 @@ export function BoardGraph({
           </>
         )}
       </div>
+      )}
       </div>
 
-      <PinsInUse conns={conns} fileName={fileName} />
+      {effectiveView === 'graph' && <PinsInUse conns={conns} fileName={fileName} />}
     </div>
   )
 }
@@ -933,7 +1027,7 @@ export function BoardGraph({
 // --- SVG drawing ------------------------------------------------------------
 
 /** Stable key for a drawn pad coordinate (matches "used" pads to drawn pads). */
-function padKey(p: { x: number; y: number }): string {
+export function padKey(p: { x: number; y: number }): string {
   return `${p.x.toFixed(1)},${p.y.toFixed(1)}`
 }
 
@@ -1029,7 +1123,7 @@ function labelTransform(counter: 0 | 180, ax: number, ay: number): string | unde
 }
 
 /** Shared SVG <defs> (gradients + glow) — reused by the live view. */
-function BoardDefs({ def }: { def: BoardDefinition }): JSX.Element {
+export function BoardDefs({ def }: { def: BoardDefinition }): JSX.Element {
   return (
     <defs>
       <linearGradient id="bg-pcb" x1="0" y1="0" x2="0" y2="1">
@@ -1086,7 +1180,7 @@ function padFill(type: BoardPadType | undefined): string {
  * position with its silk label. Pads a connection resolves to (`usedPadKeys`)
  * are highlighted; idle pads are still drawn so the full header reads.
  */
-function Board({
+export function Board({
   def,
   box,
   pads,

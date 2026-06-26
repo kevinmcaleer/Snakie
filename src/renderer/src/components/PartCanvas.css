@@ -87,6 +87,77 @@
   color: var(--text-muted);
 }
 
+/* Multi-select rings + rubber-band marquee. */
+.pcv__sel-ring {
+  fill: none;
+  stroke: #4ea1ff;
+  stroke-width: 2;
+  pointer-events: none;
+}
+
+.pcv__marquee {
+  fill: rgba(78, 161, 255, 0.12);
+  stroke: #4ea1ff;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+}
+
+/* Alignment toolbar (appears when ≥2 pins are selected). */
+.pcv__align {
+  position: absolute;
+  top: 0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.2rem 0.3rem;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+
+.pcv__align-count {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  margin: 0 0.2rem;
+}
+
+.pcv__align-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.pcv__align-btn:hover {
+  border-color: var(--text-muted);
+}
+
+.pcv__align-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pcv__align-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.15rem;
+  background: var(--border);
+}
+
 .pcv__svg--interactive {
   cursor: default;
 }

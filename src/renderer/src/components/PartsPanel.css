@@ -380,9 +380,17 @@
 
 .pl__detail-head {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.4rem;
   margin-bottom: 0.4rem;
+}
+
+/* The selected part's name sits on its own line (with the close ✕), above the
+   action buttons — so the narrow dock isn't cramped. */
+.pl__detail-titlerow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .pl__detail-title {
@@ -393,6 +401,7 @@
 
 .pl__detail-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.3rem;
 }
 
@@ -488,65 +497,3 @@
   color: var(--text-muted);
 }
 
-/* --- Board-window Parts mode chrome (board-main.tsx) --- */
-.bw-parts {
-  display: flex;
-  flex-direction: column;
-  width: 100vw;
-  height: 100vh;
-  background: var(--bg-elevated);
-  color: var(--text);
-}
-
-.bw-parts__bar {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.5rem 0.7rem;
-  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
-  border-bottom: var(--border-w) solid var(--border);
-  -webkit-app-region: drag;
-  app-region: drag;
-}
-
-.bw-parts__title {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.bw-parts__title-main {
-  font-weight: 700;
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-}
-
-.bw-parts__title-sub {
-  font-size: 0.66rem;
-  color: var(--text-muted);
-}
-
-.bw-parts__done {
-  -webkit-app-region: no-drag;
-  app-region: no-drag;
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: var(--text);
-  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.28rem 0.7rem;
-  cursor: pointer;
-}
-
-.bw-parts__done:hover {
-  border-color: var(--text-muted);
-}
-
-.bw-parts__body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: hidden;
-}

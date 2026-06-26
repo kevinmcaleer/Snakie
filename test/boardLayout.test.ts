@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
   boardBox,
   busLabel,
+  enumerateBoardPads,
   layoutPads,
+  mcuSymbolLayout,
   ledPoint,
   nodeSide,
   padForToken,
@@ -294,5 +296,109 @@ describe('busLabel (#147)', () => {
 
   it('falls back to the bare type when the bus is unknown', () => {
     expect(busLabel('i2c', undefined)).toBe('I2C')
+  })
+})
+
+describe('enumerateBoardPads (canonical pin order)', () => {
+  // A board with an EMPTY header in the middle — the case that previously made the
+  // life-like (layoutPads) and schematic (headers.flatMap) pad indices diverge.
+  const WITH_EMPTY: BoardDefinition = {
+    ...DEF,
+    headers: [
+      { edge: 'left', pins: [{ gpio: 0, label: 'GP0' }, { gpio: 1, label: 'GP1' }] },
+      { edge: 'right', pins: [] }, // empty — must be skipped, not shift indices
+      { edge: 'bottom', pins: [{ gpio: 2, label: 'GP2' }] }
+    ]
+  }
+
+  it('skips empty headers and numbers pads sequentially', () => {
+    const refs = enumerateBoardPads(WITH_EMPTY)
+    expect(refs.map((r) => r.pad.label)).toEqual(['GP0', 'GP1', 'GP2'])
+    expect(refs.map((r) => r.index)).toEqual([0, 1, 2])
+    expect(refs.map((r) => r.edge)).toEqual(['left', 'left', 'bottom'])
+  })
+
+  it('matches layoutPads order exactly (life-like builds on enumerateBoardPads)', () => {
+    const box = boardBox(1, GEOM)
+    expect(layoutPads(WITH_EMPTY, box).map((p) => p.pad.label)).toEqual(
+      enumerateBoardPads(WITH_EMPTY).map((r) => r.pad.label)
+    )
+  })
+
+  it('matches the schematic flatten order, so a wire never re-targets on toggle', () => {
+    // The schematic block flattens headers→pins (empty headers yield nothing); the
+    // life-like enumeration must produce the identical order so `board.*#index`
+    // endpoints resolve to the same physical pad in both views.
+    const schematicFlat = WITH_EMPTY.headers.flatMap((h) => h.pins.map((p) => p.label))
+    expect(enumerateBoardPads(WITH_EMPTY).map((r) => r.pad.label)).toEqual(schematicFlat)
+  })
+})
+
+describe('mcuSymbolLayout (MCU IC block, schematic)', () => {
+  const DEF2: BoardDefinition = {
+    id: 'm',
+    name: 'M',
+    mcu: 'TST',
+    pcbColor: '#0f5a2e',
+    aspect: 1,
+    headers: [
+      { edge: 'left', pins: [{ gpio: 0, label: 'GP0' }, { label: 'GND', type: 'gnd' }, { label: '3V3', type: 'vcc' }] },
+      { edge: 'right', pins: [{ gpio: 1, label: 'GP1' }, { label: 'GND', type: 'gnd' }] }
+    ]
+  }
+
+  it('keeps every pad flatIndex (one terminal per pad, dense 0..n-1)', () => {
+    const lay = mcuSymbolLayout(DEF2)
+    expect(lay.terminals.map((t) => t.flatIndex).sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4])
+  })
+
+  it('collapses all GND pads to ONE primary terminal at the bottom, sharing an anchor', () => {
+    const lay = mcuSymbolLayout(DEF2)
+    const gnd = lay.terminals.filter((t) => t.pad.type === 'gnd')
+    expect(gnd).toHaveLength(2) // both gnd pads kept (indices 1 and 4) for wiring
+    expect(gnd.filter((t) => t.primary)).toHaveLength(1) // but only one is drawn
+    expect(gnd.every((t) => t.side === 'bottom')).toBe(true)
+    expect(gnd[0].outer).toEqual(gnd[1].outer) // any board.GND#n wire hits one point
+  })
+
+  it('puts power (vcc) on top; non-power/ground keep their header edge', () => {
+    const lay = mcuSymbolLayout(DEF2)
+    expect(lay.terminals.find((t) => t.pad.label === '3V3')?.side).toBe('top')
+    expect(lay.terminals.find((t) => t.pad.label === 'GP0')?.side).toBe('left')
+    expect(lay.terminals.find((t) => t.pad.label === 'GP1')?.side).toBe('right')
+  })
+})
+
+describe('mcuSymbolLayout — power rails merge by label', () => {
+  const DEF3: BoardDefinition = {
+    id: 'm3',
+    name: 'M3',
+    mcu: 'TST',
+    pcbColor: '#0f5a2e',
+    aspect: 1,
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { label: '3V3', type: 'vcc' },
+          { label: '3V3', type: 'vcc' },
+          { label: 'VBUS', type: 'vcc' },
+          { gpio: 0, label: 'GP0' }
+        ]
+      }
+    ]
+  }
+
+  it('collapses same-label power pads to ONE terminal but keeps distinct rails separate', () => {
+    const lay = mcuSymbolLayout(DEF3)
+    const v3 = lay.terminals.filter((t) => t.pad.label === '3V3')
+    const vbus = lay.terminals.filter((t) => t.pad.label === 'VBUS')
+    expect(v3).toHaveLength(2) // both 3V3 pads kept for wiring
+    expect(v3.filter((t) => t.primary)).toHaveLength(1) // …drawn once
+    expect(v3[0].outer).toEqual(v3[1].outer) // …sharing one terminal
+    expect(vbus).toHaveLength(1) // VBUS is a separate rail
+    // Power rails go on top; signals keep their edge.
+    expect(v3.every((t) => t.side === 'top')).toBe(true)
+    expect(lay.terminals.find((t) => t.pad.label === 'GP0')?.side).toBe('left')
   })
 })

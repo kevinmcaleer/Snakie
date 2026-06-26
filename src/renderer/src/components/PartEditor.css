@@ -494,17 +494,20 @@
   max-height: 100%;
 }
 
+/* The symbol body is always dark (var(--sc-fill)), so the text is a FIXED light
+   colour — not the theme --text, which is dark in the light/skeuomorph theme and
+   would be unreadable on the symbol. */
 .sc__pin-label {
   font-family: var(--font-mono);
   font-size: 12px;
-  fill: var(--text, #e9edf1);
+  fill: #eef1f5;
 }
 
 .sc__title {
   font-family: var(--font-mono);
   font-size: 14px;
   font-weight: 700;
-  fill: var(--text, #e9edf1);
+  fill: #ffffff;
   text-anchor: middle;
   dominant-baseline: middle;
 }
@@ -512,7 +515,7 @@
 .sc__sub {
   font-family: var(--font-mono);
   font-size: 10px;
-  fill: var(--text-muted, #9aa3ad);
+  fill: #aeb4bd;
   text-anchor: middle;
 }
 

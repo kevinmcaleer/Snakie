@@ -67,31 +67,56 @@ export interface PadPoint {
   pad: BoardPad
 }
 
+/** A board pad in flattened (header→pin) order — the canonical pin enumeration. */
+export interface BoardPadRef {
+  pad: BoardPad
+  edge: BoardHeader['edge']
+  /** Flattened index — authoritative; the wiring endpoint `#index` for the MCU. */
+  index: number
+  /** Position within its own header (for even edge spreading). */
+  i: number
+  /** Pin count of its header. */
+  n: number
+}
+
 /**
- * Compute every pad's drawn coordinate for a board (so they can be drawn +
- * matched). Pads are spread evenly along their header's edge, inset from the
- * corners, in header/array order. Empty headers are skipped.
+ * Flatten a board's pads in header→pin order, **skipping empty headers**. This is
+ * the single source of truth for board pad ORDER, shared by {@link layoutPads}
+ * (life-like) and the MCU schematic symbol, so the wiring endpoint `board.*#index`
+ * resolves to the same physical pad in BOTH views. Pure + DOM-free for tests.
  */
-export function layoutPads(def: BoardDefinition, box: BoardBox): PadPoint[] {
-  const points: PadPoint[] = []
+export function enumerateBoardPads(def: BoardDefinition): BoardPadRef[] {
+  const out: BoardPadRef[] = []
+  let index = 0
   for (const header of def.headers) {
     const n = header.pins.length
     if (n === 0) continue
     header.pins.forEach((pad, i) => {
-      // Spread pads evenly along the edge, inset from the corners.
-      const t = n === 1 ? 0.5 : i / (n - 1)
-      if (header.edge === 'left' || header.edge === 'right') {
-        const y = box.y + 18 + t * (box.h - 36)
-        const x = header.edge === 'left' ? box.x + 12 : box.x + box.w - 12
-        points.push({ x, y, edge: header.edge, pad })
-      } else {
-        const x = box.x + 18 + t * (box.w - 36)
-        const y = header.edge === 'top' ? box.y + 12 : box.y + box.h - 12
-        points.push({ x, y, edge: header.edge, pad })
-      }
+      out.push({ pad, edge: header.edge, index, i, n })
+      index += 1
     })
   }
-  return points
+  return out
+}
+
+/**
+ * Compute every pad's drawn coordinate for a board (so they can be drawn +
+ * matched). Pads are spread evenly along their header's edge, inset from the
+ * corners, in {@link enumerateBoardPads} order (empty headers skipped).
+ */
+export function layoutPads(def: BoardDefinition, box: BoardBox): PadPoint[] {
+  return enumerateBoardPads(def).map(({ pad, edge, i, n }) => {
+    // Spread pads evenly along the edge, inset from the corners.
+    const t = n === 1 ? 0.5 : i / (n - 1)
+    if (edge === 'left' || edge === 'right') {
+      const y = box.y + 18 + t * (box.h - 36)
+      const x = edge === 'left' ? box.x + 12 : box.x + box.w - 12
+      return { x, y, edge, pad }
+    }
+    const x = box.x + 18 + t * (box.w - 36)
+    const y = edge === 'top' ? box.y + 12 : box.y + box.h - 12
+    return { x, y, edge, pad }
+  })
 }
 
 /** The onboard-LED dot position (top-right corner of the board). */
@@ -241,4 +266,139 @@ export function padForToken(
 
   // Last resort: first pad.
   return pads[0] ?? { x: box.x, y: box.y, edge: 'left', pad: { label: t } }
+}
+
+// --- MCU schematic symbol (#140) -------------------------------------------
+// The microcontroller drawn as a generic IC block (a rectangle with labelled pin
+// stubs) for the Schematic wiring view. Built on enumerateBoardPads so a
+// terminal's flatIndex == the layoutPads index == the wiring endpoint `#index`.
+
+/** A microcontroller IC-block terminal (schematic view). */
+export interface McuTerminal {
+  pad: BoardPad
+  side: BoardHeader['edge']
+  /** Flattened pad index — the wiring endpoint `#index` for the MCU. */
+  flatIndex: number
+  /** All flatIndices sharing this terminal (a rail merges several pads into one). */
+  railIndices: number[]
+  /** Box-edge attach point, local to the symbol box origin. */
+  inner: { x: number; y: number }
+  /** Stub end = the wire/dot attach point, local. */
+  outer: { x: number; y: number }
+  label: { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
+  /** False for the extra ground pads merged into the single GND terminal — the
+   *  symbol/dots draw only the `primary` one, but every pad keeps its own
+   *  flatIndex so any `board.GND#n` wire still resolves to the shared terminal. */
+  primary: boolean
+}
+
+export interface McuSymbolLayout {
+  box: { w: number; h: number }
+  terminals: McuTerminal[]
+}
+
+/** Evenly spaced positions for `n` terminals between `a` and `b` (inset). */
+function mcuSlots(n: number, a: number, b: number): number[] {
+  if (n <= 0) return []
+  if (n === 1) return [(a + b) / 2]
+  return Array.from({ length: n }, (_, i) => a + ((i + 1) * (b - a)) / (n + 1))
+}
+
+/** A pad on the ground net (by type, or a ground-ish label as a fallback). */
+function isGndPad(pad: BoardPad): boolean {
+  return pad.type === 'gnd' || /^(gnd|ground|vss|vee|agnd|dgnd)$/i.test(pad.label ?? '')
+}
+/** A pad on a power rail (by type, or a supply-ish label as a fallback). */
+function isPwrPad(pad: BoardPad): boolean {
+  return pad.type === 'vcc' || /^(3v3|3\.3v|5v|vcc|vdd|vbus|vsys|vin|v\+|avdd)$/i.test(pad.label ?? '')
+}
+/** The rail a pad belongs to (merged in the schematic): one GND, one terminal per
+ *  distinct power-rail label (so several `3V3` pads share a terminal but `VBUS` and
+ *  `VSYS` stay separate). Signals return null (never merged). */
+function railKey(pad: BoardPad): string | null {
+  if (isGndPad(pad)) return 'GND'
+  if (isPwrPad(pad)) return `PWR:${(pad.label ?? '').toUpperCase()}`
+  return null
+}
+
+/**
+ * Lay out the MCU as an IC block at the origin. Schematic convention: power rails
+ * on top, a single combined GND at the bottom, signals on the sides (single-header
+ * boards split left/right). Pads on the same rail (all grounds; all `3V3`; …)
+ * collapse to ONE terminal — each keeps its own flatIndex (so `board.<pin>#n`
+ * wires still resolve to the shared terminal) but only the first is `primary`
+ * (drawn). Pure + DOM-free.
+ */
+export function mcuSymbolLayout(def: BoardDefinition, opts?: { stub?: number }): McuSymbolLayout {
+  const stub = opts?.stub ?? 26
+  const refs = enumerateBoardPads(def)
+
+  // Group pads by rail; non-rail pads (signals) stay individual.
+  const groups = new Map<string, BoardPadRef[]>()
+  const singles: BoardPadRef[] = []
+  for (const r of refs) {
+    const k = railKey(r.pad)
+    if (k) {
+      const g = groups.get(k)
+      if (g) g.push(r)
+      else groups.set(k, [r])
+    } else {
+      singles.push(r)
+    }
+  }
+
+  interface VT {
+    side: BoardHeader['edge']
+    refs: BoardPadRef[]
+  }
+  const vts: VT[] = []
+  // Signals on their header edge (single-header boards split left/right).
+  const sigEdges = new Set(singles.map((r) => r.edge))
+  const sigHalf = Math.ceil(singles.length / 2)
+  singles.forEach((r, i) =>
+    vts.push({ side: sigEdges.size <= 1 ? (i < sigHalf ? 'left' : 'right') : r.edge, refs: [r] })
+  )
+  // Power rails on top (board order), the combined GND at the bottom.
+  for (const [k, g] of groups) if (k !== 'GND') vts.push({ side: 'top', refs: g })
+  const gndGroup = groups.get('GND')
+  if (gndGroup) vts.push({ side: 'bottom', refs: gndGroup })
+
+  const bySide: Record<BoardHeader['edge'], VT[]> = { left: [], right: [], top: [], bottom: [] }
+  for (const vt of vts) bySide[vt.side].push(vt)
+
+  const vRows = Math.max(bySide.left.length, bySide.right.length, 1)
+  const hCols = Math.max(bySide.top.length, bySide.bottom.length, 1)
+  const boxW = Math.min(340, Math.max(150, hCols * 30 + 80))
+  const boxH = Math.min(560, Math.max(140, vRows * 24 + 40))
+
+  const lY = mcuSlots(bySide.left.length, 0, boxH)
+  const rY = mcuSlots(bySide.right.length, 0, boxH)
+  const tX = mcuSlots(bySide.top.length, 0, boxW)
+  const bX = mcuSlots(bySide.bottom.length, 0, boxW)
+
+  const terminals: McuTerminal[] = []
+  const place = (vt: VT, side: BoardHeader['edge'], x1: number, y1: number, x2: number, y2: number): void => {
+    const labelX = side === 'left' ? x1 + 6 : side === 'right' ? x1 - 6 : x1
+    const labelY = side === 'top' ? y1 + 14 : side === 'bottom' ? y1 - 8 : y1 - 4
+    const anchor: 'start' | 'middle' | 'end' = side === 'left' ? 'start' : side === 'right' ? 'end' : 'middle'
+    const railIndices = vt.refs.map((r) => r.index)
+    vt.refs.forEach((r, k) =>
+      terminals.push({
+        pad: r.pad,
+        side,
+        flatIndex: r.index,
+        railIndices,
+        inner: { x: x1, y: y1 },
+        outer: { x: x2, y: y2 },
+        label: { x: labelX, y: labelY, anchor },
+        primary: k === 0
+      })
+    )
+  }
+  bySide.left.forEach((vt, i) => place(vt, 'left', 0, lY[i], -stub, lY[i]))
+  bySide.right.forEach((vt, i) => place(vt, 'right', boxW, rY[i], boxW + stub, rY[i]))
+  bySide.top.forEach((vt, i) => place(vt, 'top', tX[i], 0, tX[i], -stub))
+  bySide.bottom.forEach((vt, i) => place(vt, 'bottom', bX[i], boxH, bX[i], boxH + stub))
+  terminals.sort((a, b) => a.flatIndex - b.flatIndex)
+  return { box: { w: boxW, h: boxH }, terminals }
 }

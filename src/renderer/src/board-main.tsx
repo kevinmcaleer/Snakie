@@ -12,11 +12,11 @@
  *     `{ source, fileName, isPython, theme }` (the generic {@link BoardView}
  *     drawer is kept for the Board Creator's preview).
  *
- * The Board Viewer also HOSTS the **Parts Library** (#129/#130): the parts
- * library is only used by the board-viewer UX (parts get placed on the board), so
- * its browser + the Part Editor live here rather than in the main editor window.
- * A chip button in the title bar opens the Parts mode; authoring a part opens the
- * Part Editor as a full-window overlay.
+ * The Board Viewer also HOSTS the **Parts Library** + **Wiring** (#129/#130/#139/
+ * #140): the parts library is only used by the board-viewer UX (parts get placed
+ * on the board), so it lives here. {@link BoardGraph} carries the view-type tabs
+ * (Node graph / Life-like / Schematic) and a right-side library dock; placing a
+ * part appends it to `robot.yml` and authoring one opens the Part Editor overlay.
  *
  * No scrim/modal chrome — it fills the OS window; the title bar is the draggable
  * region (handled inside BoardView via `asWindow`).
@@ -28,10 +28,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
 import { BoardCreator } from './components/BoardCreator'
-import { PartsPanel, OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
+import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
-import { WiringCanvas } from './components/WiringCanvas'
-import { mergeBoards } from './components/board-defs'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import type {
   BoardDefinition,
@@ -58,11 +56,10 @@ function BoardWindowApp(): JSX.Element {
     theme: 'skeuomorph'
   })
   const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
-  // Modes: the live board VIEW, the Board Creator (DESIGN), the PARTS library, and
-  // WIRING (place parts + wire pins). `editing` overlays the Part Editor.
+  // Two screens: the live board VIEW (BoardGraph — which itself hosts the
+  // Life-like/Schematic wiring views + the library dock, #139/#140) and the
+  // Board Creator (DESIGN). `editing` overlays the Part Editor on top of either.
   const [designMode, setDesignMode] = useState(false)
-  const [partsMode, setPartsMode] = useState(false)
-  const [wiringMode, setWiringMode] = useState(false)
   const [editing, setEditing] = useState<{
     libraryId: string
     part: PartDefinition | null
@@ -193,7 +190,9 @@ function BoardWindowApp(): JSX.Element {
   // Append a library part to the project (robot.yml), with a unique instance id.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition): void => {
-      const ids = new Set(robot.parts.map((p) => p.id))
+      // Reserve 'board' (the MCU's subject key on the wiring canvas) so a part can
+      // never collide with it and shadow the microcontroller's endpoints.
+      const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
       let id = part.id
       let n = 2
       while (ids.has(id)) id = `${part.id}${n++}`
@@ -206,15 +205,13 @@ function BoardWindowApp(): JSX.Element {
   )
 
   // Esc backs out one level at a time (so a stray Esc / a focused input's Esc
-  // never slams the window shut): editor → parts → design → board → close.
+  // never slams the window shut): part editor → Board Creator → close window.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
       const el = document.activeElement as HTMLElement | null
       if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return
       if (editing) setEditing(null)
-      else if (partsMode) setPartsMode(false)
-      else if (wiringMode) setWiringMode(false)
       else if (designMode) {
         setDesignMode(false)
         refreshUserBoards()
@@ -224,7 +221,7 @@ function BoardWindowApp(): JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editing, partsMode, wiringMode, designMode, refreshUserBoards])
+  }, [editing, designMode, refreshUserBoards])
 
   if (designMode) {
     return (
@@ -241,70 +238,36 @@ function BoardWindowApp(): JSX.Element {
     )
   }
 
-  if (partsMode) {
-    return (
-      <div className="bw-parts">
-        <header className="bw-parts__bar">
-          <div className="bw-parts__title">
-            <span className="bw-parts__title-main">My Parts Library</span>
-            <span className="bw-parts__title-sub">Parts you create are saved here.</span>
-          </div>
-          <button type="button" className="bw-parts__done" onClick={() => setPartsMode(false)} title="Back to the board view (Esc)">
-            Done
-          </button>
-        </header>
-        <div className="bw-parts__body">
-          <PartsPanel onAddToProject={addToProject} />
-        </div>
-        {editing && (
-          <PartEditor
-            libraryId={editing.libraryId}
-            initial={editing.part}
-            existingParts={editing.existingParts}
-            libraries={editing.libraries}
-            onSaved={() => window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))}
-            onClose={() => {
-              setEditing(null)
-              window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
-            }}
-          />
-        )}
-      </div>
-    )
-  }
-
-  if (wiringMode) {
-    return (
-      <div className="bw-parts">
-        <header className="bw-parts__bar">
-          <div className="bw-parts__title">
-            <span className="bw-parts__title-main">Wiring</span>
-            <span className="bw-parts__title-sub">{robot.name || 'Connect parts to the microcontroller.'}</span>
-          </div>
-          <button type="button" className="bw-parts__done" onClick={() => setWiringMode(false)} title="Back to the board view (Esc)">
-            Done
-          </button>
-        </header>
-        <div className="bw-parts__body">
-          <WiringCanvas robot={robot} onChange={saveRobot} libraries={libraries} boards={mergeBoards(userBoards)} />
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <BoardGraph
-      source={payload.source}
-      fileName={payload.fileName}
-      isPython={payload.isPython}
-      userBoards={userBoards}
-      asWindow
-      onOpenParts={() => setPartsMode(true)}
-      onOpenWiring={() => setWiringMode(true)}
-      onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
-      onEnterCreator={() => setDesignMode(true)}
-      onClose={() => window.api.board.close()}
-    />
+    <>
+      <BoardGraph
+        source={payload.source}
+        fileName={payload.fileName}
+        isPython={payload.isPython}
+        userBoards={userBoards}
+        asWindow
+        onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
+        onEnterCreator={() => setDesignMode(true)}
+        onClose={() => window.api.board.close()}
+        robot={robot}
+        onChangeRobot={saveRobot}
+        libraries={libraries}
+        onAddToProject={addToProject}
+      />
+      {editing && (
+        <PartEditor
+          libraryId={editing.libraryId}
+          initial={editing.part}
+          existingParts={editing.existingParts}
+          libraries={editing.libraries}
+          onSaved={() => window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))}
+          onClose={() => {
+            setEditing(null)
+            window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+          }}
+        />
+      )}
+    </>
   )
 }
 

@@ -833,6 +833,17 @@ function Inspector(props: InspectorProps): JSX.Element {
             />
           </label>
         </div>
+        <div className="pe__row">
+          <label className="pe__field">
+            <span>Background</span>
+            <input
+              type="color"
+              value={/^#[0-9a-f]{6}$/i.test(part.pcbColor ?? '') ? (part.pcbColor as string) : '#0f5a2e'}
+              onChange={(e) => patch({ pcbColor: e.target.value })}
+              title="PCB / board background colour"
+            />
+          </label>
+        </div>
         {part.shape?.kind !== 'polygon' && (
           <SliderField
             label="Corner radius"

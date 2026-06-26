@@ -620,3 +620,191 @@ export function resolvedPins(part: PartDefinition): ResolvedPin[] {
   })
   return out
 }
+
+/** A drawn box in canvas/SVG coordinates. */
+export interface Box {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Outward unit normal for an edge — the direction a wire leaves the body. */
+export function edgeNormal(edge: string): [number, number] {
+  switch (edge) {
+    case 'left':
+      return [-1, 0]
+    case 'right':
+      return [1, 0]
+    case 'top':
+      return [0, -1]
+    default:
+      return [0, 1] // bottom / led / unknown
+  }
+}
+
+/**
+ * A part pin flattened to a CANVAS position + outward normal, keyed by the wiring
+ * endpoint index. Built from {@link resolvedPins} so the order is IDENTICAL to the
+ * `<key>.<pin>#<index>` endpoints and to `headers.flatMap(h => h.pins)` — the
+ * invariant that lets life-like ↔ schematic toggle without rewiring.
+ */
+export interface PinPoint {
+  index: number
+  name: string
+  type: PartPinType
+  edge: PartEdge
+  x: number
+  y: number
+  ox: number
+  oy: number
+}
+
+/** Resolve every pin of a part to a connectable canvas point within `box`. */
+export function pinPositions(part: PartDefinition, box: Box): PinPoint[] {
+  return resolvedPins(part).map((rp, i) => {
+    const [ox, oy] = edgeNormal(rp.edge)
+    return {
+      index: i,
+      name: rp.pin.name,
+      type: rp.pin.type,
+      edge: rp.edge,
+      x: box.x + rp.x * box.w,
+      y: box.y + rp.y * box.h,
+      ox,
+      oy
+    }
+  })
+}
+
+/** Evenly spaced positions for `n` terminals between `a` and `b` (inset). */
+export function evenSlots(n: number, a: number, b: number): number[] {
+  if (n <= 0) return []
+  if (n === 1) return [(a + b) / 2]
+  return Array.from({ length: n }, (_, i) => a + ((i + 1) * (b - a)) / (n + 1))
+}
+
+/** A schematic-symbol terminal: a pin placed on a side, with its stub geometry. */
+export interface SymbolTerminal {
+  pin: PartPin
+  side: PartEdge
+  /** Flattened header index — the wiring endpoint `#index` (authoritative). */
+  flatIndex: number
+  /** All flatIndices sharing this terminal (a rail merges several pins into one). */
+  railIndices: number[]
+  /** False for pads merged into a shared rail terminal (extra GND / same power
+   *  rail) — not drawn, but the pin still resolves for wiring. */
+  primary: boolean
+  /** Box-edge attach point, local to the symbol box origin. */
+  inner: { x: number; y: number }
+  /** Stub end = the wire/dot attach point, local. */
+  outer: { x: number; y: number }
+  label: { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
+}
+
+export interface SymbolLayout {
+  box: { w: number; h: number }
+  terminals: SymbolTerminal[]
+}
+
+const SYMBOL_STUB = 26
+
+/**
+ * Lay out a part's schematic symbol (a labelled block with pin stubs), at the
+ * origin. Terminals are placed on the side from `schematic.pins` when present
+ * (else the header edge), but their `flatIndex` is the **flattened header order**
+ * — NOT the schematic `order` — so a wire's `#index` endpoint binds to the same
+ * pin in the breadboard/life-like views. Pure + DOM-free.
+ */
+export function schematicSymbolLayout(
+  part: PartDefinition,
+  opts?: { boxW?: number; boxH?: number; stub?: number }
+): SymbolLayout {
+  const stub = opts?.stub ?? SYMBOL_STUB
+  const byName = new Map<string, { side: PartEdge; order: number }>()
+  if (part.schematic?.pins?.length) {
+    for (const sp of part.schematic.pins) byName.set(sp.pin, { side: sp.side, order: sp.order })
+  }
+  interface Ref {
+    flatIndex: number
+    pin: PartPin
+    edge: PartEdge
+  }
+  const refs: Ref[] = resolvedPins(part).map((rp, i) => ({ flatIndex: i, pin: rp.pin, edge: rp.edge }))
+
+  // Collapse rails (every GND → one terminal; same power label → one) so the
+  // symbol shows ONE GND / ONE 3V3 etc; signals stay individual. Each merged pad
+  // keeps its flatIndex (so `<part>.<pin>#n` wires resolve to the shared terminal)
+  // but only the first is `primary` (drawn).
+  const railKey = (pin: PartPin): string | null =>
+    pin.type === 'gnd' ? 'GND' : pin.type === 'pwr' ? `PWR:${(pin.label || pin.name || '').toUpperCase()}` : null
+  const groups = new Map<string, Ref[]>()
+  const singles: Ref[] = []
+  for (const r of refs) {
+    const k = railKey(r.pin)
+    if (k) {
+      const g = groups.get(k)
+      if (g) g.push(r)
+      else groups.set(k, [r])
+    } else {
+      singles.push(r)
+    }
+  }
+
+  interface VT {
+    side: PartEdge
+    order: number
+    refs: Ref[]
+  }
+  // Side: the author's explicit schematic mapping wins for signals; otherwise the
+  // convention (power → top, ground → bottom, else the header edge).
+  const vts: VT[] = []
+  for (const r of singles) {
+    const so = byName.get(r.pin.name)
+    vts.push({ side: so?.side ?? r.edge, order: so?.order ?? r.flatIndex, refs: [r] })
+  }
+  for (const [k, g] of groups) {
+    if (k === 'GND') vts.push({ side: 'bottom', order: Number.MAX_SAFE_INTEGER, refs: g })
+    else vts.push({ side: 'top', order: byName.get(g[0].pin.name)?.order ?? g[0].flatIndex, refs: g })
+  }
+
+  const bySide: Record<PartEdge, VT[]> = { left: [], right: [], top: [], bottom: [] }
+  for (const vt of vts) bySide[vt.side].push(vt)
+  for (const side of PART_EDGES) bySide[side].sort((a, b) => a.order - b.order)
+
+  const vRows = Math.max(bySide.left.length, bySide.right.length, 1)
+  const hCols = Math.max(bySide.top.length, bySide.bottom.length, 1)
+  const boxW = opts?.boxW ?? Math.min(300, Math.max(140, hCols * 46 + 60))
+  const boxH = opts?.boxH ?? Math.min(300, Math.max(120, vRows * 30 + 40))
+
+  const lY = evenSlots(bySide.left.length, 0, boxH)
+  const rY = evenSlots(bySide.right.length, 0, boxH)
+  const tX = evenSlots(bySide.top.length, 0, boxW)
+  const bX = evenSlots(bySide.bottom.length, 0, boxW)
+
+  const terminals: SymbolTerminal[] = []
+  const place = (vt: VT, side: PartEdge, x1: number, y1: number, x2: number, y2: number): void => {
+    const labelX = side === 'left' ? x1 + 6 : side === 'right' ? x1 - 6 : x1
+    const labelY = side === 'top' ? y1 + 14 : side === 'bottom' ? y1 - 8 : y1 - 4
+    const anchor: 'start' | 'middle' | 'end' = side === 'left' ? 'start' : side === 'right' ? 'end' : 'middle'
+    const railIndices = vt.refs.map((r) => r.flatIndex)
+    vt.refs.forEach((r, k) =>
+      terminals.push({
+        pin: r.pin,
+        side,
+        flatIndex: r.flatIndex,
+        railIndices,
+        primary: k === 0,
+        inner: { x: x1, y: y1 },
+        outer: { x: x2, y: y2 },
+        label: { x: labelX, y: labelY, anchor }
+      })
+    )
+  }
+  bySide.left.forEach((vt, i) => place(vt, 'left', 0, lY[i], -stub, lY[i]))
+  bySide.right.forEach((vt, i) => place(vt, 'right', boxW, rY[i], boxW + stub, rY[i]))
+  bySide.top.forEach((vt, i) => place(vt, 'top', tX[i], 0, tX[i], -stub))
+  bySide.bottom.forEach((vt, i) => place(vt, 'bottom', bX[i], boxH, bX[i], boxH + stub))
+  terminals.sort((a, b) => a.flatIndex - b.flatIndex)
+  return { box: { w: boxW, h: boxH }, terminals }
+}

@@ -17,6 +17,7 @@ import {
   type ResolvedPin
 } from './part-editor.util'
 import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
+import { castellatedPad } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -154,7 +155,7 @@ function clamp01(n: number): number {
 
 /** Drag state while a pointer is down. */
 interface Drag {
-  kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex' | 'move-shape-vertex'
+  kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex' | 'move-shape-vertex' | 'create-array' | 'marquee'
   sel: CanvasSelection
   corner?: number
   startNX: number
@@ -168,6 +169,8 @@ interface Drag {
   panTX?: number
   panTY?: number
   moved?: boolean
+  /** When set, a dragged pin snaps to this anchor's 2.54mm array grid. */
+  anchor?: { x: number; y: number }
 }
 
 export function PartCanvas({
@@ -190,6 +193,11 @@ export function PartCanvas({
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // Live preview of the pins a "drag from the selected pin" gesture will create.
+  const [createPreview, setCreatePreview] = useState<{ axis: 'x' | 'y'; dir: number; n: number } | null>(null)
+  // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
+  const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -254,6 +262,15 @@ export function PartCanvas({
   const snapX = (v: number): number => snapVal(v, 'x')
   const snapY = (v: number): number => snapVal(v, 'y')
 
+  // --- ghost pin array (#…): a 2.54mm grid centred on the selected pin --------
+  const ARRAY_REACH = 4 // ghost pins shown in each direction
+  const stepNX = 1 / gridSteps('x') // one pin-pitch in normalised x
+  const stepNY = 1 / gridSteps('y') // one pin-pitch in normalised y
+  /** The selected pin — the ghost array's anchor — if exactly one pin is selected. */
+  const selPin = selection?.type === 'pin' ? pins.find((p) => p.hi === selection.hi && p.pi === selection.pi) ?? null : null
+  /** Snap a value to the anchor's array grid (anchor ± k·step). */
+  const snapToAnchor = (v: number, anchor: number, step: number): number => clamp01(anchor + Math.round((v - anchor) / step) * step)
+
   /** Distance between two normalised points, in viewBox units. */
   const dist = (ax: number, ay: number, bx: number, by: number): number =>
     Math.hypot((ax - bx) * box.w, (ay - by) * box.h)
@@ -268,10 +285,11 @@ export function PartCanvas({
   // --- mutation helpers -----------------------------------------------------
   const commit = (next: PartDefinition): void => onChange?.(next)
 
-  const movePinTo = (hi: number, pi: number, nx: number, ny: number): void => {
-    // Test the SNAPPED point we'll actually store: pins can't sit in a hole.
-    const sx = snapX(nx)
-    const sy = snapY(ny)
+  const movePinTo = (hi: number, pi: number, nx: number, ny: number, anchor?: { x: number; y: number }): void => {
+    // With an anchor (another pin is selected), lock to its 2.54mm array grid;
+    // otherwise snap to the global grid. Test the point we'll store (no hole).
+    const sx = anchor ? snapToAnchor(nx, anchor.x, stepNX) : snapX(nx)
+    const sy = anchor ? snapToAnchor(ny, anchor.y, stepNY) : snapY(ny)
     if (inHole(sx, sy)) return
     commit({
       ...part,
@@ -359,6 +377,73 @@ export function PartCanvas({
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, newPin] } : h)) })
     onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length })
+  }
+  /** Add several pins at once (the ghost-array "drag to create" gesture). */
+  const addPinsArray = (positions: { x: number; y: number }[]): void => {
+    const valid = positions.filter((p) => !inHole(p.x, p.y))
+    if (!valid.length) return
+    const n0 = pins.length
+    const newPins = valid.map((p, i) => ({
+      name: `P${n0 + i}`,
+      type: 'io' as const,
+      gpio: n0 + i,
+      capabilities: ['digital' as const],
+      x: p.x,
+      y: p.y
+    }))
+    const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
+    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...newPins] } : h)) })
+  }
+
+  // --- multi-select + alignment (#…) ----------------------------------------
+  const pinKey = (hi: number, pi: number): string => `${hi}-${pi}`
+  const toggleSelectedPin = (hi: number, pi: number): void =>
+    setSelectedPins((cur) =>
+      cur.some((s) => s.hi === hi && s.pi === pi) ? cur.filter((s) => !(s.hi === hi && s.pi === pi)) : [...cur, { hi, pi }]
+    )
+
+  /** Commit x/y updates for several pins in a single change. */
+  const commitPins = (updates: Map<string, { x?: number; y?: number }>): void =>
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const u = updates.get(pinKey(hi, pi))
+          return u ? { ...p, ...(u.x !== undefined ? { x: u.x } : {}), ...(u.y !== undefined ? { y: u.y } : {}) } : p
+        })
+      }))
+    })
+
+  const selectedResolved = (): { hi: number; pi: number; x: number; y: number }[] =>
+    selectedPins
+      .map((s) => {
+        const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+        return rp ? { hi: s.hi, pi: s.pi, x: rp.x, y: rp.y } : null
+      })
+      .filter((v): v is { hi: number; pi: number; x: number; y: number } => v !== null)
+
+  const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom'): void => {
+    const sel = selectedResolved()
+    if (sel.length < 2) return
+    const horiz = mode === 'left' || mode === 'right'
+    const vals = sel.map((s) => (horiz ? s.x : s.y))
+    const target = mode === 'left' || mode === 'top' ? Math.min(...vals) : Math.max(...vals)
+    const updates = new Map<string, { x?: number; y?: number }>()
+    for (const s of sel) updates.set(pinKey(s.hi, s.pi), horiz ? { x: target } : { y: target })
+    commitPins(updates)
+  }
+
+  const distributeSelected = (axis: 'x' | 'y'): void => {
+    const sel = selectedResolved()
+    if (sel.length < 3) return // ≥3 to space evenly (2 are already "distributed")
+    const sorted = [...sel].sort((a, b) => (axis === 'x' ? a.x - b.x : a.y - b.y))
+    const min = axis === 'x' ? sorted[0].x : sorted[0].y
+    const max = axis === 'x' ? sorted[sorted.length - 1].x : sorted[sorted.length - 1].y
+    const step = (max - min) / (sorted.length - 1)
+    const updates = new Map<string, { x?: number; y?: number }>()
+    sorted.forEach((s, i) => updates.set(pinKey(s.hi, s.pi), axis === 'x' ? { x: min + i * step } : { y: min + i * step }))
+    commitPins(updates)
   }
   const addHole = (nx: number, ny: number): void => {
     const sx = snapX(nx)
@@ -512,8 +597,37 @@ export function PartCanvas({
     }
 
     const hit = hitTest(nx, ny)
+
+    // Multi-select: shift-click toggles a pin in the alignment group.
+    if (hit?.type === 'pin' && e.shiftKey) {
+      toggleSelectedPin(hit.hi, hit.pi)
+      onSelect?.(null)
+      return
+    }
+    // Any plain (non-shift) interaction clears an existing multi-selection.
+    if (!e.shiftKey && selectedPins.length) setSelectedPins([])
+
+    // Ghost-array gestures (a pin is selected = the array anchor):
+    if (hit?.type === 'pin' && selPin) {
+      if (hit.hi === selPin.hi && hit.pi === selPin.pi) {
+        // Drag FROM the anchor pin → lay down a row/column of new pins.
+        dragRef.current = { kind: 'create-array', sel: hit, startNX: nx, startNY: ny, ox: selPin.x, oy: selPin.y, anchor: { x: selPin.x, y: selPin.y } }
+        return
+      }
+      // Drag a DIFFERENT pin → align it to the anchor's grid; keep the anchor
+      // selected (a no-move click re-anchors, handled in onPointerUp).
+      const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
+      dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox: rp?.x ?? nx, oy: rp?.y ?? ny, anchor: { x: selPin.x, y: selPin.y } }
+      return
+    }
+
     onSelect?.(hit)
-    if (!hit) return
+    if (!hit) {
+      // Empty canvas (select tool) → rubber-band marquee to select pins.
+      dragRef.current = { kind: 'marquee', sel: null, startNX: nx, startNY: ny, ox: nx, oy: ny }
+      setMarquee({ x0: nx, y0: ny, x1: nx, y1: ny })
+      return
+    }
     let ox = 0
     let oy = 0
     if (hit.type === 'pin') {
@@ -554,6 +668,22 @@ export function PartCanvas({
     const dy = ny - d.startNY
     // Only count a real drag (so a click on a vertex stays a click → delete).
     if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) d.moved = true
+    if (d.kind === 'marquee') {
+      setMarquee({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
+      return
+    }
+    if (d.kind === 'create-array' && d.anchor) {
+      // Lay pins along the dominant drag axis at array positions (preview only;
+      // committed on pointer-up).
+      const ax = nx - d.anchor.x
+      const ay = ny - d.anchor.y
+      const horiz = Math.abs(ax) >= Math.abs(ay)
+      const step = horiz ? stepNX : stepNY
+      const delta = horiz ? ax : ay
+      const n = Math.min(ARRAY_REACH, Math.max(0, Math.round(Math.abs(delta) / step)))
+      setCreatePreview(n > 0 ? { axis: horiz ? 'x' : 'y', dir: delta >= 0 ? 1 : -1, n } : null)
+      return
+    }
     if (d.kind === 'resize-image' && d.ow !== undefined && d.oh !== undefined) {
       let x = d.ox
       let y = d.oy
@@ -603,7 +733,7 @@ export function PartCanvas({
     if (d.kind === 'move-obj' && d.sel) {
       const x = d.ox + dx
       const y = d.oy + dy
-      if (d.sel.type === 'pin') movePinTo(d.sel.hi, d.sel.pi, x, y)
+      if (d.sel.type === 'pin') movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
       else if (d.sel.type === 'hole') moveHoleTo(d.sel.index, x, y)
       else if (d.sel.type === 'shape') moveShapeTo(d.sel.index, x, y)
       else if (d.sel.type === 'label') moveLabelTo(d.sel.index, x, y)
@@ -614,7 +744,45 @@ export function PartCanvas({
   const onPointerUp = (): void => {
     const d = dragRef.current
     dragRef.current = null
-    if (!d || d.moved || !interactive) return
+    const preview = createPreview
+    setCreatePreview(null)
+    if (!d || !interactive) return
+
+    // Marquee → select the pins inside the box.
+    if (d.kind === 'marquee') {
+      const m = marquee
+      setMarquee(null)
+      if (m) {
+        const minX = Math.min(m.x0, m.x1)
+        const maxX = Math.max(m.x0, m.x1)
+        const minY = Math.min(m.y0, m.y1)
+        const maxY = Math.max(m.y0, m.y1)
+        const inside = pins
+          .filter((p) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY)
+          .map((p) => ({ hi: p.hi, pi: p.pi }))
+        setSelectedPins(inside)
+        if (inside.length) onSelect?.(null)
+      }
+      return
+    }
+
+    // Commit the ghost-array "drag to create" gesture.
+    if (d.kind === 'create-array' && d.anchor && preview && preview.n > 0) {
+      const positions: { x: number; y: number }[] = []
+      for (let k = 1; k <= preview.n; k++) {
+        const x = preview.axis === 'x' ? d.anchor.x + preview.dir * k * stepNX : d.anchor.x
+        const y = preview.axis === 'y' ? d.anchor.y + preview.dir * k * stepNY : d.anchor.y
+        if (x >= 0 && x <= 1 && y >= 0 && y <= 1) positions.push({ x, y })
+      }
+      addPinsArray(positions)
+      return
+    }
+    if (d.moved) return
+    // A no-move click on a pin (while another was the anchor) re-anchors to it.
+    if (d.kind === 'move-obj' && d.anchor && d.sel?.type === 'pin') {
+      onSelect?.(d.sel)
+      return
+    }
     // A click (no drag) on a polygon vertex deletes it.
     if (d.kind === 'move-vertex' && d.sel?.type === 'vertex') deleteVertex(d.sel.index)
     else if (d.kind === 'move-shape-vertex' && d.sel?.type === 'shape-vertex') deleteShapeVertex(d.sel.index, d.sel.vi)
@@ -762,15 +930,7 @@ export function PartCanvas({
             if (shape === 'round') {
               pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
             } else if (shape === 'castellated') {
-              // A castellated edge pad: a square with a plated half-hole notched
-              // into the outward edge (the side facing off the board).
-              const edgeX = rp.x < 0.5 ? cx - size / 2 : cx + size / 2
-              pad = (
-                <>
-                  <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
-                  <circle cx={edgeX} cy={cy} r={size / 2 - 2} fill="var(--bc-mat, #0c0f12)" />
-                </>
-              )
+              pad = castellatedPad(cx, cy, size, rp.x, rp.y, rp.pin.type === 'gnd', stroke, sw)
             } else if (shape === 'header') {
               // A through-hole header pad: copper annular ring with the drill hole.
               pad = (
@@ -807,6 +967,55 @@ export function PartCanvas({
               </g>
             )
           })}
+
+        {/* Ghost pin array (#…): a faint 2.54mm grid centred on the selected pin,
+            so nearby pins snap to it and a drag-from-it lays down a row of pins. */}
+        {interactive && selPin && visible.pins && (
+          <g className="pcv__ghosts" aria-hidden="true" style={{ pointerEvents: 'none' }}>
+            {([1, 2, 3, 4] as const).flatMap((k) => {
+              const opacity = 0.34 * (1 - (k - 1) * 0.2) // fades out further from centre
+              const spots = [
+                { x: selPin.x + k * stepNX, y: selPin.y },
+                { x: selPin.x - k * stepNX, y: selPin.y },
+                { x: selPin.x, y: selPin.y + k * stepNY },
+                { x: selPin.x, y: selPin.y - k * stepNY }
+              ]
+              return spots
+                .filter((s) => s.x >= 0 && s.x <= 1 && s.y >= 0 && s.y <= 1)
+                .map((s, j) => (
+                  <circle key={`g${k}-${j}`} cx={px(s.x)} cy={py(s.y)} r={5} fill="#d6a531" opacity={opacity} />
+                ))
+            })}
+          </g>
+        )}
+
+        {/* Live preview of the pins a "drag from the selected pin" will create. */}
+        {interactive && selPin && createPreview && (
+          <g className="pcv__create-preview" aria-hidden="true" style={{ pointerEvents: 'none' }}>
+            {Array.from({ length: createPreview.n }, (_, i) => i + 1).map((k) => {
+              const x = createPreview.axis === 'x' ? selPin.x + createPreview.dir * k * stepNX : selPin.x
+              const y = createPreview.axis === 'y' ? selPin.y + createPreview.dir * k * stepNY : selPin.y
+              if (x < 0 || x > 1 || y < 0 || y > 1) return null
+              return <circle key={`cp${k}`} cx={px(x)} cy={py(y)} r={6} fill="#d6a531" stroke="#fff" strokeWidth={1.2} opacity={0.85} />
+            })}
+          </g>
+        )}
+
+        {/* Multi-select: rings on the selected pins + the rubber-band box. */}
+        {interactive &&
+          selectedPins.length > 0 &&
+          selectedResolved().map((s) => (
+            <circle key={`sel-${s.hi}-${s.pi}`} cx={px(s.x)} cy={py(s.y)} r={9} className="pcv__sel-ring" />
+          ))}
+        {interactive && marquee && (
+          <rect
+            x={px(Math.min(marquee.x0, marquee.x1))}
+            y={py(Math.min(marquee.y0, marquee.y1))}
+            width={Math.abs(marquee.x1 - marquee.x0) * box.w}
+            height={Math.abs(marquee.y1 - marquee.y0) * box.h}
+            className="pcv__marquee"
+          />
+        )}
 
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&
@@ -911,6 +1120,31 @@ export function PartCanvas({
   return (
     <div className="pcv__wrap">
       {svg}
+      {/* Alignment toolbar — appears when ≥2 pins are multi-selected. */}
+      {interactive && selectedPins.length >= 2 && (
+        <div className="pcv__align" role="toolbar" aria-label="Align pins">
+          <span className="pcv__align-count">{selectedPins.length} pins</span>
+          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
+            ⬅
+          </button>
+          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges">
+            ➡
+          </button>
+          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges">
+            ⬆
+          </button>
+          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges">
+            ⬇
+          </button>
+          <span className="pcv__align-sep" />
+          <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={selectedPins.length < 3}>
+            ↔
+          </button>
+          <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={selectedPins.length < 3}>
+            ↕
+          </button>
+        </div>
+      )}
       {interactive && (
         <div className="pcv__zoom" aria-label="View controls">
           {onToggleGrid && (

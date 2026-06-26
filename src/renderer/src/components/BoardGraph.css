@@ -49,9 +49,44 @@
 .boardgraph__bar--drag .boardgraph__picker-menu,
 .boardgraph__bar--drag .boardgraph__picker-backdrop,
 .boardgraph__bar--drag .boardgraph__knob,
+.boardgraph__bar--drag .boardgraph__viewtabs,
+.boardgraph__bar--drag .boardgraph__live,
 .boardgraph__bar--drag .boardgraph__key {
   -webkit-app-region: no-drag;
   app-region: no-drag;
+}
+
+/* --- View-type tabs (Node graph / Life-like / Schematic), #139/#140 --- */
+.boardgraph__viewtabs {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  gap: 2px;
+  background: #161719;
+  border: 1px solid #2c2e33;
+  border-radius: 9px;
+}
+
+.boardgraph__viewtab {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #9aa0a8;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 5px 10px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.boardgraph__viewtab:hover {
+  color: #d6dade;
+}
+
+.boardgraph__viewtab.is-active {
+  color: #fff;
+  background: #2f5f8c;
 }
 
 /* 6-dot drag grip (2 columns × 3 rows). */
@@ -76,14 +111,22 @@
   font-weight: 700;
   letter-spacing: 0.22em;
   color: #cfd3da;
-  flex: 0 0 auto;
+  /* Shrinkable + truncating so the right-docked actions (esp. the close X) are
+     never pushed off the edge and clipped when the window is narrowed (#…). */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* --- Board picker (custom dropdown — a native <select> is unreliable in a
    frameless, always-on-top window) --- */
 .boardgraph__picker {
   position: relative;
-  flex: 0 0 auto;
+  /* Shrinkable so the actions cluster (close X) is never clipped on resize. */
+  flex: 0 1 auto;
+  min-width: 4.5rem;
 }
 
 .boardgraph__picker-btn {
@@ -189,10 +232,15 @@
   color: #6a6f78;
   letter-spacing: 0.05em;
   white-space: nowrap;
-  flex: 0 0 auto;
+  /* Lowest-priority text — collapses first when space is tight. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Right cluster (LIVE + knob + folder + close). */
+/* Right cluster (LIVE + knob + folder + close). NEVER shrinks, so the close X
+   stays pinned to the top-right and visible at any window width (#…). */
 .boardgraph__actions {
   margin-left: auto;
   display: flex;
@@ -322,6 +370,83 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+
+/* --- Wiring views (Life-like / Schematic) + right-side library dock --- */
+.boardgraph__wiring {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.boardgraph__dock {
+  flex: 0 0 300px;
+  width: 300px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated, #1f2024);
+  border-left: 1px solid #2c2e33;
+}
+
+.boardgraph__dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #9aa0a8);
+  border-bottom: 1px solid #2c2e33;
+}
+
+.boardgraph__dock-toggle {
+  width: 22px;
+  height: 22px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--text-muted, #9aa0a8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.boardgraph__dock-toggle:hover {
+  color: var(--text, #d6dade);
+  border-color: #3a3d44;
+}
+
+.boardgraph__dock-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Collapsed dock: a thin vertical tab on the right edge to reopen it. */
+.boardgraph__dock-tab {
+  flex: 0 0 auto;
+  align-self: stretch;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  padding: 0.6rem 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9aa0a8);
+  background: var(--bg-elevated, #1f2024);
+  border: none;
+  border-left: 1px solid #2c2e33;
+  cursor: pointer;
+}
+
+.boardgraph__dock-tab:hover {
+  color: var(--text, #d6dade);
 }
 
 /* --- Canvas (dark mat + faint 28px grid) — the pan/zoom/rotate VIEWPORT.

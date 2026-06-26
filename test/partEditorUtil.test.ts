@@ -5,9 +5,11 @@ import {
   normalisePart,
   partToBoardDefinition,
   pinNames,
+  pinPositions,
   pinShapeOf,
   resolvedPins,
   sanitisePartId,
+  schematicSymbolLayout,
   snapToGrid,
   validatePart,
   withPinPositions,
@@ -285,5 +287,83 @@ describe('pinNames', () => {
       ]
     })
     expect(pinNames(part)).toEqual(['A', 'B'])
+  })
+})
+
+describe('pinPositions + schematicSymbolLayout share the flattened endpoint index', () => {
+  // A part whose explicit schematic.pins REORDER the pins (order ≠ header order),
+  // and place them on chosen sides. The wiring endpoint index must stay the
+  // flattened-header order in BOTH the breadboard (pinPositions) and schematic
+  // (schematicSymbolLayout) views, so a wire never re-targets on toggle.
+  const part: PartDefinition = {
+    id: 'p',
+    name: 'P',
+    headers: [
+      { edge: 'left', pins: [{ name: 'VCC', type: 'pwr' }, { name: 'GND', type: 'gnd' }] },
+      { edge: 'right', pins: [{ name: 'SDA', type: 'io' }, { name: 'SCL', type: 'io' }] }
+    ],
+    schematic: {
+      pins: [
+        { pin: 'SCL', side: 'right', order: 0 },
+        { pin: 'SDA', side: 'right', order: 1 },
+        { pin: 'GND', side: 'bottom', order: 2 },
+        { pin: 'VCC', side: 'top', order: 3 }
+      ]
+    }
+  }
+
+  it('pinPositions is in flattened header order', () => {
+    expect(pinPositions(part, { x: 0, y: 0, w: 100, h: 100 }).map((p) => p.name)).toEqual(['VCC', 'GND', 'SDA', 'SCL'])
+  })
+
+  it('schematicSymbolLayout terminals carry the flattened index regardless of schematic order', () => {
+    const lay = schematicSymbolLayout(part)
+    // terminals[i].flatIndex === i, and the pin at each index matches the header flatten.
+    expect(lay.terminals.map((t) => t.flatIndex)).toEqual([0, 1, 2, 3])
+    expect(lay.terminals.map((t) => t.pin.name)).toEqual(['VCC', 'GND', 'SDA', 'SCL'])
+  })
+
+  it('places each terminal on the side from schematic.pins (not the header edge)', () => {
+    const lay = schematicSymbolLayout(part)
+    const side = (name: string): string => lay.terminals.find((t) => t.pin.name === name)!.side
+    expect(side('VCC')).toBe('top')
+    expect(side('GND')).toBe('bottom')
+    expect(side('SCL')).toBe('right')
+  })
+})
+
+describe('schematicSymbolLayout collapses rails (one GND / one power rail)', () => {
+  const part: PartDefinition = {
+    id: 'p2',
+    name: 'P2',
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'V1', label: '3V3', type: 'pwr' },
+          { name: 'V2', label: '3V3', type: 'pwr' },
+          { name: 'G1', type: 'gnd' },
+          { name: 'G2', type: 'gnd' },
+          { name: 'SIG', type: 'io' }
+        ]
+      }
+    ]
+  }
+
+  it('keeps every pad flatIndex but merges same-rail pads to one drawn terminal', () => {
+    const lay = schematicSymbolLayout(part)
+    expect(lay.terminals).toHaveLength(5) // all pads kept (for wiring)
+    const gnd = lay.terminals.filter((t) => t.pin.type === 'gnd')
+    expect(gnd.filter((t) => t.primary)).toHaveLength(1) // one GND drawn
+    expect(gnd[0].outer).toEqual(gnd[1].outer) // …both grounds share its anchor
+    const pwr = lay.terminals.filter((t) => t.pin.type === 'pwr')
+    expect(pwr.filter((t) => t.primary)).toHaveLength(1) // both 3V3 → one terminal
+    expect(pwr[0].outer).toEqual(pwr[1].outer)
+  })
+
+  it('puts the merged power rail on top and ground at the bottom', () => {
+    const lay = schematicSymbolLayout(part)
+    expect(lay.terminals.filter((t) => t.pin.type === 'pwr').every((t) => t.side === 'top')).toBe(true)
+    expect(lay.terminals.filter((t) => t.pin.type === 'gnd').every((t) => t.side === 'bottom')).toBe(true)
   })
 })

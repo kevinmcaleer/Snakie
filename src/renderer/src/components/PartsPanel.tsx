@@ -431,7 +431,12 @@ function PartDetail({
   return (
     <div className="pl__detail">
       <div className="pl__detail-head">
-        <span className="pl__detail-title">{part.name}</span>
+        <div className="pl__detail-titlerow">
+          <span className="pl__detail-title">{part.name}</span>
+          <button type="button" className="pl__icon" onClick={onClose} title="Close detail">
+            ✕
+          </button>
+        </div>
         <div className="pl__detail-actions">
           {onAddToProject && (
             <button type="button" className="pl__btn pl__btn--small pl__btn--primary" onClick={onAddToProject} title="Add this part to the project (robot.yml)">
@@ -443,9 +448,6 @@ function PartDetail({
           </button>
           <button type="button" className="pl__btn pl__btn--small pl__btn--danger" onClick={onDelete}>
             Delete
-          </button>
-          <button type="button" className="pl__icon" onClick={onClose} title="Close detail">
-            ✕
           </button>
         </div>
       </div>
