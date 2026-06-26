@@ -158,9 +158,27 @@
   color: var(--text-muted);
 }
 
+/* --- Resizable list / preview split --- */
+.pl__split {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pl__resize {
+  height: 6px;
+  flex: 0 0 6px;
+  background: var(--border);
+  cursor: row-resize;
+}
+
+.pl__resize:hover,
+.pl__resize[data-resize-handle-active] {
+  background: var(--text-muted);
+}
+
 /* --- Library list --- */
 .pl__list {
-  flex: 1 1 auto;
+  height: 100%;
   overflow: auto;
   padding: 0 0.6rem 0.6rem;
 }
@@ -323,11 +341,41 @@
 
 /* --- Part detail card --- */
 .pl__detail {
+  height: 100%;
   border-top: var(--border-w) solid var(--border);
   padding: 0.5rem 0.6rem 0.8rem;
   background: var(--bg-sunken);
-  max-height: 55%;
   overflow: auto;
+}
+
+/* Board/Schematic preview toggle */
+.pl__detail-seg {
+  display: inline-flex;
+  margin-bottom: 0.4rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.pl__seg-btn {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: none;
+  padding: 0.2rem 0.6rem;
+  cursor: pointer;
+}
+
+.pl__seg-btn.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pl__seg-btn.is-active {
+  background: #e6ab30;
+  color: #5a3d0e;
 }
 
 .pl__detail-head {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { PartCanvas } from './PartCanvas'
+import { PartSchematicView } from './PartSchematicView'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
   LibraryUpdate,
@@ -278,8 +280,11 @@ export function PartsPanel(): JSX.Element {
         </div>
       )}
 
-      {/* Installed libraries + parts */}
-      <div className="pl__list">
+      {/* Installed libraries + parts (top) and the part preview (bottom), with a
+          draggable splitter between them. */}
+      <PanelGroup direction="vertical" autoSaveId="snakie.parts.split" className="pl__split">
+        <Panel id="pl-list" order={1} minSize={20} defaultSize={60}>
+          <div className="pl__list">
         {loading && <p className="pl__muted">Loading libraries…</p>}
         {!loading && libraries.length === 0 && (
           <div className="pl__empty">
@@ -363,18 +368,25 @@ export function PartsPanel(): JSX.Element {
               </div>
             )
           })}
-      </div>
+          </div>
+        </Panel>
 
-      {/* Part detail */}
-      {selectedPart && (
-        <PartDetail
-          libraryId={selectedPart.libraryId}
-          part={selectedPart.part}
-          onEdit={() => openEditor(selectedPart.libraryId, selectedPart.part)}
-          onDelete={() => void deletePart(selectedPart.libraryId, selectedPart.part)}
-          onClose={() => setSelected(null)}
-        />
-      )}
+        {/* Part preview (resizable) — only when a part is selected. */}
+        {selectedPart && (
+          <>
+            <PanelResizeHandle className="pl__resize" />
+            <Panel id="pl-detail" order={2} minSize={20} defaultSize={40}>
+              <PartDetail
+                libraryId={selectedPart.libraryId}
+                part={selectedPart.part}
+                onEdit={() => openEditor(selectedPart.libraryId, selectedPart.part)}
+                onDelete={() => void deletePart(selectedPart.libraryId, selectedPart.part)}
+                onClose={() => setSelected(null)}
+              />
+            </Panel>
+          </>
+        )}
+      </PanelGroup>
     </div>
   )
 }
@@ -392,6 +404,7 @@ function PartDetail({
   onDelete: () => void
   onClose: () => void
 }): JSX.Element {
+  const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
   const metaRows: [string, string | undefined][] = [
     ['Manufacturer', part.manufacturer],
     ['Family', part.family],
@@ -423,8 +436,32 @@ function PartDetail({
 
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
 
+      <div className="pl__detail-seg" role="tablist" aria-label="Preview">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={previewMode === 'board'}
+          className={`pl__seg-btn${previewMode === 'board' ? ' is-active' : ''}`}
+          onClick={() => setPreviewMode('board')}
+        >
+          Board
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={previewMode === 'schematic'}
+          className={`pl__seg-btn${previewMode === 'schematic' ? ' is-active' : ''}`}
+          onClick={() => setPreviewMode('schematic')}
+        >
+          Schematic
+        </button>
+      </div>
       <div className="pl__detail-fp">
-        <PartCanvas part={part} readOnly />
+        {previewMode === 'board' ? (
+          <PartCanvas part={part} readOnly />
+        ) : (
+          <PartSchematicView part={part} />
+        )}
       </div>
 
       <dl className="pl__meta">
