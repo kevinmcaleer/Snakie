@@ -200,6 +200,42 @@
 /* --- Controls --- */
 .i2cdet__controls {
   display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+/* Bus / SDA / SCL pin pickers (#165). */
+.i2cdet__pick {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--accent) 70%, #fff);
+}
+
+.i2cdet__pick select {
+  height: 30px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent);
+  background: #0c1410;
+  border: 1px solid var(--accent-border);
+  padding: 0 4px;
+  cursor: pointer;
+}
+
+.i2cdet__pick select:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.i2cdet__error {
+  color: #ff8a7a;
 }
 
 .i2cdet__scan {

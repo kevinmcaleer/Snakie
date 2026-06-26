@@ -1,48 +1,56 @@
 import { useCallback, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
-import { useTelemetryStream } from './instrument-telemetry-subscribe'
-import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
-import { I2C_DETECT_DEMO, I2C_DETECT_DEMO_NAME } from './i2c-detect-demo'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
+import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption } from './i2c-pins'
+import { BUILTIN_BOARDS, DEFAULT_BOARD_ID } from './board-defs'
 import './I2cDetectInstrument.css'
 
 /**
- * I²C DETECT (#121) — the classic `i2cdetect` 8×16 address grid as a dock
+ * I²C DETECT (#121 / #165) — the classic `i2cdetect` 8×16 address grid as a dock
  * instrument.
  * =============================================================================
  *
- * An ON-DEMAND scanner: pressing SCAN kicks an on-device I²C bus scan over the
- * control channel (`SNKCMD scan:i2c`, the documented `scan:<kind>` trigger
- * token), and the result — every responding 7-bit address — arrives back as ONE
- * `I2cTelemetry` reading on the broadcast serial stream (the shared
- * `instrument-telemetry` parser decodes the board's `SNK I2C …` line). The grid
- * rows are the high nibble (0x00–0x70) and columns the low nibble (0x0–0xF);
- * detected cells glow the instrument accent.
- *
- * Reuses the shared {@link InstrumentWindow} chrome + {@link PhosphorScreen}
- * exactly like the scope/meter, so it sits natively in the dock. All the address
- * → cell / detected-set / grid-model maths lives in the unit-tested, DOM-free
- * {@link ./scanner-logic}; this file is just the SCAN button, the small scan
- * state machine, and the grid render.
+ * The user picks the **bus + SDA + SCL** from dropdowns of the connected board's
+ * valid I²C pins (#165 — invalid combos can't be chosen; see {@link ./i2c-pins}),
+ * then SCAN runs a one-shot probe on the board over `device.exec`: it builds a
+ * `machine.I2C` on those pins, scans, and prints the responding addresses, which
+ * we parse into the grid. Works on demand — no running program needed — and the
+ * address → cell maths still lives in the unit-tested {@link ./scanner-logic}.
  */
 
+/** GPIO numbers a board exposes (for the I²C pin dropdowns). */
+function boardGpios(boardId: string | null): number[] {
+  const def =
+    BUILTIN_BOARDS.find((b) => b.id === boardId) ??
+    BUILTIN_BOARDS.find((b) => b.id === DEFAULT_BOARD_ID) ??
+    BUILTIN_BOARDS[0]
+  return (def?.headers ?? [])
+    .flatMap((h) => h.pins)
+    .map((p) => p.gpio)
+    .filter((g): g is number => typeof g === 'number')
+}
+
+/** The SCAN exec snippet: build I²C on the chosen pins, print the addresses. */
+function scanSnippet(bus: number, sda: number, scl: number): string {
+  return [
+    'from machine import I2C, Pin',
+    'try:',
+    `    _b = I2C(${bus}, sda=Pin(${sda}), scl=Pin(${scl}))`,
+    "    print('SNKI2C ' + ' '.join('%02x' % a for a in _b.scan()))",
+    'except Exception as e:',
+    "    print('SNKI2CERR ' + repr(e))"
+  ].join('\n')
+}
+
 export interface I2cDetectInstrumentProps {
-  /** The registry def driving the name, accent and source pill. */
   def: InstrumentDef
-  /** Close (hide) this instrument — same close→hide model as the other windows. */
   onClose?: () => void
-  /** Whether the window is docked (always true in the dock today). */
   docked?: boolean
-  /** Float ⟷ dock toggle (the dock-to-side key) + drag placement when floating. */
   onToggleDock?: () => void
   float?: FloatProps
 }
-
-/** The on-device scan trigger token for the I²C bus (documented `scan:<kind>`). */
-const SCAN_TRIGGER = 'scan:i2c'
 
 export function I2cDetectInstrument({
   def,
@@ -53,150 +61,129 @@ export function I2cDetectInstrument({
 }: I2cDetectInstrumentProps): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
-  const { present } = useSnakiePresence()
-  const { openBuffer } = useWorkspace()
 
-  // `grid` is undefined until the first result lands; `scanning` lights the
-  // "scanning…" state on SCAN and clears on the first reading.
+  // Valid I²C combos for the selected board (the board picker persists its id).
+  let boardId: string | null = null
+  try {
+    boardId = window.localStorage.getItem('snakie.board.id')
+  } catch {
+    boardId = null
+  }
+  const opts = i2cOptions(boardGpios(boardId))
+  const buses = i2cBuses(opts)
+
+  const [sel, setSel] = useState<I2cOption>(() => opts[0] ?? { bus: 0, sda: 0, scl: 1 })
   const [grid, setGrid] = useState<I2cGridModel | undefined>(undefined)
   const [scanning, setScanning] = useState(false)
-  // Shown when SCAN can't reach the bus — no board, or no Snakie program running
-  // an I²C bus to service the trigger (then we offer to run the demo). #149.
-  const [prompt, setPrompt] = useState(false)
-  // True while opening + running the demo (disables the prompt buttons).
-  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // The whole address set arrives in ONE `kind:'i2c'` reading, so we just rebuild
-  // the grid from it and drop the scanning flag.
-  useTelemetryStream(
-    useCallback((reading) => {
-      if (reading.kind !== 'i2c') return
-      setGrid(buildI2cGrid(reading.addrs))
-      setScanning(false)
-    }, [])
-  )
+  const pickBus = (bus: number): void => {
+    const first = opts.find((o) => o.bus === bus)
+    if (first) setSel(first)
+  }
+  const pickSda = (sda: number): void => {
+    const first = opts.find((o) => o.bus === sel.bus && o.sda === sda)
+    if (first) setSel(first)
+  }
+  const pickScl = (scl: number): void => {
+    const match = opts.find((o) => o.bus === sel.bus && o.sda === sel.sda && o.scl === scl)
+    if (match) setSel(match)
+  }
 
-  // Kick a scan. The on-device `scan:i2c` trigger only exists when a Snakie
-  // program called `inst.start(i2c=…)`; without a live program the SCAN can't
-  // reach the bus, so — instead of a misleading "scanning…" that never resolves
-  // (#149) — surface a prompt offering to run the I²C demo.
+  // One-shot scan on the chosen pins (no running program needed).
   const scan = useCallback(async () => {
-    if (!connected || !present) {
-      setPrompt(true)
-      return
-    }
-    setPrompt(false)
+    if (!connected) return
+    setError(null)
     setScanning(true)
     try {
-      await window.api.device.sendControl(SCAN_TRIGGER)
+      const res = await window.api.device.exec(scanSnippet(sel.bus, sel.sda, sel.scl))
+      const out = `${res.stdout ?? ''}\n${res.stderr ?? ''}`
+      const okLine = out.split('\n').find((l) => l.startsWith('SNKI2C '))
+      const errLine = out.split('\n').find((l) => l.startsWith('SNKI2CERR '))
+      if (okLine) {
+        const addrs = okLine
+          .slice('SNKI2C '.length)
+          .trim()
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((h) => parseInt(h, 16))
+        setGrid(buildI2cGrid(addrs))
+      } else {
+        setError(errLine ? errLine.slice('SNKI2CERR '.length) : 'Scan failed — check the pins/wiring.')
+      }
     } catch {
-      // The send failed (no board / closed port): drop the scanning state so the
-      // panel doesn't hang on "scanning…". The grid keeps its last result.
-      setScanning(false)
-    }
-  }, [connected, present])
-
-  // Open the I²C demo in a new tab and run it: interrupt any running program,
-  // drop the demo in the editor, then paste-run it. Its `inst.start(i2c=…)`
-  // registers the scan trigger (→ READY → present) and the initial scan fills the
-  // grid. Mirrors the Wi-Fi scanner's demo flow.
-  const runDemo = useCallback(async () => {
-    setBusy(true)
-    try {
-      await window.api.device.interrupt().catch(() => undefined)
-      openBuffer(I2C_DETECT_DEMO_NAME, I2C_DETECT_DEMO)
-      await new Promise((resolve) => setTimeout(resolve, 200))
-      await window.api.device.sendData(`\x05${I2C_DETECT_DEMO}\x04`)
-      setPrompt(false)
-      setScanning(true)
-    } catch {
-      setScanning(false)
+      setError('Scan failed — is the board connected?')
     } finally {
-      setBusy(false)
+      setScanning(false)
     }
-  }, [openBuffer])
+  }, [connected, sel])
 
   const found = grid?.found ?? []
   const foundText = scanning && !grid ? '··' : String(found.length)
+  const noPins = opts.length === 0
 
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
-      source="I2C0"
+      source={`I2C${sel.bus}`}
       docked={docked}
       onClose={onClose}
       onToggleDock={onToggleDock}
       {...float}
     >
-      <div
-        className="i2cdet"
-        style={{ '--accent': def.accent, '--accent-border': def.border } as CSSProperties}
-      >
+      <div className="i2cdet" style={{ '--accent': def.accent, '--accent-border': def.border } as CSSProperties}>
         <PhosphorScreen className="instr__screen--accent">
           <div className="i2cdet__screen">
-            {prompt ? (
-              <div className="i2cdet__prompt">
-                {connected ? (
-                  <>
-                    <p className="i2cdet__prompt-msg">
-                      No Snakie program is running an I²C bus to scan.
-                    </p>
-                    <div className="i2cdet__prompt-actions">
-                      <button
-                        type="button"
-                        className="i2cdet__demo"
-                        onClick={() => void runDemo()}
-                        disabled={busy}
-                      >
-                        {busy ? 'STARTING…' : '▶ Run I²C demo'}
-                      </button>
-                      <button
-                        type="button"
-                        className="i2cdet__dismiss"
-                        onClick={() => setPrompt(false)}
-                        disabled={busy}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                    <p className="i2cdet__prompt-hint">
-                      Opens a demo that sets up an I²C bus and scans on the 2nd core — or run your
-                      own program that calls <code>inst.start(i2c=…)</code>.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="i2cdet__prompt-msg">Connect a board to scan the I²C bus.</p>
-                    <div className="i2cdet__prompt-actions">
-                      <button
-                        type="button"
-                        className="i2cdet__dismiss"
-                        onClick={() => setPrompt(false)}
-                      >
-                        Dismiss
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
+            {!connected ? (
+              <p className="i2cdet__hint">Connect a board to scan the I²C bus.</p>
+            ) : error ? (
+              <p className="i2cdet__hint i2cdet__error">{error}</p>
             ) : grid ? (
               <I2cGrid grid={grid} />
             ) : (
-              <p className="i2cdet__hint">
-                {scanning ? 'scanning…' : 'Press SCAN to probe the I²C bus'}
-              </p>
+              <p className="i2cdet__hint">{scanning ? 'scanning…' : 'Pick the bus + pins, then SCAN'}</p>
             )}
             {scanning && grid && <div className="i2cdet__scanning">scanning…</div>}
           </div>
         </PhosphorScreen>
 
         <div className="i2cdet__controls">
+          <label className="i2cdet__pick">
+            <span>BUS</span>
+            <select value={sel.bus} onChange={(e) => pickBus(Number(e.target.value))} disabled={noPins}>
+              {buses.map((b) => (
+                <option key={b} value={b}>
+                  I2C{b}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="i2cdet__pick">
+            <span>SDA</span>
+            <select value={sel.sda} onChange={(e) => pickSda(Number(e.target.value))} disabled={noPins}>
+              {sdaOptions(opts, sel.bus).map((p) => (
+                <option key={p} value={p}>
+                  GP{p}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="i2cdet__pick">
+            <span>SCL</span>
+            <select value={sel.scl} onChange={(e) => pickScl(Number(e.target.value))} disabled={noPins}>
+              {sclOptions(opts, sel.bus, sel.sda).map((p) => (
+                <option key={p} value={p}>
+                  GP{p}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             className="i2cdet__scan"
             onClick={() => void scan()}
-            disabled={scanning}
-            title="Run an I²C bus scan on the connected board"
+            disabled={scanning || noPins || !connected}
+            title="Run an I²C bus scan on the chosen pins"
           >
             {scanning ? 'SCANNING…' : 'SCAN'}
           </button>
@@ -205,9 +192,9 @@ export function I2cDetectInstrument({
         <div className="i2cdet__readout">
           <Cell label="FOUND" value={foundText} />
           <span className="i2cdet__div" aria-hidden="true" />
-          <Cell label="SDA" value="—" />
+          <Cell label="SDA" value={`GP${sel.sda}`} />
           <span className="i2cdet__div" aria-hidden="true" />
-          <Cell label="SCL" value="—" />
+          <Cell label="SCL" value={`GP${sel.scl}`} />
         </div>
       </div>
     </InstrumentWindow>

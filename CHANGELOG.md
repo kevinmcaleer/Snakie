@@ -40,6 +40,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Raspberry-Pi-style** — a **gold** pad with the **main hole centred on the pin**
   and a plated **half-hole** at the board edge (ground pads square, others
   rounded). A **Background** colour well sets the PCB colour.
+- **I²C-detect: pick the bus + pins (#165).** The instrument now has **Bus / SDA /
+  SCL** dropdowns of the connected board's valid I²C pins (the RP2040/RP2350
+  mapping — invalid combinations can't be chosen), and SCAN runs a one-shot probe
+  on those exact pins (no running program needed).
 - **Parts Library — portable, community-authored & version-controlled (#129).**
   A new **Parts** view (in the Board Viewer — see below) browses your installed
   parts libraries and the parts inside them. Parts are **no longer hard-coded** into Snakie:
