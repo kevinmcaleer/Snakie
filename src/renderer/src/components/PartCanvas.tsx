@@ -14,6 +14,7 @@ import {
   addComponentOnTop,
   derivePinPosition,
   insertPolygonPoint,
+  nearestCenter,
   nearestPolygonEdge,
   orderedComponents,
   pinShapeOf,
@@ -215,6 +216,9 @@ export function PartCanvas({
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  // Smart alignment guides (#169): green center-lines shown while dragging a pin /
+  // hole that lines up with another's centre. Normalised x (vertical line) / y.
+  const [guides, setGuides] = useState<{ x?: number; y?: number } | null>(null)
   // The pin under the pointer — shows its capability badges (breadboard view).
   const [hoverPin, setHoverPin] = useState<{ hi: number; pi: number } | null>(null)
   const rawId = useId()
@@ -301,14 +305,41 @@ export function PartCanvas({
   const onPin = (nx: number, ny: number, r: number): boolean =>
     pins.some((p) => dist(nx, ny, p.x, p.y) < r + 6)
 
+  // --- smart alignment guides (#169) ----------------------------------------
+  /** Snap distance (viewBox px) for a dragged centre to line up with another's. */
+  const ALIGN_PX = 6
+  /**
+   * While dragging a pin/hole, snap its centre to another pin/hole's centre line
+   * (x and/or y) when within {@link ALIGN_PX}, returning the (possibly snapped)
+   * point + which guide lines to draw. `off` (Ctrl/Cmd held) bypasses alignment
+   * and just applies the normal grid snap.
+   */
+  const alignDrag = (
+    nx: number,
+    ny: number,
+    kind: 'pin' | 'hole',
+    exclude: { hi?: number; pi?: number; index?: number },
+    off: boolean
+  ): { x: number; y: number; gx?: number; gy?: number } => {
+    if (off) return { x: snapX(nx), y: snapY(ny) }
+    const centres =
+      kind === 'pin'
+        ? pins.filter((p) => !(p.hi === exclude.hi && p.pi === exclude.pi)).map((p) => ({ x: p.x, y: p.y }))
+        : holes.filter((_, i) => i !== exclude.index).map((h) => ({ x: h.x, y: h.y }))
+    const gx = nearestCenter(centres.map((c) => c.x), nx, box.w, ALIGN_PX)
+    const gy = nearestCenter(centres.map((c) => c.y), ny, box.h, ALIGN_PX)
+    return { x: gx ?? snapX(nx), y: gy ?? snapY(ny), gx: gx ?? undefined, gy: gy ?? undefined }
+  }
+
   // --- mutation helpers -----------------------------------------------------
   const commit = (next: PartDefinition): void => onChange?.(next)
 
-  const movePinTo = (hi: number, pi: number, nx: number, ny: number, anchor?: { x: number; y: number }): void => {
+  const movePinTo = (hi: number, pi: number, nx: number, ny: number, anchor?: { x: number; y: number }, presnapped = false): void => {
     // With an anchor (another pin is selected), lock to its 2.54mm array grid;
-    // otherwise snap to the global grid. Test the point we'll store (no hole).
-    const sx = anchor ? snapToAnchor(nx, anchor.x, stepNX) : snapX(nx)
-    const sy = anchor ? snapToAnchor(ny, anchor.y, stepNY) : snapY(ny)
+    // `presnapped` (alignment-guide drag) means the caller already chose x/y, so
+    // don't re-snap; otherwise snap to the global grid. Test the stored point.
+    const sx = anchor ? snapToAnchor(nx, anchor.x, stepNX) : presnapped ? nx : snapX(nx)
+    const sy = anchor ? snapToAnchor(ny, anchor.y, stepNY) : presnapped ? ny : snapY(ny)
     if (inHole(sx, sy)) return
     commit({
       ...part,
@@ -317,9 +348,9 @@ export function PartCanvas({
       )
     })
   }
-  const moveHoleTo = (index: number, nx: number, ny: number): void => {
-    const sx = snapX(nx)
-    const sy = snapY(ny)
+  const moveHoleTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
     // The reverse invariant: a hole can't be dragged onto a pin.
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
@@ -796,9 +827,20 @@ export function PartCanvas({
     if (d.kind === 'move-obj' && d.sel) {
       const x = d.ox + dx
       const y = d.oy + dy
-      if (d.sel.type === 'pin') movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
-      else if (d.sel.type === 'hole') moveHoleTo(d.sel.index, x, y)
-      else if (d.sel.type === 'shape') moveShapeTo(d.sel.index, x, y)
+      const noSnap = e.ctrlKey || e.metaKey // Ctrl/Cmd disables alignment snapping
+      if (d.sel.type === 'pin' && d.anchor) {
+        // Ghost-array drag keeps its 2.54mm lock; no alignment guides.
+        movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
+        setGuides(null)
+      } else if (d.sel.type === 'pin') {
+        const a = alignDrag(x, y, 'pin', { hi: d.sel.hi, pi: d.sel.pi }, noSnap)
+        setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
+        movePinTo(d.sel.hi, d.sel.pi, a.x, a.y, undefined, true)
+      } else if (d.sel.type === 'hole') {
+        const a = alignDrag(x, y, 'hole', { index: d.sel.index }, noSnap)
+        setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
+        moveHoleTo(d.sel.index, a.x, a.y, true)
+      } else if (d.sel.type === 'shape') moveShapeTo(d.sel.index, x, y)
       else if (d.sel.type === 'label') moveLabelTo(d.sel.index, x, y)
       else if (d.sel.type === 'image') moveImage(x, y)
     }
@@ -809,6 +851,7 @@ export function PartCanvas({
     dragRef.current = null
     const preview = createPreview
     setCreatePreview(null)
+    setGuides(null) // drop any alignment guides
     if (!d || !interactive) return
 
     // Marquee → select the pins inside the box.
@@ -1083,6 +1126,18 @@ export function PartCanvas({
             height={Math.abs(marquee.y1 - marquee.y0) * box.h}
             className="pcv__marquee"
           />
+        )}
+
+        {/* Smart alignment guides (#169): green centre-lines while dragging. */}
+        {interactive && guides && (
+          <g className="pcv__guides" style={{ pointerEvents: 'none' }}>
+            {guides.x !== undefined && (
+              <line x1={px(guides.x)} y1={box.y} x2={px(guides.x)} y2={box.y + box.h} className="pcv__guide" />
+            )}
+            {guides.y !== undefined && (
+              <line x1={box.x} y1={py(guides.y)} x2={box.x + box.w} y2={py(guides.y)} className="pcv__guide" />
+            )}
+          </g>
         )}
 
         {/* Hover badges (#…): the hovered pin's capabilities, in pastel chips. */}

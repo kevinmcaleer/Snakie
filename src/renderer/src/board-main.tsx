@@ -65,6 +65,8 @@ function BoardWindowApp(): JSX.Element {
     part: PartDefinition | null
     libraries: PartLibrary[]
     existingParts: PartDefinition[]
+    /** True for a pre-seeded NEW part (e.g. "+ board") so the collision guard arms. */
+    isNew?: boolean
   } | null>(null)
   // The project's robot.yml (parts + wiring) + the installed libraries used to
   // resolve placed parts' pins on the wiring canvas.
@@ -239,9 +241,9 @@ function BoardWindowApp(): JSX.Element {
       .listLibraries()
       .then((libs) => {
         const lib = libs.find((l) => l.id === 'my-parts')
-        setEditing({ libraryId: 'my-parts', part: starter, libraries: libs, existingParts: lib?.parts ?? [] })
+        setEditing({ libraryId: 'my-parts', part: starter, libraries: libs, existingParts: lib?.parts ?? [], isNew: true })
       })
-      .catch(() => setEditing({ libraryId: 'my-parts', part: starter, libraries: [], existingParts: [] }))
+      .catch(() => setEditing({ libraryId: 'my-parts', part: starter, libraries: [], existingParts: [], isNew: true }))
   }
 
   return (
@@ -264,6 +266,7 @@ function BoardWindowApp(): JSX.Element {
         <PartEditor
           libraryId={editing.libraryId}
           initial={editing.part}
+          isNew={editing.isNew}
           existingParts={editing.existingParts}
           libraries={editing.libraries}
           onSaved={() => window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))}

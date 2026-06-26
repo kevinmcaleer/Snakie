@@ -97,6 +97,13 @@
   pointer-events: none;
 }
 
+/* Smart alignment guide line (#169): a thin green centre-line. */
+.pcv__guide {
+  stroke: #46e06a;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
 /* Alignment toolbar (appears when ≥2 pins are selected). */
 .pcv__align {
   position: absolute;

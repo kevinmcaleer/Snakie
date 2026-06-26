@@ -7,6 +7,7 @@ import {
   derivePinPosition,
   insertPolygonPoint,
   isBoardPart,
+  nearestCenter,
   nearestPolygonEdge,
   nextComponentZ,
   normalisePart,
@@ -604,5 +605,20 @@ describe('boardPartFor (issue-1: board → source part)', () => {
     // Same pins, same order: pad N (label) == part pin N (name).
     expect(boardPads.map((p) => p.label)).toEqual(partPins.map((p) => p.name))
     expect(partPins.map((p) => p.index)).toEqual([0, 1, 2])
+  })
+})
+
+describe('nearestCenter (#169 alignment guides)', () => {
+  it('snaps to a centre within the px threshold (nearest wins)', () => {
+    // dim=400px: 0.50 vs centres 0.49 (4px away) and 0.70 (84px) → 0.49 within 6px.
+    expect(nearestCenter([0.49, 0.7], 0.5, 400, 6)).toBe(0.49)
+  })
+  it('returns null when nothing is within the threshold', () => {
+    expect(nearestCenter([0.7, 0.9], 0.5, 400, 6)).toBeNull()
+    expect(nearestCenter([], 0.5, 400, 6)).toBeNull()
+  })
+  it('picks the closest of several near centres', () => {
+    // 0.50: 0.515 is 6px (excluded, not < 6), 0.49 is 4px → 0.49.
+    expect(nearestCenter([0.515, 0.49], 0.5, 400, 6)).toBe(0.49)
   })
 })

@@ -75,6 +75,9 @@ export interface PartEditorProps {
   libraryId: string
   /** The part to edit, or null for a brand-new blank part. */
   initial: PartDefinition | null
+  /** Treat `initial` as a brand-NEW part (a pre-seeded starter, e.g. "+ board"),
+   *  so the id-collision guard stays armed even though `initial` carries an id. */
+  isNew?: boolean
   /** Other parts in the same library (for the id-collision warning). */
   existingParts: PartDefinition[]
   /** All installed libraries (for the target-library selector). */
@@ -201,6 +204,7 @@ function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
 export function PartEditor({
   libraryId,
   initial,
+  isNew = false,
   existingParts,
   libraries,
   onClose,
@@ -212,7 +216,9 @@ export function PartEditor({
     withShapesFromFeatures(withPinPositions(initial ?? blankPart()))
   )
   const [libId, setLibId] = useState<string>(libraryId)
-  const [openedId, setOpenedId] = useState<string | null>(initial?.id ?? null)
+  // A NEW part (incl. a pre-seeded starter) has no "opened" id, so the collision
+  // guard treats its id as fresh and warns before overwriting an existing part.
+  const [openedId, setOpenedId] = useState<string | null>(isNew ? null : (initial?.id ?? null))
   // The library the part was opened/last-saved from — so the collision guard only
   // stays silent when saving back to the SAME library with the same id.
   const [openedLibId, setOpenedLibId] = useState<string>(libraryId)

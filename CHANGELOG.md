@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Smart alignment guides in the Part Editor (#169).** While dragging a pin (or a
+  mounting hole), a **green centre-line** appears when it lines up horizontally or
+  vertically with another pin/hole, and it **snaps** to that line; hold **Ctrl/Cmd**
+  to drag freely without snapping. Holes align with holes, pins with pins.
 - **Promote a board to the Standard Boards library (developer).** In a dev build, a
   microcontroller board part shows a **Promote to Standard / Update Standard** button
   in the Parts Library: it copies the board into the bundled `snakie-standard` library
@@ -159,6 +163,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   legible above them.
 
 ### Fixed
+- **"+ board" no longer silently overwrites an existing board.** The new-board
+  starter is now treated as a genuinely new part, so the Part Editor's duplicate-id
+  guard warns before overwriting (it had been disabled by the pre-seeded id).
 - **Schematic view: one terminal per rail, no stray pin circles.** A placed part's
   (or the MCU's) multiple grounds and same-label power pads now collapse to a single
   schematic terminal (they stay individual in Breadboard), and pins draw as plain

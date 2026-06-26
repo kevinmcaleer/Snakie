@@ -454,6 +454,29 @@ export function nearestPolygonEdge(
   return { index: bi, dist: bd }
 }
 
+/**
+ * The nearest centre coordinate to `value` (normalised) that is within
+ * `thresholdPx` once scaled by `dim` (the box width/height in px); null if none.
+ * Backs the Part Editor's smart alignment guides (#169). Pure.
+ */
+export function nearestCenter(
+  centres: number[],
+  value: number,
+  dim: number,
+  thresholdPx: number
+): number | null {
+  let best: number | null = null
+  let bestPx = thresholdPx
+  for (const c of centres) {
+    const px = Math.abs((c - value) * dim)
+    if (px < bestPx) {
+      bestPx = px
+      best = c
+    }
+  }
+  return best
+}
+
 /** Insert a point right after `edgeIndex` in a polygon ring. Pure. */
 export function insertPolygonPoint(
   points: PolygonPoint[],
