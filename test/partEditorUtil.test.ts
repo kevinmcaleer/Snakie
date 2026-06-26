@@ -1,12 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import {
   blankPart,
+  derivePinPosition,
   normalisePart,
   partToBoardDefinition,
   pinNames,
+  resolvedPins,
   sanitisePartId,
   snapToGrid,
-  validatePart
+  validatePart,
+  withPinPositions
 } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -146,6 +149,86 @@ describe('partToBoardDefinition', () => {
     })
     part.imageData = 'data:image/png;base64,ZZZ'
     expect(partToBoardDefinition(part).image).toBe('data:image/png;base64,ZZZ')
+  })
+})
+
+describe('free-placement positions', () => {
+  it('derivePinPosition places pads just inside the named edge', () => {
+    expect(derivePinPosition('left', 0, 1)).toEqual({ x: 0.06, y: 0.5 })
+    expect(derivePinPosition('right', 0, 1)).toEqual({ x: 0.94, y: 0.5 })
+    expect(derivePinPosition('top', 0, 1).y).toBe(0.06)
+    expect(derivePinPosition('bottom', 0, 1).y).toBe(0.94)
+  })
+
+  it('normalisePart migrates legacy edge-based pins to absolute x/y', () => {
+    const legacy: PartDefinition = {
+      id: 'legacy',
+      name: 'Legacy',
+      headers: [
+        { edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }, { name: 'B', type: 'io', gpio: 1 }] }
+      ]
+    }
+    const n = normalisePart(legacy)
+    for (const pin of n.headers[0].pins) {
+      expect(typeof pin.x).toBe('number')
+      expect(typeof pin.y).toBe('number')
+      expect(pin.x).toBeGreaterThanOrEqual(0)
+      expect(pin.x).toBeLessThanOrEqual(1)
+    }
+    // Idempotent: positions are preserved on a second pass.
+    expect(normalisePart(n)).toEqual(n)
+  })
+
+  it('keeps explicit positions over the edge fallback', () => {
+    const part: PartDefinition = {
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0, x: 0.42, y: 0.42 }] }]
+    }
+    const n = normalisePart(part)
+    expect(n.headers[0].pins[0].x).toBe(0.42)
+    expect(n.headers[0].pins[0].y).toBe(0.42)
+  })
+
+  it('withPinPositions gives every pin an x/y and preserves runtime fields', () => {
+    const seeded = withPinPositions({
+      id: 'p',
+      name: 'P',
+      imageData: 'data:image/png;base64,ZZZ',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }, { name: 'B', type: 'io', gpio: 1, x: 0.3, y: 0.3 }] }]
+    })
+    expect(seeded.imageData).toBe('data:image/png;base64,ZZZ') // not stripped (unlike normalisePart)
+    expect(typeof seeded.headers[0].pins[0].x).toBe('number')
+    expect(seeded.headers[0].pins[1]).toMatchObject({ x: 0.3, y: 0.3 }) // explicit kept
+  })
+
+  it('resolvedPins flattens pins with resolved positions + indices', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        { edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] },
+        { edge: 'right', pins: [{ name: 'B', type: 'io', gpio: 1, x: 0.9, y: 0.2 }] }
+      ]
+    })
+    const rp = resolvedPins(part)
+    expect(rp).toHaveLength(2)
+    expect(rp[0]).toMatchObject({ hi: 0, pi: 0 })
+    expect(rp[1]).toMatchObject({ hi: 1, pi: 0, x: 0.9, y: 0.2 })
+  })
+
+  it('normalises shape, imageLayer and labels', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      shape: { kind: 'polygon', cornerRadius: 9 },
+      imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 2 },
+      labels: [{ text: 'Hi', x: 0.5, y: 0.5 }, { text: '', x: 0, y: 0 }],
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }]
+    })
+    expect(part.shape).toEqual({ kind: 'polygon', cornerRadius: 0.5 }) // clamped
+    expect(part.imageLayer?.opacity).toBe(1) // clamped to 0..1
+    expect(part.labels).toHaveLength(1) // empty-text label dropped
   })
 })
 

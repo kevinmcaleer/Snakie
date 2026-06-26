@@ -19,11 +19,14 @@
 import { parse, stringify } from 'yaml'
 import type {
   PartDefinition,
+  PartEdge,
+  PartFeature,
   PartHeader,
   PartLibrary,
   PartPin,
   PartPinCapability,
-  PartPinType
+  PartPinType,
+  SchematicPin
 } from './part'
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
@@ -85,6 +88,10 @@ function coercePin(raw: unknown): PartPin | null {
   const label = str(r.label)
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
+  const x = num(r.x)
+  const y = num(r.y)
+  if (x !== undefined) pin.x = x
+  if (y !== undefined) pin.y = y
   return pin
 }
 
@@ -110,6 +117,8 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
+  if (p.x !== undefined) out.x = p.x
+  if (p.y !== undefined) out.y = p.y
   return out
 }
 
@@ -136,13 +145,16 @@ export function partToYaml(part: PartDefinition): string {
     aspect: part.aspect,
     dimensions: part.dimensions,
     polygon: part.polygon,
+    shape: part.shape,
     headers: part.headers?.map((h) => ({ edge: h.edge, pins: h.pins.map(pinToObj) })),
     mountingHoles: part.mountingHoles,
     buttons: part.buttons,
     features: part.features,
+    labels: part.labels,
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
+    imageLayer: part.imageLayer,
     schematic: part.schematic
   })
   return stringify(obj, { lineWidth: 0 })
@@ -205,6 +217,13 @@ export function partFromYaml(text: string): PartDefinition {
       .filter((p): p is { x: number; y: number } => p !== null)
     if (pts.length >= 3) part.polygon = pts
   }
+  if (raw.shape && typeof raw.shape === 'object') {
+    const s = raw.shape as Record<string, unknown>
+    const kind = s.kind === 'polygon' ? 'polygon' : 'rect'
+    part.shape = { kind }
+    const cr = num(s.cornerRadius)
+    if (cr !== undefined) part.shape.cornerRadius = cr
+  }
   if (Array.isArray(raw.mountingHoles)) {
     const holes = raw.mountingHoles
       .map((h) => {
@@ -230,12 +249,73 @@ export function partFromYaml(text: string): PartDefinition {
     if (btns.length) part.buttons = btns
   }
   if (Array.isArray(raw.features)) {
-    part.features = raw.features as PartDefinition['features']
+    const KINDS = ['mcu', 'wifi', 'usb', 'chip', 'led']
+    const features = raw.features
+      .map((f): PartFeature | null => {
+        if (!f || typeof f !== 'object') return null
+        const r = f as Record<string, unknown>
+        const x = num(r.x)
+        const y = num(r.y)
+        const w = num(r.w)
+        const h = num(r.h)
+        if (x === undefined || y === undefined || w === undefined || h === undefined) return null
+        const kind = (KINDS.includes(r.kind as string) ? r.kind : 'chip') as PartFeature['kind']
+        return { label: str(r.label) ?? '', kind, x, y, w, h }
+      })
+      .filter((f): f is PartFeature => f !== null)
+    if (features.length) part.features = features
+  }
+  if (Array.isArray(raw.labels)) {
+    const labels = raw.labels
+      .map((l) => {
+        const rec = l as Record<string, unknown>
+        const text = str(rec?.text)
+        const x = num(rec?.x)
+        const y = num(rec?.y)
+        if (text === undefined || x === undefined || y === undefined) return null
+        const out: { text: string; x: number; y: number; fontSize?: number } = { text, x, y }
+        const fs = num(rec?.fontSize)
+        if (fs !== undefined) out.fontSize = fs
+        return out
+      })
+      .filter((l): l is { text: string; x: number; y: number; fontSize?: number } => l !== null)
+    if (labels.length) part.labels = labels
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
-  if (raw.schematic && typeof raw.schematic === 'object') {
-    part.schematic = raw.schematic as PartDefinition['schematic']
+  if (raw.imageLayer && typeof raw.imageLayer === 'object') {
+    const il = raw.imageLayer as Record<string, unknown>
+    const x = num(il.x)
+    const y = num(il.y)
+    const w = num(il.w)
+    const h = num(il.h)
+    if (x !== undefined && y !== undefined && w !== undefined && h !== undefined) {
+      part.imageLayer = { x, y, w, h }
+      const op = num(il.opacity)
+      const rot = num(il.rotation)
+      if (op !== undefined) part.imageLayer.opacity = op
+      if (rot !== undefined) part.imageLayer.rotation = rot
+    }
+  }
+  if (raw.schematic && typeof raw.schematic === 'object' && !Array.isArray(raw.schematic)) {
+    const s = raw.schematic as Record<string, unknown>
+    if (Array.isArray(s.pins)) {
+      const pins = s.pins
+        .map((sp): SchematicPin | null => {
+          if (!sp || typeof sp !== 'object') return null
+          const r = sp as Record<string, unknown>
+          const pin = str(r.pin)
+          if (pin === undefined) return null
+          const side = EDGES.includes(r.side as PartEdge) ? (r.side as PartEdge) : 'left'
+          return { pin, side, order: num(r.order) ?? 0 }
+        })
+        .filter((p): p is SchematicPin => p !== null)
+      if (pins.length) {
+        part.schematic = { pins }
+        const aspect = num(s.aspect)
+        if (aspect !== undefined) part.schematic.aspect = aspect
+      }
+    }
   }
 
   return part

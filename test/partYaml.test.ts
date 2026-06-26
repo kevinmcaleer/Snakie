@@ -30,21 +30,24 @@ const RICH: PartDefinition = normalisePart({
     { x: 1, y: 1 },
     { x: 0, y: 1 }
   ],
+  shape: { kind: 'polygon' },
   headers: [
     {
       edge: 'bottom',
       pins: [
-        { name: 'VIN', type: 'pwr', number: 1 },
-        { name: 'GND', type: 'gnd', number: 2 },
-        { name: 'SCL', type: 'io', gpio: 5, capabilities: ['i2c', 'digital'], number: 3 },
-        { name: 'SDA', type: 'io', gpio: 4, capabilities: ['i2c', 'digital'], number: 4, castellated: true }
+        { name: 'VIN', type: 'pwr', number: 1, x: 0.2, y: 0.9 },
+        { name: 'GND', type: 'gnd', number: 2, x: 0.4, y: 0.9 },
+        { name: 'SCL', type: 'io', gpio: 5, capabilities: ['i2c', 'digital'], number: 3, x: 0.6, y: 0.9 },
+        { name: 'SDA', type: 'io', gpio: 4, capabilities: ['i2c', 'digital'], number: 4, castellated: true, x: 0.8, y: 0.9 }
       ]
     }
   ],
   mountingHoles: [{ x: 0.1, y: 0.5, diameter: 2 }],
   buttons: [{ label: 'XSHUT', x: 0.8, y: 0.5 }],
+  labels: [{ text: 'ToF', x: 0.5, y: 0.3, fontSize: 14 }],
   ledLabel: 'LED',
   image: 'image.png',
+  imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 0.9 },
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] }
 })
 
@@ -74,6 +77,41 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(part.id).toBe('thing')
     expect(part.name).toBe('thing')
     expect(part.headers[0].pins[0].name).toBe('A0')
+  })
+
+  it('coerces malformed features + schematic (tolerant parse, no crash)', () => {
+    const part = partFromYaml(
+      [
+        'id: x',
+        'headers:',
+        '  - edge: left',
+        '    pins: [{ name: A, type: io }]',
+        'features:',
+        '  - { label: MCU, kind: banana, x: 0.3, y: 0.3, w: 0.2, h: 0.2 }', // bad kind → chip
+        '  - { label: NoCoords }', // missing x/y/w/h → dropped
+        '  - null', // null entry → dropped
+        'schematic:',
+        '  pins:',
+        '    - { pin: A, side: weird, order: 0 }', // bad side → left',
+        '    - null', // dropped
+        ''
+      ].join('\n')
+    )
+    expect(part.features).toHaveLength(1)
+    expect(part.features?.[0].kind).toBe('chip')
+    expect(part.schematic?.pins).toHaveLength(1)
+    expect(part.schematic?.pins[0].side).toBe('left')
+  })
+
+  it('round-trips a non-finite imageLayer rotation (dropped both sides)', () => {
+    const p = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'pwr' }] }],
+      imageLayer: { x: 0, y: 0, w: 1, h: 1, rotation: NaN }
+    })
+    expect(p.imageLayer?.rotation).toBeUndefined() // finite-guarded out
+    expect(normalisePart(partFromYaml(partToYaml(p)))).toEqual(p)
   })
 
   it('drops non-io fields like gpio/capabilities on power pins', () => {

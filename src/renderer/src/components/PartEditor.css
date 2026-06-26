@@ -462,32 +462,10 @@
   border-radius: 0;
 }
 
-/* --- Footprint (pf__) + schematic (sc__) shared SVG text --- */
-.pf__svg,
+/* --- Schematic (sc__) SVG text --- */
 .sc__svg {
   max-width: 100%;
   max-height: 100%;
-}
-
-.pf__pin-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  fill: var(--text, #e9edf1);
-}
-
-.pf__feat-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  fill: #cfd6dd;
-  text-anchor: middle;
-  dominant-baseline: middle;
-}
-
-.pf__btn-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  fill: var(--text, #e9edf1);
-  text-anchor: middle;
 }
 
 .sc__pin-label {
@@ -510,4 +488,109 @@
   font-size: 10px;
   fill: var(--text-muted, #9aa3ad);
   text-anchor: middle;
+}
+
+/* --- Breadboard canvas pane (toolbar + interactive canvas) --- */
+.pe__canvaspane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bc-mat, var(--bg-sunken));
+}
+
+.pe__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.4rem 0.5rem;
+  border-bottom: var(--border-w) solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.pe__tool {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.22rem 0.5rem;
+  cursor: pointer;
+}
+
+.pe__tool:hover {
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.pe__tool.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pe__tool.is-active {
+  background: #e6ab30;
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
+.pe__toolcheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.pe__canvas-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem;
+}
+
+/* --- Inspector additions --- */
+.pe__section--sel {
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  padding: 0.5rem;
+}
+
+.pe__add--danger {
+  color: #ff8b7e;
+}
+
+.pe__add--danger:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+.pe__subh {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.pe__hint--muted {
+  font-style: italic;
+  opacity: 0.8;
+}
+
+.pe input[type='range'] {
+  width: 100%;
 }

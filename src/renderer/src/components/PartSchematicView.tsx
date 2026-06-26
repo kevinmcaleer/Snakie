@@ -7,7 +7,7 @@ import type { PartDefinition, PartEdge, PartPin } from '../../../shared/part'
  *
  * A simple line-drawing schematic symbol of a {@link PartDefinition}: a labelled
  * box with pin terminals projecting from its four sides — the schematic-view
- * counterpart to the {@link PartFootprint}. The Part Editor's recommended
+ * counterpart to the breadboard {@link PartCanvas}. The Part Editor's recommended
  * authoring flow starts here ("define the pins") before moving to the breadboard
  * view, and the schematic ⇄ breadboard toggle flips between the two.
  *

@@ -21,14 +21,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Part Editor — author parts (schematic, breadboard, parts.yml) (#130).** A
   full-screen visual editor (launched from the Parts view's **+ New part** or a
   part's **Edit**) authors the exact `parts.yml` the library stores. Flip between
-  a **Schematic** view (a line-drawing symbol with the pads ↔ pins table) and a
-  **Breadboard** view (board meta, dimensions, image upload, the pin headers with
-  **pin number / GPIO name / type pwr·gnd·io / IO capabilities digital·pwm·adc·
-  spi·i2c / castellated-or-regular**, **mounting holes**, **buttons**, and
-  **2.54 mm grid snap**). The live preview toggles between the engineering
-  **footprint** and the **life-like** full-colour rendering (the latter reuses the
-  Board View renderer). The YAML round-trips, so a saved part re-opens unchanged.
-  See `docs/part-editor.md`.
+  a **Schematic** view (a line-drawing symbol with the pads ↔ pins table) and an
+  interactive **Breadboard** canvas. The canvas is **layered** — a board
+  **shape** (rectangle or **polygon**) → the board **image on its own movable,
+  resizable layer** (with opacity) → **free-placed** pins, mounting holes and
+  text labels on top. A toolbar (**select · pan · shape · pin · hole · text**)
+  drives placement, a contextual inspector edits the selected object (pin
+  number / GPIO name / type pwr·gnd·io / IO capabilities digital·pwm·adc·spi·i2c /
+  castellated-or-regular), and **board dimensions** are fields. A
+  **Life-like / Footprint** toggle just shows or hides the image layer, with a
+  **2.54 mm grid + snap**. The YAML round-trips, so a saved part re-opens
+  unchanged. See `docs/part-editor.md`. (Image **crop** + magic-wand background
+  removal are the next pass.)
 
 ## [0.14.0] - 2026-06-24
 

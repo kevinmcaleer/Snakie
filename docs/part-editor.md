@@ -30,45 +30,61 @@ symbol (and order it); the symbol updates live. When you haven't customised it,
 the symbol is derived from your headers (a `left`-edge header → the symbol's left
 side), so a part drawn in the breadboard view gets a sensible schematic for free.
 
-### Breadboard view
+### Breadboard view — the layered canvas
 
-The physical design, authored in scrollable sections with a **live preview** on
-the right:
+The Breadboard view is an interactive, **layered canvas**. Bottom → top:
 
-- **Part** — name, description, manufacturer, family, tags, voltage, part #,
-  version. The name becomes the saved folder id (shown as `…/parts.yml`).
-- **Physical** — package (**THT / SMD**), **pin spacing** (mm), **dimensions**
-  (width × height mm), PCB colour, MCU/chip, onboard-LED pin.
-- **Image** — upload a photo/SVG of the board (ideally pins in a **vertical
-  arrangement**, per the spec). Stored as an asset beside `parts.yml`.
-- **Headers & pins** — a header is a row of pins along one edge (`left`/`right`
-  run vertically, `top`/`bottom` horizontally). Each pin has:
-  - a **board pin number**, a **GPIO / signal name**,
-  - a **type**: power · ground · **IO** · other,
-  - for **IO** pins: a **GPIO number** + **capabilities** (digital, pwm, adc,
-    spi, i2c) as checkboxes,
-  - **castellated or regular** (an edge pad vs a header hole).
-- **Mounting holes** — positioned (normalised x/y) with a millimetre diameter.
-- **Buttons** — a label at a position.
-- **Properties** — arbitrary key/value spec rows.
+1. **Board shape** — a **rectangle** (with an adjustable corner radius) or a
+   **polygon**. Set the shape + PCB colour + physical **dimensions** (width ×
+   height mm) in the left inspector's **Board** section.
+2. **Image layer** — the board photo is its **own layer**, not stretched to the
+   outline. Upload it, then drag it (and its corner handles) on the canvas to
+   line it up with the real board; an **opacity** slider helps you trace over it.
+3. **Components on top** — **pins**, **mounting holes** and **text labels**, each
+   **free-placed** by dragging it anywhere on the board.
 
-#### Grid snap
+#### Toolbar
 
-The **Snap positions to 2.54 mm grid** checkbox snaps mounting-hole and button
-positions to the part's pin-spacing grid (0.1″ headers by default), and shows the
-grid behind the footprint preview — for accurate placement against the real
-board.
+A toolbar above the canvas selects the active tool:
 
-## Footprint vs life-like preview
+- **Select** — click an object (or the image) to select it; drag to move it;
+  drag the image's corner handles to resize it.
+- **Pan** — drag to pan the canvas; the scroll-wheel zooms. **Fit** resets it.
+- **Shape** — drag the polygon's vertices, or click the board to add one.
+- **Pin** / **Hole** / **Text** — click the board to drop a pin, mounting hole
+  or label at that point.
 
-The breadboard preview toggles between:
+#### Inspector
 
-- **Footprint** — the engineering view: the board outline (your polygon, or a
-  rounded rect), pin **pads** laid along their edges (castellated vs regular,
-  coloured by role, numbered + named), **mounting holes** (rings) and **buttons**.
-- **Life-like** — the full-colour rendering, drawn by the **Board View** renderer
-  (your image, PCB colour, features and labelled pads) — so what you author is
-  exactly what the Board Viewer will show.
+Whatever you select shows its editable fields in the left **inspector**:
+
+- **Pin** — board pin number, GPIO/signal **name**, **type** (power · ground ·
+  **IO** · other), for IO pins a **GPIO number** + **capabilities** (digital,
+  pwm, adc, spi, i2c), **castellated or regular**, and its x/y.
+- **Mounting hole** — x/y + millimetre diameter.
+- **Label** — text, x/y, font size.
+- **Image layer** — x/y/w/h + opacity.
+
+A **Delete** button on the inspector removes the selected object.
+
+#### Grid & snap
+
+The toolbar's **Grid** toggle draws the part's pin-spacing grid (0.1″ / 2.54 mm
+by default) behind the board, and **Snap** snaps placed/dragged objects to it for
+accurate alignment with the real board.
+
+## Footprint vs life-like
+
+The toolbar's **Life-like / Footprint** toggle simply shows or hides the image
+layer on the *same* canvas:
+
+- **Life-like** — the full-colour board (image layer + shape + components).
+- **Footprint** — the engineering view: the board outline + the **pads / pin
+  holes**, mounting holes and labels, with the photo hidden. "The footprint
+  mirrors the life-like, just without the image."
+
+> Coming next: image **crop** and **magic-wand background removal** (so you can
+> knock out a plain backdrop and make the photo match the real board exactly).
 
 ## Output
 
@@ -85,7 +101,8 @@ another part in the same library.
 
 The fields written are the full Parts Library schema — name, manufacturer,
 family, tags, package, pin spacing, user key/values, voltage, part #, dimensions,
-polygon, pins, mounting holes, buttons and the image filename. See
+board **shape** + polygon, **free-placed pins** (with x/y), mounting holes,
+labels, the image filename and its **image-layer** placement. See
 [parts-library.md](parts-library.md#a-part--partsyml) for the on-disk format.
 
 ## See also

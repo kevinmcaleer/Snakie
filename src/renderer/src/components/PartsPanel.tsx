@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
-import { PartFootprint } from './PartFootprint'
+import { PartCanvas } from './PartCanvas'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
   LibraryUpdate,
@@ -408,7 +408,7 @@ function PartDetail({
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
 
       <div className="pl__detail-fp">
-        <PartFootprint part={part} />
+        <PartCanvas part={part} readOnly showImage />
       </div>
 
       <dl className="pl__meta">

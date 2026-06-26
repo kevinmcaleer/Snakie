@@ -1,0 +1,52 @@
+/*
+ * Part Canvas (#130 redesign) — the interactive layered board surface.
+ * Unique `pcv__` BEM prefix so the global instrument/preview CSS never collides.
+ */
+
+.pcv__svg {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  touch-action: none; /* let pointer drags pan/move instead of scrolling */
+}
+
+.pcv__svg--interactive {
+  cursor: default;
+}
+
+/* Per-tool cursors (interactive only). */
+.pcv__svg--interactive.pcv__tool-move {
+  cursor: grab;
+}
+.pcv__svg--interactive.pcv__tool-pin,
+.pcv__svg--interactive.pcv__tool-hole,
+.pcv__svg--interactive.pcv__tool-text,
+.pcv__svg--interactive.pcv__tool-shape {
+  cursor: crosshair;
+}
+
+.pcv__pin-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--text, #e9edf1);
+}
+
+.pcv__feat-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: #cfd6dd;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.pcv__btn-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--text, #e9edf1);
+  text-anchor: middle;
+}
+
+.pcv__label {
+  font-family: var(--font-mono);
+  font-weight: 600;
+}

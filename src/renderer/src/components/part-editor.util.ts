@@ -19,8 +19,11 @@
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
 import {
   STANDARD_PIN_SPACING_MM,
+  type ImageLayer,
   type PartDefinition,
+  type PartEdge,
   type PartHeader,
+  type PartLabel,
   type PartPin,
   type PartPinCapability,
   type PartPinType,
@@ -141,6 +144,36 @@ function normaliseCaps(caps: PartPinCapability[] | undefined): PartPinCapability
   return out.length ? out : undefined
 }
 
+/**
+ * Even fractional positions for `n` items along an edge (inset from the ends) —
+ * the layout legacy edge-based pins are migrated onto. Mirrors the canvas.
+ */
+function spread(n: number): number[] {
+  if (n <= 0) return []
+  if (n === 1) return [0.5]
+  const inset = 0.5 / n
+  return Array.from({ length: n }, (_, i) => inset + (i * (1 - 2 * inset)) / (n - 1))
+}
+
+/**
+ * Derive an absolute 0..1 board position for a legacy edge-based pin (no stored
+ * x/y) from its edge + order. Pads sit just inside the named edge. Used by the
+ * one-time migration so "pure free placement" parts always have a real position.
+ */
+export function derivePinPosition(edge: PartEdge, index: number, count: number): { x: number; y: number } {
+  const f = spread(count)[index] ?? 0.5
+  switch (edge) {
+    case 'left':
+      return { x: 0.06, y: f }
+    case 'right':
+      return { x: 0.94, y: f }
+    case 'top':
+      return { x: f, y: 0.06 }
+    default:
+      return { x: f, y: 0.94 }
+  }
+}
+
 /** Normalise a single pin: default type, clean fields, gate IO-only fields. */
 function normalisePin(pin: PartPin): PartPin {
   const type: PartPinType = PIN_TYPES.includes(pin.type) ? pin.type : 'io'
@@ -155,6 +188,8 @@ function normalisePin(pin: PartPin): PartPin {
   const label = String(pin.label ?? '').trim()
   if (label && label !== name) out.label = label
   if (pin.castellated === true) out.castellated = true
+  if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
+  if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
   return out
 }
 
@@ -166,10 +201,22 @@ function normalisePin(pin: PartPin): PartPin {
  */
 export function normalisePart(part: PartDefinition): PartDefinition {
   const headers: PartHeader[] = (Array.isArray(part.headers) ? part.headers : [])
-    .map((h) => ({
-      edge: PART_EDGES.includes(h.edge) ? h.edge : 'left',
-      pins: (Array.isArray(h.pins) ? h.pins : []).map(normalisePin).filter((p) => p.name !== '')
-    }))
+    .map((h) => {
+      const edge: PartEdge = PART_EDGES.includes(h.edge) ? h.edge : 'left'
+      const pins = (Array.isArray(h.pins) ? h.pins : [])
+        .map(normalisePin)
+        .filter((p) => p.name !== '')
+      // Migrate legacy edge-based pins (no stored x/y) to an absolute position so
+      // the canvas can free-place them ("pure free placement" is the model).
+      pins.forEach((p, i) => {
+        if (p.x === undefined || p.y === undefined) {
+          const pos = derivePinPosition(edge, i, pins.length)
+          p.x = pos.x
+          p.y = pos.y
+        }
+      })
+      return { edge, pins }
+    })
     .filter((h) => h.pins.length > 0)
 
   const out: PartDefinition = {
@@ -222,6 +269,12 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   if (Array.isArray(part.polygon) && part.polygon.length >= 3) {
     out.polygon = part.polygon.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }))
   }
+  if (part.shape && (part.shape.kind === 'rect' || part.shape.kind === 'polygon')) {
+    out.shape = { kind: part.shape.kind }
+    if (typeof part.shape.cornerRadius === 'number' && Number.isFinite(part.shape.cornerRadius)) {
+      out.shape.cornerRadius = clamp(part.shape.cornerRadius, 0, 0.5)
+    }
+  }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
     out.mountingHoles = part.mountingHoles.map((h) => ({
       x: clamp(h.x, 0, 1),
@@ -246,10 +299,42 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       h: clamp(f.h, 0.01, 1.4)
     }))
   }
+  if (Array.isArray(part.labels) && part.labels.length) {
+    const labels = part.labels
+      .map((l) => {
+        const lbl: PartLabel = {
+          text: String(l.text ?? '').trim(),
+          x: clamp(l.x, 0, 1),
+          y: clamp(l.y, 0, 1)
+        }
+        if (typeof l.fontSize === 'number' && Number.isFinite(l.fontSize)) lbl.fontSize = l.fontSize
+        return lbl
+      })
+      .filter((l) => l.text !== '')
+    if (labels.length) out.labels = labels
+  }
   set('ledLabel', text(part.ledLabel))
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)
   // is preserved for previews but is NOT part of the round-trip-comparable shape.
   set('image', text(part.image))
+  if (
+    part.imageLayer &&
+    [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(
+      (n) => typeof n === 'number' && Number.isFinite(n)
+    )
+  ) {
+    const il: ImageLayer = {
+      x: part.imageLayer.x,
+      y: part.imageLayer.y,
+      w: part.imageLayer.w,
+      h: part.imageLayer.h
+    }
+    if (typeof part.imageLayer.opacity === 'number') il.opacity = clamp(part.imageLayer.opacity, 0, 1)
+    if (typeof part.imageLayer.rotation === 'number' && Number.isFinite(part.imageLayer.rotation)) {
+      il.rotation = part.imageLayer.rotation
+    }
+    out.imageLayer = il
+  }
   if (part.schematic && Array.isArray(part.schematic.pins) && part.schematic.pins.length) {
     out.schematic = {
       ...(typeof part.schematic.aspect === 'number' ? { aspect: part.schematic.aspect } : {}),
@@ -366,5 +451,62 @@ export function pinNames(part: PartDefinition): string[] {
       }
     }
   }
+  return out
+}
+
+/** A pin flattened for the canvas: its resolved absolute position + indices. */
+export interface ResolvedPin {
+  pin: PartPin
+  x: number
+  y: number
+  edge: PartEdge
+  /** Header index + pin index, so the canvas can mutate the right pin. */
+  hi: number
+  pi: number
+}
+
+/**
+ * Return a copy of the part where EVERY pin has an absolute `x`/`y` — its stored
+ * position, or one derived from its edge + order. Used to seed the Part Editor's
+ * working state so the canvas + inspector always have real positions (the full
+ * {@link normalisePart} migration only runs at save, and would also drop runtime
+ * fields like `imageData`). Preserves all other fields verbatim.
+ */
+export function withPinPositions(part: PartDefinition): PartDefinition {
+  return {
+    ...part,
+    headers: (part.headers ?? []).map((h) => {
+      const edge: PartEdge = PART_EDGES.includes(h.edge) ? h.edge : 'left'
+      return {
+        ...h,
+        edge,
+        pins: h.pins.map((p, i) => {
+          if (p.x !== undefined && p.y !== undefined) return p
+          const pos = derivePinPosition(edge, i, h.pins.length)
+          return { ...p, x: pos.x, y: pos.y }
+        })
+      }
+    })
+  }
+}
+
+/**
+ * Flatten a part's pins into a single list with resolved absolute positions —
+ * each pin's stored `x`/`y`, or a fallback derived from its edge + order (so a
+ * part loaded straight off disk, un-normalised, still renders). The canvas and
+ * the panel detail both render from this.
+ */
+export function resolvedPins(part: PartDefinition): ResolvedPin[] {
+  const out: ResolvedPin[] = []
+  ;(part.headers ?? []).forEach((h, hi) => {
+    const edge: PartEdge = PART_EDGES.includes(h.edge) ? h.edge : 'left'
+    h.pins.forEach((pin, pi) => {
+      const pos =
+        pin.x !== undefined && pin.y !== undefined
+          ? { x: pin.x, y: pin.y }
+          : derivePinPosition(edge, pi, h.pins.length)
+      out.push({ pin, x: pos.x, y: pos.y, edge, hi, pi })
+    })
+  })
   return out
 }

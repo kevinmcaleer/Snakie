@@ -58,6 +58,14 @@ export interface PartPin {
   capabilities?: PartPinCapability[]
   /** Whether this pad is a castellated edge pad (vs a regular header hole). */
   castellated?: boolean
+  /**
+   * Absolute position on the board canvas, normalised `0..1` (0,0 = top-left).
+   * The Part Editor uses **free placement**: this is the source of truth for
+   * where the pad is drawn. Legacy parts authored as edge-based headers (with no
+   * position) are migrated to a position derived from their edge + order on load.
+   */
+  x?: number
+  y?: number
 }
 
 /** A run of pins laid evenly along one edge of the board, in array order. */
@@ -92,6 +100,43 @@ export interface PartButton {
 export interface PolygonPoint {
   x: number
   y: number
+}
+
+/** The board outline kind. `rect` (default) uses the dimensions/aspect; `polygon`
+ *  uses the {@link PartDefinition.polygon} points (so any shape can be authored). */
+export type BoardShapeKind = 'rect' | 'polygon'
+
+/** The board's outline shape. Absent ⇒ a plain rounded rectangle. */
+export interface PartShape {
+  kind: BoardShapeKind
+  /** Corner radius for `rect`, normalised to the smaller board side (0..0.5). */
+  cornerRadius?: number
+}
+
+/**
+ * The board photo placed as its OWN layer on the canvas (not stretched to fit the
+ * outline). Position/size are normalised `0..1` relative to the board box, so the
+ * image stays put when the canvas resizes. The pixels live in
+ * {@link PartDefinition.image} / `imageData`; this is just the placement.
+ */
+export interface ImageLayer {
+  x: number
+  y: number
+  w: number
+  h: number
+  /** 0..1 layer opacity (default 1). */
+  opacity?: number
+  /** Rotation in degrees (default 0). */
+  rotation?: number
+}
+
+/** A free-floating text label placed on the board canvas (normalised 0..1). */
+export interface PartLabel {
+  text: string
+  x: number
+  y: number
+  /** Font size in SVG user units (the canvas viewBox is ~420 wide). */
+  fontSize?: number
 }
 
 /**
@@ -171,10 +216,13 @@ export interface PartDefinition {
   /** Physical board size in millimetres (informational + footprint scale). */
   dimensions?: { width: number; height: number }
   /**
-   * Physical board outline as a polygon of normalised 0..1 points. Absent ⇒ a
-   * rounded rectangle of `aspect` is drawn. Authored for non-rectangular boards.
+   * Physical board outline as a polygon of normalised 0..1 points. Used when
+   * {@link shape}`.kind === 'polygon'`. Absent / `rect` ⇒ a rounded rectangle of
+   * `aspect` is drawn. Authored for non-rectangular boards.
    */
   polygon?: PolygonPoint[]
+  /** The board outline kind (rect | polygon). Absent ⇒ rect. */
+  shape?: PartShape
 
   // --- Pins, holes, buttons, decorations -----------------------------------
   /** The pin headers around the board (preferably vertical per the spec). */
@@ -185,6 +233,8 @@ export interface PartDefinition {
   buttons?: PartButton[]
   /** Decorative chips/cans/connectors drawn as labelled rects. */
   features?: PartFeature[]
+  /** Free-floating text labels placed on the board canvas. */
+  labels?: PartLabel[]
   /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). */
   ledLabel?: string
 
@@ -203,6 +253,12 @@ export interface PartDefinition {
    * keeps the relative `image` filename). Undefined when there is no image.
    */
   imageData?: string
+  /**
+   * Where the {@link image} sits on the board canvas (its own layer), normalised
+   * `0..1`. Absent ⇒ the image covers the whole board box (the legacy "fit"
+   * behaviour). Authored by dragging/resizing the image in the Part Editor.
+   */
+  imageLayer?: ImageLayer
 
   // --- Schematic (Part Editor, #130) ---------------------------------------
   /** Optional schematic symbol (line-drawing) for the schematic view. */
