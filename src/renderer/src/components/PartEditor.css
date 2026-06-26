@@ -361,6 +361,16 @@
   margin-bottom: 0.5rem;
 }
 
+/* "This is a board" toggle — wraps its explanatory text. */
+.pe__check--board {
+  align-items: flex-start;
+  margin: 0.1rem 0 0.4rem;
+}
+
+.pe__check--board strong {
+  color: var(--text);
+}
+
 .pe__caps {
   display: inline-flex;
   flex-wrap: wrap;

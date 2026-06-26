@@ -1344,9 +1344,33 @@ function DetailsFields({
         </label>
         <label className="pe__field">
           <span>Family</span>
-          <input type="text" value={part.family ?? ''} onChange={(e) => patch({ family: e.target.value })} placeholder="Sensor" />
+          <input
+            type="text"
+            list="pe-family-options"
+            value={part.family ?? ''}
+            onChange={(e) => patch({ family: e.target.value })}
+            placeholder="Sensor"
+          />
+          <datalist id="pe-family-options">
+            <option value="Microcontroller" />
+            <option value="Sensor" />
+            <option value="Motor Driver" />
+            <option value="Display" />
+            <option value="Breakout" />
+            <option value="Connector" />
+          </datalist>
         </label>
       </div>
+      <label className="pe__check pe__check--board">
+        <input
+          type="checkbox"
+          checked={(part.family ?? '').trim().toLowerCase() === 'microcontroller'}
+          onChange={(e) => patch({ family: e.target.checked ? 'Microcontroller' : '' })}
+        />
+        <span>
+          This part is a <strong>microcontroller board</strong> — it appears in the Board Viewer&rsquo;s board selector.
+        </span>
+      </label>
       <label className="pe__field">
         <span>Tags (comma-separated)</span>
         <input

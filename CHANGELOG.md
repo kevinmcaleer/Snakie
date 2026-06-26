@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Author boards in the Part Editor.** A board is just a part with the
+  **Microcontroller** family — the Part Editor has a "this part is a microcontroller
+  board" toggle (and a family picker) that makes it appear in the Board Viewer's
+  board selector. The **Board Creator has been removed** in favour of the
+  fuller-featured Part Editor; the board window's "+ board" button now opens the
+  Part Editor on a starter Microcontroller part.
 - **Boards render as the parts they are.** When a board comes from a Parts Library
   microcontroller part, the Board Viewer's **Breadboard** view now draws it with the
   part's **real appearance** (background image + your exact pin positions +

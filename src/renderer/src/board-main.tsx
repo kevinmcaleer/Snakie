@@ -27,9 +27,9 @@ import './lib/preloadFallback'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
-import { BoardCreator } from './components/BoardCreator'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
+import { blankPart } from './components/part-editor.util'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import type {
   BoardDefinition,
@@ -56,10 +56,10 @@ function BoardWindowApp(): JSX.Element {
     theme: 'skeuomorph'
   })
   const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
-  // Two screens: the live board VIEW (BoardGraph — which itself hosts the
-  // Life-like/Schematic wiring views + the library dock, #139/#140) and the
-  // Board Creator (DESIGN). `editing` overlays the Part Editor on top of either.
-  const [designMode, setDesignMode] = useState(false)
+  // The live board VIEW (BoardGraph — which hosts the Life-like/Schematic wiring
+  // views + the library dock). `editing` overlays the Part Editor on top of it —
+  // boards are now authored in the Part Editor (a Microcontroller-family part), so
+  // the old Board Creator is gone.
   const [editing, setEditing] = useState<{
     libraryId: string
     part: PartDefinition | null
@@ -225,30 +225,23 @@ function BoardWindowApp(): JSX.Element {
       const el = document.activeElement as HTMLElement | null
       if (el && (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA')) return
       if (editing) setEditing(null)
-      else if (designMode) {
-        setDesignMode(false)
-        refreshUserBoards()
-      } else {
-        window.api.board.close()
-      }
+      else window.api.board.close()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [editing, designMode, refreshUserBoards])
+  }, [editing])
 
-  if (designMode) {
-    return (
-      <BoardCreator
-        userBoards={userBoards}
-        asWindow
-        onSave={(d) => window.api.board.saveUserBoard(d)}
-        onDelete={(id) => window.api.board.deleteUserBoard(id)}
-        onDone={() => {
-          setDesignMode(false)
-          refreshUserBoards()
-        }}
-      />
-    )
+  // Author a NEW board: open the Part Editor on a starter Microcontroller part in
+  // the user's library (boards are just Microcontroller-family parts now).
+  const newBoard = (): void => {
+    const starter: PartDefinition = { ...blankPart(), id: 'my-board', name: 'My Board', family: 'Microcontroller' }
+    window.api.parts
+      .listLibraries()
+      .then((libs) => {
+        const lib = libs.find((l) => l.id === 'my-parts')
+        setEditing({ libraryId: 'my-parts', part: starter, libraries: libs, existingParts: lib?.parts ?? [] })
+      })
+      .catch(() => setEditing({ libraryId: 'my-parts', part: starter, libraries: [], existingParts: [] }))
   }
 
   return (
@@ -260,7 +253,7 @@ function BoardWindowApp(): JSX.Element {
         userBoards={userBoards}
         asWindow
         onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
-        onEnterCreator={() => setDesignMode(true)}
+        onEnterCreator={newBoard}
         onClose={() => window.api.board.close()}
         robot={robot}
         onChangeRobot={saveRobot}

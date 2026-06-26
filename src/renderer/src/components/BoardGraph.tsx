@@ -713,8 +713,8 @@ export function BoardGraph({
               type="button"
               className="boardgraph__knob"
               onClick={onEnterCreator}
-              title="Create or edit a custom board"
-              aria-label="Open the Board Creator"
+              title="New board (opens the Part Editor)"
+              aria-label="Create a new board in the Part Editor"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                 <path
