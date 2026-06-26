@@ -1,0 +1,55 @@
+id: esp32-devkit
+name: ESP32 DevKit
+description: ESP32-WROOM-32 development board with 2.4GHz Wi-Fi + Bluetooth.
+manufacturer: Espressif
+family: Microcontroller
+tags:
+  - esp32
+  - wifi
+  - bluetooth
+package: THT
+pinSpacing: 2.54
+voltage: 2.3–3.6V
+version: 1.0.0
+mcu: ESP32
+pcbColor: "#1b2733"
+aspect: 0.42
+ledLabel: "2"
+features:
+  - { label: ESP32-WROOM-32, kind: wifi, x: 0.14, y: 0.05, w: 0.72, h: 0.22 }
+  - { label: USB, kind: usb, x: 0.36, y: 0.95, w: 0.28, h: 0.05 }
+headers:
+  - edge: left
+    pins:
+      - { name: "3V3", type: pwr }
+      - { name: EN, type: other }
+      - { name: IO36, type: io, gpio: 36, capabilities: [digital, adc] }
+      - { name: IO39, type: io, gpio: 39, capabilities: [digital, adc] }
+      - { name: IO34, type: io, gpio: 34, capabilities: [digital, adc] }
+      - { name: IO35, type: io, gpio: 35, capabilities: [digital, adc] }
+      - { name: IO32, type: io, gpio: 32, capabilities: [digital, pwm, adc] }
+      - { name: IO33, type: io, gpio: 33, capabilities: [digital, pwm, adc] }
+      - { name: IO25, type: io, gpio: 25, capabilities: [digital, pwm, adc] }
+      - { name: IO26, type: io, gpio: 26, capabilities: [digital, pwm, adc] }
+      - { name: IO27, type: io, gpio: 27, capabilities: [digital, pwm, adc] }
+      - { name: IO14, type: io, gpio: 14, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO12, type: io, gpio: 12, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd }
+      - { name: IO13, type: io, gpio: 13, capabilities: [digital, pwm, i2c, spi] }
+  - edge: right
+    pins:
+      - { name: VIN, type: pwr }
+      - { name: GND, type: gnd }
+      - { name: IO23, type: io, gpio: 23, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO22, type: io, gpio: 22, capabilities: [digital, pwm, i2c, spi] }
+      - { name: TX0, type: io, gpio: 1, capabilities: [digital, uart] }
+      - { name: RX0, type: io, gpio: 3, capabilities: [digital, uart] }
+      - { name: IO21, type: io, gpio: 21, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO19, type: io, gpio: 19, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO18, type: io, gpio: 18, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO5, type: io, gpio: 5, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO17, type: io, gpio: 17, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO16, type: io, gpio: 16, capabilities: [digital, pwm, i2c, spi] }
+      - { name: IO4, type: io, gpio: 4, capabilities: [digital, pwm, i2c, spi, adc] }
+      - { name: IO0, type: io, gpio: 0, capabilities: [digital, pwm] }
+      - { name: IO2, type: io, gpio: 2, capabilities: [digital, pwm, adc] }

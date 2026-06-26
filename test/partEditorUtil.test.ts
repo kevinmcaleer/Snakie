@@ -2,12 +2,15 @@ import { describe, it, expect } from 'vitest'
 import {
   addComponentOnTop,
   blankPart,
+  boardsFromLibraries,
   derivePinPosition,
   insertPolygonPoint,
+  isBoardPart,
   nearestPolygonEdge,
   nextComponentZ,
   normalisePart,
   orderedComponents,
+  resolveBoards,
   partToBoardDefinition,
   pinNames,
   pinPositions,
@@ -513,5 +516,56 @@ describe('polygon edge insertion helpers', () => {
     expect(next).toHaveLength(5)
     expect(next[1]).toEqual({ x: 0.5, y: 0 }) // inserted between v0 and v1
     expect(next[2]).toEqual({ x: 1, y: 0 }) // original v1 shifted along
+  })
+})
+
+describe('boardsFromLibraries / resolveBoards (#52 boards from parts)', () => {
+  const ioPin = (n: number): { name: string; type: 'io'; gpio: number } => ({ name: `GP${n}`, type: 'io', gpio: n })
+  const mcuPart = (id: string, name: string, pins: { name: string; type: 'io'; gpio: number }[]): PartDefinition => ({
+    id,
+    name,
+    family: 'Microcontroller',
+    headers: [{ edge: 'left', pins }]
+  })
+
+  it('isBoardPart only accepts the Microcontroller family', () => {
+    expect(isBoardPart({ family: 'Microcontroller' })).toBe(true)
+    expect(isBoardPart({ family: 'microcontroller' })).toBe(true)
+    expect(isBoardPart({ family: 'Breakout' })).toBe(false)
+    expect(isBoardPart({})).toBe(false)
+  })
+
+  it('includes only Microcontroller parts, projected to boards', () => {
+    const libs = [
+      {
+        parts: [
+          mcuPart('pico', 'Pico', [ioPin(0), ioPin(1)]),
+          { id: 'vl', name: 'Sensor', family: 'Sensor', headers: [{ edge: 'left' as const, pins: [{ name: 'SDA', type: 'io' as const }] }] }
+        ]
+      }
+    ]
+    const boards = boardsFromLibraries(libs)
+    expect(boards.map((b) => b.id)).toEqual(['pico'])
+    expect(boards[0].headers.flatMap((h) => h.pins)).toHaveLength(2)
+  })
+
+  it('dedupes same id keeping the most complete (most pads) board', () => {
+    const libs = [
+      { parts: [mcuPart('pico', 'Pico', [ioPin(0)])] }, // 1 pad (a stub)
+      { parts: [mcuPart('pico', 'Pico', [ioPin(0), ioPin(1), ioPin(2)])] } // 3 pads (full)
+    ]
+    const boards = boardsFromLibraries(libs)
+    expect(boards).toHaveLength(1)
+    expect(boards[0].headers.flatMap((h) => h.pins)).toHaveLength(3)
+  })
+
+  it('resolveBoards merges library + user boards and falls back to built-ins when empty', () => {
+    expect(resolveBoards([], []).length).toBeGreaterThan(0) // built-in fallback
+    const libs = [{ parts: [mcuPart('pico', 'Pico', [ioPin(0)])] }]
+    const ids = resolveBoards(libs, [
+      { id: 'custom', name: 'Custom', mcu: 'X', pcbColor: '#000', aspect: 0.5, headers: [] }
+    ]).map((b) => b.id)
+    expect(ids).toContain('pico')
+    expect(ids).toContain('custom')
   })
 })

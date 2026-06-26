@@ -38,6 +38,17 @@ extraResources:
     to: micropython
     filter:
       - '**/*.py'
+  # Ship the bundled "Standard Boards" parts library (Pico / Pico 2 W / ESP32) so
+  # the board selector has a canonical board set out of the box. The main process
+  # seeds it into <userData>/parts on first run (src/main/parts/library.ts), and
+  # resolves it from process.resourcesPath when packaged / the repo root in dev.
+  - from: examples/parts/snakie-standard
+    to: examples/parts/snakie-standard
+    filter:
+      - '**/*.yml'
+      - '**/*.png'
+      - '**/*.jpg'
+      - '**/*.svg'
 
 # Rebuild native modules (e.g. serialport) for the Electron ABI.
 # npmRebuild defaults to true; nodeGypRebuild stays false so install-app-deps

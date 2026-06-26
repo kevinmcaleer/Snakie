@@ -795,6 +795,11 @@ export function InstrumentDockRegion({
     .filter((d): d is InstrumentDef => d !== undefined)
   return (
     <InstrumentDock
+      top={
+        // #168: a compact node-graph board (MCU + code-used pins) pinned above the
+        // instrument toggle icons.
+        <MiniBoardView source={host.source} isPython={host.isPython} />
+      }
       header={
         <DockHeader
           vis={vis}
@@ -805,8 +810,6 @@ export function InstrumentDockRegion({
         />
       }
     >
-      {/* #168: a compact node-graph board (MCU + code-used pins) atop the dock. */}
-      <MiniBoardView source={host.source} isPython={host.isPython} />
       {paletteOpen && (
         <AddInstrumentPalette
           vis={vis}

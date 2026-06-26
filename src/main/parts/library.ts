@@ -23,7 +23,7 @@
 
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
-import { promises as fsp } from 'fs'
+import { existsSync, promises as fsp } from 'fs'
 import {
   libraryFromYaml,
   libraryToYaml,
@@ -39,6 +39,37 @@ export function partsDir(): string {
 
 /** The id of the auto-created library that holds the user's own authored parts. */
 export const LOCAL_LIBRARY_ID = 'my-parts'
+
+/** The bundled "Standard Boards" library seeded on first run (#52). */
+export const STANDARD_LIBRARY_ID = 'snakie-standard'
+
+/** Resolve the bundled Standard Boards library (packaged resources vs dev repo),
+ *  mirroring how the plugin host resolves its bundled dirs. */
+function bundledStandardLibraryDir(): string {
+  const packaged = join(process.resourcesPath, 'examples', 'parts', STANDARD_LIBRARY_ID)
+  if (app.isPackaged && existsSync(packaged)) return packaged
+  // Dev: __dirname is out/main, so the repo root is two levels up.
+  return join(__dirname, '..', '..', 'examples', 'parts', STANDARD_LIBRARY_ID)
+}
+
+/**
+ * Seed the bundled "Standard Boards" library (Pico / Pico 2 W / ESP32 DevKit) into
+ * `<userData>/parts` on first run, so the board selector has a canonical board set
+ * out of the box. Idempotent + best-effort: it never overwrites an existing copy
+ * (user edits survive) and a failure just falls back to the built-in boards.
+ */
+export async function seedStandardLibrary(): Promise<void> {
+  const dest = join(partsDir(), STANDARD_LIBRARY_ID)
+  if (existsSync(dest)) return
+  const src = bundledStandardLibraryDir()
+  if (!existsSync(src)) return
+  try {
+    await fsp.mkdir(partsDir(), { recursive: true })
+    await fsp.cp(src, dest, { recursive: true })
+  } catch {
+    // best-effort — the built-in board fallback covers a failed seed
+  }
+}
 
 /**
  * Sanitise an id into a safe path segment (no traversal): lower-case, keep only

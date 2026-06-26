@@ -3,7 +3,11 @@ import { readFileSync } from 'fs'
 import { join } from 'path'
 import { libraryFromYaml, partFromYaml } from '../src/shared/part-yaml'
 import { parseRegistry } from '../src/shared/part-registry'
-import { normalisePart, validatePart } from '../src/renderer/src/components/part-editor.util'
+import {
+  normalisePart,
+  partToBoardDefinition,
+  validatePart
+} from '../src/renderer/src/components/part-editor.util'
 
 /**
  * Guard the bundled example library (`examples/parts/`) — it doubles as the
@@ -42,5 +46,47 @@ describe('example parts library', () => {
     const reg = parseRegistry(read('registry.json'))
     expect(reg.libraries.map((l) => l.id)).toContain('snakie-basics')
     expect(reg.libraries[0].repo).toMatch(/^https?:\/\//)
+  })
+})
+
+describe('standard boards library (snakie-standard)', () => {
+  it('library.yml parses', () => {
+    const lib = libraryFromYaml(read('snakie-standard', 'library.yml'))
+    expect(lib.id).toBe('snakie-standard')
+    expect(lib.name).toBe('Standard Boards')
+  })
+
+  // Each board is a full microcontroller part that must convert cleanly to a
+  // BoardDefinition (so it can REPLACE the hardcoded built-ins).
+  const boards = [
+    { id: 'pico', pads: 40, mcu: 'RP2040' },
+    { id: 'pico-2w', pads: 40, mcu: 'RP2350' },
+    { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' }
+  ]
+
+  it.each(boards)('$id parses, validates, round-trips and converts to a board', ({ id, pads, mcu }) => {
+    const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
+    expect(part.id).toBe(id)
+    expect(part.family).toBe('Microcontroller') // so it's picked up as a board
+    const clean = normalisePart(part)
+    expect(validatePart(clean)).toBeNull()
+    // Round-trips through normalise (the canonical-shape invariant).
+    expect(normalisePart(clean)).toEqual(clean)
+    // Power/gnd/other pins carry no capabilities; io pins do.
+    for (const h of clean.headers) {
+      for (const pin of h.pins) {
+        expect(pin.name).not.toBe('')
+        if (pin.type !== 'io') expect(pin.capabilities).toBeUndefined()
+      }
+    }
+    // The full pinout converts to a complete board.
+    const board = partToBoardDefinition(clean)
+    expect(board.mcu).toBe(mcu)
+    const allPads = board.headers.flatMap((h) => h.pins)
+    expect(allPads).toHaveLength(pads)
+    // Every IO pad keeps a numeric gpio (needed for Pin(n) matching + I²C-detect).
+    const gpioPads = allPads.filter((p) => p.type === 'gpio')
+    expect(gpioPads.length).toBeGreaterThan(0)
+    expect(gpioPads.every((p) => typeof p.gpio === 'number')).toBe(true)
   })
 })

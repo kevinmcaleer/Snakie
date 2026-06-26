@@ -4,7 +4,8 @@ import { type InstrumentDef } from './instruments-registry'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
 import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption } from './i2c-pins'
-import { BUILTIN_BOARDS, DEFAULT_BOARD_ID } from './board-defs'
+import { useBoards } from './use-boards'
+import type { BoardDefinition } from '../../../shared/board'
 import './I2cDetectInstrument.css'
 
 /**
@@ -21,11 +22,8 @@ import './I2cDetectInstrument.css'
  */
 
 /** GPIO numbers a board exposes (for the I²C pin dropdowns). */
-function boardGpios(boardId: string | null): number[] {
-  const def =
-    BUILTIN_BOARDS.find((b) => b.id === boardId) ??
-    BUILTIN_BOARDS.find((b) => b.id === DEFAULT_BOARD_ID) ??
-    BUILTIN_BOARDS[0]
+function boardGpios(boards: BoardDefinition[], boardId: string | null): number[] {
+  const def = boards.find((b) => b.id === boardId) ?? boards[0]
   return (def?.headers ?? [])
     .flatMap((h) => h.pins)
     .map((p) => p.gpio)
@@ -61,6 +59,8 @@ export function I2cDetectInstrument({
 }: I2cDetectInstrumentProps): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
+  // Boards sourced from the installed parts libraries (#52).
+  const boards = useBoards()
 
   // Valid I²C combos for the selected board (the board picker persists its id).
   let boardId: string | null = null
@@ -69,7 +69,7 @@ export function I2cDetectInstrument({
   } catch {
     boardId = null
   }
-  const opts = i2cOptions(boardGpios(boardId))
+  const opts = i2cOptions(boardGpios(boards, boardId))
   const buses = i2cBuses(opts)
 
   const [sel, setSel] = useState<I2cOption>(() => opts[0] ?? { bus: 0, sda: 0, scl: 1 })

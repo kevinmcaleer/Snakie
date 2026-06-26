@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Boards come from the Parts Library now.** The board selector (Board Viewer, the
+  mini board view, I²C-detect) is sourced from **microcontroller parts** (`family:
+  Microcontroller`) in your installed parts libraries — converted to boards with
+  their full pinout — instead of a hardcoded list. A new bundled **Standard Boards**
+  library (`examples/parts/snakie-standard`) ships accurate **Raspberry Pi Pico**,
+  **Pico 2 W** and **ESP32 DevKit** parts; the old built-in definitions remain only
+  as a fresh-install fallback. Same-id boards dedupe to the most complete pinout.
 - **Mini board view in the instruments panel (#168).** A compact node-graph board
   sits at the top of the instruments dock, showing the **microcontroller + only the
   pins the current code uses** (auto-zoomed to fit just those pins — no pin table or

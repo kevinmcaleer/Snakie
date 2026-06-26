@@ -17,6 +17,7 @@
  */
 
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
+import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
   type ComponentShape,
@@ -727,6 +728,49 @@ export function partToBoardDefinition(part: PartDefinition): BoardDefinition {
   const img = part.imageData ?? (part.image?.startsWith('data:') ? part.image : undefined)
   if (img) def.image = img
   return def
+}
+
+/** A part counts as a board when it declares the Microcontroller family. */
+export function isBoardPart(part: { family?: string }): boolean {
+  return (part.family ?? '').trim().toLowerCase() === 'microcontroller'
+}
+
+/**
+ * Project the microcontroller parts of the installed libraries into board
+ * definitions (#168 / boards-from-library). Deduped by id, the most complete
+ * (most pads) winning so a full pinout beats a stub of the same id. Pure.
+ */
+export function boardsFromLibraries(libraries: { parts?: PartDefinition[] }[]): BoardDefinition[] {
+  const byId = new Map<string, { def: BoardDefinition; pads: number }>()
+  for (const lib of libraries ?? []) {
+    for (const part of lib.parts ?? []) {
+      if (!isBoardPart(part)) continue
+      const def = partToBoardDefinition(part)
+      const pads = def.headers.reduce((n, h) => n + h.pins.length, 0)
+      if (pads === 0) continue
+      const prev = byId.get(def.id)
+      if (!prev || pads > prev.pads) byId.set(def.id, { def, pads })
+    }
+  }
+  return [...byId.values()].map((v) => v.def).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * The board list for the selector: boards sourced from the parts libraries (the
+ * standard + user board parts), plus any Board-Creator boards, deduped by id with
+ * the library board winning. Falls back to the hardcoded built-ins ONLY when there
+ * are no library/user boards (a fresh install). Pure.
+ */
+export function resolveBoards(
+  libraries: { parts?: PartDefinition[] }[],
+  userBoards?: BoardDefinition[]
+): BoardDefinition[] {
+  const byId = new Map<string, BoardDefinition>()
+  for (const b of [...boardsFromLibraries(libraries), ...(userBoards ?? [])]) {
+    if (!byId.has(b.id)) byId.set(b.id, b)
+  }
+  const merged = [...byId.values()]
+  return merged.length ? merged : BUILTIN_BOARDS
 }
 
 /** Every pin name declared on the part (for ledLabel / schematic pickers). */

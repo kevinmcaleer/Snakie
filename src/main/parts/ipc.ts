@@ -27,6 +27,7 @@ import {
   ensureLibrary,
   partsDir,
   readLibraries,
+  seedStandardLibrary,
   writePart
 } from './library'
 import { checkUpdates, fetchRegistry, installLibrary } from './registry'
@@ -46,7 +47,12 @@ interface DeletePartArgs {
 
 /** Register every Parts IPC handler. Idempotent enough for one-time setup. */
 export function registerPartsIpc(): void {
-  ipcMain.handle('parts:listLibraries', () => readLibraries())
+  // Seed the bundled Standard Boards library before the first listing, so the
+  // board selector has its canonical boards on a fresh install (idempotent).
+  ipcMain.handle('parts:listLibraries', async () => {
+    await seedStandardLibrary()
+    return readLibraries()
+  })
 
   ipcMain.handle('parts:openPartsFolder', async () => {
     const dir = partsDir()

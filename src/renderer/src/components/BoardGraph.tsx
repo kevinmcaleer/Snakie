@@ -10,11 +10,11 @@ import {
 import {
   BUILTIN_BOARDS,
   DEFAULT_BOARD_ID,
-  mergeBoards,
   type BoardDefinition,
   type BoardFeature,
   type BoardPadType
 } from './board-defs'
+import { resolveBoards } from './part-editor.util'
 import {
   boardBox,
   busLabel,
@@ -319,7 +319,9 @@ export function BoardGraph({
   libraries,
   onAddToProject
 }: BoardGraphProps): JSX.Element {
-  const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
+  // Boards are sourced from the installed parts libraries (microcontroller parts)
+  // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
+  const boards = useMemo(() => resolveBoards(libraries ?? [], userBoards), [libraries, userBoards])
 
   // The view representation (#139/#140): the node-graph (parsed pin usage), or
   // the Life-like / Schematic wiring canvas. Wiring is only available when the

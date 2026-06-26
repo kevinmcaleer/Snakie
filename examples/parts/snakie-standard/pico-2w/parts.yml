@@ -1,0 +1,70 @@
+id: pico-2w
+name: Raspberry Pi Pico 2 W
+description: RP2350 microcontroller board with CYW43439 2.4GHz wireless (Wi-Fi / BLE).
+manufacturer: Raspberry Pi
+family: Microcontroller
+tags:
+  - rp2350
+  - wifi
+  - pico
+package: THT
+pinSpacing: 2.54
+voltage: 1.8–5.5V
+partNumber: SC0918
+version: 1.0.0
+mcu: RP2350
+pcbColor: "#0f5a2e"
+aspect: 0.46
+dimensions:
+  width: 21
+  height: 51
+ledLabel: LED
+features:
+  - { label: RP2350, kind: mcu, x: 0.28, y: 0.44, w: 0.44, h: 0.2 }
+  - { label: CYW43439, kind: wifi, x: 0.22, y: 0.08, w: 0.56, h: 0.1 }
+  - { label: USB, kind: usb, x: 0.36, y: 0, w: 0.28, h: 0.05 }
+headers:
+  - edge: left
+    pins:
+      - { name: GP0, type: io, number: 1, gpio: 0, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP1, type: io, number: 2, gpio: 1, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 3 }
+      - { name: GP2, type: io, number: 4, gpio: 2, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP3, type: io, number: 5, gpio: 3, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP4, type: io, number: 6, gpio: 4, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP5, type: io, number: 7, gpio: 5, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 8 }
+      - { name: GP6, type: io, number: 9, gpio: 6, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP7, type: io, number: 10, gpio: 7, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP8, type: io, number: 11, gpio: 8, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP9, type: io, number: 12, gpio: 9, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 13 }
+      - { name: GP10, type: io, number: 14, gpio: 10, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP11, type: io, number: 15, gpio: 11, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP12, type: io, number: 16, gpio: 12, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP13, type: io, number: 17, gpio: 13, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 18 }
+      - { name: GP14, type: io, number: 19, gpio: 14, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP15, type: io, number: 20, gpio: 15, capabilities: [digital, pwm, i2c, spi] }
+  - edge: right
+    pins:
+      - { name: VBUS, type: pwr, number: 40 }
+      - { name: VSYS, type: pwr, number: 39 }
+      - { name: GND, type: gnd, number: 38 }
+      - { name: 3V3_EN, type: other, number: 37 }
+      - { name: 3V3, type: pwr, number: 36 }
+      - { name: ADC_VREF, type: other, number: 35 }
+      - { name: GP28, type: io, number: 34, gpio: 28, capabilities: [digital, pwm, i2c, spi, adc] }
+      - { name: GND, type: gnd, number: 33 }
+      - { name: GP27, type: io, number: 32, gpio: 27, capabilities: [digital, pwm, i2c, spi, adc] }
+      - { name: GP26, type: io, number: 31, gpio: 26, capabilities: [digital, pwm, i2c, spi, adc] }
+      - { name: RUN, type: other, number: 30 }
+      - { name: GP22, type: io, number: 29, gpio: 22, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 28 }
+      - { name: GP21, type: io, number: 27, gpio: 21, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP20, type: io, number: 26, gpio: 20, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP19, type: io, number: 25, gpio: 19, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP18, type: io, number: 24, gpio: 18, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GND, type: gnd, number: 23 }
+      - { name: GP17, type: io, number: 22, gpio: 17, capabilities: [digital, pwm, i2c, spi] }
+      - { name: GP16, type: io, number: 21, gpio: 16, capabilities: [digital, pwm, i2c, spi] }

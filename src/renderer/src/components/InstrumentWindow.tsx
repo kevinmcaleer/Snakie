@@ -374,13 +374,17 @@ export function AddInstrumentButton({
  */
 export function InstrumentDock({
   header,
-  children
+  children,
+  top
 }: {
   header: ReactNode
   children: ReactNode
+  /** Pinned content above the header row (e.g. the mini board view, #168). */
+  top?: ReactNode
 }): JSX.Element {
   return (
     <aside className="instr-dock" aria-label="Instrument dock">
+      {top}
       <div className="instr-dock__head">
         <span className="instr-dock__title">
           <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

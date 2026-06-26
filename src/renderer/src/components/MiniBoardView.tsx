@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_TAG } from './parse-pins'
-import {
-  BUILTIN_BOARDS,
-  DEFAULT_BOARD_ID,
-  boardIdFromReplText,
-  mergeBoards,
-  type BoardDefinition
-} from './board-defs'
+import { BUILTIN_BOARDS, DEFAULT_BOARD_ID, boardIdFromReplText } from './board-defs'
 import {
   boardBox,
   layoutPads,
@@ -16,6 +10,7 @@ import {
   padLabelPlacement,
   type PadPoint
 } from './board-layout'
+import { useBoards } from './use-boards'
 import { useConsole } from '../store/console'
 import './MiniBoardView.css'
 
@@ -56,7 +51,9 @@ function annotation(u: UsedPad): string {
  */
 export function MiniBoardView({ source, isPython }: { source: string; isPython: boolean }): JSX.Element {
   const consoleStore = useConsole()
-  const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
+  // Boards from the installed parts libraries (microcontroller parts), built-ins
+  // as a fallback — the same source the full Board Viewer uses (#52).
+  const boards = useBoards()
   const [boardId, setBoardId] = useState<string>(() => {
     try {
       return window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_BOARD_ID
@@ -64,22 +61,6 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
       return DEFAULT_BOARD_ID
     }
   })
-
-  // Load user-authored boards so a custom selection resolves (best-effort).
-  useEffect(() => {
-    let alive = true
-    window.api.board
-      .listUserBoards()
-      .then((b) => {
-        if (alive) setUserBoards(b ?? [])
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const boards = useMemo(() => mergeBoards(userBoards), [userBoards])
 
   // Adopt a board inferred from REPL text, persisting it so the full Board Viewer
   // picks it up too. Guarded to KNOWN boards + only when it actually changes.
