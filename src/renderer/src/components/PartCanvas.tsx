@@ -16,9 +16,19 @@ import {
   resolvedPins,
   type ResolvedPin
 } from './part-editor.util'
-import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
+import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinCapability, PartPinType } from '../../../shared/part'
 import { castellatedPad } from './part-body'
 import './PartCanvas.css'
+
+/** Capability → hover-badge text + pastel colour (#…). */
+const CAP_BADGE: Record<PartPinCapability, { text: string; color: string }> = {
+  digital: { text: 'GPIO', color: '#d9dee4' },
+  pwm: { text: 'PWM', color: '#cfe8a9' },
+  adc: { text: 'ADC', color: '#a9f0ec' },
+  i2c: { text: 'I2C', color: '#a9d3f5' },
+  spi: { text: 'SPI', color: '#f7b6d2' },
+  uart: { text: 'UART', color: '#cdb4f0' }
+}
 
 /**
  * PART CANVAS (#130) — a layered, interactive board editor.
@@ -198,6 +208,8 @@ export function PartCanvas({
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
+  // The pin under the pointer — shows its capability badges (breadboard view).
+  const [hoverPin, setHoverPin] = useState<{ hi: number; pi: number } | null>(null)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -930,7 +942,7 @@ export function PartCanvas({
             if (shape === 'round') {
               pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
             } else if (shape === 'castellated') {
-              pad = castellatedPad(cx, cy, size, rp.x, rp.y, rp.pin.type === 'gnd', stroke, sw)
+              pad = castellatedPad(cx, cy, size, rp.x, rp.pin.type === 'gnd', stroke, sw, rp.pin.rotation)
             } else if (shape === 'header') {
               // A through-hole header pad: copper annular ring with the drill hole.
               pad = (
@@ -954,7 +966,11 @@ export function PartCanvas({
             const tw = text.length * 6.2 + 6 // approx width of the mono label
             const bgX = anchor === 'start' ? lx - 3 : lx - tw + 3
             return (
-              <g key={`p${i}`}>
+              <g
+                key={`p${i}`}
+                onPointerEnter={() => setHoverPin({ hi: rp.hi, pi: rp.pi })}
+                onPointerLeave={() => setHoverPin((h) => (h?.hi === rp.hi && h?.pi === rp.pi ? null : h))}
+              >
                 {pad}
                 {text && (
                   <>
@@ -1016,6 +1032,41 @@ export function PartCanvas({
             className="pcv__marquee"
           />
         )}
+
+        {/* Hover badges (#…): the hovered pin's capabilities, in pastel chips. */}
+        {interactive &&
+          hoverPin &&
+          !dragRef.current &&
+          (() => {
+            const rp = pins.find((p) => p.hi === hoverPin.hi && p.pi === hoverPin.pi)
+            const caps = rp?.pin.capabilities ?? []
+            if (!rp || caps.length === 0) return null
+            const badges = caps.map((c) => CAP_BADGE[c]).filter(Boolean)
+            const fs = 11 // same size as the pin labels
+            const h = 16
+            const gap = 3
+            const widths = badges.map((b) => b.text.length * 6.2 + 8)
+            const total = widths.reduce((a, w) => a + w, 0) + gap * Math.max(0, badges.length - 1)
+            const cx = px(rp.x)
+            const by = py(rp.y) - 13 - h // a row just above the pad
+            let acc = cx - total / 2
+            return (
+              <g className="pcv__badges" style={{ pointerEvents: 'none' }} aria-hidden="true">
+                {badges.map((b, i) => {
+                  const x = acc
+                  acc += widths[i] + gap
+                  return (
+                    <g key={i}>
+                      <rect x={x} y={by} width={widths[i]} height={h} rx={3} fill={b.color} />
+                      <text x={x + widths[i] / 2} y={by + h - 5} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#1a1d20" fontFamily="var(--font-mono)">
+                        {b.text}
+                      </text>
+                    </g>
+                  )
+                })}
+              </g>
+            )
+          })()}
 
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&

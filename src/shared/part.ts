@@ -34,7 +34,7 @@ export type PartPinType = 'pwr' | 'gnd' | 'io' | 'other'
  * What an `io` pin can do, per the Part Editor spec. A pin may have several
  * (e.g. a pin that is digital + pwm + adc). Authored as checkboxes in the editor.
  */
-export type PartPinCapability = 'digital' | 'pwm' | 'adc' | 'spi' | 'i2c'
+export type PartPinCapability = 'digital' | 'pwm' | 'adc' | 'spi' | 'i2c' | 'uart'
 
 /** How the part is mounted: through-hole vs surface-mount. */
 export type PartPackage = 'THT' | 'SMD'
@@ -73,6 +73,12 @@ export interface PartPin {
   castellated?: boolean
   /** How the pad is drawn (square / round / castellated / header). */
   shape?: PartPinShape
+  /**
+   * Castellation outward direction in degrees: 0 = right, 90 = down, 180 = left,
+   * 270 = up. Absent ⇒ derived from the pin's side (left/right by x). Only affects
+   * `castellated` pads — the rotate/flip controls in the pin inspector set it.
+   */
+  rotation?: number
   /**
    * Absolute position on the board canvas, normalised `0..1` (0,0 = top-left).
    * The Part Editor uses **free placement**: this is the source of truth for

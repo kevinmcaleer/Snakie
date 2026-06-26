@@ -1058,6 +1058,39 @@ function SelectionInspector({
               ))}
             </select>
           </label>
+          {pinShapeOf(pin) === 'castellated' &&
+            (() => {
+              const rot = pin.rotation ?? ((pin.x ?? 0) < 0.5 ? 180 : 0)
+              return (
+                <div className="pe__pinrot">
+                  <span>Castellation</span>
+                  <button
+                    type="button"
+                    className="pe__iconbtn"
+                    title="Rotate the half-hole 90°"
+                    aria-label="Rotate castellation"
+                    onClick={() => updatePin({ rotation: (rot + 90) % 360 })}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M20 11a8 8 0 1 0-2.3 5.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                      <path d="M20 4v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="pe__iconbtn"
+                    title="Flip the half-hole to the opposite side"
+                    aria-label="Flip castellation"
+                    onClick={() => updatePin({ rotation: (rot + 180) % 360 })}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 3v18" stroke="currentColor" strokeWidth="1.6" strokeDasharray="2 2" />
+                      <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+              )
+            })()}
           <div className="pe__row">
             {num('x', pin.x ?? 0, (v) => updatePin({ x: v }))}
             {num('y', pin.y ?? 0, (v) => updatePin({ y: v }))}

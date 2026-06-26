@@ -367,6 +367,20 @@
   gap: 0.3rem;
 }
 
+/* Castellation rotate / flip controls in the pin inspector. */
+.pe__pinrot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.pe__pinrot > span {
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 .pe__cap {
   display: inline-flex;
   align-items: center;

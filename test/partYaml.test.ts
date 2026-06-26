@@ -177,3 +177,24 @@ describe('library link (#166) round-trips', () => {
     expect(part.library).toBeUndefined()
   })
 })
+
+describe('pin rotation + uart capability round-trip', () => {
+  it('snaps rotation to 90° and keeps the uart capability through normalise + YAML', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        {
+          edge: 'top',
+          pins: [{ name: 'TX', type: 'io', gpio: 0, capabilities: ['uart', 'pwm'], shape: 'castellated', rotation: 95 }]
+        }
+      ]
+    })
+    const pin = part.headers[0].pins[0]
+    expect(pin.rotation).toBe(90) // 95 snapped to the nearest 90°
+    expect(pin.capabilities).toContain('uart')
+    const back = partFromYaml(partToYaml(part)).headers[0].pins[0]
+    expect(back.rotation).toBe(90)
+    expect(back.capabilities).toContain('uart')
+  })
+})

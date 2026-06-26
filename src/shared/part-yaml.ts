@@ -33,7 +33,7 @@ import type {
 } from './part'
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
-const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c']
+const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
 const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
 const SHAPE_KINDS: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
 const EDGES = ['left', 'right', 'top', 'bottom'] as const
@@ -94,6 +94,8 @@ function coercePin(raw: unknown): PartPin | null {
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
   if (PIN_SHAPES.includes(r.shape as PartPinShape)) pin.shape = r.shape as PartPinShape
+  const rotation = num(r.rotation)
+  if (rotation !== undefined) pin.rotation = rotation
   const x = num(r.x)
   const y = num(r.y)
   if (x !== undefined) pin.x = x
@@ -161,6 +163,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
   if (p.shape) out.shape = p.shape
+  if (p.rotation !== undefined) out.rotation = p.rotation
   if (p.x !== undefined) out.x = p.x
   if (p.y !== undefined) out.y = p.y
   return out

@@ -39,31 +39,36 @@ export const PAD_FILL: Record<PartPinType, string> = {
 
 /**
  * A Raspberry-Pi-style castellated pad: a GOLD pad with the **main hole centred on
- * the pin** and a plated **half-hole** at the nearest board edge. Ground pads are
+ * the pin** and a plated **half-hole** facing the board edge. Ground pads are
  * square; signal/power pads are rounded (a stadium from the main hole to the edge).
- * `nx`/`ny` are the pin's normalised position (to pick the nearest edge).
+ * The half-hole faces `rotationDeg` (0=right, 90=down, 180=left, 270=up); when
+ * absent it defaults to the nearer horizontal edge (`nx`), since castellations
+ * normally run along the left/right edges.
  */
 export function castellatedPad(
   cx: number,
   cy: number,
   size: number,
   nx: number,
-  ny: number,
   isGnd: boolean,
   stroke: string,
-  sw: number
+  sw: number,
+  rotationDeg?: number
 ): JSX.Element {
   const GOLD = '#f0ce5c'
   const hR = size * 0.28 // hole radius
   const half = hR + 2.5 // pad half-thickness (perpendicular to the run)
   const ext = size * 0.95 // distance from the main hole out to the edge half-hole
-  const dL = nx
-  const dR = 1 - nx
-  const dT = ny
-  const dB = 1 - ny
-  const m = Math.min(dL, dR, dT, dB)
-  const ox = m === dL ? -1 : m === dR ? 1 : 0
-  const oy = m === dT ? -1 : m === dB ? 1 : 0
+  let ox: number
+  let oy: number
+  if (rotationDeg !== undefined) {
+    const r = (((Math.round(rotationDeg / 90) * 90) % 360) + 360) % 360
+    ox = r === 0 ? 1 : r === 180 ? -1 : 0
+    oy = r === 90 ? 1 : r === 270 ? -1 : 0
+  } else {
+    ox = nx < 0.5 ? -1 : 1
+    oy = 0
+  }
   let rx2: number
   let ry2: number
   let rw: number
@@ -290,7 +295,7 @@ export function PartBody({
           if (shape === 'round') {
             pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
           } else if (shape === 'castellated') {
-            pad = castellatedPad(cx, cy, size, rp.x, rp.y, rp.pin.type === 'gnd', stroke, sw)
+            pad = castellatedPad(cx, cy, size, rp.x, rp.pin.type === 'gnd', stroke, sw, rp.pin.rotation)
           } else if (shape === 'header') {
             pad = (
               <>

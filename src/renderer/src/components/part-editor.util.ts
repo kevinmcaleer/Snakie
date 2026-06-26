@@ -46,7 +46,7 @@ export const PIN_TYPE_LABEL: Record<PartPinType, string> = {
 }
 
 /** The IO capabilities the editor offers (checkboxes), in UI order. */
-export const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c']
+export const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
 
 /** Human labels for each capability. */
 export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
@@ -54,7 +54,8 @@ export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
   pwm: 'PWM',
   adc: 'ADC',
   spi: 'SPI',
-  i2c: 'I²C'
+  i2c: 'I²C',
+  uart: 'UART'
 }
 
 /** Package types, in UI order. */
@@ -225,6 +226,9 @@ function normalisePin(pin: PartPin): PartPin {
   if (label && label !== name) out.label = label
   if (pin.castellated === true) out.castellated = true
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
+  if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
+    out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
+  }
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
   if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
   return out
