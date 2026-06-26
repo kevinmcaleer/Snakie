@@ -1,0 +1,91 @@
+/* Mini board view (#168) — a compact node-graph board pinned to the top of the
+   instruments dock. Shows the MCU + only the pins the current code uses. */
+.mini-board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.4rem 0.5rem 0.5rem;
+  border-bottom: var(--border-w, 1px) solid var(--border, #2a2d33);
+  background: var(--bg-sunken, #0c0f12);
+  flex: 0 0 auto;
+}
+
+.mini-board__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.mini-board__name {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text-muted, #aeb4bd);
+  letter-spacing: 0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-board__open {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  color: var(--text-muted, #aeb4bd);
+  background: var(--bg-elevated, #1a1d21);
+  border: var(--border-w, 1px) solid var(--border, #2a2d33);
+  border-radius: var(--radius, 4px);
+  cursor: pointer;
+}
+
+.mini-board__open:hover {
+  color: var(--text, #e9edf1);
+  border-color: var(--text-muted, #aeb4bd);
+}
+
+.mini-board__svg {
+  display: block;
+  width: 100%;
+  height: 150px;
+}
+
+.mini-board__mcu {
+  font-family: var(--font-mono), monospace;
+  font-size: 12px;
+  font-weight: 700;
+  fill: #b9bdc6;
+}
+
+/* Idle pads: just the hole, dimmed, so the user sees they exist. */
+.mini-board__hole {
+  fill: rgba(0, 0, 0, 0.35);
+  stroke: #9a7a1e;
+  stroke-width: 0.7;
+  opacity: 0.45;
+}
+
+.mini-board__label {
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  fill: #cfe8d4;
+}
+
+/* The connected variable + pin-type tag (coloured by connection type inline). */
+.mini-board__var {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mini-board__hint {
+  margin: 0;
+  font-size: 0.62rem;
+  color: var(--text-muted, #aeb4bd);
+  text-align: center;
+  opacity: 0.8;
+}

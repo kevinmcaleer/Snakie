@@ -297,3 +297,57 @@ export function mergeBoards(user: BoardDefinition[]): BoardDefinition[] {
   const ordered = BUILTIN_BOARDS.map((b) => byId.get(b.id) ?? b)
   return [...ordered, ...extra]
 }
+
+/**
+ * Best-effort: infer a board id from REPL/console text (#168). MicroPython's
+ * friendly banner reads like `MicroPython v1.24 on 2024-…; Raspberry Pi Pico 2 W
+ * with RP2350` — we match the description against board NAMES (most specific
+ * wins), then fall back to a UNIQUE mcu match (several boards are RP2350, so an
+ * ambiguous mcu yields nothing rather than a wrong guess). Returns null when
+ * nothing is confidently matched. Pure + total (never throws) so it's unit-tested.
+ */
+export function boardIdFromReplText(replText: string, boards: BoardDefinition[] = BUILTIN_BOARDS): string | null {
+  if (!replText) return null
+  const norm = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim()
+  const text = norm(replText)
+
+  /** The longest board whose NAME appears verbatim in `hay` (most specific wins). */
+  const byName = (hay: string): BoardDefinition | null => {
+    let best: BoardDefinition | null = null
+    for (const b of boards) {
+      const bn = norm(b.name)
+      if (bn && hay.includes(bn) && (!best || norm(best.name).length < bn.length)) best = b
+    }
+    return best
+  }
+  /** The board for an mcu string, only when exactly one board has that mcu. */
+  const byUniqueMcu = (mcu: string): BoardDefinition | null => {
+    const m = norm(mcu)
+    if (!m) return null
+    const hits = boards.filter((b) => norm(b.mcu) === m)
+    return hits.length === 1 ? hits[0] : null
+  }
+
+  // 1) Parse the MicroPython banner(s); the LAST one wins (most recent boot).
+  const re = /micropython\s+v\S+\s+on\s+[^;]*;\s*(.+?)\s+with\s+([a-z0-9-]+)/gi
+  let desc = ''
+  let mcu = ''
+  for (let m = re.exec(replText); m !== null; m = re.exec(replText)) {
+    desc = norm(m[1])
+    mcu = norm(m[2])
+  }
+  if (desc) {
+    const n = byName(desc)
+    if (n) return n.id
+    const m = byUniqueMcu(mcu)
+    if (m) return m.id
+  }
+
+  // 2) No usable banner — scan the whole console for a board name, then unique mcu.
+  const n2 = byName(text)
+  if (n2) return n2.id
+  for (const b of boards) {
+    if (text.includes(norm(b.mcu)) && byUniqueMcu(b.mcu)) return b.id
+  }
+  return null
+}

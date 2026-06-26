@@ -22,6 +22,7 @@ import {
   ledPoint,
   nodeSide,
   padForToken,
+  padKey,
   padLabelPlacement,
   padsBounds,
   type BoardBox,
@@ -1027,10 +1028,6 @@ export function BoardGraph({
 // --- SVG drawing ------------------------------------------------------------
 
 /** Stable key for a drawn pad coordinate (matches "used" pads to drawn pads). */
-export function padKey(p: { x: number; y: number }): string {
-  return `${p.x.toFixed(1)},${p.y.toFixed(1)}`
-}
-
 /**
  * A drooping cubic bezier from a node solder dot `(sx, sy)` to a target pad on
  * the physical board — wherever it sits (left / right / top / bottom / led).

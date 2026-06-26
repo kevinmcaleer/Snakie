@@ -67,6 +67,12 @@ export interface PadPoint {
   pad: BoardPad
 }
 
+/** Stable identity for a drawn pad by its rounded coordinate (used to mark which
+ *  pads a connection resolves to). Shared by every board renderer. */
+export function padKey(p: { x: number; y: number }): string {
+  return `${p.x.toFixed(1)},${p.y.toFixed(1)}`
+}
+
 /** A board pad in flattened (header→pin) order — the canonical pin enumeration. */
 export interface BoardPadRef {
   pad: BoardPad

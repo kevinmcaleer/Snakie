@@ -32,6 +32,7 @@ import { DisplayInstrument } from './DisplayInstrument'
 import { WifiScanInstrument } from './WifiScanInstrument'
 import { BluetoothInstrument } from './BluetoothInstrument'
 import { I2cDetectInstrument } from './I2cDetectInstrument'
+import { MiniBoardView } from './MiniBoardView'
 import {
   SINGLETON_IDS,
   filterPalette,
@@ -312,6 +313,8 @@ export interface UseInstrumentsResult {
   /** Floating scope/meter items (the rest). */
   floatItems: ResolvedInstrument[]
   source: string
+  /** Whether the active file is Python (so the mini board view knows to parse). */
+  isPython: boolean
   pwmConns: UsedPins[]
   adcConns: UsedPins[]
   /** Global live-poll state (mirrored on each instrument's LIVE toggle). */
@@ -518,6 +521,7 @@ export function useInstruments({
     dockedItems: resolved.filter((r) => r.isDocked),
     floatItems: resolved.filter((r) => !r.isDocked),
     source,
+    isPython,
     pwmConns,
     adcConns,
     live,
@@ -801,6 +805,8 @@ export function InstrumentDockRegion({
         />
       }
     >
+      {/* #168: a compact node-graph board (MCU + code-used pins) atop the dock. */}
+      <MiniBoardView source={host.source} isPython={host.isPython} />
       {paletteOpen && (
         <AddInstrumentPalette
           vis={vis}

@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Mini board view in the instruments panel (#168).** A compact node-graph board
+  sits at the top of the instruments dock, showing the **microcontroller + only the
+  pins the current code uses** (auto-zoomed to fit just those pins — no pin table or
+  toolbar). A small **expand** button opens the full Board Viewer, and the board
+  **auto-swaps to match the REPL boot banner** when it names a known board.
 - **Part Editor — stack, reshape, and hide components (#130).** Components (shapes
   + text labels) can be **restacked**: each row in the Components list has ▲/▼
   buttons, and the item at the **top of the list draws on top** (newly-added
