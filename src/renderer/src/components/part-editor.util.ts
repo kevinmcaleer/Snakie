@@ -19,13 +19,17 @@
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
 import {
   STANDARD_PIN_SPACING_MM,
+  type ComponentShape,
+  type ComponentShapeKind,
   type ImageLayer,
   type PartDefinition,
   type PartEdge,
+  type PartFeature,
   type PartHeader,
   type PartLabel,
   type PartPin,
   type PartPinCapability,
+  type PartPinShape,
   type PartPinType,
   type PartPackage
 } from '../../../shared/part'
@@ -55,6 +59,38 @@ export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
 
 /** Package types, in UI order. */
 export const PACKAGES: PartPackage[] = ['THT', 'SMD']
+
+/** Pad shapes the editor offers, in UI order. */
+export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
+
+/** Human labels for each pad shape. */
+export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
+  square: 'Square',
+  round: 'Round',
+  castellated: 'Castellated',
+  header: 'Header hole'
+}
+
+/** Component shape kinds the Shapes dropdown offers, in UI order. */
+export const COMPONENT_SHAPES: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
+
+/** Human labels for each component shape kind. */
+export const COMPONENT_SHAPE_LABEL: Record<ComponentShapeKind, string> = {
+  rect: 'Rectangle',
+  circle: 'Circle',
+  polygon: 'Polygon'
+}
+
+/** Default colours for a freshly-added component shape. */
+export const DEFAULT_SHAPE_FILL = '#1c2227'
+export const DEFAULT_SHAPE_STROKE = '#8a8f96'
+export const DEFAULT_SHAPE_STROKE_WIDTH = 1
+
+/** The effective pad shape for a pin (honours the legacy `castellated` flag). */
+export function pinShapeOf(pin: PartPin): PartPinShape {
+  if (pin.shape) return pin.shape
+  return pin.castellated ? 'castellated' : 'square'
+}
 
 /** Header edges, in UI order. */
 export const PART_EDGES: PartHeader['edge'][] = ['left', 'right', 'top', 'bottom']
@@ -188,9 +224,80 @@ function normalisePin(pin: PartPin): PartPin {
   const label = String(pin.label ?? '').trim()
   if (label && label !== name) out.label = label
   if (pin.castellated === true) out.castellated = true
+  if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
   if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
   return out
+}
+
+/** Normalise one component shape: validate kind, clamp coords, default colours. */
+function normaliseShape(s: ComponentShape): ComponentShape {
+  const kind: ComponentShapeKind = COMPONENT_SHAPES.includes(s.kind) ? s.kind : 'rect'
+  const out: ComponentShape = { kind, x: clamp(s.x, -0.2, 1.2), y: clamp(s.y, -0.2, 1.2) }
+  const label = String(s.label ?? '').trim()
+  if (label) out.label = label
+  out.fill = typeof s.fill === 'string' && s.fill.trim() ? s.fill : DEFAULT_SHAPE_FILL
+  out.stroke = typeof s.stroke === 'string' && s.stroke.trim() ? s.stroke : DEFAULT_SHAPE_STROKE
+  out.strokeWidth =
+    typeof s.strokeWidth === 'number' && Number.isFinite(s.strokeWidth) && s.strokeWidth >= 0
+      ? s.strokeWidth
+      : DEFAULT_SHAPE_STROKE_WIDTH
+  if (kind === 'rect') {
+    out.w = clamp(typeof s.w === 'number' ? s.w : 0.2, 0.01, 1.4)
+    out.h = clamp(typeof s.h === 'number' ? s.h : 0.15, 0.01, 1.4)
+  } else if (kind === 'circle') {
+    out.r = clamp(typeof s.r === 'number' ? s.r : 0.1, 0.005, 1)
+  } else if (kind === 'polygon') {
+    const pts =
+      Array.isArray(s.points) && s.points.length >= 3
+        ? s.points
+        : [
+            { x: out.x, y: out.y },
+            { x: out.x + 0.15, y: out.y },
+            { x: out.x + 0.075, y: out.y + 0.15 }
+          ]
+    out.points = pts.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }))
+  }
+  return out
+}
+
+/** Fill colour for a migrated legacy feature, by its kind. */
+function featureFill(kind: PartFeature['kind']): string {
+  switch (kind) {
+    case 'mcu':
+      return '#2a2f36'
+    case 'wifi':
+      return '#3a2f1c'
+    case 'usb':
+      return '#3a3f44'
+    case 'led':
+      return '#5a2230'
+    default:
+      return DEFAULT_SHAPE_FILL
+  }
+}
+
+/**
+ * Convert a part's legacy {@link PartFeature}s into editable {@link ComponentShape}
+ * rectangles (appended to `shapes`, features removed). The Part Editor runs this
+ * on load so existing parts' chips become editable in the Components layer.
+ */
+export function withShapesFromFeatures(part: PartDefinition): PartDefinition {
+  if (!part.features?.length) return part
+  const migrated: ComponentShape[] = part.features.map((f) => ({
+    kind: 'rect',
+    label: f.label,
+    fill: featureFill(f.kind),
+    stroke: DEFAULT_SHAPE_STROKE,
+    strokeWidth: DEFAULT_SHAPE_STROKE_WIDTH,
+    x: f.x,
+    y: f.y,
+    w: f.w,
+    h: f.h
+  }))
+  const next = { ...part, shapes: [...(part.shapes ?? []), ...migrated] }
+  delete next.features
+  return next
 }
 
 /**
@@ -298,6 +405,9 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       w: clamp(f.w, 0.01, 1.4),
       h: clamp(f.h, 0.01, 1.4)
     }))
+  }
+  if (Array.isArray(part.shapes) && part.shapes.length) {
+    out.shapes = part.shapes.map((s) => normaliseShape(s))
   }
   if (Array.isArray(part.labels) && part.labels.length) {
     const labels = part.labels

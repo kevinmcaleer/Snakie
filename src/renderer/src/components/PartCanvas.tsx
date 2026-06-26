@@ -7,8 +7,16 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
-import { derivePinPosition, resolvedPins, type ResolvedPin } from './part-editor.util'
-import type { PartDefinition, PartPinType } from '../../../shared/part'
+import {
+  DEFAULT_SHAPE_FILL,
+  DEFAULT_SHAPE_STROKE,
+  DEFAULT_SHAPE_STROKE_WIDTH,
+  derivePinPosition,
+  pinShapeOf,
+  resolvedPins,
+  type ResolvedPin
+} from './part-editor.util'
+import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
 import './PartCanvas.css'
 
 /**
@@ -44,8 +52,18 @@ const PAD_FILL: Record<PartPinType, string> = {
   other: '#8a8f96'
 }
 
-/** The toolbar / layer-add tools, in display order. */
-export type CanvasTool = 'select' | 'move' | 'shape' | 'pin' | 'hole' | 'rect' | 'text'
+/** The toolbar / layer-add tools, in display order. `rect`/`circle`/`cpoly` add
+ *  component shapes; `shape` edits the board outline polygon. */
+export type CanvasTool =
+  | 'select'
+  | 'move'
+  | 'shape'
+  | 'pin'
+  | 'hole'
+  | 'text'
+  | 'rect'
+  | 'circle'
+  | 'cpoly'
 
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
@@ -61,7 +79,8 @@ export const DEFAULT_LAYERS: LayerVisibility = { image: true, holes: true, pins:
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
-  | { type: 'feature'; index: number }
+  | { type: 'shape'; index: number }
+  | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
   | { type: 'vertex'; index: number }
   | { type: 'image' }
@@ -121,7 +140,7 @@ function clamp01(n: number): number {
 
 /** Drag state while a pointer is down. */
 interface Drag {
-  kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex'
+  kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex' | 'move-shape-vertex'
   sel: CanvasSelection
   corner?: number
   startNX: number
@@ -165,7 +184,8 @@ export function PartCanvas({
   const box = fitBox(boardAspect(part))
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
-  const features = part.features ?? []
+  const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
+  const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const interactive = !readOnly && !!onChange
@@ -239,8 +259,31 @@ export function PartCanvas({
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
   }
-  const moveFeatureTo = (index: number, nx: number, ny: number): void => {
-    commit({ ...part, features: features.map((f, i) => (i === index ? { ...f, x: snapX(nx), y: snapY(ny) } : f)) })
+  const moveShapeTo = (index: number, nx: number, ny: number): void => {
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    commit({
+      ...part,
+      shapes: shapes.map((s, i) => {
+        if (i !== index) return s
+        // Polygons are drawn from `points`, so translate every vertex by the
+        // delta too (otherwise dragging the body would be a no-op).
+        if (s.kind === 'polygon' && s.points?.length) {
+          const ddx = sx - s.x
+          const ddy = sy - s.y
+          return { ...s, x: sx, y: sy, points: s.points.map((p) => ({ x: clamp01(p.x + ddx), y: clamp01(p.y + ddy) })) }
+        }
+        return { ...s, x: sx, y: sy }
+      })
+    })
+  }
+  const moveShapeVertexTo = (index: number, vi: number, nx: number, ny: number): void => {
+    commit({
+      ...part,
+      shapes: shapes.map((s, i) =>
+        i === index ? { ...s, points: (s.points ?? []).map((p, j) => (j === vi ? { x: clamp01(nx), y: clamp01(ny) } : p)) } : s
+      )
+    })
   }
   const moveLabelTo = (index: number, nx: number, ny: number): void => {
     commit({ ...part, labels: labels.map((l, i) => (i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l)) })
@@ -280,10 +323,36 @@ export function PartCanvas({
     commit({ ...part, mountingHoles: next })
     onSelect?.({ type: 'hole', index: next.length - 1 })
   }
-  const addFeature = (nx: number, ny: number): void => {
-    const next = [...features, { label: 'IC', kind: 'chip' as const, x: clamp01(nx - 0.1), y: clamp01(ny - 0.07), w: 0.2, h: 0.14 }]
-    commit({ ...part, features: next })
-    onSelect?.({ type: 'feature', index: next.length - 1 })
+  const addShape = (kind: ComponentShapeKind, nx: number, ny: number): void => {
+    const base = {
+      kind,
+      label: '',
+      fill: DEFAULT_SHAPE_FILL,
+      stroke: DEFAULT_SHAPE_STROKE,
+      strokeWidth: DEFAULT_SHAPE_STROKE_WIDTH
+    }
+    let shape: ComponentShape
+    if (kind === 'circle') {
+      shape = { ...base, x: clamp01(nx), y: clamp01(ny), r: 0.08 }
+    } else if (kind === 'polygon') {
+      const cx = clamp01(nx)
+      const cy = clamp01(ny)
+      shape = {
+        ...base,
+        x: cx,
+        y: cy,
+        points: [
+          { x: clamp01(cx), y: clamp01(cy - 0.08) },
+          { x: clamp01(cx + 0.09), y: clamp01(cy + 0.06) },
+          { x: clamp01(cx - 0.09), y: clamp01(cy + 0.06) }
+        ]
+      }
+    } else {
+      shape = { ...base, x: clamp01(nx - 0.1), y: clamp01(ny - 0.07), w: 0.2, h: 0.14 }
+    }
+    const next = [...shapes, shape]
+    commit({ ...part, shapes: next })
+    onSelect?.({ type: 'shape', index: next.length - 1 })
   }
   const addLabel = (nx: number, ny: number): void => {
     const next = [...labels, { text: 'Label', x: clamp01(nx), y: clamp01(ny), fontSize: 12 }]
@@ -302,14 +371,25 @@ export function PartCanvas({
 
   // --- hit testing (topmost VISIBLE selectable object) ----------------------
   const HIT = 14
+  /** True if a normalised point is inside a component shape. */
+  const inShape = (s: ComponentShape, nx: number, ny: number): boolean => {
+    if (s.kind === 'rect') return nx >= s.x && nx <= s.x + (s.w ?? 0) && ny >= s.y && ny <= s.y + (s.h ?? 0)
+    if (s.kind === 'circle') return dist(nx, ny, s.x, s.y) <= (s.r ?? 0) * box.w + 2
+    // polygon: ray-cast point-in-polygon over the points (normalised)
+    const pts = s.points ?? []
+    let inside = false
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const a = pts[i]
+      const b = pts[j]
+      if (a.y > ny !== b.y > ny && nx < ((b.x - a.x) * (ny - a.y)) / (b.y - a.y) + a.x) inside = !inside
+    }
+    return inside
+  }
   const hitTest = (nx: number, ny: number): CanvasSelection => {
     if (visible.components) {
       for (let i = labels.length - 1; i >= 0; i--)
         if (dist(nx, ny, labels[i].x, labels[i].y) < HIT * 1.4) return { type: 'label', index: i }
-      for (let i = features.length - 1; i >= 0; i--) {
-        const f = features[i]
-        if (nx >= f.x && nx <= f.x + f.w && ny >= f.y && ny <= f.y + f.h) return { type: 'feature', index: i }
-      }
+      for (let i = shapes.length - 1; i >= 0; i--) if (inShape(shapes[i], nx, ny)) return { type: 'shape', index: i }
     }
     if (visible.pins)
       for (let i = pins.length - 1; i >= 0; i--)
@@ -334,7 +414,9 @@ export function PartCanvas({
     }
     if (tool === 'pin') return addPin(nx, ny)
     if (tool === 'hole') return addHole(nx, ny)
-    if (tool === 'rect') return addFeature(nx, ny)
+    if (tool === 'rect') return addShape('rect', nx, ny)
+    if (tool === 'circle') return addShape('circle', nx, ny)
+    if (tool === 'cpoly') return addShape('polygon', nx, ny)
     if (tool === 'text') return addLabel(nx, ny)
     if (tool === 'shape') {
       const poly = part.polygon ?? []
@@ -349,7 +431,23 @@ export function PartCanvas({
       return
     }
 
-    // select tool — image resize handles first (when the image is selected)
+    // select tool — a selected polygon shape's vertex handles first
+    if ((selection?.type === 'shape' || selection?.type === 'shape-vertex') && visible.components) {
+      const si = selection.index
+      const poly = shapes[si]
+      if (poly?.kind === 'polygon') {
+        const pts = poly.points ?? []
+        for (let v = pts.length - 1; v >= 0; v--) {
+          if (dist(nx, ny, pts[v].x, pts[v].y) < HIT) {
+            onSelect?.({ type: 'shape-vertex', index: si, vi: v })
+            dragRef.current = { kind: 'move-shape-vertex', sel: { type: 'shape-vertex', index: si, vi: v }, startNX: nx, startNY: ny, ox: pts[v].x, oy: pts[v].y }
+            return
+          }
+        }
+      }
+    }
+
+    // select tool — image resize handles (when the image is selected)
     if (selection?.type === 'image' && visible.image && part.imageData) {
       const corners = [
         [layer.x, layer.y],
@@ -377,9 +475,9 @@ export function PartCanvas({
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
-    } else if (hit.type === 'feature') {
-      ox = features[hit.index]?.x ?? nx
-      oy = features[hit.index]?.y ?? ny
+    } else if (hit.type === 'shape') {
+      ox = shapes[hit.index]?.x ?? nx
+      oy = shapes[hit.index]?.y ?? ny
     } else if (hit.type === 'label') {
       ox = labels[hit.index]?.x ?? nx
       oy = labels[hit.index]?.y ?? ny
@@ -438,12 +536,16 @@ export function PartCanvas({
       moveVertexTo(d.sel.index, d.ox + dx, d.oy + dy)
       return
     }
+    if (d.kind === 'move-shape-vertex' && d.sel?.type === 'shape-vertex') {
+      moveShapeVertexTo(d.sel.index, d.sel.vi, d.ox + dx, d.oy + dy)
+      return
+    }
     if (d.kind === 'move-obj' && d.sel) {
       const x = d.ox + dx
       const y = d.oy + dy
       if (d.sel.type === 'pin') movePinTo(d.sel.hi, d.sel.pi, x, y)
       else if (d.sel.type === 'hole') moveHoleTo(d.sel.index, x, y)
-      else if (d.sel.type === 'feature') moveFeatureTo(d.sel.index, x, y)
+      else if (d.sel.type === 'shape') moveShapeTo(d.sel.index, x, y)
       else if (d.sel.type === 'label') moveLabelTo(d.sel.index, x, y)
       else if (d.sel.type === 'image') moveImage(x, y)
     }
@@ -470,6 +572,16 @@ export function PartCanvas({
       return { scale, tx: local.x - wx * scale, ty: local.y - wy * scale }
     })
   }
+  /** Zoom by a factor about the canvas centre (the zoom buttons). */
+  const zoomBy = (factor: number): void =>
+    setView((v) => {
+      const scale = Math.min(4, Math.max(0.4, v.scale * factor))
+      const cx = VIEW_W / 2
+      const cy = VIEW_H / 2
+      const wx = (cx - v.tx) / v.scale
+      const wy = (cy - v.ty) / v.scale
+      return { scale, tx: cx - wx * scale, ty: cy - wy * scale }
+    })
 
   // --- board outline path ---------------------------------------------------
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
@@ -496,7 +608,7 @@ export function PartCanvas({
 
   const isSel = (s: CanvasSelection): boolean => !!selection && JSON.stringify(selection) === JSON.stringify(s)
 
-  return (
+  const svg = (
     <svg
       ref={svgRef}
       className={`pcv__svg${interactive ? ' pcv__svg--interactive' : ''} pcv__tool-${tool}`}
@@ -559,47 +671,118 @@ export function PartCanvas({
             />
           ))}
 
-        {/* Layer 3: pins */}
+        {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
             const size = 12
+            const cx = px(rp.x)
+            const cy = py(rp.y)
+            const stroke = sel ? '#fff' : '#0008'
+            const sw = sel ? 3 : 1
+            const shape = pinShapeOf(rp.pin)
+            let pad: JSX.Element
+            if (shape === 'round') {
+              pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
+            } else if (shape === 'castellated') {
+              // A castellated edge pad: a square with a plated half-hole notched
+              // into the outward edge (the side facing off the board).
+              const edgeX = rp.x < 0.5 ? cx - size / 2 : cx + size / 2
+              pad = (
+                <>
+                  <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
+                  <circle cx={edgeX} cy={cy} r={size / 2 - 2} fill="var(--bc-mat, #0c0f12)" />
+                </>
+              )
+            } else if (shape === 'header') {
+              // A through-hole header pad: copper annular ring with the drill hole.
+              pad = (
+                <>
+                  <circle cx={cx} cy={cy} r={size / 2} fill="#c79a4e" stroke={stroke} strokeWidth={sw} />
+                  <circle cx={cx} cy={cy} r={size / 2 - 3.5} fill="var(--bc-mat, #0c0f12)" />
+                </>
+              )
+            } else {
+              pad = (
+                <>
+                  <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
+                  <circle cx={cx} cy={cy} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                </>
+              )
+            }
+            const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
             const anchor = rp.x < 0.5 ? 'start' : 'end'
             const ldx = rp.x < 0.5 ? size : -size
+            const lx = cx + ldx
+            const tw = text.length * 6.2 + 6 // approx width of the mono label
+            const bgX = anchor === 'start' ? lx - 3 : lx - tw + 3
             return (
               <g key={`p${i}`}>
-                {rp.pin.castellated ? (
-                  <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={size / 2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
-                ) : (
+                {pad}
+                {text && (
                   <>
-                    <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
-                    <circle cx={px(rp.x)} cy={py(rp.y)} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                    <rect x={bgX} y={cy - 8} width={tw} height={16} rx={2} className="pcv__label-bg" />
+                    <text x={lx} y={cy + 4} className="pcv__pin-label" textAnchor={anchor}>
+                      {text}
+                    </text>
                   </>
                 )}
-                <text x={px(rp.x) + ldx} y={py(rp.y) + 4} className="pcv__pin-label" textAnchor={anchor}>
-                  {rp.pin.number != null ? `${rp.pin.number} ` : ''}
-                  {rp.pin.label || rp.pin.name}
-                </text>
               </g>
             )
           })}
 
-        {/* Layer 4a: component rectangles */}
+        {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&
-          features.map((f, i) => {
-            const sel = isSel({ type: 'feature', index: i })
+          features.map((f, i) => (
+            <g key={`f${i}`} style={{ pointerEvents: 'none' }}>
+              <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke="#0006" />
+              <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
+                {f.label}
+              </text>
+            </g>
+          ))}
+
+        {/* Layer 4b: component shapes (rect / circle / polygon) */}
+        {visible.components &&
+          shapes.map((s, i) => {
+            const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
+            const fill = s.fill ?? DEFAULT_SHAPE_FILL
+            const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
+            const sw = (s.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH) + (isSel({ type: 'shape', index: i }) ? 1.5 : 0)
+            let el: JSX.Element
+            let lcx: number
+            let lcy: number
+            if (s.kind === 'circle') {
+              const r = (s.r ?? 0.08) * box.w
+              el = <circle cx={px(s.x)} cy={py(s.y)} r={r} fill={fill} stroke={stroke} strokeWidth={sw} />
+              lcx = px(s.x)
+              lcy = py(s.y)
+            } else if (s.kind === 'polygon') {
+              const pts = s.points ?? []
+              el = <polygon points={pts.map((p) => `${px(p.x)},${py(p.y)}`).join(' ')} fill={fill} stroke={stroke} strokeWidth={sw} />
+              lcx = pts.length ? px(pts.reduce((a, p) => a + p.x, 0) / pts.length) : px(s.x)
+              lcy = pts.length ? py(pts.reduce((a, p) => a + p.y, 0) / pts.length) : py(s.y)
+            } else {
+              const w = (s.w ?? 0.2) * box.w
+              const h = (s.h ?? 0.15) * box.h
+              el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={3} fill={fill} stroke={stroke} strokeWidth={sw} />
+              lcx = px(s.x) + w / 2
+              lcy = py(s.y) + h / 2
+            }
             return (
-              <g key={`f${i}`}>
-                <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke={sel ? '#fff' : '#0006'} strokeWidth={sel ? 2.5 : 1} />
-                <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
-                  {f.label}
-                </text>
+              <g key={`s${i}`}>
+                {el}
+                {s.label && (
+                  <text x={lcx} y={lcy} className="pcv__feat-label">
+                    {s.label}
+                  </text>
+                )}
               </g>
             )
           })}
 
-        {/* Layer 4b: text labels */}
+        {/* Layer 4c: text labels */}
         {visible.components &&
           labels.map((l, i) => (
             <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
@@ -622,15 +805,51 @@ export function PartCanvas({
           </g>
         )}
 
-        {/* Polygon vertex handles (shape tool) */}
+        {/* Board polygon vertex handles (shape tool) */}
         {interactive &&
           tool === 'shape' &&
           usePolygon &&
           (part.polygon ?? []).map((p, i) => (
             <rect key={`v${i}`} x={px(p.x) - 5} y={py(p.y) - 5} width={10} height={10} fill={isSel({ type: 'vertex', index: i }) ? '#fff' : '#4ea1ff'} stroke="#0008" />
           ))}
+
+        {/* Component-polygon vertex handles (a polygon shape is selected) */}
+        {interactive &&
+          (selection?.type === 'shape' || selection?.type === 'shape-vertex') &&
+          shapes[selection.index]?.kind === 'polygon' &&
+          (shapes[selection.index].points ?? []).map((p, vi) => (
+            <rect
+              key={`sv${vi}`}
+              x={px(p.x) - 5}
+              y={py(p.y) - 5}
+              width={10}
+              height={10}
+              fill={isSel({ type: 'shape-vertex', index: selection.index, vi }) ? '#fff' : '#4ea1ff'}
+              stroke="#0008"
+            />
+          ))}
       </g>
     </svg>
+  )
+
+  return (
+    <div className="pcv__wrap">
+      {svg}
+      {interactive && (
+        <div className="pcv__zoom" aria-label="Zoom controls">
+          <button type="button" className="pcv__zoom-btn" onClick={() => zoomBy(1 / 1.2)} title="Zoom out" aria-label="Zoom out">
+            −
+          </button>
+          <span className="pcv__zoom-pct">{Math.round(view.scale * 100)}%</span>
+          <button type="button" className="pcv__zoom-btn" onClick={() => zoomBy(1.2)} title="Zoom in" aria-label="Zoom in">
+            +
+          </button>
+          <button type="button" className="pcv__zoom-btn" onClick={() => setView({ tx: 0, ty: 0, scale: 1 })} title="Reset view" aria-label="Reset view">
+            ⤢
+          </button>
+        </div>
+      )}
+    </div>
   )
 }
 

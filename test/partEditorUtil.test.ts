@@ -5,11 +5,13 @@ import {
   normalisePart,
   partToBoardDefinition,
   pinNames,
+  pinShapeOf,
   resolvedPins,
   sanitisePartId,
   snapToGrid,
   validatePart,
-  withPinPositions
+  withPinPositions,
+  withShapesFromFeatures
 } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -229,6 +231,46 @@ describe('free-placement positions', () => {
     expect(part.shape).toEqual({ kind: 'polygon', cornerRadius: 0.5 }) // clamped
     expect(part.imageLayer?.opacity).toBe(1) // clamped to 0..1
     expect(part.labels).toHaveLength(1) // empty-text label dropped
+  })
+})
+
+describe('pin + component shapes', () => {
+  it('pinShapeOf honours the legacy castellated flag and the explicit shape', () => {
+    expect(pinShapeOf({ name: 'A', type: 'io' })).toBe('square')
+    expect(pinShapeOf({ name: 'A', type: 'io', castellated: true })).toBe('castellated')
+    expect(pinShapeOf({ name: 'A', type: 'io', castellated: true, shape: 'round' })).toBe('round')
+    expect(pinShapeOf({ name: 'A', type: 'io', shape: 'header' })).toBe('header')
+  })
+
+  it('withShapesFromFeatures migrates legacy feature chips to component shapes', () => {
+    const migrated = withShapesFromFeatures({
+      id: 'p',
+      name: 'P',
+      features: [{ label: 'RP2350', kind: 'mcu', x: 0.3, y: 0.4, w: 0.4, h: 0.2 }],
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }]
+    })
+    expect(migrated.features).toBeUndefined()
+    expect(migrated.shapes).toHaveLength(1)
+    expect(migrated.shapes?.[0]).toMatchObject({ kind: 'rect', label: 'RP2350', w: 0.4, h: 0.2 })
+  })
+
+  it('normalisePart cleans component shapes (kind, colours, geometry defaults)', () => {
+    const n = normalisePart({
+      id: 'p',
+      name: 'P',
+      shapes: [
+        { kind: 'rect', x: 0.1, y: 0.1 }, // missing w/h → defaulted
+        { kind: 'circle', x: 0.5, y: 0.5 }, // missing r → defaulted
+        // @ts-expect-error bad kind coerced to rect
+        { kind: 'banana', x: 0.2, y: 0.2 }
+      ],
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }]
+    })
+    expect(n.shapes?.[0]).toMatchObject({ kind: 'rect' })
+    expect(n.shapes?.[0].w).toBeGreaterThan(0)
+    expect(n.shapes?.[0].fill).toMatch(/^#/)
+    expect(n.shapes?.[1].r).toBeGreaterThan(0)
+    expect(n.shapes?.[2].kind).toBe('rect')
   })
 })
 

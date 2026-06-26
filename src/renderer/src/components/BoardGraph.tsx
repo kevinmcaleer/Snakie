@@ -99,6 +99,8 @@ export interface BoardGraphProps {
   onClose?: () => void
   /** Enter the Board Creator. When set, the gold edit knob is shown. */
   onEnterCreator?: () => void
+  /** Open the Parts Library (the user's parts). When set, a chip button shows. */
+  onOpenParts?: () => void
   /** Open the user's boards folder (wired in the floating window). */
   onOpenBoardsFolder?: () => void
 }
@@ -297,6 +299,7 @@ export function BoardGraph({
   asWindow = false,
   onClose,
   onEnterCreator,
+  onOpenParts,
   onOpenBoardsFolder
 }: BoardGraphProps): JSX.Element {
   const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
@@ -630,6 +633,22 @@ export function BoardGraph({
                   strokeWidth="1.8"
                   strokeLinejoin="round"
                 />
+              </svg>
+            </button>
+          )}
+          {onOpenParts && (
+            <button
+              type="button"
+              className="boardgraph__key"
+              onClick={onOpenParts}
+              title="Open your Parts Library (browse + author parts)"
+              aria-label="Open the Parts Library"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <g fill="none" stroke="currentColor" strokeWidth="1.4">
+                  <rect x="4.5" y="4.5" width="7" height="7" fill="currentColor" stroke="none" />
+                  <path d="M2 6h2.5M2 9h2.5M11.5 6H14M11.5 9H14M6 2v2.5M9 2v2.5M6 11.5V14M9 11.5V14" />
+                </g>
               </svg>
             </button>
           )}

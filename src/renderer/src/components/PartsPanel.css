@@ -237,6 +237,21 @@
   border-color: #9a6b1e;
 }
 
+.pl__badge--mine {
+  cursor: default;
+  color: var(--accent-2, #46e06a);
+  border-color: currentColor;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* The user's own library gets a subtle accent rail so it reads as "yours". */
+.pl__lib--mine {
+  border-left: 2px solid var(--accent-2, #46e06a);
+  padding-left: 0.4rem;
+  margin-left: -0.2rem;
+}
+
 .pl__parts {
   list-style: none;
   margin: 0;
@@ -423,4 +438,67 @@
   font-family: var(--font-mono);
   font-size: 0.62rem;
   color: var(--text-muted);
+}
+
+/* --- Board-window Parts mode chrome (board-main.tsx) --- */
+.bw-parts {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-elevated);
+  color: var(--text);
+}
+
+.bw-parts__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
+  border-bottom: var(--border-w) solid var(--border);
+  -webkit-app-region: drag;
+  app-region: drag;
+}
+
+.bw-parts__title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.bw-parts__title-main {
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+}
+
+.bw-parts__title-sub {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.bw-parts__done {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.28rem 0.7rem;
+  cursor: pointer;
+}
+
+.bw-parts__done:hover {
+  border-color: var(--text-muted);
+}
+
+.bw-parts__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
 }

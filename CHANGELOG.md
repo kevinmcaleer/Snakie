@@ -28,12 +28,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **mounting holes cut through** the PCB *and* the image, and you **can't drop a
   pin inside a hole**. The board outline is a **rectangle** (corner radius) or a
   **polygon**; every pin/hole/component is **free-placed** by dragging. Each layer
-  has a visibility toggle (hide the PCB image → footprint view). A contextual
-  inspector edits the selected object (pin number / GPIO name / type pwr·gnd·io /
-  IO capabilities digital·pwm·adc·spi·i2c / castellated-or-regular), **board
-  dimensions** are fields, with a **2.54 mm grid + snap**. The YAML round-trips,
-  so a saved part re-opens unchanged. See `docs/part-editor.md`. (Image **crop** +
-  magic-wand background removal are the next pass.)
+  has a visibility toggle (hide the PCB image → footprint view) and a
+  **collapsible list of its items**. The properties live in a slim **right-hand
+  panel** so the canvas dominates; an **icon toolbar** (Select · Pan · Fit · a
+  **Shapes** dropdown · Text) plus an in-canvas **zoom control** drive it.
+  Components are coloured **shapes** — **rectangle / circle / polygon** — with
+  **fill / outline colour + outline width** wells; pins choose a **pad shape**
+  (**square · round · castellated · header hole**) and carry a **solid label
+  background** so labels stay legible over the photo. A contextual inspector edits
+  the selected object (pin number / GPIO name / type pwr·gnd·io / IO capabilities
+  digital·pwm·adc·spi·i2c), **board dimensions** are fields, with a **2.54 mm grid
+  + snap**. The YAML round-trips, so a saved part re-opens unchanged. The Parts
+  Library + Part Editor live in the **Board Viewer** window (open the board view,
+  then the **chip** button in its title bar) — the only place that uses them;
+  parts you create go to your own **My Parts** library (listed first, badged
+  *Your library*, and shown as the editor's "Saved to" target). See
+  `docs/part-editor.md`. (Image **crop** + magic-wand background removal are the
+  next pass.)
 - **Board/part images render under the locked-down CSP.** Added `img-src 'self'
   data:` to the renderer Content-Security-Policy so `data:`-URL images (the Part
   Editor's board photo and the Board View's uploaded board image) actually paint —

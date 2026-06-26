@@ -25,7 +25,11 @@ import './PartsPanel.css'
  * overlay without this panel threading a callback up the tree.
  */
 
-/** Window CustomEvent that asks AppShell to open the Part Editor overlay. */
+/** The id of the auto-created library that holds the user's own authored parts
+ *  (mirrors LOCAL_LIBRARY_ID in src/main/parts/library.ts). */
+export const LOCAL_LIBRARY_ID = 'my-parts'
+
+/** Window CustomEvent that asks the host to open the Part Editor overlay. */
 export const OPEN_PART_EDITOR_EVENT = 'snakie:open-part-editor'
 /** Window CustomEvent AppShell fires after the editor saves/closes → refresh. */
 export const PARTS_CHANGED_EVENT = 'snakie:parts-changed'
@@ -187,6 +191,16 @@ export function PartsPanel(): JSX.Element {
     return m
   }, [updates])
 
+  // Show the user's OWN library ("My Parts") first so it's the obvious home for
+  // anything they create.
+  const orderedLibraries = useMemo(
+    () =>
+      [...libraries].sort((a, b) =>
+        a.id === LOCAL_LIBRARY_ID ? -1 : b.id === LOCAL_LIBRARY_ID ? 1 : 0
+      ),
+    [libraries]
+  )
+
   return (
     <div className="pl">
       <div className="pl__toolbar">
@@ -277,13 +291,14 @@ export function PartsPanel(): JSX.Element {
           </div>
         )}
         {!loading &&
-          libraries.map((lib) => {
+          orderedLibraries.map((lib) => {
             const parts = q ? lib.parts.filter((p) => matches.some((m) => m.libraryId === lib.id && m.part.id === p.id)) : lib.parts
             if (q && parts.length === 0) return null
             const isCollapsed = collapsed[lib.id]
             const update = updatableById.get(lib.id)
+            const isLocal = lib.id === LOCAL_LIBRARY_ID
             return (
-              <div className="pl__lib" key={lib.id}>
+              <div className={`pl__lib${isLocal ? ' pl__lib--mine' : ''}`} key={lib.id}>
                 <div className="pl__lib-head">
                   <button
                     type="button"
@@ -293,6 +308,7 @@ export function PartsPanel(): JSX.Element {
                   >
                     <span className="pl__caret">{isCollapsed ? '▸' : '▾'}</span>
                     <span className="pl__lib-name">{lib.name}</span>
+                    {isLocal && <span className="pl__badge pl__badge--mine">Your library</span>}
                     <span className="pl__lib-count">{lib.parts.length}</span>
                   </button>
                   {update && (

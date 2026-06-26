@@ -10,28 +10,36 @@ import {
 import {
   CAPABILITIES,
   CAPABILITY_LABEL,
+  COMPONENT_SHAPES,
+  COMPONENT_SHAPE_LABEL,
   PACKAGES,
   PART_EDGES,
+  PIN_SHAPES,
+  PIN_SHAPE_LABEL,
   PIN_TYPES,
   PIN_TYPE_LABEL,
   blankPart,
   normalisePart,
   pinNames,
+  pinShapeOf,
   resolvedPins,
   sanitisePartId,
   validatePart,
-  withPinPositions
+  withPinPositions,
+  withShapesFromFeatures
 } from './part-editor.util'
 import type {
+  ComponentShape,
+  ComponentShapeKind,
   ImageLayer,
   MountingHole,
   PartDefinition,
-  PartFeature,
   PartHeader,
   PartLabel,
   PartLibrary,
   PartPin,
   PartPinCapability,
+  PartPinShape,
   PartPinType
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
@@ -77,6 +85,93 @@ interface Status {
   text: string
 }
 
+/** Inline pixel-ish toolbar icons (currentColor, crisp). */
+const ICON: Record<string, JSX.Element> = {
+  select: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path d="M3 2l9 4.5-3.6 1.1L7 12z" fill="currentColor" />
+    </svg>
+  ),
+  pan: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.4">
+        <path d="M8 1.5v13M1.5 8h13" />
+        <path d="M8 1.5l-2 2M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2" />
+      </g>
+    </svg>
+  ),
+  fit: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6">
+        <path d="M2 5V2h3M11 2h3v3M14 11v3h-3M5 14H2v-3" />
+      </g>
+    </svg>
+  ),
+  text: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <path d="M3 3h10v2.2h-1.1V4.2H8.6v7.6H10V13H6v-1.2h1.4V4.2H4.1v1H3z" fill="currentColor" />
+    </svg>
+  ),
+  shapes: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.4">
+        <rect x="1.5" y="6.5" width="6" height="6" />
+        <circle cx="11" cy="5" r="3.2" />
+      </g>
+    </svg>
+  )
+}
+
+/** Tool ids for each component shape kind the Shapes menu adds. */
+const SHAPE_TOOL: Record<ComponentShapeKind, CanvasTool> = {
+  rect: 'rect',
+  circle: 'circle',
+  polygon: 'cpoly'
+}
+
+/** A small dropdown in the toolbar that arms a component-shape add tool. */
+function ShapesMenu({ tool, setTool }: { tool: CanvasTool; setTool: (t: CanvasTool) => void }): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const active = tool === 'rect' || tool === 'circle' || tool === 'cpoly'
+  return (
+    <div className="pe__menu">
+      <button
+        type="button"
+        className={`pe__iconbtn${active ? ' is-active' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+        title="Add a component shape"
+        aria-haspopup="menu"
+        aria-expanded={open}
+      >
+        {ICON.shapes}
+        <span className="pe__caret">▾</span>
+      </button>
+      {open && (
+        <>
+          <button type="button" className="pe__menu-backdrop" aria-hidden="true" tabIndex={-1} onClick={() => setOpen(false)} />
+          <ul className="pe__menu-list" role="menu">
+            {COMPONENT_SHAPES.map((k) => (
+              <li key={k} role="none">
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={`pe__menu-item${tool === SHAPE_TOOL[k] ? ' is-active' : ''}`}
+                  onClick={() => {
+                    setTool(SHAPE_TOOL[k])
+                    setOpen(false)
+                  }}
+                >
+                  {COMPONENT_SHAPE_LABEL[k]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function PartEditor({
   libraryId,
   initial,
@@ -85,11 +180,16 @@ export function PartEditor({
   onClose,
   onSaved
 }: PartEditorProps): JSX.Element {
-  // Seed with every pin given an absolute x/y (so the canvas + inspector always
-  // have real positions — see withPinPositions).
-  const [part, setPart] = useState<PartDefinition>(() => withPinPositions(initial ?? blankPart()))
+  // Seed with every pin given an absolute x/y and legacy feature chips migrated
+  // into editable component shapes (see withPinPositions / withShapesFromFeatures).
+  const [part, setPart] = useState<PartDefinition>(() =>
+    withShapesFromFeatures(withPinPositions(initial ?? blankPart()))
+  )
   const [libId, setLibId] = useState<string>(libraryId)
   const [openedId, setOpenedId] = useState<string | null>(initial?.id ?? null)
+  // The library the part was opened/last-saved from — so the collision guard only
+  // stays silent when saving back to the SAME library with the same id.
+  const [openedLibId, setOpenedLibId] = useState<string>(libraryId)
   const [propRows, setPropRows] = useState<[string, string][]>(() =>
     Object.entries(initial?.properties ?? {})
   )
@@ -163,8 +263,17 @@ export function PartEditor({
       }))
     } else if (sel.type === 'hole') {
       patch({ mountingHoles: (part.mountingHoles ?? []).filter((_, i) => i !== sel.index) })
-    } else if (sel.type === 'feature') {
-      patch({ features: (part.features ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'shape') {
+      patch({ shapes: (part.shapes ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'shape-vertex') {
+      // Delete a polygon vertex (keep ≥ 3); falls back to deleting nothing.
+      patch({
+        shapes: (part.shapes ?? []).map((s, i) =>
+          i === sel.index && (s.points?.length ?? 0) > 3
+            ? { ...s, points: (s.points ?? []).filter((_, v) => v !== sel.vi) }
+            : s
+        )
+      })
     } else if (sel.type === 'label') {
       patch({ labels: (part.labels ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'vertex') {
@@ -178,7 +287,7 @@ export function PartEditor({
 
   // --- persistence ----------------------------------------------------------
   const newPart = (): void => {
-    setPart(withPinPositions(blankPart()))
+    setPart(withShapesFromFeatures(withPinPositions(blankPart())))
     setPropRows([])
     setOpenedId(null)
     setSelection(null)
@@ -201,9 +310,11 @@ export function PartEditor({
     } catch {
       // Fall back to the parts we were given if the read fails.
     }
-    const collision =
-      sanitisePartId(openedId ?? '') !== clean.id &&
-      destParts.some((p) => sanitisePartId(p.id) === clean.id)
+    // Only suppress the warning when saving back to the SAME library + id we
+    // opened (an in-place edit); a same-id part in a DIFFERENT library is a real
+    // collision we must not silently overwrite.
+    const sameTarget = openedLibId === libId && sanitisePartId(openedId ?? '') === clean.id
+    const collision = !sameTarget && destParts.some((p) => sanitisePartId(p.id) === clean.id)
     if (collision) {
       setStatus({
         kind: 'error',
@@ -215,6 +326,7 @@ export function PartEditor({
     const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
     if (res.ok) {
       setOpenedId(clean.id)
+      setOpenedLibId(res.libraryId ?? libId)
       setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId}.` })
       onSaved(res.libraryId ?? libId, res.id ?? clean.id)
     } else {
@@ -246,13 +358,15 @@ export function PartEditor({
             Schematic
           </button>
         </div>
-        <label className="pe__libsel" title="Library to save into">
-          <span>Library</span>
+        <label className="pe__libsel" title="The parts library this part is saved into">
+          <span>Saved to</span>
           <select value={libId} onChange={(e) => setLibId(e.target.value)}>
-            {!libraries.some((l) => l.id === 'my-parts') && <option value="my-parts">My Parts</option>}
+            {!libraries.some((l) => l.id === 'my-parts') && (
+              <option value="my-parts">My Parts (your library)</option>
+            )}
             {libraries.map((l) => (
               <option key={l.id} value={l.id}>
-                {l.name}
+                {l.id === 'my-parts' ? `${l.name} (your library)` : l.name}
               </option>
             ))}
           </select>
@@ -279,46 +393,22 @@ export function PartEditor({
       <div className="pe__body">
         {view === 'breadboard' ? (
           <>
-            <div className="pe__panels">
-              <LayersPanel
-                part={part}
-                visible={visible}
-                setVisible={setVisible}
-                tool={tool}
-                setTool={setTool}
-                fileInputRef={fileInputRef}
-                onPickImage={onPickImage}
-                patch={patch}
-              />
-              <Inspector
-                part={part}
-                selection={selection}
-                names={names}
-                propRows={propRows}
-                setProps={setProps}
-                detailsOpen={detailsOpen}
-                setDetailsOpen={setDetailsOpen}
-                fileId={fileId}
-                fileInputRef={fileInputRef}
-                onPickImage={onPickImage}
-                removeImage={removeImage}
-                setImageLayer={setImageLayer}
-                patch={patch}
-                setPart={setPart}
-                deleteSelection={deleteSelection}
-              />
-            </div>
-
+            {/* Canvas takes the lion's share on the LEFT */}
             <div className="pe__canvaspane">
               <div className="pe__toolbar">
-                <button type="button" className={`pe__tool${tool === 'select' ? ' is-active' : ''}`} onClick={() => setTool('select')} title="Select & move objects">
-                  Select
+                <button type="button" className={`pe__iconbtn${tool === 'select' ? ' is-active' : ''}`} onClick={() => setTool('select')} title="Select & move objects" aria-label="Select">
+                  {ICON.select}
                 </button>
-                <button type="button" className={`pe__tool${tool === 'move' ? ' is-active' : ''}`} onClick={() => setTool('move')} title="Drag to pan; scroll to zoom">
-                  Pan
+                <button type="button" className={`pe__iconbtn${tool === 'move' ? ' is-active' : ''}`} onClick={() => setTool('move')} title="Pan (drag); scroll to zoom" aria-label="Pan">
+                  {ICON.pan}
                 </button>
-                <button type="button" className="pe__tool" onClick={() => setFitSignal((n) => n + 1)} title="Reset pan / zoom">
-                  Fit
+                <button type="button" className="pe__iconbtn" onClick={() => setFitSignal((n) => n + 1)} title="Fit / reset the view" aria-label="Fit">
+                  {ICON.fit}
+                </button>
+                <span className="pe__divider" />
+                <ShapesMenu tool={tool} setTool={setTool} />
+                <button type="button" className={`pe__iconbtn${tool === 'text' ? ' is-active' : ''}`} onClick={() => setTool('text')} title="Add a text label" aria-label="Text">
+                  {ICON.text}
                 </button>
                 <span className="pe__spacer" />
                 <label className="pe__toolcheck" title="Show the pin-spacing grid">
@@ -342,6 +432,39 @@ export function PartEditor({
                   resetSignal={fitSignal}
                 />
               </div>
+            </div>
+
+            {/* Properties on the RIGHT (~1/4 width) */}
+            <div className="pe__panels pe__panels--right">
+              <LayersPanel
+                part={part}
+                visible={visible}
+                setVisible={setVisible}
+                tool={tool}
+                setTool={setTool}
+                selection={selection}
+                setSelection={setSelection}
+                fileInputRef={fileInputRef}
+                onPickImage={onPickImage}
+                patch={patch}
+              />
+              <Inspector
+                part={part}
+                selection={selection}
+                names={names}
+                propRows={propRows}
+                setProps={setProps}
+                detailsOpen={detailsOpen}
+                setDetailsOpen={setDetailsOpen}
+                fileId={fileId}
+                fileInputRef={fileInputRef}
+                onPickImage={onPickImage}
+                removeImage={removeImage}
+                setImageLayer={setImageLayer}
+                patch={patch}
+                setPart={setPart}
+                deleteSelection={deleteSelection}
+              />
             </div>
           </>
         ) : (
@@ -372,6 +495,8 @@ interface LayersPanelProps {
   setVisible: React.Dispatch<React.SetStateAction<LayerVisibility>>
   tool: CanvasTool
   setTool: (t: CanvasTool) => void
+  selection: CanvasSelection
+  setSelection: (s: CanvasSelection) => void
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
   patch: (p: Partial<PartDefinition>) => void
@@ -379,8 +504,8 @@ interface LayersPanelProps {
 
 /**
  * The Layers panel — the board "stack", top → bottom: Components, Pins, Mounting
- * holes, PCB. Each layer has a visibility toggle + a count + add affordances; the
- * active layer (derived from the current tool) is highlighted.
+ * holes, PCB. Each layer has a visibility toggle, a count, an add affordance, and
+ * a collapsible list of its items (click one to select it on the canvas).
  */
 function LayersPanel({
   part,
@@ -388,27 +513,41 @@ function LayersPanel({
   setVisible,
   tool,
   setTool,
+  selection,
+  setSelection,
   fileInputRef,
   onPickImage,
   patch
 }: LayersPanelProps): JSX.Element {
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const pins = resolvedPins(part)
+  const holes = part.mountingHoles ?? []
+  const shapes = part.shapes ?? []
+  const labels = part.labels ?? []
   const counts = {
-    components: (part.features?.length ?? 0) + (part.labels?.length ?? 0),
-    pins: (part.headers ?? []).reduce((n, h) => n + h.pins.length, 0),
-    holes: part.mountingHoles?.length ?? 0,
+    components: shapes.length + labels.length,
+    pins: pins.length,
+    holes: holes.length,
     image: part.imageData ? 1 : 0
   }
-  const toggle = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
+  const toggleVis = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
   const eye = (key: keyof LayerVisibility): JSX.Element => (
     <input
       type="checkbox"
       className="pe__eye"
       checked={visible[key]}
-      onChange={() => toggle(key)}
+      onChange={() => toggleVis(key)}
       title={visible[key] ? 'Hide layer' : 'Show layer'}
       aria-label={`${visible[key] ? 'Hide' : 'Show'} layer`}
     />
   )
+  const isOpen = (id: string): boolean => !collapsed[id]
+  const caret = (id: string): JSX.Element => (
+    <button type="button" className="pe__layer-caret" onClick={() => setCollapsed((c) => ({ ...c, [id]: !c[id] }))} aria-expanded={isOpen(id)} title={isOpen(id) ? 'Collapse' : 'Expand'}>
+      {isOpen(id) ? '▾' : '▸'}
+    </button>
+  )
+  const selEq = (a: CanvasSelection): boolean => JSON.stringify(a) === JSON.stringify(selection)
   const setShape = (kind: 'rect' | 'polygon'): void => {
     if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
       patch({
@@ -423,76 +562,110 @@ function LayersPanel({
     } else {
       patch({ shape: { kind } })
     }
-    // Leave the Shape tool when switching to a rectangle, so a stale 'shape' tool
-    // can't re-add a vertex (and silently flip the board back to a polygon).
     if (kind === 'rect' && tool === 'shape') setTool('select')
   }
-  const componentsActive = tool === 'rect' || tool === 'text'
-  const pcbActive = tool === 'shape'
 
   return (
     <section className="pe__section pe__layers">
       <h3 className="pe__h">Layers</h3>
 
       {/* Components (top) */}
-      <div className={`pe__layer${componentsActive ? ' is-active' : ''}`}>
+      <div className={`pe__layer${tool === 'rect' || tool === 'circle' || tool === 'cpoly' || tool === 'text' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
+          {caret('components')}
           {eye('components')}
           <span className="pe__layer-name">Components</span>
           <span className="pe__layer-count">{counts.components}</span>
         </div>
-        <div className="pe__layer-tools">
-          <button type="button" className={`pe__chip${tool === 'rect' ? ' is-active' : ''}`} onClick={() => setTool('rect')} title="Click the board to add a component rectangle">
-            ＋ Rect
-          </button>
-          <button type="button" className={`pe__chip${tool === 'text' ? ' is-active' : ''}`} onClick={() => setTool('text')} title="Click the board to add a text label">
-            ＋ Text
-          </button>
-        </div>
+        {isOpen('components') && (
+          <ul className="pe__layer-list">
+            {counts.components === 0 && <li className="pe__layer-empty">Add shapes from the toolbar ▸ Shapes.</li>}
+            {shapes.map((s, i) => {
+              // Stay highlighted while editing one of this shape's polygon vertices.
+              const shapeActive =
+                (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === i
+              return (
+                <li key={`s${i}`}>
+                  <button type="button" className={`pe__item${shapeActive ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'shape', index: i })}>
+                    <span className="pe__item-name">{s.label || s.kind}</span>
+                    <span className="pe__item-sub">{s.kind}</span>
+                  </button>
+                </li>
+              )
+            })}
+            {labels.map((l, i) => (
+              <li key={`l${i}`}>
+                <button type="button" className={`pe__item${selEq({ type: 'label', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'label', index: i })}>
+                  <span className="pe__item-name">{l.text || '(label)'}</span>
+                  <span className="pe__item-sub">text</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Pins */}
       <div className={`pe__layer${tool === 'pin' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
+          {caret('pins')}
           {eye('pins')}
           <span className="pe__layer-name">Pins</span>
           <span className="pe__layer-count">{counts.pins}</span>
-        </div>
-        <div className="pe__layer-tools">
-          <button type="button" className={`pe__chip${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
-            ＋ Pin
+          <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
+            ＋
           </button>
         </div>
+        {isOpen('pins') && (
+          <ul className="pe__layer-list">
+            {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
+            {pins.map((rp) => (
+              <li key={`p${rp.hi}-${rp.pi}`}>
+                <button type="button" className={`pe__item${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+                  <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
+                  <span className="pe__item-sub">{rp.pin.type}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Mounting holes */}
       <div className={`pe__layer${tool === 'hole' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
+          {caret('holes')}
           {eye('holes')}
           <span className="pe__layer-name">Mounting holes</span>
           <span className="pe__layer-count">{counts.holes}</span>
-        </div>
-        <div className="pe__layer-tools">
-          <button type="button" className={`pe__chip${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
-            ＋ Hole
+          <button type="button" className={`pe__chip pe__chip--add${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
+            ＋
           </button>
         </div>
+        {isOpen('holes') && (
+          <ul className="pe__layer-list">
+            {holes.length === 0 && <li className="pe__layer-empty">No holes yet.</li>}
+            {holes.map((h, i) => (
+              <li key={`h${i}`}>
+                <button type="button" className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
+                  <span className="pe__item-name">Hole {i + 1}</span>
+                  <span className="pe__item-sub">⌀{h.diameter}mm</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* PCB (bottom) — shape + image live here */}
-      <div className={`pe__layer pe__layer--pcb${pcbActive ? ' is-active' : ''}`}>
+      <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {eye('image')}
           <span className="pe__layer-name">PCB / image</span>
           <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
         </div>
         <div className="pe__layer-tools">
-          <select
-            className="pe__chip-select"
-            value={part.shape?.kind ?? 'rect'}
-            onChange={(e) => setShape(e.target.value as 'rect' | 'polygon')}
-            title="Board outline shape"
-          >
+          <select className="pe__chip-select" value={part.shape?.kind ?? 'rect'} onChange={(e) => setShape(e.target.value as 'rect' | 'polygon')} title="Board outline shape">
             <option value="rect">Rectangle</option>
             <option value="polygon">Polygon</option>
           </select>
@@ -505,13 +678,7 @@ function LayersPanel({
             {part.imageData ? 'Replace image' : '＋ Image'}
           </button>
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/svg+xml"
-          style={{ display: 'none' }}
-          onChange={onPickImage}
-        />
+        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
       <p className="pe__hint pe__hint--muted">PCB on the bottom; holes cut through it; pins &amp; components on top.</p>
     </section>
@@ -711,8 +878,22 @@ function SelectionInspector({
               ))}
             </div>
           )}
-          <label className="pe__check">
-            <input type="checkbox" checked={!!pin.castellated} onChange={(e) => updatePin({ castellated: e.target.checked })} /> Castellated
+          <label className="pe__field">
+            <span>Pad shape</span>
+            <select
+              value={pinShapeOf(pin)}
+              onChange={(e) => {
+                const shape = e.target.value as PartPinShape
+                // Keep the legacy `castellated` flag consistent with the shape.
+                updatePin({ shape, castellated: shape === 'castellated' ? true : undefined })
+              }}
+            >
+              {PIN_SHAPES.map((s) => (
+                <option key={s} value={s}>
+                  {PIN_SHAPE_LABEL[s]}
+                </option>
+              ))}
+            </select>
           </label>
           <div className="pe__row">
             {num('x', pin.x ?? 0, (v) => updatePin({ x: v }))}
@@ -735,36 +916,46 @@ function SelectionInspector({
         </div>
       )
     }
-  } else if (selection.type === 'feature') {
-    const feat = (part.features ?? [])[selection.index]
-    if (feat) {
-      title = 'Component'
-      const upd = (p: Partial<PartFeature>): void =>
-        patch({ features: (part.features ?? []).map((f, i) => (i === selection.index ? { ...f, ...p } : f)) })
+  } else if (selection.type === 'shape' || selection.type === 'shape-vertex') {
+    const si = selection.index
+    const shp = (part.shapes ?? [])[si]
+    if (shp) {
+      title = `Component (${shp.kind})`
+      const upd = (p: Partial<ComponentShape>): void =>
+        patch({ shapes: (part.shapes ?? []).map((s, i) => (i === si ? { ...s, ...p } : s)) })
+      const colour = (val: string | undefined, fallback: string, on: (v: string) => void): JSX.Element => (
+        <input type="color" value={/^#[0-9a-f]{6}$/i.test(val ?? '') ? (val as string) : fallback} onChange={(e) => on(e.target.value)} />
+      )
       body = (
         <>
+          <label className="pe__field">
+            <span>Label</span>
+            <input type="text" value={shp.label ?? ''} onChange={(e) => upd({ label: e.target.value })} placeholder="(optional)" />
+          </label>
           <div className="pe__row">
             <label className="pe__field">
-              <span>Label</span>
-              <input type="text" value={feat.label} onChange={(e) => upd({ label: e.target.value })} />
+              <span>Fill</span>
+              {colour(shp.fill, '#1c2227', (v) => upd({ fill: v }))}
             </label>
             <label className="pe__field">
-              <span>Kind</span>
-              <select value={feat.kind} onChange={(e) => upd({ kind: e.target.value as PartFeature['kind'] })}>
-                {(['chip', 'mcu', 'wifi', 'usb', 'led'] as const).map((k) => (
-                  <option key={k} value={k}>
-                    {k}
-                  </option>
-                ))}
-              </select>
+              <span>Outline</span>
+              {colour(shp.stroke, '#8a8f96', (v) => upd({ stroke: v }))}
+            </label>
+            <label className="pe__field">
+              <span>Width</span>
+              <input type="number" step="0.5" min="0" value={shp.strokeWidth ?? 1} onChange={(e) => upd({ strokeWidth: Number(e.target.value) })} />
             </label>
           </div>
           <div className="pe__row">
-            {num('x', feat.x, (v) => upd({ x: v }))}
-            {num('y', feat.y, (v) => upd({ y: v }))}
-            {num('w', feat.w, (v) => upd({ w: v }))}
-            {num('h', feat.h, (v) => upd({ h: v }))}
+            {num('x', shp.x, (v) => upd({ x: v }))}
+            {num('y', shp.y, (v) => upd({ y: v }))}
+            {shp.kind === 'rect' && num('w', shp.w ?? 0.2, (v) => upd({ w: v }))}
+            {shp.kind === 'rect' && num('h', shp.h ?? 0.15, (v) => upd({ h: v }))}
+            {shp.kind === 'circle' && num('r', shp.r ?? 0.08, (v) => upd({ r: v }))}
           </div>
+          {shp.kind === 'polygon' && (
+            <p className="pe__hint">Drag the polygon vertices on the canvas to reshape it.</p>
+          )}
         </>
       )
     }

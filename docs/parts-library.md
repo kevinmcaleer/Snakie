@@ -7,10 +7,16 @@ you can have any number of **libraries**, each holding many **parts**, and a
 master list of approved community libraries lives in a GitHub repo — so adding
 new parts is just **PRs against that repo**.
 
-Open it from the **Parts** icon in the activity bar (the IC chip). From there you
-can browse installed libraries, search across every part, inspect a part's
-footprint + pinout, author new parts (see [part-editor.md](part-editor.md)), and
-install / update community libraries.
+The Parts Library lives in the **Board Viewer** — it's only used by the
+board-viewer UX (parts get placed on the board) — so open the Board View window
+(the toolbar **board** button) and click the **chip** button in its title bar.
+From there you can browse installed libraries, search across every part, inspect a
+part's footprint + pinout, author new parts (see [part-editor.md](part-editor.md)),
+and install / update community libraries.
+
+Parts **you** create are saved into your own **My Parts** library (shown first,
+badged *Your library*); the part editor's "Saved to" selector makes the
+destination explicit.
 
 ## Where the files go
 

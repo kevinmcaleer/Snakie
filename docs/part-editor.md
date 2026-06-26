@@ -7,9 +7,11 @@ build an **accurate representation of a part** for the [Board Viewer](board.md).
 
 ## Opening it
 
-From the **Parts** view in the activity bar:
+Open the **Board View** window, click the **chip** button in its title bar to
+enter the **Parts Library**, then:
 
-- **+ New part** — start a blank part (saved into your local **My Parts** library).
+- **+ New part** — start a blank part (saved into your **My Parts** library —
+  the editor's "Saved to" selector shows it as *your library*).
 - A part's **Edit** button — re-open a saved part for editing.
 
 The editor fills the window. **Done** closes it (your last save is kept; saving is
@@ -35,7 +37,8 @@ side), so a part drawn in the breadboard view gets a sensible schematic for free
 The Breadboard view is an interactive, **layered canvas**, managed from a
 **Layers panel** (top → bottom is the draw order):
 
-1. **Components** — labelled **rectangles** (chips/parts) + **text labels**.
+1. **Components** — coloured **shapes** (rectangle / circle / polygon) + **text
+   labels**.
 2. **Pins** — free-placed pads (you **can't drop a pin inside a mounting hole**).
 3. **Mounting holes** — these **cut through** the PCB *and* the image (a real
    cutout), with a plating ring.
@@ -43,30 +46,32 @@ The Breadboard view is an interactive, **layered canvas**, managed from a
    **polygon**) **and the board image**, which sits on this layer and is
    **clipped to the outline**.
 
-Each layer has a **visibility toggle** (the eye checkbox) and a count. Hiding the
-PCB image gives you the footprint view (pads & holes only).
+The **Layers panel + inspector sit on the right** (about a quarter of the width)
+so the canvas gets the room. Each layer (Components / Pins / Mounting holes) is a
+**collapsible list** of its items — click an item to select it on the canvas, and
+each layer has a **visibility eye** + count. Hiding the PCB image gives the
+footprint view.
 
 #### Adding & editing
 
-- The **Layers panel** drives adding: **＋Pin**, **＋Hole**, **＋Rect**, **＋Text**
-  arm a tool — then click the board to drop that object. The **PCB** row has the
-  **shape** selector (Rectangle / Polygon), **Edit shape** (drag polygon
-  vertices), and **＋Image** (upload a board photo onto the PCB).
-- The toolbar above the canvas has **Select** (click an object — or the image —
-  to select; drag to move; drag the image's corner handles to resize), **Pan**
-  (drag to pan, scroll to zoom), and **Fit** (reset the view).
-- The **inspector** below the Layers panel edits whatever is selected, with a
-  **Delete** button.
+- The **toolbar** (icons, above the canvas): **Select**, **Pan** (drag; scroll
+  to zoom — plus a **− / % / +** control bottom-right and a **Fit** reset),
+  **Shapes ▾** (add a component **Rectangle / Circle / Polygon**), and **Text**.
+- The **Layers panel** adds **＋Pin** and **＋Hole** (from their rows), and the
+  **PCB** row carries the outline **shape** selector, **Edit shape** (drag polygon
+  vertices) and **＋Image** upload.
 
 #### Inspector
 
-Whatever you select shows its editable fields in the left **inspector**:
+Whatever you select shows its editable fields in the **inspector**:
 
 - **Pin** — board pin number, GPIO/signal **name**, **type** (power · ground ·
   **IO** · other), for IO pins a **GPIO number** + **capabilities** (digital,
-  pwm, adc, spi, i2c), **castellated or regular**, and its x/y.
+  pwm, adc, spi, i2c), a **pad shape** (square · round · castellated · header
+  hole), and its x/y.
 - **Mounting hole** — x/y + millimetre diameter.
-- **Component** — label, kind, x/y/w/h.
+- **Component** — label, **fill / outline colour + outline width**, x/y and size
+  (w/h for a rectangle, r for a circle; drag a polygon's vertices on the canvas).
 - **Label** — text, x/y, font size.
 - **Image layer** — x/y/w/h + opacity.
 

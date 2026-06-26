@@ -18,6 +18,8 @@
 
 import { parse, stringify } from 'yaml'
 import type {
+  ComponentShape,
+  ComponentShapeKind,
   PartDefinition,
   PartEdge,
   PartFeature,
@@ -25,12 +27,15 @@ import type {
   PartLibrary,
   PartPin,
   PartPinCapability,
+  PartPinShape,
   PartPinType,
   SchematicPin
 } from './part'
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
 const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c']
+const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
+const SHAPE_KINDS: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
 const EDGES = ['left', 'right', 'top', 'bottom'] as const
 
 /** Drop `undefined`/`null`, empty strings, empty arrays + empty objects. */
@@ -88,11 +93,49 @@ function coercePin(raw: unknown): PartPin | null {
   const label = str(r.label)
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
+  if (PIN_SHAPES.includes(r.shape as PartPinShape)) pin.shape = r.shape as PartPinShape
   const x = num(r.x)
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
   return pin
+}
+
+/** Coerce one raw component-shape object from YAML into a {@link ComponentShape}. */
+function coerceShape(raw: unknown): ComponentShape | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const kind = (SHAPE_KINDS.includes(r.kind as ComponentShapeKind) ? r.kind : 'rect') as ComponentShapeKind
+  const x = num(r.x)
+  const y = num(r.y)
+  if (x === undefined || y === undefined) return null
+  const shape: ComponentShape = { kind, x, y }
+  const label = str(r.label)
+  if (label) shape.label = label
+  const fill = str(r.fill)
+  if (fill) shape.fill = fill
+  const stroke = str(r.stroke)
+  if (stroke) shape.stroke = stroke
+  const sw = num(r.strokeWidth)
+  if (sw !== undefined) shape.strokeWidth = sw
+  const w = num(r.w)
+  const h = num(r.h)
+  if (w !== undefined) shape.w = w
+  if (h !== undefined) shape.h = h
+  const rad = num(r.r)
+  if (rad !== undefined) shape.r = rad
+  if (Array.isArray(r.points)) {
+    const pts = r.points
+      .map((p) => {
+        const pr = p as Record<string, unknown>
+        const px = num(pr?.x)
+        const py = num(pr?.y)
+        return px !== undefined && py !== undefined ? { x: px, y: py } : null
+      })
+      .filter((p): p is { x: number; y: number } => p !== null)
+    if (pts.length >= 3) shape.points = pts
+  }
+  return shape
 }
 
 /** Coerce one raw header object from YAML into a clean {@link PartHeader}. */
@@ -117,6 +160,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
+  if (p.shape) out.shape = p.shape
   if (p.x !== undefined) out.x = p.x
   if (p.y !== undefined) out.y = p.y
   return out
@@ -150,6 +194,7 @@ export function partToYaml(part: PartDefinition): string {
     mountingHoles: part.mountingHoles,
     buttons: part.buttons,
     features: part.features,
+    shapes: part.shapes,
     labels: part.labels,
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
@@ -264,6 +309,10 @@ export function partFromYaml(text: string): PartDefinition {
       })
       .filter((f): f is PartFeature => f !== null)
     if (features.length) part.features = features
+  }
+  if (Array.isArray(raw.shapes)) {
+    const shapes = raw.shapes.map(coerceShape).filter((s): s is ComponentShape => s !== null)
+    if (shapes.length) part.shapes = shapes
   }
   if (Array.isArray(raw.labels)) {
     const labels = raw.labels

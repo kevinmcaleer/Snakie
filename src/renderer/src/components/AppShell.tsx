@@ -9,8 +9,6 @@ import { FilePanel } from './FilePanel'
 import { GitPanel } from './GitPanel'
 import { PackagesPanel } from './PackagesPanel'
 import { PluginsPanel } from './PluginsPanel'
-import { PartsPanel, OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
-import { PartEditor } from './PartEditor'
 import { InspectPanel } from './InspectPanel'
 import { HelpPanel } from './HelpPanel'
 import { EditorArea } from './EditorArea'
@@ -42,7 +40,6 @@ import {
   type InstallState
 } from '../lib/instrumentsLib'
 import { useWorkspace } from '../store/workspace'
-import type { PartDefinition, PartLibrary } from '../../../preload/index.d'
 
 /**
  * Wrap a panel that lacks its own region chrome in a scrollable region.
@@ -95,12 +92,6 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
       return (
         <LeftRegion title="Plugins" showHeader={false}>
           <PluginsPanel />
-        </LeftRegion>
-      )
-    case 'parts':
-      return (
-        <LeftRegion title="Parts" showHeader={false}>
-          <PartsPanel />
         </LeftRegion>
       )
     case 'inspect':
@@ -581,45 +572,8 @@ export function AppShell(): JSX.Element {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, handler)
   }, [openSettings])
 
-  // Part Editor overlay (#130): the Parts panel asks (via a window event) to open
-  // the editor for a new/existing part. We fetch the libraries here so the editor
-  // gets the target-library list + the existing parts (for id-collision checks).
-  const [editingPart, setEditingPart] = useState<{
-    libraryId: string
-    part: PartDefinition | null
-    libraries: PartLibrary[]
-    existingParts: PartDefinition[]
-  } | null>(null)
-
-  useEffect(() => {
-    const handler = (e: Event): void => {
-      const detail = (e as CustomEvent<OpenPartEditorDetail>).detail
-      if (!detail) return
-      window.api.parts
-        .listLibraries()
-        .then((libs) => {
-          const lib = libs.find((l) => l.id === detail.libraryId)
-          // PartLibraryWithParts is assignable to PartLibrary (the extra `parts`
-          // is harmless), so pass the libraries straight through as the selector.
-          setEditingPart({
-            libraryId: detail.libraryId,
-            part: detail.part,
-            libraries: libs,
-            existingParts: lib?.parts ?? []
-          })
-        })
-        .catch(() =>
-          setEditingPart({
-            libraryId: detail.libraryId,
-            part: detail.part,
-            libraries: [],
-            existingParts: []
-          })
-        )
-    }
-    window.addEventListener(OPEN_PART_EDITOR_EVENT, handler)
-    return () => window.removeEventListener(OPEN_PART_EDITOR_EVENT, handler)
-  }, [])
+  // The Parts Library + Part Editor live in the Board Viewer window now (it's the
+  // only place that uses parts), so the main window no longer hosts them.
 
   return (
     <div className="shell">
@@ -764,23 +718,6 @@ export function AppShell(): JSX.Element {
 
       {settingsOpen && (
         <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
-      )}
-
-      {/* Part Editor overlay (#130): full-screen authoring surface launched from
-          the Parts panel. Closing/saving fires PARTS_CHANGED_EVENT so the panel
-          re-reads the libraries off disk. */}
-      {editingPart && (
-        <PartEditor
-          libraryId={editingPart.libraryId}
-          initial={editingPart.part}
-          existingParts={editingPart.existingParts}
-          libraries={editingPart.libraries}
-          onSaved={() => window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))}
-          onClose={() => {
-            setEditingPart(null)
-            window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
-          }}
-        />
       )}
     </div>
   )

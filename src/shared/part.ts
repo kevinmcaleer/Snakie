@@ -39,6 +39,16 @@ export type PartPinCapability = 'digital' | 'pwm' | 'adc' | 'spi' | 'i2c'
 /** How the part is mounted: through-hole vs surface-mount. */
 export type PartPackage = 'THT' | 'SMD'
 
+/**
+ * How a pin/pad is drawn:
+ *  - `square`     — a solid square SMD-style pad (default)
+ *  - `round`      — a solid round pad
+ *  - `castellated`— a castellated edge pad (the plated half-moon look)
+ *  - `header`     — a through-hole header pad: a copper annular ring with the
+ *                   drill hole showing (where pin headers are soldered)
+ */
+export type PartPinShape = 'square' | 'round' | 'castellated' | 'header'
+
 /** Which edge of the board outline a pin/header sits on. */
 export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
 
@@ -56,8 +66,13 @@ export interface PartPin {
   type: PartPinType
   /** For `io` pins: what the pin supports. Ignored for non-io pins. */
   capabilities?: PartPinCapability[]
-  /** Whether this pad is a castellated edge pad (vs a regular header hole). */
+  /**
+   * Whether this pad is a castellated edge pad. Legacy flag — superseded by
+   * {@link shape}` === 'castellated'`; still read for backward compatibility.
+   */
   castellated?: boolean
+  /** How the pad is drawn (square / round / castellated / header). */
+  shape?: PartPinShape
   /**
    * Absolute position on the board canvas, normalised `0..1` (0,0 = top-left).
    * The Part Editor uses **free placement**: this is the source of truth for
@@ -128,6 +143,37 @@ export interface ImageLayer {
   opacity?: number
   /** Rotation in degrees (default 0). */
   rotation?: number
+}
+
+/** The kind of a component shape drawn on the board. */
+export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
+
+/**
+ * A component drawn on the board as a coloured shape — a rectangle, circle or
+ * polygon (for irregular parts). Positions/sizes are normalised `0..1`; the
+ * colours are author-controlled (fill, outline, outline width). This is the
+ * "components" layer the Part Editor authors via the toolbar's Shapes dropdown.
+ */
+export interface ComponentShape {
+  kind: ComponentShapeKind
+  /** Optional label drawn centred on the shape. */
+  label?: string
+  /** Fill colour (any CSS colour). */
+  fill?: string
+  /** Outline colour. */
+  stroke?: string
+  /** Outline width in canvas (viewBox) units. */
+  strokeWidth?: number
+  /** Top-left (rect) / centre (circle) / bounding ref (polygon), normalised. */
+  x: number
+  y: number
+  /** Rectangle size (normalised), when `kind === 'rect'`. */
+  w?: number
+  h?: number
+  /** Circle radius as a fraction of the board width, when `kind === 'circle'`. */
+  r?: number
+  /** Polygon vertices (normalised), when `kind === 'polygon'`. */
+  points?: PolygonPoint[]
 }
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
@@ -231,8 +277,11 @@ export interface PartDefinition {
   mountingHoles?: MountingHole[]
   /** Push-buttons on the board. */
   buttons?: PartButton[]
-  /** Decorative chips/cans/connectors drawn as labelled rects. */
+  /** Decorative chips/cans/connectors drawn as labelled rects (legacy; the Part
+   *  Editor migrates these into {@link shapes} for editing). */
   features?: PartFeature[]
+  /** Component shapes (rect / circle / polygon) drawn on the board. */
+  shapes?: ComponentShape[]
   /** Free-floating text labels placed on the board canvas. */
   labels?: PartLabel[]
   /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). */

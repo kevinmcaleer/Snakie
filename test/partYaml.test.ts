@@ -37,13 +37,29 @@ const RICH: PartDefinition = normalisePart({
       pins: [
         { name: 'VIN', type: 'pwr', number: 1, x: 0.2, y: 0.9 },
         { name: 'GND', type: 'gnd', number: 2, x: 0.4, y: 0.9 },
-        { name: 'SCL', type: 'io', gpio: 5, capabilities: ['i2c', 'digital'], number: 3, x: 0.6, y: 0.9 },
-        { name: 'SDA', type: 'io', gpio: 4, capabilities: ['i2c', 'digital'], number: 4, castellated: true, x: 0.8, y: 0.9 }
+        { name: 'SCL', type: 'io', gpio: 5, capabilities: ['i2c', 'digital'], number: 3, x: 0.6, y: 0.9, shape: 'header' },
+        { name: 'SDA', type: 'io', gpio: 4, capabilities: ['i2c', 'digital'], number: 4, castellated: true, x: 0.8, y: 0.9, shape: 'round' }
       ]
     }
   ],
   mountingHoles: [{ x: 0.1, y: 0.5, diameter: 2 }],
   buttons: [{ label: 'XSHUT', x: 0.8, y: 0.5 }],
+  shapes: [
+    { kind: 'circle', x: 0.5, y: 0.5, r: 0.1, fill: '#101010', stroke: '#202020', strokeWidth: 2, label: 'U1' },
+    {
+      kind: 'polygon',
+      x: 0.2,
+      y: 0.2,
+      fill: '#111111',
+      stroke: '#222222',
+      strokeWidth: 1,
+      points: [
+        { x: 0.2, y: 0.1 },
+        { x: 0.3, y: 0.2 },
+        { x: 0.1, y: 0.2 }
+      ]
+    }
+  ],
   labels: [{ text: 'ToF', x: 0.5, y: 0.3, fontSize: 14 }],
   ledLabel: 'LED',
   image: 'image.png',

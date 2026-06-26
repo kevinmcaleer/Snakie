@@ -138,15 +138,22 @@
 /* --- Body --- */
 .pe__body {
   flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: minmax(360px, 1fr) minmax(320px, 1fr);
+  display: flex;
   min-height: 0;
 }
 
+/* The properties column: a slim fixed-ish width (~1/4) so the canvas dominates. */
 .pe__panels {
+  flex: 0 0 clamp(260px, 25%, 340px);
   overflow: auto;
   padding: 0.6rem 0.8rem;
   border-right: var(--border-w) solid var(--border);
+}
+
+/* On the breadboard view the properties sit on the RIGHT. */
+.pe__panels--right {
+  border-right: none;
+  border-left: var(--border-w) solid var(--border);
 }
 
 .pe__section {
@@ -394,6 +401,7 @@
 
 /* --- Preview pane --- */
 .pe__preview {
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -490,8 +498,10 @@
   text-anchor: middle;
 }
 
-/* --- Breadboard canvas pane (toolbar + interactive canvas) --- */
+/* --- Breadboard canvas pane (toolbar + interactive canvas) — dominant column --- */
 .pe__canvaspane {
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -674,4 +684,164 @@
   background: #e6ab30;
   border-color: #9a6b1e;
   color: #5a3d0e;
+}
+
+/* --- Icon toolbar buttons --- */
+.pe__iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  width: 1.9rem;
+  height: 1.7rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.pe__iconbtn:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.pe__iconbtn.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pe__iconbtn.is-active {
+  background: #e6ab30;
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
+.pe__divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.2rem;
+  background: var(--border);
+}
+
+.pe__caret {
+  font-size: 0.6rem;
+}
+
+/* --- Shapes dropdown menu --- */
+.pe__menu {
+  position: relative;
+}
+
+.pe__menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: default;
+}
+
+.pe__menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 50;
+  min-width: 8rem;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.pe__menu-item {
+  width: 100%;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+}
+
+.pe__menu-item:hover,
+.pe__menu-item.is-active {
+  background: var(--bg-sunken);
+}
+
+/* --- Layer collapsible lists --- */
+.pe__layer-caret {
+  width: 1rem;
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.pe__chip--add {
+  margin-left: auto;
+  padding: 0.06rem 0.4rem;
+}
+
+.pe__layer-list {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.pe__layer-empty {
+  font-size: 0.66rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0.3rem;
+}
+
+.pe__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  font-size: 0.7rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.2rem 0.35rem;
+  cursor: pointer;
+}
+
+.pe__item:hover {
+  background: var(--bg-elevated);
+}
+
+.pe__item.is-active {
+  background: var(--bg-elevated);
+  outline: 1px solid var(--text-muted);
+}
+
+.pe__item-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe__item-sub {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text-muted);
+  flex: 0 0 auto;
 }
