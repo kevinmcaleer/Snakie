@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Boards render as the parts they are.** When a board comes from a Parts Library
+  microcontroller part, the Board Viewer's **Breadboard** view now draws it with the
+  part's **real appearance** (background image + your exact pin positions +
+  castellations) via the part renderer — instead of the generic edge-laid pinout —
+  so an authored board looks exactly as drawn. Wiring identity is unchanged (the
+  board pad index still matches the part's flattened header order). Legacy built-in
+  boards keep the edge-laid rendering.
 - **Boards come from the Parts Library now.** The board selector (Board Viewer, the
   mini board view, I²C-detect) is sourced from **microcontroller parts** (`family:
   Microcontroller`) in your installed parts libraries — converted to boards with

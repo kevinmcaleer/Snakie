@@ -215,6 +215,9 @@ export interface WiringCanvasProps {
   libraries: PartLibraryWithParts[]
   /** The microcontroller to show as the board (the board view's selection). */
   boardDef: BoardDefinition | null
+  /** The board's SOURCE part (when it came from a Parts Library microcontroller
+   *  part) — drawn life-like via PartBody so it looks exactly as authored. */
+  boardPart?: PartDefinition | null
   /** Which representation to draw — driven by the board view's toggle. */
   renderMode: WiringRenderMode
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
@@ -243,7 +246,7 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, renderMode, usedByCode }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -259,9 +262,30 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, renderMode,
   if (boardDef) {
     const x = robot.boardX ?? 60
     const y = robot.boardY ?? 90
-    if (renderMode === 'lifelike') {
-      // The MCU drawn as its real PCB (the node-graph's Board), pads at their edge
-      // positions; the body is centred within a fixed mat so labels have room.
+    if (renderMode === 'lifelike' && boardPart) {
+      // The MCU is a Parts-Library microcontroller part — draw it with its REAL part
+      // body (background image + accurate x/y pins + castellations), exactly like a
+      // placed part. Pin flat-index order matches the board pad enumeration, so the
+      // `board.<pin>#<index>` wiring identity is unchanged.
+      const box = partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      subjects.push({
+        key: 'board',
+        kind: 'board',
+        title: boardDef.name,
+        x,
+        y,
+        w: box.w,
+        h: box.h,
+        mode: 'lifelike',
+        pins: partLifelikePins(boardPart, box),
+        partDef: boardPart,
+        boardDef,
+        box,
+        codeUsed: usedByCode,
+        hit: hitRegion('lifelike', x, y, box.w, box.h)
+      })
+    } else if (renderMode === 'lifelike') {
+      // Legacy built-in board (no source part): the node-graph's edge-laid Board.
       const box = boardBox(boardDef.aspect, { cx: BOARD_BODY_W / 2, cy: BOARD_BODY_H / 2, maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
       const pads = layoutPads(boardDef, box)
       const usedPadKeys = new Set<string>()
@@ -845,10 +869,13 @@ function SubjectBody({
         ) : null
       ) : (
         <>
-          {s.kind === 'board' && s.boardDef && s.box && s.pads ? (
-            <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
-          ) : s.partDef && s.box ? (
+          {/* A part-backed board renders via its REAL part body (image + x/y pins),
+              so an authored board looks exactly as drawn (#52/issue-1). Legacy
+              built-in boards (no source part) fall back to the edge-laid Board. */}
+          {s.partDef && s.box ? (
             <PartBody part={s.partDef} box={s.box} />
+          ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
+            <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
           <text x={s.w / 2} y={-7} textAnchor="middle" className="wc__body-title">
             {s.title}

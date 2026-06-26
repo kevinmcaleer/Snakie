@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   addComponentOnTop,
   blankPart,
+  boardPartFor,
   boardsFromLibraries,
   derivePinPosition,
   insertPolygonPoint,
@@ -567,5 +568,41 @@ describe('boardsFromLibraries / resolveBoards (#52 boards from parts)', () => {
     ]).map((b) => b.id)
     expect(ids).toContain('pico')
     expect(ids).toContain('custom')
+  })
+})
+
+describe('boardPartFor (issue-1: board → source part)', () => {
+  const ioPin = (n: number): { name: string; type: 'io'; gpio: number } => ({ name: `GP${n}`, type: 'io', gpio: n })
+  const mcuPart = (id: string, pins: { name: string; type: 'io'; gpio: number }[]): PartDefinition => ({
+    id,
+    name: id,
+    family: 'Microcontroller',
+    headers: [{ edge: 'left', pins }]
+  })
+
+  it('returns the source microcontroller part for a board id', () => {
+    const libs = [{ parts: [mcuPart('pico2w', [ioPin(0), ioPin(1)])] }]
+    const part = boardPartFor(libs, 'pico2w')
+    expect(part?.id).toBe('pico2w')
+    expect(boardPartFor(libs, 'nope')).toBeNull()
+  })
+
+  it('prefers the most complete part when an id repeats', () => {
+    const libs = [
+      { parts: [mcuPart('pico2w', [ioPin(0)])] },
+      { parts: [mcuPart('pico2w', [ioPin(0), ioPin(1), ioPin(2)])] }
+    ]
+    expect((boardPartFor(libs, 'pico2w')?.headers[0].pins ?? [])).toHaveLength(3)
+  })
+
+  it('keeps board pad index aligned with the part flat-index (wiring identity)', () => {
+    // The board view draws the part via partLifelikePins (flat index) while wiring
+    // enumerates the converted board; both must agree so `board.<pin>#<index>` holds.
+    const part = mcuPart('pico2w', [ioPin(0), ioPin(1), ioPin(2)])
+    const boardPads = partToBoardDefinition(part).headers.flatMap((h) => h.pins)
+    const partPins = pinPositions(part, { x: 0, y: 0, w: 100, h: 100 })
+    // Same pins, same order: pad N (label) == part pin N (name).
+    expect(boardPads.map((p) => p.label)).toEqual(partPins.map((p) => p.name))
+    expect(partPins.map((p) => p.index)).toEqual([0, 1, 2])
   })
 })

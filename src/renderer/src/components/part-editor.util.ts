@@ -756,6 +756,26 @@ export function boardsFromLibraries(libraries: { parts?: PartDefinition[] }[]): 
 }
 
 /**
+ * The source microcontroller PART behind a board id (so the board view can draw it
+ * life-like via PartBody, issue-1). Mirrors {@link boardsFromLibraries}'s dedupe
+ * (the most complete pinout wins). Null for a built-in board with no source part.
+ */
+export function boardPartFor(
+  libraries: { parts?: PartDefinition[] }[],
+  boardId: string
+): PartDefinition | null {
+  let best: { part: PartDefinition; pads: number } | null = null
+  for (const lib of libraries ?? []) {
+    for (const part of lib.parts ?? []) {
+      if (!isBoardPart(part) || partToBoardDefinition(part).id !== boardId) continue
+      const pads = (part.headers ?? []).reduce((n, h) => n + (h.pins?.length ?? 0), 0)
+      if (pads > 0 && (!best || pads > best.pads)) best = { part, pads }
+    }
+  }
+  return best?.part ?? null
+}
+
+/**
  * The board list for the selector: boards sourced from the parts libraries (the
  * standard + user board parts) win by id, then any Board-Creator boards, then the
  * hardcoded built-ins fill the gaps — so a library board REPLACES its built-in

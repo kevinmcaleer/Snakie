@@ -14,7 +14,7 @@ import {
   type BoardFeature,
   type BoardPadType
 } from './board-defs'
-import { resolveBoards } from './part-editor.util'
+import { boardPartFor, resolveBoards } from './part-editor.util'
 import {
   boardBox,
   busLabel,
@@ -353,6 +353,9 @@ export function BoardGraph({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot?.board, boards])
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  // The source part behind the selected board (if any) — so the Breadboard view
+  // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
+  const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])
 
   // Custom dropdown open state — a native <select> popup is unreliable inside a
   // frameless, always-on-top window with a drag region (same as BoardView).
@@ -757,6 +760,7 @@ export function BoardGraph({
           <div className="boardgraph__wiring">
             <WiringCanvas
               boardDef={def}
+              boardPart={boardPart}
               renderMode={effectiveView}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
