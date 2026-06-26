@@ -102,6 +102,9 @@ export interface PartCanvasProps {
   snap?: boolean
   /** Keep the image layer's width:height ratio fixed while resizing it. */
   lockAspect?: boolean
+  /** The board image's NATIVE pixel aspect (w/h); used so a locked resize keeps
+   *  the photo's true proportions rather than whatever it was stretched to. */
+  imageNativeAspect?: number | null
   /** Mutate the part (interactive only). */
   onChange?: (next: PartDefinition) => void
   /** Selection changed. */
@@ -176,6 +179,7 @@ export function PartCanvas({
   selection = null,
   snap = false,
   lockAspect = false,
+  imageNativeAspect = null,
   onChange,
   onSelect,
   onNotify,
@@ -558,12 +562,14 @@ export function PartCanvas({
       const right = d.ox + d.ow
       const bottom = d.oy + d.oh
       if (lockAspect && d.oh > 0) {
-        // Keep the start w:h ratio; the horizontal drag drives the size and the
-        // opposite corner stays anchored (so the image is never distorted).
-        const ratio = d.ow / d.oh
+        // Keep the image's NATIVE pixel aspect (so it's never distorted): size the
+        // layer box so (w·boxW)/(h·boxH) === native. Falls back to the current
+        // on-screen ratio if the native aspect isn't known yet.
+        const native =
+          imageNativeAspect && imageNativeAspect > 0 ? imageNativeAspect : (d.ow * box.w) / (d.oh * box.h)
         const grow = d.corner === 0 || d.corner === 3 ? -dx : dx
         w = Math.max(0.06, d.ow + grow)
-        h = w / ratio
+        h = (w * box.w) / (native * box.h)
         x = d.corner === 0 || d.corner === 3 ? right - w : d.ox
         y = d.corner === 0 || d.corner === 1 ? bottom - h : d.oy
       } else if (d.corner === 0) {
@@ -644,7 +650,9 @@ export function PartCanvas({
 
   // --- board outline path ---------------------------------------------------
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
-  const cornerR = part.shape?.cornerRadius ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  // Honour an explicit 0 (square corners); only fall back when truly unset.
+  const cornerR =
+    part.shape?.cornerRadius != null ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
   const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
 
   /** The board outline as a shape element, with the given paint props. */

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { PartSchematicView } from './PartSchematicView'
 import {
   PartCanvas,
@@ -197,6 +197,9 @@ export function PartEditor({
   const [visible, setVisible] = useState<LayerVisibility>(DEFAULT_LAYERS)
   const [showGrid, setShowGrid] = useState(false)
   const [lockImageAspect, setLockImageAspect] = useState(true)
+  // The board image's native pixel aspect (w/h), read off the loaded image so a
+  // locked resize keeps its true proportions. Null until known / no image.
+  const [imageNativeAspect, setImageNativeAspect] = useState<number | null>(null)
   const [snap, setSnap] = useState(false)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
@@ -207,6 +210,35 @@ export function PartEditor({
 
   const fileId = useMemo(() => sanitisePartId(part.id), [part.id])
   const names = useMemo(() => pinNames(part), [part])
+
+  // Read the image's native pixel aspect whenever the image changes (upload or a
+  // re-opened part), so "lock aspect" can use the photo's true proportions.
+  useEffect(() => {
+    const data = part.imageData
+    if (!data) {
+      setImageNativeAspect(null)
+      return
+    }
+    let cancelled = false
+    const img = new Image()
+    img.onload = () => {
+      if (cancelled) return
+      setImageNativeAspect(img.naturalWidth > 0 && img.naturalHeight > 0 ? img.naturalWidth / img.naturalHeight : null)
+    }
+    img.onerror = () => !cancelled && setImageNativeAspect(null)
+    img.src = data
+    return () => {
+      cancelled = true
+    }
+  }, [part.imageData])
+
+  /** The board outline aspect (w/h) — dimensions first, like the canvas. */
+  const boardAspectOf = (p: PartDefinition): number =>
+    p.dimensions && p.dimensions.width > 0 && p.dimensions.height > 0
+      ? p.dimensions.width / p.dimensions.height
+      : typeof p.aspect === 'number' && p.aspect > 0
+        ? p.aspect
+        : 0.6
 
   const patch = (p: Partial<PartDefinition>): void => setPart((d) => ({ ...d, ...p }))
 
@@ -249,6 +281,17 @@ export function PartEditor({
   const setImageLayer = (p: Partial<ImageLayer>): void => {
     const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
     patch({ imageLayer: { ...cur, ...p } })
+  }
+  // Toggle the lock; when turning it ON, immediately reshape the image layer to
+  // the photo's native aspect (so an already-stretched image snaps back).
+  const toggleLockAspect = (): void => {
+    const next = !lockImageAspect
+    setLockImageAspect(next)
+    if (next && imageNativeAspect && imageNativeAspect > 0 && part.imageData) {
+      const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+      // (w·boardAspect)/(h) === native  ⇒  h = w·boardAspect/native (box w/h ratio = boardAspect)
+      patch({ imageLayer: { ...cur, h: (cur.w * boardAspectOf(part)) / imageNativeAspect } })
+    }
   }
 
   // --- delete the selected object ------------------------------------------
@@ -424,6 +467,7 @@ export function PartEditor({
                   showGrid={showGrid}
                   snap={snap}
                   lockAspect={lockImageAspect}
+                  imageNativeAspect={imageNativeAspect}
                   tool={tool}
                   selection={selection}
                   onChange={setPart}
@@ -473,7 +517,7 @@ export function PartEditor({
                 removeImage={removeImage}
                 setImageLayer={setImageLayer}
                 lockImageAspect={lockImageAspect}
-                setLockImageAspect={setLockImageAspect}
+                onToggleLockAspect={toggleLockAspect}
                 patch={patch}
                 setPart={setPart}
                 deleteSelection={deleteSelection}
@@ -714,7 +758,7 @@ interface InspectorProps {
   removeImage: () => void
   setImageLayer: (p: Partial<ImageLayer>) => void
   lockImageAspect: boolean
-  setLockImageAspect: (b: boolean) => void
+  onToggleLockAspect: () => void
   patch: (p: Partial<PartDefinition>) => void
   setPart: React.Dispatch<React.SetStateAction<PartDefinition>>
   deleteSelection: () => void
@@ -755,17 +799,14 @@ function Inspector(props: InspectorProps): JSX.Element {
           </label>
         </div>
         {part.shape?.kind !== 'polygon' && (
-          <label className="pe__field">
-            <span>Corner radius</span>
-            <input
-              type="range"
-              min="0"
-              max="0.5"
-              step="0.02"
-              value={part.shape?.cornerRadius ?? 0.04}
-              onChange={(e) => patch({ shape: { kind: 'rect', cornerRadius: Number(e.target.value) } })}
-            />
-          </label>
+          <SliderField
+            label="Corner radius"
+            value={part.shape?.cornerRadius ?? 0.04}
+            min={0}
+            max={0.5}
+            step={0.01}
+            onChange={(v) => patch({ shape: { kind: 'rect', cornerRadius: v } })}
+          />
         )}
         <label className="pe__field">
           <span>Onboard LED pin</span>
@@ -827,6 +868,45 @@ function DetailsSection({
   )
 }
 
+/** A labelled slider paired with a number box, so values can be set precisely. */
+function SliderField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange
+}: {
+  label: string
+  value: number
+  min: number
+  max: number
+  step: number
+  onChange: (v: number) => void
+}): JSX.Element {
+  const set = (raw: number): void => {
+    const v = Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : min
+    onChange(v)
+  }
+  return (
+    <label className="pe__field">
+      <span>{label}</span>
+      <div className="pe__slider">
+        <input type="range" min={min} max={max} step={step} value={value} onChange={(e) => set(Number(e.target.value))} />
+        <input
+          className="pe__slider-num"
+          type="number"
+          min={min}
+          max={max}
+          step={step}
+          value={Number.isFinite(value) ? value : min}
+          onChange={(e) => set(Number(e.target.value))}
+        />
+      </div>
+    </label>
+  )
+}
+
 /** The editable fields for whatever is selected on the canvas. */
 function SelectionInspector({
   part,
@@ -835,7 +915,7 @@ function SelectionInspector({
   patch,
   setImageLayer,
   lockImageAspect,
-  setLockImageAspect,
+  onToggleLockAspect,
   deleteSelection
 }: InspectorProps): JSX.Element {
   if (!selection) {
@@ -1042,13 +1122,17 @@ function SelectionInspector({
           {num('w', layer.w, (v) => setImageLayer({ w: v }))}
           {num('h', layer.h, (v) => setImageLayer({ h: v }))}
         </div>
-        <label className="pe__field">
-          <span>Opacity</span>
-          <input type="range" min="0.1" max="1" step="0.05" value={layer.opacity ?? 1} onChange={(e) => setImageLayer({ opacity: Number(e.target.value) })} />
-        </label>
-        <label className="pe__check">
-          <input type="checkbox" checked={lockImageAspect} onChange={(e) => setLockImageAspect(e.target.checked)} /> Lock aspect ratio
-        </label>
+        <SliderField label="Opacity" value={layer.opacity ?? 1} min={0.1} max={1} step={0.05} onChange={(v) => setImageLayer({ opacity: v })} />
+        <button
+          type="button"
+          className={`pe__togglebtn${lockImageAspect ? ' is-active' : ''}`}
+          onClick={onToggleLockAspect}
+          aria-pressed={lockImageAspect}
+          title="Keep the image at its native aspect ratio while resizing"
+        >
+          <span className="pe__togglebtn-dot" aria-hidden="true" />
+          Lock aspect ratio
+        </button>
       </>
     )
   }

@@ -623,6 +623,68 @@
   width: 100%;
 }
 
+/* --- Slider + value box --- */
+.pe__slider {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.pe__slider input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pe__slider-num {
+  flex: 0 0 auto;
+  width: 3.4rem;
+}
+
+/* --- Toggle button (e.g. Lock aspect ratio) --- */
+.pe__togglebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+}
+
+.pe__togglebtn:hover {
+  border-color: var(--text-muted);
+}
+
+.pe__togglebtn-dot {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+.pe__togglebtn.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+}
+
+.pe__togglebtn.is-active .pe__togglebtn-dot {
+  background: currentColor;
+}
+
+:root[data-theme='skeuomorph'] .pe__togglebtn.is-active {
+  background: #e6ab30;
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
 /* --- Layers panel --- */
 .pe__layer {
   margin-bottom: 0.3rem;
