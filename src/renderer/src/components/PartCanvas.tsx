@@ -11,13 +11,17 @@ import {
   DEFAULT_SHAPE_FILL,
   DEFAULT_SHAPE_STROKE,
   DEFAULT_SHAPE_STROKE_WIDTH,
+  addComponentOnTop,
   derivePinPosition,
+  insertPolygonPoint,
+  nearestPolygonEdge,
+  orderedComponents,
   pinShapeOf,
   resolvedPins,
   type ResolvedPin
 } from './part-editor.util'
 import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
-import { capabilityBadges, castellatedPad } from './part-body'
+import { capabilityBadges, castellatedPad, pinLabelLayout } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -76,6 +80,12 @@ export interface LayerVisibility {
 
 export const DEFAULT_LAYERS: LayerVisibility = { image: true, holes: true, pins: true, components: true }
 
+/** Per-layer edit lock (same keys as {@link LayerVisibility}). A locked layer is
+ *  still drawn, but its items can't be selected, moved, resized, or created — so
+ *  you can't accidentally nudge the background PCB while wiring pins. */
+export type LayerLocks = LayerVisibility
+export const DEFAULT_LOCKS: LayerLocks = { image: false, holes: false, pins: false, components: false }
+
 /** What is currently selected (drives the editor's contextual inspector). */
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
@@ -91,6 +101,8 @@ export interface PartCanvasProps {
   part: PartDefinition
   /** Per-layer visibility. Defaults to all visible. */
   visible?: LayerVisibility
+  /** Per-layer edit lock. A locked layer can't be selected/moved/edited. */
+  locked?: LayerLocks
   /** Draw the pin-spacing grid behind the board. */
   showGrid?: boolean
   /** Non-interactive render (the Parts panel detail). */
@@ -175,7 +187,8 @@ interface Drag {
 
 export function PartCanvas({
   part,
-  visible = DEFAULT_LAYERS,
+  visible: visibleProp,
+  locked = DEFAULT_LOCKS,
   showGrid = false,
   readOnly = false,
   tool = 'select',
@@ -190,6 +203,10 @@ export function PartCanvas({
   onToggleSnap,
   resetSignal
 }: PartCanvasProps): JSX.Element {
+  // When no explicit visibility is passed (the Parts Library read-only preview),
+  // honour the part's own saved layer visibility so hidden layers (e.g. a traced
+  // PCB image) stay hidden. The editor passes `visible` explicitly.
+  const visible: LayerVisibility = visibleProp ?? { ...DEFAULT_LAYERS, ...(part.layerVisibility ?? {}) }
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -359,6 +376,20 @@ export function PartCanvas({
     commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, points: pts.filter((_, j) => j !== vi) } : s)) })
     onSelect?.({ type: 'shape', index })
   }
+  /** Insert a vertex into a component polygon after edge `edgeI` (click-on-edge). */
+  const insertShapeVertex = (index: number, edgeI: number, nx: number, ny: number): void => {
+    const pts = shapes[index]?.points ?? []
+    const next = insertPolygonPoint(pts, edgeI, clamp01(nx), clamp01(ny))
+    commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, points: next } : s)) })
+    onSelect?.({ type: 'shape-vertex', index, vi: edgeI + 1 })
+  }
+  /** Insert a vertex into the board outline after edge `edgeI` (click-on-edge). */
+  const insertVertexAt = (edgeI: number, nx: number, ny: number): void => {
+    const poly = part.polygon ?? []
+    const next = insertPolygonPoint(poly, edgeI, clamp01(nx), clamp01(ny))
+    commit({ ...part, polygon: next, shape: { kind: 'polygon' } })
+    onSelect?.({ type: 'vertex', index: edgeI + 1 })
+  }
   const moveImage = (nx: number, ny: number): void => commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
   const resizeImage = (x: number, y: number, w: number, h: number): void =>
     commit({ ...part, imageLayer: { ...layer, x, y, w, h } })
@@ -485,14 +516,15 @@ export function PartCanvas({
     } else {
       shape = { ...base, x: clamp01(nx - 0.1), y: clamp01(ny - 0.07), w: 0.2, h: 0.14 }
     }
-    const next = [...shapes, shape]
-    commit({ ...part, shapes: next })
-    onSelect?.({ type: 'shape', index: next.length - 1 })
+    // addComponentOnTop renormalises z so the new shape lands strictly on top.
+    const nextPart = addComponentOnTop(part, 'shape', shape)
+    commit(nextPart)
+    onSelect?.({ type: 'shape', index: (nextPart.shapes?.length ?? 1) - 1 })
   }
   const addLabel = (nx: number, ny: number): void => {
-    const next = [...labels, { text: 'Label', x: clamp01(nx), y: clamp01(ny), fontSize: 12 }]
-    commit({ ...part, labels: next })
-    onSelect?.({ type: 'label', index: next.length - 1 })
+    const nextPart = addComponentOnTop(part, 'label', { text: 'Label', x: clamp01(nx), y: clamp01(ny), fontSize: 12 })
+    commit(nextPart)
+    onSelect?.({ type: 'label', index: (nextPart.labels?.length ?? 1) - 1 })
   }
   const addVertex = (nx: number, ny: number): void => {
     const poly = part.polygon ?? [
@@ -506,6 +538,9 @@ export function PartCanvas({
 
   // --- hit testing (topmost VISIBLE selectable object) ----------------------
   const HIT = 14
+  // Edge-click-to-insert uses a thinner band than the vertex grab so a click in
+  // the interior of a SMALL polygon still moves the body instead of inserting.
+  const EDGE_HIT = 7
   /** True if a normalised point is inside a component shape. */
   const inShape = (s: ComponentShape, nx: number, ny: number): boolean => {
     if (s.kind === 'rect') return nx >= s.x && nx <= s.x + (s.w ?? 0) && ny >= s.y && ny <= s.y + (s.h ?? 0)
@@ -521,18 +556,27 @@ export function PartCanvas({
     return inside
   }
   const hitTest = (nx: number, ny: number): CanvasSelection => {
-    if (visible.components) {
-      for (let i = labels.length - 1; i >= 0; i--)
-        if (dist(nx, ny, labels[i].x, labels[i].y) < HIT * 1.4) return { type: 'label', index: i }
-      for (let i = shapes.length - 1; i >= 0; i--) if (inShape(shapes[i], nx, ny)) return { type: 'shape', index: i }
+    // A locked layer is skipped entirely — its items can't be picked up.
+    if (visible.components && !locked.components) {
+      // Walk the unified z-order top-most first so a click selects what's visually
+      // on top (shapes and labels interleave by `z`).
+      const ord = orderedComponents(part)
+      for (let k = ord.length - 1; k >= 0; k--) {
+        const c = ord[k]
+        if (c.kind === 'label') {
+          if (dist(nx, ny, labels[c.index].x, labels[c.index].y) < HIT * 1.4) return { type: 'label', index: c.index }
+        } else if (inShape(shapes[c.index], nx, ny)) {
+          return { type: 'shape', index: c.index }
+        }
+      }
     }
-    if (visible.pins)
+    if (visible.pins && !locked.pins)
       for (let i = pins.length - 1; i >= 0; i--)
         if (dist(nx, ny, pins[i].x, pins[i].y) < HIT) return { type: 'pin', hi: pins[i].hi, pi: pins[i].pi }
-    if (visible.holes)
+    if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
-    if (visible.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
+    if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
   }
@@ -547,13 +591,15 @@ export function PartCanvas({
       dragRef.current = { kind: 'pan', sel: null, startNX: nx, startNY: ny, ox: 0, oy: 0, panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
       return
     }
-    if (tool === 'pin') return addPin(nx, ny)
-    if (tool === 'hole') return addHole(nx, ny)
-    if (tool === 'rect') return addShape('rect', nx, ny)
-    if (tool === 'circle') return addShape('circle', nx, ny)
-    if (tool === 'cpoly') return addShape('polygon', nx, ny)
-    if (tool === 'text') return addLabel(nx, ny)
+    // Creation tools no-op on a locked layer.
+    if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
+    if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
+    if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
+    if (tool === 'circle') return locked.components ? undefined : addShape('circle', nx, ny)
+    if (tool === 'cpoly') return locked.components ? undefined : addShape('polygon', nx, ny)
+    if (tool === 'text') return locked.components ? undefined : addLabel(nx, ny)
     if (tool === 'shape') {
+      if (locked.image) return
       const poly = part.polygon ?? []
       for (let i = poly.length - 1; i >= 0; i--) {
         if (dist(nx, ny, poly[i].x, poly[i].y) < HIT) {
@@ -562,16 +608,20 @@ export function PartCanvas({
           return
         }
       }
-      addVertex(nx, ny)
+      // Click ON an edge inserts a vertex there; clicking elsewhere appends one.
+      const ne = poly.length >= 2 ? nearestPolygonEdge(poly, nx, ny, box.w, box.h) : { index: -1, dist: Infinity }
+      if (ne.index >= 0 && ne.dist < EDGE_HIT) insertVertexAt(ne.index, nx, ny)
+      else addVertex(nx, ny)
       return
     }
 
     // select tool — a selected polygon shape's vertex handles first
-    if ((selection?.type === 'shape' || selection?.type === 'shape-vertex') && visible.components) {
+    if ((selection?.type === 'shape' || selection?.type === 'shape-vertex') && visible.components && !locked.components) {
       const si = selection.index
       const poly = shapes[si]
       if (poly?.kind === 'polygon') {
         const pts = poly.points ?? []
+        // A vertex click takes priority (drag = move, no-move click = delete)…
         for (let v = pts.length - 1; v >= 0; v--) {
           if (dist(nx, ny, pts[v].x, pts[v].y) < HIT) {
             onSelect?.({ type: 'shape-vertex', index: si, vi: v })
@@ -579,11 +629,19 @@ export function PartCanvas({
             return
           }
         }
+        // …else a click ON an edge (within the thin EDGE_HIT band, so the body
+        // stays draggable) inserts a new vertex there. No drag, so the no-move-
+        // delete in onPointerUp can't immediately undo it.
+        const ne = nearestPolygonEdge(pts, nx, ny, box.w, box.h)
+        if (ne.index >= 0 && ne.dist < EDGE_HIT) {
+          insertShapeVertex(si, ne.index, nx, ny)
+          return
+        }
       }
     }
 
     // select tool — image resize handles (when the image is selected)
-    if (selection?.type === 'image' && visible.image && part.imageData) {
+    if (selection?.type === 'image' && visible.image && !locked.image && part.imageData) {
       const corners = [
         [layer.x, layer.y],
         [layer.x + layer.w, layer.y],
@@ -625,9 +683,12 @@ export function PartCanvas({
 
     onSelect?.(hit)
     if (!hit) {
-      // Empty canvas (select tool) → rubber-band marquee to select pins.
-      dragRef.current = { kind: 'marquee', sel: null, startNX: nx, startNY: ny, ox: nx, oy: ny }
-      setMarquee({ x0: nx, y0: ny, x1: nx, y1: ny })
+      // Empty canvas (select tool) → rubber-band marquee to select pins. Skipped
+      // when the pin layer is locked (there'd be nothing selectable to gather).
+      if (!locked.pins) {
+        dragRef.current = { kind: 'marquee', sel: null, startNX: nx, startNY: ny, ox: nx, oy: ny }
+        setMarquee({ x0: nx, y0: ny, x1: nx, y1: ny })
+      }
       return
     }
     let ox = 0
@@ -950,11 +1011,9 @@ export function PartCanvas({
               )
             }
             const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
-            const anchor = rp.x < 0.5 ? 'start' : 'end'
-            const ldx = rp.x < 0.5 ? size : -size
-            const lx = cx + ldx
-            const tw = text.length * 6.2 + 6 // approx width of the mono label
-            const bgX = anchor === 'start' ? lx - 3 : lx - tw + 3
+            // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
+            // 90° on the top/bottom edges (never upside-down) so rows don't collide.
+            const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size)
             return (
               <g
                 key={`p${i}`}
@@ -963,12 +1022,15 @@ export function PartCanvas({
               >
                 {pad}
                 {text && (
-                  <>
-                    <rect x={bgX} y={cy - 8} width={tw} height={16} rx={2} className="pcv__label-bg" />
-                    <text x={lx} y={cy + 4} className="pcv__pin-label" textAnchor={anchor}>
-                      {text}
-                    </text>
-                  </>
+                  <text
+                    x={ll.lx}
+                    y={ll.ly}
+                    className="pcv__pin-label"
+                    textAnchor={ll.anchor}
+                    transform={ll.rotate ? `rotate(${ll.rotate} ${ll.lx} ${ll.ly})` : undefined}
+                  >
+                    {text}
+                  </text>
                 )}
               </g>
             )
@@ -976,7 +1038,7 @@ export function PartCanvas({
 
         {/* Ghost pin array (#…): a faint 2.54mm grid centred on the selected pin,
             so nearby pins snap to it and a drag-from-it lays down a row of pins. */}
-        {interactive && selPin && visible.pins && (
+        {interactive && selPin && visible.pins && !locked.pins && (
           <g className="pcv__ghosts" aria-hidden="true" style={{ pointerEvents: 'none' }}>
             {([1, 2, 3, 4] as const).flatMap((k) => {
               const opacity = 0.34 * (1 - (k - 1) * 0.2) // fades out further from centre
@@ -1044,9 +1106,21 @@ export function PartCanvas({
             </g>
           ))}
 
-        {/* Layer 4b: component shapes (rect / circle / polygon) */}
+        {/* Layer 4b/4c: shapes + text labels, drawn in one unified z-order so they
+            can be stacked (top of the Components list = highest z = drawn last). */}
         {visible.components &&
-          shapes.map((s, i) => {
+          orderedComponents(part).map((c) => {
+            if (c.kind === 'label') {
+              const i = c.index
+              const l = labels[i]
+              return (
+                <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+                  {l.text}
+                </text>
+              )
+            }
+            const i = c.index
+            const s = shapes[i]
             const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
             const fill = s.fill ?? DEFAULT_SHAPE_FILL
             const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
@@ -1083,16 +1157,8 @@ export function PartCanvas({
             )
           })}
 
-        {/* Layer 4c: text labels */}
-        {visible.components &&
-          labels.map((l, i) => (
-            <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
-              {l.text}
-            </text>
-          ))}
-
         {/* Selection chrome: image box + handles */}
-        {interactive && selection?.type === 'image' && visible.image && part.imageData && (
+        {interactive && selection?.type === 'image' && visible.image && !locked.image && part.imageData && (
           <g>
             <rect x={px(layer.x)} y={py(layer.y)} width={layer.w * box.w} height={layer.h * box.h} fill="none" stroke="#4ea1ff" strokeDasharray="4 3" strokeWidth={1.5} />
             {[
@@ -1109,6 +1175,7 @@ export function PartCanvas({
         {/* Board polygon vertex handles (shape tool) */}
         {interactive &&
           tool === 'shape' &&
+          !locked.image &&
           usePolygon &&
           (part.polygon ?? []).map((p, i) => (
             <rect key={`v${i}`} x={px(p.x) - 5} y={py(p.y) - 5} width={10} height={10} fill={isSel({ type: 'vertex', index: i }) ? '#fff' : '#4ea1ff'} stroke="#0008" />
@@ -1116,6 +1183,7 @@ export function PartCanvas({
 
         {/* Component-polygon vertex handles (a polygon shape is selected) */}
         {interactive &&
+          !locked.components &&
           (selection?.type === 'shape' || selection?.type === 'shape-vertex') &&
           shapes[selection.index]?.kind === 'polygon' &&
           (shapes[selection.index].points ?? []).map((p, vi) => (

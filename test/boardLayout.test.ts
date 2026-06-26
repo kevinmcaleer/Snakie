@@ -369,6 +369,37 @@ describe('mcuSymbolLayout (MCU IC block, schematic)', () => {
   })
 })
 
+describe('mcuSymbolLayout — signals split evenly left/right', () => {
+  // Four signals all on one header edge should balance 2/2 across the sides so the
+  // IC block stays compact rather than one tall column.
+  const DEF4: BoardDefinition = {
+    id: 'm4',
+    name: 'M4',
+    mcu: 'TST',
+    pcbColor: '#0f5a2e',
+    aspect: 1,
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { gpio: 0, label: 'GP0' },
+          { gpio: 1, label: 'GP1' },
+          { gpio: 2, label: 'GP2' },
+          { gpio: 3, label: 'GP3' }
+        ]
+      }
+    ]
+  }
+
+  it('balances same-edge signals into left/right columns', () => {
+    const lay = mcuSymbolLayout(DEF4)
+    const left = lay.terminals.filter((t) => t.side === 'left').map((t) => t.pad.label)
+    const right = lay.terminals.filter((t) => t.side === 'right').map((t) => t.pad.label)
+    expect(left).toEqual(['GP0', 'GP1'])
+    expect(right).toEqual(['GP2', 'GP3'])
+  })
+})
+
 describe('mcuSymbolLayout — power rails merge by label', () => {
   const DEF3: BoardDefinition = {
     id: 'm3',

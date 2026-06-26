@@ -381,6 +381,16 @@
   color: var(--text-muted);
 }
 
+/* The live rotation readout (so it's clear the value is set + saved). */
+.pe__pinrot-deg {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text);
+  min-width: 2.2rem;
+  text-align: right;
+}
+
 .pe__cap {
   display: inline-flex;
   align-items: center;
@@ -747,6 +757,36 @@
   cursor: pointer;
 }
 
+/* Per-layer edit lock (padlock). Dim when unlocked, lit when frozen. */
+.pe__lock {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  font-size: 0.78rem;
+  line-height: 1;
+  background: transparent;
+  border: var(--border-w) solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.pe__lock:hover {
+  opacity: 0.9;
+  border-color: var(--border);
+}
+
+.pe__lock.is-locked {
+  opacity: 1;
+  color: var(--accent, #e6ab30);
+  border-color: var(--border);
+  background: var(--bg-elevated);
+}
+
 .pe__layer-tools {
   display: flex;
   flex-wrap: wrap;
@@ -918,6 +958,58 @@
   font-size: 0.66rem;
   color: var(--text-muted);
   padding: 0.2rem 0.3rem;
+}
+
+/* A component row: the selectable item + its restack (▲/▼) buttons. */
+.pe__item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.pe__item-row .pe__item {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Restack buttons, shown on hover/selection of the row. */
+.pe__item-order {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 0 0 auto;
+  opacity: 0;
+}
+
+.pe__item-row:hover .pe__item-order,
+.pe__item-row:focus-within .pe__item-order {
+  opacity: 1;
+}
+
+.pe__ordbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 0.78rem;
+  padding: 0;
+  font-size: 0.5rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.pe__ordbtn:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.pe__ordbtn:disabled {
+  opacity: 0.3;
+  cursor: default;
 }
 
 .pe__item {

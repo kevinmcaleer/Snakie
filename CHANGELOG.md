@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Part Editor — stack, reshape, and hide components (#130).** Components (shapes
+  + text labels) can be **restacked**: each row in the Components list has ▲/▼
+  buttons, and the item at the **top of the list draws on top** (newly-added
+  components land on top). The **polygon tool** now lets you **click an edge to add
+  a point** (and click a vertex to remove it) — for component polygons *and* the
+  board outline. **Pin rotation** is available for **every** pin (not just
+  castellated), with a live degree readout — it turns the pin's silk label (and the
+  half-hole on castellated pads). And **layer visibility is saved with the part**:
+  hide the traced **PCB image** (or any layer) and it stays hidden in the Parts
+  Library preview and the Board View while its bytes are kept for later refinement.
 - **Robot definition + wiring, merged into the Board View (#128 / #139 / #140).**
   The Board Viewer gains **Breadboard** and **Schematic** view tabs alongside the
   node graph (top-left toggle). The **Breadboard** view draws the chosen
@@ -43,7 +53,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **rotate / flip** icons aim it any of the four ways. A **Background** colour well
   sets the PCB colour. Hovering a pin (in the Part Editor **and** the Board
   Viewer's Breadboard) shows **capability badges** (GPIO / PWM / ADC / I²C / SPI /
-  UART) in pastel colours.
+  UART) in pastel colours. Each layer now has a **padlock** beside its eye — lock a
+  layer (e.g. the **PCB / background image**) and its items can't be selected,
+  moved, resized, or created, so you can't nudge it out of place while wiring.
 - **I²C-detect: pick the bus + pins (#165).** The instrument now has **Bus / SDA /
   SCL** dropdowns of the connected board's valid I²C pins (the RP2040/RP2350
   mapping — invalid combinations can't be chosen), and SCAN runs a one-shot probe
@@ -81,8 +93,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Shapes** dropdown · Text) plus an in-canvas **zoom control** drive it.
   Components are coloured **shapes** — **rectangle / circle / polygon** — with
   **fill / outline colour + outline width** wells; pins choose a **pad shape**
-  (**square · round · castellated · header hole**) and carry a **solid label
-  background** so labels stay legible over the photo. A contextual inspector edits
+  (**square · round · castellated · header hole**); pin **silk labels** read like
+  the node-graph board — light-grey text on a transparent background, pushed
+  **outward** from the edge each pin sits on (turned 90° on the top/bottom edges so
+  dense rows don't overlap). A contextual inspector edits
   the selected object (pin number / GPIO name / type pwr·gnd·io / IO capabilities
   digital·pwm·adc·spi·i2c), **board dimensions** are fields (and **reshape the
   PCB** live), with **Details at the top** of the panel. The view control
@@ -105,6 +119,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 - **The Board View is a normal window** now (no longer always-on-top), so it can
   sit behind the editor like any other window.
+- **Schematic symbols are balanced & roomier.** Signal pins now split **evenly
+  across the left and right sides** of the IC block (instead of piling into one tall
+  column), and pin rows use a generous per-pin pitch (the built-in Pico is the
+  guide) so labels on the top/bottom rows no longer overlap.
+- **Pin labels match the node-graph board everywhere.** In the Breadboard view and
+  the Part Editor, pin labels are now light-grey silk text on a transparent
+  background, pushed **outward** from the board edge a pin sits on; labels on
+  top/bottom-edge pins are turned 90° (never upside-down) so the board title stays
+  legible above them.
 
 ### Fixed
 - **Schematic view: one terminal per rail, no stray pin circles.** A placed part's

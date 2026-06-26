@@ -1,12 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import {
+  addComponentOnTop,
   blankPart,
   derivePinPosition,
+  insertPolygonPoint,
+  nearestPolygonEdge,
+  nextComponentZ,
   normalisePart,
+  orderedComponents,
   partToBoardDefinition,
   pinNames,
   pinPositions,
   pinShapeOf,
+  reorderComponent,
   resolvedPins,
   sanitisePartId,
   schematicSymbolLayout,
@@ -332,6 +338,55 @@ describe('pinPositions + schematicSymbolLayout share the flattened endpoint inde
   })
 })
 
+describe('schematicSymbolLayout balances free signals across left/right', () => {
+  // Five signals all on a single header edge: the schematic should split them
+  // evenly L/R (so the symbol never grows into one tall column) and give each side
+  // enough height that adjacent pins don't overlap.
+  const part: PartDefinition = {
+    id: 'p3',
+    name: 'P3',
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'A', type: 'io' },
+          { name: 'B', type: 'io' },
+          { name: 'C', type: 'io' },
+          { name: 'D', type: 'io' },
+          { name: 'E', type: 'io' }
+        ]
+      }
+    ]
+  }
+
+  it('splits same-edge signals into balanced left/right columns', () => {
+    const lay = schematicSymbolLayout(part)
+    const left = lay.terminals.filter((t) => t.side === 'left').map((t) => t.pin.name)
+    const right = lay.terminals.filter((t) => t.side === 'right').map((t) => t.pin.name)
+    expect(left).toEqual(['A', 'B', 'C'])
+    expect(right).toEqual(['D', 'E'])
+    expect(Math.abs(left.length - right.length)).toBeLessThanOrEqual(1)
+  })
+
+  it('spaces stub ends at least ~24px apart so labels never overlap', () => {
+    const lay = schematicSymbolLayout(part)
+    const ys = lay.terminals
+      .filter((t) => t.side === 'left')
+      .map((t) => t.outer.y)
+      .sort((a, b) => a - b)
+    for (let i = 1; i < ys.length; i++) expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(24)
+  })
+
+  it('keeps an author-pinned signal on its chosen side (explicit mapping wins)', () => {
+    const pinned: PartDefinition = {
+      ...part,
+      schematic: { pins: [{ pin: 'A', side: 'right', order: 0 }] }
+    }
+    const lay = schematicSymbolLayout(pinned)
+    expect(lay.terminals.find((t) => t.pin.name === 'A')!.side).toBe('right')
+  })
+})
+
 describe('schematicSymbolLayout collapses rails (one GND / one power rail)', () => {
   const part: PartDefinition = {
     id: 'p2',
@@ -365,5 +420,98 @@ describe('schematicSymbolLayout collapses rails (one GND / one power rail)', () 
     const lay = schematicSymbolLayout(part)
     expect(lay.terminals.filter((t) => t.pin.type === 'pwr').every((t) => t.side === 'top')).toBe(true)
     expect(lay.terminals.filter((t) => t.pin.type === 'gnd').every((t) => t.side === 'bottom')).toBe(true)
+  })
+})
+
+describe('orderedComponents (unified z-order for stacking)', () => {
+  const part: PartDefinition = {
+    id: 'p',
+    name: 'P',
+    headers: [],
+    shapes: [{ kind: 'rect', x: 0, y: 0 }, { kind: 'rect', x: 0.1, y: 0.1 }],
+    labels: [{ text: 'A', x: 0.2, y: 0.2 }]
+  }
+
+  it('defaults to shapes below labels (today\'s look) when no z is set', () => {
+    const ord = orderedComponents(part)
+    expect(ord.map((c) => `${c.kind}${c.index}`)).toEqual(['shape0', 'shape1', 'label0'])
+  })
+
+  it('sorts by explicit z (a shape can sit above a label)', () => {
+    const withZ: PartDefinition = {
+      ...part,
+      shapes: [{ kind: 'rect', x: 0, y: 0, z: 9 }, { kind: 'rect', x: 0.1, y: 0.1, z: 0 }],
+      labels: [{ text: 'A', x: 0.2, y: 0.2, z: 5 }]
+    }
+    // ascending z: shape1(0) < label0(5) < shape0(9)
+    expect(orderedComponents(withZ).map((c) => `${c.kind}${c.index}`)).toEqual(['shape1', 'label0', 'shape0'])
+  })
+
+  it('nextComponentZ lands a new component on top of the stack', () => {
+    expect(nextComponentZ(part)).toBe(3) // 3 items at default z 0,1,2 → next is 3
+    expect(nextComponentZ({ id: 'e', name: 'E', headers: [] })).toBe(0)
+  })
+
+  it('addComponentOnTop puts a new shape strictly above a legacy no-z label', () => {
+    // The regression the review caught: a pre-append z ties the label's drifting
+    // fallback, sinking the new shape under it. addComponentOnTop renormalises.
+    const legacy: PartDefinition = {
+      id: 'p',
+      name: 'P',
+      headers: [],
+      shapes: [{ kind: 'rect', x: 0, y: 0 }],
+      labels: [{ text: 'L', x: 0.5, y: 0.5 }]
+    }
+    const next = addComponentOnTop(legacy, 'shape', { kind: 'circle', x: 0.3, y: 0.3, r: 0.05 })
+    const ord = orderedComponents(next)
+    expect(ord[ord.length - 1]).toEqual({ kind: 'shape', index: 1, z: 2 }) // new shape on top
+    expect(next.shapes).toHaveLength(2)
+    expect(next.labels).toHaveLength(1)
+  })
+
+  it('addComponentOnTop puts a new label above everything', () => {
+    const next = addComponentOnTop(part, 'label', { text: 'New', x: 0.9, y: 0.9 })
+    const ord = orderedComponents(next)
+    expect(ord[ord.length - 1]).toEqual({ kind: 'label', index: 1, z: 3 })
+  })
+
+  it('reorderComponent moves an item one step and renormalises every z', () => {
+    // Move shape0 (bottom) one step forward; only z changes, indices are preserved.
+    const moved = reorderComponent(part, { kind: 'shape', index: 0 }, 1)
+    expect(orderedComponents(moved).map((c) => `${c.kind}${c.index}`)).toEqual(['shape1', 'shape0', 'label0'])
+    expect(moved.shapes?.every((s) => typeof s.z === 'number')).toBe(true)
+    // The list still has the same items (no splice / identity loss).
+    expect(moved.shapes).toHaveLength(2)
+    expect(moved.labels).toHaveLength(1)
+  })
+
+  it('reorderComponent is a no-op past the ends', () => {
+    expect(reorderComponent(part, { kind: 'label', index: 0 }, 1)).toBe(part) // already top
+    expect(reorderComponent(part, { kind: 'shape', index: 0 }, -1)).toBe(part) // already bottom
+  })
+})
+
+describe('polygon edge insertion helpers', () => {
+  const square = [
+    { x: 0, y: 0 },
+    { x: 1, y: 0 },
+    { x: 1, y: 1 },
+    { x: 0, y: 1 }
+  ]
+
+  it('nearestPolygonEdge finds the edge a point is closest to', () => {
+    // A point near the middle of the TOP edge (index 0: v0→v1).
+    expect(nearestPolygonEdge(square, 0.5, 0.02, 100, 100).index).toBe(0)
+    // Near the middle of the RIGHT edge (index 1: v1→v2).
+    expect(nearestPolygonEdge(square, 0.98, 0.5, 100, 100).index).toBe(1)
+    // Distance is in viewBox units (here ~2px from the top edge).
+    expect(nearestPolygonEdge(square, 0.5, 0.02, 100, 100).dist).toBeCloseTo(2, 0)
+  })
+
+  it('insertPolygonPoint inserts right after the edge index', () => {
+    const next = insertPolygonPoint(square, 0, 0.5, 0)
+    expect(next).toHaveLength(5)
+    expect(next[1]).toEqual({ x: 0.5, y: 0 }) // inserted between v0 and v1
+    expect(next[2]).toEqual({ x: 1, y: 0 }) // original v1 shifted along
   })
 })

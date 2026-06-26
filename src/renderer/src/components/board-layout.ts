@@ -352,12 +352,10 @@ export function mcuSymbolLayout(def: BoardDefinition, opts?: { stub?: number }):
     refs: BoardPadRef[]
   }
   const vts: VT[] = []
-  // Signals on their header edge (single-header boards split left/right).
-  const sigEdges = new Set(singles.map((r) => r.edge))
+  // Signals always split EVENLY between the left and right sides (in pad order) so
+  // the IC block stays balanced and never grows into one tall column.
   const sigHalf = Math.ceil(singles.length / 2)
-  singles.forEach((r, i) =>
-    vts.push({ side: sigEdges.size <= 1 ? (i < sigHalf ? 'left' : 'right') : r.edge, refs: [r] })
-  )
+  singles.forEach((r, i) => vts.push({ side: i < sigHalf ? 'left' : 'right', refs: [r] }))
   // Power rails on top (board order), the combined GND at the bottom.
   for (const [k, g] of groups) if (k !== 'GND') vts.push({ side: 'top', refs: g })
   const gndGroup = groups.get('GND')
@@ -366,10 +364,12 @@ export function mcuSymbolLayout(def: BoardDefinition, opts?: { stub?: number }):
   const bySide: Record<BoardHeader['edge'], VT[]> = { left: [], right: [], top: [], bottom: [] }
   for (const vt of vts) bySide[vt.side].push(vt)
 
+  // Box size from a per-pin pitch so labels never overlap (≈26px rows, ≈58px cols):
+  // height from the busiest L/R side, width from the busiest top/bottom row.
   const vRows = Math.max(bySide.left.length, bySide.right.length, 1)
   const hCols = Math.max(bySide.top.length, bySide.bottom.length, 1)
-  const boxW = Math.min(340, Math.max(150, hCols * 30 + 80))
-  const boxH = Math.min(560, Math.max(140, vRows * 24 + 40))
+  const boxW = Math.max(170, (hCols + 1) * 58)
+  const boxH = Math.max(150, (vRows + 1) * 26)
 
   const lY = mcuSlots(bySide.left.length, 0, boxH)
   const rY = mcuSlots(bySide.right.length, 0, boxH)

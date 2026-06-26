@@ -197,4 +197,44 @@ describe('pin rotation + uart capability round-trip', () => {
     expect(back.rotation).toBe(90)
     expect(back.capabilities).toContain('uart')
   })
+
+  it('persists rotation on a NON-castellated pin (rotation applies to every pin)', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        { edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0, shape: 'round', rotation: 270 }] }
+      ]
+    })
+    expect(part.headers[0].pins[0].rotation).toBe(270)
+    const back = partFromYaml(partToYaml(part)).headers[0].pins[0]
+    expect(back.rotation).toBe(270) // survives the YAML round-trip for a round pad too
+  })
+
+  it('keeps rotation 0 (a deliberately un-rotated pin is not dropped)', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0, rotation: 0 }] }]
+    })
+    expect(part.headers[0].pins[0].rotation).toBe(0)
+    expect(partFromYaml(partToYaml(part)).headers[0].pins[0].rotation).toBe(0)
+  })
+})
+
+describe('component z-order + layer visibility round-trip', () => {
+  it('round-trips component z and persisted layer visibility', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2, z: 3 }],
+      labels: [{ text: 'U1', x: 0.5, y: 0.5, z: 1 }],
+      layerVisibility: { image: false, pins: true }
+    })
+    expect(part.shapes?.[0].z).toBe(3)
+    expect(part.labels?.[0].z).toBe(1)
+    expect(part.layerVisibility).toEqual({ image: false, pins: true })
+    expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
+  })
 })

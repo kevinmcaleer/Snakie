@@ -31,7 +31,8 @@ import {
   type PartPinCapability,
   type PartPinShape,
   type PartPinType,
-  type PartPackage
+  type PartPackage,
+  type PolygonPoint
 } from '../../../shared/part'
 
 /** The pin types the editor offers, in UI order. */
@@ -262,6 +263,7 @@ function normaliseShape(s: ComponentShape): ComponentShape {
           ]
     out.points = pts.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }))
   }
+  if (typeof s.z === 'number' && Number.isFinite(s.z)) out.z = s.z
   return out
 }
 
@@ -302,6 +304,163 @@ export function withShapesFromFeatures(part: PartDefinition): PartDefinition {
   const next = { ...part, shapes: [...(part.shapes ?? []), ...migrated] }
   delete next.features
   return next
+}
+
+// --- Components z-order (stacking) ------------------------------------------
+// The Components layer is two arrays (shapes + labels). Draw order is a single
+// `z` per item: higher z draws later (on top). Absent z falls back to a stable
+// legacy order (shapes by index, then labels) so existing parts look unchanged.
+
+/** One drawable component, resolved to its array + z. Sorted ascending by z =
+ *  bottom→top draw order. The Components list shows the reverse (top of list =
+ *  highest z = drawn on top). */
+export interface OrderedComponent {
+  kind: 'shape' | 'label'
+  /** Index into `part.shapes` or `part.labels`. */
+  index: number
+  /** Resolved draw order (explicit `z`, else the legacy fallback). */
+  z: number
+}
+
+/** Shapes + labels merged into one ascending-z draw order. Pure. */
+export function orderedComponents(part: PartDefinition): OrderedComponent[] {
+  const shapes = part.shapes ?? []
+  const labels = part.labels ?? []
+  const combined: OrderedComponent[] = [
+    ...shapes.map((s, i) => ({ kind: 'shape' as const, index: i, z: s.z ?? i })),
+    // Legacy default keeps labels above all shapes (today's look).
+    ...labels.map((l, i) => ({ kind: 'label' as const, index: i, z: l.z ?? shapes.length + i }))
+  ]
+  // Stable sort by z; ties keep insertion order (shapes before labels).
+  return combined
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => a.c.z - b.c.z || a.i - b.i)
+    .map(({ c }) => c)
+}
+
+/** The z a newly-created component should take to land on top of everything. */
+export function nextComponentZ(part: PartDefinition): number {
+  const ord = orderedComponents(part)
+  return ord.length ? ord[ord.length - 1].z + 1 : 0
+}
+
+/**
+ * Append a shape or label and put it strictly ON TOP of every existing component,
+ * renormalising all `z` to 0..n in the resolved order. Pure. (Computing a single
+ * `z` before the append is unsafe: the no-`z` label fallback depends on the shape
+ * count, which the append changes — so it can tie/overtake the new item.)
+ */
+export function addComponentOnTop(
+  part: PartDefinition,
+  kind: 'shape' | 'label',
+  item: ComponentShape | PartLabel
+): PartDefinition {
+  const shapes = (part.shapes ?? []).map((s) => ({ ...s }))
+  const labels = (part.labels ?? []).map((l) => ({ ...l }))
+  let newIndex: number
+  if (kind === 'shape') {
+    shapes.push({ ...(item as ComponentShape) })
+    newIndex = shapes.length - 1
+  } else {
+    labels.push({ ...(item as PartLabel) })
+    newIndex = labels.length - 1
+  }
+  const ord = orderedComponents({ ...part, shapes, labels })
+  const isNew = (c: OrderedComponent): boolean => c.kind === kind && c.index === newIndex
+  // Everything except the new item keeps its resolved order; the new item goes last.
+  const finalOrder = [...ord.filter((c) => !isNew(c)), ...ord.filter(isNew)]
+  finalOrder.forEach((c, z) => {
+    if (c.kind === 'shape') shapes[c.index].z = z
+    else labels[c.index].z = z
+  })
+  return { ...part, shapes, labels }
+}
+
+/**
+ * Move a component one step up (`dir: +1`, toward the front/top) or down
+ * (`dir: -1`) in the unified z-order, renormalising every component's `z` to its
+ * new 0..n-1 position. Pure: returns a NEW part (arrays + indices unchanged, only
+ * `z` values change, so any live `{type,index}` selection stays valid). A no-op
+ * (returns the same part) when the item is already at the end it's moving toward.
+ */
+export function reorderComponent(
+  part: PartDefinition,
+  item: { kind: 'shape' | 'label'; index: number },
+  dir: 1 | -1
+): PartDefinition {
+  const ord = orderedComponents(part)
+  const pos = ord.findIndex((c) => c.kind === item.kind && c.index === item.index)
+  if (pos < 0) return part
+  const swap = pos + dir
+  if (swap < 0 || swap >= ord.length) return part
+  const reordered = [...ord]
+  ;[reordered[pos], reordered[swap]] = [reordered[swap], reordered[pos]]
+  const shapes = (part.shapes ?? []).map((s) => ({ ...s }))
+  const labels = (part.labels ?? []).map((l) => ({ ...l }))
+  reordered.forEach((c, z) => {
+    if (c.kind === 'shape') shapes[c.index].z = z
+    else labels[c.index].z = z
+  })
+  return { ...part, shapes, labels }
+}
+
+// --- Polygon vertex insertion (edge click) ---------------------------------
+
+/** Perpendicular distance from a normalised point to a segment, in viewBox units
+ *  (so it shares the canvas HIT threshold). */
+function segDistance(
+  nx: number,
+  ny: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  boxW: number,
+  boxH: number
+): number {
+  const px = nx * boxW
+  const py = ny * boxH
+  const aX = ax * boxW
+  const aY = ay * boxH
+  const dX = (bx - ax) * boxW
+  const dY = (by - ay) * boxH
+  const len2 = dX * dX + dY * dY
+  let t = len2 ? ((px - aX) * dX + (py - aY) * dY) / len2 : 0
+  t = Math.max(0, Math.min(1, t))
+  return Math.hypot(px - (aX + t * dX), py - (aY + t * dY))
+}
+
+/** The polygon ring edge (by start-vertex index) nearest a normalised point, with
+ *  its distance in viewBox units. `index` is -1 for an empty ring. Pure. */
+export function nearestPolygonEdge(
+  points: PolygonPoint[],
+  nx: number,
+  ny: number,
+  boxW: number,
+  boxH: number
+): { index: number; dist: number } {
+  let bi = -1
+  let bd = Infinity
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]
+    const b = points[(i + 1) % points.length]
+    const d = segDistance(nx, ny, a.x, a.y, b.x, b.y, boxW, boxH)
+    if (d < bd) {
+      bd = d
+      bi = i
+    }
+  }
+  return { index: bi, dist: bd }
+}
+
+/** Insert a point right after `edgeIndex` in a polygon ring. Pure. */
+export function insertPolygonPoint(
+  points: PolygonPoint[],
+  edgeIndex: number,
+  x: number,
+  y: number
+): PolygonPoint[] {
+  return [...points.slice(0, edgeIndex + 1), { x, y }, ...points.slice(edgeIndex + 1)]
 }
 
 /**
@@ -422,6 +581,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           y: clamp(l.y, 0, 1)
         }
         if (typeof l.fontSize === 'number' && Number.isFinite(l.fontSize)) lbl.fontSize = l.fontSize
+        if (typeof l.z === 'number' && Number.isFinite(l.z)) lbl.z = l.z
         return lbl
       })
       .filter((l) => l.text !== '')
@@ -468,6 +628,13 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     if (url !== undefined) lib.url = url
     if (docs !== undefined) lib.docs = docs
     if (Object.keys(lib).length) out.library = lib
+  }
+  if (part.layerVisibility && typeof part.layerVisibility === 'object') {
+    const lv: NonNullable<PartDefinition['layerVisibility']> = {}
+    for (const key of ['image', 'holes', 'pins', 'components'] as const) {
+      if (typeof part.layerVisibility[key] === 'boolean') lv[key] = part.layerVisibility[key]
+    }
+    if (Object.keys(lv).length) out.layerVisibility = lv
   }
 
   return out
@@ -722,6 +889,10 @@ export interface SymbolLayout {
 }
 
 const SYMBOL_STUB = 26
+/** Per-pin pitch for the schematic block (px) — the built-in Pico's roomy rows are
+ *  the guide, so labels never overlap. evenSlots() spreads pins ≈this far apart. */
+const SYMBOL_PITCH_Y = 30
+const SYMBOL_PITCH_X = 64
 
 /**
  * Lay out a part's schematic symbol (a labelled block with pin stubs), at the
@@ -742,9 +913,8 @@ export function schematicSymbolLayout(
   interface Ref {
     flatIndex: number
     pin: PartPin
-    edge: PartEdge
   }
-  const refs: Ref[] = resolvedPins(part).map((rp, i) => ({ flatIndex: i, pin: rp.pin, edge: rp.edge }))
+  const refs: Ref[] = resolvedPins(part).map((rp, i) => ({ flatIndex: i, pin: rp.pin }))
 
   // Collapse rails (every GND → one terminal; same power label → one) so the
   // symbol shows ONE GND / ONE 3V3 etc; signals stay individual. Each merged pad
@@ -770,13 +940,21 @@ export function schematicSymbolLayout(
     order: number
     refs: Ref[]
   }
-  // Side: the author's explicit schematic mapping wins for signals; otherwise the
-  // convention (power → top, ground → bottom, else the header edge).
+  // Side assignment follows schematic convention: power → top, ground → bottom,
+  // signals on the L/R sides. The author's explicit schematic mapping wins for a
+  // signal; otherwise free signals are split EVENLY between left and right (in
+  // flat-index order) so the symbol stays balanced and never grows into one tall
+  // column.
   const vts: VT[] = []
+  const free: Ref[] = []
   for (const r of singles) {
     const so = byName.get(r.pin.name)
-    vts.push({ side: so?.side ?? r.edge, order: so?.order ?? r.flatIndex, refs: [r] })
+    if (so) vts.push({ side: so.side, order: so.order, refs: [r] })
+    else free.push(r)
   }
+  free.sort((a, b) => a.flatIndex - b.flatIndex)
+  const half = Math.ceil(free.length / 2)
+  free.forEach((r, i) => vts.push({ side: i < half ? 'left' : 'right', order: r.flatIndex, refs: [r] }))
   for (const [k, g] of groups) {
     if (k === 'GND') vts.push({ side: 'bottom', order: Number.MAX_SAFE_INTEGER, refs: g })
     else vts.push({ side: 'top', order: byName.get(g[0].pin.name)?.order ?? g[0].flatIndex, refs: g })
@@ -786,10 +964,13 @@ export function schematicSymbolLayout(
   for (const vt of vts) bySide[vt.side].push(vt)
   for (const side of PART_EDGES) bySide[side].sort((a, b) => a.order - b.order)
 
+  // Box size from a per-pin pitch so labels never overlap: height from the busiest
+  // L/R side, width from the busiest top/bottom row. evenSlots() then spreads pins
+  // ≈pitch apart (gap = box/(n+1)).
   const vRows = Math.max(bySide.left.length, bySide.right.length, 1)
   const hCols = Math.max(bySide.top.length, bySide.bottom.length, 1)
-  const boxW = opts?.boxW ?? Math.min(300, Math.max(140, hCols * 46 + 60))
-  const boxH = opts?.boxH ?? Math.min(300, Math.max(120, vRows * 30 + 40))
+  const boxW = opts?.boxW ?? Math.max(170, (hCols + 1) * SYMBOL_PITCH_X)
+  const boxH = opts?.boxH ?? Math.max(130, (vRows + 1) * SYMBOL_PITCH_Y)
 
   const lY = evenSlots(bySide.left.length, 0, boxH)
   const rY = evenSlots(bySide.right.length, 0, boxH)

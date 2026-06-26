@@ -20,12 +20,6 @@
   touch-action: none; /* let pointer drags pan/move instead of scrolling */
 }
 
-/* Pin-label backing plate so labels stay legible over the board image. */
-.pcv__label-bg {
-  fill: #ffffff;
-  fill-opacity: 0.9;
-}
-
 /* Zoom controls overlay (bottom-right of the canvas). */
 .pcv__zoom {
   position: absolute;
@@ -176,8 +170,9 @@
 .pcv__pin-label {
   font-family: var(--font-mono);
   font-size: 11px;
-  /* Dark text on the white backing plate, so labels read over any board/image. */
-  fill: #16191d;
+  /* Node-graph style: light grey silk text on a transparent background, sitting in
+     the margin just outside the board edge. */
+  fill: #cfd6dd;
 }
 
 .pcv__feat-label {

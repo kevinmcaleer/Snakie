@@ -3,10 +3,13 @@ import { PartSchematicView } from './PartSchematicView'
 import {
   PartCanvas,
   DEFAULT_LAYERS,
+  DEFAULT_LOCKS,
   type CanvasSelection,
   type CanvasTool,
-  type LayerVisibility
+  type LayerVisibility,
+  type LayerLocks
 } from './PartCanvas'
+import { pinOutwardDir } from './part-body'
 import {
   CAPABILITIES,
   CAPABILITY_LABEL,
@@ -20,8 +23,10 @@ import {
   PIN_TYPE_LABEL,
   blankPart,
   normalisePart,
+  orderedComponents,
   pinNames,
   pinShapeOf,
+  reorderComponent,
   resolvedPins,
   sanitisePartId,
   validatePart,
@@ -172,6 +177,27 @@ function ShapesMenu({ tool, setTool }: { tool: CanvasTool; setTool: (t: CanvasTo
   )
 }
 
+/** Which lockable layer a selection belongs to (so a locked layer's items can't be
+ *  selected/deleted/edited from the panel either, matching the canvas lock). */
+function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
+  if (!sel) return null
+  switch (sel.type) {
+    case 'pin':
+      return 'pins'
+    case 'hole':
+      return 'holes'
+    case 'shape':
+    case 'shape-vertex':
+    case 'label':
+      return 'components'
+    case 'vertex':
+    case 'image':
+      return 'image'
+    default:
+      return null
+  }
+}
+
 export function PartEditor({
   libraryId,
   initial,
@@ -194,7 +220,7 @@ export function PartEditor({
     Object.entries(initial?.properties ?? {})
   )
   const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard')
-  const [visible, setVisible] = useState<LayerVisibility>(DEFAULT_LAYERS)
+  const [locked, setLocked] = useState<LayerLocks>(DEFAULT_LOCKS)
   const [showGrid, setShowGrid] = useState(false)
   const [lockImageAspect, setLockImageAspect] = useState(true)
   // The board image's native pixel aspect (w/h), read off the loaded image so a
@@ -241,6 +267,15 @@ export function PartEditor({
         : 0.6
 
   const patch = (p: Partial<PartDefinition>): void => setPart((d) => ({ ...d, ...p }))
+
+  // Layer visibility is PERSISTED on the part, so the Parts Library preview and
+  // the Board View respect what the author hid (e.g. a traced PCB image stays
+  // hidden while its bytes are kept for later). Toggling patches the part.
+  const visible: LayerVisibility = { ...DEFAULT_LAYERS, ...(part.layerVisibility ?? {}) }
+  const setVisible: React.Dispatch<React.SetStateAction<LayerVisibility>> = (action) => {
+    const next = typeof action === 'function' ? (action as (v: LayerVisibility) => LayerVisibility)(visible) : action
+    patch({ layerVisibility: next })
+  }
 
   // --- property rows (editable, blank-key rows survive while typing) --------
   const setProps = (rows: [string, string][]): void => {
@@ -298,6 +333,9 @@ export function PartEditor({
   const deleteSelection = (): void => {
     const sel = selection
     if (!sel) return
+    // A locked layer's items can't be deleted (keyboard or the Layers trash).
+    const lk = selectionLockKey(sel)
+    if (lk && locked[lk]) return
     if (sel.type === 'pin') {
       setPart((d) => ({
         ...d,
@@ -480,6 +518,7 @@ export function PartEditor({
                 <PartCanvas
                   part={part}
                   visible={visible}
+                  locked={locked}
                   showGrid={showGrid}
                   snap={snap}
                   lockAspect={lockImageAspect}
@@ -511,6 +550,8 @@ export function PartEditor({
                 part={part}
                 visible={visible}
                 setVisible={setVisible}
+                locked={locked}
+                setLocked={setLocked}
                 tool={tool}
                 setTool={setTool}
                 selection={selection}
@@ -567,6 +608,8 @@ interface LayersPanelProps {
   part: PartDefinition
   visible: LayerVisibility
   setVisible: React.Dispatch<React.SetStateAction<LayerVisibility>>
+  locked: LayerLocks
+  setLocked: React.Dispatch<React.SetStateAction<LayerLocks>>
   tool: CanvasTool
   setTool: (t: CanvasTool) => void
   selection: CanvasSelection
@@ -586,6 +629,8 @@ function LayersPanel({
   part,
   visible,
   setVisible,
+  locked,
+  setLocked,
   tool,
   setTool,
   selection,
@@ -616,6 +661,26 @@ function LayersPanel({
       title={visible[key] ? 'Hide layer' : 'Show layer'}
       aria-label={`${visible[key] ? 'Hide' : 'Show'} layer`}
     />
+  )
+  const toggleLock = (key: keyof LayerLocks): void => {
+    const willLock = !locked[key]
+    setLocked((l) => ({ ...l, [key]: !l[key] }))
+    // Locking a layer drops a selection that belongs to it, so its items can't
+    // then be edited via the inspector either.
+    if (willLock && selectionLockKey(selection) === key) setSelection(null)
+  }
+  /** A padlock toggle so a layer can be frozen (e.g. the background PCB). */
+  const lock = (key: keyof LayerLocks): JSX.Element => (
+    <button
+      type="button"
+      className={`pe__lock${locked[key] ? ' is-locked' : ''}`}
+      onClick={() => toggleLock(key)}
+      title={locked[key] ? 'Unlock layer (allow editing)' : 'Lock layer (prevent editing)'}
+      aria-label={`${locked[key] ? 'Unlock' : 'Lock'} layer`}
+      aria-pressed={locked[key]}
+    >
+      {locked[key] ? '🔒' : '🔓'}
+    </button>
   )
   const isOpen = (id: string): boolean => !collapsed[id]
   const caret = (id: string): JSX.Element => (
@@ -653,6 +718,11 @@ function LayersPanel({
     }
     if (kind === 'rect' && tool === 'shape') setTool('select')
   }
+  /** Restack a component one step (dir +1 = forward/on top, -1 = backward). */
+  const moveComponent = (kind: 'shape' | 'label', index: number, dir: 1 | -1): void => {
+    const next = reorderComponent(part, { kind, index }, dir)
+    patch({ shapes: next.shapes, labels: next.labels })
+  }
 
   return (
     <section className="pe__section pe__layers">
@@ -663,34 +733,44 @@ function LayersPanel({
         <div className="pe__layer-head">
           {caret('components')}
           {eye('components')}
+          {lock('components')}
           <span className="pe__layer-name">Components</span>
           <span className="pe__layer-count">{counts.components}</span>
-          {delBtn(selection?.type === 'shape' || selection?.type === 'shape-vertex' || selection?.type === 'label')}
+          {delBtn((selection?.type === 'shape' || selection?.type === 'shape-vertex' || selection?.type === 'label') && !locked.components)}
         </div>
         {isOpen('components') && (
           <ul className="pe__layer-list">
             {counts.components === 0 && <li className="pe__layer-empty">Add shapes from the toolbar ▸ Shapes.</li>}
-            {shapes.map((s, i) => {
-              // Stay highlighted while editing one of this shape's polygon vertices.
-              const shapeActive =
-                (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === i
-              return (
-                <li key={`s${i}`}>
-                  <button type="button" className={`pe__item${shapeActive ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'shape', index: i })}>
-                    <span className="pe__item-name">{s.label || s.kind}</span>
-                    <span className="pe__item-sub">{s.kind}</span>
-                  </button>
-                </li>
-              )
-            })}
-            {labels.map((l, i) => (
-              <li key={`l${i}`}>
-                <button type="button" className={`pe__item${selEq({ type: 'label', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'label', index: i })}>
-                  <span className="pe__item-name">{l.text || '(label)'}</span>
-                  <span className="pe__item-sub">text</span>
-                </button>
-              </li>
-            ))}
+            {/* One list across shapes + labels in draw order, TOP-MOST FIRST. The
+                ▲/▼ buttons restack a component (top of the list draws on top). */}
+            {orderedComponents(part)
+              .slice()
+              .reverse()
+              .map((c, ri, rows) => {
+                const isShape = c.kind === 'shape'
+                const name = isShape ? shapes[c.index].label || shapes[c.index].kind : labels[c.index].text || '(label)'
+                const sub = isShape ? shapes[c.index].kind : 'text'
+                const active = isShape
+                  ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === c.index
+                  : selEq({ type: 'label', index: c.index })
+                const sel: CanvasSelection = isShape ? { type: 'shape', index: c.index } : { type: 'label', index: c.index }
+                return (
+                  <li key={`${c.kind}${c.index}`} className="pe__item-row">
+                    <button type="button" disabled={locked.components} className={`pe__item${active ? ' is-active' : ''}`} onClick={() => setSelection(sel)}>
+                      <span className="pe__item-name">{name}</span>
+                      <span className="pe__item-sub">{sub}</span>
+                    </button>
+                    <div className="pe__item-order">
+                      <button type="button" className="pe__ordbtn" disabled={ri === 0 || locked.components} title="Bring forward (draw on top)" aria-label="Bring forward" onClick={() => moveComponent(c.kind, c.index, 1)}>
+                        ▲
+                      </button>
+                      <button type="button" className="pe__ordbtn" disabled={ri === rows.length - 1 || locked.components} title="Send backward (draw underneath)" aria-label="Send backward" onClick={() => moveComponent(c.kind, c.index, -1)}>
+                        ▼
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
           </ul>
         )}
       </div>
@@ -700,19 +780,20 @@ function LayersPanel({
         <div className="pe__layer-head">
           {caret('pins')}
           {eye('pins')}
+          {lock('pins')}
           <span className="pe__layer-name">Pins</span>
           <span className="pe__layer-count">{counts.pins}</span>
           <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
             ＋
           </button>
-          {delBtn(selection?.type === 'pin')}
+          {delBtn(selection?.type === 'pin' && !locked.pins)}
         </div>
         {isOpen('pins') && (
           <ul className="pe__layer-list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
             {pins.map((rp) => (
               <li key={`p${rp.hi}-${rp.pi}`}>
-                <button type="button" className={`pe__item${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+                <button type="button" disabled={locked.pins} className={`pe__item${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                   <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   <span className="pe__item-sub">{rp.pin.type}</span>
                 </button>
@@ -727,19 +808,20 @@ function LayersPanel({
         <div className="pe__layer-head">
           {caret('holes')}
           {eye('holes')}
+          {lock('holes')}
           <span className="pe__layer-name">Mounting holes</span>
           <span className="pe__layer-count">{counts.holes}</span>
           <button type="button" className={`pe__chip pe__chip--add${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
             ＋
           </button>
-          {delBtn(selection?.type === 'hole')}
+          {delBtn(selection?.type === 'hole' && !locked.holes)}
         </div>
         {isOpen('holes') && (
           <ul className="pe__layer-list">
             {holes.length === 0 && <li className="pe__layer-empty">No holes yet.</li>}
             {holes.map((h, i) => (
               <li key={`h${i}`}>
-                <button type="button" className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
+                <button type="button" disabled={locked.holes} className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
                   <span className="pe__item-name">Hole {i + 1}</span>
                   <span className="pe__item-sub">⌀{h.diameter}mm</span>
                 </button>
@@ -753,6 +835,7 @@ function LayersPanel({
       <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {eye('image')}
+          {lock('image')}
           <span className="pe__layer-name">PCB / image</span>
           <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
         </div>
@@ -1058,39 +1141,46 @@ function SelectionInspector({
               ))}
             </select>
           </label>
-          {pinShapeOf(pin) === 'castellated' &&
-            (() => {
-              const rot = pin.rotation ?? ((pin.x ?? 0) < 0.5 ? 180 : 0)
-              return (
-                <div className="pe__pinrot">
-                  <span>Castellation</span>
-                  <button
-                    type="button"
-                    className="pe__iconbtn"
-                    title="Rotate the half-hole 90°"
-                    aria-label="Rotate castellation"
-                    onClick={() => updatePin({ rotation: (rot + 90) % 360 })}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M20 11a8 8 0 1 0-2.3 5.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      <path d="M20 4v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="pe__iconbtn"
-                    title="Flip the half-hole to the opposite side"
-                    aria-label="Flip castellation"
-                    onClick={() => updatePin({ rotation: (rot + 180) % 360 })}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 3v18" stroke="currentColor" strokeWidth="1.6" strokeDasharray="2 2" />
-                      <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-                </div>
-              )
-            })()}
+          {/* Rotation applies to EVERY pin — it turns the silk label (and the
+              half-hole on castellated pads). Shown for all shapes so the label can
+              be aimed any of the four ways; the degree readout confirms it saved. */}
+          {(() => {
+            // Default to the SAME nearest-border direction the label is drawn with
+            // (pinOutwardDir uses x AND y), so the readout + the +90/+180 base match
+            // what's on the canvas for top/bottom-edge pins too.
+            const dir = pinOutwardDir(pin.rotation, pin.x ?? 0.5, pin.y ?? 0.5)
+            const rot = pin.rotation ?? { right: 0, bottom: 90, left: 180, top: 270 }[dir]
+            return (
+              <div className="pe__pinrot">
+                <span>Rotation</span>
+                <button
+                  type="button"
+                  className="pe__iconbtn"
+                  title="Rotate 90° (turns the label; the half-hole on castellated pads)"
+                  aria-label="Rotate pin"
+                  onClick={() => updatePin({ rotation: (rot + 90) % 360 })}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 11a8 8 0 1 0-2.3 5.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M20 4v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="pe__iconbtn"
+                  title="Flip 180°"
+                  aria-label="Flip pin"
+                  onClick={() => updatePin({ rotation: (rot + 180) % 360 })}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 3v18" stroke="currentColor" strokeWidth="1.6" strokeDasharray="2 2" />
+                    <path d="M8 8l-4 4 4 4M16 8l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <span className="pe__pinrot-deg">{rot}°</span>
+              </div>
+            )
+          })()}
           <div className="pe__row">
             {num('x', pin.x ?? 0, (v) => updatePin({ x: v }))}
             {num('y', pin.y ?? 0, (v) => updatePin({ y: v }))}

@@ -180,6 +180,10 @@ export interface ComponentShape {
   r?: number
   /** Polygon vertices (normalised), when `kind === 'polygon'`. */
   points?: PolygonPoint[]
+  /** Draw order within the Components layer; higher = drawn later (on top of
+   *  lower-z shapes AND labels). Absent ⇒ legacy order (its array index, below
+   *  labels). Lets components be stacked from the editor's Components list. */
+  z?: number
 }
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
@@ -189,6 +193,8 @@ export interface PartLabel {
   y: number
   /** Font size in SVG user units (the canvas viewBox is ~420 wide). */
   fontSize?: number
+  /** Draw order within the Components layer (see {@link ComponentShape.z}). */
+  z?: number
 }
 
 /**
@@ -322,6 +328,23 @@ export interface PartDefinition {
   // --- Code library (#166) -------------------------------------------------
   /** A MicroPython driver/library linked to this part. */
   library?: PartLibraryLink
+
+  // --- Editor display state (persisted) ------------------------------------
+  /**
+   * Which layers are shown when the part is drawn (Part Editor, Parts Library
+   * preview and Board View). A key set to `false` hides that layer everywhere —
+   * e.g. hide the traced PCB `image` in the finished part while keeping its bytes
+   * for later refinement. Absent keys default to visible.
+   */
+  layerVisibility?: PartLayerVisibility
+}
+
+/** Per-layer visibility persisted with a part (absent key ⇒ visible). */
+export interface PartLayerVisibility {
+  image?: boolean
+  holes?: boolean
+  pins?: boolean
+  components?: boolean
 }
 
 /**

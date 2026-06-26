@@ -3,6 +3,7 @@ import {
   DEFAULT_SHAPE_FILL,
   DEFAULT_SHAPE_STROKE,
   DEFAULT_SHAPE_STROKE_WIDTH,
+  orderedComponents,
   pinShapeOf,
   resolvedPins,
   type Box,
@@ -142,6 +143,59 @@ export function castellatedPad(
   )
 }
 
+/** The board edge a pin sits on (= the direction its silk label is pushed). Taken
+ *  from the castellation `rotation` (0=right, 90=bottom, 180=left, 270=top) when set,
+ *  else inferred from the nearest board border. */
+export function pinOutwardDir(
+  rotationDeg: number | undefined,
+  nx: number,
+  ny: number
+): 'left' | 'right' | 'top' | 'bottom' {
+  if (rotationDeg !== undefined) {
+    const r = (((Math.round(rotationDeg / 90) * 90) % 360) + 360) % 360
+    return r === 0 ? 'right' : r === 90 ? 'bottom' : r === 180 ? 'left' : 'top'
+  }
+  const dl = nx
+  const dr = 1 - nx
+  const dt = ny
+  const db = 1 - ny
+  const m = Math.min(dl, dr, dt, db)
+  if (m === dt) return 'top'
+  if (m === db) return 'bottom'
+  if (m === dl) return 'left'
+  return 'right'
+}
+
+/** Placement for a pin's silk label, node-graph style: pushed OUTWARD from the
+ *  board edge the pin is on. Left/right labels stay horizontal; top/bottom labels
+ *  are turned 90° (never 180°/upside-down) so dense rows don't overlap. */
+export interface PinLabelLayout {
+  lx: number
+  ly: number
+  anchor: 'start' | 'middle' | 'end'
+  /** Degrees to rotate the text about (lx, ly); 0 = horizontal (right-side-up). */
+  rotate: number
+}
+export function pinLabelLayout(
+  cx: number,
+  cy: number,
+  rotationDeg: number | undefined,
+  nx: number,
+  ny: number,
+  gap: number
+): PinLabelLayout {
+  switch (pinOutwardDir(rotationDeg, nx, ny)) {
+    case 'right':
+      return { lx: cx + gap, ly: cy + 4, anchor: 'start', rotate: 0 }
+    case 'left':
+      return { lx: cx - gap, ly: cy + 4, anchor: 'end', rotate: 0 }
+    case 'top':
+      return { lx: cx, ly: cy - gap, anchor: 'start', rotate: -90 }
+    default: // bottom
+      return { lx: cx, ly: cy + gap, anchor: 'start', rotate: 90 }
+  }
+}
+
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
   image: boolean
@@ -211,11 +265,15 @@ export interface PartBodyProps {
 export function PartBody({
   part,
   box,
-  visible = DEFAULT_LAYERS,
+  visible: visibleProp,
   showGrid = false,
   selection = null,
   idPrefix
 }: PartBodyProps): JSX.Element {
+  // Honour the part's own saved layer visibility (so the Board View / library
+  // preview hide what the author hid, e.g. a traced PCB image) unless the caller
+  // overrides it.
+  const visible: LayerVisibility = visibleProp ?? { ...DEFAULT_LAYERS, ...(part.layerVisibility ?? {}) }
   const rawId = useId()
   const uid = idPrefix ?? rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -353,21 +411,22 @@ export function PartBody({
             )
           }
           const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
-          const anchor = rp.x < 0.5 ? 'start' : 'end'
-          const ldx = rp.x < 0.5 ? size : -size
-          const lx = cx + ldx
-          const tw = text.length * 6.2 + 6 // approx width of the mono label
-          const bgX = anchor === 'start' ? lx - 3 : lx - tw + 3
+          // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
+          // 90° on the top/bottom edges so dense rows don't collide.
+          const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size)
           return (
             <g key={`p${i}`}>
               {pad}
               {text && (
-                <>
-                  <rect x={bgX} y={cy - 8} width={tw} height={16} rx={2} className="pcv__label-bg" />
-                  <text x={lx} y={cy + 4} className="pcv__pin-label" textAnchor={anchor}>
-                    {text}
-                  </text>
-                </>
+                <text
+                  x={ll.lx}
+                  y={ll.ly}
+                  className="pcv__pin-label"
+                  textAnchor={ll.anchor}
+                  transform={ll.rotate ? `rotate(${ll.rotate} ${ll.lx} ${ll.ly})` : undefined}
+                >
+                  {text}
+                </text>
               )}
             </g>
           )
@@ -384,9 +443,20 @@ export function PartBody({
           </g>
         ))}
 
-      {/* Layer 4b: component shapes (rect / circle / polygon) */}
+      {/* Layer 4b/4c: shapes + text labels in one unified z-order (so they stack). */}
       {visible.components &&
-        shapes.map((s, i) => {
+        orderedComponents(part).map((c) => {
+          if (c.kind === 'label') {
+            const i = c.index
+            const l = labels[i]
+            return (
+              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+                {l.text}
+              </text>
+            )
+          }
+          const i = c.index
+          const s = shapes[i]
           const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
           const fill = s.fill ?? DEFAULT_SHAPE_FILL
           const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
@@ -422,14 +492,6 @@ export function PartBody({
             </g>
           )
         })}
-
-      {/* Layer 4c: text labels */}
-      {visible.components &&
-        labels.map((l, i) => (
-          <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
-            {l.text}
-          </text>
-        ))}
     </g>
   )
 }

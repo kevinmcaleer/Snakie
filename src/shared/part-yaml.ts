@@ -68,6 +68,13 @@ function strArray(v: unknown): string[] | undefined {
   return out.length ? out : undefined
 }
 
+function bool(v: unknown): boolean | undefined {
+  if (typeof v === 'boolean') return v
+  if (v === 'true') return true
+  if (v === 'false') return false
+  return undefined
+}
+
 /** Coerce one raw pin object from YAML into a clean {@link PartPin}. */
 function coercePin(raw: unknown): PartPin | null {
   if (!raw || typeof raw !== 'object') return null
@@ -137,6 +144,8 @@ function coerceShape(raw: unknown): ComponentShape | null {
       .filter((p): p is { x: number; y: number } => p !== null)
     if (pts.length >= 3) shape.points = pts
   }
+  const z = num(r.z)
+  if (z !== undefined) shape.z = z
   return shape
 }
 
@@ -204,7 +213,8 @@ export function partToYaml(part: PartDefinition): string {
     image: part.image,
     imageLayer: part.imageLayer,
     schematic: part.schematic,
-    library: part.library
+    library: part.library,
+    layerVisibility: part.layerVisibility
   })
   return stringify(obj, { lineWidth: 0 })
 }
@@ -326,12 +336,14 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num(rec?.x)
         const y = num(rec?.y)
         if (text === undefined || x === undefined || y === undefined) return null
-        const out: { text: string; x: number; y: number; fontSize?: number } = { text, x, y }
+        const out: { text: string; x: number; y: number; fontSize?: number; z?: number } = { text, x, y }
         const fs = num(rec?.fontSize)
         if (fs !== undefined) out.fontSize = fs
+        const z = num(rec?.z)
+        if (z !== undefined) out.z = z
         return out
       })
-      .filter((l): l is { text: string; x: number; y: number; fontSize?: number } => l !== null)
+      .filter((l): l is { text: string; x: number; y: number; fontSize?: number; z?: number } => l !== null)
     if (labels.length) part.labels = labels
   }
   assign('ledLabel', str(raw.ledLabel))
@@ -381,6 +393,16 @@ export function partFromYaml(text: string): PartDefinition {
     if (url !== undefined) lib.url = url
     if (docs !== undefined) lib.docs = docs
     if (Object.keys(lib).length) part.library = lib
+  }
+
+  if (raw.layerVisibility && typeof raw.layerVisibility === 'object' && !Array.isArray(raw.layerVisibility)) {
+    const lv = raw.layerVisibility as Record<string, unknown>
+    const out: NonNullable<PartDefinition['layerVisibility']> = {}
+    for (const key of ['image', 'holes', 'pins', 'components'] as const) {
+      const b = bool(lv[key])
+      if (b !== undefined) out[key] = b
+    }
+    if (Object.keys(out).length) part.layerVisibility = out
   }
 
   return part
