@@ -1,0 +1,243 @@
+/*
+ * Wiring canvas (#139/#140) — Board Viewer "Wiring" mode. Dark mat with draggable
+ * MCU/part boxes, node-RED noodle wires, and a connections table. Unique `wc__`
+ * prefix.
+ */
+
+.wc {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--bc-mat, #0c0f12);
+  color: var(--text);
+}
+
+.wc__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.6rem;
+  border-bottom: var(--border-w) solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.wc__board {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.wc__board select {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: #2a2c30;
+  background: var(--paper, #fbf7ec);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.22rem 0.4rem;
+}
+
+.wc__hint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.wc__spacer {
+  flex: 1 1 auto;
+}
+
+.wc__btn {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.24rem 0.6rem;
+  cursor: pointer;
+}
+
+.wc__btn:hover {
+  border-color: var(--text-muted);
+}
+
+.wc__svg {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: block;
+  touch-action: none;
+  cursor: default;
+}
+
+/* Boxes */
+.wc__box {
+  fill: #1c2128;
+  stroke: #0008;
+  stroke-width: 1.5;
+}
+
+.wc__box--mcu {
+  fill: #14321f;
+}
+
+.wc__box-title {
+  fill: #ffffff14;
+}
+
+.wc__box-titletext {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  fill: #e9edf1;
+  text-anchor: middle;
+}
+
+.wc__pin-name {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: #cfd6dd;
+  text-anchor: middle;
+}
+
+/* "Remove part" affordance on a part box's title bar. */
+.wc__box-remove {
+  cursor: pointer;
+}
+.wc__box-remove circle {
+  fill: #0006;
+  stroke: #ffffff2a;
+  stroke-width: 1;
+}
+.wc__box-remove:hover circle {
+  fill: #c0392b;
+}
+.wc__box-remove text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  fill: #e9edf1;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+/* Pin dots, coloured by net. */
+.wc__dot {
+  stroke: #0c0f12;
+  stroke-width: 1;
+  cursor: crosshair;
+}
+.wc__dot--vcc {
+  fill: #c0392b;
+}
+.wc__dot--gnd {
+  fill: #e9edf1;
+}
+.wc__dot--signal {
+  fill: #d6a531;
+}
+
+.wc__wire {
+  cursor: pointer;
+}
+
+/* Empty state */
+.wc__empty {
+  margin: auto;
+  text-align: center;
+  padding: 2rem;
+}
+.wc__empty p {
+  margin: 0.3rem 0;
+  font-size: 0.8rem;
+}
+
+.wc__muted {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+/* Connections table */
+.wc__table {
+  flex: 0 0 auto;
+  max-height: 32%;
+  overflow: auto;
+  border-top: var(--border-w) solid var(--border);
+  background: var(--bg-elevated);
+  padding: 0.4rem 0.6rem;
+}
+
+.wc__table-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.wc__table-count {
+  font-size: 0.62rem;
+  background: var(--bg-sunken);
+  border-radius: 999px;
+  padding: 0 0.4rem;
+}
+
+.wc__table-empty {
+  margin: 0.2rem 0;
+}
+
+.wc__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.7rem;
+}
+
+.wc__table th,
+.wc__table td {
+  text-align: left;
+  padding: 0.18rem 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.wc__table th {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.wc__mono {
+  font-family: var(--font-mono);
+}
+
+.wc__swatch {
+  width: 2rem;
+  height: 1.2rem;
+  padding: 0;
+  border: var(--border-w) solid var(--border);
+  border-radius: 3px;
+  background: none;
+  cursor: pointer;
+}
+
+.wc__del {
+  width: 1.4rem;
+  height: 1.4rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.wc__del:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}

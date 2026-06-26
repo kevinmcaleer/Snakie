@@ -128,13 +128,16 @@ export function AppShell(): JSX.Element {
   // us stream every edit / theme change to that window over IPC so it updates
   // live. `boardOpened` tracks whether the window has been opened this session
   // (so we only stream while it's open); it resets when the user closes it.
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
 
   const boardSource = activeFile?.content ?? ''
   const boardFileName = activeFile?.name
   const boardIsPython = !!activeFile && /\.py$/i.test(activeFile.name)
+  // The open project folder, streamed to the board window so its Wiring mode can
+  // read/write robot.yml next to the user's code.
+  const boardFolder = currentFolder ?? undefined
 
   // Toggle the floating Board View window from the toolbar button: open (and
   // push the current file immediately so it isn't blank) if closed, or close it
@@ -152,11 +155,12 @@ export function AppShell(): JSX.Element {
           source: boardSource,
           fileName: boardFileName,
           isPython: boardIsPython,
-          theme
+          theme,
+          folder: boardFolder
         })
       )
       .catch(() => undefined)
-  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme])
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, boardFolder])
 
   // While the window is open, stream the active file / content / theme to it on
   // every change so it stays live.
@@ -166,9 +170,10 @@ export function AppShell(): JSX.Element {
       source: boardSource,
       fileName: boardFileName,
       isPython: boardIsPython,
-      theme
+      theme,
+      folder: boardFolder
     })
-  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme])
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, boardFolder])
 
   // Reset the "opened" flag when the user closes the board window.
   useEffect(() => {

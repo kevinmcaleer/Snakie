@@ -101,6 +101,8 @@ export interface BoardGraphProps {
   onEnterCreator?: () => void
   /** Open the Parts Library (the user's parts). When set, a chip button shows. */
   onOpenParts?: () => void
+  /** Open the Wiring mode (place parts + wire pins). When set, a button shows. */
+  onOpenWiring?: () => void
   /** Open the user's boards folder (wired in the floating window). */
   onOpenBoardsFolder?: () => void
 }
@@ -300,6 +302,7 @@ export function BoardGraph({
   onClose,
   onEnterCreator,
   onOpenParts,
+  onOpenWiring,
   onOpenBoardsFolder
 }: BoardGraphProps): JSX.Element {
   const boards = useMemo(() => mergeBoards(userBoards ?? []), [userBoards])
@@ -633,6 +636,23 @@ export function BoardGraph({
                   strokeWidth="1.8"
                   strokeLinejoin="round"
                 />
+              </svg>
+            </button>
+          )}
+          {onOpenWiring && (
+            <button
+              type="button"
+              className="boardgraph__key"
+              onClick={onOpenWiring}
+              title="Open Wiring (place parts + connect pins)"
+              aria-label="Open Wiring"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <g fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <circle cx="3" cy="4" r="1.6" fill="currentColor" stroke="none" />
+                  <circle cx="13" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                  <path d="M3 4c5 0 5 8 10 8" />
+                </g>
               </svg>
             </button>
           )}

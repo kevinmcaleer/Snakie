@@ -30,6 +30,10 @@ export type {
   PartRegistry,
   LibraryUpdate
 } from '../shared/part'
+
+// Re-export the Robot Definition types (#128) so the wiring canvas + project
+// list can import them from this single UI-facing module.
+export type { RobotDefinition, RobotPart, RobotConnection, RobotNet } from '../shared/robot'
 export type {
   BoardDefinition,
   BoardPad,

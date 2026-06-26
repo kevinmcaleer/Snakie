@@ -7,9 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot definition + Wiring mode (#128 / #139 / #140).** The Board Viewer gains
+  a **Wiring** mode (the wires button in its title bar): pick a microcontroller,
+  **add parts from the library** (a part's **+ Add to project** button), and drag
+  **node-RED-style noodle wires** between any two pins. Power wires are red,
+  ground white, and signal wires take a palette colour (or one you pick per wire).
+  Every wire is mirrored in a **connections table** beneath the canvas. The whole
+  project — chosen board, placed parts and their placements, and the pin-to-pin
+  connections — is saved as a human-readable **`robot.yml`** in the project folder
+  (round-trips). See `docs/robot-definition.md`.
 - **Parts Library — portable, community-authored & version-controlled (#129).**
-  A new **Parts** view in the activity bar browses your installed parts libraries
-  and the parts inside them. Parts are **no longer hard-coded** into Snakie:
+  A new **Parts** view (in the Board Viewer — see below) browses your installed
+  parts libraries and the parts inside them. Parts are **no longer hard-coded** into Snakie:
   each part lives in its own folder as a human-readable `parts.yml` (+ image
   asset), grouped into libraries (modelled on Fusion 360's electronics
   libraries) under `<userData>/parts/<library>/<part>/`. Search across every part

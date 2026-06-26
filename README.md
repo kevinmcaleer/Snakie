@@ -67,6 +67,10 @@ Grab the latest installer for your platform from the
 - 🛠️ A visual **Part Editor** (schematic ⇄ breadboard) to author parts: pins with
   type + capabilities, castellated/regular pads, mounting holes, buttons, 2.54 mm
   grid snap, and a footprint + life-like preview ([`docs/part-editor.md`](docs/part-editor.md))
+- 🔌 A **Wiring** mode that places parts + the microcontroller on a canvas and lets
+  you drag **node-RED-style noodle wires** between pins (red power / white ground /
+  colour-picked signals), saved to a `robot.yml` project file
+  ([`docs/robot-definition.md`](docs/robot-definition.md))
 
 ### Workflow
 

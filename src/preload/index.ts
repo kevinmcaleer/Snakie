@@ -67,6 +67,7 @@ import type {
   PartRegistry,
   RegistryEntry
 } from '../shared/part'
+import type { RobotDefinition } from '../shared/robot'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -74,6 +75,8 @@ export interface BoardSourcePayload {
   fileName?: string
   isPython: boolean
   theme: string
+  /** The open project folder, so the board window can read/write its robot.yml. */
+  folder?: string
 }
 
 /**
@@ -819,6 +822,20 @@ const parts = {
     ipcRenderer.invoke('parts:checkUpdates', url)
 }
 
+/**
+ * Robot definition layer (#128): the project's `robot.yml` (parts + pin-to-pin
+ * wiring) that the Board Viewer's Wiring mode reads/writes. `folder` is the open
+ * project folder (so the file sits with the user's code); omit it to use the
+ * app-data fallback.
+ */
+const robot = {
+  /** Load the project's robot.yml (empty definition if none exists). */
+  load: (folder?: string): Promise<RobotDefinition> => ipcRenderer.invoke('robot:load', folder),
+  /** Save the robot definition. Resolves to {ok,error} — never rejects. */
+  save: (folder: string | undefined, def: RobotDefinition): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('robot:save', { folder, def })
+}
+
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
 const api = {
@@ -856,7 +873,9 @@ const api = {
   /** Find & Replace window: native window ↔ main editor find/replace relay. */
   find,
   /** Parts Library + Part Editor layer: on-disk parts + community registry. */
-  parts
+  parts,
+  /** Robot definition layer: the project's robot.yml (parts + wiring). */
+  robot
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to the renderer only if

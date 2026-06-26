@@ -14,6 +14,7 @@ import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerPartsIpc } from './parts/ipc'
+import { registerRobotIpc } from './robot/ipc'
 import { setupAppMenu } from './menu'
 
 /** The single application window, used to route device push-events. */
@@ -174,6 +175,10 @@ app.whenReady().then(() => {
   // community-authored parts on disk (<userData>/parts/<lib>/<part>/parts.yml)
   // plus the master community registry (fetch + install + update checks).
   registerPartsIpc()
+
+  // Register the Robot Definition layer (#128): read/write robot.yml (the
+  // project's parts + pin-to-pin wiring) for the Board Viewer's Wiring mode.
+  registerRobotIpc()
 
   createWindow()
 

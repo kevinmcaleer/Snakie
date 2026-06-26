@@ -49,7 +49,13 @@ function openEditor(libraryId: string, part: PartDefinition | null): void {
   )
 }
 
-export function PartsPanel(): JSX.Element {
+export interface PartsPanelProps {
+  /** When provided, the part detail shows an "Add to project" button that adds
+   *  the part to robot.yml (wired by the board window). */
+  onAddToProject?: (libraryId: string, part: PartDefinition) => void
+}
+
+export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Element {
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -381,6 +387,9 @@ export function PartsPanel(): JSX.Element {
                 part={selectedPart.part}
                 onEdit={() => openEditor(selectedPart.libraryId, selectedPart.part)}
                 onDelete={() => void deletePart(selectedPart.libraryId, selectedPart.part)}
+                onAddToProject={
+                  onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
+                }
                 onClose={() => setSelected(null)}
               />
             </Panel>
@@ -396,12 +405,14 @@ function PartDetail({
   part,
   onEdit,
   onDelete,
+  onAddToProject,
   onClose
 }: {
   libraryId: string
   part: PartDefinition
   onEdit: () => void
   onDelete: () => void
+  onAddToProject?: () => void
   onClose: () => void
 }): JSX.Element {
   const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
@@ -422,6 +433,11 @@ function PartDetail({
       <div className="pl__detail-head">
         <span className="pl__detail-title">{part.name}</span>
         <div className="pl__detail-actions">
+          {onAddToProject && (
+            <button type="button" className="pl__btn pl__btn--small pl__btn--primary" onClick={onAddToProject} title="Add this part to the project (robot.yml)">
+              + Add to project
+            </button>
+          )}
           <button type="button" className="pl__btn pl__btn--small" onClick={onEdit}>
             Edit
           </button>
