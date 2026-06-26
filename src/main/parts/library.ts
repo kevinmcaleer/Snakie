@@ -52,22 +52,37 @@ function bundledStandardLibraryDir(): string {
   return join(__dirname, '..', '..', 'examples', 'parts', STANDARD_LIBRARY_ID)
 }
 
+/** In-flight seed, so concurrent `listLibraries` calls don't race the copy. */
+let seedInFlight: Promise<void> | null = null
+
 /**
  * Seed the bundled "Standard Boards" library (Pico / Pico 2 W / ESP32 DevKit) into
  * `<userData>/parts` on first run, so the board selector has a canonical board set
  * out of the box. Idempotent + best-effort: it never overwrites an existing copy
- * (user edits survive) and a failure just falls back to the built-in boards.
+ * (user edits survive) and a failure just falls back to the built-in boards. Runs
+ * at most once concurrently (a single copy even if several callers race it).
  */
-export async function seedStandardLibrary(): Promise<void> {
+export function seedStandardLibrary(): Promise<void> {
+  if (!seedInFlight) seedInFlight = doSeedStandardLibrary()
+  return seedInFlight
+}
+
+async function doSeedStandardLibrary(): Promise<void> {
   const dest = join(partsDir(), STANDARD_LIBRARY_ID)
   if (existsSync(dest)) return
   const src = bundledStandardLibraryDir()
   if (!existsSync(src)) return
+  // Copy into a temp dir first, then rename — so an interrupted copy can't leave a
+  // half-written library that the existsSync guard would then skip.
+  const tmp = `${dest}.seeding-${process.pid}`
   try {
     await fsp.mkdir(partsDir(), { recursive: true })
-    await fsp.cp(src, dest, { recursive: true })
+    await fsp.rm(tmp, { recursive: true, force: true })
+    await fsp.cp(src, tmp, { recursive: true })
+    await fsp.rename(tmp, dest)
   } catch {
     // best-effort — the built-in board fallback covers a failed seed
+    await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {})
   }
 }
 

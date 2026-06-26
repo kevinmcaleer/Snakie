@@ -60,7 +60,7 @@ describe('standard boards library (snakie-standard)', () => {
   // BoardDefinition (so it can REPLACE the hardcoded built-ins).
   const boards = [
     { id: 'pico', pads: 40, mcu: 'RP2040' },
-    { id: 'pico-2w', pads: 40, mcu: 'RP2350' },
+    { id: 'pico2w', pads: 40, mcu: 'RP2350' }, // canonical id, matches the built-in
     { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' }
   ]
 

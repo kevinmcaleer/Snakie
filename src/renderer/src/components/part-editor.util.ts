@@ -757,20 +757,20 @@ export function boardsFromLibraries(libraries: { parts?: PartDefinition[] }[]): 
 
 /**
  * The board list for the selector: boards sourced from the parts libraries (the
- * standard + user board parts), plus any Board-Creator boards, deduped by id with
- * the library board winning. Falls back to the hardcoded built-ins ONLY when there
- * are no library/user boards (a fresh install). Pure.
+ * standard + user board parts) win by id, then any Board-Creator boards, then the
+ * hardcoded built-ins fill the gaps — so a library board REPLACES its built-in
+ * namesake (e.g. `pico2w`) while bundled boards without a library equivalent (the
+ * Pimoroni Tiny / Plus) stay available. Never empty. Pure.
  */
 export function resolveBoards(
   libraries: { parts?: PartDefinition[] }[],
   userBoards?: BoardDefinition[]
 ): BoardDefinition[] {
   const byId = new Map<string, BoardDefinition>()
-  for (const b of [...boardsFromLibraries(libraries), ...(userBoards ?? [])]) {
+  for (const b of [...boardsFromLibraries(libraries), ...(userBoards ?? []), ...BUILTIN_BOARDS]) {
     if (!byId.has(b.id)) byId.set(b.id, b)
   }
-  const merged = [...byId.values()]
-  return merged.length ? merged : BUILTIN_BOARDS
+  return [...byId.values()]
 }
 
 /** Every pin name declared on the part (for ledLabel / schematic pickers). */
