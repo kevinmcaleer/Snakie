@@ -29,6 +29,13 @@ import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
+import { PartsImportBanner } from './PartsImportBanner'
+import {
+  requiredPartModules,
+  missingImports as computeMissingImports,
+  missingOnBoard as computeMissingOnBoard,
+  type RequiredModule
+} from './part-imports'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import {
   INSTRUMENTS_LIB_PATH,
@@ -500,6 +507,88 @@ export function AppShell(): JSX.Element {
     dismissed: libDismissed
   })
 
+  // --- Parts import check (#166) ---------------------------------------------
+  // The project's placed parts may link MicroPython libraries. When the board
+  // connects or a .py file opens, flag any required module the file doesn't import
+  // and/or the board doesn't have installed, and offer to install the missing ones.
+  const [requiredModules, setRequiredModules] = useState<RequiredModule[]>([])
+  const [installedModules, setInstalledModules] = useState<Set<string> | null>(null)
+  const [partsDismissed, setPartsDismissed] = useState(false)
+  const [partsInstalling, setPartsInstalling] = useState(false)
+  const [partsInstallError, setPartsInstallError] = useState<string | null>(null)
+
+  // Load the required modules from the project's robot.yml + installed libraries.
+  // Refreshed on connect / file-open / folder change (the issue's triggers) — no
+  // cross-window event needed.
+  useEffect(() => {
+    let active = true
+    void (async (): Promise<void> => {
+      try {
+        const [robotDef, libs] = await Promise.all([
+          window.api.robot.load(boardFolder),
+          window.api.parts.listLibraries()
+        ])
+        if (active) setRequiredModules(requiredPartModules(robotDef, libs))
+      } catch {
+        if (active) setRequiredModules([])
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [boardFolder, boardFileName, connected])
+
+  // Probe the board (once per connection) for which required modules import.
+  useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path])
+  useEffect(() => {
+    if (!connected || requiredModules.length === 0 || installedModules !== null) return
+    let active = true
+    void (async (): Promise<void> => {
+      const present = await window.api.modules.probeInstalled(requiredModules.map((m) => m.module))
+      if (active) setInstalledModules(new Set(present))
+    })()
+    return () => {
+      active = false
+    }
+  }, [connected, requiredModules, installedModules])
+
+  // Re-surface the banner when the file or connection changes (per-trigger dismiss).
+  useEffect(() => {
+    setPartsDismissed(false)
+    setPartsInstallError(null)
+  }, [boardFileName, deviceStatus.state, deviceStatus.path])
+
+  const missImports = useMemo(
+    () => (boardIsPython ? computeMissingImports(requiredModules, boardSource) : []),
+    [boardIsPython, requiredModules, boardSource]
+  )
+  const missBoard = useMemo(
+    () => (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []),
+    [installedModules, requiredModules]
+  )
+  const showPartsBanner =
+    requiredModules.length > 0 && !partsDismissed && (missImports.length > 0 || missBoard.length > 0)
+
+  const installMissingLibs = useCallback((): void => {
+    const targets = missBoard.filter((m) => m.url)
+    if (partsInstalling || targets.length === 0) return
+    setPartsInstalling(true)
+    setPartsInstallError(null)
+    void (async (): Promise<void> => {
+      try {
+        for (const t of targets) {
+          const res = await window.api.packages.install(t.url as string)
+          if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
+        }
+        setInstalledModules(null) // re-probe → banner clears if now present
+      } catch (err) {
+        setPartsInstallError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setPartsInstalling(false)
+      }
+    })()
+  }, [missBoard, partsInstalling])
+
   // Opening an instrument must RELIABLY reveal it docked. We carry the FULL
   // parsed connection (`conn`) from the board node in the payload, so the
   // instrument is SELF-CONTAINED — it renders from `conn` regardless of the main
@@ -594,6 +683,18 @@ export function AppShell(): JSX.Element {
           outdated={libState === 'outdated'}
           onInstall={installInstrumentsLib}
           onDismiss={dismissLibBanner}
+        />
+      )}
+      {/* #166: the project's parts need libraries this file doesn't import / the
+          board doesn't have — offer to install the missing ones. */}
+      {showPartsBanner && (
+        <PartsImportBanner
+          missingImports={missImports}
+          missingOnBoard={missBoard}
+          installing={partsInstalling}
+          error={partsInstallError}
+          onInstall={installMissingLibs}
+          onDismiss={() => setPartsDismissed(true)}
         />
       )}
       <Toolbar
