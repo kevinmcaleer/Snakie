@@ -538,8 +538,10 @@ export function AppShell(): JSX.Element {
     }
   }, [boardFolder, boardFileName, connected])
 
-  // Probe the board (once per connection) for which required modules import.
-  useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path])
+  // Probe the board (once per connection, and again on a project change) for which
+  // required modules import. Including boardFolder avoids a stale probe set when you
+  // switch projects while staying connected (modules change but the cache wouldn't).
+  useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path, boardFolder])
   useEffect(() => {
     if (!connected || requiredModules.length === 0 || installedModules !== null) return
     let active = true
