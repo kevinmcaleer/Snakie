@@ -22,17 +22,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   full-screen visual editor (launched from the Parts view's **+ New part** or a
   part's **Edit**) authors the exact `parts.yml` the library stores. Flip between
   a **Schematic** view (a line-drawing symbol with the pads ↔ pins table) and an
-  interactive **Breadboard** canvas. The canvas is **layered** — a board
-  **shape** (rectangle or **polygon**) → the board **image on its own movable,
-  resizable layer** (with opacity) → **free-placed** pins, mounting holes and
-  text labels on top. A toolbar (**select · pan · shape · pin · hole · text**)
-  drives placement, a contextual inspector edits the selected object (pin
-  number / GPIO name / type pwr·gnd·io / IO capabilities digital·pwm·adc·spi·i2c /
-  castellated-or-regular), and **board dimensions** are fields. A
-  **Life-like / Footprint** toggle just shows or hides the image layer, with a
-  **2.54 mm grid + snap**. The YAML round-trips, so a saved part re-opens
-  unchanged. See `docs/part-editor.md`. (Image **crop** + magic-wand background
-  removal are the next pass.)
+  interactive **Breadboard** canvas managed from a **Layers panel** (top →
+  bottom): **Components** (rectangles + text) → **Pins** → **Mounting holes** →
+  **PCB**. The board **image sits on the PCB layer, clipped to the outline**;
+  **mounting holes cut through** the PCB *and* the image, and you **can't drop a
+  pin inside a hole**. The board outline is a **rectangle** (corner radius) or a
+  **polygon**; every pin/hole/component is **free-placed** by dragging. Each layer
+  has a visibility toggle (hide the PCB image → footprint view). A contextual
+  inspector edits the selected object (pin number / GPIO name / type pwr·gnd·io /
+  IO capabilities digital·pwm·adc·spi·i2c / castellated-or-regular), **board
+  dimensions** are fields, with a **2.54 mm grid + snap**. The YAML round-trips,
+  so a saved part re-opens unchanged. See `docs/part-editor.md`. (Image **crop** +
+  magic-wand background removal are the next pass.)
+- **Board/part images render under the locked-down CSP.** Added `img-src 'self'
+  data:` to the renderer Content-Security-Policy so `data:`-URL images (the Part
+  Editor's board photo and the Board View's uploaded board image) actually paint —
+  previously they were silently blocked by the `default-src 'self'` fallback.
 
 ## [0.14.0] - 2026-06-24
 

@@ -32,27 +32,31 @@ side), so a part drawn in the breadboard view gets a sensible schematic for free
 
 ### Breadboard view — the layered canvas
 
-The Breadboard view is an interactive, **layered canvas**. Bottom → top:
+The Breadboard view is an interactive, **layered canvas**, managed from a
+**Layers panel** (top → bottom is the draw order):
 
-1. **Board shape** — a **rectangle** (with an adjustable corner radius) or a
-   **polygon**. Set the shape + PCB colour + physical **dimensions** (width ×
-   height mm) in the left inspector's **Board** section.
-2. **Image layer** — the board photo is its **own layer**, not stretched to the
-   outline. Upload it, then drag it (and its corner handles) on the canvas to
-   line it up with the real board; an **opacity** slider helps you trace over it.
-3. **Components on top** — **pins**, **mounting holes** and **text labels**, each
-   **free-placed** by dragging it anywhere on the board.
+1. **Components** — labelled **rectangles** (chips/parts) + **text labels**.
+2. **Pins** — free-placed pads (you **can't drop a pin inside a mounting hole**).
+3. **Mounting holes** — these **cut through** the PCB *and* the image (a real
+   cutout), with a plating ring.
+4. **PCB** (bottom) — the board outline (**rectangle** with corner radius, or
+   **polygon**) **and the board image**, which sits on this layer and is
+   **clipped to the outline**.
 
-#### Toolbar
+Each layer has a **visibility toggle** (the eye checkbox) and a count. Hiding the
+PCB image gives you the footprint view (pads & holes only).
 
-A toolbar above the canvas selects the active tool:
+#### Adding & editing
 
-- **Select** — click an object (or the image) to select it; drag to move it;
-  drag the image's corner handles to resize it.
-- **Pan** — drag to pan the canvas; the scroll-wheel zooms. **Fit** resets it.
-- **Shape** — drag the polygon's vertices, or click the board to add one.
-- **Pin** / **Hole** / **Text** — click the board to drop a pin, mounting hole
-  or label at that point.
+- The **Layers panel** drives adding: **＋Pin**, **＋Hole**, **＋Rect**, **＋Text**
+  arm a tool — then click the board to drop that object. The **PCB** row has the
+  **shape** selector (Rectangle / Polygon), **Edit shape** (drag polygon
+  vertices), and **＋Image** (upload a board photo onto the PCB).
+- The toolbar above the canvas has **Select** (click an object — or the image —
+  to select; drag to move; drag the image's corner handles to resize), **Pan**
+  (drag to pan, scroll to zoom), and **Fit** (reset the view).
+- The **inspector** below the Layers panel edits whatever is selected, with a
+  **Delete** button.
 
 #### Inspector
 
@@ -62,6 +66,7 @@ Whatever you select shows its editable fields in the left **inspector**:
   **IO** · other), for IO pins a **GPIO number** + **capabilities** (digital,
   pwm, adc, spi, i2c), **castellated or regular**, and its x/y.
 - **Mounting hole** — x/y + millimetre diameter.
+- **Component** — label, kind, x/y/w/h.
 - **Label** — text, x/y, font size.
 - **Image layer** — x/y/w/h + opacity.
 
@@ -75,13 +80,13 @@ accurate alignment with the real board.
 
 ## Footprint vs life-like
 
-The toolbar's **Life-like / Footprint** toggle simply shows or hides the image
-layer on the *same* canvas:
+Hide the **PCB image** layer (its eye in the Layers panel) to get the footprint
+view — the same canvas with the photo off:
 
-- **Life-like** — the full-colour board (image layer + shape + components).
-- **Footprint** — the engineering view: the board outline + the **pads / pin
-  holes**, mounting holes and labels, with the photo hidden. "The footprint
-  mirrors the life-like, just without the image."
+- **Life-like** — the full-colour board (PCB + image + holes + pins + components).
+- **Footprint** — the board outline + the **pads / pin holes** + mounting holes +
+  components, with the photo hidden. "The footprint mirrors the life-like, just
+  without the image."
 
 > Coming next: image **crop** and **magic-wand background removal** (so you can
 > knock out a plain backdrop and make the photo match the real board exactly).

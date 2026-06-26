@@ -408,7 +408,7 @@ function PartDetail({
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
 
       <div className="pl__detail-fp">
-        <PartCanvas part={part} readOnly showImage />
+        <PartCanvas part={part} readOnly />
       </div>
 
       <dl className="pl__meta">

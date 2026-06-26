@@ -2,9 +2,10 @@ import { useMemo, useRef, useState, type JSX } from 'react'
 import { PartSchematicView } from './PartSchematicView'
 import {
   PartCanvas,
-  CANVAS_TOOLS,
+  DEFAULT_LAYERS,
   type CanvasSelection,
-  type CanvasTool
+  type CanvasTool,
+  type LayerVisibility
 } from './PartCanvas'
 import {
   CAPABILITIES,
@@ -24,8 +25,8 @@ import {
 import type {
   ImageLayer,
   MountingHole,
-  PartButton,
   PartDefinition,
+  PartFeature,
   PartHeader,
   PartLabel,
   PartLibrary,
@@ -93,7 +94,7 @@ export function PartEditor({
     Object.entries(initial?.properties ?? {})
   )
   const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard')
-  const [showImage, setShowImage] = useState(true)
+  const [visible, setVisible] = useState<LayerVisibility>(DEFAULT_LAYERS)
   const [showGrid, setShowGrid] = useState(false)
   const [snap, setSnap] = useState(false)
   const [tool, setTool] = useState<CanvasTool>('select')
@@ -124,10 +125,10 @@ export function PartEditor({
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         patch({ imageData: reader.result })
-        setShowImage(true)
+        setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
-        setStatus({ kind: 'info', text: 'Image added as a layer — drag it / its corners to place + size it.' })
+        setStatus({ kind: 'info', text: 'Image added to the PCB layer — drag it / its corners to place + size it.' })
       }
     }
     reader.onerror = () => setStatus({ kind: 'error', text: 'Could not read that image.' })
@@ -162,8 +163,8 @@ export function PartEditor({
       }))
     } else if (sel.type === 'hole') {
       patch({ mountingHoles: (part.mountingHoles ?? []).filter((_, i) => i !== sel.index) })
-    } else if (sel.type === 'button') {
-      patch({ buttons: (part.buttons ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'feature') {
+      patch({ features: (part.features ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'label') {
       patch({ labels: (part.labels ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'vertex') {
@@ -279,6 +280,16 @@ export function PartEditor({
         {view === 'breadboard' ? (
           <>
             <div className="pe__panels">
+              <LayersPanel
+                part={part}
+                visible={visible}
+                setVisible={setVisible}
+                tool={tool}
+                setTool={setTool}
+                fileInputRef={fileInputRef}
+                onPickImage={onPickImage}
+                patch={patch}
+              />
               <Inspector
                 part={part}
                 selection={selection}
@@ -300,56 +311,34 @@ export function PartEditor({
 
             <div className="pe__canvaspane">
               <div className="pe__toolbar">
-                {CANVAS_TOOLS.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    className={`pe__tool${tool === t.id ? ' is-active' : ''}`}
-                    title={t.hint}
-                    onClick={() => setTool(t.id)}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                <button type="button" className={`pe__tool${tool === 'select' ? ' is-active' : ''}`} onClick={() => setTool('select')} title="Select & move objects">
+                  Select
+                </button>
+                <button type="button" className={`pe__tool${tool === 'move' ? ' is-active' : ''}`} onClick={() => setTool('move')} title="Drag to pan; scroll to zoom">
+                  Pan
+                </button>
+                <button type="button" className="pe__tool" onClick={() => setFitSignal((n) => n + 1)} title="Reset pan / zoom">
+                  Fit
+                </button>
                 <span className="pe__spacer" />
-                <div className="pe__seg" role="group" aria-label="Image visibility">
-                  <button
-                    type="button"
-                    className={`pe__seg-btn${showImage ? ' is-active' : ''}`}
-                    onClick={() => setShowImage(true)}
-                    title="Show the board image (life-like)"
-                  >
-                    Life-like
-                  </button>
-                  <button
-                    type="button"
-                    className={`pe__seg-btn${!showImage ? ' is-active' : ''}`}
-                    onClick={() => setShowImage(false)}
-                    title="Hide the image (footprint — pads & holes only)"
-                  >
-                    Footprint
-                  </button>
-                </div>
                 <label className="pe__toolcheck" title="Show the pin-spacing grid">
                   <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid
                 </label>
                 <label className="pe__toolcheck" title="Snap placement to the pin-spacing grid">
                   <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
                 </label>
-                <button type="button" className="pe__tool" onClick={() => setFitSignal((n) => n + 1)} title="Reset pan / zoom">
-                  Fit
-                </button>
               </div>
               <div className="pe__canvas-stage">
                 <PartCanvas
                   part={part}
-                  showImage={showImage}
+                  visible={visible}
                   showGrid={showGrid}
                   snap={snap}
                   tool={tool}
                   selection={selection}
                   onChange={setPart}
                   onSelect={setSelection}
+                  onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
                   resetSignal={fitSignal}
                 />
               </div>
@@ -372,6 +361,160 @@ export function PartEditor({
         )}
       </div>
     </div>
+  )
+}
+
+// --- Layers panel -----------------------------------------------------------
+
+interface LayersPanelProps {
+  part: PartDefinition
+  visible: LayerVisibility
+  setVisible: React.Dispatch<React.SetStateAction<LayerVisibility>>
+  tool: CanvasTool
+  setTool: (t: CanvasTool) => void
+  fileInputRef: React.RefObject<HTMLInputElement>
+  onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
+  patch: (p: Partial<PartDefinition>) => void
+}
+
+/**
+ * The Layers panel — the board "stack", top → bottom: Components, Pins, Mounting
+ * holes, PCB. Each layer has a visibility toggle + a count + add affordances; the
+ * active layer (derived from the current tool) is highlighted.
+ */
+function LayersPanel({
+  part,
+  visible,
+  setVisible,
+  tool,
+  setTool,
+  fileInputRef,
+  onPickImage,
+  patch
+}: LayersPanelProps): JSX.Element {
+  const counts = {
+    components: (part.features?.length ?? 0) + (part.labels?.length ?? 0),
+    pins: (part.headers ?? []).reduce((n, h) => n + h.pins.length, 0),
+    holes: part.mountingHoles?.length ?? 0,
+    image: part.imageData ? 1 : 0
+  }
+  const toggle = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
+  const eye = (key: keyof LayerVisibility): JSX.Element => (
+    <input
+      type="checkbox"
+      className="pe__eye"
+      checked={visible[key]}
+      onChange={() => toggle(key)}
+      title={visible[key] ? 'Hide layer' : 'Show layer'}
+      aria-label={`${visible[key] ? 'Hide' : 'Show'} layer`}
+    />
+  )
+  const setShape = (kind: 'rect' | 'polygon'): void => {
+    if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
+      patch({
+        shape: { kind },
+        polygon: [
+          { x: 0.05, y: 0.05 },
+          { x: 0.95, y: 0.05 },
+          { x: 0.95, y: 0.95 },
+          { x: 0.05, y: 0.95 }
+        ]
+      })
+    } else {
+      patch({ shape: { kind } })
+    }
+    // Leave the Shape tool when switching to a rectangle, so a stale 'shape' tool
+    // can't re-add a vertex (and silently flip the board back to a polygon).
+    if (kind === 'rect' && tool === 'shape') setTool('select')
+  }
+  const componentsActive = tool === 'rect' || tool === 'text'
+  const pcbActive = tool === 'shape'
+
+  return (
+    <section className="pe__section pe__layers">
+      <h3 className="pe__h">Layers</h3>
+
+      {/* Components (top) */}
+      <div className={`pe__layer${componentsActive ? ' is-active' : ''}`}>
+        <div className="pe__layer-head">
+          {eye('components')}
+          <span className="pe__layer-name">Components</span>
+          <span className="pe__layer-count">{counts.components}</span>
+        </div>
+        <div className="pe__layer-tools">
+          <button type="button" className={`pe__chip${tool === 'rect' ? ' is-active' : ''}`} onClick={() => setTool('rect')} title="Click the board to add a component rectangle">
+            ＋ Rect
+          </button>
+          <button type="button" className={`pe__chip${tool === 'text' ? ' is-active' : ''}`} onClick={() => setTool('text')} title="Click the board to add a text label">
+            ＋ Text
+          </button>
+        </div>
+      </div>
+
+      {/* Pins */}
+      <div className={`pe__layer${tool === 'pin' ? ' is-active' : ''}`}>
+        <div className="pe__layer-head">
+          {eye('pins')}
+          <span className="pe__layer-name">Pins</span>
+          <span className="pe__layer-count">{counts.pins}</span>
+        </div>
+        <div className="pe__layer-tools">
+          <button type="button" className={`pe__chip${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
+            ＋ Pin
+          </button>
+        </div>
+      </div>
+
+      {/* Mounting holes */}
+      <div className={`pe__layer${tool === 'hole' ? ' is-active' : ''}`}>
+        <div className="pe__layer-head">
+          {eye('holes')}
+          <span className="pe__layer-name">Mounting holes</span>
+          <span className="pe__layer-count">{counts.holes}</span>
+        </div>
+        <div className="pe__layer-tools">
+          <button type="button" className={`pe__chip${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
+            ＋ Hole
+          </button>
+        </div>
+      </div>
+
+      {/* PCB (bottom) — shape + image live here */}
+      <div className={`pe__layer pe__layer--pcb${pcbActive ? ' is-active' : ''}`}>
+        <div className="pe__layer-head">
+          {eye('image')}
+          <span className="pe__layer-name">PCB / image</span>
+          <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
+        </div>
+        <div className="pe__layer-tools">
+          <select
+            className="pe__chip-select"
+            value={part.shape?.kind ?? 'rect'}
+            onChange={(e) => setShape(e.target.value as 'rect' | 'polygon')}
+            title="Board outline shape"
+          >
+            <option value="rect">Rectangle</option>
+            <option value="polygon">Polygon</option>
+          </select>
+          {part.shape?.kind === 'polygon' && (
+            <button type="button" className={`pe__chip${tool === 'shape' ? ' is-active' : ''}`} onClick={() => setTool('shape')} title="Drag the polygon vertices (or click an edge to add one)">
+              Edit shape
+            </button>
+          )}
+          <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title="Upload a board photo onto the PCB layer">
+            {part.imageData ? 'Replace image' : '＋ Image'}
+          </button>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/svg+xml"
+          style={{ display: 'none' }}
+          onChange={onPickImage}
+        />
+      </div>
+      <p className="pe__hint pe__hint--muted">PCB on the bottom; holes cut through it; pins &amp; components on top.</p>
+    </section>
   )
 }
 
@@ -402,60 +545,9 @@ function Inspector(props: InspectorProps): JSX.Element {
       {/* Contextual: the selected object */}
       <SelectionInspector {...props} />
 
-      {/* Board shape + size */}
+      {/* Board size + appearance (shape + image live in the Layers panel) */}
       <section className="pe__section">
         <h3 className="pe__h">Board</h3>
-        <div className="pe__row">
-          <label className="pe__field">
-            <span>Shape</span>
-            <select
-              value={part.shape?.kind ?? 'rect'}
-              onChange={(e) => {
-                const kind = e.target.value as 'rect' | 'polygon'
-                if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
-                  // Seed a rectangle polygon the user can then reshape.
-                  patch({
-                    shape: { kind },
-                    polygon: [
-                      { x: 0.05, y: 0.05 },
-                      { x: 0.95, y: 0.05 },
-                      { x: 0.95, y: 0.95 },
-                      { x: 0.05, y: 0.95 }
-                    ]
-                  })
-                } else {
-                  patch({ shape: { kind } })
-                }
-              }}
-            >
-              <option value="rect">Rectangle</option>
-              <option value="polygon">Polygon</option>
-            </select>
-          </label>
-          <label className="pe__field">
-            <span>PCB colour</span>
-            <input
-              type="color"
-              value={/^#[0-9a-f]{6}$/i.test(part.pcbColor ?? '') ? (part.pcbColor as string) : '#0f5a2e'}
-              onChange={(e) => patch({ pcbColor: e.target.value })}
-            />
-          </label>
-        </div>
-        {part.shape?.kind === 'polygon' ? (
-          <p className="pe__hint">Pick the <strong>Shape</strong> tool, then drag the vertices (or click the board edge to add one).</p>
-        ) : (
-          <label className="pe__field">
-            <span>Corner radius</span>
-            <input
-              type="range"
-              min="0"
-              max="0.5"
-              step="0.02"
-              value={part.shape?.cornerRadius ?? 0.04}
-              onChange={(e) => patch({ shape: { kind: 'rect', cornerRadius: Number(e.target.value) } })}
-            />
-          </label>
-        )}
         <div className="pe__row">
           <label className="pe__field">
             <span>Width (mm)</span>
@@ -480,6 +572,19 @@ function Inspector(props: InspectorProps): JSX.Element {
             />
           </label>
         </div>
+        {part.shape?.kind !== 'polygon' && (
+          <label className="pe__field">
+            <span>Corner radius</span>
+            <input
+              type="range"
+              min="0"
+              max="0.5"
+              step="0.02"
+              value={part.shape?.cornerRadius ?? 0.04}
+              onChange={(e) => patch({ shape: { kind: 'rect', cornerRadius: Number(e.target.value) } })}
+            />
+          </label>
+        )}
         <label className="pe__field">
           <span>Onboard LED pin</span>
           <select value={part.ledLabel ?? ''} onChange={(e) => patch({ ledLabel: e.target.value || undefined })}>
@@ -492,51 +597,6 @@ function Inspector(props: InspectorProps): JSX.Element {
             ))}
           </select>
         </label>
-      </section>
-
-      {/* Image layer */}
-      <section className="pe__section">
-        <h3 className="pe__h">Image layer</h3>
-        <p className="pe__hint">
-          The board photo is its own layer — upload it, then drag it (and its corner handles) on the canvas to match
-          the real board. Components sit on top.
-        </p>
-        <div className="pe__row">
-          <button type="button" className="pe__btn" onClick={() => props.fileInputRef.current?.click()}>
-            {part.imageData ? 'Replace image…' : 'Upload image…'}
-          </button>
-          {part.imageData && (
-            <>
-              <button type="button" className="pe__btn" onClick={() => props.setImageLayer({ x: 0, y: 0, w: 1, h: 1 })} title="Reset the image to cover the board">
-                Fit
-              </button>
-              <button type="button" className="pe__btn pe__btn--danger" onClick={props.removeImage}>
-                Remove
-              </button>
-            </>
-          )}
-          <input
-            ref={props.fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/svg+xml"
-            style={{ display: 'none' }}
-            onChange={props.onPickImage}
-          />
-        </div>
-        {part.imageData && (
-          <label className="pe__field">
-            <span>Opacity</span>
-            <input
-              type="range"
-              min="0.1"
-              max="1"
-              step="0.05"
-              value={part.imageLayer?.opacity ?? 1}
-              onChange={(e) => props.setImageLayer({ opacity: Number(e.target.value) })}
-            />
-          </label>
-        )}
-        <p className="pe__hint pe__hint--muted">Crop + magic-wand background removal land in the next pass.</p>
       </section>
 
       {/* Identity / catalogue metadata (collapsible) */}
@@ -675,21 +735,35 @@ function SelectionInspector({
         </div>
       )
     }
-  } else if (selection.type === 'button') {
-    const btn = (part.buttons ?? [])[selection.index]
-    if (btn) {
-      title = 'Button'
-      const upd = (p: Partial<PartButton>): void =>
-        patch({ buttons: (part.buttons ?? []).map((b, i) => (i === selection.index ? { ...b, ...p } : b)) })
+  } else if (selection.type === 'feature') {
+    const feat = (part.features ?? [])[selection.index]
+    if (feat) {
+      title = 'Component'
+      const upd = (p: Partial<PartFeature>): void =>
+        patch({ features: (part.features ?? []).map((f, i) => (i === selection.index ? { ...f, ...p } : f)) })
       body = (
         <>
-          <label className="pe__field">
-            <span>Label</span>
-            <input type="text" value={btn.label} onChange={(e) => upd({ label: e.target.value })} />
-          </label>
           <div className="pe__row">
-            {num('x', btn.x, (v) => upd({ x: v }))}
-            {num('y', btn.y, (v) => upd({ y: v }))}
+            <label className="pe__field">
+              <span>Label</span>
+              <input type="text" value={feat.label} onChange={(e) => upd({ label: e.target.value })} />
+            </label>
+            <label className="pe__field">
+              <span>Kind</span>
+              <select value={feat.kind} onChange={(e) => upd({ kind: e.target.value as PartFeature['kind'] })}>
+                {(['chip', 'mcu', 'wifi', 'usb', 'led'] as const).map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="pe__row">
+            {num('x', feat.x, (v) => upd({ x: v }))}
+            {num('y', feat.y, (v) => upd({ y: v }))}
+            {num('w', feat.w, (v) => upd({ w: v }))}
+            {num('h', feat.h, (v) => upd({ h: v }))}
           </div>
         </>
       )

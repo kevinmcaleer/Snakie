@@ -1,40 +1,34 @@
 import {
   useEffect,
+  useId,
   useRef,
   useState,
   type JSX,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
-import {
-  derivePinPosition,
-  resolvedPins,
-  type ResolvedPin
-} from './part-editor.util'
+import { derivePinPosition, resolvedPins, type ResolvedPin } from './part-editor.util'
 import type { PartDefinition, PartPinType } from '../../../shared/part'
 import './PartCanvas.css'
 
 /**
- * PART CANVAS (#130, redesign)
- * ============================
+ * PART CANVAS (#130) — a layered, interactive board editor.
+ * =========================================================
  *
- * The interactive, **layered** drawing surface for the Part Editor's Breadboard
- * view. Layers, bottom → top:
+ * Layers, bottom → top (the user's mental model: "build up the board"):
  *
- *   1. board shape    — a rectangle (with optional corner radius) or a polygon
- *   2. image layer    — the board photo, placed as its OWN movable/resizable
- *                       layer (NOT stretched to the outline). Hidden in the
- *                       "footprint" rendering (`showImage={false}`).
- *   3. components     — features, mounting holes, buttons, pins (free-placed by
- *                       absolute x/y) and text labels.
+ *   1. PCB        — the board outline (rect / polygon) + the board IMAGE, which
+ *                   sits on this layer and is CLIPPED to the outline.
+ *   2. Holes      — mounting holes that CUT THROUGH the PCB + image (an SVG mask
+ *                   punches them out), with a plating ring on top. You cannot
+ *                   place a pin inside a hole.
+ *   3. Pins       — free-placed pads (absolute x/y), coloured by role.
+ *   4. Components — labelled rectangles (parts on the board) + text labels.
  *
- * It is **pure free placement**: every pin/hole/label/button carries an absolute
- * normalised position and is dragged directly. A `tool` selects the interaction
- * (select / move-pan / shape / text / pin / hole); `readOnly` renders the same
- * scene non-interactively (the Parts panel's part detail reuses it).
- *
- * The same component renders the life-like view (image on) and the footprint
- * (image off) — "the footprint mirrors the life-like, just without the image".
+ * Each layer can be toggled via the `visible` prop (the editor's Layers panel);
+ * the footprint view is just the PCB image hidden. Pure free placement: every
+ * object carries an absolute normalised position and is dragged directly.
+ * `readOnly` renders the same scene non-interactively (the Parts panel detail).
  */
 
 const VIEW_W = 460
@@ -50,23 +44,24 @@ const PAD_FILL: Record<PartPinType, string> = {
   other: '#8a8f96'
 }
 
-/** The toolbar tools, in display order. */
-export type CanvasTool = 'select' | 'move' | 'shape' | 'text' | 'pin' | 'hole'
+/** The toolbar / layer-add tools, in display order. */
+export type CanvasTool = 'select' | 'move' | 'shape' | 'pin' | 'hole' | 'rect' | 'text'
 
-export const CANVAS_TOOLS: { id: CanvasTool; label: string; hint: string }[] = [
-  { id: 'select', label: 'Select', hint: 'Select & move objects (and the image)' },
-  { id: 'move', label: 'Pan', hint: 'Drag to pan the canvas; scroll to zoom' },
-  { id: 'shape', label: 'Shape', hint: 'Edit the board polygon vertices' },
-  { id: 'pin', label: 'Pin', hint: 'Click the board to add a pin' },
-  { id: 'hole', label: 'Hole', hint: 'Click the board to add a mounting hole' },
-  { id: 'text', label: 'Text', hint: 'Click the board to add a label' }
-]
+/** Which layers are currently shown (driven by the Layers panel). */
+export interface LayerVisibility {
+  image: boolean
+  holes: boolean
+  pins: boolean
+  components: boolean
+}
+
+export const DEFAULT_LAYERS: LayerVisibility = { image: true, holes: true, pins: true, components: true }
 
 /** What is currently selected (drives the editor's contextual inspector). */
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
-  | { type: 'button'; index: number }
+  | { type: 'feature'; index: number }
   | { type: 'label'; index: number }
   | { type: 'vertex'; index: number }
   | { type: 'image' }
@@ -74,8 +69,8 @@ export type CanvasSelection =
 
 export interface PartCanvasProps {
   part: PartDefinition
-  /** Show the image layer (life-like). False = footprint (pads/holes only). */
-  showImage?: boolean
+  /** Per-layer visibility. Defaults to all visible. */
+  visible?: LayerVisibility
   /** Draw the pin-spacing grid behind the board. */
   showGrid?: boolean
   /** Non-interactive render (the Parts panel detail). */
@@ -90,6 +85,8 @@ export interface PartCanvasProps {
   onChange?: (next: PartDefinition) => void
   /** Selection changed. */
   onSelect?: (sel: CanvasSelection) => void
+  /** Surface a transient message (e.g. "can't place a pin in a hole"). */
+  onNotify?: (msg: string) => void
   /** Bump this number to reset pan/zoom to the default (a "Fit" button). */
   resetSignal?: number
 }
@@ -126,17 +123,13 @@ function clamp01(n: number): number {
 interface Drag {
   kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex'
   sel: CanvasSelection
-  /** resize corner (0=tl,1=tr,2=br,3=bl). */
   corner?: number
-  /** pointer start in normalised board coords. */
   startNX: number
   startNY: number
-  /** object's original position/size. */
   ox: number
   oy: number
   ow?: number
   oh?: number
-  /** pan start in screen-view coords. */
   panX?: number
   panY?: number
   panTX?: number
@@ -146,7 +139,7 @@ interface Drag {
 
 export function PartCanvas({
   part,
-  showImage = true,
+  visible = DEFAULT_LAYERS,
   showGrid = false,
   readOnly = false,
   tool = 'select',
@@ -154,24 +147,39 @@ export function PartCanvas({
   snap = false,
   onChange,
   onSelect,
+  onNotify,
   resetSignal
 }: PartCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  const rawId = useId()
+  const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
+  const clipId = `pcb-clip-${uid}`
+  const maskId = `pcb-holes-${uid}`
 
-  // Reset pan/zoom when the editor's "Fit" button bumps the signal.
   useEffect(() => {
     if (resetSignal !== undefined) setView({ tx: 0, ty: 0, scale: 1 })
   }, [resetSignal])
 
   const box = fitBox(boardAspect(part))
   const pins = resolvedPins(part)
+  const holes = part.mountingHoles ?? []
+  const features = part.features ?? []
+  const labels = part.labels ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const interactive = !readOnly && !!onChange
 
-  // The image layer placement (defaults to covering the whole board box).
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+
+  // --- geometry helpers -----------------------------------------------------
+  const px = (nx: number): number => box.x + nx * box.w
+  const py = (ny: number): number => box.y + ny * box.h
+  /** A hole's drawn (and collision) radius in viewBox units. */
+  const holeR = (diameter: number): number =>
+    part.dimensions && part.dimensions.width > 0
+      ? Math.max(3, (diameter / part.dimensions.width) * box.w)
+      : 6
 
   // --- coordinate helpers ---------------------------------------------------
   const toWorld = (e: { clientX: number; clientY: number }): { x: number; y: number } => {
@@ -182,7 +190,7 @@ export function PartCanvas({
     const pt = svg.createSVGPoint()
     pt.x = e.clientX
     pt.y = e.clientY
-    const local = pt.matrixTransform(ctm.inverse()) // viewBox-space
+    const local = pt.matrixTransform(ctm.inverse())
     return { x: (local.x - view.tx) / view.scale, y: (local.y - view.ty) / view.scale }
   }
   const toNorm = (e: { clientX: number; clientY: number }): { nx: number; ny: number } => {
@@ -191,8 +199,6 @@ export function PartCanvas({
   }
   const snapVal = (v: number, axis: 'x' | 'y'): number => {
     if (!snap) return clamp01(v)
-    // Snap to the pin-spacing grid across the board's physical extent on THIS
-    // axis (width for x, height for y) so non-square boards snap correctly.
     const sizeMm = axis === 'x' ? part.dimensions?.width : part.dimensions?.height
     const steps = sizeMm && sizeMm > 0 ? Math.max(1, Math.round(sizeMm / spacing)) : 20
     return clamp01(Math.round(v * steps) / steps)
@@ -200,89 +206,89 @@ export function PartCanvas({
   const snapX = (v: number): number => snapVal(v, 'x')
   const snapY = (v: number): number => snapVal(v, 'y')
 
-  // Project a normalised point into world coords for drawing.
-  const px = (nx: number): number => box.x + nx * box.w
-  const py = (ny: number): number => box.y + ny * box.h
+  /** Distance between two normalised points, in viewBox units. */
+  const dist = (ax: number, ay: number, bx: number, by: number): number =>
+    Math.hypot((ax - bx) * box.w, (ay - by) * box.h)
+
+  /** True if a normalised point lands inside (or just on) a mounting hole. */
+  const inHole = (nx: number, ny: number): boolean =>
+    holes.some((h) => dist(nx, ny, h.x, h.y) < holeR(h.diameter) + 7)
+  /** True if a normalised point (with a hole of radius `r`) would touch a pin. */
+  const onPin = (nx: number, ny: number, r: number): boolean =>
+    pins.some((p) => dist(nx, ny, p.x, p.y) < r + 6)
 
   // --- mutation helpers -----------------------------------------------------
   const commit = (next: PartDefinition): void => onChange?.(next)
 
   const movePinTo = (hi: number, pi: number, nx: number, ny: number): void => {
+    // Test the SNAPPED point we'll actually store: pins can't sit in a hole.
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    if (inHole(sx, sy)) return
     commit({
       ...part,
       headers: part.headers.map((h, i) =>
-        i === hi
-          ? { ...h, pins: h.pins.map((p, j) => (j === pi ? { ...p, x: snapX(nx), y: snapY(ny) } : p)) }
-          : h
+        i === hi ? { ...h, pins: h.pins.map((p, j) => (j === pi ? { ...p, x: sx, y: sy } : p)) } : h
       )
     })
   }
   const moveHoleTo = (index: number, nx: number, ny: number): void => {
-    commit({
-      ...part,
-      mountingHoles: (part.mountingHoles ?? []).map((h, i) =>
-        i === index ? { ...h, x: snapX(nx), y: snapY(ny) } : h
-      )
-    })
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    // The reverse invariant: a hole can't be dragged onto a pin.
+    if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
+    commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
   }
-  const moveButtonTo = (index: number, nx: number, ny: number): void => {
-    commit({
-      ...part,
-      buttons: (part.buttons ?? []).map((b, i) =>
-        i === index ? { ...b, x: snapX(nx), y: snapY(ny) } : b
-      )
-    })
+  const moveFeatureTo = (index: number, nx: number, ny: number): void => {
+    commit({ ...part, features: features.map((f, i) => (i === index ? { ...f, x: snapX(nx), y: snapY(ny) } : f)) })
   }
   const moveLabelTo = (index: number, nx: number, ny: number): void => {
-    commit({
-      ...part,
-      labels: (part.labels ?? []).map((l, i) =>
-        i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l
-      )
-    })
+    commit({ ...part, labels: labels.map((l, i) => (i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l)) })
   }
   const moveVertexTo = (index: number, nx: number, ny: number): void => {
-    commit({
-      ...part,
-      polygon: (part.polygon ?? []).map((p, i) =>
-        i === index ? { x: clamp01(nx), y: clamp01(ny) } : p
-      )
-    })
+    commit({ ...part, polygon: (part.polygon ?? []).map((p, i) => (i === index ? { x: clamp01(nx), y: clamp01(ny) } : p)) })
   }
-  const moveImage = (nx: number, ny: number): void => {
-    commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
-  }
-  const resizeImage = (x: number, y: number, w: number, h: number): void => {
+  const moveImage = (nx: number, ny: number): void => commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
+  const resizeImage = (x: number, y: number, w: number, h: number): void =>
     commit({ ...part, imageLayer: { ...layer, x, y, w, h } })
-  }
 
   const addPin = (nx: number, ny: number): void => {
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    if (inHole(sx, sy)) {
+      onNotify?.(
+        visible.holes
+          ? "Can't place a pin in a mounting hole."
+          : 'A hidden mounting hole is there — toggle the Holes layer to see it.'
+      )
+      return
+    }
     const n = pins.length
-    const newPin = {
-      name: `P${n}`,
-      type: 'io' as const,
-      gpio: n,
-      capabilities: ['digital' as const],
-      x: snapX(nx),
-      y: snapY(ny)
-    }
+    const newPin = { name: `P${n}`, type: 'io' as const, gpio: n, capabilities: ['digital' as const], x: sx, y: sy }
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
-    const next = {
-      ...part,
-      headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, newPin] } : h))
-    }
-    commit(next)
+    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, newPin] } : h)) })
     onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length })
   }
   const addHole = (nx: number, ny: number): void => {
-    const holes = [...(part.mountingHoles ?? []), { x: snapX(nx), y: snapY(ny), diameter: 2.5 }]
-    commit({ ...part, mountingHoles: holes })
-    onSelect?.({ type: 'hole', index: holes.length - 1 })
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    if (onPin(sx, sy, holeR(2.5))) {
+      onNotify?.("Can't place a mounting hole on a pin.")
+      return
+    }
+    const next = [...holes, { x: sx, y: sy, diameter: 2.5 }]
+    commit({ ...part, mountingHoles: next })
+    onSelect?.({ type: 'hole', index: next.length - 1 })
+  }
+  const addFeature = (nx: number, ny: number): void => {
+    const next = [...features, { label: 'IC', kind: 'chip' as const, x: clamp01(nx - 0.1), y: clamp01(ny - 0.07), w: 0.2, h: 0.14 }]
+    commit({ ...part, features: next })
+    onSelect?.({ type: 'feature', index: next.length - 1 })
   }
   const addLabel = (nx: number, ny: number): void => {
-    const labels = [...(part.labels ?? []), { text: 'Label', x: clamp01(nx), y: clamp01(ny), fontSize: 12 }]
-    commit({ ...part, labels })
-    onSelect?.({ type: 'label', index: labels.length - 1 })
+    const next = [...labels, { text: 'Label', x: clamp01(nx), y: clamp01(ny), fontSize: 12 }]
+    commit({ ...part, labels: next })
+    onSelect?.({ type: 'label', index: next.length - 1 })
   }
   const addVertex = (nx: number, ny: number): void => {
     const poly = part.polygon ?? [
@@ -294,37 +300,25 @@ export function PartCanvas({
     commit({ ...part, polygon: [...poly, { x: clamp01(nx), y: clamp01(ny) }], shape: { kind: 'polygon' } })
   }
 
-  // --- hit testing (topmost selectable object at a normalised point) --------
-  // dist() returns VIEWBOX units (normalised deltas scaled by the board box), so
-  // the tolerance is in viewBox units too (~14 ≈ a comfortable click target).
-  const hitRadius = 14
-  const dist = (ax: number, ay: number, bx: number, by: number): number =>
-    Math.hypot((ax - bx) * box.w, (ay - by) * box.h)
-
+  // --- hit testing (topmost VISIBLE selectable object) ----------------------
+  const HIT = 14
   const hitTest = (nx: number, ny: number): CanvasSelection => {
-    // labels
-    const labels = part.labels ?? []
-    for (let i = labels.length - 1; i >= 0; i--) {
-      if (dist(nx, ny, labels[i].x, labels[i].y) < hitRadius * 1.4) return { type: 'label', index: i }
+    if (visible.components) {
+      for (let i = labels.length - 1; i >= 0; i--)
+        if (dist(nx, ny, labels[i].x, labels[i].y) < HIT * 1.4) return { type: 'label', index: i }
+      for (let i = features.length - 1; i >= 0; i--) {
+        const f = features[i]
+        if (nx >= f.x && nx <= f.x + f.w && ny >= f.y && ny <= f.y + f.h) return { type: 'feature', index: i }
+      }
     }
-    // pins
-    for (let i = pins.length - 1; i >= 0; i--) {
-      if (dist(nx, ny, pins[i].x, pins[i].y) < hitRadius) return { type: 'pin', hi: pins[i].hi, pi: pins[i].pi }
-    }
-    // buttons
-    const buttons = part.buttons ?? []
-    for (let i = buttons.length - 1; i >= 0; i--) {
-      if (dist(nx, ny, buttons[i].x, buttons[i].y) < hitRadius * 1.2) return { type: 'button', index: i }
-    }
-    // holes
-    const holes = part.mountingHoles ?? []
-    for (let i = holes.length - 1; i >= 0; i--) {
-      if (dist(nx, ny, holes[i].x, holes[i].y) < hitRadius) return { type: 'hole', index: i }
-    }
-    // image (if shown + present): inside its layer box
-    if (showImage && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h) {
+    if (visible.pins)
+      for (let i = pins.length - 1; i >= 0; i--)
+        if (dist(nx, ny, pins[i].x, pins[i].y) < HIT) return { type: 'pin', hi: pins[i].hi, pi: pins[i].pi }
+    if (visible.holes)
+      for (let i = holes.length - 1; i >= 0; i--)
+        if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+    if (visible.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
-    }
     return null
   }
 
@@ -335,28 +329,17 @@ export function PartCanvas({
     const { nx, ny } = toNorm(e)
 
     if (tool === 'move') {
-      dragRef.current = {
-        kind: 'pan',
-        sel: null,
-        startNX: nx,
-        startNY: ny,
-        ox: 0,
-        oy: 0,
-        panX: e.clientX,
-        panY: e.clientY,
-        panTX: view.tx,
-        panTY: view.ty
-      }
+      dragRef.current = { kind: 'pan', sel: null, startNX: nx, startNY: ny, ox: 0, oy: 0, panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
       return
     }
     if (tool === 'pin') return addPin(nx, ny)
     if (tool === 'hole') return addHole(nx, ny)
+    if (tool === 'rect') return addFeature(nx, ny)
     if (tool === 'text') return addLabel(nx, ny)
     if (tool === 'shape') {
-      // Edit polygon vertices: grab the nearest, else add one.
       const poly = part.polygon ?? []
       for (let i = poly.length - 1; i >= 0; i--) {
-        if (dist(nx, ny, poly[i].x, poly[i].y) < hitRadius) {
+        if (dist(nx, ny, poly[i].x, poly[i].y) < HIT) {
           onSelect?.({ type: 'vertex', index: i })
           dragRef.current = { kind: 'move-vertex', sel: { type: 'vertex', index: i }, startNX: nx, startNY: ny, ox: poly[i].x, oy: poly[i].y }
           return
@@ -366,9 +349,8 @@ export function PartCanvas({
       return
     }
 
-    // select tool
-    // First: image resize handles (when the image is selected).
-    if (selection?.type === 'image' && showImage && part.imageData) {
+    // select tool — image resize handles first (when the image is selected)
+    if (selection?.type === 'image' && visible.image && part.imageData) {
       const corners = [
         [layer.x, layer.y],
         [layer.x + layer.w, layer.y],
@@ -376,18 +358,8 @@ export function PartCanvas({
         [layer.x, layer.y + layer.h]
       ]
       for (let c = 0; c < 4; c++) {
-        if (dist(nx, ny, corners[c][0], corners[c][1]) < hitRadius) {
-          dragRef.current = {
-            kind: 'resize-image',
-            sel: { type: 'image' },
-            corner: c,
-            startNX: nx,
-            startNY: ny,
-            ox: layer.x,
-            oy: layer.y,
-            ow: layer.w,
-            oh: layer.h
-          }
+        if (dist(nx, ny, corners[c][0], corners[c][1]) < HIT) {
+          dragRef.current = { kind: 'resize-image', sel: { type: 'image' }, corner: c, startNX: nx, startNY: ny, ox: layer.x, oy: layer.y, ow: layer.w, oh: layer.h }
           return
         }
       }
@@ -396,7 +368,6 @@ export function PartCanvas({
     const hit = hitTest(nx, ny)
     onSelect?.(hit)
     if (!hit) return
-    // Start moving the hit object.
     let ox = 0
     let oy = 0
     if (hit.type === 'pin') {
@@ -404,14 +375,14 @@ export function PartCanvas({
       ox = rp?.x ?? nx
       oy = rp?.y ?? ny
     } else if (hit.type === 'hole') {
-      ox = (part.mountingHoles ?? [])[hit.index]?.x ?? nx
-      oy = (part.mountingHoles ?? [])[hit.index]?.y ?? ny
-    } else if (hit.type === 'button') {
-      ox = (part.buttons ?? [])[hit.index]?.x ?? nx
-      oy = (part.buttons ?? [])[hit.index]?.y ?? ny
+      ox = holes[hit.index]?.x ?? nx
+      oy = holes[hit.index]?.y ?? ny
+    } else if (hit.type === 'feature') {
+      ox = features[hit.index]?.x ?? nx
+      oy = features[hit.index]?.y ?? ny
     } else if (hit.type === 'label') {
-      ox = (part.labels ?? [])[hit.index]?.x ?? nx
-      oy = (part.labels ?? [])[hit.index]?.y ?? ny
+      ox = labels[hit.index]?.x ?? nx
+      oy = labels[hit.index]?.y ?? ny
     } else if (hit.type === 'image') {
       ox = layer.x
       oy = layer.y
@@ -419,7 +390,6 @@ export function PartCanvas({
     dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy }
   }
 
-  /** CSS-px → viewBox-unit scale (the SVG renders at ~100%, not 460px wide). */
   const viewBoxScale = (): number => {
     const ctm = svgRef.current?.getScreenCTM()
     return ctm && ctm.a ? ctm.a : 1
@@ -429,14 +399,8 @@ export function PartCanvas({
     const d = dragRef.current
     if (!d || !interactive) return
     if (d.kind === 'pan') {
-      // Convert the client-pixel delta to viewBox units so the content tracks
-      // the cursor 1:1 regardless of the SVG's rendered size.
       const s = viewBoxScale()
-      setView((v) => ({
-        ...v,
-        tx: (d.panTX ?? 0) + (e.clientX - (d.panX ?? 0)) / s,
-        ty: (d.panTY ?? 0) + (e.clientY - (d.panY ?? 0)) / s
-      }))
+      setView((v) => ({ ...v, tx: (d.panTX ?? 0) + (e.clientX - (d.panX ?? 0)) / s, ty: (d.panTY ?? 0) + (e.clientY - (d.panY ?? 0)) / s }))
       return
     }
     const { nx, ny } = toNorm(e)
@@ -444,7 +408,6 @@ export function PartCanvas({
     const dy = ny - d.startNY
     d.moved = true
     if (d.kind === 'resize-image' && d.ow !== undefined && d.oh !== undefined) {
-      // Resize from the dragged corner; keep the opposite corner anchored.
       let x = d.ox
       let y = d.oy
       let w = d.ow
@@ -480,7 +443,7 @@ export function PartCanvas({
       const y = d.oy + dy
       if (d.sel.type === 'pin') movePinTo(d.sel.hi, d.sel.pi, x, y)
       else if (d.sel.type === 'hole') moveHoleTo(d.sel.index, x, y)
-      else if (d.sel.type === 'button') moveButtonTo(d.sel.index, x, y)
+      else if (d.sel.type === 'feature') moveFeatureTo(d.sel.index, x, y)
       else if (d.sel.type === 'label') moveLabelTo(d.sel.index, x, y)
       else if (d.sel.type === 'image') moveImage(x, y)
     }
@@ -492,7 +455,6 @@ export function PartCanvas({
 
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
     if (!interactive) return
-    // Cursor-anchored zoom: keep the viewBox point under the pointer fixed.
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM()
     setView((v) => {
@@ -502,8 +464,7 @@ export function PartCanvas({
       const pt = svg!.createSVGPoint()
       pt.x = e.clientX
       pt.y = e.clientY
-      const local = pt.matrixTransform(ctm.inverse()) // viewBox-space point
-      // world point under the cursor (transform-independent), kept fixed:
+      const local = pt.matrixTransform(ctm.inverse())
       const wx = (local.x - v.tx) / v.scale
       const wy = (local.y - v.ty) / v.scale
       return { scale, tx: local.x - wx * scale, ty: local.y - wy * scale }
@@ -513,30 +474,27 @@ export function PartCanvas({
   // --- board outline path ---------------------------------------------------
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
   const cornerR = part.shape?.cornerRadius ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
 
-  const boardEl = usePolygon ? (
-    <polygon
-      points={(part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')}
-      fill={part.pcbColor || '#0f5a2e'}
-      stroke="#0008"
-      strokeWidth={2}
-    />
-  ) : (
-    <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={cornerR} fill={part.pcbColor || '#0f5a2e'} stroke="#0008" strokeWidth={2} />
-  )
+  /** The board outline as a shape element, with the given paint props. */
+  const shapeEl = (props: Record<string, unknown>): JSX.Element =>
+    usePolygon ? (
+      <polygon points={polyPoints} {...props} />
+    ) : (
+      <rect x={box.x} y={box.y} width={box.w} height={box.h} rx={cornerR} {...props} />
+    )
 
-  // Grid dots at the pin pitch (authoring aid).
+  const cutHoles = visible.holes && holes.length > 0
+
   const gridDots: JSX.Element[] = []
   if (showGrid) {
     const cols = part.dimensions ? Math.min(24, Math.max(2, Math.round(part.dimensions.width / spacing))) : 8
     const rows = part.dimensions ? Math.min(30, Math.max(2, Math.round(part.dimensions.height / spacing))) : 16
     for (let c = 1; c < cols; c++)
-      for (let r = 1; r < rows; r++)
-        gridDots.push(<circle key={`g${c}-${r}`} cx={px(c / cols)} cy={py(r / rows)} r={0.8} fill="#ffffff22" />)
+      for (let r = 1; r < rows; r++) gridDots.push(<circle key={`g${c}-${r}`} cx={px(c / cols)} cy={py(r / rows)} r={0.8} fill="#ffffff22" />)
   }
 
-  const isSel = (s: CanvasSelection): boolean =>
-    !!selection && JSON.stringify(selection) === JSON.stringify(s)
+  const isSel = (s: CanvasSelection): boolean => !!selection && JSON.stringify(selection) === JSON.stringify(s)
 
   return (
     <svg
@@ -546,98 +504,111 @@ export function PartCanvas({
       width="100%"
       height="100%"
       role="img"
-      aria-label={`${showImage ? 'Life-like' : 'Footprint'} view of ${part.name}`}
+      aria-label={`Board view of ${part.name}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       onWheel={onWheel}
     >
-      <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
-        {/* Layer 1: board shape */}
-        {boardEl}
-        {showGrid && <g aria-hidden="true">{gridDots}</g>}
-
-        {/* Layer 2: image */}
-        {showImage && part.imageData && (
-          <image
-            href={part.imageData}
-            x={px(layer.x)}
-            y={py(layer.y)}
-            width={layer.w * box.w}
-            height={layer.h * box.h}
-            opacity={layer.opacity ?? 1}
-            preserveAspectRatio="none"
-            style={{ pointerEvents: 'none' }}
-          />
+      <defs>
+        {/* Clip the image to the board outline (image sits ON the PCB). */}
+        <clipPath id={clipId}>{shapeEl({})}</clipPath>
+        {/* Punch the mounting holes through the PCB + image. */}
+        {cutHoles && (
+          <mask id={maskId}>
+            {shapeEl({ fill: 'white' })}
+            {holes.map((h, i) => (
+              <circle key={i} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+            ))}
+          </mask>
         )}
+      </defs>
 
-        {/* Layer 3a: features (faint) */}
-        {(part.features ?? []).map((f, i) => (
-          <g key={`f${i}`} opacity={0.85} style={{ pointerEvents: 'none' }}>
-            <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke="#0006" />
-            <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
-              {f.label}
+      <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+        {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
+        <g mask={cutHoles ? `url(#${maskId})` : undefined}>
+          {shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
+          {showGrid && <g aria-hidden="true">{gridDots}</g>}
+          {visible.image && part.imageData && (
+            <image
+              href={part.imageData}
+              x={px(layer.x)}
+              y={py(layer.y)}
+              width={layer.w * box.w}
+              height={layer.h * box.h}
+              opacity={layer.opacity ?? 1}
+              preserveAspectRatio="none"
+              clipPath={`url(#${clipId})`}
+              style={{ pointerEvents: 'none' }}
+            />
+          )}
+        </g>
+
+        {/* Layer 2: hole plating rings (on top of the cutout) */}
+        {visible.holes &&
+          holes.map((h, i) => (
+            <circle
+              key={`h${i}`}
+              cx={px(h.x)}
+              cy={py(h.y)}
+              r={holeR(h.diameter)}
+              fill="none"
+              stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'}
+              strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
+            />
+          ))}
+
+        {/* Layer 3: pins */}
+        {visible.pins &&
+          pins.map((rp: ResolvedPin, i) => {
+            const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
+            const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
+            const size = 12
+            const anchor = rp.x < 0.5 ? 'start' : 'end'
+            const ldx = rp.x < 0.5 ? size : -size
+            return (
+              <g key={`p${i}`}>
+                {rp.pin.castellated ? (
+                  <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={size / 2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
+                ) : (
+                  <>
+                    <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
+                    <circle cx={px(rp.x)} cy={py(rp.y)} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                  </>
+                )}
+                <text x={px(rp.x) + ldx} y={py(rp.y) + 4} className="pcv__pin-label" textAnchor={anchor}>
+                  {rp.pin.number != null ? `${rp.pin.number} ` : ''}
+                  {rp.pin.label || rp.pin.name}
+                </text>
+              </g>
+            )
+          })}
+
+        {/* Layer 4a: component rectangles */}
+        {visible.components &&
+          features.map((f, i) => {
+            const sel = isSel({ type: 'feature', index: i })
+            return (
+              <g key={`f${i}`}>
+                <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke={sel ? '#fff' : '#0006'} strokeWidth={sel ? 2.5 : 1} />
+                <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
+                  {f.label}
+                </text>
+              </g>
+            )
+          })}
+
+        {/* Layer 4b: text labels */}
+        {visible.components &&
+          labels.map((l, i) => (
+            <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+              {l.text}
             </text>
-          </g>
-        ))}
+          ))}
 
-        {/* Layer 3b: mounting holes */}
-        {(part.mountingHoles ?? []).map((h, i) => {
-          const r = part.dimensions && part.dimensions.width > 0 ? Math.max(3, (h.diameter / part.dimensions.width) * box.w) : 6
-          return (
-            <g key={`h${i}`}>
-              <circle cx={px(h.x)} cy={py(h.y)} r={r} fill="var(--bc-mat, #0c0f12)" stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'} strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2} />
-              <circle cx={px(h.x)} cy={py(h.y)} r={Math.max(1.5, r * 0.45)} fill="#cfd6dd" />
-            </g>
-          )
-        })}
-
-        {/* Layer 3c: buttons */}
-        {(part.buttons ?? []).map((b, i) => (
-          <g key={`b${i}`}>
-            <rect x={px(b.x) - 10} y={py(b.y) - 8} width={20} height={16} rx={3} fill="#cfd6dd" stroke={isSel({ type: 'button', index: i }) ? '#fff' : '#0007'} strokeWidth={isSel({ type: 'button', index: i }) ? 2.5 : 1} />
-            <text x={px(b.x)} y={py(b.y) + 20} className="pcv__btn-label">
-              {b.label}
-            </text>
-          </g>
-        ))}
-
-        {/* Layer 3d: pins */}
-        {pins.map((rp: ResolvedPin, i) => {
-          const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
-          const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-          const size = 12
-          // Label anchored away from the nearer board edge.
-          const anchor = rp.x < 0.5 ? 'start' : 'end'
-          const ldx = rp.x < 0.5 ? size : -size
-          return (
-            <g key={`p${i}`}>
-              {rp.pin.castellated ? (
-                <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={size / 2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
-              ) : (
-                <>
-                  <rect x={px(rp.x) - size / 2} y={py(rp.y) - size / 2} width={size} height={size} rx={2} fill={fill} stroke={sel ? '#fff' : '#0008'} strokeWidth={sel ? 3 : 1} />
-                  <circle cx={px(rp.x)} cy={py(rp.y)} r={2.3} fill="var(--bc-mat, #0c0f12)" />
-                </>
-              )}
-              <text x={px(rp.x) + ldx} y={py(rp.y) + 4} className="pcv__pin-label" textAnchor={anchor}>
-                {rp.pin.number != null ? `${rp.pin.number} ` : ''}
-                {rp.pin.label || rp.pin.name}
-              </text>
-            </g>
-          )
-        })}
-
-        {/* Layer 3e: labels */}
-        {(part.labels ?? []).map((l, i) => (
-          <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
-            {l.text}
-          </text>
-        ))}
-
-        {/* Selection chrome: image box + corner handles */}
-        {interactive && selection?.type === 'image' && showImage && part.imageData && (
+        {/* Selection chrome: image box + handles */}
+        {interactive && selection?.type === 'image' && visible.image && part.imageData && (
           <g>
             <rect x={px(layer.x)} y={py(layer.y)} width={layer.w * box.w} height={layer.h * box.h} fill="none" stroke="#4ea1ff" strokeDasharray="4 3" strokeWidth={1.5} />
             {[
@@ -652,13 +623,15 @@ export function PartCanvas({
         )}
 
         {/* Polygon vertex handles (shape tool) */}
-        {interactive && tool === 'shape' && usePolygon && (part.polygon ?? []).map((p, i) => (
-          <rect key={`v${i}`} x={px(p.x) - 5} y={py(p.y) - 5} width={10} height={10} fill={isSel({ type: 'vertex', index: i }) ? '#fff' : '#4ea1ff'} stroke="#0008" />
-        ))}
+        {interactive &&
+          tool === 'shape' &&
+          usePolygon &&
+          (part.polygon ?? []).map((p, i) => (
+            <rect key={`v${i}`} x={px(p.x) - 5} y={py(p.y) - 5} width={10} height={10} fill={isSel({ type: 'vertex', index: i }) ? '#fff' : '#4ea1ff'} stroke="#0008" />
+          ))}
       </g>
     </svg>
   )
 }
 
-/** Re-export so callers can derive default positions without importing the util. */
 export { derivePinPosition }
