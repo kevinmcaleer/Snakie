@@ -37,11 +37,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (**square · round · castellated · header hole**) and carry a **solid label
   background** so labels stay legible over the photo. A contextual inspector edits
   the selected object (pin number / GPIO name / type pwr·gnd·io / IO capabilities
-  digital·pwm·adc·spi·i2c), **board dimensions** are fields, with a **2.54 mm grid
-  + snap**. The YAML round-trips, so a saved part re-opens unchanged. The Parts
-  Library + Part Editor live in the **Board Viewer** window (open the board view,
-  then the **chip** button in its title bar) — the only place that uses them;
-  parts you create go to your own **My Parts** library (listed first, badged
+  digital·pwm·adc·spi·i2c), **board dimensions** are fields (and **reshape the
+  PCB** live), with **Details at the top** of the panel. The view control
+  (bottom-right of the canvas) carries zoom + the **grid / snap** toggles (the
+  grid draws at the pin spacing); the image layer has a **Lock aspect ratio**
+  toggle so the photo isn't stretched; and **clicking a polygon vertex deletes
+  it** (drag still moves it; ≥ 3 points kept). The YAML round-trips, so a saved
+  part re-opens unchanged. The Parts Library + Part Editor live in the **Board
+  Viewer** window (open the board view, then the **chip** button in its title
+  bar) — the only place that uses them; parts you create go to your own **My
+  Parts** library (listed first, badged
   *Your library*, and shown as the editor's "Saved to" target). See
   `docs/part-editor.md`. (Image **crop** + magic-wand background removal are the
   next pass.)

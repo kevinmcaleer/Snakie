@@ -16,6 +16,11 @@
   overflow: hidden;
   background: var(--bg-elevated);
   color: var(--text);
+  /* The editor overlays the Board Viewer window, whose title bar is an OS drag
+   * region; without this the overlapping top strip would swallow clicks on the
+   * editor's toolbar (e.g. Save). Keep the whole overlay interactive. */
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
 }
 
 /* --- Title bar --- */
@@ -225,12 +230,14 @@
 
 .pe__row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.5rem;
 }
 
 .pe__row .pe__field {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .pe__grow {
@@ -265,13 +272,24 @@
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
+  flex: 1 1 3rem;
+  min-width: 3rem;
   font-size: 0.64rem;
   color: var(--text-muted);
 }
 
 .pe__num input,
 .pe__num select {
-  width: 4.4rem;
+  width: 100%;
+}
+
+/* Never let a control push past the panel edge. */
+.pe input[type='text'],
+.pe input[type='number'],
+.pe input[type='color'],
+.pe select {
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pe__subitem {

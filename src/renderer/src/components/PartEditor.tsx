@@ -196,6 +196,7 @@ export function PartEditor({
   const [view, setView] = useState<'breadboard' | 'schematic'>('breadboard')
   const [visible, setVisible] = useState<LayerVisibility>(DEFAULT_LAYERS)
   const [showGrid, setShowGrid] = useState(false)
+  const [lockImageAspect, setLockImageAspect] = useState(true)
   const [snap, setSnap] = useState(false)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
@@ -323,14 +324,19 @@ export function PartEditor({
       return
     }
     const payload: PartDefinition = { ...clean, imageData: part.imageData }
-    const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
-    if (res.ok) {
-      setOpenedId(clean.id)
-      setOpenedLibId(res.libraryId ?? libId)
-      setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId}.` })
-      onSaved(res.libraryId ?? libId, res.id ?? clean.id)
-    } else {
-      setStatus({ kind: 'error', text: res.error ?? 'Save failed.' })
+    try {
+      const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
+      if (res?.ok) {
+        setOpenedId(clean.id)
+        setOpenedLibId(res.libraryId ?? libId)
+        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId}.` })
+        onSaved(res.libraryId ?? libId, res.id ?? clean.id)
+      } else {
+        setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
+      }
+    } catch (e) {
+      // Never let a thrown IPC error fail silently (the button would look dead).
+      setStatus({ kind: 'error', text: `Save failed: ${(e as Error)?.message ?? 'unknown error'}` })
     }
   }
 
@@ -410,13 +416,6 @@ export function PartEditor({
                 <button type="button" className={`pe__iconbtn${tool === 'text' ? ' is-active' : ''}`} onClick={() => setTool('text')} title="Add a text label" aria-label="Text">
                   {ICON.text}
                 </button>
-                <span className="pe__spacer" />
-                <label className="pe__toolcheck" title="Show the pin-spacing grid">
-                  <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Grid
-                </label>
-                <label className="pe__toolcheck" title="Snap placement to the pin-spacing grid">
-                  <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap
-                </label>
               </div>
               <div className="pe__canvas-stage">
                 <PartCanvas
@@ -424,18 +423,30 @@ export function PartEditor({
                   visible={visible}
                   showGrid={showGrid}
                   snap={snap}
+                  lockAspect={lockImageAspect}
                   tool={tool}
                   selection={selection}
                   onChange={setPart}
                   onSelect={setSelection}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
+                  onToggleGrid={() => setShowGrid((g) => !g)}
+                  onToggleSnap={() => setSnap((s) => !s)}
                   resetSignal={fitSignal}
                 />
               </div>
             </div>
 
-            {/* Properties on the RIGHT (~1/4 width) */}
+            {/* Properties on the RIGHT (~1/4 width) — Details at the top. */}
             <div className="pe__panels pe__panels--right">
+              <DetailsSection
+                part={part}
+                patch={patch}
+                propRows={propRows}
+                setProps={setProps}
+                detailsOpen={detailsOpen}
+                setDetailsOpen={setDetailsOpen}
+                fileId={fileId}
+              />
               <LayersPanel
                 part={part}
                 visible={visible}
@@ -461,6 +472,8 @@ export function PartEditor({
                 onPickImage={onPickImage}
                 removeImage={removeImage}
                 setImageLayer={setImageLayer}
+                lockImageAspect={lockImageAspect}
+                setLockImageAspect={setLockImageAspect}
                 patch={patch}
                 setPart={setPart}
                 deleteSelection={deleteSelection}
@@ -700,6 +713,8 @@ interface InspectorProps {
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
   removeImage: () => void
   setImageLayer: (p: Partial<ImageLayer>) => void
+  lockImageAspect: boolean
+  setLockImageAspect: (b: boolean) => void
   patch: (p: Partial<PartDefinition>) => void
   setPart: React.Dispatch<React.SetStateAction<PartDefinition>>
   deleteSelection: () => void
@@ -765,30 +780,50 @@ function Inspector(props: InspectorProps): JSX.Element {
           </select>
         </label>
       </section>
-
-      {/* Identity / catalogue metadata (collapsible) */}
-      <section className="pe__section">
-        <h3 className="pe__h">
-          Details
-          <button type="button" className="pe__add" onClick={() => props.setDetailsOpen(!props.detailsOpen)}>
-            {props.detailsOpen ? 'Hide' : 'Show'}
-          </button>
-        </h3>
-        <label className="pe__field">
-          <span>Name</span>
-          <input
-            type="text"
-            value={part.name}
-            onChange={(e) => patch({ name: e.target.value, id: sanitisePartId(e.target.value) || part.id })}
-            placeholder="VL53L0X ToF"
-          />
-        </label>
-        <p className="pe__hint">
-          Saves as <code>{props.fileId || '—'}/parts.yml</code>
-        </p>
-        {props.detailsOpen && <DetailsFields part={part} patch={patch} propRows={props.propRows} setProps={props.setProps} />}
-      </section>
     </>
+  )
+}
+
+/** The part's identity / catalogue metadata — placed at the TOP of the panel. */
+function DetailsSection({
+  part,
+  patch,
+  propRows,
+  setProps,
+  detailsOpen,
+  setDetailsOpen,
+  fileId
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  propRows: [string, string][]
+  setProps: (rows: [string, string][]) => void
+  detailsOpen: boolean
+  setDetailsOpen: (b: boolean) => void
+  fileId: string
+}): JSX.Element {
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">
+        Details
+        <button type="button" className="pe__add" onClick={() => setDetailsOpen(!detailsOpen)}>
+          {detailsOpen ? 'Hide' : 'Show'}
+        </button>
+      </h3>
+      <label className="pe__field">
+        <span>Name</span>
+        <input
+          type="text"
+          value={part.name}
+          onChange={(e) => patch({ name: e.target.value, id: sanitisePartId(e.target.value) || part.id })}
+          placeholder="VL53L0X ToF"
+        />
+      </label>
+      <p className="pe__hint">
+        Saves as <code>{fileId || '—'}/parts.yml</code>
+      </p>
+      {detailsOpen && <DetailsFields part={part} patch={patch} propRows={propRows} setProps={setProps} />}
+    </section>
   )
 }
 
@@ -799,6 +834,8 @@ function SelectionInspector({
   setPart,
   patch,
   setImageLayer,
+  lockImageAspect,
+  setLockImageAspect,
   deleteSelection
 }: InspectorProps): JSX.Element {
   if (!selection) {
@@ -1008,6 +1045,9 @@ function SelectionInspector({
         <label className="pe__field">
           <span>Opacity</span>
           <input type="range" min="0.1" max="1" step="0.05" value={layer.opacity ?? 1} onChange={(e) => setImageLayer({ opacity: Number(e.target.value) })} />
+        </label>
+        <label className="pe__check">
+          <input type="checkbox" checked={lockImageAspect} onChange={(e) => setLockImageAspect(e.target.checked)} /> Lock aspect ratio
         </label>
       </>
     )

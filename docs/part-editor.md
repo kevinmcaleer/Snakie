@@ -46,20 +46,25 @@ The Breadboard view is an interactive, **layered canvas**, managed from a
    **polygon**) **and the board image**, which sits on this layer and is
    **clipped to the outline**.
 
-The **Layers panel + inspector sit on the right** (about a quarter of the width)
-so the canvas gets the room. Each layer (Components / Pins / Mounting holes) is a
+The **Details, Layers panel + inspector sit on the right** (about a quarter of
+the width) so the canvas gets the room. **Details** (part name + catalogue
+metadata) is at the **top**. Each layer (Components / Pins / Mounting holes) is a
 **collapsible list** of its items — click an item to select it on the canvas, and
 each layer has a **visibility eye** + count. Hiding the PCB image gives the
 footprint view.
 
 #### Adding & editing
 
-- The **toolbar** (icons, above the canvas): **Select**, **Pan** (drag; scroll
-  to zoom — plus a **− / % / +** control bottom-right and a **Fit** reset),
-  **Shapes ▾** (add a component **Rectangle / Circle / Polygon**), and **Text**.
+- The **toolbar** (icons, above the canvas): **Select**, **Pan**, **Fit**, a
+  **Shapes ▾** menu (add a component **Rectangle / Circle / Polygon**), and
+  **Text**.
+- The canvas's **view control** (bottom-right) has **− / % / +** zoom + reset and
+  the **grid** and **snap** toggles.
 - The **Layers panel** adds **＋Pin** and **＋Hole** (from their rows), and the
   **PCB** row carries the outline **shape** selector, **Edit shape** (drag polygon
   vertices) and **＋Image** upload.
+- **Polygon vertices**: drag a vertex to move it; **click** a vertex to delete it
+  (a polygon keeps at least 3 points).
 
 #### Inspector
 
@@ -73,15 +78,16 @@ Whatever you select shows its editable fields in the **inspector**:
 - **Component** — label, **fill / outline colour + outline width**, x/y and size
   (w/h for a rectangle, r for a circle; drag a polygon's vertices on the canvas).
 - **Label** — text, x/y, font size.
-- **Image layer** — x/y/w/h + opacity.
+- **Image layer** — x/y/w/h, opacity, and a **Lock aspect ratio** toggle (keeps
+  the photo from being stretched while you resize it).
 
 A **Delete** button on the inspector removes the selected object.
 
 #### Grid & snap
 
-The toolbar's **Grid** toggle draws the part's pin-spacing grid (0.1″ / 2.54 mm
-by default) behind the board, and **Snap** snaps placed/dragged objects to it for
-accurate alignment with the real board.
+The view control's **grid** toggle draws the part's pin-spacing grid (the **pin
+spacing**, 2.54 mm by default) over the board, and **snap** snaps placed/dragged
+objects to it for accurate alignment with the real board.
 
 ## Footprint vs life-like
 

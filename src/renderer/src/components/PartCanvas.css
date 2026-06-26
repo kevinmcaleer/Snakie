@@ -60,6 +60,25 @@
   border-color: var(--text-muted);
 }
 
+.pcv__zoom-btn.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pcv__zoom-btn.is-active {
+  background: #e6ab30;
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
+.pcv__zoom-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.15rem;
+  background: var(--border);
+}
+
 .pcv__zoom-pct {
   min-width: 2.6rem;
   text-align: center;

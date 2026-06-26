@@ -100,12 +100,18 @@ export interface PartCanvasProps {
   selection?: CanvasSelection
   /** Snap placed/moved positions to the pin-spacing grid. */
   snap?: boolean
+  /** Keep the image layer's width:height ratio fixed while resizing it. */
+  lockAspect?: boolean
   /** Mutate the part (interactive only). */
   onChange?: (next: PartDefinition) => void
   /** Selection changed. */
   onSelect?: (sel: CanvasSelection) => void
   /** Surface a transient message (e.g. "can't place a pin in a hole"). */
   onNotify?: (msg: string) => void
+  /** Toggle the pin-spacing grid (the zoom-overlay grid button). */
+  onToggleGrid?: () => void
+  /** Toggle snap-to-grid (the zoom-overlay snap button). */
+  onToggleSnap?: () => void
   /** Bump this number to reset pan/zoom to the default (a "Fit" button). */
   resetSignal?: number
 }
@@ -118,8 +124,13 @@ interface Box {
 }
 
 function boardAspect(part: PartDefinition): number {
+  // Physical dimensions are the source of truth for the outline, so editing
+  // width/height reshapes the PCB. `aspect` is only a fallback when there are no
+  // dimensions (e.g. a hand-authored part).
+  if (part.dimensions && part.dimensions.width > 0 && part.dimensions.height > 0) {
+    return part.dimensions.width / part.dimensions.height
+  }
   if (typeof part.aspect === 'number' && part.aspect > 0) return part.aspect
-  if (part.dimensions && part.dimensions.height > 0) return part.dimensions.width / part.dimensions.height
   return 0.6
 }
 
@@ -164,9 +175,12 @@ export function PartCanvas({
   tool = 'select',
   selection = null,
   snap = false,
+  lockAspect = false,
   onChange,
   onSelect,
   onNotify,
+  onToggleGrid,
+  onToggleSnap,
   resetSignal
 }: PartCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
@@ -217,10 +231,20 @@ export function PartCanvas({
     const w = toWorld(e)
     return { nx: (w.x - box.x) / box.w, ny: (w.y - box.y) / box.h }
   }
+  /**
+   * Number of pin-pitch cells along an axis — the SINGLE source of truth shared
+   * by both the snap lattice and the drawn grid (so snapped objects land on the
+   * lines). Derived from the physical size / pin spacing, with a sensible
+   * fallback when the part has no dimensions, and clamped so it never explodes.
+   */
+  const gridSteps = (axis: 'x' | 'y'): number => {
+    const sizeMm = axis === 'x' ? part.dimensions?.width : part.dimensions?.height
+    const n = sizeMm && sizeMm > 0 ? Math.round(sizeMm / spacing) : axis === 'x' ? 8 : 16
+    return Math.min(axis === 'x' ? 60 : 80, Math.max(2, n))
+  }
   const snapVal = (v: number, axis: 'x' | 'y'): number => {
     if (!snap) return clamp01(v)
-    const sizeMm = axis === 'x' ? part.dimensions?.width : part.dimensions?.height
-    const steps = sizeMm && sizeMm > 0 ? Math.max(1, Math.round(sizeMm / spacing)) : 20
+    const steps = gridSteps(axis)
     return clamp01(Math.round(v * steps) / steps)
   }
   const snapX = (v: number): number => snapVal(v, 'x')
@@ -290,6 +314,26 @@ export function PartCanvas({
   }
   const moveVertexTo = (index: number, nx: number, ny: number): void => {
     commit({ ...part, polygon: (part.polygon ?? []).map((p, i) => (i === index ? { x: clamp01(nx), y: clamp01(ny) } : p)) })
+  }
+  /** Click-to-delete a board-polygon vertex (a polygon needs ≥ 3 points). */
+  const deleteVertex = (index: number): void => {
+    const poly = part.polygon ?? []
+    if (poly.length <= 3) {
+      onNotify?.('A polygon needs at least 3 points.')
+      return
+    }
+    commit({ ...part, polygon: poly.filter((_, i) => i !== index) })
+    onSelect?.(null)
+  }
+  /** Click-to-delete a component-polygon vertex (keeps ≥ 3 points). */
+  const deleteShapeVertex = (index: number, vi: number): void => {
+    const pts = shapes[index]?.points ?? []
+    if (pts.length <= 3) {
+      onNotify?.('A polygon needs at least 3 points.')
+      return
+    }
+    commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, points: pts.filter((_, j) => j !== vi) } : s)) })
+    onSelect?.({ type: 'shape', index })
   }
   const moveImage = (nx: number, ny: number): void => commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
   const resizeImage = (x: number, y: number, w: number, h: number): void =>
@@ -504,7 +548,8 @@ export function PartCanvas({
     const { nx, ny } = toNorm(e)
     const dx = nx - d.startNX
     const dy = ny - d.startNY
-    d.moved = true
+    // Only count a real drag (so a click on a vertex stays a click → delete).
+    if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) d.moved = true
     if (d.kind === 'resize-image' && d.ow !== undefined && d.oh !== undefined) {
       let x = d.ox
       let y = d.oy
@@ -512,7 +557,16 @@ export function PartCanvas({
       let h = d.oh
       const right = d.ox + d.ow
       const bottom = d.oy + d.oh
-      if (d.corner === 0) {
+      if (lockAspect && d.oh > 0) {
+        // Keep the start w:h ratio; the horizontal drag drives the size and the
+        // opposite corner stays anchored (so the image is never distorted).
+        const ratio = d.ow / d.oh
+        const grow = d.corner === 0 || d.corner === 3 ? -dx : dx
+        w = Math.max(0.06, d.ow + grow)
+        h = w / ratio
+        x = d.corner === 0 || d.corner === 3 ? right - w : d.ox
+        y = d.corner === 0 || d.corner === 1 ? bottom - h : d.oy
+      } else if (d.corner === 0) {
         x = d.ox + dx
         y = d.oy + dy
         w = right - x
@@ -552,7 +606,12 @@ export function PartCanvas({
   }
 
   const onPointerUp = (): void => {
+    const d = dragRef.current
     dragRef.current = null
+    if (!d || d.moved || !interactive) return
+    // A click (no drag) on a polygon vertex deletes it.
+    if (d.kind === 'move-vertex' && d.sel?.type === 'vertex') deleteVertex(d.sel.index)
+    else if (d.kind === 'move-shape-vertex' && d.sel?.type === 'shape-vertex') deleteShapeVertex(d.sel.index, d.sel.vi)
   }
 
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
@@ -598,12 +657,15 @@ export function PartCanvas({
 
   const cutHoles = visible.holes && holes.length > 0
 
-  const gridDots: JSX.Element[] = []
+  // The pin-pitch grid (visible lines at the current `spacing`, default 2.54mm).
+  const gridLines: JSX.Element[] = []
   if (showGrid) {
-    const cols = part.dimensions ? Math.min(24, Math.max(2, Math.round(part.dimensions.width / spacing))) : 8
-    const rows = part.dimensions ? Math.min(30, Math.max(2, Math.round(part.dimensions.height / spacing))) : 16
+    const cols = gridSteps('x')
+    const rows = gridSteps('y')
     for (let c = 1; c < cols; c++)
-      for (let r = 1; r < rows; r++) gridDots.push(<circle key={`g${c}-${r}`} cx={px(c / cols)} cy={py(r / rows)} r={0.8} fill="#ffffff22" />)
+      gridLines.push(<line key={`gc${c}`} x1={px(c / cols)} y1={box.y} x2={px(c / cols)} y2={box.y + box.h} stroke="var(--bc-grid, #ffffff30)" strokeWidth={0.5} />)
+    for (let r = 1; r < rows; r++)
+      gridLines.push(<line key={`gr${r}`} x1={box.x} y1={py(r / rows)} x2={box.x + box.w} y2={py(r / rows)} stroke="var(--bc-grid, #ffffff30)" strokeWidth={0.5} />)
   }
 
   const isSel = (s: CanvasSelection): boolean => !!selection && JSON.stringify(selection) === JSON.stringify(s)
@@ -641,7 +703,6 @@ export function PartCanvas({
         {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
         <g mask={cutHoles ? `url(#${maskId})` : undefined}>
           {shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
-          {showGrid && <g aria-hidden="true">{gridDots}</g>}
           {visible.image && part.imageData && (
             <image
               href={part.imageData}
@@ -656,6 +717,13 @@ export function PartCanvas({
             />
           )}
         </g>
+
+        {/* The pin-pitch grid, on top of the image so you can align to it. */}
+        {showGrid && (
+          <g aria-hidden="true" clipPath={`url(#${clipId})`} style={{ pointerEvents: 'none' }}>
+            {gridLines}
+          </g>
+        )}
 
         {/* Layer 2: hole plating rings (on top of the cutout) */}
         {visible.holes &&
@@ -836,7 +904,38 @@ export function PartCanvas({
     <div className="pcv__wrap">
       {svg}
       {interactive && (
-        <div className="pcv__zoom" aria-label="Zoom controls">
+        <div className="pcv__zoom" aria-label="View controls">
+          {onToggleGrid && (
+            <button
+              type="button"
+              className={`pcv__zoom-btn${showGrid ? ' is-active' : ''}`}
+              onClick={onToggleGrid}
+              title={`${showGrid ? 'Hide' : 'Show'} the ${spacing}mm grid`}
+              aria-label="Toggle grid"
+              aria-pressed={showGrid}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <g fill="none" stroke="currentColor" strokeWidth="1.2">
+                  <path d="M1.5 6h13M1.5 10h13M6 1.5v13M10 1.5v13" />
+                </g>
+              </svg>
+            </button>
+          )}
+          {onToggleSnap && (
+            <button
+              type="button"
+              className={`pcv__zoom-btn${snap ? ' is-active' : ''}`}
+              onClick={onToggleSnap}
+              title={`Snap to the grid: ${snap ? 'on' : 'off'}`}
+              aria-label="Toggle snap to grid"
+              aria-pressed={snap}
+            >
+              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+                <path d="M4 2v6a4 4 0 0 0 8 0V2h-2.5v6a1.5 1.5 0 0 1-3 0V2z" fill="currentColor" />
+              </svg>
+            </button>
+          )}
+          <span className="pcv__zoom-sep" />
           <button type="button" className="pcv__zoom-btn" onClick={() => zoomBy(1 / 1.2)} title="Zoom out" aria-label="Zoom out">
             −
           </button>

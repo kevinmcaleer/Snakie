@@ -119,6 +119,17 @@ if (!w.api) {
       onOpen: unsub,
       librarySource: P('')
     },
+    parts: {
+      listLibraries: P([]),
+      openPartsFolder: P(undefined),
+      savePart: P({ ok: false, error: 'window.api is unavailable (preload not loaded).' }),
+      deletePart: P({ ok: false }),
+      createLibrary: P({ ok: false }),
+      deleteLibrary: P({ ok: false }),
+      fetchRegistry: P({ libraries: [] }),
+      installLibrary: P({ ok: false }),
+      checkUpdates: P([])
+    },
     git: {
       openRepo: P(null),
       status: P({
