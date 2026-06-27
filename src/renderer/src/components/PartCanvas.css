@@ -162,6 +162,118 @@
   background: var(--border);
 }
 
+/* Selected-component toolbar (duplicate / fill / border / delete) — floats above
+   the component, same dark style as the other mini toolbars. */
+.pcv__ctb {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem 0.3rem;
+  background: rgba(20, 22, 26, 0.94);
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+}
+
+.pcv__ctb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.pcv__ctb-btn:hover {
+  border-color: #565b63;
+}
+
+.pcv__ctb-btn--danger:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+/* Colour wells (fill + border). */
+.pcv__ctb-well {
+  display: inline-flex;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.pcv__ctb-well input[type='color'],
+.pcv__ctb-row input[type='color'] {
+  width: 100%;
+  height: 100%;
+  min-width: 1.6rem;
+  min-height: 1.4rem;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+.pcv__ctb-border {
+  position: relative;
+  display: inline-flex;
+}
+
+.pcv__ctb-menu {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 6px);
+  transform: translateX(-50%);
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 12rem;
+  padding: 0.45rem;
+  background: rgba(20, 22, 26, 0.97);
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.pcv__ctb-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: #aeb4bd;
+}
+
+.pcv__ctb-row span {
+  flex: 0 0 2.6rem;
+}
+
+.pcv__ctb-row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pcv__ctb-num {
+  flex: 0 0 2.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: #e9edf1;
+  background: #1a1c20;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}
+
 .pcv__svg--interactive {
   cursor: default;
 }

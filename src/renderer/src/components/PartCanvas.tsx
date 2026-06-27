@@ -16,6 +16,7 @@ import {
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
+  nextComponentZ,
   orderedComponents,
   pinShapeOf,
   resolvedPins,
@@ -279,6 +280,8 @@ export function PartCanvas({
   const [guides, setGuides] = useState<{ x?: number; y?: number } | null>(null)
   // The pin under the pointer — shows its capability badges (breadboard view).
   const [hoverPin, setHoverPin] = useState<{ hi: number; pi: number } | null>(null)
+  // The selected-component toolbar's border dropdown (width + colour).
+  const [borderMenuOpen, setBorderMenuOpen] = useState(false)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -622,6 +625,90 @@ export function PartCanvas({
     const rect = base.getBoundingClientRect()
     return { left: s.x - rect.left, top: s.y - rect.top }
   }
+  // --- selected-component toolbar (#…): duplicate / delete / fill / border -----
+  /** Patch a shape's style/geometry. */
+  const updateShape = (index: number, patch: Partial<ComponentShape>): void =>
+    commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
+
+  /** Duplicate the selected shape/label (offset a little) and select the copy. */
+  const duplicateComponent = (sel: CanvasSelection): void => {
+    if (sel?.type === 'shape') {
+      const s = shapes[sel.index]
+      if (!s) return
+      const off = 0.04
+      const copy: ComponentShape = {
+        ...s,
+        x: clamp01(s.x + off),
+        y: clamp01(s.y + off),
+        points: s.points?.map((p) => ({ x: clamp01(p.x + off), y: clamp01(p.y + off) })),
+        z: nextComponentZ(part)
+      }
+      const next = [...shapes, copy]
+      commit({ ...part, shapes: next })
+      onSelect?.({ type: 'shape', index: next.length - 1 })
+    } else if (sel?.type === 'label') {
+      const l = labels[sel.index]
+      if (!l) return
+      const next = [...labels, { ...l, x: clamp01(l.x + 0.04), y: clamp01(l.y + 0.04), z: nextComponentZ(part) }]
+      commit({ ...part, labels: next })
+      onSelect?.({ type: 'label', index: next.length - 1 })
+    }
+  }
+
+  /** Delete the selected shape/label. */
+  const deleteComponent = (sel: CanvasSelection): void => {
+    if (sel?.type === 'shape') commit({ ...part, shapes: shapes.filter((_, i) => i !== sel.index) })
+    else if (sel?.type === 'label') commit({ ...part, labels: labels.filter((_, i) => i !== sel.index) })
+    onSelect?.(null)
+  }
+
+  /** Normalised top-centre of a shape/label, for floating its toolbar above it. */
+  const componentTopCenter = (sel: CanvasSelection): { nx: number; ny: number } | null => {
+    if (sel?.type === 'shape') {
+      const s = shapes[sel.index]
+      if (!s) return null
+      if (s.kind === 'circle') return { nx: s.x, ny: s.y - ((s.r ?? 0.08) * box.w) / box.h }
+      if (s.kind === 'polygon' && s.points?.length) {
+        const xs = s.points.map((p) => p.x)
+        const ys = s.points.map((p) => p.y)
+        return { nx: (Math.min(...xs) + Math.max(...xs)) / 2, ny: Math.min(...ys) }
+      }
+      return { nx: s.x + (s.w ?? 0.2) / 2, ny: s.y }
+    }
+    if (sel?.type === 'label') {
+      const l = labels[sel.index]
+      return l ? { nx: l.x, ny: l.y } : null
+    }
+    return null
+  }
+
+  /** Container-pixel position of the selected component's top-centre. */
+  const componentAnchorPx = (sel: CanvasSelection): { left: number; top: number } | null => {
+    const c = componentTopCenter(sel)
+    const svg = svgRef.current
+    if (!c || !svg) return null
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = view.tx + px(c.nx) * view.scale
+    pt.y = view.ty + py(c.ny) * view.scale
+    const s = pt.matrixTransform(ctm)
+    const base = (svg.closest('.pcv__wrap') as HTMLElement | null) ?? svg
+    const rect = base.getBoundingClientRect()
+    return { left: s.x - rect.left, top: s.y - rect.top }
+  }
+
+  // Close the border dropdown on an outside click, or when the selection changes.
+  useEffect(() => {
+    if (!borderMenuOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.pcv__ctb-border')) setBorderMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [borderMenuOpen])
+  useEffect(() => setBorderMenuOpen(false), [selection])
+
   const addHole = (nx: number, ny: number): void => {
     const sx = snapX(nx)
     const sy = snapY(ny)
@@ -1574,6 +1661,99 @@ export function PartCanvas({
               </button>
               <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={selectedPins.length < 3}>
                 {alignIcon('distY')}
+              </button>
+            </div>
+          )
+        })()}
+
+      {/* Selected-component toolbar — floats above a selected shape / label. */}
+      {interactive &&
+        !locked.components &&
+        selectedPins.length === 0 &&
+        (selection?.type === 'shape' || selection?.type === 'label') &&
+        (() => {
+          const sel = selection
+          if (sel?.type !== 'shape' && sel?.type !== 'label') return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          const shape = sel.type === 'shape' ? shapes[sel.index] : null
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit component" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateComponent(sel)}>
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
+                  <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                </svg>
+              </button>
+              {shape && (
+                <>
+                  <label className="pcv__ctb-well" title="Fill colour">
+                    <input
+                      type="color"
+                      value={shape.fill ?? DEFAULT_SHAPE_FILL}
+                      onChange={(e) => updateShape(sel.index, { fill: e.target.value })}
+                      aria-label="Fill colour"
+                    />
+                  </label>
+                  <div className="pcv__ctb-border">
+                    <button
+                      type="button"
+                      className="pcv__ctb-btn"
+                      title="Border"
+                      aria-label="Border"
+                      aria-haspopup="menu"
+                      aria-expanded={borderMenuOpen}
+                      onClick={() => setBorderMenuOpen((o) => !o)}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <rect x={2.5} y={2.5} width={11} height={11} rx={1.5} fill="none" stroke="currentColor" strokeWidth={2} />
+                      </svg>
+                    </button>
+                    {borderMenuOpen && (
+                      <div className="pcv__ctb-menu" role="menu" aria-label="Border">
+                        <div className="pcv__ctb-row">
+                          <span>Width</span>
+                          <input
+                            type="range"
+                            min={0}
+                            max={8}
+                            step={0.5}
+                            value={shape.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH}
+                            onChange={(e) => updateShape(sel.index, { strokeWidth: Number(e.target.value) })}
+                            aria-label="Border width"
+                          />
+                          <input
+                            type="number"
+                            min={0}
+                            max={8}
+                            step={0.5}
+                            className="pcv__ctb-num"
+                            value={shape.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH}
+                            onChange={(e) => updateShape(sel.index, { strokeWidth: Math.max(0, Number(e.target.value) || 0) })}
+                            aria-label="Border width value"
+                          />
+                        </div>
+                        <div className="pcv__ctb-row">
+                          <span>Colour</span>
+                          <input
+                            type="color"
+                            value={shape.stroke ?? DEFAULT_SHAPE_STROKE}
+                            onChange={(e) => updateShape(sel.index, { stroke: e.target.value })}
+                            aria-label="Border colour"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+              <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete component" onClick={() => deleteComponent(sel)}>
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M3.5 4.5h9M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1V4.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                  <path d="M4.5 4.5 5 13a1 1 0 0 0 1 .9h4a1 1 0 0 0 1-.9l.5-8.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
               </button>
             </div>
           )
