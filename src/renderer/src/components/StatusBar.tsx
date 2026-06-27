@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { useConsole } from '../store/console'
+import { useEditorSettings } from '../store/settings'
 import { FirmwareFlasher } from './FirmwareFlasher'
 import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
-import type { UpdateStatus } from '../../../preload/index.d'
+import { micropythonVersionFromBanner, newerFirmware } from './firmware-version'
+import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
 
 /**
@@ -64,9 +67,14 @@ export function StatusBar({
 }: StatusBarProps = {}): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, currentFolder } = useWorkspace()
+  const consoleStore = useConsole()
+  const settings = useEditorSettings()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
 
   const [flasherOpen, setFlasherOpen] = useState(false)
+  // A newer MicroPython than the connected device is running (#173), + dismissal.
+  const [fwUpdate, setFwUpdate] = useState<{ current: string; latest: string } | null>(null)
+  const [fwDismissed, setFwDismissed] = useState(false)
   const [update, setUpdate] = useState<UpdateStatus | null>(null)
   const [version, setVersion] = useState<string>('')
   const [changedCount, setChangedCount] = useState<number | null>(null)
@@ -156,6 +164,45 @@ export function StatusBar({
         : status.state === 'error'
           ? 'Error'
           : 'Disconnected'
+
+  // Detect a newer MicroPython for the connected device (#173): read its running
+  // version from the REPL boot banner and compare against the firmware catalog's
+  // newest stable build. Runs once per connection, only when the setting is on.
+  useEffect(() => {
+    if (!connected || !settings.checkFirmwareUpdates) {
+      setFwUpdate(null)
+      setFwDismissed(false)
+      return
+    }
+    let alive = true
+    let catalog: FirmwareCatalog | null = null
+    let done = false
+    const run = async (): Promise<void> => {
+      if (done) return
+      const v = micropythonVersionFromBanner(consoleStore.getAll())
+      if (!v) return // no banner yet — wait for device output
+      done = true
+      if (!catalog) {
+        try {
+          catalog = await window.api.firmware.fetchCatalog()
+        } catch {
+          return // offline / catalog unreachable — degrade silently
+        }
+      }
+      if (alive) setFwUpdate(newerFirmware(v, catalog))
+    }
+    void run() // seed from any banner already in the console
+    const decoder = new TextDecoder()
+    let tail = ''
+    const off = window.api.device.onData((chunk) => {
+      tail = (tail + decoder.decode(chunk, { stream: true })).slice(-4096)
+      if (!done && /micropython/i.test(tail)) void run()
+    })
+    return () => {
+      alive = false
+      off()
+    }
+  }, [connected, settings.checkFirmwareUpdates, consoleStore])
 
   const lines = activeFile ? activeFile.content.split('\n').length : null
 
@@ -288,16 +335,50 @@ export function StatusBar({
             </button>
           ))}
         <CoffeeLink />
-        <button
-          type="button"
-          className="statusbar__item statusbar__flash"
-          onClick={() => setFlasherOpen(true)}
-          title="Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)"
-          aria-label="Flash MicroPython firmware"
-        >
-          <span aria-hidden="true">⚡</span>
-          <span>Flash firmware</span>
-        </button>
+        <div className="statusbar__flash-wrap">
+          {/* Newer-firmware prompt, anchored above the flash button (#173). */}
+          {fwUpdate && !fwDismissed && (
+            <div className="statusbar__fw-popup" role="status">
+              <span className="statusbar__fw-text">
+                MicroPython <strong>v{fwUpdate.latest}</strong> is available (device runs v{fwUpdate.current}).
+              </span>
+              <button
+                type="button"
+                className="statusbar__fw-flash"
+                onClick={() => {
+                  setFlasherOpen(true)
+                  setFwDismissed(true)
+                }}
+              >
+                Flash
+              </button>
+              <button
+                type="button"
+                className="statusbar__fw-dismiss"
+                onClick={() => setFwDismissed(true)}
+                title="Dismiss"
+                aria-label="Dismiss firmware update notice"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          <button
+            type="button"
+            className="statusbar__item statusbar__flash"
+            onClick={() => setFlasherOpen(true)}
+            title={
+              fwUpdate
+                ? `MicroPython v${fwUpdate.latest} available (device runs v${fwUpdate.current}). Flash firmware.`
+                : 'Flash MicroPython firmware to the device (ESP via esptool, RP2040 via UF2)'
+            }
+            aria-label="Flash MicroPython firmware"
+          >
+            <span aria-hidden="true">⚡</span>
+            <span>Flash firmware</span>
+            {fwUpdate && !fwDismissed && <span className="statusbar__fw-badge" aria-hidden="true" />}
+          </button>
+        </div>
       </div>
 
       {flasherOpen && <FirmwareFlasher onClose={() => setFlasherOpen(false)} />}

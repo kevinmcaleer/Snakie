@@ -114,8 +114,16 @@ export function SettingsDialog({
 
 /** The Editor tab: notebook paper, line spacing and the editor colour theme. */
 function EditorTab(): JSX.Element {
-  const { paper, lineSpacing, editorTheme, setPaper, setLineSpacing, setEditorTheme } =
-    useEditorSettings()
+  const {
+    paper,
+    lineSpacing,
+    editorTheme,
+    checkFirmwareUpdates,
+    setPaper,
+    setLineSpacing,
+    setEditorTheme,
+    setCheckFirmwareUpdates
+  } = useEditorSettings()
 
   return (
     <>
@@ -187,6 +195,22 @@ function EditorTab(): JSX.Element {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Firmware updates</h3>
+        <p className="settings-section__hint">
+          Check whether a newer MicroPython is available for the connected device and prompt you from
+          the Flash-firmware button.
+        </p>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={checkFirmwareUpdates}
+            onChange={(e) => setCheckFirmwareUpdates(e.target.checked)}
+          />
+          <span>Check for newer MicroPython firmware</span>
+        </label>
       </section>
     </>
   )

@@ -188,6 +188,72 @@
   outline-offset: 1px;
 }
 
+/* Newer-firmware prompt (#173): a callout above the flash button + a badge. */
+.statusbar__flash-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.statusbar__fw-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-2, #46e06a);
+  box-shadow: 0 0 0 1px var(--bg, #111);
+}
+
+.statusbar__fw-popup {
+  /* Fixed (not absolute) so the status bar's `overflow: hidden` can't clip it;
+     anchored just above the bar at the bottom-right, near the flash button. */
+  position: fixed;
+  right: 10px;
+  bottom: 2.2rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: max-content;
+  max-width: 22rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.72rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+
+.statusbar__fw-flash {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border: var(--border-w) solid var(--accent, #2f6b2a);
+  border-radius: var(--radius);
+  padding: 0.12rem 0.5rem;
+  cursor: pointer;
+}
+
+.statusbar__fw-dismiss {
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.15rem;
+}
+
+.statusbar__fw-dismiss:hover {
+  color: var(--text);
+}
+
 /* Flash-firmware action — compact, sits at the far right. */
 .statusbar__flash {
   background: transparent;

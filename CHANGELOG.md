@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Newer-firmware check (#173).** When a device is connected, Snakie reads its
+  running MicroPython version from the REPL boot banner and compares it against the
+  newest stable build in the firmware catalog. If a newer version exists, a prompt
+  appears above the **Flash firmware** button (with a one-click **Flash**). A new
+  Settings → *Firmware updates* toggle disables the check.
+
 ### Changed
 - **Part versions auto-bump on edit (#172).** Saving an edited part now
   automatically increments its **PATCH** version when its content actually

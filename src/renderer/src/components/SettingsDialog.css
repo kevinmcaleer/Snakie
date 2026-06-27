@@ -125,6 +125,20 @@
   line-height: 1.4;
 }
 
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.settings-check input {
+  cursor: pointer;
+}
+
 .settings-value {
   font-variant-numeric: tabular-nums;
   font-weight: 700;

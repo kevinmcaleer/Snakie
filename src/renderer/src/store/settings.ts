@@ -40,11 +40,15 @@ export interface SettingsStore {
   lineSpacing: number
   /** Selected editor colour theme id (see store/editorThemes). */
   editorTheme: string
+  /** Whether to check for a newer MicroPython firmware for the device (#173). */
+  checkFirmwareUpdates: boolean
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
   /** Set the editor colour theme by id. */
   setEditorTheme: (id: string) => void
+  /** Enable/disable the newer-firmware check (#173). */
+  setCheckFirmwareUpdates: (on: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -65,6 +69,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
   const [editorTheme, setEditorTheme] = useLocalStorage<string>(
     'snakie.editor.theme',
     DEFAULT_EDITOR_THEME
+  )
+  const [checkFirmwareUpdates, setCheckFirmwareUpdates] = useLocalStorage<boolean>(
+    'snakie.firmware.checkUpdates',
+    true
   )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
@@ -122,11 +130,22 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       paper,
       lineSpacing,
       editorTheme,
+      checkFirmwareUpdates,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
-      setEditorTheme
+      setEditorTheme,
+      setCheckFirmwareUpdates
     }),
-    [paper, lineSpacing, editorTheme, setPaper, setLineSpacingRaw, setEditorTheme]
+    [
+      paper,
+      lineSpacing,
+      editorTheme,
+      checkFirmwareUpdates,
+      setPaper,
+      setLineSpacingRaw,
+      setEditorTheme,
+      setCheckFirmwareUpdates
+    ]
   )
 
   return createElement(SettingsContext.Provider, { value: store }, children)
