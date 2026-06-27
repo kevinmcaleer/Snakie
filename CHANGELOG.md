@@ -49,7 +49,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Zoomable mini board view.** The mini board now keeps the **whole board at its
   correct aspect ratio** (same representation as the breadboard view), scaled to
   fill the dock width, with **hover-revealed zoom controls** (in / out / fit) and a
-  scrollable viewport for panning around when zoomed in.
+  scrollable viewport for panning around when zoomed in. It also draws pins at
+  their **real authored positions** (matching the full board view) rather than
+  stacking them along one edge.
 - **Collapsible connections table.** The Board Viewer's bottom connections table
   can now be **collapsed to its header** (and restored) to free up canvas space.
 - **Cleaner part on the breadboard.** Removed the small ✕ remove badge from each

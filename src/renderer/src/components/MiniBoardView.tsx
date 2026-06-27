@@ -3,6 +3,7 @@ import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_TAG } from './parse-pins'
 import { BUILTIN_BOARDS, DEFAULT_BOARD_ID, boardIdFromReplText } from './board-defs'
 import {
   boardBox,
+  enumerateBoardPads,
   layoutPads,
   ledPoint,
   padForToken,
@@ -45,6 +46,14 @@ interface UsedPad {
 /** Normalise a pad edge ('led' renders like a bottom pin). */
 function pinEdge(e: PadPoint['edge']): 'left' | 'right' | 'top' | 'bottom' {
   return e === 'led' ? 'bottom' : e
+}
+
+/** Which edge a freely-placed pad faces, from its normalised position — biased to
+ *  left/right (the common column layout) unless it's clearly near the top/bottom. */
+function edgeFromXY(x: number, y: number): 'left' | 'right' | 'top' | 'bottom' {
+  if (x < 0.3) return 'left'
+  if (x > 0.7) return 'right'
+  return y < 0.5 ? 'top' : 'bottom'
 }
 
 /**
@@ -207,7 +216,19 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     () => boardBox(def.aspect, { cx: VW / 2, cy: VH / 2, maxW: VW - 150, maxH: VH - 80 }),
     [def.aspect]
   )
-  const pads = useMemo<PadPoint[]>(() => layoutPads(def, box), [def, box])
+  // When the source part placed its pins freely (real x/y on the pads), draw them
+  // at those positions — same distribution as the full board view — instead of
+  // stacking them along their header's edge. Built-in boards (no x/y) edge-spread.
+  const pads = useMemo<PadPoint[]>(() => {
+    const refs = enumerateBoardPads(def)
+    if (!refs.some((r) => r.pad.x != null && r.pad.y != null)) return layoutPads(def, box)
+    const edgeLaid = layoutPads(def, box)
+    return refs.map((r, idx) =>
+      r.pad.x != null && r.pad.y != null
+        ? { x: box.x + r.pad.x * box.w, y: box.y + r.pad.y * box.h, edge: edgeFromXY(r.pad.x, r.pad.y), pad: r.pad }
+        : edgeLaid[idx]
+    )
+  }, [def, box])
 
   // Pads the parsed code resolves to, keyed by pad for an O(1) lookup while
   // drawing every pad (idle pads stay visible but dimmed).

@@ -24,6 +24,11 @@ export interface BoardPad {
   /** Physical board pin number (1-based silk numbering), if the board prints one.
    *  Shown in the pad's number box — distinct from the electrical `gpio`. */
   number?: number
+  /** The pad's authored position on the board (normalised 0..1), when the source
+   *  part placed pins freely. Renderers that honour it (e.g. the mini board view)
+   *  draw the pad here instead of spreading it along its header's edge. */
+  x?: number
+  y?: number
   /** The numeric GPIO this pad breaks out, matched against numeric `Pin(n)`. */
   gpio?: number
   /** The silk text drawn on/next to the pad (e.g. `"GP0"`, `"3V3"`, `"IO34"`). */

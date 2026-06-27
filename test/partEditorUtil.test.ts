@@ -185,6 +185,25 @@ describe('partToBoardDefinition', () => {
     expect(pads[0].gpio).toBe(0)
     expect(pads[1].number).toBe(3) // a non-io pin still carries its pin number
   })
+
+  it('carries a freely-placed pin position (x/y) onto the pad', () => {
+    const part = normalisePart({
+      id: 'b',
+      name: 'B',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'GP0', type: 'io', gpio: 0, x: 0.08, y: 0.2 },
+            { name: 'VBUS', type: 'pwr', x: 0.92, y: 0.04 }
+          ]
+        }
+      ]
+    })
+    const pads = partToBoardDefinition(part).headers[0].pins
+    expect(pads[0].x).toBeCloseTo(0.08, 5)
+    expect(pads[1].x).toBeCloseTo(0.92, 5) // a right-column pin kept its real x
+  })
 })
 
 describe('free-placement positions', () => {

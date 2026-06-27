@@ -722,6 +722,10 @@ export function partToBoardDefinition(part: PartDefinition): BoardDefinition {
         type: pinTypeToPad(p.type)
       }
       if (typeof p.number === 'number') pad.number = p.number
+      if (typeof p.x === 'number' && typeof p.y === 'number') {
+        pad.x = p.x
+        pad.y = p.y
+      }
       if (p.type === 'io' && typeof p.gpio === 'number') pad.gpio = p.gpio
       return pad
     })
