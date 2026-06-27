@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Breadboard parts are drawn to real-world scale.** Placed parts on the
+  Breadboard view are now sized from their **real dimensions** (mm) relative to the
+  board — instead of every part being fitted to one fixed footprint — so e.g. an
+  HC-SR04 reads larger than a small sensor. Each part body is also rendered at a
+  native size then uniformly scaled, so its **silk text, pads and strokes shrink
+  with the body** (a part's added text no longer looks oversized on the breadboard).
+
 ### Added
 - **Holes are drilled right through the board (#171).** Mounting holes, pin holes
   and castellation half-holes now cut through the PCB **and** the board image **and**

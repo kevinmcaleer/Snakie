@@ -60,7 +60,21 @@ const clampScale = (s: number): number => Math.min(WC_MAX_ZOOM, Math.max(WC_MIN_
 const BOARD_BODY_W = 190
 const BOARD_BODY_H = 300
 const PART_BODY_W = 140
-const PART_BODY_MAX_H = 240
+
+// Real-world scale for the breadboard: parts are drawn at their REAL dimensions
+// (mm → px) relative to the board, so e.g. an HC-SR04 reads larger than a small
+// sensor. The board anchors the scale (it keeps BOARD_BODY_W and defines px/mm);
+// when its real width is unknown we fall back to a Pico-ish default (~51mm → 190px).
+const PX_PER_MM_DEFAULT = 3.7
+// Parts are rendered at a NATIVE reference size then uniformly scaled, so pads,
+// silk text and strokes shrink together (not just positions) — fixing labels that
+// looked huge on a small body. Clamp the final size so an odd dimension can't make
+// a part vanish or swamp the canvas.
+const PART_NATIVE_W = 300
+const PART_NATIVE_H = 300
+const PART_MIN_W = 48
+const PART_MAX_W = 380
+const PART_MAX_H = 380
 
 /** A connection anchor in a subject's LOCAL coordinate space + its outward dir. */
 interface Anchor {
@@ -105,6 +119,9 @@ interface Subject {
   boardDef?: BoardDefinition
   /** The local box the life-like body draws into. */
   box?: Box
+  /** Uniform scale applied to the life-like part body (so pads/text/strokes scale
+   *  together and the body reflects its real dimensions). 1/undefined = as-drawn. */
+  scale?: number
   pads?: PadPoint[]
   usedPadKeys?: Set<string>
   ledLit?: boolean
@@ -333,6 +350,13 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       })
     }
   }
+  // px-per-mm anchored to the board's ACTUAL drawn width (it may be height-limited
+  // for a portrait board, so the raw constant would over-scale): keeps the board's
+  // on-canvas size and defines the scale parts are drawn to, so every body reads at
+  // its real relative size.
+  const boardFitW = boardPart ? partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H }).w : BOARD_BODY_W
+  const boardMmW = boardPart?.dimensions?.width
+  const pxPerMm = boardMmW && boardMmW > 0 ? boardFitW / boardMmW : PX_PER_MM_DEFAULT
   robot.parts.forEach((rp, i) => {
     const def = resolvePart(rp.lib, rp.part)
     const x = rp.x ?? 420 + (i % 2) * 230
@@ -355,21 +379,39 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
         hit: hitRegion(renderMode, x, y, w, h)
       })
     } else if (renderMode === 'lifelike') {
-      // The part drawn with its REAL Part-Editor appearance (image + accurate pins).
-      const box = partBodyBox(def, { maxW: PART_BODY_W, maxH: PART_BODY_MAX_H })
+      // The part drawn with its REAL Part-Editor appearance (image + accurate pins),
+      // at a NATIVE reference size then uniformly scaled to its real dimensions so
+      // pads, silk text and strokes shrink together (not just positions).
+      const nativeBox = partBodyBox(def, { maxW: PART_NATIVE_W, maxH: PART_NATIVE_H })
+      const dims = def.dimensions
+      // Target on-canvas width: real width × the board's px/mm, else the legacy
+      // fixed footprint. Clamped so a stray dimension can't make it tiny/huge.
+      const rawW = dims && dims.width > 0 ? dims.width * pxPerMm : PART_BODY_W
+      const targetW = Math.max(PART_MIN_W, Math.min(PART_MAX_W, rawW))
+      // Scale from width, then also cap by height so a tall/narrow part can't
+      // overflow the canvas (aspect is preserved either way).
+      let k = targetW / nativeBox.w
+      if (nativeBox.h * k > PART_MAX_H) k = PART_MAX_H / nativeBox.h
+      const w = nativeBox.w * k
+      const h = nativeBox.h * k
       subjects.push({
         key: rp.id,
         kind: 'part',
         title: rp.label || def.name || rp.id,
         x,
         y,
-        w: box.w,
-        h: box.h,
+        w,
+        h,
         mode: 'lifelike',
-        pins: partLifelikePins(def, box),
+        // Anchors live in CANVAS coords, so scale them to match the scaled body.
+        pins: partLifelikePins(def, nativeBox).map((p) => ({
+          ...p,
+          anchors: p.anchors.map((a) => ({ x: a.x * k, y: a.y * k, ox: a.ox, oy: a.oy }))
+        })),
         partDef: def,
-        box,
-        hit: hitRegion('lifelike', x, y, box.w, box.h)
+        box: nativeBox,
+        scale: k,
+        hit: hitRegion('lifelike', x, y, w, h)
       })
     } else {
       // The part drawn as its REAL schematic symbol.
@@ -918,7 +960,13 @@ function SubjectBody({
               so an authored board looks exactly as drawn (#52/issue-1). Legacy
               built-in boards (no source part) fall back to the edge-laid Board. */}
           {s.partDef && s.box ? (
-            <PartBody part={s.partDef} box={s.box} />
+            s.scale && s.scale !== 1 ? (
+              <g transform={`scale(${s.scale})`}>
+                <PartBody part={s.partDef} box={s.box} />
+              </g>
+            ) : (
+              <PartBody part={s.partDef} box={s.box} />
+            )
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
