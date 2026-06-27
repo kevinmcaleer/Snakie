@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Multi-select alignment in the Part Editor (#170).** Drag a marquee to select
+  several pins, or **Shift / Ctrl / Cmd-click** to add or remove individual pins
+  from the selection (the browser's blue text-highlight no longer appears while
+  drag-selecting). A small **alignment toolbar floats just above the last-selected
+  pin** and acts on the whole group: align **left / horizontal-centre / right** and
+  **top / vertical-centre / bottom**, plus **distribute** horizontally/vertically
+  (≥3 pins). The toolbar icons now picture the operation — a reference line with
+  three differently-sized bars snapped to it — instead of bare arrows.
 - **Smart alignment guides in the Part Editor (#169).** While dragging a pin (or a
   mounting hole), a **green centre-line** appears when it lines up horizontally or
   vertically with another pin/hole, and it **snaps** to that line; hold **Ctrl/Cmd**

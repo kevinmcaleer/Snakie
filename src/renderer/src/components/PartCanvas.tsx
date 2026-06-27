@@ -154,6 +154,58 @@ function boardAspect(part: PartDefinition): number {
   return 0.6
 }
 
+/** The alignment/distribute modes the toolbar offers. */
+type AlignMode = 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom' | 'distX' | 'distY'
+
+/**
+ * A representative align/distribute icon (#170): a reference line on the alignment
+ * side + three bars of different lengths snapped to it (à la objects-align-left),
+ * so the icon reads as its function rather than a bare arrow.
+ */
+function alignIcon(mode: AlignMode): JSX.Element {
+  const bar = (x: number, y: number, w: number, h: number): JSX.Element => (
+    <rect key={`${x},${y}`} x={x} y={y} width={w} height={h} rx={0.6} fill="currentColor" />
+  )
+  const line = (x1: number, y1: number, x2: number, y2: number): JSX.Element => (
+    <line key="ln" x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" />
+  )
+  const W = [9, 5.5, 11] // three different bar lengths
+  const C = [3, 6.7, 10.4] // three cross-axis slots
+  const T = 2.4 // bar thickness
+  let content: JSX.Element[]
+  switch (mode) {
+    case 'left':
+      content = [line(2.2, 2, 2.2, 14), ...W.map((w, i) => bar(3.4, C[i], w, T))]
+      break
+    case 'right':
+      content = [line(13.8, 2, 13.8, 14), ...W.map((w, i) => bar(12.6 - w, C[i], w, T))]
+      break
+    case 'centerX':
+      content = [line(8, 2, 8, 14), ...W.map((w, i) => bar(8 - w / 2, C[i], w, T))]
+      break
+    case 'top':
+      content = [line(2, 2.2, 14, 2.2), ...W.map((w, i) => bar(C[i], 3.4, T, w))]
+      break
+    case 'bottom':
+      content = [line(2, 13.8, 14, 13.8), ...W.map((w, i) => bar(C[i], 12.6 - w, T, w))]
+      break
+    case 'centerY':
+      content = [line(2, 8, 14, 8), ...W.map((w, i) => bar(C[i], 8 - w / 2, T, w))]
+      break
+    case 'distX':
+      content = [bar(2.2, 3, T, 10), bar(6.8, 3, T, 10), bar(11.4, 3, T, 10)]
+      break
+    default: // distY
+      content = [bar(3, 2.2, 10, T), bar(3, 6.8, 10, T), bar(3, 11.4, 10, T)]
+      break
+  }
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      {content}
+    </svg>
+  )
+}
+
 /** Fit a board of the given aspect centred within the SVG mat. */
 function fitBox(aspect: number): Box {
   let w = MAX_W
@@ -187,6 +239,9 @@ interface Drag {
   moved?: boolean
   /** When set, a dragged pin snaps to this anchor's 2.54mm array grid. */
   anchor?: { x: number; y: number }
+  /** A modifier (shift/ctrl)-click on a pin: toggle its alignment-selection
+   *  membership on a no-move release; a drag instead moves it (#170). */
+  toggleSel?: boolean
 }
 
 export function PartCanvas({
@@ -490,12 +545,15 @@ export function PartCanvas({
       })
       .filter((v): v is { hi: number; pi: number; x: number; y: number } => v !== null)
 
-  const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom'): void => {
+  const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom' | 'centerX' | 'centerY'): void => {
     const sel = selectedResolved()
     if (sel.length < 2) return
-    const horiz = mode === 'left' || mode === 'right'
+    const horiz = mode === 'left' || mode === 'right' || mode === 'centerX'
     const vals = sel.map((s) => (horiz ? s.x : s.y))
-    const target = mode === 'left' || mode === 'top' ? Math.min(...vals) : Math.max(...vals)
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    // left/top → min edge, right/bottom → max edge, centerX/centerY → midpoint.
+    const target = mode === 'left' || mode === 'top' ? min : mode === 'right' || mode === 'bottom' ? max : (min + max) / 2
     const updates = new Map<string, { x?: number; y?: number }>()
     for (const s of sel) updates.set(pinKey(s.hi, s.pi), horiz ? { x: target } : { y: target })
     commitPins(updates)
@@ -511,6 +569,26 @@ export function PartCanvas({
     const updates = new Map<string, { x?: number; y?: number }>()
     sorted.forEach((s, i) => updates.set(pinKey(s.hi, s.pi), axis === 'x' ? { x: min + i * step } : { y: min + i * step }))
     commitPins(updates)
+  }
+
+  /** Container-pixel position of the LAST selected pin, so the align toolbar can
+   *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */
+  const alignAnchorPx = (): { left: number; top: number } | null => {
+    const last = selectedPins[selectedPins.length - 1]
+    const svg = svgRef.current
+    if (!last || !svg) return null
+    const rp = pins.find((p) => p.hi === last.hi && p.pi === last.pi)
+    const ctm = svg.getScreenCTM()
+    if (!rp || !ctm) return null
+    const pt = svg.createSVGPoint()
+    pt.x = view.tx + px(rp.x) * view.scale
+    pt.y = view.ty + py(rp.y) * view.scale
+    const s = pt.matrixTransform(ctm)
+    // The toolbar is absolutely positioned inside .pcv__wrap, so measure relative to
+    // that container — not the SVG, which is flex-centred and may be letterboxed.
+    const base = (svg.closest('.pcv__wrap') as HTMLElement | null) ?? svg
+    const rect = base.getBoundingClientRect()
+    return { left: s.x - rect.left, top: s.y - rect.top }
   }
   const addHole = (nx: number, ny: number): void => {
     const sx = snapX(nx)
@@ -692,14 +770,17 @@ export function PartCanvas({
 
     const hit = hitTest(nx, ny)
 
-    // Multi-select: shift-click toggles a pin in the alignment group.
-    if (hit?.type === 'pin' && e.shiftKey) {
-      toggleSelectedPin(hit.hi, hit.pi)
-      onSelect?.(null)
+    // Multi-select (#170): shift OR ctrl/cmd click on a pin adds/removes it from
+    // the alignment group on a no-move RELEASE; a drag instead moves it (so
+    // ctrl-drag still free-moves, #169). The toggle fires in onPointerUp.
+    const modSelect = e.shiftKey || e.ctrlKey || e.metaKey
+    if (hit?.type === 'pin' && modSelect) {
+      const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
+      dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox: rp?.x ?? nx, oy: rp?.y ?? ny, toggleSel: true }
       return
     }
-    // Any plain (non-shift) interaction clears an existing multi-selection.
-    if (!e.shiftKey && selectedPins.length) setSelectedPins([])
+    // Any plain (non-modifier) interaction clears an existing multi-selection.
+    if (!modSelect && selectedPins.length) setSelectedPins([])
 
     // Ghost-array gestures (a pin is selected = the array anchor):
     if (hit?.type === 'pin' && selPin) {
@@ -887,6 +968,12 @@ export function PartCanvas({
       return
     }
     if (d.moved) return
+    // A no-move modifier-click toggles the pin's alignment-selection membership.
+    if (d.kind === 'move-obj' && d.toggleSel && d.sel?.type === 'pin') {
+      toggleSelectedPin(d.sel.hi, d.sel.pi)
+      onSelect?.(null)
+      return
+    }
     // A no-move click on a pin (while another was the anchor) re-anchors to it.
     if (d.kind === 'move-obj' && d.anchor && d.sel?.type === 'pin') {
       onSelect?.(d.sel)
@@ -1262,31 +1349,46 @@ export function PartCanvas({
   return (
     <div className="pcv__wrap">
       {svg}
-      {/* Alignment toolbar — appears when ≥2 pins are multi-selected. */}
-      {interactive && selectedPins.length >= 2 && (
-        <div className="pcv__align" role="toolbar" aria-label="Align pins">
-          <span className="pcv__align-count">{selectedPins.length} pins</span>
-          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
-            ⬅
-          </button>
-          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges">
-            ➡
-          </button>
-          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges">
-            ⬆
-          </button>
-          <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges">
-            ⬇
-          </button>
-          <span className="pcv__align-sep" />
-          <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={selectedPins.length < 3}>
-            ↔
-          </button>
-          <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={selectedPins.length < 3}>
-            ↕
-          </button>
-        </div>
-      )}
+      {/* Alignment toolbar — floats above the LAST selected pin (≥2 selected). */}
+      {interactive &&
+        selectedPins.length >= 2 &&
+        (() => {
+          const anchor = alignAnchorPx()
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__align" role="toolbar" aria-label="Align pins" style={style}>
+              <span className="pcv__align-count">{selectedPins.length}</span>
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
+                {alignIcon('left')}
+              </button>
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerX')} title="Align horizontal centres">
+                {alignIcon('centerX')}
+              </button>
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges">
+                {alignIcon('right')}
+              </button>
+              <span className="pcv__align-sep" />
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges">
+                {alignIcon('top')}
+              </button>
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerY')} title="Align vertical centres">
+                {alignIcon('centerY')}
+              </button>
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges">
+                {alignIcon('bottom')}
+              </button>
+              <span className="pcv__align-sep" />
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={selectedPins.length < 3}>
+                {alignIcon('distX')}
+              </button>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={selectedPins.length < 3}>
+                {alignIcon('distY')}
+              </button>
+            </div>
+          )
+        })()}
       {interactive && (
         <div className="pcv__zoom" aria-label="View controls">
           {onToggleGrid && (

@@ -11,6 +11,9 @@
   align-items: center;
   justify-content: center;
   min-height: 0;
+  /* Marquee/drag-select must not trigger the browser's blue text highlight (#170). */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .pcv__svg {
