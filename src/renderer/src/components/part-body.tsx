@@ -9,7 +9,7 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import type { PartDefinition, PartPinCapability, PartPinType } from '../../../shared/part'
+import type { PartDefinition, PartPinCapability, PartPinShape, PartPinType } from '../../../shared/part'
 import './PartCanvas.css'
 
 /** Capability → hover-badge text + pastel colour (#…). Shared by the Part Editor
@@ -87,17 +87,15 @@ export const PAD_FILL: Record<PartPinType, string> = {
  * absent it defaults to the nearer horizontal edge (`nx`), since castellations
  * normally run along the left/right edges.
  */
-export function castellatedPad(
+/** A castellated pad's geometry (hole radius + outward direction + edge half-hole
+ *  centre), shared by the pad renderer and the layer-cut mask (#171). */
+export function castellationGeom(
   cx: number,
   cy: number,
   size: number,
   nx: number,
-  isGnd: boolean,
-  stroke: string,
-  sw: number,
   rotationDeg?: number
-): JSX.Element {
-  const GOLD = '#f0ce5c'
+): { hR: number; half: number; ox: number; oy: number; ex: number; ey: number } {
   const hR = size * 0.28 // hole radius
   const half = hR + 2.5 // pad half-thickness (perpendicular to the run)
   const ext = size * 0.95 // distance from the main hole out to the edge half-hole
@@ -111,24 +109,36 @@ export function castellatedPad(
     ox = nx < 0.5 ? -1 : 1
     oy = 0
   }
+  // The half-hole centre sits ON the pad's outer edge (so it reads as bisected).
+  const ex = ox !== 0 ? cx + ox * ext : cx
+  const ey = ox !== 0 ? cy : cy + oy * ext
+  return { hR, half, ox, oy, ex, ey }
+}
+
+export function castellatedPad(
+  cx: number,
+  cy: number,
+  size: number,
+  nx: number,
+  isGnd: boolean,
+  stroke: string,
+  sw: number,
+  rotationDeg?: number
+): JSX.Element {
+  const GOLD = '#f0ce5c'
+  const { hR, half, ox, oy, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
   let rx2: number
   let ry2: number
   let rw: number
   let rh: number
-  let ex: number
-  let ey: number
   if (ox !== 0) {
     const inner = cx - ox * half
-    ex = cx + ox * ext // half-hole centre sits ON the pad's outer edge (bisected)
-    ey = cy
     rx2 = Math.min(inner, ex)
     rw = Math.abs(ex - inner)
     ry2 = cy - half
     rh = 2 * half
   } else {
     const inner = cy - oy * half
-    ex = cx
-    ey = cy + oy * ext
     ry2 = Math.min(inner, ey)
     rh = Math.abs(ey - inner)
     rx2 = cx - half
@@ -141,6 +151,29 @@ export function castellatedPad(
       <circle cx={ex} cy={ey} r={hR} fill="var(--bc-mat, #0c0f12)" />
     </>
   )
+}
+
+/** The drilled through-hole(s) of a pin pad — the bits that should cut through the
+ *  PCB + image (NOT the copper) for a realistic board (#171). Empty for a solid
+ *  SMD (round) pad. Mirrors the dark hole circles each pad shape draws. */
+export function pinThroughHoles(
+  shape: PartPinShape,
+  cx: number,
+  cy: number,
+  size: number,
+  nx: number,
+  rotationDeg?: number
+): { cx: number; cy: number; r: number }[] {
+  if (shape === 'round') return []
+  if (shape === 'header') return [{ cx, cy, r: size / 2 - 3.5 }]
+  if (shape === 'castellated') {
+    const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
+    return [
+      { cx, cy, r: hR },
+      { cx: ex, cy: ey, r: hR }
+    ]
+  }
+  return [{ cx, cy, r: 2.3 }] // square / default
 }
 
 /** The board edge a pin sits on (= the direction its silk label is pushed). Taken
@@ -319,6 +352,12 @@ export function PartBody({
     )
 
   const cutHoles = visible.holes && holes.length > 0
+  // Pin/castellation through-holes to cut through the PCB + image + copper (#171),
+  // so a realistic board shows the real background through its holes.
+  const pinHoleList = visible.pins
+    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12, rp.x, rp.pin.rotation))
+    : []
+  const hasCuts = cutHoles || pinHoleList.length > 0
 
   const gridLines: JSX.Element[] = []
   if (showGrid) {
@@ -337,19 +376,26 @@ export function PartBody({
       <defs>
         {/* Clip the image to the board outline (image sits ON the PCB). */}
         <clipPath id={clipId}>{shapeEl({})}</clipPath>
-        {/* Punch the mounting holes through the PCB + image. */}
-        {cutHoles && (
+        {/* Punch mounting holes + pin/castellation through-holes through the PCB +
+            image (and, where applied, the copper pads). The white field is a
+            generous rect — not the board outline — so masking a castellation pad
+            that straddles the edge doesn't clip its outer half (#171). */}
+        {hasCuts && (
           <mask id={maskId}>
-            {shapeEl({ fill: 'white' })}
-            {holes.map((h, i) => (
-              <circle key={i} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+            <rect x={box.x - 40} y={box.y - 40} width={box.w + 80} height={box.h + 80} fill="white" />
+            {cutHoles &&
+              holes.map((h, i) => (
+                <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+              ))}
+            {pinHoleList.map((h, i) => (
+              <circle key={`ph${i}`} cx={h.cx} cy={h.cy} r={h.r} fill="black" />
             ))}
           </mask>
         )}
       </defs>
 
       {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
-      <g mask={cutHoles ? `url(#${maskId})` : undefined}>
+      <g mask={hasCuts ? `url(#${maskId})` : undefined}>
         {visible.pcb && shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
         {visible.image && part.imageData && (
           <image
@@ -424,7 +470,9 @@ export function PartBody({
           const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
           return (
             <g key={`p${i}`}>
-              {pad}
+              {/* Mask the pad (not its label) so the through-hole shows the real
+                  background, not a painted dot (#171). */}
+              {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
               {text && (
                 <text
                   x={ll.lx}

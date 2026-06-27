@@ -22,7 +22,7 @@ import {
   type ResolvedPin
 } from './part-editor.util'
 import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
-import { capabilityBadges, castellatedPad, pinLabelLayout } from './part-body'
+import { capabilityBadges, castellatedPad, pinLabelLayout, pinThroughHoles } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -1028,6 +1028,11 @@ export function PartCanvas({
     )
 
   const cutHoles = visible.holes && holes.length > 0
+  // Pin/castellation through-holes to cut through the PCB + image + copper (#171).
+  const pinHoleList = visible.pins
+    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12, rp.x, rp.pin.rotation))
+    : []
+  const hasCuts = cutHoles || pinHoleList.length > 0
 
   // The pin-pitch grid (visible lines at the current `spacing`, default 2.54mm).
   const gridLines: JSX.Element[] = []
@@ -1060,12 +1065,19 @@ export function PartCanvas({
       <defs>
         {/* Clip the image to the board outline (image sits ON the PCB). */}
         <clipPath id={clipId}>{shapeEl({})}</clipPath>
-        {/* Punch the mounting holes through the PCB + image. */}
-        {cutHoles && (
+        {/* Punch mounting holes + pin/castellation through-holes through the PCB +
+            image (and the copper pads). The white field is a generous rect — not
+            the board outline — so masking a castellation pad that straddles the
+            edge doesn't clip its outer half (#171). */}
+        {hasCuts && (
           <mask id={maskId}>
-            {shapeEl({ fill: 'white' })}
-            {holes.map((h, i) => (
-              <circle key={i} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+            <rect x={box.x - 40} y={box.y - 40} width={box.w + 80} height={box.h + 80} fill="white" />
+            {cutHoles &&
+              holes.map((h, i) => (
+                <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+              ))}
+            {pinHoleList.map((h, i) => (
+              <circle key={`ph${i}`} cx={h.cx} cy={h.cy} r={h.r} fill="black" />
             ))}
           </mask>
         )}
@@ -1073,7 +1085,7 @@ export function PartCanvas({
 
       <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
         {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
-        <g mask={cutHoles ? `url(#${maskId})` : undefined}>
+        <g mask={hasCuts ? `url(#${maskId})` : undefined}>
           {visible.pcb && shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
           {visible.image && part.imageData && (
             <image
@@ -1153,7 +1165,9 @@ export function PartCanvas({
                 onPointerEnter={() => setHoverPin({ hi: rp.hi, pi: rp.pi })}
                 onPointerLeave={() => setHoverPin((h) => (h?.hi === rp.hi && h?.pi === rp.pi ? null : h))}
               >
-                {pad}
+                {/* Mask the pad (not its label) so the through-hole shows the real
+                    background, not a painted dot (#171). */}
+                {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
                 {text && (
                   <text
                     x={ll.lx}

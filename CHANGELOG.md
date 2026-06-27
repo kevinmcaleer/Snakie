@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Holes are drilled right through the board (#171).** Mounting holes, pin holes
+  and castellation half-holes now cut through the PCB **and** the board image **and**
+  the copper pad, so the real background shows through them — a much more realistic
+  board. Only the holes are cut, never the copper around them. Applies in both the
+  Part Editor and the read-only board/preview renderer.
 - **Reopens your last folder on launch (#177).** Snakie remembers the working
   folder you last opened and restores it on the next start (if it still exists),
   so you don't have to re-open your project every session.
