@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Reopens your last folder on launch (#177).** Snakie remembers the working
+  folder you last opened and restores it on the next start (if it still exists),
+  so you don't have to re-open your project every session.
 - **Zoom controls on the board viewer's Breadboard & Schematic views (#174).** The
   life-like Breadboard and Schematic views now have the same floating **− / % / +
   / fit** zoom cluster as the node-graph view and the Part Editor (previously they

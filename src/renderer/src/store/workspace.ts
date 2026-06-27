@@ -41,12 +41,26 @@ import {
   createElement,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
   type ReactNode
 } from 'react'
 
 export type FileSource = 'local' | 'device'
+
+/** localStorage key for the last opened working folder (#177), restored on launch. */
+const LAST_FOLDER_KEY = 'snakie.lastFolder'
+
+/** Persist (or clear) the last opened folder. Best-effort — storage may be off. */
+function rememberFolder(folder: string | null): void {
+  try {
+    if (folder) window.localStorage.setItem(LAST_FOLDER_KEY, folder)
+    else window.localStorage.removeItem(LAST_FOLDER_KEY)
+  } catch {
+    // ignore storage failures
+  }
+}
 
 export interface OpenFile {
   /** Stable id derived from source+path (`${source}:${path}`). */
@@ -277,11 +291,44 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
 
   const openFolder = useCallback(async (): Promise<void> => {
     const folder = await window.api.fs.openFolderDialog()
-    if (folder) dispatch({ type: 'setFolder', folder })
+    if (folder) {
+      dispatch({ type: 'setFolder', folder })
+      rememberFolder(folder) // restore it on next launch (#177)
+    }
   }, [])
 
   const openFolderPath = useCallback((path: string): void => {
-    if (path) dispatch({ type: 'setFolder', folder: path })
+    if (path) {
+      dispatch({ type: 'setFolder', folder: path })
+      rememberFolder(path)
+    }
+  }, [])
+
+  // Restore the last opened folder on launch (#177) — but only if it still exists,
+  // so a moved/deleted folder doesn't leave the file tree pointing at nothing.
+  useEffect(() => {
+    let cancelled = false
+    let saved: string | null = null
+    try {
+      saved = window.localStorage.getItem(LAST_FOLDER_KEY)
+    } catch {
+      saved = null
+    }
+    if (!saved) return
+    const dir = saved
+    void window.api.fs
+      .stat(dir)
+      .then((s) => {
+        if (cancelled) return
+        if (s.isDir) dispatch({ type: 'setFolder', folder: dir })
+        else rememberFolder(null)
+      })
+      .catch(() => {
+        if (!cancelled) rememberFolder(null) // gone — forget it
+      })
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const revealLine = useCallback((line: number): void => {
