@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
@@ -635,6 +636,14 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       parts: robot.parts.map((p) => (p.id === key ? { ...p, label: label.trim() || undefined } : p))
     })
 
+  // Save the project/robot name + description into robot.yml (#179).
+  const commitRobotMeta = (patch: { name?: string; description?: string }): void =>
+    persist({
+      ...robot,
+      name: patch.name !== undefined ? patch.name.trim() || undefined : robot.name,
+      description: patch.description !== undefined ? patch.description.trim() || undefined : robot.description
+    })
+
   // --- pointer handlers -----------------------------------------------------
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
@@ -1059,10 +1068,106 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
         )}
       </div>
 
+      <RobotHeader name={robot.name ?? ''} description={robot.description ?? ''} onCommit={commitRobotMeta} />
       <div className="wc__bottom">
         <PartsList parts={robot.parts} onRemove={removePart} />
         <ConnectionsTable connections={robot.connections} isDark={isDark} onRemove={removeConnection} onColor={setConnectionColor} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Inline-editable project/robot name + description, saved to robot.yml (#179).
+ * Sits above the parts list (where the definition is structured). Ghost
+ * placeholder text shows when empty; Enter (name) or blur saves and flashes a
+ * "Saved to robot.yml" confirmation; Esc reverts.
+ */
+function RobotHeader({
+  name,
+  description,
+  onCommit
+}: {
+  name: string
+  description: string
+  onCommit: (patch: { name?: string; description?: string }) => void
+}): JSX.Element {
+  const [nameDraft, setNameDraft] = useState(name)
+  const [descDraft, setDescDraft] = useState(description)
+  const [saved, setSaved] = useState(false)
+  // Esc reverts: the closing blur fires synchronously, so flag it to skip the save.
+  const revertRef = useRef(false)
+  // Re-sync drafts when the robot loads / changes from elsewhere.
+  useEffect(() => setNameDraft(name), [name])
+  useEffect(() => setDescDraft(description), [description])
+  // Auto-hide the "saved" flash.
+  useEffect(() => {
+    if (!saved) return
+    const t = window.setTimeout(() => setSaved(false), 2200)
+    return () => window.clearTimeout(t)
+  }, [saved])
+
+  const commitName = (): void => {
+    if (revertRef.current) {
+      revertRef.current = false
+      return
+    }
+    if (nameDraft !== name) {
+      onCommit({ name: nameDraft })
+      setSaved(true)
+    }
+  }
+  const commitDesc = (): void => {
+    if (revertRef.current) {
+      revertRef.current = false
+      return
+    }
+    if (descDraft !== description) {
+      onCommit({ description: descDraft })
+      setSaved(true)
+    }
+  }
+  // Cancel an edit: skip the commit the closing blur would trigger, restore the
+  // draft, and don't let Esc bubble to the board window's global close handler.
+  const cancel = (e: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>, restore: () => void): void => {
+    revertRef.current = true
+    e.stopPropagation()
+    restore()
+    e.currentTarget.blur()
+  }
+
+  return (
+    <div className="wc__project">
+      <input
+        className="wc__project-name"
+        value={nameDraft}
+        placeholder="Untitled project"
+        aria-label="Project name"
+        onChange={(e) => setNameDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur()
+          else if (e.key === 'Escape') cancel(e, () => setNameDraft(name))
+        }}
+        onBlur={commitName}
+      />
+      <textarea
+        className="wc__project-desc"
+        value={descDraft}
+        placeholder="Add a description…"
+        aria-label="Project description"
+        rows={2}
+        onChange={(e) => setDescDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            e.currentTarget.blur()
+          } else if (e.key === 'Escape') cancel(e, () => setDescDraft(description))
+        }}
+        onBlur={commitDesc}
+      />
+      <span className={`wc__project-saved${saved ? ' is-shown' : ''}`} aria-live="polite">
+        {saved ? 'Saved to robot.yml ✓' : ''}
+      </span>
     </div>
   )
 }

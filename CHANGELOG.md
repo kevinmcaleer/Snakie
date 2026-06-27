@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Name & describe your project on the board (#179).** The Board Viewer now has an
+  inline-editable **project/robot name + description** above the parts list, saved
+  into `robot.yml`. Empty fields show ghost placeholder text; pressing **Enter** (or
+  clicking away) saves and flashes a "Saved to robot.yml" confirmation, and **Esc**
+  reverts.
 - **Resize shapes with drag handles in the Part Editor (#175).** Select a rectangle
   or circle component and drag its handles to resize — rectangles have 8 handles
   (corners + edge midpoints) for width/height, circles have 4 for the diameter. The

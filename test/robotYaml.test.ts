@@ -27,6 +27,16 @@ describe('robot.yml round-trip', () => {
     expect(robotFromYaml(robotToYaml(blankRobot()))).toEqual(blankRobot())
   })
 
+  it('round-trips the project name + description (and drops empties)', () => {
+    const back = robotFromYaml(robotToYaml({ ...blankRobot(), name: 'Rover', description: 'A 2-wheel line follower' }))
+    expect(back.name).toBe('Rover')
+    expect(back.description).toBe('A 2-wheel line follower')
+    // Empty strings are not serialised.
+    const empty = robotFromYaml(robotToYaml({ ...blankRobot(), name: '', description: '' }))
+    expect(empty.name).toBeUndefined()
+    expect(empty.description).toBeUndefined()
+  })
+
   it('round-trips a part rotation and snaps it to 90°', () => {
     const def = robotFromYaml(
       ['parts:', '  - { id: a, lib: l, part: p, rotation: 95 }', '  - { id: b, lib: l, part: p, rotation: 0 }'].join('\n')

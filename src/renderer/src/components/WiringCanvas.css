@@ -261,6 +261,71 @@
   font-size: 0.72rem;
 }
 
+/* Project / robot name + description, above the bottom dock (#179). */
+.wc__project {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0.6rem;
+  border-top: var(--border-w) solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.wc__project-name {
+  font-family: var(--font-mono);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.15rem 0.3rem;
+}
+
+.wc__project-desc {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.15rem 0.3rem;
+  resize: none;
+}
+
+.wc__project-name:hover,
+.wc__project-desc:hover {
+  border-color: var(--border);
+}
+
+.wc__project-name:focus,
+.wc__project-desc:focus {
+  outline: none;
+  border-color: var(--text-muted);
+  background: var(--bg-sunken);
+}
+
+.wc__project-name::placeholder,
+.wc__project-desc::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.wc__project-saved {
+  font-size: 0.66rem;
+  color: var(--accent-2, #46e06a);
+  min-height: 0.9rem;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.wc__project-saved.is-shown {
+  opacity: 1;
+}
+
 /* Bottom dock: the parts list beside the connections table. */
 .wc__bottom {
   flex: 0 0 auto;

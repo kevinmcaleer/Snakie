@@ -47,6 +47,8 @@ export interface RobotConnection {
 export interface RobotDefinition {
   /** Project name. */
   name?: string
+  /** Free-text project / robot description. */
+  description?: string
   /** The microcontroller board id (a built-in or user board, e.g. `pico2w`). */
   board?: string
   /** Optional canvas position for the microcontroller box. */

@@ -60,6 +60,7 @@ function coerceConnection(raw: unknown): RobotConnection | null {
 export function robotToYaml(def: RobotDefinition): string {
   const obj: Record<string, unknown> = {}
   if (str(def.name)) obj.name = def.name
+  if (str(def.description)) obj.description = def.description
   if (str(def.board)) obj.board = def.board
   if (typeof def.boardX === 'number') obj.boardX = def.boardX
   if (typeof def.boardY === 'number') obj.boardY = def.boardY
@@ -93,6 +94,7 @@ export function robotFromYaml(text: string): RobotDefinition {
       : []
   }
   if (str(raw.name)) def.name = str(raw.name)
+  if (str(raw.description)) def.description = str(raw.description)
   if (str(raw.board)) def.board = str(raw.board)
   const bx = num(raw.boardX)
   const by = num(raw.boardY)
