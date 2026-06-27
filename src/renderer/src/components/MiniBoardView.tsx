@@ -7,7 +7,6 @@ import {
   ledPoint,
   padForToken,
   padKey,
-  padLabelPlacement,
   type PadPoint
 } from './board-layout'
 import { useBoards } from './use-boards'
@@ -20,6 +19,15 @@ const STORAGE_KEY = 'snakie.board.id'
 const VW = 520
 const VH = 320
 const PAD_R = 6
+
+// Pin annotation layout, ordered OUTWARD from a used pad: [number box][label]
+// [variable]. A fixed-size grey square holds the GPIO number (right-aligned);
+// the label then the code variable follow, mirrored per pin facing.
+const NUM_BOX = 13 // square side
+const STUB = 7 // pad → first element gap
+const SLOT_GAP = 3 // gap between number box / label / variable
+const CHAR_W = 6 // ~width of one mono glyph at the label size (extent estimate)
+const LINE_H = 13 // vertical step for top/bottom-facing pins
 
 /** A pad the code uses + how to annotate it (node-graph style). */
 interface UsedPad {
@@ -34,10 +42,93 @@ interface UsedPad {
   role?: string
 }
 
-/** The coloured node label for a used pin: `[role] variable · TAG`. */
-function annotation(u: UsedPad): string {
-  const base = [u.role, u.variable].filter(Boolean).join(' ')
-  return u.tag ? (base ? `${base} · ${u.tag}` : u.tag) : base
+/** Normalise a pad edge ('led' renders like a bottom pin). */
+function pinEdge(e: PadPoint['edge']): 'left' | 'right' | 'top' | 'bottom' {
+  return e === 'led' ? 'bottom' : e
+}
+
+/**
+ * The [number box][label][variable] annotation for a used pad, laid out OUTWARD
+ * from the pin: the grey GPIO box sits next to the pad, then the silk label, then
+ * the code variable — mirrored for each facing (#…).
+ */
+function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
+  const px = u.p.x
+  const py = u.p.y
+  const num = u.p.pad.gpio != null ? String(u.p.pad.gpio) : ''
+  const label = u.p.pad.label
+  const variable = u.variable
+  const labelW = label.length * CHAR_W
+  const edge = pinEdge(u.p.edge)
+
+  const box = (bx: number, by: number): JSX.Element => (
+    <>
+      <rect x={bx} y={by} width={NUM_BOX} height={NUM_BOX} rx={2} className="mini-board__numbox" />
+      {num && (
+        <text x={bx + NUM_BOX - 2.5} y={by + NUM_BOX - 3.5} textAnchor="end" className="mini-board__num">
+          {num}
+        </text>
+      )}
+    </>
+  )
+
+  let body: JSX.Element
+  if (edge === 'left') {
+    const bx = px - STUB - NUM_BOX
+    const labelX = bx - SLOT_GAP
+    const varX = labelX - labelW - SLOT_GAP
+    body = (
+      <>
+        <line x1={px} y1={py} x2={bx + NUM_BOX} y2={py} stroke={u.color} strokeWidth="1.2" opacity="0.65" />
+        {box(bx, py - NUM_BOX / 2)}
+        <text x={labelX} y={py + 3.5} textAnchor="end" className="mini-board__label">{label}</text>
+        {variable && <text x={varX} y={py + 3.5} textAnchor="end" className="mini-board__var" fill={u.color}>{variable}</text>}
+      </>
+    )
+  } else if (edge === 'right') {
+    const bx = px + STUB
+    const labelX = bx + NUM_BOX + SLOT_GAP
+    const varX = labelX + labelW + SLOT_GAP
+    body = (
+      <>
+        <line x1={px} y1={py} x2={bx} y2={py} stroke={u.color} strokeWidth="1.2" opacity="0.65" />
+        {box(bx, py - NUM_BOX / 2)}
+        <text x={labelX} y={py + 3.5} textAnchor="start" className="mini-board__label">{label}</text>
+        {variable && <text x={varX} y={py + 3.5} textAnchor="start" className="mini-board__var" fill={u.color}>{variable}</text>}
+      </>
+    )
+  } else if (edge === 'top') {
+    const bx = px - NUM_BOX / 2
+    const by = py - STUB - NUM_BOX
+    const labelY = by - SLOT_GAP
+    body = (
+      <>
+        <line x1={px} y1={py} x2={px} y2={by + NUM_BOX} stroke={u.color} strokeWidth="1.2" opacity="0.65" />
+        {box(bx, by)}
+        <text x={px} y={labelY} textAnchor="middle" className="mini-board__label">{label}</text>
+        {variable && <text x={px} y={labelY - LINE_H} textAnchor="middle" className="mini-board__var" fill={u.color}>{variable}</text>}
+      </>
+    )
+  } else {
+    const bx = px - NUM_BOX / 2
+    const by = py + STUB
+    const labelY = by + NUM_BOX + LINE_H - 4
+    body = (
+      <>
+        <line x1={px} y1={py} x2={px} y2={by} stroke={u.color} strokeWidth="1.2" opacity="0.65" />
+        {box(bx, by)}
+        <text x={px} y={labelY} textAnchor="middle" className="mini-board__label">{label}</text>
+        {variable && <text x={px} y={labelY + LINE_H} textAnchor="middle" className="mini-board__var" fill={u.color}>{variable}</text>}
+      </>
+    )
+  }
+
+  return (
+    <>
+      {body}
+      <circle cx={px} cy={py} r={PAD_R} fill={u.color} stroke="#fff" strokeWidth="1.8" />
+    </>
+  )
 }
 
 /**
@@ -143,16 +234,29 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     let maxX = box.x + box.w
     let maxY = box.y + box.h
     for (const u of usedList) {
-      const place = padLabelPlacement(u.p.edge)
-      const lx = u.p.x + place.dx
-      const ly = u.p.y + place.dy
-      const w = (u.p.pad.label.length + 1 + annotation(u).length) * 6
-      const x0 = place.anchor === 'end' ? lx - w : place.anchor === 'middle' ? lx - w / 2 : lx
-      const x1 = place.anchor === 'end' ? lx : place.anchor === 'middle' ? lx + w / 2 : lx + w
-      minX = Math.min(minX, x0)
-      maxX = Math.max(maxX, x1)
-      minY = Math.min(minY, ly - 9)
-      maxY = Math.max(maxY, ly + 5)
+      const px = u.p.x
+      const py = u.p.y
+      const labelW = u.p.pad.label.length * CHAR_W
+      const varW = u.variable ? u.variable.length * CHAR_W : 0
+      // Outward run of [box][label][variable] for left/right, or stacked rows up/down.
+      const run = STUB + NUM_BOX + SLOT_GAP + labelW + (u.variable ? SLOT_GAP + varW : 0)
+      const edge = pinEdge(u.p.edge)
+      if (edge === 'left') {
+        minX = Math.min(minX, px - run)
+        minY = Math.min(minY, py - NUM_BOX / 2)
+        maxY = Math.max(maxY, py + NUM_BOX / 2)
+      } else if (edge === 'right') {
+        maxX = Math.max(maxX, px + run)
+        minY = Math.min(minY, py - NUM_BOX / 2)
+        maxY = Math.max(maxY, py + NUM_BOX / 2)
+      } else {
+        const halfW = Math.max(NUM_BOX, labelW, varW) / 2
+        minX = Math.min(minX, px - halfW)
+        maxX = Math.max(maxX, px + halfW)
+        const stack = STUB + NUM_BOX + SLOT_GAP + LINE_H + (u.variable ? LINE_H : 0)
+        if (edge === 'top') minY = Math.min(minY, py - stack)
+        else maxY = Math.max(maxY, py + stack)
+      }
     }
     const m = 12
     return `${minX - m} ${minY - m} ${maxX - minX + m * 2} ${maxY - minY + m * 2}`
@@ -224,28 +328,7 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           if (!u) {
             return <circle key={`p${i}`} cx={p.x} cy={p.y} r={2.6} className="mini-board__hole" />
           }
-          const place = padLabelPlacement(u.p.edge)
-          const lx = u.p.x + place.dx
-          const ly = u.p.y + place.dy
-          const annot = annotation(u)
-          return (
-            <g key={`p${i}`}>
-              {/* short "noodle" stub from the pad to its node label */}
-              <line x1={u.p.x} y1={u.p.y} x2={lx} y2={ly - 3} stroke={u.color} strokeWidth="1.2" opacity="0.65" />
-              <circle cx={u.p.x} cy={u.p.y} r={PAD_R} fill={u.color} stroke="#fff" strokeWidth="1.8" />
-              <text x={lx} y={ly} textAnchor={place.anchor}>
-                <tspan className="mini-board__label">
-                  {u.p.pad.label}
-                  {annot ? ' ' : ''}
-                </tspan>
-                {annot && (
-                  <tspan className="mini-board__var" fill={u.color}>
-                    {annot}
-                  </tspan>
-                )}
-              </text>
-            </g>
-          )
+          return <PinAnnotation key={`p${i}`} u={u} />
         })}
       </svg>
       {usedList.length === 0 && (

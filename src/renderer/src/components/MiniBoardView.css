@@ -80,11 +80,25 @@
   fill: #cfe8d4;
 }
 
-/* The connected variable + pin-type tag (coloured by connection type inline). */
+/* The connected variable (coloured by connection type inline). */
 .mini-board__var {
   font-family: var(--font-mono), monospace;
   font-size: 10px;
   font-weight: 600;
+}
+
+/* Grey square holding the pin's GPIO number, sat next to the pad. */
+.mini-board__numbox {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: #565b63;
+  stroke-width: 0.7;
+}
+
+.mini-board__num {
+  font-family: var(--font-mono), monospace;
+  font-size: 9px;
+  font-weight: 700;
+  fill: #e9edf1;
 }
 
 .mini-board__hint {
