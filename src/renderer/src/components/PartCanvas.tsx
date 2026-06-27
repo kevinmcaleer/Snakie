@@ -223,7 +223,7 @@ function clamp01(n: number): number {
 
 /** Drag state while a pointer is down. */
 interface Drag {
-  kind: 'move-obj' | 'pan' | 'resize-image' | 'move-vertex' | 'move-shape-vertex' | 'create-array' | 'marquee'
+  kind: 'move-obj' | 'pan' | 'resize-image' | 'resize-shape' | 'move-vertex' | 'move-shape-vertex' | 'create-array' | 'marquee'
   sel: CanvasSelection
   corner?: number
   startNX: number
@@ -431,6 +431,38 @@ export function PartCanvas({
       })
     })
   }
+  // Resize a rect / circle shape (#175). Rect: new box; circle: new radius.
+  const resizeRectShape = (index: number, x: number, y: number, w: number, h: number): void =>
+    commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, x, y, w, h } : s)) })
+  const resizeCircleShape = (index: number, r: number): void =>
+    commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, r } : s)) })
+
+  /** Candidate snap lines (pins, holes + other shapes' edges/centres) for the
+   *  dynamic guides while resizing a shape (#175). */
+  const shapeSnapLines = (excludeIndex: number): { xs: number[]; ys: number[] } => {
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const p of pins) {
+      xs.push(p.x)
+      ys.push(p.y)
+    }
+    for (const h of holes) {
+      xs.push(h.x)
+      ys.push(h.y)
+    }
+    shapes.forEach((s, i) => {
+      if (i === excludeIndex) return
+      if (s.kind === 'rect') {
+        xs.push(s.x, s.x + (s.w ?? 0))
+        ys.push(s.y, s.y + (s.h ?? 0))
+      } else if (s.kind === 'circle') {
+        xs.push(s.x)
+        ys.push(s.y)
+      }
+    })
+    return { xs, ys }
+  }
+
   const moveShapeVertexTo = (index: number, vi: number, nx: number, ny: number): void => {
     commit({
       ...part,
@@ -768,6 +800,47 @@ export function PartCanvas({
       }
     }
 
+    // select tool — shape resize handles (when a rect/circle shape is selected).
+    if (selection?.type === 'shape' && !locked.components) {
+      const s = shapes[selection.index]
+      if (s?.kind === 'rect') {
+        const w = s.w ?? 0.2 // match the render-time fallbacks so handles are grabbable
+        const h = s.h ?? 0.15
+        // 0 TL, 1 TR, 2 BR, 3 BL, 4 T, 5 R, 6 B, 7 L
+        const handles: [number, number][] = [
+          [s.x, s.y],
+          [s.x + w, s.y],
+          [s.x + w, s.y + h],
+          [s.x, s.y + h],
+          [s.x + w / 2, s.y],
+          [s.x + w, s.y + h / 2],
+          [s.x + w / 2, s.y + h],
+          [s.x, s.y + h / 2]
+        ]
+        for (let c = 0; c < handles.length; c++) {
+          if (dist(nx, ny, handles[c][0], handles[c][1]) < HIT) {
+            dragRef.current = { kind: 'resize-shape', sel: selection, corner: c, startNX: nx, startNY: ny, ox: s.x, oy: s.y, ow: w, oh: h }
+            return
+          }
+        }
+      } else if (s?.kind === 'circle') {
+        const r = s.r ?? 0.08
+        const ry = (r * box.w) / box.h // circle radius as a normalised-y offset
+        const handles: [number, number][] = [
+          [s.x + r, s.y],
+          [s.x - r, s.y],
+          [s.x, s.y + ry],
+          [s.x, s.y - ry]
+        ]
+        for (const [hx, hy] of handles) {
+          if (dist(nx, ny, hx, hy) < HIT) {
+            dragRef.current = { kind: 'resize-shape', sel: selection, startNX: nx, startNY: ny, ox: s.x, oy: s.y }
+            return
+          }
+        }
+      }
+    }
+
     const hit = hitTest(nx, ny)
 
     // Multi-select (#170): shift OR ctrl/cmd click on a pin adds/removes it from
@@ -898,6 +971,68 @@ export function PartCanvas({
         h = d.oh + dy
       }
       if (w > 0.05 && h > 0.05) resizeImage(x, y, w, h)
+      return
+    }
+    if (d.kind === 'resize-shape' && d.sel?.type === 'shape') {
+      const s = shapes[d.sel.index]
+      if (!s) return
+      const off = e.ctrlKey || e.metaKey // hold Ctrl/Cmd to resize freely (no snap)
+      if (s.kind === 'circle') {
+        // Radius = the pointer's distance from the (fixed) centre, in board-width
+        // fractions; any of the four handles drags it.
+        const r = Math.max(0.02, Math.hypot((nx - s.x) * box.w, (ny - s.y) * box.h) / box.w)
+        resizeCircleShape(d.sel.index, r)
+        setGuides(null)
+        return
+      }
+      // Rect: move only the edges the grabbed handle owns; snap them to nearby
+      // pins / holes / other shapes' edges (dynamic guides), Ctrl/Cmd = free.
+      const c = d.corner ?? 2
+      const leftMoves = c === 0 || c === 3 || c === 7
+      const rightMoves = c === 1 || c === 2 || c === 5
+      const topMoves = c === 0 || c === 1 || c === 4
+      const bottomMoves = c === 2 || c === 3 || c === 6
+      let x0 = d.ox
+      let y0 = d.oy
+      let x1 = d.ox + (d.ow ?? 0)
+      let y1 = d.oy + (d.oh ?? 0)
+      if (leftMoves) x0 = d.ox + dx
+      if (rightMoves) x1 = d.ox + (d.ow ?? 0) + dx
+      if (topMoves) y0 = d.oy + dy
+      if (bottomMoves) y1 = d.oy + (d.oh ?? 0) + dy
+      let gx: number | undefined
+      let gy: number | undefined
+      if (!off) {
+        const cand = shapeSnapLines(d.sel.index)
+        if (leftMoves) {
+          const sx = nearestCenter(cand.xs, x0, box.w, ALIGN_PX)
+          if (sx != null) ((x0 = sx), (gx = sx))
+        } else if (rightMoves) {
+          const sx = nearestCenter(cand.xs, x1, box.w, ALIGN_PX)
+          if (sx != null) ((x1 = sx), (gx = sx))
+        }
+        if (topMoves) {
+          const sy = nearestCenter(cand.ys, y0, box.h, ALIGN_PX)
+          if (sy != null) ((y0 = sy), (gy = sy))
+        } else if (bottomMoves) {
+          const sy = nearestCenter(cand.ys, y1, box.h, ALIGN_PX)
+          if (sy != null) ((y1 = sy), (gy = sy))
+        }
+      }
+      // Clamp BOTH edges to the board before measuring, so dragging one edge off
+      // the top/left can't shift the opposite (anchored) edge.
+      const cx0 = clamp01(x0)
+      const cx1 = clamp01(x1)
+      const cy0 = clamp01(y0)
+      const cy1 = clamp01(y1)
+      const x = Math.min(cx0, cx1)
+      const y = Math.min(cy0, cy1)
+      const w = Math.abs(cx1 - cx0)
+      const h = Math.abs(cy1 - cy0)
+      if (w > 0.02 && h > 0.02) {
+        resizeRectShape(d.sel.index, x, y, w, h)
+        setGuides(gx !== undefined || gy !== undefined ? { x: gx, y: gy } : null)
+      }
       return
     }
     if (d.kind === 'move-vertex' && d.sel?.type === 'vertex') {
@@ -1330,6 +1465,46 @@ export function PartCanvas({
             ))}
           </g>
         )}
+
+        {/* Resize handles for a selected rect / circle shape (#175). */}
+        {interactive &&
+          !locked.components &&
+          selection?.type === 'shape' &&
+          shapes[selection.index] &&
+          (() => {
+            const s = shapes[selection.index]
+            let pts: [number, number][] = []
+            if (s.kind === 'rect') {
+              const w = s.w ?? 0.2
+              const h = s.h ?? 0.15
+              pts = [
+                [s.x, s.y],
+                [s.x + w, s.y],
+                [s.x + w, s.y + h],
+                [s.x, s.y + h],
+                [s.x + w / 2, s.y],
+                [s.x + w, s.y + h / 2],
+                [s.x + w / 2, s.y + h],
+                [s.x, s.y + h / 2]
+              ]
+            } else if (s.kind === 'circle') {
+              const r = s.r ?? 0.08
+              const ry = (r * box.w) / box.h
+              pts = [
+                [s.x + r, s.y],
+                [s.x - r, s.y],
+                [s.x, s.y + ry],
+                [s.x, s.y - ry]
+              ]
+            }
+            return (
+              <g>
+                {pts.map(([hx, hy], c) => (
+                  <rect key={c} x={px(hx) - 5} y={py(hy) - 5} width={10} height={10} fill="#4ea1ff" stroke="#fff" />
+                ))}
+              </g>
+            )
+          })()}
 
         {/* Board polygon vertex handles (shape tool) */}
         {interactive &&

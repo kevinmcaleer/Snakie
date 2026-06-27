@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Resize shapes with drag handles in the Part Editor (#175).** Select a rectangle
+  or circle component and drag its handles to resize — rectangles have 8 handles
+  (corners + edge midpoints) for width/height, circles have 4 for the diameter. The
+  dynamic alignment guides snap the resized edges to nearby pins, holes and other
+  shapes (hold **Ctrl/Cmd** to resize freely). Polygons keep their vertex handles.
 - **Rotate, rename & delete parts on the breadboard (#176).** Click a placed part
   in the Breadboard view to select it; a small toolbar appears above it to **rotate
   it 90° at a time** (its wires follow the rotated pins), **rename** it (a display-only
