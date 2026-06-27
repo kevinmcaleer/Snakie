@@ -655,7 +655,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   }
   if (part.layerVisibility && typeof part.layerVisibility === 'object') {
     const lv: NonNullable<PartDefinition['layerVisibility']> = {}
-    for (const key of ['image', 'holes', 'pins', 'components'] as const) {
+    for (const key of ['pcb', 'image', 'holes', 'pins', 'components'] as const) {
       if (typeof part.layerVisibility[key] === 'boolean') lv[key] = part.layerVisibility[key]
     }
     if (Object.keys(lv).length) out.layerVisibility = lv

@@ -398,7 +398,7 @@ export function partFromYaml(text: string): PartDefinition {
   if (raw.layerVisibility && typeof raw.layerVisibility === 'object' && !Array.isArray(raw.layerVisibility)) {
     const lv = raw.layerVisibility as Record<string, unknown>
     const out: NonNullable<PartDefinition['layerVisibility']> = {}
-    for (const key of ['image', 'holes', 'pins', 'components'] as const) {
+    for (const key of ['pcb', 'image', 'holes', 'pins', 'components'] as const) {
       const b = bool(lv[key])
       if (b !== undefined) out[key] = b
     }

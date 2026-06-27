@@ -198,13 +198,15 @@ export function pinLabelLayout(
 
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
+  /** The PCB body (outline + fill) — separate from the photo (board-less parts). */
+  pcb: boolean
   image: boolean
   holes: boolean
   pins: boolean
   components: boolean
 }
 
-export const DEFAULT_LAYERS: LayerVisibility = { image: true, holes: true, pins: true, components: true }
+export const DEFAULT_LAYERS: LayerVisibility = { pcb: true, image: true, holes: true, pins: true, components: true }
 
 /** What is currently selected (drives the editor's contextual inspector). */
 export type CanvasSelection =
@@ -342,7 +344,7 @@ export function PartBody({
 
       {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
       <g mask={cutHoles ? `url(#${maskId})` : undefined}>
-        {shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
+        {visible.pcb && shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
         {visible.image && part.imageData && (
           <image
             href={part.imageData}

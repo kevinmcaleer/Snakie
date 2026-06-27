@@ -341,6 +341,9 @@ export interface PartDefinition {
 
 /** Per-layer visibility persisted with a part (absent key ⇒ visible). */
 export interface PartLayerVisibility {
+  /** The PCB body (outline + fill). Off for parts with no board, e.g. a motor. */
+  pcb?: boolean
+  /** The uploaded board photo (separate from the PCB body). */
   image?: boolean
   holes?: boolean
   pins?: boolean

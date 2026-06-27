@@ -553,6 +553,7 @@ export function PartEditor({
                 fileId={fileId}
               />
               <LayersPanel
+                variant="layers"
                 part={part}
                 visible={visible}
                 setVisible={setVisible}
@@ -585,6 +586,24 @@ export function PartEditor({
                 patch={patch}
                 setPart={setPart}
                 deleteSelection={deleteSelection}
+              />
+              {/* Board structure (mounting holes + PCB + image) sits BELOW the
+                  selected-item details, so pin editing stays near the top. */}
+              <LayersPanel
+                variant="board"
+                part={part}
+                visible={visible}
+                setVisible={setVisible}
+                locked={locked}
+                setLocked={setLocked}
+                tool={tool}
+                setTool={setTool}
+                selection={selection}
+                setSelection={setSelection}
+                onDeleteSelected={deleteSelection}
+                fileInputRef={fileInputRef}
+                onPickImage={onPickImage}
+                patch={patch}
               />
             </div>
           </>
@@ -624,6 +643,9 @@ interface LayersPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
   patch: (p: Partial<PartDefinition>) => void
+  /** Which sections to show: 'layers' = Components + Pins; 'board' = Mounting holes
+   *  + PCB + Image. Lets the board layers sit BELOW the selection inspector. */
+  variant?: 'layers' | 'board'
 }
 
 /**
@@ -644,7 +666,8 @@ function LayersPanel({
   onDeleteSelected,
   fileInputRef,
   onPickImage,
-  patch
+  patch,
+  variant = 'layers'
 }: LayersPanelProps): JSX.Element {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
@@ -732,8 +755,10 @@ function LayersPanel({
 
   return (
     <section className="pe__section pe__layers">
-      <h3 className="pe__h">Layers</h3>
+      <h3 className="pe__h">{variant === 'board' ? 'Board' : 'Layers'}</h3>
 
+      {variant !== 'board' && (
+        <>
       {/* Components (top) */}
       <div className={`pe__layer${tool === 'rect' || tool === 'circle' || tool === 'cpoly' || tool === 'text' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
@@ -809,6 +834,11 @@ function LayersPanel({
         )}
       </div>
 
+        </>
+      )}
+
+      {variant === 'board' && (
+        <>
       {/* Mounting holes */}
       <div className={`pe__layer${tool === 'hole' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
@@ -837,13 +867,13 @@ function LayersPanel({
         )}
       </div>
 
-      {/* PCB (bottom) — shape + image live here */}
+      {/* PCB body (outline + fill) — its own toggle so board-less parts (motors)
+          can hide it independently of the photo. */}
       <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
-          {eye('image')}
+          {eye('pcb')}
           {lock('image')}
-          <span className="pe__layer-name">PCB / image</span>
-          <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
+          <span className="pe__layer-name">PCB</span>
         </div>
         <div className="pe__layer-tools">
           <select className="pe__chip-select" value={part.shape?.kind ?? 'rect'} onChange={(e) => setShape(e.target.value as 'rect' | 'polygon')} title="Board outline shape">
@@ -855,6 +885,17 @@ function LayersPanel({
               Edit shape
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Image (board photo) — separate toggle from the PCB body. */}
+      <div className="pe__layer">
+        <div className="pe__layer-head">
+          {eye('image')}
+          <span className="pe__layer-name">Image</span>
+          <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
+        </div>
+        <div className="pe__layer-tools">
           <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title="Upload a board photo onto the PCB layer">
             {part.imageData ? 'Replace image' : '＋ Image'}
           </button>
@@ -862,6 +903,8 @@ function LayersPanel({
         <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
       <p className="pe__hint pe__hint--muted">PCB on the bottom; holes cut through it; pins &amp; components on top.</p>
+        </>
+      )}
     </section>
   )
 }

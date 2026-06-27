@@ -230,11 +230,11 @@ describe('component z-order + layer visibility round-trip', () => {
       headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
       shapes: [{ kind: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2, z: 3 }],
       labels: [{ text: 'U1', x: 0.5, y: 0.5, z: 1 }],
-      layerVisibility: { image: false, pins: true }
+      layerVisibility: { pcb: false, image: false, pins: true }
     })
     expect(part.shapes?.[0].z).toBe(3)
     expect(part.labels?.[0].z).toBe(1)
-    expect(part.layerVisibility).toEqual({ image: false, pins: true })
+    expect(part.layerVisibility).toEqual({ pcb: false, image: false, pins: true })
     expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
   })
 })

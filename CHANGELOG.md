@@ -152,6 +152,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   previously they were silently blocked by the `default-src 'self'` fallback.
 
 ### Changed
+- **Part Editor: PCB and image toggle independently; board layers moved down.** The
+  **PCB body** (outline + fill) now has its **own show/hide toggle, separate from the
+  board photo** — so a board-less part (e.g. a motor) can hide the PCB while keeping
+  an image, or vice versa (persisted with the part). The **Mounting holes / PCB /
+  Image** sections now sit **below the selected-item details** in the right panel, so
+  pin editing stays near the top.
 - **The Board View is a normal window** now (no longer always-on-top), so it can
   sit behind the editor like any other window.
 - **Schematic symbols are balanced & roomier.** Signal pins now split **evenly
