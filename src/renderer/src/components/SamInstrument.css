@@ -62,8 +62,7 @@
   color: var(--text-muted, #8b919b);
 }
 
-.sam__pin input {
-  width: 3.4rem;
+.sam__pin select {
   font-family: var(--font-mono);
   font-size: 0.78rem;
   color: var(--text, #e9edf1);
@@ -71,6 +70,7 @@
   border: var(--border-w, 1px) solid var(--border, #2a2d33);
   border-radius: var(--radius, 4px);
   padding: 0.2rem 0.35rem;
+  cursor: pointer;
 }
 
 .sam__speak {

@@ -37,8 +37,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Duplicate a part on the breadboard.** The selected-part toolbar gains a
   **Duplicate** button that drops a copy (fresh id, offset a little) and selects it.
 - **SAM text-to-speech instrument (#167).** A new **SAM** (Software Automated Mouth)
-  instrument in the dock: type into the speech bubble, pick the buzzer/speaker pin,
-  and **Speak** — the IDE makes sure the [`sam`](https://github.com/kevinmcaleer/sam)
+  instrument in the dock: type into the speech bubble, pick the buzzer/speaker pin
+  from a **dropdown of the selected board's GPIO pins**, and **Speak** — the IDE makes sure the [`sam`](https://github.com/kevinmcaleer/sam)
   library (with its `sam_render.mpy` accelerator) is on the board, installing it if
   needed, then synthesises the text out of that single pin. **Open demo** drops a
   runnable `sam_demo.py` into the editor.

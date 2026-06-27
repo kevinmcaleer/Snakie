@@ -1,6 +1,8 @@
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
+import type { BoardDefinition } from '../../../shared/board'
 import { InstrumentWindow, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
+import { useBoards } from './use-boards'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { SAM_DEMO, SAM_DEMO_NAME } from './sam-demo'
@@ -17,6 +19,27 @@ import './SamInstrument.css'
  * board synthesises the text out of that single pin. "Open demo" drops a small
  * runnable `sam_demo.py` into the editor. Library: https://github.com/kevinmcaleer/sam
  */
+
+/** GPIO pins (number + silk label) the selected board exposes, for the pin
+ *  dropdown — deduped and sorted ascending. Falls back to the first board. */
+function boardGpioPins(
+  boards: BoardDefinition[],
+  boardId: string | null
+): { gpio: number; label: string }[] {
+  const def = boards.find((b) => b.id === boardId) ?? boards[0]
+  const seen = new Set<number>()
+  const out: { gpio: number; label: string }[] = []
+  for (const h of def?.headers ?? []) {
+    for (const p of h.pins) {
+      if (typeof p.gpio === 'number' && !seen.has(p.gpio)) {
+        seen.add(p.gpio)
+        out.push({ gpio: p.gpio, label: p.label || `GP${p.gpio}` })
+      }
+    }
+  }
+  out.sort((a, b) => a.gpio - b.gpio)
+  return out
+}
 
 /** The exec snippet that speaks `text` out of `pin` via the SAM library. */
 function saySnippet(pin: number, text: string): string {
@@ -39,6 +62,18 @@ export function SamInstrument({ def, onClose, docked = true, onToggleDock, float
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
   const { openBuffer } = useWorkspace()
+  // The GPIO pins of the currently-selected board (the picker persists its id),
+  // for the buzzer-pin dropdown.
+  const boards = useBoards()
+  const gpioPins = useMemo(() => {
+    let boardId: string | null = null
+    try {
+      boardId = window.localStorage.getItem('snakie.board.id')
+    } catch {
+      boardId = null
+    }
+    return boardGpioPins(boards, boardId)
+  }, [boards])
 
   const [text, setText] = useState('Hello, I am Sam')
   const [pin, setPin] = useState(0)
@@ -107,14 +142,19 @@ export function SamInstrument({ def, onClose, docked = true, onToggleDock, float
         <div className="sam__controls">
           <label className="sam__pin">
             <span>BUZZER PIN</span>
-            <input
-              type="number"
-              min={0}
-              max={48}
+            <select
               value={pin}
-              onChange={(e) => setPin(Math.max(0, Math.min(48, Number(e.target.value) || 0)))}
-              aria-label="Buzzer pin (GPIO number)"
-            />
+              onChange={(e) => setPin(Number(e.target.value))}
+              aria-label="Buzzer pin (GPIO)"
+            >
+              {gpioPins.map((p) => (
+                <option key={p.gpio} value={p.gpio}>
+                  {p.label === `GP${p.gpio}` ? p.label : `${p.label} (GP${p.gpio})`}
+                </option>
+              ))}
+              {/* Keep the current value selectable even if the board doesn't list it. */}
+              {!gpioPins.some((p) => p.gpio === pin) && <option value={pin}>{`GP${pin}`}</option>}
+            </select>
           </label>
           <button
             type="button"
