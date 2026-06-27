@@ -339,6 +339,28 @@
   border-color: #a5281b;
 }
 
+/* Slightly larger square icon buttons for the part action row (Edit / Duplicate /
+   Promote / Delete) — keeps the elevated look of the text buttons they replace. */
+.pl__icon--action {
+  width: 1.7rem;
+  height: 1.7rem;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
+}
+
+/* A toolbar button holding a single icon (refresh / folder) rather than text. */
+.pl__btn--icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.28rem 0.4rem;
+}
+
+.pl__icon svg,
+.pl__btn--icon svg {
+  display: block;
+}
+
 /* --- Part detail card --- */
 .pl__detail {
   height: 100%;

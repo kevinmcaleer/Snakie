@@ -178,6 +178,17 @@ export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): voi
     getMainWindow()?.webContents.send('instruments:open', payload)
   })
 
+  // Relay a board selection to every OTHER window so the full Board Viewer and the
+  // main window's mini board view agree on the chosen board. Echo is skipped (the
+  // sender already updated its own state).
+  ipcMain.on('board:select', (e, id: string) => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed() && w.webContents.id !== e.sender.id) {
+        w.webContents.send('board:select', id)
+      }
+    }
+  })
+
   ipcMain.handle('board:listUserBoards', () => readUserBoards())
 
   ipcMain.handle('board:openBoardsFolder', async () => {

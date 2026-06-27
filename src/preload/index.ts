@@ -683,6 +683,16 @@ const board = {
     ipcRenderer.on('board:closed', listener)
     return () => ipcRenderer.removeListener('board:closed', listener)
   },
+  /** Broadcast the chosen board id to the app's other window(s) so the full Board
+   *  Viewer and the mini board view stay in sync. Fire-and-forget. */
+  selectBoard: (id: string): void => ipcRenderer.send('board:select', id),
+  /** Subscribe to a board-selection broadcast made in another window. Returns an
+   *  unsubscribe function. */
+  onSelectBoard: (cb: (id: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, id: string): void => cb(id)
+    ipcRenderer.on('board:select', listener)
+    return () => ipcRenderer.removeListener('board:select', listener)
+  },
   /** User-authored board definitions read from `<userData>/boards/*.json`. */
   listUserBoards: (): Promise<BoardDefinition[]> => ipcRenderer.invoke('board:listUserBoards'),
   /** Reveal the boards folder in the OS file manager (creates it if missing). */

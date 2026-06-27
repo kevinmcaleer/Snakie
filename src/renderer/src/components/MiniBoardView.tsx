@@ -77,6 +77,23 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     }
   }
 
+  // Follow the full Board Viewer: when the user picks a different board there, it
+  // broadcasts the id (via main) so this mini view switches to the same board.
+  // The same broadcast makes useBoards() re-read the library list, so a board that
+  // was just created/duplicated (and so wasn't in `boards` yet) resolves on the
+  // next render rather than falling back to the first board.
+  useEffect(() => {
+    const off = window.api.board.onSelectBoard((id) => {
+      setBoardId(id)
+      try {
+        window.localStorage.setItem(STORAGE_KEY, id)
+      } catch {
+        // ignore storage failures
+      }
+    })
+    return off
+  }, [])
+
   // Seed from whatever the console already holds (the board may have connected
   // before this mounted), then watch new device output for a boot banner.
   useEffect(() => {

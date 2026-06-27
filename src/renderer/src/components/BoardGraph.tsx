@@ -368,6 +368,8 @@ export function BoardGraph({
     } catch {
       // Ignore write failures (storage disabled / quota).
     }
+    // Tell the other window(s) so the main window's mini board view follows along.
+    window.api.board.selectBoard(id)
     // In a wiring-enabled window, record the chosen board in robot.yml too, so the
     // selection takes effect immediately (not only as a side-effect of a later
     // wire edit) and the picker, drawn board and file never diverge.

@@ -52,6 +52,69 @@ function openEditor(libraryId: string, part: PartDefinition | null): void {
   )
 }
 
+type IconName = 'edit' | 'duplicate' | 'promote' | 'delete' | 'refresh' | 'folder'
+
+/** Line-icon glyphs (16×16, currentColor) — hoisted so the record isn't rebuilt
+ *  on every render. */
+const ICON_PATHS: Record<IconName, JSX.Element> = {
+  // Pencil.
+  edit: (
+    <>
+      <path d="M11.1 2.6a1.4 1.4 0 0 1 2 2L5.6 12 3 13l1-2.6 7.1-7.8Z" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" />
+      <path d="M9.6 4.1l2.3 2.3" stroke="currentColor" strokeWidth={1.3} />
+    </>
+  ),
+  // Two overlapping sheets.
+  duplicate: (
+    <>
+      <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
+      <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+    </>
+  ),
+  // Up-arrow rising to a shelf (promote/upgrade to Standard).
+  promote: (
+    <>
+      <path d="M8 11V4M8 4 5 7M8 4l3 3" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 13h9" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+    </>
+  ),
+  // Trash can.
+  delete: (
+    <>
+      <path d="M3.5 4.5h9M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1V4.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+      <path d="M4.5 4.5 5 13a1 1 0 0 0 1 .9h4a1 1 0 0 0 1-.9l.5-8.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 6.8v4.4M9 6.8v4.4" stroke="currentColor" strokeWidth={1.1} strokeLinecap="round" />
+    </>
+  ),
+  // Circular arrow.
+  refresh: (
+    <>
+      <path d="M12.5 8a4.5 4.5 0 1 1-1.3-3.2" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+      <path d="M12.6 2.5v2.6h-2.6" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </>
+  ),
+  // Folder (reveal the parts folder).
+  folder: (
+    <path
+      d="M2.4 5.2V4a1 1 0 0 1 1-1h2.4l1.3 1.5h5.5a1 1 0 0 1 1 1V12a1 1 0 0 1-1 1H3.4a1 1 0 0 1-1-1V5.2Z"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      strokeLinejoin="round"
+    />
+  )
+}
+
+/** A small line-icon (16×16, currentColor) for the toolbar + part action buttons —
+ *  so the actions read as icons, not text/emoji. */
+function actionIcon(name: IconName): JSX.Element {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      {ICON_PATHS[name]}
+    </svg>
+  )
+}
+
 export interface PartsPanelProps {
   /** When provided, the part detail shows an "Add to project" button that adds
    *  the part to robot.yml (wired by the board window). */
@@ -204,6 +267,33 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     await refresh()
   }
 
+  // Copy a part (with a fresh, unique id + name) into the same library and open
+  // the copy in the Part Editor — the quick way to spin up a near-identical board
+  // (e.g. the Pico family) without redrawing it.
+  const duplicatePart = async (libraryId: string, part: PartDefinition): Promise<void> => {
+    const lib = libraries.find((l) => l.id === libraryId)
+    const ids = new Set((lib?.parts ?? []).map((p) => p.id))
+    const names = new Set((lib?.parts ?? []).map((p) => p.name))
+    const baseId = part.id.replace(/-copy(-\d+)?$/, '')
+    const baseName = part.name.replace(/ copy( \d+)?$/, '')
+    let id = `${baseId}-copy`
+    let name = `${baseName} copy`
+    for (let n = 2; ids.has(id) || names.has(name); n++) {
+      id = `${baseId}-copy-${n}`
+      name = `${baseName} copy ${n}`
+    }
+    const copy: PartDefinition = { ...part, id, name }
+    const res = await window.api.parts.savePart(libraryId, copy)
+    if (res.ok) {
+      setNote(`Duplicated "${part.name}" → "${name}".`)
+      await refresh()
+      setSelected({ libraryId, partId: id })
+      openEditor(libraryId, copy) // jump straight into renaming/tweaking the copy
+    } else {
+      setNote(res.error ?? 'Duplicate failed.')
+    }
+  }
+
   const deleteLibrary = async (lib: PartLibrary): Promise<void> => {
     if (!window.confirm(`Delete the whole library "${lib.name}" and all its parts?`)) return
     await window.api.parts.deleteLibrary(lib.id)
@@ -242,11 +332,27 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
         </button>
         <button
           type="button"
-          className="pl__btn"
+          className="pl__btn pl__btn--icon"
+          onClick={() => {
+            setNote(null)
+            // Parts are read fresh from disk on every list call, so this picks up
+            // on-disk edits with no app restart; the shared event also reloads the
+            // board graph in this window.
+            window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+          }}
+          title="Reload parts from disk (no restart needed)"
+          aria-label="Reload parts from disk"
+        >
+          {actionIcon('refresh')}
+        </button>
+        <button
+          type="button"
+          className="pl__btn pl__btn--icon"
           onClick={() => void window.api.parts.openPartsFolder()}
           title="Reveal the parts folder"
+          aria-label="Reveal the parts folder"
         >
-          📁
+          {actionIcon('folder')}
         </button>
       </div>
 
@@ -403,6 +509,7 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                 libraryId={selectedPart.libraryId}
                 part={selectedPart.part}
                 onEdit={() => openEditor(selectedPart.libraryId, selectedPart.part)}
+                onDuplicate={() => void duplicatePart(selectedPart.libraryId, selectedPart.part)}
                 onDelete={() => void deletePart(selectedPart.libraryId, selectedPart.part)}
                 onAddToProject={
                   onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
@@ -436,6 +543,7 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
 function PartDetail({
   part,
   onEdit,
+  onDuplicate,
   onDelete,
   onAddToProject,
   onPromote,
@@ -445,6 +553,7 @@ function PartDetail({
   libraryId: string
   part: PartDefinition
   onEdit: () => void
+  onDuplicate: () => void
   onDelete: () => void
   onAddToProject?: () => void
   /** DEV-only: promote this microcontroller board into the Standard Boards library. */
@@ -480,16 +589,31 @@ function PartDetail({
               + Add to project
             </button>
           )}
-          <button type="button" className="pl__btn pl__btn--small" onClick={onEdit}>
-            Edit
+          <button type="button" className="pl__icon pl__icon--action" onClick={onEdit} title="Edit part" aria-label="Edit part">
+            {actionIcon('edit')}
+          </button>
+          <button type="button" className="pl__icon pl__icon--action" onClick={onDuplicate} title="Duplicate part" aria-label="Duplicate part">
+            {actionIcon('duplicate')}
           </button>
           {onPromote && (
-            <button type="button" className="pl__btn pl__btn--small" onClick={onPromote} title="Copy this board into the Standard Boards library (developer)">
-              {promoteLabel ?? 'Promote to Standard'}
+            <button
+              type="button"
+              className="pl__icon pl__icon--action"
+              onClick={onPromote}
+              title={`${promoteLabel ?? 'Promote to Standard'} (developer)`}
+              aria-label={`${promoteLabel ?? 'Promote to Standard'} (developer)`}
+            >
+              {actionIcon('promote')}
             </button>
           )}
-          <button type="button" className="pl__btn pl__btn--small pl__btn--danger" onClick={onDelete}>
-            Delete
+          <button
+            type="button"
+            className="pl__icon pl__icon--action pl__icon--danger"
+            onClick={onDelete}
+            title="Delete part"
+            aria-label="Delete part"
+          >
+            {actionIcon('delete')}
           </button>
         </div>
       </div>

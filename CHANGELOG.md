@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Duplicate a part in the Parts Library.** The part-detail card has a
+  **Duplicate** action that copies the selected part (with a fresh, unique id +
+  "… copy" name) into the same library and opens the copy in the Part Editor — the
+  quick way to spin up a near-identical board (e.g. the Pico family) without
+  redrawing it.
+- **Icon part actions + a Reload button.** The part-detail **Edit / Duplicate /
+  Promote / Delete** actions are now compact icon buttons (with tooltips +
+  accessible labels) instead of text. A new **Reload** button in the Parts toolbar
+  re-reads the libraries from disk so on-disk edits show **without restarting the
+  app** (it also refreshes the board graph in the same window).
+- **Mini board view follows the Board Viewer.** Picking a different board in the
+  full Board Viewer now switches the **mini board view** in the main window to the
+  same board (relayed across windows), so the two never disagree.
 - **Multi-select alignment in the Part Editor (#170).** Drag a marquee to select
   several pins, or **Shift / Ctrl / Cmd-click** to add or remove individual pins
   from the selection (the browser's blue text-highlight no longer appears while
