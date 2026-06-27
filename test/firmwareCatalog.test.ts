@@ -96,6 +96,24 @@ describe('buildCatalog', () => {
     expect(m.variants.map((v) => v.title)).toEqual(['RISC-V', 'Std'])
   })
 
+  it('keeps .hex downloads (BBC micro:bit / DAPLink)', () => {
+    const cat = buildCatalog([
+      {
+        vendor: 'BBC',
+        model: 'micro:bit v2',
+        family: 'nrf52',
+        downloads: [
+          { version: '2.1.2', url: 'https://x/micropython-microbit-v2.1.2.hex' },
+          { version: 'bad', url: 'https://x/readme.txt' }
+        ]
+      }
+    ])
+    expect(cat.families).toHaveLength(1)
+    expect(cat.families[0].family).toBe('nrf52')
+    const versions = cat.families[0].models[0].variants[0].versions
+    expect(versions).toEqual([{ version: '2.1.2', url: 'https://x/micropython-microbit-v2.1.2.hex' }])
+  })
+
   it('returns an empty catalog for non-array input', () => {
     expect(buildCatalog(null).families).toEqual([])
     expect(buildCatalog({}).families).toEqual([])
@@ -190,6 +208,13 @@ describe('flashTargetForFamily', () => {
     expect(target.offset).toBeUndefined()
   })
 
+  it('maps micro:bit families (nrf51/nrf52) to the microbit board, NO offset', () => {
+    expect(flashTargetForFamily('nrf51')).toEqual({ board: 'microbit' })
+    expect(flashTargetForFamily('nrf52')).toEqual({ board: 'microbit' })
+    expect(flashTargetForFamily('microbit')).toEqual({ board: 'microbit' })
+    expect(flashTargetForFamily('nrf51').offset).toBeUndefined()
+  })
+
   it('treats an unknown family as a UF2 copy (rp2040, no offset)', () => {
     expect(flashTargetForFamily('mimxrt')).toEqual({ board: 'rp2040' })
   })
@@ -215,6 +240,14 @@ describe('fileNameFromUrl', () => {
   it('drops a query string', () => {
     expect(fileNameFromUrl('https://x/y/FW-v1.uf2?token=abc')).toBe('FW-v1.uf2')
     expect(fileNameFromUrl('https://x/y/FW-v1.bin?token=abc')).toBe('FW-v1.bin')
+  })
+
+  it('extracts the .hex basename from a micro:bit URL', () => {
+    expect(
+      fileNameFromUrl(
+        'https://github.com/microbit-foundation/micropython-microbit-v2/releases/download/v2.1.2/micropython-microbit-v2.1.2.hex'
+      )
+    ).toBe('micropython-microbit-v2.1.2.hex')
   })
 
   it('falls back to a generated .bin name when the URL has no firmware basename', () => {

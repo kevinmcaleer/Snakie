@@ -39,10 +39,10 @@ export function fileNameFromUrl(url: string): string {
   } catch {
     name = ''
   }
-  // Strip query junk and keep it a plausible .uf2 / .bin name.
+  // Strip query junk and keep it a plausible .uf2 / .bin / .hex name.
   name = name.split('?')[0]
   const lower = name.toLowerCase()
-  if (!name || !(lower.endsWith('.uf2') || lower.endsWith('.bin'))) {
+  if (!name || !(lower.endsWith('.uf2') || lower.endsWith('.bin') || lower.endsWith('.hex'))) {
     name = `micropython-${Date.now()}.bin`
   }
   return name

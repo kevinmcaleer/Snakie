@@ -151,14 +151,100 @@ async function detectRp2040Drive(): Promise<BoardCandidate[]> {
 }
 
 /**
+ * Determine the micro:bit generation from its `DETAILS.TXT` "Board ID" — the
+ * 4-digit code DAPLink writes (9900/9901 = v1 nRF51, 9903–9906 = v2 nRF52833).
+ * Pure + exported for unit testing. Returns undefined when undeterminable.
+ */
+export function microbitVersionFromDetails(text: string): 'v1' | 'v2' | undefined {
+  const m = text.match(/board id:\s*(\d{4})/i)
+  if (!m) return undefined
+  const id = Number(m[1])
+  if (id === 9900 || id === 9901) return 'v1'
+  if (id >= 9903 && id <= 9910) return 'v2'
+  return undefined
+}
+
+/** A directory looks like a BBC micro:bit DAPLink drive if it carries its markers. */
+async function looksLikeMicrobitDrive(dir: string): Promise<boolean> {
+  try {
+    const entries = await fs.readdir(dir)
+    const lower = entries.map((e) => e.toLowerCase())
+    // The MICROBIT MSD volume always contains DETAILS.TXT (+ usually MICROBIT.HTM).
+    return lower.includes('details.txt') || lower.includes('microbit.htm')
+  } catch {
+    return false
+  }
+}
+
+/** Read + parse the micro:bit generation from a drive's DETAILS.TXT, if present.
+ *  Resolves the filename case-insensitively (it can mount as `details.txt` on a
+ *  case-sensitive vfat mount). */
+async function readMicrobitVersion(mount: string): Promise<'v1' | 'v2' | undefined> {
+  try {
+    const entries = await fs.readdir(mount)
+    const file = entries.find((e) => e.toLowerCase() === 'details.txt')
+    if (!file) return undefined
+    const text = await fs.readFile(join(mount, file), 'utf8')
+    return microbitVersionFromDetails(text)
+  } catch {
+    return undefined
+  }
+}
+
+/** Build one micro:bit candidate for a mount, reading its generation if it can. */
+async function microbitCandidate(mount: string): Promise<BoardCandidate> {
+  const version = await readMicrobitVersion(mount)
+  const gen = version ? ` ${version}` : ''
+  return {
+    board: 'microbit',
+    source: 'uf2-drive',
+    mountPath: mount,
+    label: `${mount} — BBC micro:bit${gen} (MICROBIT)`,
+    microbitVersion: version
+  }
+}
+
+/** Detect a BBC micro:bit by scanning mount points for the MICROBIT MSD volume. */
+async function detectMicrobitDrive(): Promise<BoardCandidate[]> {
+  const candidates: BoardCandidate[] = []
+  const os = platform()
+
+  for (const root of uf2SearchRoots()) {
+    if (!root) continue
+    if (os === 'win32') {
+      if (await looksLikeMicrobitDrive(root)) candidates.push(await microbitCandidate(root))
+      continue
+    }
+    let names: string[]
+    try {
+      names = await fs.readdir(root)
+    } catch {
+      continue
+    }
+    for (const name of names) {
+      const mount = join(root, name)
+      const labelled = name.toUpperCase().includes('MICROBIT')
+      if (labelled || (await looksLikeMicrobitDrive(mount))) {
+        candidates.push(await microbitCandidate(mount))
+      }
+    }
+  }
+  return candidates
+}
+
+/**
  * Detect all board candidates, combining serial-port and UF2-drive strategies.
  * De-duplicates by (board, port/mountPath) and returns serial candidates first.
  * Always resolves (never rejects) — an empty array simply means nothing was
  * confidently recognised, which the UI presents as "choose manually".
  */
 export async function detectBoards(): Promise<BoardCandidate[]> {
-  const [esp, rp] = await Promise.all([detectEspFromSerial(), detectRp2040Drive()])
-  const all = [...esp, ...rp]
+  const [esp, rp, microbit] = await Promise.all([
+    detectEspFromSerial(),
+    detectRp2040Drive(),
+    detectMicrobitDrive()
+  ])
+  const all = [...esp, ...rp, ...microbit]
   const seen = new Set<string>()
   return all.filter((c) => {
     const key = `${c.board}:${c.port ?? c.mountPath ?? ''}`

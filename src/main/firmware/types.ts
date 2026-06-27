@@ -8,9 +8,11 @@
 
 /**
  * The board families we know how to flash. `esp32` / `esp8266` shell out to
- * `esptool`; `rp2040` copies a `.uf2` file onto the mounted boot drive.
+ * `esptool`; `rp2040` copies a `.uf2` onto the mounted boot drive; `microbit`
+ * (BBC micro:bit v1/v2, a DAPLink device) copies a `.hex` onto the mounted
+ * `MICROBIT` drive — the same drive-copy mechanism as RP2040.
  */
-export type BoardType = 'esp32' | 'esp8266' | 'rp2040'
+export type BoardType = 'esp32' | 'esp8266' | 'rp2040' | 'microbit'
 
 /**
  * A board candidate detected from a serial port (ESP) or a mounted UF2 boot
@@ -22,12 +24,13 @@ export interface BoardCandidate {
   board: BoardType
   /**
    * How the candidate was found. ESP boards are found via the serial port's
-   * USB VID/PID; RP2040 boards in BOOTSEL mode appear as a mounted UF2 volume.
+   * USB VID/PID; RP2040 boards in BOOTSEL mode and BBC micro:bit boards both
+   * appear as a mounted mass-storage volume (`RPI-RP2` / `MICROBIT`).
    */
   source: 'serial' | 'uf2-drive'
   /** Serial port path, when `source === 'serial'` (e.g. `/dev/ttyUSB0`). */
   port?: string
-  /** Mounted UF2 boot-drive path, when `source === 'uf2-drive'`. */
+  /** Mounted boot/MSD drive path, when `source === 'uf2-drive'`. */
   mountPath?: string
   /** Human-friendly description for the UI dropdown. */
   label: string
@@ -35,6 +38,12 @@ export interface BoardCandidate {
   vendorId?: string
   /** USB product id (hex string), when known. */
   productId?: string
+  /**
+   * For a detected micro:bit, which generation it is — read from `DETAILS.TXT`
+   * on the `MICROBIT` drive. Lets the UI pre-select the matching firmware family
+   * (nrf51 for v1, nrf52 for v2). Absent when not a micro:bit / undeterminable.
+   */
+  microbitVersion?: 'v1' | 'v2'
 }
 
 /** A live progress / log line streamed to the renderer during a flash. */

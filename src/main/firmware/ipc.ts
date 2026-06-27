@@ -71,7 +71,7 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
         title: 'Choose firmware file',
         properties: ['openFile'],
         filters: [
-          { name: 'Firmware', extensions: ['bin', 'uf2'] },
+          { name: 'Firmware', extensions: ['bin', 'uf2', 'hex'] },
           { name: 'All files', extensions: ['*'] }
         ]
       }

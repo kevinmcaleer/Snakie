@@ -16,14 +16,21 @@ interface FirmwareFlasherProps {
 const BOARD_LABELS: Record<BoardType, string> = {
   esp32: 'ESP32 (esptool)',
   esp8266: 'ESP8266 (esptool)',
-  rp2040: 'RP2040 / Pico (UF2)'
+  rp2040: 'RP2040 / Pico (UF2)',
+  microbit: 'BBC micro:bit (.hex)'
 }
 
 /** Default ESP offsets shown in the UI; user can override per board. */
 const DEFAULT_OFFSET: Record<BoardType, string> = {
   esp32: '0x1000',
   esp8266: '0x0',
-  rp2040: ''
+  rp2040: '',
+  microbit: ''
+}
+
+/** ESP boards flash via esptool (port + offset); the rest copy a file to a drive. */
+function isEspBoard(b: BoardType): boolean {
+  return b === 'esp32' || b === 'esp8266'
 }
 
 /** Where the firmware to flash comes from (`.uf2` or `.bin`). */
@@ -39,6 +46,7 @@ type Source = 'local' | 'catalog'
 function flashTargetForFamily(family: string): { board: BoardType; offset?: string } {
   const fam = family.trim().toLowerCase()
   if (fam.startsWith('rp2')) return { board: 'rp2040' }
+  if (fam.startsWith('nrf') || fam === 'microbit') return { board: 'microbit' }
   if (fam === 'esp8266') return { board: 'esp8266', offset: '0x0' }
   if (fam.startsWith('esp')) return { board: 'esp32', offset: fam === 'esp32' ? '0x1000' : '0x0' }
   return { board: 'rp2040' }
@@ -74,6 +82,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
   const [firmwarePath, setFirmwarePath] = useState<string>('')
   const [esptool, setEsptool] = useState<EsptoolInfo | null>(null)
+  // Generation of a detected micro:bit (v1/v2), to pre-select the right firmware.
+  const [detectedMicrobit, setDetectedMicrobit] = useState<'v1' | 'v2' | undefined>(undefined)
   const [log, setLog] = useState<FlashProgress[]>([])
   const [percent, setPercent] = useState<number | null>(null)
   const [flashing, setFlashing] = useState(false)
@@ -124,8 +134,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       if (first) {
         setBoard(first.board)
         setOffset(DEFAULT_OFFSET[first.board])
-        if (first.port) setPort(first.port)
-        if (first.mountPath) setMountPath(first.mountPath)
+        // port / mountPath / detectedMicrobit are derived from the selected board
+        // by the effect below, so a board switch can't keep a stale target.
       }
     } catch {
       // Detection is best-effort; leave manual selection available.
@@ -135,6 +145,18 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   useEffect(() => {
     void refreshDetection()
   }, [refreshDetection])
+
+  // Re-point the flash target at a detected candidate for the SELECTED board
+  // whenever the board (manual pick or catalog family sync) or the detected set
+  // changes — and clear it when none match. Prevents flashing to the wrong drive
+  // (e.g. a micro:bit `.hex` onto a previously-detected RP2040 boot drive) now
+  // that two different boards both flash via a mounted drive.
+  useEffect(() => {
+    const match = candidates.find((c) => c.board === board)
+    setPort(match?.port ?? '')
+    setMountPath(match?.mountPath ?? '')
+    setDetectedMicrobit(match?.board === 'microbit' ? match.microbitVersion : undefined)
+  }, [board, candidates])
 
   const handleBoardChange = useCallback((next: BoardType): void => {
     setBoard(next)
@@ -193,14 +215,20 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   // Pre-select a sensible Family once the catalog arrives: prefer one whose
   // flash target matches the currently selected board (so an ESP user lands on
-  // an ESP family), then `rp2`, then the first family.
+  // an ESP family), then `rp2`, then the first family. For a detected micro:bit,
+  // prefer the family matching its generation (nrf52 for v2, nrf51 for v1).
   useEffect(() => {
     if (families.length === 0) return
     if (selFamily && families.some((f) => f.family === selFamily)) return
+    const microbitFamily =
+      board === 'microbit'
+        ? families.find((f) => f.family === (detectedMicrobit === 'v1' ? 'nrf51' : 'nrf52'))
+        : undefined
     const matchesBoard = families.find((f) => flashTargetForFamily(f.family).board === board)
-    const preferred = matchesBoard ?? families.find((f) => f.family === 'rp2') ?? families[0]
+    const preferred =
+      microbitFamily ?? matchesBoard ?? families.find((f) => f.family === 'rp2') ?? families[0]
     setSelFamily(preferred.family)
-  }, [families, selFamily, board])
+  }, [families, selFamily, board, detectedMicrobit])
 
   // Reset downstream selections whenever the upstream selection changes.
   useEffect(() => {
@@ -231,7 +259,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   }, [source, selFamily])
 
   const serialCandidates = candidates.filter((c) => c.source === 'serial')
-  const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive')
+  // Drive candidates relevant to the selected board (RP2040 vs micro:bit drives).
+  const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive' && c.board === board)
 
   const usingCatalog = source === 'catalog'
 
@@ -265,13 +294,14 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         // catalog flash); the user may have edited the offset, so prefer the
         // field value over the family default (issue #125).
         const target = flashTargetForFamily(selFamily)
+        const esp = isEspBoard(target.board)
         await window.api.firmware.downloadAndFlash({
           url: selVersionUrl,
           board: target.board,
-          // ESP: serial port + offset; RP2040: boot drive.
-          port: target.board === 'rp2040' ? undefined : port,
-          offset: target.board === 'rp2040' ? undefined : offset || target.offset,
-          mountPath: target.board === 'rp2040' ? mountPath : undefined
+          // ESP: serial port + offset; RP2040 / micro:bit: copy to the drive.
+          port: esp ? port : undefined,
+          offset: esp ? offset || target.offset : undefined,
+          mountPath: esp ? undefined : mountPath
         })
       } else {
         await window.api.firmware.flash({
@@ -433,7 +463,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           ) : (
             <div className="firmware-field">
               <label className="firmware-field__label" htmlFor="firmware-mount">
-                RP2040 boot drive (RPI-RP2)
+                {board === 'microbit' ? 'micro:bit drive (MICROBIT)' : 'RP2040 boot drive (RPI-RP2)'}
               </label>
               <div className="firmware-field__row">
                 <select
@@ -443,7 +473,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   disabled={flashing}
                   onChange={(e) => setMountPath(e.target.value)}
                 >
-                  <option value="">Select a boot drive…</option>
+                  <option value="">Select a drive…</option>
                   {uf2Candidates.map((c) => (
                     <option key={c.mountPath} value={c.mountPath}>
                       {c.label}
@@ -456,8 +486,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
               </div>
               {uf2Candidates.length === 0 && (
                 <p className="firmware-hint">
-                  No RPI-RP2 drive detected. Hold BOOTSEL while plugging the board in, then press
-                  Detect.
+                  {board === 'microbit'
+                    ? 'No MICROBIT drive detected. Plug the micro:bit in via USB, then press Detect.'
+                    : 'No RPI-RP2 drive detected. Hold BOOTSEL while plugging the board in, then press Detect.'}
                 </p>
               )}
             </div>
@@ -605,7 +636,13 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   type="text"
                   readOnly
                   value={firmwarePath}
-                  placeholder={isEsp ? 'Choose a .bin file…' : 'Choose a .uf2 file…'}
+                  placeholder={
+                    isEsp
+                      ? 'Choose a .bin file…'
+                      : board === 'microbit'
+                        ? 'Choose a .hex file…'
+                        : 'Choose a .uf2 file…'
+                  }
                 />
                 <button
                   type="button"

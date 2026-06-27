@@ -156,23 +156,32 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
   return { ok: true }
 }
 
-/** Copy a `.uf2` file onto the mounted RP2040 boot drive, streaming progress. */
-async function flashRp2040(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
+/**
+ * Copy a firmware file onto a mounted mass-storage boot drive, streaming
+ * progress. Used by BOTH the RP2040 (a `.uf2` onto the `RPI-RP2` BOOTSEL volume)
+ * and the BBC micro:bit (a `.hex` onto the `MICROBIT` DAPLink volume) — same
+ * mechanism, board-specific wording.
+ */
+async function flashDriveCopy(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
+  const microbit = opts.board === 'microbit'
+  const fileKind = microbit ? '.hex' : 'UF2'
   const mount = opts.mountPath
   if (!mount) {
     return {
       ok: false,
-      error: 'No RP2040 boot drive selected. Hold BOOTSEL while connecting so RPI-RP2 mounts.'
+      error: microbit
+        ? 'No micro:bit drive selected. Connect the micro:bit so the MICROBIT drive mounts.'
+        : 'No RP2040 boot drive selected. Hold BOOTSEL while connecting so RPI-RP2 mounts.'
     }
   }
 
   try {
     const dirStat = await fs.stat(mount)
     if (!dirStat.isDirectory()) {
-      return { ok: false, error: `Boot drive path is not a directory: ${mount}` }
+      return { ok: false, error: `Drive path is not a directory: ${mount}` }
     }
   } catch {
-    return { ok: false, error: `Boot drive not found: ${mount}` }
+    return { ok: false, error: `Drive not found: ${mount}` }
   }
 
   const dest = join(mount, basename(opts.firmwarePath))
@@ -203,11 +212,16 @@ async function flashRp2040(opts: FlashOptions, emit: Emit): Promise<FlashResult>
     // The board commonly reboots and unmounts mid-write; surface the raw error
     // but note this may still indicate success on real hardware.
     const msg = err instanceof Error ? err.message : String(err)
-    emit({ kind: 'error', message: `UF2 copy error: ${msg}` })
+    emit({ kind: 'error', message: `${fileKind} copy error: ${msg}` })
     return { ok: false, error: msg }
   }
 
-  emit({ kind: 'log', message: 'UF2 copied. The board will reboot into the new firmware.' })
+  emit({
+    kind: 'log',
+    message: microbit
+      ? 'Firmware copied. The micro:bit will flash it and reboot (the yellow LED blinks during write).'
+      : 'UF2 copied. The board will reboot into the new firmware.'
+  })
   return { ok: true }
 }
 
@@ -220,8 +234,8 @@ export async function flash(opts: FlashOptions, emit: Emit): Promise<FlashResult
   let result: FlashResult
   try {
     await assertFirmwareFile(opts.firmwarePath)
-    if (opts.board === 'rp2040') {
-      result = await flashRp2040(opts, emit)
+    if (opts.board === 'rp2040' || opts.board === 'microbit') {
+      result = await flashDriveCopy(opts, emit)
     } else {
       result = await flashEsp(opts, emit)
     }
