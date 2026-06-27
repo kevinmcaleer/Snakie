@@ -300,6 +300,14 @@ export interface PartBodyProps {
   selection?: CanvasSelection
   /** Override the clip/mask id prefix (defaults to a per-instance useId). */
   idPrefix?: string
+  /** The clockwise rotation (deg) the CALLER applies around this body's centre
+   *  (e.g. a rotated part on the breadboard). Text is counter-rotated so it never
+   *  ends up upside down (#180). 0 in the Part Editor. */
+  rotation?: number
+  /** The uniform scale the caller applies to the body. Pin labels are counter-
+   *  scaled by 1/bodyScale so they stay a consistent on-screen size across parts
+   *  regardless of each part's real-world size (#180). 1 in the Part Editor. */
+  bodyScale?: number
 }
 
 /** The static life-like scene of a part, drawn into `box`. */
@@ -309,8 +317,24 @@ export function PartBody({
   visible: visibleProp,
   showGrid = false,
   selection = null,
-  idPrefix
+  idPrefix,
+  rotation = 0,
+  bodyScale = 1
 }: PartBodyProps): JSX.Element {
+  // Text-orientation/size correction for a rotated/scaled body (#180): counter the
+  // caller's rotation so text is never upside down, and (pin labels only) counter
+  // the scale so they read at a consistent size across parts. No-ops in the editor.
+  const textRot = (((rotation % 360) + 360) % 360) || 0
+  const uprightRotate = (x: number, y: number, localRotate = 0): string | undefined => {
+    const r = localRotate - textRot
+    return r ? `rotate(${r} ${x} ${y})` : undefined
+  }
+  const pinLabelTransform = (x: number, y: number, localRotate: number): string | undefined => {
+    const r = localRotate - textRot
+    const s = bodyScale > 0 ? 1 / bodyScale : 1
+    if (!r && s === 1) return undefined
+    return `translate(${x} ${y}) rotate(${r}) scale(${s}) translate(${-x} ${-y})`
+  }
   // Honour the part's own saved layer visibility (so the Board View / library
   // preview hide what the author hid, e.g. a traced PCB image) unless the caller
   // overrides it.
@@ -479,7 +503,7 @@ export function PartBody({
                   y={ll.ly}
                   className="pcv__pin-label"
                   textAnchor={ll.anchor}
-                  transform={ll.rotate ? `rotate(${ll.rotate} ${ll.lx} ${ll.ly})` : undefined}
+                  transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
                 >
                   {text}
                 </text>
@@ -493,7 +517,12 @@ export function PartBody({
         features.map((f, i) => (
           <g key={`f${i}`} style={{ pointerEvents: 'none' }}>
             <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke="#0006" />
-            <text x={px(f.x) + (f.w * box.w) / 2} y={py(f.y) + (f.h * box.h) / 2} className="pcv__feat-label">
+            <text
+              x={px(f.x) + (f.w * box.w) / 2}
+              y={py(f.y) + (f.h * box.h) / 2}
+              className="pcv__feat-label"
+              transform={uprightRotate(px(f.x) + (f.w * box.w) / 2, py(f.y) + (f.h * box.h) / 2)}
+            >
               {f.label}
             </text>
           </g>
@@ -506,7 +535,7 @@ export function PartBody({
             const i = c.index
             const l = labels[i]
             return (
-              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={uprightRotate(px(l.x), py(l.y))}>
                 {l.text}
               </text>
             )
@@ -541,7 +570,7 @@ export function PartBody({
             <g key={`s${i}`}>
               {el}
               {s.label && (
-                <text x={lcx} y={lcy} className="pcv__feat-label">
+                <text x={lcx} y={lcy} className="pcv__feat-label" transform={uprightRotate(lcx, lcy)}>
                   {s.label}
                 </text>
               )}

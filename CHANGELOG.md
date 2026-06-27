@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Breadboard layout fixes for rotated parts (#180).** A rotated part's silk/pin
+  text is no longer ever upside down (text is counter-rotated to stay readable),
+  its title now sits centred above the rotated body, and **pin labels are a
+  consistent size across parts** (they're no longer scaled by each part's
+  real-world size).
+- **The mini board view is always dark (#181).** Its node labels were invisible in
+  light themes; the mini board now uses a fixed dark palette regardless of the app
+  theme.
+
 ### Added
 - **Name & describe your project on the board (#179).** The Board Viewer now has an
   inline-editable **project/robot name + description** above the parts list, saved

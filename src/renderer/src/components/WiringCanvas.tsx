@@ -1236,6 +1236,7 @@ function SubjectBody({
   // Centre the title + remove ✕ over the VISIBLE body (shifted for a rotated
   // non-square part); 0 for everything else.
   const dx = s.bodyDX ?? 0
+  const dy = s.bodyDY ?? 0 // visible (rotated) top, so the title sits above it (#180)
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
   return (
     <g transform={`translate(${s.x} ${s.y})`}>
@@ -1267,13 +1268,15 @@ function SubjectBody({
               const bw = s.box.w * k
               const bh = s.box.h * k
               const tf = `${s.rotation ? `rotate(${s.rotation} ${bw / 2} ${bh / 2}) ` : ''}${k !== 1 ? `scale(${k})` : ''}`.trim()
-              const body = <PartBody part={s.partDef} box={s.box} />
+              // Tell PartBody the applied rotation/scale so it keeps text upright
+              // and pin labels a consistent size (#180).
+              const body = <PartBody part={s.partDef} box={s.box} rotation={s.rotation ?? 0} bodyScale={k} />
               return tf ? <g transform={tf}>{body}</g> : body
             })()
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
-          <text x={dx + s.w / 2} y={-7} textAnchor="middle" className="wc__body-title">
+          <text x={dx + s.w / 2} y={dy - 7} textAnchor="middle" className="wc__body-title">
             {s.title}
           </text>
         </>
@@ -1325,8 +1328,8 @@ function SubjectBody({
           }}
         >
           <title>Remove part</title>
-          <circle cx={dx + s.w - 11} cy={removeY} r={7} />
-          <text x={dx + s.w - 11} y={removeY + 3.5}>
+          <circle cx={dx + s.w - 11} cy={dy + removeY} r={7} />
+          <text x={dx + s.w - 11} y={dy + removeY + 3.5}>
             ✕
           </text>
         </g>
