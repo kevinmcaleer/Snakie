@@ -21,6 +21,9 @@ export type BoardPadType = 'gpio' | 'gnd' | 'vcc' | 'other'
 
 /** One header pad: a numeric GPIO (if any) plus the silk-screen label text. */
 export interface BoardPad {
+  /** Physical board pin number (1-based silk numbering), if the board prints one.
+   *  Shown in the pad's number box — distinct from the electrical `gpio`. */
+  number?: number
   /** The numeric GPIO this pad breaks out, matched against numeric `Pin(n)`. */
   gpio?: number
   /** The silk text drawn on/next to the pad (e.g. `"GP0"`, `"3V3"`, `"IO34"`). */

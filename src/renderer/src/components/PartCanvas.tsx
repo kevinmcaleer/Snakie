@@ -285,6 +285,7 @@ export function PartCanvas({
   const [hoverPin, setHoverPin] = useState<{ hi: number; pi: number } | null>(null)
   // The selected-component toolbar's border dropdown (width + colour).
   const [borderMenuOpen, setBorderMenuOpen] = useState(false)
+  const [fillMenuOpen, setFillMenuOpen] = useState(false)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -304,6 +305,11 @@ export function PartCanvas({
   const interactive = !readOnly && !!onChange
 
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+  // Colours already used in this part (shape fills + strokes), for the fill
+  // dropdown's quick-pick swatch grid. Deduped, in first-seen order.
+  const usedColors = Array.from(
+    new Set(shapes.flatMap((s) => [s.fill, s.stroke]).filter((c): c is string => !!c))
+  )
 
   // --- geometry helpers -----------------------------------------------------
   const px = (nx: number): number => box.x + nx * box.w
@@ -419,9 +425,9 @@ export function PartCanvas({
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
   }
-  const moveShapeTo = (index: number, nx: number, ny: number): void => {
-    const sx = snapX(nx)
-    const sy = snapY(ny)
+  const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
     commit({
       ...part,
       shapes: shapes.map((s, i) => {
@@ -477,8 +483,10 @@ export function PartCanvas({
       )
     })
   }
-  const moveLabelTo = (index: number, nx: number, ny: number): void => {
-    commit({ ...part, labels: labels.map((l, i) => (i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l)) })
+  const moveLabelTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
+    commit({ ...part, labels: labels.map((l, i) => (i === index ? { ...l, x: sx, y: sy } : l)) })
   }
   const moveVertexTo = (index: number, nx: number, ny: number): void => {
     commit({ ...part, polygon: (part.polygon ?? []).map((p, i) => (i === index ? { x: clamp01(nx), y: clamp01(ny) } : p)) })
@@ -593,6 +601,35 @@ export function PartCanvas({
       return { cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (Math.min(...ys) + Math.max(...ys)) / 2 }
     }
     return { cx: s.x + (s.w ?? 0.2) / 2, cy: s.y + (s.h ?? 0.15) / 2 }
+  }
+
+  /** Smart-alignment for a dragged component (#169, extended from pins/holes):
+   *  snap the component's CENTRE to the nearest other item's centre (pins, holes
+   *  and the OTHER components), returning the chosen centre + the guide lines to
+   *  draw. `off` (Ctrl/Cmd) disables alignment but keeps the grid snap. */
+  const alignComponentDrag = (
+    cx: number,
+    cy: number,
+    exclude: { kind: 'shape' | 'label'; index: number },
+    off: boolean
+  ): { cx: number; cy: number; gx?: number; gy?: number } => {
+    if (off) return { cx: snapX(cx), cy: snapY(cy) }
+    const centres: { x: number; y: number }[] = []
+    pins.forEach((p) => centres.push({ x: p.x, y: p.y }))
+    holes.forEach((h) => centres.push({ x: h.x, y: h.y }))
+    shapes.forEach((_, i) => {
+      if (exclude.kind === 'shape' && i === exclude.index) return
+      const c = componentCenter('shape', i)
+      if (c) centres.push({ x: c.cx, y: c.cy })
+    })
+    labels.forEach((_, i) => {
+      if (exclude.kind === 'label' && i === exclude.index) return
+      const c = componentCenter('label', i)
+      if (c) centres.push({ x: c.cx, y: c.cy })
+    })
+    const gx = nearestCenter(centres.map((c) => c.x), cx, box.w, ALIGN_PX)
+    const gy = nearestCenter(centres.map((c) => c.y), cy, box.h, ALIGN_PX)
+    return { cx: gx ?? snapX(cx), cy: gy ?? snapY(cy), gx: gx ?? undefined, gy: gy ?? undefined }
   }
 
   /** All selected items (pins + components) resolved to a centre + a ref. */
@@ -820,7 +857,19 @@ export function PartCanvas({
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [borderMenuOpen])
-  useEffect(() => setBorderMenuOpen(false), [selection])
+  // Same for the fill dropdown (native picker + used-colour swatch grid).
+  useEffect(() => {
+    if (!fillMenuOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.pcv__ctb-fill')) setFillMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [fillMenuOpen])
+  useEffect(() => {
+    setBorderMenuOpen(false)
+    setFillMenuOpen(false)
+  }, [selection])
   // Drop any multi-selection when switching to a different part (stale indices).
   useEffect(() => {
     setSelectedPins([])
@@ -1305,9 +1354,21 @@ export function PartCanvas({
         const a = alignDrag(x, y, 'hole', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
         moveHoleTo(d.sel.index, a.x, a.y, true)
-      } else if (d.sel.type === 'shape') moveShapeTo(d.sel.index, x, y)
-      else if (d.sel.type === 'label') moveLabelTo(d.sel.index, x, y)
-      else if (d.sel.type === 'image') moveImage(x, y)
+      } else if (d.sel.type === 'shape') {
+        // Smart-align the shape's CENTRE (the stored x/y is a corner for rects /
+        // a reference for polygons), then convert the snapped centre back.
+        const s = shapes[d.sel.index]
+        const ctr = componentCenter('shape', d.sel.index)
+        const offX = ctr && s ? ctr.cx - s.x : 0
+        const offY = ctr && s ? ctr.cy - s.y : 0
+        const a = alignComponentDrag(x + offX, y + offY, { kind: 'shape', index: d.sel.index }, noSnap)
+        setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
+        moveShapeTo(d.sel.index, a.cx - offX, a.cy - offY, true)
+      } else if (d.sel.type === 'label') {
+        const a = alignComponentDrag(x, y, { kind: 'label', index: d.sel.index }, noSnap)
+        setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
+        moveLabelTo(d.sel.index, a.cx, a.cy, true)
+      } else if (d.sel.type === 'image') moveImage(x, y)
     }
   }
 
@@ -1926,14 +1987,49 @@ export function PartCanvas({
               </button>
               {shape && (
                 <>
-                  <label className="pcv__ctb-well" title="Fill colour">
-                    <input
-                      type="color"
-                      value={shape.fill ?? DEFAULT_SHAPE_FILL}
-                      onChange={(e) => updateShape(sel.index, { fill: e.target.value })}
+                  <div className="pcv__ctb-fill">
+                    <button
+                      type="button"
+                      className="pcv__ctb-well"
+                      title="Fill colour"
                       aria-label="Fill colour"
+                      aria-haspopup="menu"
+                      aria-expanded={fillMenuOpen}
+                      style={{ background: shape.fill ?? DEFAULT_SHAPE_FILL }}
+                      onClick={() => {
+                        setBorderMenuOpen(false)
+                        setFillMenuOpen((o) => !o)
+                      }}
                     />
-                  </label>
+                    {fillMenuOpen && (
+                      <div className="pcv__ctb-menu" role="menu" aria-label="Fill">
+                        <div className="pcv__ctb-row">
+                          <span>Fill</span>
+                          <input
+                            type="color"
+                            value={shape.fill ?? DEFAULT_SHAPE_FILL}
+                            onChange={(e) => updateShape(sel.index, { fill: e.target.value })}
+                            aria-label="Fill colour"
+                          />
+                        </div>
+                        {usedColors.length > 0 && (
+                          <div className="pcv__ctb-swatches" role="group" aria-label="Colours used in this part">
+                            {usedColors.map((col) => (
+                              <button
+                                key={col}
+                                type="button"
+                                className="pcv__ctb-swatch"
+                                style={{ background: col }}
+                                title={col}
+                                aria-label={`Use ${col}`}
+                                onClick={() => updateShape(sel.index, { fill: col })}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   <div className="pcv__ctb-border">
                     <button
                       type="button"
@@ -1942,7 +2038,10 @@ export function PartCanvas({
                       aria-label="Border"
                       aria-haspopup="menu"
                       aria-expanded={borderMenuOpen}
-                      onClick={() => setBorderMenuOpen((o) => !o)}
+                      onClick={() => {
+                        setFillMenuOpen(false)
+                        setBorderMenuOpen((o) => !o)
+                      }}
                     >
                       <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                         <rect x={2.5} y={2.5} width={11} height={11} rx={1.5} fill="none" stroke="currentColor" strokeWidth={2} />

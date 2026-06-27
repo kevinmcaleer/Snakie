@@ -53,10 +53,21 @@
   border-color: #aeb4bd;
 }
 
+/* The board is drawn at a fixed (doubled) scale and zoomed to the pins in use, so
+   it can overflow — this wrapper scrolls it (e.g. down to the bottom pins). */
+.mini-board__scroll {
+  max-height: 320px;
+  overflow: auto;
+}
+
 .mini-board__svg {
   display: block;
-  width: 100%;
-  height: 150px;
+  margin: 0 auto;
+  /* Render at the doubled intrinsic size (width/height attrs), but never wider
+     than the dock — scale down proportionally instead of a horizontal scrollbar.
+     Tall (zoomed) content still overflows vertically → the wrapper scrolls. */
+  max-width: 100%;
+  height: auto;
 }
 
 .mini-board__mcu {
@@ -87,7 +98,7 @@
   font-weight: 600;
 }
 
-/* Grey square holding the pin's GPIO number, sat next to the pad. */
+/* Grey square holding the board pin number, sat next to the pad. */
 .mini-board__numbox {
   fill: rgba(255, 255, 255, 0.12);
   stroke: #565b63;

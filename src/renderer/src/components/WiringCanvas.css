@@ -235,26 +235,6 @@
   text-anchor: middle;
 }
 
-/* "Remove part" affordance on a part box's title bar. */
-.wc__box-remove {
-  cursor: pointer;
-}
-.wc__box-remove circle {
-  fill: #0006;
-  stroke: #ffffff2a;
-  stroke-width: 1;
-}
-.wc__box-remove:hover circle {
-  fill: #c0392b;
-}
-.wc__box-remove text {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  fill: #e9edf1;
-  text-anchor: middle;
-  pointer-events: none;
-}
-
 /* Pin dots, coloured by net. */
 .wc__dot {
   stroke: #0c0f12;

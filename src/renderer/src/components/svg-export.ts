@@ -48,28 +48,29 @@ export async function rasterise(
   background?: string
 ): Promise<HTMLCanvasElement> {
   const img = new Image()
-  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
-  try {
-    await new Promise<void>((resolve, reject) => {
-      img.onload = () => resolve()
-      img.onerror = () => reject(new Error('SVG image failed to load'))
-      img.src = url
-    })
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.max(1, Math.round(outW * dpr))
-    canvas.height = Math.max(1, Math.round(outH * dpr))
-    const ctx = canvas.getContext('2d')
-    if (!ctx) throw new Error('No 2D canvas context')
-    if (background) {
-      ctx.fillStyle = background
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-    }
-    ctx.scale(dpr, dpr)
-    ctx.drawImage(img, 0, 0, outW, outH)
-    return canvas
-  } finally {
-    URL.revokeObjectURL(url)
+  // Load via a `data:` URL, NOT a `blob:` object URL. The renderer's CSP is
+  // `img-src 'self' data:` — a blob: URL is blocked, so the <img> would silently
+  // fail to load and PNG/PDF export would do nothing (SVG export still works as it
+  // downloads via an <a>, not an <img>). data: is allowed and doesn't taint the
+  // canvas (so toBlob succeeds). encodeURIComponent keeps the SVG markup valid.
+  const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve()
+    img.onerror = () => reject(new Error('SVG image failed to load'))
+    img.src = url
+  })
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(outW * dpr))
+  canvas.height = Math.max(1, Math.round(outH * dpr))
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('No 2D canvas context')
+  if (background) {
+    ctx.fillStyle = background
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
   }
+  ctx.scale(dpr, dpr)
+  ctx.drawImage(img, 0, 0, outW, outH)
+  return canvas
 }
 
 /** Read a canvas as a Blob of the given MIME (+ quality). */

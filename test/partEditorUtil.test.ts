@@ -165,6 +165,26 @@ describe('partToBoardDefinition', () => {
     part.imageData = 'data:image/png;base64,ZZZ'
     expect(partToBoardDefinition(part).image).toBe('data:image/png;base64,ZZZ')
   })
+
+  it('carries the board pin NUMBER (distinct from gpio) onto the pad', () => {
+    const part = normalisePart({
+      id: 'b',
+      name: 'B',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'GP0', type: 'io', gpio: 0, number: 1 },
+            { name: 'GND', type: 'gnd', number: 3 }
+          ]
+        }
+      ]
+    })
+    const pads = partToBoardDefinition(part).headers[0].pins
+    expect(pads[0].number).toBe(1) // physical pin 1, not gpio 0
+    expect(pads[0].gpio).toBe(0)
+    expect(pads[1].number).toBe(3) // a non-io pin still carries its pin number
+  })
 })
 
 describe('free-placement positions', () => {

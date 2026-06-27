@@ -23,6 +23,7 @@ const PAD_R = 6
 // Pin annotation layout, ordered OUTWARD from a used pad: [number box][label]
 // [variable]. A fixed-size grey square holds the GPIO number (right-aligned);
 // the label then the code variable follow, mirrored per pin facing.
+const ZOOM = 1.6 // px per viewBox unit — renders the (zoomed-to-used) board large
 const NUM_BOX = 13 // square side
 const STUB = 7 // pad → first element gap
 const SLOT_GAP = 3 // gap between number box / label / variable
@@ -55,7 +56,9 @@ function pinEdge(e: PadPoint['edge']): 'left' | 'right' | 'top' | 'bottom' {
 function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
   const px = u.p.x
   const py = u.p.y
-  const num = u.p.pad.gpio != null ? String(u.p.pad.gpio) : ''
+  // Prefer the physical board pin number; fall back to GPIO for built-in boards
+  // that don't carry pin numbers (so the box is never blank).
+  const num = String(u.p.pad.number ?? u.p.pad.gpio ?? '')
   const label = u.p.pad.label
   const variable = u.variable
   const labelW = label.length * CHAR_W
@@ -226,16 +229,24 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     return { usedByKey: map, usedList: [...map.values()], ledLit: led }
   }, [source, isPython, def, pads, box])
 
-  // Frame the WHOLE board (so every idle hole stays visible) plus the used pins'
-  // node labels (so nothing clips).
+  // Zoom to fit JUST the pins in use (+ their node labels) so they read large —
+  // falling back to the WHOLE board only when nothing is used yet. Returns the
+  // viewBox string plus its size, so the SVG can be drawn at a fixed (doubled)
+  // scale and scrolled when it overflows the dock.
   const viewBox = useMemo(() => {
-    let minX = box.x
-    let minY = box.y
-    let maxX = box.x + box.w
-    let maxY = box.y + box.h
+    const hasUsed = usedList.length > 0
+    let minX = hasUsed ? Infinity : box.x
+    let minY = hasUsed ? Infinity : box.y
+    let maxX = hasUsed ? -Infinity : box.x + box.w
+    let maxY = hasUsed ? -Infinity : box.y + box.h
     for (const u of usedList) {
       const px = u.p.x
       const py = u.p.y
+      // The pad itself (so a single-edge selection still has real x/y extents).
+      minX = Math.min(minX, px)
+      maxX = Math.max(maxX, px)
+      minY = Math.min(minY, py)
+      maxY = Math.max(maxY, py)
       const labelW = u.p.pad.label.length * CHAR_W
       const varW = u.variable ? u.variable.length * CHAR_W : 0
       // Outward run of [box][label][variable] for left/right, or stacked rows up/down.
@@ -259,7 +270,9 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
       }
     }
     const m = 12
-    return `${minX - m} ${minY - m} ${maxX - minX + m * 2} ${maxY - minY + m * 2}`
+    const w = maxX - minX + m * 2
+    const h = maxY - minY + m * 2
+    return { str: `${minX - m} ${minY - m} ${w} ${h}`, w, h }
   }, [box, usedList])
 
   const led = ledPoint(box)
@@ -290,7 +303,15 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           </svg>
         </button>
       </div>
-      <svg className="mini-board__svg" viewBox={viewBox} role="img" aria-label={`${def.name} with ${usedList.length} pins in use`}>
+      <div className="mini-board__scroll">
+      <svg
+        className="mini-board__svg"
+        viewBox={viewBox.str}
+        width={Math.round(viewBox.w * ZOOM)}
+        height={Math.round(viewBox.h * ZOOM)}
+        role="img"
+        aria-label={`${def.name} with ${usedList.length} pins in use`}
+      >
         <defs>
           <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stopColor={def.pcbColor || '#1f7a44'} />
@@ -331,6 +352,7 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           return <PinAnnotation key={`p${i}`} u={u} />
         })}
       </svg>
+      </div>
       {usedList.length === 0 && (
         <p className="mini-board__hint">{isPython ? 'No pins used in this file yet.' : 'Open a MicroPython (.py) file to see its pins.'}</p>
       )}

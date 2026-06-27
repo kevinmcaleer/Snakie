@@ -9,12 +9,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Selected-component toolbar in the Part Editor.** Selecting a shape or text label
   now floats a dark mini-toolbar above it to **duplicate**, **rotate** (90° steps) or
-  **delete** it; shapes also get a quick **fill colour well** and a **border** dropdown
-  (width slider + value and a border colour well).
+  **delete** it; shapes also get a quick **fill** picker with a **grid of colours
+  already used in the part** for one-click reuse, and a **border** dropdown (width
+  slider + value and a border colour well).
 - **Multi-select + align components in the Part Editor.** Shift/Ctrl-click shapes and
   labels — or drag a marquee around them — to select several at once, then use the
   **alignment toolbar** (left/centre/right, top/middle/bottom, distribute) to line
-  them up. Pins and components can be aligned together in one selection.
+  them up. Pins and components can be aligned together in one selection. Dragging a
+  single shape/label now also shows the **smart-alignment guides** (it snaps its
+  centre to other items), matching pins.
 - **Floating project browser on the Board Viewer.** The project name + description
   and the component hierarchy (the microcontroller + placed parts) now live in a
   **floating, collapsible browser** pinned top-left of the canvas (Fusion-360
@@ -38,12 +41,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 - **Boxed pin annotations on the board.** In the **mini board view** and the
-  **breadboard (life-like)** microcontroller, each pin now shows a **grey GPIO
-  number box** next to the pad, then the **pin label**, then (for pins used in the
-  code) the **code variable** — laid out outward from the pin and mirrored for each
-  facing (left/right/top/bottom). The Part Editor's own pin labels are unchanged.
+  **breadboard (life-like)** microcontroller, each pin now shows a **grey board
+  pin-number box** (the physical pin number, not the GPIO) next to the pad, then the
+  **pin label**, then (for pins used in the code) the **code variable** — laid out
+  outward from the pin and mirrored for each facing (left/right/top/bottom). The
+  Part Editor's own pin labels are unchanged.
+- **The mini board view zooms to the pins in use.** It now frames just the used
+  pins (instead of the whole board) and draws them at a larger, readable scale,
+  scrolling when the result overflows the dock. With no pins used it still shows
+  the whole board.
 - **Collapsible connections table.** The Board Viewer's bottom connections table
   can now be **collapsed to its header** (and restored) to free up canvas space.
+- **Cleaner part on the breadboard.** Removed the small ✕ remove badge from each
+  placed part (it could clash with the part's title) — the selected-part toolbar's
+  **trash** button is the single, tidier way to delete.
 - **The parts list shows the board.** The component browser pins the currently
   selected **microcontroller** at the top (tagged "MCU"), listed alongside the
   parts wired to it.

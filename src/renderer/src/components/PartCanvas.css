@@ -200,15 +200,46 @@
   border-color: #a5281b;
 }
 
-/* Colour wells (fill + border). */
+/* Colour wells (fill + border). The fill well is a borderless swatch button
+   showing the current fill (a border made it look out of place in the bar). */
 .pcv__ctb-well {
   display: inline-flex;
   width: 1.6rem;
   height: 1.6rem;
-  border: 1px solid #3a3d44;
+  padding: 0;
+  border: none;
   border-radius: 6px;
   overflow: hidden;
   cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.pcv__ctb-fill {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Quick-pick grid of colours already used in the part (under the fill picker). */
+.pcv__ctb-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pcv__ctb-swatch {
+  width: 1.1rem;
+  height: 1.1rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.pcv__ctb-swatch:hover {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 0 2px #565b63;
 }
 
 .pcv__ctb-well input[type='color'],

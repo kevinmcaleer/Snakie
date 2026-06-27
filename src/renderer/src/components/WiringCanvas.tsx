@@ -823,7 +823,11 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
-    void exportSvgString(res.svg, fmt, res.width, res.height, base)
+    exportSvgString(res.svg, fmt, res.width, res.height, base).catch((err) => {
+      // Don't fail silently — a swallowed rejection here is exactly what made
+      // PNG/PDF "do nothing" before. Surface it so the cause is visible.
+      console.error(`Board export (${fmt}) failed:`, err)
+    })
   }
 
   // Close the export menu on an outside click.
@@ -984,7 +988,6 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               <SubjectBody
                 key={s.key}
                 subject={s}
-                onRemove={s.kind === 'part' ? () => removePart(s.key) : undefined}
                 onHoverPin={(idx) => setHover(idx == null ? null : { key: s.key, index: idx })}
               />
             ))}
@@ -1438,16 +1441,13 @@ function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: n
  *  the wiring canvas draws the connectable dots + combine labels on top. */
 function SubjectBody({
   subject: s,
-  onRemove,
   onHoverPin
 }: {
   subject: Subject
-  onRemove?: () => void
   onHoverPin?: (index: number | null) => void
 }): JSX.Element {
-  const removeY = s.mode === 'schematic' ? 10 : -7
-  // Centre the title + remove ✕ over the VISIBLE body (shifted for a rotated
-  // non-square part); 0 for everything else.
+  // Centre the title over the VISIBLE body (shifted for a rotated non-square
+  // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
   const dx = s.bodyDX ?? 0
   const dy = s.bodyDY ?? 0 // visible (rotated) top, so the title sits above it (#180)
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
@@ -1549,21 +1549,6 @@ function SubjectBody({
           )
         })}
 
-      {onRemove && (
-        <g
-          className="wc__box-remove"
-          onPointerDown={(e) => {
-            e.stopPropagation()
-            onRemove()
-          }}
-        >
-          <title>Remove part</title>
-          <circle cx={dx + s.w - 11} cy={dy + removeY} r={7} />
-          <text x={dx + s.w - 11} y={dy + removeY + 3.5}>
-            ✕
-          </text>
-        </g>
-      )}
     </g>
   )
 }

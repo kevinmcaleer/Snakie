@@ -581,7 +581,7 @@ export function PartBody({
                     cx,
                     cy,
                     pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
-                    rp.pin.type === 'io' && rp.pin.gpio != null ? String(rp.pin.gpio) : '',
+                    String(rp.pin.number ?? rp.pin.gpio ?? ''),
                     rp.pin.label || rp.pin.name,
                     pinVariables?.get(i)?.variable,
                     pinVariables?.get(i)?.color ?? '#cfd6dd'
