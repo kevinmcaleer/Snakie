@@ -54,20 +54,47 @@
   color: #aeb4bd;
 }
 
-.wc__btn {
+/* Zoom cluster (− / % / + / fit) — mirrors the node-graph + Part Editor controls
+   so the board viewer's three views share one zoom UI. */
+.wc__zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.wc__zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
   font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 0.85rem;
+  line-height: 1;
   color: #d6dade;
   background: #26282d;
   border: 1px solid #3a3d44;
   border-radius: 8px;
-  padding: 0.24rem 0.6rem;
   cursor: pointer;
 }
 
-.wc__btn:hover {
+.wc__zoom-btn:hover {
   border-color: #565b63;
+}
+
+.wc__zoom-pct {
+  min-width: 2.6rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: #aeb4bd;
+}
+
+.wc__zoom-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.15rem;
+  background: #3a3d44;
 }
 
 /* --- Bodies are drawn by the real renderers (Board / PartBody / symbols). --- */

@@ -50,6 +50,12 @@ const VIEW_W = 1180
 const VIEW_H = 720
 const DOT_R = 5
 
+// Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
+const WC_MIN_ZOOM = 0.35
+const WC_MAX_ZOOM = 3
+const WC_ZOOM_STEP = 1.2
+const clampScale = (s: number): number => Math.min(WC_MAX_ZOOM, Math.max(WC_MIN_ZOOM, s))
+
 // Life-like body footprints (fitted by aspect within these).
 const BOARD_BODY_W = 190
 const BOARD_BODY_H = 300
@@ -584,7 +590,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM()
     setView((v) => {
-      const scale = Math.min(3, Math.max(0.35, v.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1)))
+      const scale = clampScale(v.scale * (e.deltaY < 0 ? 1.1 : 1 / 1.1))
       if (!ctm || !svg) return { ...v, scale }
       const pt = svg.createSVGPoint()
       pt.x = e.clientX
@@ -593,6 +599,19 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       const wx = (local.x - v.tx) / v.scale
       const wy = (local.y - v.ty) / v.scale
       return { scale, tx: local.x - wx * scale, ty: local.y - wy * scale }
+    })
+  }
+
+  // Button zoom (− / +): zoom about the viewBox centre so the framed content stays
+  // centred, mirroring the node-graph + Part Editor zoom controls.
+  const zoomBy = (factor: number): void => {
+    setView((v) => {
+      const scale = clampScale(v.scale * factor)
+      const cx = VIEW_W / 2
+      const cy = VIEW_H / 2
+      const wx = (cx - v.tx) / v.scale
+      const wy = (cy - v.ty) / v.scale
+      return { scale, tx: cx - wx * scale, ty: cy - wy * scale }
     })
   }
 
@@ -765,9 +784,35 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
 
         <div className="wc__controls" role="toolbar" aria-label="Wiring view controls">
           <span className="wc__hint">Drag from a pin to another pin to wire them.</span>
-          <button type="button" className="wc__btn" onClick={fitView} title="Fit to view">
-            Fit
-          </button>
+          <div className="wc__zoom">
+            <button
+              type="button"
+              className="wc__zoom-btn"
+              onClick={() => zoomBy(1 / WC_ZOOM_STEP)}
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <span className="wc__zoom-pct" aria-label={`Zoom ${Math.round(view.scale * 100)} percent`}>
+              {Math.round(view.scale * 100)}%
+            </span>
+            <button
+              type="button"
+              className="wc__zoom-btn"
+              onClick={() => zoomBy(WC_ZOOM_STEP)}
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <span className="wc__zoom-sep" aria-hidden="true" />
+            <button type="button" className="wc__zoom-btn" onClick={fitView} title="Zoom to fit" aria-label="Zoom to fit">
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {!boardDef && robot.parts.length === 0 && (

@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Zoom controls on the board viewer's Breadboard & Schematic views (#174).** The
+  life-like Breadboard and Schematic views now have the same floating **− / % / +
+  / fit** zoom cluster as the node-graph view and the Part Editor (previously they
+  had only mouse-wheel zoom and a single "Fit" button), so all three board views
+  share one consistent zoom UI.
 - **Duplicate a part in the Parts Library.** The part-detail card has a
   **Duplicate** action that copies the selected part (with a fresh, unique id +
   "… copy" name) into the same library and opens the copy in the Part Editor — the
