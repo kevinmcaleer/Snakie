@@ -25,7 +25,7 @@ import { capabilityBadges, partBodyBox, PartBody } from './part-body'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
-import { routeOrthogonal, toRoundedPath, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
+import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import './WiringCanvas.css'
 
 /**
@@ -78,6 +78,9 @@ const PART_MAX_W = 380
 const PART_MAX_H = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
+// Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
+// noodles curve cleanly out of a pad even when the other end is on the far side.
+const WIRE_CLEARANCE = 40
 
 /** Snap any angle to the nearest of 0/90/180/270 (#176). */
 function normRot(deg?: number): 0 | 90 | 180 | 270 {
@@ -811,6 +814,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     robot.connections.map((c) => `${c.id}:${c.from}>${c.to}`).join(',')
   const wireRoutes = useMemo<Map<string, { x: number; y: number }[]>>(() => {
     const isSchem = renderMode === 'schematic'
+    // Breadboard wires are drawn as Bézier noodles straight from the pin anchors
+    // (#182), so the orthogonal router is only needed for the Schematic view.
+    if (!isSchem) return new Map()
     // Obstacles: every symbol box in Schematic; only the PART bodies in Breadboard
     // (the board's pads are inset inside its mat, so treating the board as an
     // obstacle would trap their stubs — wires still route around placed parts).
@@ -840,11 +846,38 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSig])
 
-  // --- wire path: orthogonal in Schematic, a rounded "noodle" in Breadboard ----
+  // Resolve a connection's two endpoints in canvas coords + their outward normals.
+  const wireEnds = (
+    c: RobotConnection
+  ): { ax: number; ay: number; aox: number; aoy: number; bx: number; by: number; box: number; boy: number } | null => {
+    const f = parseEndpoint(c.from)
+    const t = parseEndpoint(c.to)
+    const fs = subjByKey.get(f.key)
+    const ts = subjByKey.get(t.key)
+    const fp = fs?.pins[f.index]
+    const tp = ts?.pins[t.index]
+    if (!fs || !ts || !fp || !tp) return null
+    const fa = fp.anchors[0]
+    const ta = tp.anchors[0]
+    return { ax: fs.x + fa.x, ay: fs.y + fa.y, aox: fa.ox, aoy: fa.oy, bx: ts.x + ta.x, by: ts.y + ta.y, box: ta.ox, boy: ta.oy }
+  }
+
+  // --- wire path: orthogonal in Schematic, a Node-RED-style Bézier noodle in
+  // Breadboard (#182) — control points pushed out along each pin's normal give
+  // clearance off the pad and curve cleanly to a far-side pin; it reflows live as
+  // either end's node moves (the anchors recompute each render). ----
   const wirePath = (c: RobotConnection): { d: string } | null => {
-    const pts = wireRoutes.get(c.id)
-    if (!pts || pts.length < 2) return null
-    return { d: renderMode === 'schematic' ? toSvgPath(pts) : toRoundedPath(pts) }
+    if (renderMode === 'schematic') {
+      const pts = wireRoutes.get(c.id)
+      if (!pts || pts.length < 2) return null
+      return { d: toSvgPath(pts) }
+    }
+    const e = wireEnds(c)
+    if (!e) return null
+    const d = Math.max(WIRE_CLEARANCE, Math.hypot(e.bx - e.ax, e.by - e.ay) * 0.4)
+    return {
+      d: `M ${e.ax} ${e.ay} C ${e.ax + e.aox * d} ${e.ay + e.aoy * d}, ${e.bx + e.box * d} ${e.by + e.boy * d}, ${e.bx} ${e.by}`
+    }
   }
 
   const drag = dragRef.current
@@ -895,7 +928,19 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
-            {/* Committed wires (under the dots so the dots stay grabbable). */}
+            {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
+            {subjects.map((s) => (
+              <SubjectBody
+                key={s.key}
+                subject={s}
+                onRemove={s.kind === 'part' ? () => removePart(s.key) : undefined}
+                onHoverPin={(idx) => setHover(idx == null ? null : { key: s.key, index: idx })}
+              />
+            ))}
+
+            {/* Committed wires, ON TOP of the parts so a noodle to a far-side pin
+                isn't hidden under the body (#182). Pins stay grabbable via the
+                coordinate hit-test, not element order. */}
             {robot.connections.map((c) => {
               const p = wirePath(c)
               if (!p) return null
@@ -913,7 +958,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               const a = anchorOf(fs, fp, drag.cx ?? fs.x, drag.cy ?? fs.y)
               const cx = drag.cx ?? a.cx
               const cy = drag.cy ?? a.cy
-              const dist = Math.max(40, Math.hypot(cx - a.cx, cy - a.cy) * 0.4)
+              const dist = Math.max(WIRE_CLEARANCE, Math.hypot(cx - a.cx, cy - a.cy) * 0.4)
               return (
                 <path
                   d={`M ${a.cx} ${a.cy} C ${a.cx + a.ox * dist} ${a.cy + a.oy * dist}, ${cx} ${cy}, ${cx} ${cy}`}
@@ -924,16 +969,6 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 />
               )
             })()}
-
-            {/* Subjects (the MCU + placed parts). */}
-            {subjects.map((s) => (
-              <SubjectBody
-                key={s.key}
-                subject={s}
-                onRemove={s.kind === 'part' ? () => removePart(s.key) : undefined}
-                onHoverPin={(idx) => setHover(idx == null ? null : { key: s.key, index: idx })}
-              />
-            ))}
 
             {/* Selection ring around the selected part (#176). */}
             {selPart && (
