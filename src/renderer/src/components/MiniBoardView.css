@@ -1,12 +1,17 @@
 /* Mini board view (#168) — a compact node-graph board pinned to the top of the
-   instruments dock. Shows the MCU + only the pins the current code uses. */
+   instruments dock. Shows the MCU + only the pins the current code uses.
+
+   Always rendered DARK regardless of the app theme (#181): the node labels are
+   light (drawn over the dark PCB + in the dark margin), so a light theme would
+   make them invisible. The chrome below uses fixed dark colours, not theme
+   tokens, so the mini board stays a readable dark island in any theme. */
 .mini-board {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.4rem 0.5rem 0.5rem;
-  border-bottom: var(--border-w, 1px) solid var(--border, #2a2d33);
-  background: var(--bg-sunken, #0c0f12);
+  border-bottom: 1px solid #2a2d33;
+  background: #0c0f12;
   flex: 0 0 auto;
 }
 
@@ -21,7 +26,7 @@
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 600;
-  color: var(--text-muted, #aeb4bd);
+  color: #aeb4bd;
   letter-spacing: 0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -36,16 +41,16 @@
   width: 1.4rem;
   height: 1.4rem;
   padding: 0;
-  color: var(--text-muted, #aeb4bd);
-  background: var(--bg-elevated, #1a1d21);
-  border: var(--border-w, 1px) solid var(--border, #2a2d33);
+  color: #aeb4bd;
+  background: #1a1d21;
+  border: 1px solid #2a2d33;
   border-radius: var(--radius, 4px);
   cursor: pointer;
 }
 
 .mini-board__open:hover {
-  color: var(--text, #e9edf1);
-  border-color: var(--text-muted, #aeb4bd);
+  color: #e9edf1;
+  border-color: #aeb4bd;
 }
 
 .mini-board__svg {
@@ -85,7 +90,7 @@
 .mini-board__hint {
   margin: 0;
   font-size: 0.62rem;
-  color: var(--text-muted, #aeb4bd);
+  color: #aeb4bd;
   text-align: center;
   opacity: 0.8;
 }
