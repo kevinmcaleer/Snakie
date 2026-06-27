@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Floating project browser on the Board Viewer.** The project name + description
+  and the component hierarchy (the microcontroller + placed parts) now live in a
+  **floating, collapsible browser** pinned top-left of the canvas (Fusion-360
+  style), instead of the bottom dock. Collapse it to a small tab to reclaim space.
+- **Export the board as an image.** The board view's zoom toolbar has an **Export**
+  button offering **PNG**, **SVG** or **PDF** — it saves the whole drawing framed
+  at 1:1 (independent of the current pan/zoom), named after the project.
+- **Duplicate a part on the breadboard.** The selected-part toolbar gains a
+  **Duplicate** button that drops a copy (fresh id, offset a little) and selects it.
 - **SAM text-to-speech instrument (#167).** A new **SAM** (Software Automated Mouth)
   instrument in the dock: type into the speech bubble, pick the buzzer/speaker pin,
   and **Speak** — the IDE makes sure the [`sam`](https://github.com/kevinmcaleer/sam)
@@ -20,9 +29,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Settings → *Firmware updates* toggle disables the check.
 
 ### Changed
-- **The parts list shows the board.** The Board Viewer's Parts list now pins the
-  currently selected **microcontroller** at the top (tagged "MCU"), so the board is
-  listed alongside the parts wired to it.
+- **Collapsible connections table.** The Board Viewer's bottom connections table
+  can now be **collapsed to its header** (and restored) to free up canvas space.
+- **The parts list shows the board.** The component browser pins the currently
+  selected **microcontroller** at the top (tagged "MCU"), listed alongside the
+  parts wired to it.
 - **Part versions auto-bump on edit (#172).** Saving an edited part now
   automatically increments its **PATCH** version when its content actually
   changed, so updates are easy to detect (a manual version change you make is

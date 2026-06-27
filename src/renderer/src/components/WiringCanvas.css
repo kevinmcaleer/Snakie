@@ -97,6 +97,43 @@
   background: #3a3d44;
 }
 
+/* Export-image menu (PNG / SVG / PDF) on the zoom toolbar. */
+.wc__export {
+  position: relative;
+  display: inline-flex;
+}
+
+.wc__export-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 8.5rem;
+  padding: 0.2rem;
+  background: rgba(20, 22, 26, 0.96);
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.wc__export-item {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  text-align: left;
+  color: #d6dade;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 0.3rem 0.45rem;
+  cursor: pointer;
+}
+
+.wc__export-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
 /* Selected-part ring + mini-toolbar (#176). */
 .wc__sel-ring {
   fill: none;
@@ -118,7 +155,7 @@
   border: 1px solid #2c2e33;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-  z-index: 6;
+  z-index: 9; /* above the floating browser (8) so a selected part's toolbar shows */
 }
 
 .wc__parttb--below {
@@ -261,15 +298,158 @@
   font-size: 0.72rem;
 }
 
-/* Project / robot name + description, above the bottom dock (#179). */
+/* Floating project browser (Fusion-360-style), top-left over the canvas. */
+.wc__browser {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  width: 14rem;
+  max-height: calc(100% - 20px);
+  overflow: auto;
+  background: rgba(20, 22, 26, 0.92);
+  border: 1px solid #2c2e33;
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+}
+
+.wc__browser-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.45rem;
+  border-bottom: 1px solid #2c2e33;
+}
+
+.wc__browser-title {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #8b919b;
+}
+
+.wc__browser-collapse {
+  font: inherit;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #aeb4bd;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0.2rem;
+}
+
+.wc__browser-collapse:hover {
+  color: #e9edf1;
+}
+
+/* The collapsed tab (a small button to reopen the browser). */
+.wc__browser-tab {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 8;
+  width: 1.7rem;
+  height: 1.7rem;
+  font-size: 0.85rem;
+  color: #d6dade;
+  background: rgba(20, 22, 26, 0.92);
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.wc__browser-tab:hover {
+  border-color: #565b63;
+}
+
+/* Component hierarchy tree. */
+.wc__tree {
+  padding: 0.25rem 0.3rem 0.4rem;
+}
+
+.wc__tree-group {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #d6dade;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem 0.25rem;
+}
+
+.wc__tree-caret {
+  width: 0.7rem;
+  color: #8b919b;
+}
+
+.wc__tree-label {
+  flex: 1 1 auto;
+  text-align: left;
+}
+
+.wc__tree-count {
+  font-size: 0.62rem;
+  color: #8b919b;
+}
+
+.wc__tree-list {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 1rem;
+}
+
+.wc__tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.14rem 0.25rem;
+  border-radius: var(--radius);
+  font-size: 0.72rem;
+  color: #d6dade;
+}
+
+.wc__tree-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.wc__tree-item--board {
+  font-weight: 600;
+}
+
+.wc__tree-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.wc__tree-empty {
+  margin: 0.2rem 0.25rem;
+  padding-left: 0.4rem;
+}
+
+.wc__tree-item:hover .wc__parts-del,
+.wc__parts-del:focus-visible {
+  opacity: 1;
+}
+
+/* Project / robot name + description — inside the floating browser (#179). */
 .wc__project {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
-  padding: 0.4rem 0.6rem;
-  border-top: var(--border-w) solid var(--border);
-  background: var(--bg-elevated);
+  padding: 0.35rem 0.4rem;
 }
 
 .wc__project-name {
@@ -326,7 +506,7 @@
   opacity: 1;
 }
 
-/* Bottom dock: the parts list beside the connections table. */
+/* Bottom dock: the (collapsible) connections table. */
 .wc__bottom {
   flex: 0 0 auto;
   display: flex;
@@ -337,49 +517,7 @@
   background: var(--bg-elevated);
 }
 
-/* Parts list (left of the connections table). */
-.wc__parts {
-  flex: 0 0 13rem;
-  min-width: 0;
-  overflow: auto;
-  padding: 0.4rem 0.6rem;
-  border-right: var(--border-w) solid var(--border);
-}
-
-.wc__parts-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.wc__parts-item {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.16rem 0.2rem;
-  border-radius: var(--radius);
-  font-size: 0.72rem;
-}
-
-.wc__parts-item:hover {
-  background: var(--bg-sunken);
-}
-
-.wc__parts-name {
-  flex: 1 1 auto;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-/* The pinned microcontroller row (not removable). */
-.wc__parts-item--board {
-  font-weight: 600;
-  border-bottom: var(--border-w) solid var(--border);
-  border-radius: 0;
-  margin-bottom: 0.15rem;
-}
-
+/* The "MCU" tag pinned on the microcontroller row in the browser tree. */
 .wc__parts-tag {
   flex: 0 0 auto;
   font-size: 0.58rem;
@@ -408,11 +546,6 @@
   opacity: 0;
 }
 
-.wc__parts-item:hover .wc__parts-del,
-.wc__parts-del:focus-visible {
-  opacity: 1;
-}
-
 .wc__parts-del:hover {
   color: #fff;
   background: #c0392b;
@@ -436,6 +569,26 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--text-muted);
+}
+
+/* The connections header doubles as a collapse toggle (#…). */
+.wc__table-head--toggle {
+  width: 100%;
+  margin-bottom: 0;
+  padding: 0.1rem 0;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+}
+
+.wc__table-head--toggle:hover {
+  color: var(--text);
 }
 
 .wc__table-count {

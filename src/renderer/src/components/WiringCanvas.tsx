@@ -22,6 +22,7 @@ import type { PartDefinition, PartLibraryWithParts } from '../../../preload/inde
 import type { PartPinCapability } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { capabilityBadges, partBodyBox, PartBody, pinOutwardDir } from './part-body'
+import { serializeLiveSvg, exportSvgString, type ExportFmt } from './svg-export'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
@@ -324,6 +325,10 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
   // since closing the input fires a blur we must not treat as a save).
   const renameCommitRef = useRef(true)
+  // Whether the bottom connections table is expanded (collapse it to a header bar).
+  const [connOpen, setConnOpen] = useState(true)
+  // The image-export format menu (PNG / SVG / PDF) on the zoom toolbar.
+  const [exportOpen, setExportOpen] = useState(false)
 
   const resolvePart = (lib: string, part: string): PartDefinition | null =>
     libraries.find((l) => l.id === lib)?.parts.find((p) => p.id === part) ?? null
@@ -646,6 +651,22 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       parts: robot.parts.map((p) => (p.id === key ? { ...p, label: label.trim() || undefined } : p))
     })
 
+  // Duplicate a placed part: a copy with a fresh unique id, offset a little so it
+  // doesn't sit exactly on the original; the copy becomes the selection.
+  const duplicatePart = (key: string): void => {
+    const src = robot.parts.find((p) => p.id === key)
+    if (!src) return
+    const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
+    let id = src.part
+    let n = 2
+    while (ids.has(id)) id = `${src.part}${n++}`
+    // Use the source's on-screen position (a never-moved part has no x/y of its own).
+    const s = subjByKey.get(key)
+    const copy: RobotPart = { ...src, id, x: (src.x ?? s?.x ?? 60) + 30, y: (src.y ?? s?.y ?? 90) + 30 }
+    persist({ ...robot, parts: [...robot.parts, copy] })
+    setSelectedKey(id)
+  }
+
   // Save the project/robot name + description into robot.yml (#179).
   const commitRobotMeta = (patch: { name?: string; description?: string }): void =>
     persist({
@@ -792,6 +813,29 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     })
   }
 
+  // Export the canvas as an image (#…): serialise the live SVG framed to its
+  // content (full drawing at 1:1, independent of pan/zoom) and save it.
+  const doExport = (fmt: ExportFmt): void => {
+    setExportOpen(false)
+    const svg = svgRef.current
+    if (!svg) return
+    const res = serializeLiveSvg(svg, '.wc__content', { background: '#161719', margin: 24, exclude: ['.wc__sel-ring'] })
+    if (!res) return
+    const base =
+      (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
+    void exportSvgString(res.svg, fmt, res.width, res.height, base)
+  }
+
+  // Close the export menu on an outside click.
+  useEffect(() => {
+    if (!exportOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.wc__export')) setExportOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [exportOpen])
+
   // Auto fit-to-view when the CONTENT changes (view toggle, board change, a part
   // added/removed) — keyed on a signature that excludes positions/pan, so it
   // never yanks the view during a drag, pan or wire pull.
@@ -934,7 +978,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
           {/* The node-graph Board's gradients/filter (bg-pcb/bg-gold/bg-silver/bg-glow)
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
-          <g transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+          <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
             {subjects.map((s) => (
               <SubjectBody
@@ -1054,6 +1098,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 </button>
                 <button
                   type="button"
+                  className="wc__parttb-btn"
+                  title="Duplicate part"
+                  aria-label="Duplicate part"
+                  onClick={() => duplicatePart(selPart.key)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
+                    <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
                   className="wc__parttb-btn wc__parttb-btn--danger"
                   title="Delete from breadboard"
                   aria-label="Delete part"
@@ -1099,8 +1155,49 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            <span className="wc__zoom-sep" aria-hidden="true" />
+            {/* Export image (PNG / SVG / PDF). */}
+            <div className="wc__export">
+              <button
+                type="button"
+                className="wc__zoom-btn"
+                onClick={() => setExportOpen((o) => !o)}
+                title="Export image (PNG / SVG / PDF)"
+                aria-label="Export image"
+                aria-haspopup="menu"
+                aria-expanded={exportOpen}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M12 3v12m0 0 4-4m-4 4-4-4M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              {exportOpen && (
+                <div className="wc__export-menu" role="menu" aria-label="Export format">
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('png')}>
+                    PNG image
+                  </button>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('svg')}>
+                    SVG image
+                  </button>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('pdf')}>
+                    PDF document
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Fusion-360-style floating browser: project name + description + the
+            component hierarchy (MCU + parts), collapsible, over the canvas. */}
+        <BoardBrowser
+          name={robot.name ?? ''}
+          description={robot.description ?? ''}
+          onCommit={commitRobotMeta}
+          board={boardDef?.name}
+          parts={robot.parts}
+          onRemovePart={removePart}
+        />
 
         {!boardDef && robot.parts.length === 0 && (
           <div className="wc__empty">
@@ -1110,20 +1207,135 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
         )}
       </div>
 
-      <RobotHeader name={robot.name ?? ''} description={robot.description ?? ''} onCommit={commitRobotMeta} />
       <div className="wc__bottom">
-        <PartsList board={boardDef?.name} parts={robot.parts} onRemove={removePart} />
-        <ConnectionsTable connections={robot.connections} isDark={isDark} onRemove={removeConnection} onColor={setConnectionColor} />
+        <ConnectionsTable
+          connections={robot.connections}
+          isDark={isDark}
+          onRemove={removeConnection}
+          onColor={setConnectionColor}
+          open={connOpen}
+          onToggle={() => setConnOpen((o) => !o)}
+        />
       </div>
     </div>
   )
 }
 
 /**
+ * Floating, collapsible project browser (Fusion-360-style) pinned to the left of
+ * the canvas: the editable project name + description, then a "Components" tree
+ * of the selected microcontroller + the placed parts. Replaces the old
+ * bottom-dock header + parts list.
+ */
+function BoardBrowser({
+  name,
+  description,
+  onCommit,
+  board,
+  parts,
+  onRemovePart
+}: {
+  name: string
+  description: string
+  onCommit: (patch: { name?: string; description?: string }) => void
+  board?: string
+  parts: RobotPart[]
+  onRemovePart: (id: string) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(true)
+  const [compOpen, setCompOpen] = useState(true)
+  const count = parts.length + (board ? 1 : 0)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="wc__browser-tab"
+        onClick={() => setOpen(true)}
+        title="Show project browser"
+        aria-label="Show project browser"
+      >
+        ☰
+      </button>
+    )
+  }
+
+  return (
+    <aside className="wc__browser" aria-label="Project browser">
+      <div className="wc__browser-head">
+        <span className="wc__browser-title">BROWSER</span>
+        <button
+          type="button"
+          className="wc__browser-collapse"
+          onClick={() => setOpen(false)}
+          title="Collapse browser"
+          aria-label="Collapse browser"
+        >
+          ‹
+        </button>
+      </div>
+
+      <RobotHeader name={name} description={description} onCommit={onCommit} />
+
+      <div className="wc__tree">
+        <button
+          type="button"
+          className="wc__tree-group"
+          onClick={() => setCompOpen((o) => !o)}
+          aria-expanded={compOpen}
+        >
+          <span className="wc__tree-caret" aria-hidden="true">
+            {compOpen ? '▾' : '▸'}
+          </span>
+          <span className="wc__tree-label">Components</span>
+          <span className="wc__tree-count">{count}</span>
+        </button>
+        {compOpen &&
+          (count === 0 ? (
+            <p className="wc__muted wc__tree-empty">No components yet — pick a board + add parts.</p>
+          ) : (
+            <ul className="wc__tree-list">
+              {board && (
+                <li className="wc__tree-item wc__tree-item--board">
+                  <span className="wc__tree-name">{board}</span>
+                  <span className="wc__parts-tag">MCU</span>
+                </li>
+              )}
+              {parts.map((p) => (
+                <li key={p.id} className="wc__tree-item">
+                  <span className="wc__tree-name">{p.label || p.part}</span>
+                  <button
+                    type="button"
+                    className="wc__parts-del"
+                    onClick={() => onRemovePart(p.id)}
+                    title={`Remove ${p.label || p.part}`}
+                    aria-label={`Remove ${p.label || p.part}`}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path
+                        d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ))}
+      </div>
+    </aside>
+  )
+}
+
+/**
  * Inline-editable project/robot name + description, saved to robot.yml (#179).
- * Sits above the parts list (where the definition is structured). Ghost
- * placeholder text shows when empty; Enter (name) or blur saves and flashes a
- * "Saved to robot.yml" confirmation; Esc reverts.
+ * Rendered at the top of the floating project browser. Ghost placeholder text
+ * shows when empty; Enter (name) or blur saves and flashes a "Saved to robot.yml"
+ * confirmation; Esc reverts.
  */
 function RobotHeader({
   name,
@@ -1210,62 +1422,6 @@ function RobotHeader({
       <span className={`wc__project-saved${saved ? ' is-shown' : ''}`} aria-live="polite">
         {saved ? 'Saved to robot.yml ✓' : ''}
       </span>
-    </div>
-  )
-}
-
-/** The list of parts placed in the project, with a hover-to-reveal delete. */
-function PartsList({
-  board,
-  parts,
-  onRemove
-}: {
-  /** The currently selected microcontroller's name — pinned at the top (#…). */
-  board?: string
-  parts: RobotPart[]
-  onRemove: (id: string) => void
-}): JSX.Element {
-  return (
-    <div className="wc__parts">
-      <div className="wc__table-head">
-        <span>Parts</span>
-        <span className="wc__table-count">{parts.length + (board ? 1 : 0)}</span>
-      </div>
-      {!board && parts.length === 0 ? (
-        <p className="wc__muted wc__table-empty">No parts yet — add them from the library panel.</p>
-      ) : (
-        <ul className="wc__parts-list">
-          {board && (
-            <li className="wc__parts-item wc__parts-item--board">
-              <span className="wc__parts-name">{board}</span>
-              <span className="wc__parts-tag">MCU</span>
-            </li>
-          )}
-          {parts.map((p) => (
-            <li key={p.id} className="wc__parts-item">
-              <span className="wc__parts-name">{p.label || p.part}</span>
-              <button
-                type="button"
-                className="wc__parts-del"
-                onClick={() => onRemove(p.id)}
-                title={`Remove ${p.label || p.part}`}
-                aria-label={`Remove ${p.label || p.part}`}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path
-                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 }
@@ -1406,20 +1562,28 @@ function ConnectionsTable({
   connections,
   isDark,
   onRemove,
-  onColor
+  onColor,
+  open,
+  onToggle
 }: {
   connections: RobotConnection[]
   isDark: boolean
   onRemove: (id: string) => void
   onColor: (id: string, color: string) => void
+  /** Whether the table body is shown (collapsible — hides to just this header). */
+  open: boolean
+  onToggle: () => void
 }): JSX.Element {
   return (
     <div className="wc__table">
-      <div className="wc__table-head">
+      <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
+        <span className="wc__tree-caret" aria-hidden="true">
+          {open ? '▾' : '▸'}
+        </span>
         <span>Connections</span>
         <span className="wc__table-count">{connections.length}</span>
-      </div>
-      {connections.length === 0 ? (
+      </button>
+      {!open ? null : connections.length === 0 ? (
         <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
       ) : (
         <table>
