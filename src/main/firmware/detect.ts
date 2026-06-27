@@ -164,47 +164,69 @@ export function microbitVersionFromDetails(text: string): 'v1' | 'v2' | undefine
   return undefined
 }
 
+/**
+ * Whether a micro:bit's DETAILS.TXT reports DAPLink **bootloader/maintenance**
+ * mode (the `MAINTENANCE` drive) rather than normal interface mode — MicroPython
+ * can't be flashed in that mode. Pure + exported for unit testing.
+ */
+export function microbitMaintenanceFromDetails(text: string): boolean {
+  const m = text.match(/daplink mode:\s*(.+)/i)
+  if (!m) return false
+  const mode = m[1].toLowerCase()
+  return mode.includes('bootloader') || mode.includes('maintenance')
+}
+
 /** A directory looks like a BBC micro:bit DAPLink drive if it carries its markers. */
 async function looksLikeMicrobitDrive(dir: string): Promise<boolean> {
   try {
     const entries = await fs.readdir(dir)
     const lower = entries.map((e) => e.toLowerCase())
-    // The MICROBIT MSD volume always contains DETAILS.TXT (+ usually MICROBIT.HTM).
+    // The MICROBIT / MAINTENANCE MSD volume always contains DETAILS.TXT.
     return lower.includes('details.txt') || lower.includes('microbit.htm')
   } catch {
     return false
   }
 }
 
-/** Read + parse the micro:bit generation from a drive's DETAILS.TXT, if present.
+/** Read the micro:bit generation + mode from a drive's DETAILS.TXT, if present.
  *  Resolves the filename case-insensitively (it can mount as `details.txt` on a
  *  case-sensitive vfat mount). */
-async function readMicrobitVersion(mount: string): Promise<'v1' | 'v2' | undefined> {
+async function readMicrobitDetails(
+  mount: string
+): Promise<{ version?: 'v1' | 'v2'; maintenance: boolean }> {
   try {
     const entries = await fs.readdir(mount)
     const file = entries.find((e) => e.toLowerCase() === 'details.txt')
-    if (!file) return undefined
+    if (!file) return { maintenance: false }
     const text = await fs.readFile(join(mount, file), 'utf8')
-    return microbitVersionFromDetails(text)
+    return {
+      version: microbitVersionFromDetails(text),
+      maintenance: microbitMaintenanceFromDetails(text)
+    }
   } catch {
-    return undefined
+    return { maintenance: false }
   }
 }
 
-/** Build one micro:bit candidate for a mount, reading its generation if it can. */
-async function microbitCandidate(mount: string): Promise<BoardCandidate> {
-  const version = await readMicrobitVersion(mount)
+/** Build one micro:bit candidate for a mount, reading its generation + mode. */
+async function microbitCandidate(mount: string, nameIsMaintenance: boolean): Promise<BoardCandidate> {
+  const { version, maintenance: modeMaintenance } = await readMicrobitDetails(mount)
+  // The volume label (MAINTENANCE) is the strongest signal; DETAILS.TXT's
+  // "DAPLink Mode" backs it up (and covers Windows, where the path is a letter).
+  const maintenance = nameIsMaintenance || modeMaintenance
   const gen = version ? ` ${version}` : ''
+  const tag = maintenance ? 'MAINTENANCE — reconnect to flash' : 'MICROBIT'
   return {
     board: 'microbit',
     source: 'uf2-drive',
     mountPath: mount,
-    label: `${mount} — BBC micro:bit${gen} (MICROBIT)`,
-    microbitVersion: version
+    label: `${mount} — BBC micro:bit${gen} (${tag})`,
+    microbitVersion: version,
+    maintenance
   }
 }
 
-/** Detect a BBC micro:bit by scanning mount points for the MICROBIT MSD volume. */
+/** Detect a BBC micro:bit by scanning mount points for the MICROBIT/MAINTENANCE volume. */
 async function detectMicrobitDrive(): Promise<BoardCandidate[]> {
   const candidates: BoardCandidate[] = []
   const os = platform()
@@ -212,7 +234,9 @@ async function detectMicrobitDrive(): Promise<BoardCandidate[]> {
   for (const root of uf2SearchRoots()) {
     if (!root) continue
     if (os === 'win32') {
-      if (await looksLikeMicrobitDrive(root)) candidates.push(await microbitCandidate(root))
+      // No volume label in the path on Windows; rely on the DETAILS.TXT marker
+      // (the mode is then read from the file itself).
+      if (await looksLikeMicrobitDrive(root)) candidates.push(await microbitCandidate(root, false))
       continue
     }
     let names: string[]
@@ -223,9 +247,10 @@ async function detectMicrobitDrive(): Promise<BoardCandidate[]> {
     }
     for (const name of names) {
       const mount = join(root, name)
-      const labelled = name.toUpperCase().includes('MICROBIT')
+      const upper = name.toUpperCase()
+      const labelled = upper.includes('MICROBIT') || upper.includes('MAINTENANCE')
       if (labelled || (await looksLikeMicrobitDrive(mount))) {
-        candidates.push(await microbitCandidate(mount))
+        candidates.push(await microbitCandidate(mount, upper.includes('MAINTENANCE')))
       }
     }
   }

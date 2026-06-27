@@ -267,6 +267,12 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   // The firmware to flash: a catalog URL (download) or a picked local path.
   const haveFirmware = usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
 
+  // A micro:bit in maintenance mode (the MAINTENANCE drive) can't be flashed with
+  // MicroPython — doing so can soft-brick it — so detect it and block the flash.
+  const selectedMaintenance =
+    board === 'microbit' &&
+    candidates.some((c) => c.board === 'microbit' && c.mountPath === mountPath && c.maintenance)
+
   const canFlash = useMemo(() => {
     if (flashing) return false
     if (!haveFirmware) return false
@@ -275,9 +281,10 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       // the catalog (issue #125).
       return port.length > 0 && esptool?.available === true
     }
-    // RP2040 needs the boot drive to copy the `.uf2` onto.
-    return mountPath.length > 0
-  }, [flashing, haveFirmware, isEsp, port, esptool, mountPath])
+    // A drive board (RP2040 / micro:bit) needs the boot drive to copy onto, and a
+    // micro:bit must NOT be in maintenance mode.
+    return mountPath.length > 0 && !selectedMaintenance
+  }, [flashing, haveFirmware, isEsp, port, esptool, mountPath, selectedMaintenance])
 
   const resetRun = useCallback((): void => {
     setLog([])
@@ -489,6 +496,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   {board === 'microbit'
                     ? 'No MICROBIT drive detected. Plug the micro:bit in via USB, then press Detect.'
                     : 'No RPI-RP2 drive detected. Hold BOOTSEL while plugging the board in, then press Detect.'}
+                </p>
+              )}
+              {selectedMaintenance && (
+                <p className="firmware-banner firmware-banner--warn">
+                  This micro:bit is in <strong>maintenance mode</strong> (the MAINTENANCE drive),
+                  which is for interface-firmware updates — MicroPython can’t be flashed here and
+                  doing so can soft-brick the board. Unplug it and plug it back in{' '}
+                  <strong>without holding the reset button</strong> so the MICROBIT drive appears,
+                  then press Detect.
                 </p>
               )}
             </div>

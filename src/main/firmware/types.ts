@@ -44,6 +44,14 @@ export interface BoardCandidate {
    * (nrf51 for v1, nrf52 for v2). Absent when not a micro:bit / undeterminable.
    */
   microbitVersion?: 'v1' | 'v2'
+  /**
+   * True when a micro:bit is in DAPLink **maintenance/bootloader mode** — it
+   * mounts as `MAINTENANCE`, not `MICROBIT`. MicroPython can NOT be flashed in
+   * this mode (it expects an interface-firmware update, and copying a target
+   * `.hex` here can soft-brick the board), so the UI surfaces it but blocks the
+   * flash and tells the user to reconnect normally.
+   */
+  maintenance?: boolean
 }
 
 /** A live progress / log line streamed to the renderer during a flash. */

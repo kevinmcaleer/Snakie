@@ -12,7 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `DETAILS.TXT` to tell v1 from v2) and flashes the **latest MicroPython** by
   copying the right `.hex` onto the drive. Firmware versions come from Thonny's
   curated `daplink` catalog (the same source Thonny uses), so the list stays
-  current; the dialog pre-selects the matching v1/v2 build.
+  current; the dialog pre-selects the matching v1/v2 build. If the micro:bit is in
+  **maintenance mode** (the `MAINTENANCE` drive) the flasher detects it but blocks
+  the flash with guidance to reconnect normally — flashing MicroPython there can
+  soft-brick the board.
 - **Selected-component toolbar in the Part Editor.** Selecting a shape or text label
   now floats a dark mini-toolbar above it to **duplicate**, **rotate** (90° steps) or
   **delete** it; shapes also get a quick **fill** picker with a **grid of colours

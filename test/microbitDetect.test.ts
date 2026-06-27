@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { microbitVersionFromDetails } from '../src/main/firmware/detect'
+import { microbitVersionFromDetails, microbitMaintenanceFromDetails } from '../src/main/firmware/detect'
 
 /**
  * `microbitVersionFromDetails` reads the BBC micro:bit generation from the
@@ -29,5 +29,17 @@ describe('microbitVersionFromDetails', () => {
   it('returns undefined when there is no Board ID or it is unrecognised', () => {
     expect(microbitVersionFromDetails('no board id here')).toBeUndefined()
     expect(microbitVersionFromDetails(details('1234'))).toBeUndefined()
+  })
+})
+
+describe('microbitMaintenanceFromDetails', () => {
+  it('detects bootloader / maintenance mode', () => {
+    expect(microbitMaintenanceFromDetails('DAPLink Mode: Bootloader')).toBe(true)
+    expect(microbitMaintenanceFromDetails('daplink mode: maintenance')).toBe(true)
+  })
+
+  it('treats interface mode (and a missing line) as NOT maintenance', () => {
+    expect(microbitMaintenanceFromDetails('DAPLink Mode: Interface')).toBe(false)
+    expect(microbitMaintenanceFromDetails('Board ID: 9904')).toBe(false)
   })
 })
