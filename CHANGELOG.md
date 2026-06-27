@@ -179,6 +179,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   legible above them.
 
 ### Fixed
+- **Pin labels always render outside the part.** A pin set in from the board edge
+  used to print its silk label over the artwork; labels are now pushed out to the
+  board-box edge the pin's **rotation** points to (right/left/top/bottom), keeping
+  the perpendicular coordinate at the pin so it still lines up with its row/column.
+  Applies in both the Part Editor canvas and the read-only board/preview renderer.
 - **"+ board" no longer silently overwrites an existing board.** The new-board
   starter is now treated as a genuinely new part, so the Part Editor's duplicate-id
   guard warns before overwriting (it had been disabled by the pre-seeded id).

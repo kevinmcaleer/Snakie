@@ -1146,7 +1146,7 @@ export function PartCanvas({
             const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
             // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
             // 90° on the top/bottom edges (never upside-down) so rows don't collide.
-            const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size)
+            const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
             return (
               <g
                 key={`p${i}`}

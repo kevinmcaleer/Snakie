@@ -166,9 +166,12 @@ export function pinOutwardDir(
   return 'right'
 }
 
-/** Placement for a pin's silk label, node-graph style: pushed OUTWARD from the
- *  board edge the pin is on. Left/right labels stay horizontal; top/bottom labels
- *  are turned 90° (never 180°/upside-down) so dense rows don't overlap. */
+/** Placement for a pin's silk label, node-graph style: pushed OUTWARD to the
+ *  board edge the pin's rotation points to — so labels always sit in the margin
+ *  *outside* the part, even for pins set in from the edge (never over the
+ *  artwork). The perpendicular coordinate stays at the pin so the label lines up
+ *  with its row/column. Left/right labels stay horizontal; top/bottom labels are
+ *  turned 90° (never 180°/upside-down) so dense rows don't overlap. */
 export interface PinLabelLayout {
   lx: number
   ly: number
@@ -182,17 +185,20 @@ export function pinLabelLayout(
   rotationDeg: number | undefined,
   nx: number,
   ny: number,
-  gap: number
+  gap: number,
+  box: { x: number; y: number; w: number; h: number }
 ): PinLabelLayout {
+  // Clearance beyond the board edge — past a pad straddling that edge.
+  const m = gap / 2 + 4
   switch (pinOutwardDir(rotationDeg, nx, ny)) {
     case 'right':
-      return { lx: cx + gap, ly: cy + 4, anchor: 'start', rotate: 0 }
+      return { lx: box.x + box.w + m, ly: cy + 4, anchor: 'start', rotate: 0 }
     case 'left':
-      return { lx: cx - gap, ly: cy + 4, anchor: 'end', rotate: 0 }
+      return { lx: box.x - m, ly: cy + 4, anchor: 'end', rotate: 0 }
     case 'top':
-      return { lx: cx, ly: cy - gap, anchor: 'start', rotate: -90 }
+      return { lx: cx, ly: box.y - m, anchor: 'start', rotate: -90 }
     default: // bottom
-      return { lx: cx, ly: cy + gap, anchor: 'start', rotate: 90 }
+      return { lx: cx, ly: box.y + box.h + m, anchor: 'start', rotate: 90 }
   }
 }
 
@@ -415,7 +421,7 @@ export function PartBody({
           const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
           // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
           // 90° on the top/bottom edges so dense rows don't collide.
-          const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size)
+          const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
           return (
             <g key={`p${i}`}>
               {pad}
