@@ -21,7 +21,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinCapability } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { capabilityBadges, partBodyBox, PartBody } from './part-body'
+import { capabilityBadges, partBodyBox, PartBody, pinOutwardDir } from './part-body'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
@@ -217,14 +217,21 @@ function boardLifelikePins(pads: PadPoint[]): PlacedPin[] {
 /** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint order). */
 function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
   const rps = resolvedPins(def)
-  return pinPositions(def, box).map((pp) => ({
-    name: pp.name,
-    net: partPinNet(pp.type),
-    index: pp.index,
-    anchors: [{ x: pp.x, y: pp.y, ox: pp.ox, oy: pp.oy }],
-    label: { x: pp.x, y: pp.y, anchor: 'middle' as const }, // label drawn by PartBody
-    caps: rps[pp.index]?.pin.capabilities
-  }))
+  return pinPositions(def, box).map((pp) => {
+    const rp = rps[pp.index]
+    // A wire leaves along the pin's ORIENTATION (its rotation — the same direction
+    // its silk label points), not its header edge, so it originates from the side
+    // the pin actually faces (#182 follow-up). Falls back to the edge normal.
+    const [ox, oy] = rp ? edgeNormal(pinOutwardDir(rp.pin.rotation, rp.x, rp.y)) : [pp.ox, pp.oy]
+    return {
+      name: pp.name,
+      net: partPinNet(pp.type),
+      index: pp.index,
+      anchors: [{ x: pp.x, y: pp.y, ox, oy }],
+      label: { x: pp.x, y: pp.y, anchor: 'middle' as const }, // label drawn by PartBody
+      caps: rps[pp.index]?.pin.capabilities
+    }
+  })
 }
 
 /** Schematic MCU pins: stub-end anchors from the IC-block layout (== pad order).
