@@ -35,6 +35,11 @@ function coercePart(raw: unknown): RobotPart | null {
   const y = num(r.y)
   if (x !== undefined) out.x = x
   if (y !== undefined) out.y = y
+  const rotation = num(r.rotation)
+  if (rotation !== undefined) {
+    const snapped = (((Math.round(rotation / 90) * 90) % 360) + 360) % 360
+    if (snapped) out.rotation = snapped // drop a no-op 0
+  }
   return out
 }
 
@@ -63,6 +68,7 @@ export function robotToYaml(def: RobotDefinition): string {
     if (p.label) o.label = p.label
     if (p.x !== undefined) o.x = p.x
     if (p.y !== undefined) o.y = p.y
+    if (p.rotation) o.rotation = p.rotation // omit 0
     return o
   })
   obj.connections = (def.connections ?? []).map((c) => {

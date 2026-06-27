@@ -97,6 +97,68 @@
   background: #3a3d44;
 }
 
+/* Selected-part ring + mini-toolbar (#176). */
+.wc__sel-ring {
+  fill: none;
+  stroke: #4ea1ff;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
+.wc__parttb {
+  position: absolute;
+  /* Floats just above the part; flips below (--below) when there's no room. */
+  transform: translate(-50%, calc(-100% - 8px));
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.22rem 0.3rem;
+  background: rgba(20, 22, 26, 0.94);
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  z-index: 6;
+}
+
+.wc__parttb--below {
+  transform: translate(-50%, 8px);
+}
+
+.wc__parttb-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.wc__parttb-btn:hover {
+  border-color: #565b63;
+}
+
+.wc__parttb-btn--danger:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
+.wc__parttb-input {
+  width: 9rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #e9edf1;
+  background: #1a1c20;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  padding: 0.24rem 0.4rem;
+}
+
 /* --- Bodies are drawn by the real renderers (Board / PartBody / symbols). --- */
 .wc__body-title {
   font-family: var(--font-mono);

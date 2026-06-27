@@ -75,6 +75,29 @@ const PART_NATIVE_H = 300
 const PART_MIN_W = 48
 const PART_MAX_W = 380
 const PART_MAX_H = 380
+// Pointer travel (screen px) below which a press counts as a click, not a drag.
+const DRAG_DEADZONE_PX = 3
+
+/** Snap any angle to the nearest of 0/90/180/270 (#176). */
+function normRot(deg?: number): 0 | 90 | 180 | 270 {
+  return ((((Math.round((deg ?? 0) / 90) * 90) % 360) + 360) % 360) as 0 | 90 | 180 | 270
+}
+/** Rotate a point clockwise (SVG y-down) by a 90° multiple about (cx,cy). */
+function rotatePoint(x: number, y: number, cx: number, cy: number, deg: 0 | 90 | 180 | 270): { x: number; y: number } {
+  const dx = x - cx
+  const dy = y - cy
+  if (deg === 90) return { x: cx - dy, y: cy + dx }
+  if (deg === 180) return { x: cx - dx, y: cy - dy }
+  if (deg === 270) return { x: cx + dy, y: cy - dx }
+  return { x, y }
+}
+/** Rotate an outward unit normal clockwise by a 90° multiple. */
+function rotateNormal(ox: number, oy: number, deg: 0 | 90 | 180 | 270): { ox: number; oy: number } {
+  if (deg === 90) return { ox: -oy, oy: ox }
+  if (deg === 180) return { ox: -ox, oy: -oy }
+  if (deg === 270) return { ox: oy, oy: -ox }
+  return { ox, oy }
+}
 
 /** A connection anchor in a subject's LOCAL coordinate space + its outward dir. */
 interface Anchor {
@@ -122,6 +145,13 @@ interface Subject {
   /** Uniform scale applied to the life-like part body (so pads/text/strokes scale
    *  together and the body reflects its real dimensions). 1/undefined = as-drawn. */
   scale?: number
+  /** Clockwise rotation of the life-like part body, in degrees (0/90/180/270). */
+  rotation?: 0 | 90 | 180 | 270
+  /** Offset (local coords) of the rotated body's bounding box from the subject
+   *  origin — non-zero only for a 90/270° non-square part. Used so the obstacle
+   *  box + title/✕ decorations track the visible body. */
+  bodyDX?: number
+  bodyDY?: number
   pads?: PadPoint[]
   usedPadKeys?: Set<string>
   ledLit?: boolean
@@ -276,6 +306,13 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
   // The pin under the pointer — shows its capability badges (breadboard view).
   const [hover, setHover] = useState<{ key: string; index: number } | null>(null)
+  // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // Inline rename: the draft alias being typed, or null when not renaming.
+  const [renameText, setRenameText] = useState<string | null>(null)
+  // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
+  // since closing the input fires a blur we must not treat as a save).
+  const renameCommitRef = useRef(true)
 
   const resolvePart = (lib: string, part: string): PartDefinition | null =>
     libraries.find((l) => l.id === lib)?.parts.find((p) => p.id === part) ?? null
@@ -392,26 +429,43 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       // overflow the canvas (aspect is preserved either way).
       let k = targetW / nativeBox.w
       if (nativeBox.h * k > PART_MAX_H) k = PART_MAX_H / nativeBox.h
-      const w = nativeBox.w * k
-      const h = nativeBox.h * k
+      // Scaled (pre-rotation) body size + its centre — the rotation pivot (#176).
+      const bw = nativeBox.w * k
+      const bh = nativeBox.h * k
+      const rot = normRot(rp.rotation)
+      const cx = bw / 2
+      const cy = bh / 2
+      // A 90/270° turn swaps the on-canvas footprint; the body stays centred.
+      const aabb =
+        rot === 90 || rot === 270
+          ? { x: cx - bh / 2, y: cy - bw / 2, w: bh, h: bw }
+          : { x: 0, y: 0, w: bw, h: bh }
       subjects.push({
         key: rp.id,
         kind: 'part',
         title: rp.label || def.name || rp.id,
         x,
         y,
-        w,
-        h,
+        w: aabb.w,
+        h: aabb.h,
         mode: 'lifelike',
-        // Anchors live in CANVAS coords, so scale them to match the scaled body.
+        // Anchors live in CANVAS coords: scale to the body, then rotate about its
+        // centre so dots + wires stay attached to the rotated pads.
         pins: partLifelikePins(def, nativeBox).map((p) => ({
           ...p,
-          anchors: p.anchors.map((a) => ({ x: a.x * k, y: a.y * k, ox: a.ox, oy: a.oy }))
+          anchors: p.anchors.map((a) => {
+            const r = rotatePoint(a.x * k, a.y * k, cx, cy, rot)
+            const n = rotateNormal(a.ox, a.oy, rot)
+            return { x: r.x, y: r.y, ox: n.ox, oy: n.oy }
+          })
         })),
         partDef: def,
         box: nativeBox,
         scale: k,
-        hit: hitRegion('lifelike', x, y, w, h)
+        rotation: rot,
+        bodyDX: aabb.x,
+        bodyDY: aabb.y,
+        hit: hitRegion('lifelike', x + aabb.x, y + aabb.y, aabb.w, aabb.h)
       })
     } else {
       // The part drawn as its REAL schematic symbol.
@@ -556,13 +610,29 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   const setConnectionColor = (id: string, color: string): void =>
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
-  const removePart = (key: string): void =>
+  const removePart = (key: string): void => {
+    setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
     persist({
       ...robot,
       parts: robot.parts.filter((p) => p.id !== key),
       connections: robot.connections.filter(
         (c) => parseEndpoint(c.from).key !== key && parseEndpoint(c.to).key !== key
       )
+    })
+  }
+
+  // Rotate a placed part 90° clockwise (#176). Wires follow the rotated pins.
+  const rotatePart = (key: string): void =>
+    persist({
+      ...robot,
+      parts: robot.parts.map((p) => (p.id === key ? { ...p, rotation: normRot((p.rotation ?? 0) + 90) } : p))
+    })
+
+  // Rename a placed part — a display-only alias; the part's properties are untouched.
+  const renamePart = (key: string, label: string): void =>
+    persist({
+      ...robot,
+      parts: robot.parts.map((p) => (p.id === key ? { ...p, label: label.trim() || undefined } : p))
     })
 
   // --- pointer handlers -----------------------------------------------------
@@ -589,6 +659,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     const d = dragRef.current
     if (!d) return
     if (d.kind === 'pan') {
+      // Only count as a real pan past a small dead-zone, so a jittered click on
+      // empty space still deselects rather than being treated as a pan.
+      if (Math.hypot(e.clientX - (d.panX ?? 0), e.clientY - (d.panY ?? 0)) > DRAG_DEADZONE_PX) d.moved = true
       const ctm = svgRef.current?.getScreenCTM()
       const s = ctm && ctm.a ? ctm.a : 1
       setView((v) => ({
@@ -600,9 +673,12 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     }
     const w = toWorld(e)
     if (d.kind === 'box') {
+      // Dead-zone: a sub-pixel jitter while clicking a part must not flip it to a
+      // move (which would skip selection and dirty robot.yml with a no-op shift).
+      if (!d.moved && Math.hypot(w.x - (d.startX ?? 0), w.y - (d.startY ?? 0)) * view.scale <= DRAG_DEADZONE_PX) return
+      d.moved = true
       d.liveX = (d.ox ?? 0) + (w.x - (d.startX ?? 0))
       d.liveY = (d.oy ?? 0) + (w.y - (d.startY ?? 0))
-      d.moved = true
       force((n) => n + 1)
       return
     }
@@ -618,6 +694,19 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     dragRef.current = null
     if (d?.kind === 'box' && d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
       moveBox(d.boxKey, d.liveX, d.liveY)
+      return
+    }
+    // A click (no drag) on a placed part selects it (boards aren't selectable);
+    // a click on empty space clears the selection. Either way, end any rename.
+    if (d?.kind === 'box' && !d.moved) {
+      const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
+      setSelectedKey(renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null)
+      setRenameText(null)
+      return
+    }
+    if (d?.kind === 'pan' && !d.moved) {
+      setSelectedKey(null)
+      setRenameText(null)
       return
     }
     if (d?.kind === 'wire' && d.from) {
@@ -718,7 +807,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     // obstacle would trap their stubs — wires still route around placed parts).
     const obstacles: RBox[] = subjects
       .filter((s) => isSchem || s.kind === 'part')
-      .map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h }))
+      // bodyDX/DY shift the box to the rotated body (non-zero only for a 90/270°
+      // non-square part) so wire avoidance tracks what's actually drawn.
+      .map((s) => ({ x: s.x + (s.bodyDX ?? 0), y: s.y + (s.bodyDY ?? 0), w: s.w, h: s.h }))
     const wires: RWire[] = []
     for (const c of robot.connections) {
       const f = parseEndpoint(c.from)
@@ -749,6 +840,31 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
 
   const drag = dragRef.current
   const isDark = true // the wiring mat is dark, so ground wires render light
+
+  // Selected part + the screen position of its mini-toolbar (#176). Only placed
+  // parts in the breadboard view are selectable/rotatable.
+  const selSubject = renderMode === 'lifelike' && selectedKey ? subjByKey.get(selectedKey) : undefined
+  const selPart = selSubject?.kind === 'part' ? selSubject : undefined
+  const selToolbar = (() => {
+    const svg = svgRef.current
+    if (!selPart || !svg) return null
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    const stage = svg.closest('.wc__stage') as HTMLElement | null
+    const rect = (stage ?? svg).getBoundingClientRect()
+    const toScreen = (uy: number): DOMPoint => {
+      const pt = svg.createSVGPoint()
+      pt.x = view.tx + (selPart.hit.x + selPart.hit.w / 2) * view.scale
+      pt.y = view.ty + uy * view.scale
+      return pt.matrixTransform(ctm)
+    }
+    const top = toScreen(selPart.hit.y)
+    const aboveTop = top.y - rect.top
+    // Not enough room above (stage clips overflow) → flip the toolbar below the part.
+    const below = aboveTop < 44
+    const y = below ? toScreen(selPart.hit.y + selPart.hit.h).y - rect.top : aboveTop
+    return { left: top.x - rect.left, top: y, below }
+  })()
 
   return (
     <div className="wc">
@@ -810,6 +926,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               />
             ))}
 
+            {/* Selection ring around the selected part (#176). */}
+            {selPart && (
+              <rect
+                className="wc__sel-ring"
+                x={selPart.hit.x}
+                y={selPart.hit.y}
+                width={selPart.hit.w}
+                height={selPart.hit.h}
+                rx={6}
+              />
+            )}
+
             {/* Hover capability badges (breadboard) — over everything. */}
             {renderMode === 'lifelike' &&
               hover &&
@@ -823,6 +951,72 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               })()}
           </g>
         </svg>
+
+        {/* Mini-toolbar above the selected part (#176): rotate / rename / delete. */}
+        {selPart && selToolbar && (
+          <div
+            className={`wc__parttb${selToolbar.below ? ' wc__parttb--below' : ''}`}
+            style={{ left: `${selToolbar.left}px`, top: `${selToolbar.top}px` }}
+            role="toolbar"
+            aria-label={`Edit ${selPart.title}`}
+          >
+            {renameText !== null ? (
+              <input
+                className="wc__parttb-input"
+                autoFocus
+                value={renameText}
+                placeholder="Label…"
+                aria-label="Part label"
+                onChange={(e) => setRenameText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur() // commits via onBlur
+                  } else if (e.key === 'Escape') {
+                    renameCommitRef.current = false // cancel: the closing blur won't save
+                    e.currentTarget.blur()
+                  }
+                }}
+                onBlur={() => {
+                  if (renameCommitRef.current && renameText !== null) renamePart(selPart.key, renameText)
+                  renameCommitRef.current = true
+                  setRenameText(null)
+                }}
+              />
+            ) : (
+              <>
+                <button type="button" className="wc__parttb-btn" title="Rotate 90°" aria-label="Rotate 90 degrees" onClick={() => rotatePart(selPart.key)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" fill="currentColor" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="wc__parttb-btn"
+                  title="Rename (display label only)"
+                  aria-label="Rename part"
+                  onClick={() => setRenameText(robot.parts.find((p) => p.id === selPart.key)?.label ?? '')}
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M11.1 2.6a1.4 1.4 0 0 1 2 2L5.6 12 3 13l1-2.6 7.1-7.8Z" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" />
+                    <path d="M9.6 4.1l2.3 2.3" stroke="currentColor" strokeWidth={1.3} />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="wc__parttb-btn wc__parttb-btn--danger"
+                  title="Delete from breadboard"
+                  aria-label="Delete part"
+                  onClick={() => removePart(selPart.key)}
+                >
+                  <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path d="M3.5 4.5h9M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1V4.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                    <path d="M4.5 4.5 5 13a1 1 0 0 0 1 .9h4a1 1 0 0 0 1-.9l.5-8.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         <div className="wc__controls" role="toolbar" aria-label="Wiring view controls">
           <span className="wc__hint">Drag from a pin to another pin to wire them.</span>
@@ -934,6 +1128,9 @@ function SubjectBody({
   onHoverPin?: (index: number | null) => void
 }): JSX.Element {
   const removeY = s.mode === 'schematic' ? 10 : -7
+  // Centre the title + remove ✕ over the VISIBLE body (shifted for a rotated
+  // non-square part); 0 for everything else.
+  const dx = s.bodyDX ?? 0
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
   return (
     <g transform={`translate(${s.x} ${s.y})`}>
@@ -960,17 +1157,18 @@ function SubjectBody({
               so an authored board looks exactly as drawn (#52/issue-1). Legacy
               built-in boards (no source part) fall back to the edge-laid Board. */}
           {s.partDef && s.box ? (
-            s.scale && s.scale !== 1 ? (
-              <g transform={`scale(${s.scale})`}>
-                <PartBody part={s.partDef} box={s.box} />
-              </g>
-            ) : (
-              <PartBody part={s.partDef} box={s.box} />
-            )
+            (() => {
+              const k = s.scale ?? 1
+              const bw = s.box.w * k
+              const bh = s.box.h * k
+              const tf = `${s.rotation ? `rotate(${s.rotation} ${bw / 2} ${bh / 2}) ` : ''}${k !== 1 ? `scale(${k})` : ''}`.trim()
+              const body = <PartBody part={s.partDef} box={s.box} />
+              return tf ? <g transform={tf}>{body}</g> : body
+            })()
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
-          <text x={s.w / 2} y={-7} textAnchor="middle" className="wc__body-title">
+          <text x={dx + s.w / 2} y={-7} textAnchor="middle" className="wc__body-title">
             {s.title}
           </text>
         </>
@@ -1022,8 +1220,8 @@ function SubjectBody({
           }}
         >
           <title>Remove part</title>
-          <circle cx={s.w - 11} cy={removeY} r={7} />
-          <text x={s.w - 11} y={removeY + 3.5}>
+          <circle cx={dx + s.w - 11} cy={removeY} r={7} />
+          <text x={dx + s.w - 11} y={removeY + 3.5}>
             ✕
           </text>
         </g>

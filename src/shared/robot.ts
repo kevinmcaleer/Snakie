@@ -24,6 +24,8 @@ export interface RobotPart {
   /** Canvas position in viewBox units (where the box's top-left sits). */
   x?: number
   y?: number
+  /** Clockwise rotation on the breadboard, in degrees (0/90/180/270). */
+  rotation?: number
 }
 
 /** The electrical net of a wire — drives its colour. */

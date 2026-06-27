@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Rotate, rename & delete parts on the breadboard (#176).** Click a placed part
+  in the Breadboard view to select it; a small toolbar appears above it to **rotate
+  it 90° at a time** (its wires follow the rotated pins), **rename** it (a display-only
+  alias — the part's properties are untouched), or **delete** it from the breadboard.
+  The rotation is saved in `robot.yml`.
+
 ### Fixed
 - **Breadboard parts are drawn to real-world scale.** Placed parts on the
   Breadboard view are now sized from their **real dimensions** (mm) relative to the

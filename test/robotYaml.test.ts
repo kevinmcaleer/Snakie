@@ -27,6 +27,16 @@ describe('robot.yml round-trip', () => {
     expect(robotFromYaml(robotToYaml(blankRobot()))).toEqual(blankRobot())
   })
 
+  it('round-trips a part rotation and snaps it to 90°', () => {
+    const def = robotFromYaml(
+      ['parts:', '  - { id: a, lib: l, part: p, rotation: 95 }', '  - { id: b, lib: l, part: p, rotation: 0 }'].join('\n')
+    )
+    expect(def.parts[0].rotation).toBe(90) // 95 snapped to nearest 90
+    expect(def.parts[1].rotation).toBeUndefined() // a no-op 0 is dropped
+    const back = robotFromYaml(robotToYaml({ ...blankRobot(), parts: [{ id: 'a', lib: 'l', part: 'p', rotation: 270 }] }))
+    expect(back.parts[0].rotation).toBe(270)
+  })
+
   it('drops malformed parts/connections and defaults a missing connection id', () => {
     const def = robotFromYaml(
       [
