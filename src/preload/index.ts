@@ -683,6 +683,14 @@ const board = {
     ipcRenderer.on('board:closed', listener)
     return () => ipcRenderer.removeListener('board:closed', listener)
   },
+  /** Subscribe to the board window OPENING (via any path, e.g. the mini board's
+   *  open button) so the main window can start streaming it the active file.
+   *  Returns an unsubscribe function. */
+  onOpened: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('board:opened', listener)
+    return () => ipcRenderer.removeListener('board:opened', listener)
+  },
   /** Broadcast the chosen board id to the app's other window(s) so the full Board
    *  Viewer and the mini board view stay in sync. Fire-and-forget. */
   selectBoard: (id: string): void => ipcRenderer.send('board:select', id),

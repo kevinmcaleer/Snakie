@@ -151,6 +151,11 @@ function openBoardWindow(getMainWindow: () => BrowserWindow | null): void {
 export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): void {
   ipcMain.handle('board:open', () => {
     openBoardWindow(getMainWindow)
+    // Tell the main renderer the window is open (no matter who opened it — toolbar
+    // OR the mini board's open button) so it marks the board opened and streams the
+    // active file. Without this, opening from the mini board left the full viewer
+    // blank ("Open a Python file…") because no source was ever relayed.
+    getMainWindow()?.webContents.send('board:opened')
   })
 
   // Close the window from the renderer (its own ✕/Esc, or the toolbar toggle).

@@ -83,6 +83,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   right-angle routing.)
 
 ### Fixed
+- **Opening the full Board Viewer from the mini board panel.** Its open button left
+  the full viewer blank ("Open a Python file…") because the active file was never
+  relayed to it — the main window now starts streaming the file whenever the board
+  window opens via **any** path (toolbar or mini board), not just the toolbar.
 - **Breadboard layout fixes for rotated parts (#180).** A rotated part's silk/pin
   text is no longer ever upside down (text is counter-rotated to stay readable),
   its title now sits centred above the rotated body, and **pin labels are a

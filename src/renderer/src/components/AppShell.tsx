@@ -188,6 +188,15 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
+  // Mark the board opened whenever the window opens via ANY path — notably the
+  // mini board panel's open button, which calls board.open() directly. Flipping
+  // `boardOpened` true triggers the streaming effect above to relay the active
+  // file, so the full viewer isn't left blank ("Open a Python file…").
+  useEffect(() => {
+    const off = window.api.board.onOpened(() => setBoardOpened(true))
+    return off
+  }, [])
+
   // Panel handles + the shared collapse toggle (Files / Shell / Chat / dock).
   // Defined here (above the instrument wiring) so the toolbar Instruments button
   // can reuse the same `toggle` helper to expand/collapse the dock region.
