@@ -29,10 +29,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Settings → *Firmware updates* toggle disables the check.
 
 ### Changed
-- **Mini board view pin annotations.** Each used pin in the mini board view now
-  shows a **grey GPIO number box** next to the pad, then the **pin label**, then the
-  **code variable** — laid out outward from the pin and mirrored for each facing
-  (left/right/top/bottom).
+- **Boxed pin annotations on the board.** In the **mini board view** and the
+  **breadboard (life-like)** microcontroller, each pin now shows a **grey GPIO
+  number box** next to the pad, then the **pin label**, then (for pins used in the
+  code) the **code variable** — laid out outward from the pin and mirrored for each
+  facing (left/right/top/bottom). The Part Editor's own pin labels are unchanged.
 - **Collapsible connections table.** The Board Viewer's bottom connections table
   can now be **collapsed to its header** (and restored) to free up canvas space.
 - **The parts list shows the board.** The component browser pins the currently

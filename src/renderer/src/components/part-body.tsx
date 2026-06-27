@@ -308,6 +308,13 @@ export interface PartBodyProps {
    *  scaled by 1/bodyScale so they stay a consistent on-screen size across parts
    *  regardless of each part's real-world size (#180). 1 in the Part Editor. */
   bodyScale?: number
+  /** Render pins with the boxed annotation (grey GPIO number box → label →
+   *  variable, ordered outward) instead of the single silk label — used for the
+   *  microcontroller on the breadboard. Assumes an unrotated, unscaled body. */
+  boxedPins?: boolean
+  /** Per pin flat-index, the code variable + colour to show (boxed mode only;
+   *  used pins only — others show just the number box + label). */
+  pinVariables?: Map<number, { variable: string; color: string }>
 }
 
 /** The static life-like scene of a part, drawn into `box`. */
@@ -319,7 +326,9 @@ export function PartBody({
   selection = null,
   idPrefix,
   rotation = 0,
-  bodyScale = 1
+  bodyScale = 1,
+  boxedPins = false,
+  pinVariables
 }: PartBodyProps): JSX.Element {
   // Text-orientation/size correction for a rotated/scaled body (#180): counter the
   // caller's rotation so text is never upside down, and (pin labels only) counter
@@ -335,6 +344,76 @@ export function PartBody({
     if (!r && s === 1) return undefined
     return `translate(${x} ${y}) rotate(${r}) scale(${s}) translate(${-x} ${-y})`
   }
+  // Boxed pin annotation (breadboard MCU): a grey GPIO number box at the board
+  // edge, then the silk label, then the code variable — ordered OUTWARD per pin
+  // facing, mirrored left/right/top/bottom. Assumes an unrotated, unscaled body.
+  const boxedPinLabel = (
+    cx: number,
+    cy: number,
+    dir: 'left' | 'right' | 'top' | 'bottom',
+    num: string,
+    label: string,
+    variable: string | undefined,
+    color: string
+  ): JSX.Element => {
+    const B = 14
+    const G = 3
+    const L = 13
+    const labelW = label.length * 6.2
+    const numBox = (bx: number, by: number): JSX.Element => (
+      <>
+        <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
+        {num && (
+          <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
+            {num}
+          </text>
+        )}
+      </>
+    )
+    if (dir === 'left') {
+      const bx = box.x - G - B
+      const lx = bx - G
+      return (
+        <>
+          {numBox(bx, cy - B / 2)}
+          <text x={lx} y={cy + 3.5} textAnchor="end" className="pcv__pin-label">{label}</text>
+          {variable && <text x={lx - labelW - G} y={cy + 3.5} textAnchor="end" className="pcv__pin-var" fill={color}>{variable}</text>}
+        </>
+      )
+    }
+    if (dir === 'right') {
+      const bx = box.x + box.w + G
+      const lx = bx + B + G
+      return (
+        <>
+          {numBox(bx, cy - B / 2)}
+          <text x={lx} y={cy + 3.5} textAnchor="start" className="pcv__pin-label">{label}</text>
+          {variable && <text x={lx + labelW + G} y={cy + 3.5} textAnchor="start" className="pcv__pin-var" fill={color}>{variable}</text>}
+        </>
+      )
+    }
+    if (dir === 'top') {
+      const by = box.y - G - B
+      const ly = by - G
+      return (
+        <>
+          {numBox(cx - B / 2, by)}
+          <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
+          {variable && <text x={cx} y={ly - L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+        </>
+      )
+    }
+    const by = box.y + box.h + G
+    const ly = by + B + L - 4
+    return (
+      <>
+        {numBox(cx - B / 2, by)}
+        <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
+        {variable && <text x={cx} y={ly + L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+      </>
+    )
+  }
+
   // Honour the part's own saved layer visibility (so the Board View / library
   // preview hide what the author hid, e.g. a traced PCB image) unless the caller
   // overrides it.
@@ -497,17 +576,27 @@ export function PartBody({
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
-              {text && (
-                <text
-                  x={ll.lx}
-                  y={ll.ly}
-                  className="pcv__pin-label"
-                  textAnchor={ll.anchor}
-                  transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
-                >
-                  {text}
-                </text>
-              )}
+              {boxedPins
+                ? boxedPinLabel(
+                    cx,
+                    cy,
+                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                    rp.pin.type === 'io' && rp.pin.gpio != null ? String(rp.pin.gpio) : '',
+                    rp.pin.label || rp.pin.name,
+                    pinVariables?.get(i)?.variable,
+                    pinVariables?.get(i)?.color ?? '#cfd6dd'
+                  )
+                : text && (
+                    <text
+                      x={ll.lx}
+                      y={ll.ly}
+                      className="pcv__pin-label"
+                      textAnchor={ll.anchor}
+                      transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
+                    >
+                      {text}
+                    </text>
+                  )}
             </g>
           )
         })}

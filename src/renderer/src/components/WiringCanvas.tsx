@@ -1482,8 +1482,22 @@ function SubjectBody({
               const bh = s.box.h * k
               const tf = `${s.rotation ? `rotate(${s.rotation} ${bw / 2} ${bh / 2}) ` : ''}${k !== 1 ? `scale(${k})` : ''}`.trim()
               // Tell PartBody the applied rotation/scale so it keeps text upright
-              // and pin labels a consistent size (#180).
-              const body = <PartBody part={s.partDef} box={s.box} rotation={s.rotation ?? 0} bodyScale={k} />
+              // and pin labels a consistent size (#180). For the MCU, draw the
+              // boxed pin annotation (number box + label + code variable).
+              const pinVars =
+                s.kind === 'board' && s.codeUsed
+                  ? new Map([...s.codeUsed].map(([i, u]) => [i, { variable: u.label, color: u.color }]))
+                  : undefined
+              const body = (
+                <PartBody
+                  part={s.partDef}
+                  box={s.box}
+                  rotation={s.rotation ?? 0}
+                  bodyScale={k}
+                  boxedPins={s.kind === 'board'}
+                  pinVariables={pinVars}
+                />
+              )
               return tf ? <g transform={tf}>{body}</g> : body
             })()
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
@@ -1495,8 +1509,11 @@ function SubjectBody({
         </>
       )}
 
-      {/* --- Combine view: label each board pad the user's code uses. --- */}
+      {/* --- Combine view: label each board pad the user's code uses. Only for the
+          LEGACY edge-laid board; a part-backed MCU uses PartBody's boxed pin
+          annotation (which already shows the variable). --- */}
       {s.kind === 'board' &&
+        !s.partDef &&
         s.codeUsed &&
         s.pins.map((p) => {
           if (p.primary === false) return null

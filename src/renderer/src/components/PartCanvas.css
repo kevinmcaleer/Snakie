@@ -185,6 +185,26 @@
   fill: #cfd6dd;
 }
 
+/* Boxed pin annotation (breadboard MCU): grey GPIO number box + the code variable. */
+.pcv__pin-numbox {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: #565b63;
+  stroke-width: 0.7;
+}
+
+.pcv__pin-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  fill: #e9edf1;
+}
+
+.pcv__pin-var {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+}
+
 .pcv__feat-label {
   font-family: var(--font-mono);
   font-size: 10px;
