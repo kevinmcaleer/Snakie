@@ -274,6 +274,9 @@ export function PartCanvas({
   const [createPreview, setCreatePreview] = useState<{ axis: 'x' | 'y'; dir: number; n: number } | null>(null)
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
+  // Multi-select of components (shapes + labels) — same marquee / shift-click
+  // gesture, same alignment toolbar.
+  const [selComponents, setSelComponents] = useState<{ type: 'shape' | 'label'; index: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   // Smart alignment guides (#169): green center-lines shown while dragging a pin /
   // hole that lines up with another's centre. Normalised x (vertical line) / y.
@@ -559,19 +562,6 @@ export function PartCanvas({
       cur.some((s) => s.hi === hi && s.pi === pi) ? cur.filter((s) => !(s.hi === hi && s.pi === pi)) : [...cur, { hi, pi }]
     )
 
-  /** Commit x/y updates for several pins in a single change. */
-  const commitPins = (updates: Map<string, { x?: number; y?: number }>): void =>
-    commit({
-      ...part,
-      headers: part.headers.map((h, hi) => ({
-        ...h,
-        pins: h.pins.map((p, pi) => {
-          const u = updates.get(pinKey(hi, pi))
-          return u ? { ...p, ...(u.x !== undefined ? { x: u.x } : {}), ...(u.y !== undefined ? { y: u.y } : {}) } : p
-        })
-      }))
-    })
-
   const selectedResolved = (): { hi: number; pi: number; x: number; y: number }[] =>
     selectedPins
       .map((s) => {
@@ -580,44 +570,145 @@ export function PartCanvas({
       })
       .filter((v): v is { hi: number; pi: number; x: number; y: number } => v !== null)
 
+  // The alignment toolbar aligns a UNION of selected pins + components. Each is
+  // resolved to a normalised centre (cx, cy); pins/labels move to absolute
+  // targets, shapes translate by the delta (so polygon points come along too).
+  type AlignRef =
+    | { kind: 'pin'; hi: number; pi: number }
+    | { kind: 'shape'; index: number }
+    | { kind: 'label'; index: number }
+
+  /** Geometric centre of a shape/label in normalised coords. */
+  const componentCenter = (type: 'shape' | 'label', index: number): { cx: number; cy: number } | null => {
+    if (type === 'label') {
+      const l = labels[index]
+      return l ? { cx: l.x, cy: l.y } : null
+    }
+    const s = shapes[index]
+    if (!s) return null
+    if (s.kind === 'circle') return { cx: s.x, cy: s.y }
+    if (s.kind === 'polygon' && s.points?.length) {
+      const xs = s.points.map((p) => p.x)
+      const ys = s.points.map((p) => p.y)
+      return { cx: (Math.min(...xs) + Math.max(...xs)) / 2, cy: (Math.min(...ys) + Math.max(...ys)) / 2 }
+    }
+    return { cx: s.x + (s.w ?? 0.2) / 2, cy: s.y + (s.h ?? 0.15) / 2 }
+  }
+
+  /** All selected items (pins + components) resolved to a centre + a ref. */
+  const allAlignItems = (): { ref: AlignRef; cx: number; cy: number }[] => {
+    const out: { ref: AlignRef; cx: number; cy: number }[] = []
+    for (const s of selectedPins) {
+      const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+      if (rp) out.push({ ref: { kind: 'pin', hi: s.hi, pi: s.pi }, cx: rp.x, cy: rp.y })
+    }
+    for (const c of selComponents) {
+      const ctr = componentCenter(c.type, c.index)
+      if (ctr) out.push({ ref: { kind: c.type, index: c.index }, cx: ctr.cx, cy: ctr.cy })
+    }
+    return out
+  }
+
+  /** Translate a shape (incl. polygon points) by a normalised delta. */
+  const translateShape = (s: ComponentShape, dx: number, dy: number): ComponentShape => ({
+    ...s,
+    x: clamp01(s.x + dx),
+    y: clamp01(s.y + dy),
+    points: s.points?.map((p) => ({ x: clamp01(p.x + dx), y: clamp01(p.y + dy) }))
+  })
+
+  /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
+  const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
+    const pinSet = new Map<string, { x?: number; y?: number }>()
+    const labelSet = new Map<number, { x?: number; y?: number }>()
+    const shapeDelta = new Map<number, { dx: number; dy: number }>()
+    for (const t of targets) {
+      if (t.ref.kind === 'pin') pinSet.set(pinKey(t.ref.hi, t.ref.pi), { x: t.tcx, y: t.tcy })
+      else if (t.ref.kind === 'label') labelSet.set(t.ref.index, { x: t.tcx, y: t.tcy })
+      else {
+        const c = componentCenter('shape', t.ref.index)
+        shapeDelta.set(t.ref.index, {
+          dx: t.tcx !== undefined ? t.tcx - (c?.cx ?? 0) : 0,
+          dy: t.tcy !== undefined ? t.tcy - (c?.cy ?? 0) : 0
+        })
+      }
+    }
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const u = pinSet.get(pinKey(hi, pi))
+          return u ? { ...p, ...(u.x !== undefined ? { x: u.x } : {}), ...(u.y !== undefined ? { y: u.y } : {}) } : p
+        })
+      })),
+      shapes: shapes.map((s, i) => {
+        const d = shapeDelta.get(i)
+        return d ? translateShape(s, d.dx, d.dy) : s
+      }),
+      labels: labels.map((l, i) => {
+        const u = labelSet.get(i)
+        return u ? { ...l, ...(u.x !== undefined ? { x: clamp01(u.x) } : {}), ...(u.y !== undefined ? { y: clamp01(u.y) } : {}) } : l
+      })
+    })
+  }
+
   const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom' | 'centerX' | 'centerY'): void => {
-    const sel = selectedResolved()
+    const sel = allAlignItems()
     if (sel.length < 2) return
     const horiz = mode === 'left' || mode === 'right' || mode === 'centerX'
-    const vals = sel.map((s) => (horiz ? s.x : s.y))
+    const vals = sel.map((s) => (horiz ? s.cx : s.cy))
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     // left/top → min edge, right/bottom → max edge, centerX/centerY → midpoint.
     const target = mode === 'left' || mode === 'top' ? min : mode === 'right' || mode === 'bottom' ? max : (min + max) / 2
-    const updates = new Map<string, { x?: number; y?: number }>()
-    for (const s of sel) updates.set(pinKey(s.hi, s.pi), horiz ? { x: target } : { y: target })
-    commitPins(updates)
+    commitAlignment(sel.map((s) => ({ ref: s.ref, tcx: horiz ? target : undefined, tcy: horiz ? undefined : target })))
   }
 
   const distributeSelected = (axis: 'x' | 'y'): void => {
-    const sel = selectedResolved()
+    const sel = allAlignItems()
     if (sel.length < 3) return // ≥3 to space evenly (2 are already "distributed")
-    const sorted = [...sel].sort((a, b) => (axis === 'x' ? a.x - b.x : a.y - b.y))
-    const min = axis === 'x' ? sorted[0].x : sorted[0].y
-    const max = axis === 'x' ? sorted[sorted.length - 1].x : sorted[sorted.length - 1].y
+    const sorted = [...sel].sort((a, b) => (axis === 'x' ? a.cx - b.cx : a.cy - b.cy))
+    const min = axis === 'x' ? sorted[0].cx : sorted[0].cy
+    const max = axis === 'x' ? sorted[sorted.length - 1].cx : sorted[sorted.length - 1].cy
     const step = (max - min) / (sorted.length - 1)
-    const updates = new Map<string, { x?: number; y?: number }>()
-    sorted.forEach((s, i) => updates.set(pinKey(s.hi, s.pi), axis === 'x' ? { x: min + i * step } : { y: min + i * step }))
-    commitPins(updates)
+    commitAlignment(
+      sorted.map((s, i) => (axis === 'x' ? { ref: s.ref, tcx: min + i * step } : { ref: s.ref, tcy: min + i * step }))
+    )
   }
 
-  /** Container-pixel position of the LAST selected pin, so the align toolbar can
+  /** Total count of items in the alignment multi-selection (pins + components). */
+  const alignCount = selectedPins.length + selComponents.length
+
+  /** Container-pixel position of the LAST selected item, so the align toolbar can
    *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */
   const alignAnchorPx = (): { left: number; top: number } | null => {
-    const last = selectedPins[selectedPins.length - 1]
     const svg = svgRef.current
-    if (!last || !svg) return null
-    const rp = pins.find((p) => p.hi === last.hi && p.pi === last.pi)
+    if (!svg) return null
+    // Prefer the last component, else the last pin (matches selection recency).
+    let cx: number | undefined
+    let cy: number | undefined
+    const lastComp = selComponents[selComponents.length - 1]
+    if (lastComp) {
+      const c = componentCenter(lastComp.type, lastComp.index)
+      if (c) {
+        cx = c.cx
+        cy = c.cy
+      }
+    }
+    if (cx === undefined) {
+      const last = selectedPins[selectedPins.length - 1]
+      const rp = last && pins.find((p) => p.hi === last.hi && p.pi === last.pi)
+      if (rp) {
+        cx = rp.x
+        cy = rp.y
+      }
+    }
     const ctm = svg.getScreenCTM()
-    if (!rp || !ctm) return null
+    if (cx === undefined || cy === undefined || !ctm) return null
     const pt = svg.createSVGPoint()
-    pt.x = view.tx + px(rp.x) * view.scale
-    pt.y = view.ty + py(rp.y) * view.scale
+    pt.x = view.tx + px(cx) * view.scale
+    pt.y = view.ty + py(cy) * view.scale
     const s = pt.matrixTransform(ctm)
     // The toolbar is absolutely positioned inside .pcv__wrap, so measure relative to
     // that container — not the SVG, which is flex-centred and may be letterboxed.
@@ -625,6 +716,14 @@ export function PartCanvas({
     const rect = base.getBoundingClientRect()
     return { left: s.x - rect.left, top: s.y - rect.top }
   }
+
+  /** Toggle a component's membership in the alignment multi-selection. */
+  const toggleSelectedComponent = (type: 'shape' | 'label', index: number): void =>
+    setSelComponents((cur) =>
+      cur.some((s) => s.type === type && s.index === index)
+        ? cur.filter((s) => !(s.type === type && s.index === index))
+        : [...cur, { type, index }]
+    )
   // --- selected-component toolbar (#…): duplicate / delete / fill / border -----
   /** Patch a shape's style/geometry. */
   const updateShape = (index: number, patch: Partial<ComponentShape>): void =>
@@ -660,6 +759,20 @@ export function PartCanvas({
     if (sel?.type === 'shape') commit({ ...part, shapes: shapes.filter((_, i) => i !== sel.index) })
     else if (sel?.type === 'label') commit({ ...part, labels: labels.filter((_, i) => i !== sel.index) })
     onSelect?.(null)
+  }
+
+  /** Rotate the selected shape/label by +90° (about its own centre). */
+  const rotateComponent = (sel: CanvasSelection): void => {
+    const next = (r: number | undefined): number | undefined => (((r ?? 0) + 90) % 360) || undefined
+    if (sel?.type === 'shape') {
+      const s = shapes[sel.index]
+      if (!s) return
+      updateShape(sel.index, { rotation: next(s.rotation) })
+    } else if (sel?.type === 'label') {
+      const l = labels[sel.index]
+      if (!l) return
+      commit({ ...part, labels: labels.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
+    }
   }
 
   /** Normalised top-centre of a shape/label, for floating its toolbar above it. */
@@ -708,6 +821,11 @@ export function PartCanvas({
     return () => document.removeEventListener('pointerdown', onDown)
   }, [borderMenuOpen])
   useEffect(() => setBorderMenuOpen(false), [selection])
+  // Drop any multi-selection when switching to a different part (stale indices).
+  useEffect(() => {
+    setSelectedPins([])
+    setSelComponents([])
+  }, [part.id])
 
   const addHole = (nx: number, ny: number): void => {
     const sx = snapX(nx)
@@ -772,17 +890,48 @@ export function PartCanvas({
   // Edge-click-to-insert uses a thinner band than the vertex grab so a click in
   // the interior of a SMALL polygon still moves the body instead of inserting.
   const EDGE_HIT = 7
-  /** True if a normalised point is inside a component shape. */
+  /** Rotation pivot (normalised) of a shape — MUST match the render transform's
+   *  centre: rect = geometric centre, polygon = vertex centroid (mean), circle =
+   *  centre. (Distinct from the alignment `componentCenter`, which uses bbox-mid.) */
+  const shapeRotationCenterN = (s: ComponentShape): { cx: number; cy: number } => {
+    if (s.kind === 'circle') return { cx: s.x, cy: s.y }
+    if (s.kind === 'polygon' && s.points?.length) {
+      const n = s.points.length
+      return { cx: s.points.reduce((a, p) => a + p.x, 0) / n, cy: s.points.reduce((a, p) => a + p.y, 0) / n }
+    }
+    return { cx: s.x + (s.w ?? 0.2) / 2, cy: s.y + (s.h ?? 0.15) / 2 }
+  }
+  /** Un-rotate a normalised point into a shape's local (pre-rotation) frame so a
+   *  visibly-rotated rect/polygon hit-tests against its real footprint. Inverts the
+   *  render's `rotate(rot pivot)` in PIXEL space (the board box isn't square, so a
+   *  90° pixel rotation isn't a clean normalised one). No-op for circles / 0°. */
+  const localShapePoint = (s: ComponentShape, nx: number, ny: number): { nx: number; ny: number } => {
+    const rot = s.rotation ?? 0
+    if (!rot || s.kind === 'circle') return { nx, ny }
+    const c = shapeRotationCenterN(s)
+    const cxPx = px(c.cx)
+    const cyPx = py(c.cy)
+    const rad = (-rot * Math.PI) / 180
+    const co = Math.cos(rad)
+    const si = Math.sin(rad)
+    const dxp = px(nx) - cxPx
+    const dyp = py(ny) - cyPx
+    return { nx: (cxPx + dxp * co - dyp * si - box.x) / box.w, ny: (cyPx + dxp * si + dyp * co - box.y) / box.h }
+  }
+  /** True if a normalised point is inside a component shape (rotation-aware). */
   const inShape = (s: ComponentShape, nx: number, ny: number): boolean => {
-    if (s.kind === 'rect') return nx >= s.x && nx <= s.x + (s.w ?? 0) && ny >= s.y && ny <= s.y + (s.h ?? 0)
-    if (s.kind === 'circle') return dist(nx, ny, s.x, s.y) <= (s.r ?? 0) * box.w + 2
+    const lp = localShapePoint(s, nx, ny)
+    const lx = lp.nx
+    const ly = lp.ny
+    if (s.kind === 'rect') return lx >= s.x && lx <= s.x + (s.w ?? 0) && ly >= s.y && ly <= s.y + (s.h ?? 0)
+    if (s.kind === 'circle') return dist(lx, ly, s.x, s.y) <= (s.r ?? 0) * box.w + 2
     // polygon: ray-cast point-in-polygon over the points (normalised)
     const pts = s.points ?? []
     let inside = false
     for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
       const a = pts[i]
       const b = pts[j]
-      if (a.y > ny !== b.y > ny && nx < ((b.x - a.x) * (ny - a.y)) / (b.y - a.y) + a.x) inside = !inside
+      if (a.y > ly !== b.y > ly && lx < ((b.x - a.x) * (ly - a.y)) / (b.y - a.y) + a.x) inside = !inside
     }
     return inside
   }
@@ -850,7 +999,9 @@ export function PartCanvas({
     if ((selection?.type === 'shape' || selection?.type === 'shape-vertex') && visible.components && !locked.components) {
       const si = selection.index
       const poly = shapes[si]
-      if (poly?.kind === 'polygon') {
+      // Vertex grab / edge-insert work in un-rotated coords, so they're disabled
+      // while the polygon is rotated (un-rotate it to edit its geometry).
+      if (poly?.kind === 'polygon' && !poly.rotation) {
         const pts = poly.points ?? []
         // A vertex click takes priority (drag = move, no-move click = delete)…
         for (let v = pts.length - 1; v >= 0; v--) {
@@ -888,9 +1039,10 @@ export function PartCanvas({
     }
 
     // select tool — shape resize handles (when a rect/circle shape is selected).
+    // Rect handles work in un-rotated coords, so they're off while rotated.
     if (selection?.type === 'shape' && !locked.components) {
       const s = shapes[selection.index]
-      if (s?.kind === 'rect') {
+      if (s?.kind === 'rect' && !s.rotation) {
         const w = s.w ?? 0.2 // match the render-time fallbacks so handles are grabbable
         const h = s.h ?? 0.15
         // 0 TL, 1 TR, 2 BR, 3 BL, 4 T, 5 R, 6 B, 7 L
@@ -939,8 +1091,15 @@ export function PartCanvas({
       dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox: rp?.x ?? nx, oy: rp?.y ?? ny, toggleSel: true }
       return
     }
+    if ((hit?.type === 'shape' || hit?.type === 'label') && modSelect && !locked.components) {
+      const ox = hit.type === 'shape' ? (shapes[hit.index]?.x ?? nx) : (labels[hit.index]?.x ?? nx)
+      const oy = hit.type === 'shape' ? (shapes[hit.index]?.y ?? ny) : (labels[hit.index]?.y ?? ny)
+      dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy, toggleSel: true }
+      return
+    }
     // Any plain (non-modifier) interaction clears an existing multi-selection.
     if (!modSelect && selectedPins.length) setSelectedPins([])
+    if (!modSelect && selComponents.length) setSelComponents([])
 
     // Ghost-array gestures (a pin is selected = the array anchor):
     if (hit?.type === 'pin' && selPin) {
@@ -958,9 +1117,9 @@ export function PartCanvas({
 
     onSelect?.(hit)
     if (!hit) {
-      // Empty canvas (select tool) → rubber-band marquee to select pins. Skipped
-      // when the pin layer is locked (there'd be nothing selectable to gather).
-      if (!locked.pins) {
+      // Empty canvas (select tool) → rubber-band marquee to select pins +
+      // components. Skipped only when BOTH layers are locked (nothing to gather).
+      if (!locked.pins || !locked.components) {
         dragRef.current = { kind: 'marquee', sel: null, startNX: nx, startNY: ny, ox: nx, oy: ny }
         setMarquee({ x0: nx, y0: ny, x1: nx, y1: ny })
       }
@@ -1160,7 +1319,7 @@ export function PartCanvas({
     setGuides(null) // drop any alignment guides
     if (!d || !interactive) return
 
-    // Marquee → select the pins inside the box.
+    // Marquee → select the pins + components whose centre is inside the box.
     if (d.kind === 'marquee') {
       const m = marquee
       setMarquee(null)
@@ -1169,11 +1328,24 @@ export function PartCanvas({
         const maxX = Math.max(m.x0, m.x1)
         const minY = Math.min(m.y0, m.y1)
         const maxY = Math.max(m.y0, m.y1)
-        const inside = pins
-          .filter((p) => p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY)
-          .map((p) => ({ hi: p.hi, pi: p.pi }))
+        const within = (x: number, y: number): boolean => x >= minX && x <= maxX && y >= minY && y <= maxY
+        const inside = locked.pins
+          ? []
+          : pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
+        const insideComps: { type: 'shape' | 'label'; index: number }[] = []
+        if (!locked.components) {
+          shapes.forEach((_, i) => {
+            const c = componentCenter('shape', i)
+            if (c && within(c.cx, c.cy)) insideComps.push({ type: 'shape', index: i })
+          })
+          labels.forEach((_, i) => {
+            const c = componentCenter('label', i)
+            if (c && within(c.cx, c.cy)) insideComps.push({ type: 'label', index: i })
+          })
+        }
         setSelectedPins(inside)
-        if (inside.length) onSelect?.(null)
+        setSelComponents(insideComps)
+        if (inside.length || insideComps.length) onSelect?.(null)
       }
       return
     }
@@ -1193,6 +1365,12 @@ export function PartCanvas({
     // A no-move modifier-click toggles the pin's alignment-selection membership.
     if (d.kind === 'move-obj' && d.toggleSel && d.sel?.type === 'pin') {
       toggleSelectedPin(d.sel.hi, d.sel.pi)
+      onSelect?.(null)
+      return
+    }
+    // …same for a shape / label (component multi-select).
+    if (d.kind === 'move-obj' && d.toggleSel && (d.sel?.type === 'shape' || d.sel?.type === 'label')) {
+      toggleSelectedComponent(d.sel.type, d.sel.index)
       onSelect?.(null)
       return
     }
@@ -1444,6 +1622,54 @@ export function PartCanvas({
           selectedResolved().map((s) => (
             <circle key={`sel-${s.hi}-${s.pi}`} cx={px(s.x)} cy={py(s.y)} r={9} className="pcv__sel-ring" />
           ))}
+        {/* …and a bbox ring on each multi-selected component. */}
+        {interactive &&
+          selComponents.map((c) => {
+            if (c.type === 'label') {
+              const l = labels[c.index]
+              if (!l) return null
+              return <circle key={`selc-l${c.index}`} cx={px(l.x)} cy={py(l.y)} r={11} className="pcv__sel-ring" />
+            }
+            const s = shapes[c.index]
+            if (!s) return null
+            let x: number
+            let y: number
+            let w: number
+            let h: number
+            if (s.kind === 'circle') {
+              const r = (s.r ?? 0.08) * box.w
+              x = px(s.x) - r
+              y = py(s.y) - r
+              w = r * 2
+              h = r * 2
+            } else if (s.kind === 'polygon' && s.points?.length) {
+              const xs = s.points.map((p) => px(p.x))
+              const ys = s.points.map((p) => py(p.y))
+              x = Math.min(...xs)
+              y = Math.min(...ys)
+              w = Math.max(...xs) - x
+              h = Math.max(...ys) - y
+            } else {
+              x = px(s.x)
+              y = py(s.y)
+              w = (s.w ?? 0.2) * box.w
+              h = (s.h ?? 0.15) * box.h
+            }
+            const rot = s.rotation ?? 0
+            const piv = shapeRotationCenterN(s)
+            return (
+              <rect
+                key={`selc-s${c.index}`}
+                x={x - 3}
+                y={y - 3}
+                width={w + 6}
+                height={h + 6}
+                rx={3}
+                className="pcv__sel-ring"
+                transform={rot ? `rotate(${rot} ${px(piv.cx)} ${py(piv.cy)})` : undefined}
+              />
+            )
+          })}
         {interactive && marquee && (
           <rect
             x={px(Math.min(marquee.x0, marquee.x1))}
@@ -1495,7 +1721,7 @@ export function PartCanvas({
               const i = c.index
               const l = labels[i]
               return (
-                <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle">
+                <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={l.rotation ? `rotate(${l.rotation} ${px(l.x)} ${py(l.y)})` : undefined}>
                   {l.text}
                 </text>
               )
@@ -1526,8 +1752,9 @@ export function PartCanvas({
               lcx = px(s.x) + w / 2
               lcy = py(s.y) + h / 2
             }
+            const rot = s.rotation ?? 0
             return (
-              <g key={`s${i}`}>
+              <g key={`s${i}`} transform={rot ? `rotate(${rot} ${lcx} ${lcy})` : undefined}>
                 {el}
                 {s.label && (
                   <text x={lcx} y={lcy} className="pcv__feat-label">
@@ -1561,7 +1788,7 @@ export function PartCanvas({
           (() => {
             const s = shapes[selection.index]
             let pts: [number, number][] = []
-            if (s.kind === 'rect') {
+            if (s.kind === 'rect' && !s.rotation) {
               const w = s.w ?? 0.2
               const h = s.h ?? 0.15
               pts = [
@@ -1602,11 +1829,13 @@ export function PartCanvas({
             <rect key={`v${i}`} x={px(p.x) - 5} y={py(p.y) - 5} width={10} height={10} fill={isSel({ type: 'vertex', index: i }) ? '#fff' : '#4ea1ff'} stroke="#0008" />
           ))}
 
-        {/* Component-polygon vertex handles (a polygon shape is selected) */}
+        {/* Component-polygon vertex handles (a polygon shape is selected; hidden
+            while rotated — its vertices are edited in the un-rotated frame). */}
         {interactive &&
           !locked.components &&
           (selection?.type === 'shape' || selection?.type === 'shape-vertex') &&
           shapes[selection.index]?.kind === 'polygon' &&
+          !shapes[selection.index]?.rotation &&
           (shapes[selection.index].points ?? []).map((p, vi) => (
             <rect
               key={`sv${vi}`}
@@ -1625,17 +1854,18 @@ export function PartCanvas({
   return (
     <div className="pcv__wrap">
       {svg}
-      {/* Alignment toolbar — floats above the LAST selected pin (≥2 selected). */}
+      {/* Alignment toolbar — floats above the LAST selected item (≥2 pins and/or
+          components selected). */}
       {interactive &&
-        selectedPins.length >= 2 &&
+        alignCount >= 2 &&
         (() => {
           const anchor = alignAnchorPx()
           const style = anchor
             ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
             : undefined
           return (
-            <div className="pcv__align" role="toolbar" aria-label="Align pins" style={style}>
-              <span className="pcv__align-count">{selectedPins.length}</span>
+            <div className="pcv__align" role="toolbar" aria-label="Align selection" style={style}>
+              <span className="pcv__align-count">{alignCount}</span>
               <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
                 {alignIcon('left')}
               </button>
@@ -1656,20 +1886,21 @@ export function PartCanvas({
                 {alignIcon('bottom')}
               </button>
               <span className="pcv__align-sep" />
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={selectedPins.length < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={alignCount < 3}>
                 {alignIcon('distX')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={selectedPins.length < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignCount < 3}>
                 {alignIcon('distY')}
               </button>
             </div>
           )
         })()}
 
-      {/* Selected-component toolbar — floats above a selected shape / label. */}
+      {/* Selected-component toolbar — floats above a single selected shape / label
+          (hidden while a multi-selection is active; the align toolbar shows then). */}
       {interactive &&
         !locked.components &&
-        selectedPins.length === 0 &&
+        alignCount === 0 &&
         (selection?.type === 'shape' || selection?.type === 'label') &&
         (() => {
           const sel = selection
@@ -1685,6 +1916,12 @@ export function PartCanvas({
                 <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                   <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
                   <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                </svg>
+              </button>
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate component 90 degrees" onClick={() => rotateComponent(sel)}>
+                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path d="M12.5 6.5A5 5 0 1 0 13 9" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+                  <path d="M12.8 3v3.6H9.2" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
               {shape && (

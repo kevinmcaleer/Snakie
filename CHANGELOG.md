@@ -8,9 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **Selected-component toolbar in the Part Editor.** Selecting a shape or text label
-  now floats a dark mini-toolbar above it to **duplicate** or **delete** it; shapes
-  also get a quick **fill colour well** and a **border** dropdown (width slider +
-  value and a border colour well). (Rotate + multi-select alignment follow.)
+  now floats a dark mini-toolbar above it to **duplicate**, **rotate** (90° steps) or
+  **delete** it; shapes also get a quick **fill colour well** and a **border** dropdown
+  (width slider + value and a border colour well).
+- **Multi-select + align components in the Part Editor.** Shift/Ctrl-click shapes and
+  labels — or drag a marquee around them — to select several at once, then use the
+  **alignment toolbar** (left/centre/right, top/middle/bottom, distribute) to line
+  them up. Pins and components can be aligned together in one selection.
 - **Floating project browser on the Board Viewer.** The project name + description
   and the component hierarchy (the microcontroller + placed parts) now live in a
   **floating, collapsible browser** pinned top-left of the canvas (Fusion-360

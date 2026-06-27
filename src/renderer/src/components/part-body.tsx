@@ -624,7 +624,7 @@ export function PartBody({
             const i = c.index
             const l = labels[i]
             return (
-              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={uprightRotate(px(l.x), py(l.y))}>
+              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={uprightRotate(px(l.x), py(l.y), l.rotation ?? 0)}>
                 {l.text}
               </text>
             )
@@ -655,8 +655,9 @@ export function PartBody({
             lcx = px(s.x) + w / 2
             lcy = py(s.y) + h / 2
           }
+          const rot = s.rotation ?? 0
           return (
-            <g key={`s${i}`}>
+            <g key={`s${i}`} transform={rot ? `rotate(${rot} ${lcx} ${lcy})` : undefined}>
               {el}
               {s.label && (
                 <text x={lcx} y={lcy} className="pcv__feat-label" transform={uprightRotate(lcx, lcy)}>

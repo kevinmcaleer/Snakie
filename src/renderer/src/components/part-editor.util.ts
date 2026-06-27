@@ -265,6 +265,10 @@ function normaliseShape(s: ComponentShape): ComponentShape {
     out.points = pts.map((p) => ({ x: clamp(p.x, 0, 1), y: clamp(p.y, 0, 1) }))
   }
   if (typeof s.z === 'number' && Number.isFinite(s.z)) out.z = s.z
+  if (typeof s.rotation === 'number' && Number.isFinite(s.rotation)) {
+    const r = ((((Math.round(s.rotation / 90) * 90) % 360) + 360) % 360)
+    if (r) out.rotation = r
+  }
   return out
 }
 
@@ -606,6 +610,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         }
         if (typeof l.fontSize === 'number' && Number.isFinite(l.fontSize)) lbl.fontSize = l.fontSize
         if (typeof l.z === 'number' && Number.isFinite(l.z)) lbl.z = l.z
+        if (typeof l.rotation === 'number' && Number.isFinite(l.rotation)) {
+          const r = ((((Math.round(l.rotation / 90) * 90) % 360) + 360) % 360)
+          if (r) lbl.rotation = r
+        }
         return lbl
       })
       .filter((l) => l.text !== '')

@@ -184,6 +184,8 @@ export interface ComponentShape {
    *  lower-z shapes AND labels). Absent ⇒ legacy order (its array index, below
    *  labels). Lets components be stacked from the editor's Components list. */
   z?: number
+  /** Clockwise rotation in degrees (0/90/180/270), about the shape's centre. */
+  rotation?: number
 }
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
@@ -195,6 +197,8 @@ export interface PartLabel {
   fontSize?: number
   /** Draw order within the Components layer (see {@link ComponentShape.z}). */
   z?: number
+  /** Clockwise rotation in degrees (0/90/180/270), about the label's position. */
+  rotation?: number
 }
 
 /**

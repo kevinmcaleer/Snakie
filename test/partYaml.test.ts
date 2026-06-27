@@ -238,3 +238,36 @@ describe('component z-order + layer visibility round-trip', () => {
     expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
   })
 })
+
+describe('component rotation round-trip', () => {
+  it('snaps shape + label rotation to 90° and survives YAML', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2, rotation: 95 }],
+      labels: [{ text: 'U1', x: 0.5, y: 0.5, rotation: 265 }]
+    })
+    expect(part.shapes?.[0].rotation).toBe(90) // 95 snapped to nearest 90°
+    expect(part.labels?.[0].rotation).toBe(270) // 265 snapped to nearest 90°
+    const back = partFromYaml(partToYaml(part))
+    expect(back.shapes?.[0].rotation).toBe(90)
+    expect(back.labels?.[0].rotation).toBe(270)
+    expect(normalisePart(back)).toEqual(part)
+  })
+
+  it('drops a 0° (and full-turn 360°) rotation rather than persisting it', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2, rotation: 360 }],
+      labels: [{ text: 'U1', x: 0.5, y: 0.5, rotation: 0 }]
+    })
+    expect(part.shapes?.[0].rotation).toBeUndefined()
+    expect(part.labels?.[0].rotation).toBeUndefined()
+    const back = partFromYaml(partToYaml(part))
+    expect(back.shapes?.[0].rotation).toBeUndefined()
+    expect(back.labels?.[0].rotation).toBeUndefined()
+  })
+})

@@ -146,6 +146,8 @@ function coerceShape(raw: unknown): ComponentShape | null {
   }
   const z = num(r.z)
   if (z !== undefined) shape.z = z
+  const rotation = num(r.rotation)
+  if (rotation) shape.rotation = ((((Math.round(rotation / 90) * 90) % 360) + 360) % 360) || undefined
   return shape
 }
 
@@ -336,14 +338,16 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num(rec?.x)
         const y = num(rec?.y)
         if (text === undefined || x === undefined || y === undefined) return null
-        const out: { text: string; x: number; y: number; fontSize?: number; z?: number } = { text, x, y }
+        const out: { text: string; x: number; y: number; fontSize?: number; z?: number; rotation?: number } = { text, x, y }
         const fs = num(rec?.fontSize)
         if (fs !== undefined) out.fontSize = fs
         const z = num(rec?.z)
         if (z !== undefined) out.z = z
+        const rot = num(rec?.rotation)
+        if (rot) out.rotation = ((((Math.round(rot / 90) * 90) % 360) + 360) % 360) || undefined
         return out
       })
-      .filter((l): l is { text: string; x: number; y: number; fontSize?: number; z?: number } => l !== null)
+      .filter((l): l is { text: string; x: number; y: number; fontSize?: number; z?: number; rotation?: number } => l !== null)
     if (labels.length) part.labels = labels
   }
   assign('ledLabel', str(raw.ledLabel))
