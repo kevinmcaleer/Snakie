@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **SAM text-to-speech instrument (#167).** A new **SAM** (Software Automated Mouth)
+  instrument in the dock: type into the speech bubble, pick the buzzer/speaker pin,
+  and **Speak** — the IDE makes sure the [`sam`](https://github.com/kevinmcaleer/sam)
+  library (with its `sam_render.mpy` accelerator) is on the board, installing it if
+  needed, then synthesises the text out of that single pin. **Open demo** drops a
+  runnable `sam_demo.py` into the editor.
 - **Newer-firmware check (#173).** When a device is connected, Snakie reads its
   running MicroPython version from the REPL boot banner and compares it against the
   newest stable build in the firmware catalog. If a newer version exists, a prompt

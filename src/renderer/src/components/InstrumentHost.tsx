@@ -27,6 +27,7 @@ import { ImuInstrument } from './ImuInstrument'
 import { LedInstrument } from './LedInstrument'
 import { ButtonInstrument } from './ButtonInstrument'
 import { BuzzerInstrument } from './BuzzerInstrument'
+import { SamInstrument } from './SamInstrument'
 import { EncoderInstrument } from './EncoderInstrument'
 import { DisplayInstrument } from './DisplayInstrument'
 import { WifiScanInstrument } from './WifiScanInstrument'
@@ -889,6 +890,8 @@ function renderSingleton(
       return <ButtonInstrument {...p} />
     case 'buzzer':
       return <BuzzerInstrument {...p} />
+    case 'sam':
+      return <SamInstrument {...p} />
     case 'encoder':
       return <EncoderInstrument {...p} />
     case 'i2c-display':

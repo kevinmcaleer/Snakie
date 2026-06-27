@@ -194,6 +194,18 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['buzzer', 'piezo', 'tone', 'rtttl']
   },
   {
+    id: 'sam',
+    name: 'SAM',
+    accent: '#f6a96b',
+    border: 'rgba(246,169,107,.5)',
+    // speech bubble with a tail
+    icon: 'M4 5 h16 a1 1 0 0 1 1 1 v9 a1 1 0 0 1 -1 1 H9 l-4 4 v-4 H4 a1 1 0 0 1 -1 -1 V6 a1 1 0 0 1 1 -1 Z',
+    group: 'output',
+    kind: 'singleton',
+    description: 'Software Automated Mouth — speak typed text out of a buzzer pin.',
+    hints: ['sam', 'sam_render', 'software automated mouth']
+  },
+  {
     id: 'encoder',
     name: 'Encoder',
     accent: '#aee05e',

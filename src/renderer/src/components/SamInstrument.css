@@ -1,0 +1,124 @@
+/* SAM (Software Automated Mouth) instrument (#167) — a speech-bubble text input,
+   a buzzer-pin picker and a SPEAK button. Unique `sam__` BEM prefix. */
+.sam {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem 0.6rem;
+}
+
+/* The speech bubble holding the text the user wants spoken. */
+.sam__bubble {
+  position: relative;
+  background: var(--bg-sunken, #0c0f12);
+  border: var(--border-w, 1px) solid var(--accent-border, #3a3d44);
+  border-radius: 10px;
+  padding: 0.4rem;
+}
+
+/* Little bubble tail. */
+.sam__bubble::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  bottom: -8px;
+  width: 0;
+  height: 0;
+  border: 8px solid transparent;
+  border-top-color: var(--bg-sunken, #0c0f12);
+  border-bottom: 0;
+}
+
+.sam__text {
+  width: 100%;
+  resize: vertical;
+  min-height: 2.2rem;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  color: var(--text, #e9edf1);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.sam__text::placeholder {
+  color: var(--text-muted, #8b919b);
+  font-style: italic;
+}
+
+.sam__controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+
+.sam__pin {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.6rem;
+  letter-spacing: 0.04em;
+  color: var(--text-muted, #8b919b);
+}
+
+.sam__pin input {
+  width: 3.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--text, #e9edf1);
+  background: var(--bg-sunken, #0c0f12);
+  border: var(--border-w, 1px) solid var(--border, #2a2d33);
+  border-radius: var(--radius, 4px);
+  padding: 0.2rem 0.35rem;
+}
+
+.sam__speak {
+  flex: 1 1 auto;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #08110b;
+  background: var(--accent, #f6a96b);
+  border: var(--border-w, 1px) solid var(--accent-border, #f6a96b);
+  border-radius: var(--radius, 4px);
+  padding: 0.32rem 0.5rem;
+  cursor: pointer;
+}
+
+.sam__speak:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sam__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.sam__status {
+  font-size: 0.66rem;
+  color: var(--text-muted, #8b919b);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sam__status--error {
+  color: #ff8f8f;
+}
+
+.sam__demo {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--accent, #f6a96b);
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
