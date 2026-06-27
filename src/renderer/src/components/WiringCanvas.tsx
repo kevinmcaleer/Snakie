@@ -1112,7 +1112,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
 
       <RobotHeader name={robot.name ?? ''} description={robot.description ?? ''} onCommit={commitRobotMeta} />
       <div className="wc__bottom">
-        <PartsList parts={robot.parts} onRemove={removePart} />
+        <PartsList board={boardDef?.name} parts={robot.parts} onRemove={removePart} />
         <ConnectionsTable connections={robot.connections} isDark={isDark} onRemove={removeConnection} onColor={setConnectionColor} />
       </div>
     </div>
@@ -1215,17 +1215,32 @@ function RobotHeader({
 }
 
 /** The list of parts placed in the project, with a hover-to-reveal delete. */
-function PartsList({ parts, onRemove }: { parts: RobotPart[]; onRemove: (id: string) => void }): JSX.Element {
+function PartsList({
+  board,
+  parts,
+  onRemove
+}: {
+  /** The currently selected microcontroller's name — pinned at the top (#…). */
+  board?: string
+  parts: RobotPart[]
+  onRemove: (id: string) => void
+}): JSX.Element {
   return (
     <div className="wc__parts">
       <div className="wc__table-head">
         <span>Parts</span>
-        <span className="wc__table-count">{parts.length}</span>
+        <span className="wc__table-count">{parts.length + (board ? 1 : 0)}</span>
       </div>
-      {parts.length === 0 ? (
+      {!board && parts.length === 0 ? (
         <p className="wc__muted wc__table-empty">No parts yet — add them from the library panel.</p>
       ) : (
         <ul className="wc__parts-list">
+          {board && (
+            <li className="wc__parts-item wc__parts-item--board">
+              <span className="wc__parts-name">{board}</span>
+              <span className="wc__parts-tag">MCU</span>
+            </li>
+          )}
           {parts.map((p) => (
             <li key={p.id} className="wc__parts-item">
               <span className="wc__parts-name">{p.label || p.part}</span>

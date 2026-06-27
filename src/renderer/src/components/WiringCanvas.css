@@ -372,6 +372,25 @@
   text-overflow: ellipsis;
 }
 
+/* The pinned microcontroller row (not removable). */
+.wc__parts-item--board {
+  font-weight: 600;
+  border-bottom: var(--border-w) solid var(--border);
+  border-radius: 0;
+  margin-bottom: 0.15rem;
+}
+
+.wc__parts-tag {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--accent-2, #46e06a);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0 0.25rem;
+}
+
 /* Trash icon — hidden until the row is hovered (or the button focused). */
 .wc__parts-del {
   flex: 0 0 auto;

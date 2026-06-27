@@ -20,6 +20,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Settings → *Firmware updates* toggle disables the check.
 
 ### Changed
+- **The parts list shows the board.** The Board Viewer's Parts list now pins the
+  currently selected **microcontroller** at the top (tagged "MCU"), so the board is
+  listed alongside the parts wired to it.
 - **Part versions auto-bump on edit (#172).** Saving an edited part now
   automatically increments its **PATCH** version when its content actually
   changed, so updates are easy to detect (a manual version change you make is
