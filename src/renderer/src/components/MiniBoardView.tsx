@@ -23,7 +23,6 @@ const PAD_R = 6
 // Pin annotation layout, ordered OUTWARD from a used pad: [number box][label]
 // [variable]. A fixed-size grey square holds the GPIO number (right-aligned);
 // the label then the code variable follow, mirrored per pin facing.
-const ZOOM = 1.6 // px per viewBox unit — renders the (zoomed-to-used) board large
 const NUM_BOX = 13 // square side
 const STUB = 7 // pad → first element gap
 const SLOT_GAP = 3 // gap between number box / label / variable
@@ -229,24 +228,18 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     return { usedByKey: map, usedList: [...map.values()], ledLit: led }
   }, [source, isPython, def, pads, box])
 
-  // Zoom to fit JUST the pins in use (+ their node labels) so they read large —
-  // falling back to the WHOLE board only when nothing is used yet. Returns the
-  // viewBox string plus its size, so the SVG can be drawn at a fixed (doubled)
-  // scale and scrolled when it overflows the dock.
+  // Frame the WHOLE board (always — same aspect/representation as the breadboard
+  // view, never cropped) plus any used pins' node labels so nothing clips. The SVG
+  // then scales this to fill the dock width (CSS), so the board stays proportional
+  // whether or not pins are in use.
   const viewBox = useMemo(() => {
-    const hasUsed = usedList.length > 0
-    let minX = hasUsed ? Infinity : box.x
-    let minY = hasUsed ? Infinity : box.y
-    let maxX = hasUsed ? -Infinity : box.x + box.w
-    let maxY = hasUsed ? -Infinity : box.y + box.h
+    let minX = box.x
+    let minY = box.y
+    let maxX = box.x + box.w
+    let maxY = box.y + box.h
     for (const u of usedList) {
       const px = u.p.x
       const py = u.p.y
-      // The pad itself (so a single-edge selection still has real x/y extents).
-      minX = Math.min(minX, px)
-      maxX = Math.max(maxX, px)
-      minY = Math.min(minY, py)
-      maxY = Math.max(maxY, py)
       const labelW = u.p.pad.label.length * CHAR_W
       const varW = u.variable ? u.variable.length * CHAR_W : 0
       // Outward run of [box][label][variable] for left/right, or stacked rows up/down.
@@ -278,6 +271,27 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
   const led = ledPoint(box)
   const gradId = `mini-pcb-${def.id}`
 
+  // Hover-revealed zoom + a measured width so the board fills the dock at 1× and
+  // can be zoomed in and scrolled. Aspect is always preserved (no distortion):
+  // the SVG is sized in px to the viewBox ratio, so it scales, never stretches.
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [wrapW, setWrapW] = useState(240)
+  const [zoom, setZoom] = useState(1)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w && w > 0) setWrapW(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const aspect = viewBox.h / viewBox.w
+  const svgW = Math.max(1, Math.round(wrapW * zoom))
+  const svgH = Math.max(1, Math.round(svgW * aspect))
+  const setZoomClamped = (z: number): void => setZoom(Math.min(5, Math.max(0.5, z)))
+
   return (
     <section className="mini-board" aria-label="Board pins in use">
       <div className="mini-board__head">
@@ -303,12 +317,12 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           </svg>
         </button>
       </div>
-      <div className="mini-board__scroll">
+      <div className="mini-board__scroll" ref={scrollRef}>
       <svg
         className="mini-board__svg"
         viewBox={viewBox.str}
-        width={Math.round(viewBox.w * ZOOM)}
-        height={Math.round(viewBox.h * ZOOM)}
+        width={svgW}
+        height={svgH}
         role="img"
         aria-label={`${def.name} with ${usedList.length} pins in use`}
       >
@@ -352,6 +366,36 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           return <PinAnnotation key={`p${i}`} u={u} />
         })}
       </svg>
+      </div>
+      {/* Zoom controls — hidden until the user hovers the mini board (keeps it clean). */}
+      <div className="mini-board__zoom" aria-label="Zoom controls">
+        <button
+          type="button"
+          className="mini-board__zoom-btn"
+          title="Zoom out"
+          aria-label="Zoom out"
+          onClick={() => setZoomClamped(zoom / 1.25)}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          className="mini-board__zoom-btn"
+          title="Fit width"
+          aria-label="Fit width"
+          onClick={() => setZoom(1)}
+        >
+          ⤢
+        </button>
+        <button
+          type="button"
+          className="mini-board__zoom-btn"
+          title="Zoom in"
+          aria-label="Zoom in"
+          onClick={() => setZoomClamped(zoom * 1.25)}
+        >
+          +
+        </button>
       </div>
       {usedList.length === 0 && (
         <p className="mini-board__hint">{isPython ? 'No pins used in this file yet.' : 'Open a MicroPython (.py) file to see its pins.'}</p>

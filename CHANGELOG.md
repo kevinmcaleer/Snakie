@@ -46,10 +46,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **pin label**, then (for pins used in the code) the **code variable** — laid out
   outward from the pin and mirrored for each facing (left/right/top/bottom). The
   Part Editor's own pin labels are unchanged.
-- **The mini board view zooms to the pins in use.** It now frames just the used
-  pins (instead of the whole board) and draws them at a larger, readable scale,
-  scrolling when the result overflows the dock. With no pins used it still shows
-  the whole board.
+- **Zoomable mini board view.** The mini board now keeps the **whole board at its
+  correct aspect ratio** (same representation as the breadboard view), scaled to
+  fill the dock width, with **hover-revealed zoom controls** (in / out / fit) and a
+  scrollable viewport for panning around when zoomed in.
 - **Collapsible connections table.** The Board Viewer's bottom connections table
   can now be **collapsed to its header** (and restored) to free up canvas space.
 - **Cleaner part on the breadboard.** Removed the small ✕ remove badge from each

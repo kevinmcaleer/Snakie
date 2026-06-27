@@ -6,6 +6,7 @@
    make them invisible. The chrome below uses fixed dark colours, not theme
    tokens, so the mini board stays a readable dark island in any theme. */
 .mini-board {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
@@ -53,21 +54,64 @@
   border-color: #aeb4bd;
 }
 
-/* The board is drawn at a fixed (doubled) scale and zoomed to the pins in use, so
-   it can overflow — this wrapper scrolls it (e.g. down to the bottom pins). */
+/* Fixed-height viewport: the board fills the width at 1× zoom and this wrapper
+   scrolls (both axes) when the user zooms in past the visible area. */
 .mini-board__scroll {
-  max-height: 320px;
+  height: 190px;
   overflow: auto;
+  /* Reserve the scrollbar gutter so the measured width (and thus the 1× fit) does
+     not change when a scrollbar appears — avoids a resize feedback loop. */
+  scrollbar-gutter: stable;
 }
 
+/* The SVG is sized in px to the viewBox aspect (no CSS width/height to fight it),
+   so it always scales uniformly — never stretched/squished. */
 .mini-board__svg {
   display: block;
   margin: 0 auto;
-  /* Render at the doubled intrinsic size (width/height attrs), but never wider
-     than the dock — scale down proportionally instead of a horizontal scrollbar.
-     Tall (zoomed) content still overflows vertically → the wrapper scrolls. */
-  max-width: 100%;
-  height: auto;
+}
+
+/* Zoom controls — revealed only on hover so the board stays clean. */
+.mini-board__zoom {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(20, 22, 26, 0.92);
+  border: 1px solid #2a2d33;
+  border-radius: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.mini-board:hover .mini-board__zoom,
+.mini-board:focus-within .mini-board__zoom {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mini-board__zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  font-size: 0.9rem;
+  line-height: 1;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mini-board__zoom-btn:hover {
+  color: #fff;
+  border-color: #565b63;
 }
 
 .mini-board__mcu {
