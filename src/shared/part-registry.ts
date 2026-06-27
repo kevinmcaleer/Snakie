@@ -95,6 +95,26 @@ export function isNewer(available: string, installed: string | null): boolean {
 }
 
 /**
+ * Increment the PATCH of a `MAJOR.MINOR.PATCH` version so an edit produces a new,
+ * detectable version (#172). Tolerates a leading `v`, drops any `-pre`/`+build`
+ * suffix, and treats missing/garbage input as `0.1.0` (so a first bump → `0.1.1`).
+ */
+export function bumpPatch(version: string | undefined): string {
+  const core = String(version ?? '').trim().replace(/^v/i, '').split('+')[0].split('-')[0]
+  const [maj, min, pat] = core.split('.').map((n) => {
+    const x = parseInt(n, 10)
+    return Number.isFinite(x) ? x : NaN
+  })
+  // No usable numeric component at all (undefined/garbage) ⇒ treat as 0.1.0 → 0.1.1;
+  // otherwise a present major with missing minor/patch defaults those to 0.
+  if (!Number.isFinite(maj) && !Number.isFinite(min) && !Number.isFinite(pat)) return '0.1.1'
+  const major = Number.isFinite(maj) ? maj : 0
+  const minor = Number.isFinite(min) ? min : 0
+  const patch = Number.isFinite(pat) ? pat : 0
+  return `${major}.${minor}.${patch + 1}`
+}
+
+/**
  * Validate + normalise a fetched registry document (already JSON-parsed, or a
  * raw string). Drops malformed entries (an entry needs at least an `id`, `name`
  * and `repo`); defaults `version` to `"0.0.0"`. Never throws on a structurally

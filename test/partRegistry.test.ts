@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   availableToInstall,
+  bumpPatch,
   compareVersions,
   diffInstalled,
   isNewer,
@@ -57,6 +58,28 @@ describe('isNewer', () => {
   it('treats a missing installed version as always-newer', () => {
     expect(isNewer('0.0.1', null)).toBe(true)
     expect(isNewer('1.0.0', '')).toBe(true)
+  })
+})
+
+describe('bumpPatch', () => {
+  it('increments the patch component', () => {
+    expect(bumpPatch('1.2.3')).toBe('1.2.4')
+    expect(bumpPatch('0.1.0')).toBe('0.1.1')
+    expect(bumpPatch('v2.0.9')).toBe('2.0.10')
+  })
+  it('tolerates short / missing / garbage versions', () => {
+    expect(bumpPatch('1.2')).toBe('1.2.1') // missing patch ⇒ 0, then +1
+    expect(bumpPatch('2')).toBe('2.0.1') // present major, missing minor/patch ⇒ 0
+    expect(bumpPatch('v3')).toBe('3.0.1')
+    expect(bumpPatch(undefined)).toBe('0.1.1') // no numeric component ⇒ 0.1.0 → 0.1.1
+    expect(bumpPatch('nonsense')).toBe('0.1.1')
+  })
+  it('drops a pre-release / build suffix before bumping', () => {
+    expect(bumpPatch('1.0.0-beta')).toBe('1.0.1')
+    expect(bumpPatch('1.0.0+build5')).toBe('1.0.1')
+  })
+  it('a bumped version is strictly newer than the original', () => {
+    expect(isNewer(bumpPatch('1.2.3'), '1.2.3')).toBe(true)
   })
 })
 

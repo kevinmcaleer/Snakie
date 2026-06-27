@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Part versions auto-bump on edit (#172).** Saving an edited part now
+  automatically increments its **PATCH** version when its content actually
+  changed, so updates are easy to detect (a manual version change you make is
+  respected instead). Combined with the existing library update checks, both
+  parts and libraries are now version-tracked.
 - **Smoother breadboard wiring (#182).** Breadboard wires are now **Node-RED-style
   Bézier noodles** that leave each pad with clearance along the pin's direction and
   curve cleanly to a pin on the far side of a board (replacing the orthogonal

@@ -10,6 +10,7 @@ import {
   type LayerLocks
 } from './PartCanvas'
 import { pinOutwardDir } from './part-body'
+import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
   CAPABILITY_LABEL,
@@ -212,9 +213,15 @@ export function PartEditor({
 }: PartEditorProps): JSX.Element {
   // Seed with every pin given an absolute x/y and legacy feature chips migrated
   // into editable component shapes (see withPinPositions / withShapesFromFeatures).
-  const [part, setPart] = useState<PartDefinition>(() =>
-    withShapesFromFeatures(withPinPositions(initial ?? blankPart()))
-  )
+  // The transformed starting part (legacy features migrated to shapes, pin
+  // positions resolved) — computed once and used to seed BOTH the editable state
+  // and the last-saved baseline, so a no-edit save of a part with legacy
+  // `features` doesn't spuriously bump its version (#172).
+  const initialSeedRef = useRef<PartDefinition | null>(null)
+  if (!initialSeedRef.current) {
+    initialSeedRef.current = withShapesFromFeatures(withPinPositions(initial ?? blankPart()))
+  }
+  const [part, setPart] = useState<PartDefinition>(() => initialSeedRef.current as PartDefinition)
   const [libId, setLibId] = useState<string>(libraryId)
   // A NEW part (incl. a pre-seeded starter) has no "opened" id, so the collision
   // guard treats its id as fresh and warns before overwriting an existing part.
@@ -239,6 +246,15 @@ export function PartEditor({
   const [status, setStatus] = useState<Status | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // The content + version of the last save (or the opened part), so a save can
+  // auto-bump the PATCH version when the part's content actually changed (#172).
+  // Keyed by the canonical part minus its own version (version changes shouldn't
+  // count as a content change, and a manual version edit is respected).
+  const partContentKey = (p: PartDefinition): string => JSON.stringify({ ...normalisePart(p), version: undefined })
+  const lastSavedRef = useRef<{ content: string; version?: string }>({
+    content: partContentKey(initialSeedRef.current as PartDefinition),
+    version: (initialSeedRef.current as PartDefinition).version
+  })
 
   const fileId = useMemo(() => sanitisePartId(part.id), [part.id])
   const names = useMemo(() => pinNames(part), [part])
@@ -391,10 +407,13 @@ export function PartEditor({
 
   // --- persistence ----------------------------------------------------------
   const newPart = (): void => {
-    setPart(withShapesFromFeatures(withPinPositions(blankPart())))
+    const seed = withShapesFromFeatures(withPinPositions(blankPart()))
+    setPart(seed)
     setPropRows([])
     setOpenedId(null)
     setSelection(null)
+    // Reset the version baseline so the fresh part's first save keeps its version (#172).
+    lastSavedRef.current = { content: partContentKey(seed), version: seed.version }
     setStatus({ kind: 'info', text: 'Started a new blank part.' })
   }
 
@@ -426,13 +445,24 @@ export function PartEditor({
       })
       return
     }
-    const payload: PartDefinition = { ...clean, imageData: part.imageData }
+    // Auto-bump the PATCH version when an EDIT changed the content (#172), so the
+    // update is detectable — unless the user manually changed the version this
+    // session (then their value wins). New parts keep their authored version.
+    const contentChanged = partContentKey(clean) !== lastSavedRef.current.content
+    const versionUntouched = (clean.version ?? '') === (lastSavedRef.current.version ?? '')
+    // Only auto-bump an EDIT of an already-saved/opened part; a brand-new part's
+    // first save keeps its authored version (openedId is null until first save).
+    const nextVersion =
+      contentChanged && versionUntouched && openedId !== null ? bumpPatch(clean.version) : clean.version
+    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData }
     try {
       const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
       if (res?.ok) {
         setOpenedId(clean.id)
         setOpenedLibId(res.libraryId ?? libId)
-        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId}.` })
+        lastSavedRef.current = { content: partContentKey(payload), version: nextVersion }
+        if (nextVersion !== part.version) patch({ version: nextVersion }) // reflect the bump in the field
+        setStatus({ kind: 'ok', text: `Saved "${clean.name}" to ${res.libraryId ?? libId} (v${nextVersion}).` })
         onSaved(res.libraryId ?? libId, res.id ?? clean.id)
       } else {
         setStatus({ kind: 'error', text: res?.error ?? 'Save failed.' })
