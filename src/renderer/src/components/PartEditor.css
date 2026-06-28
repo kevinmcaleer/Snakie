@@ -677,6 +677,47 @@
   width: 3.4rem;
 }
 
+/* --- Text-style toggle row (bold / italic / underline, align, wrap) --- */
+.pe__tbtns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.pe__tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text, #e9edf1);
+  background: var(--bg-sunken, #0c0f12);
+  border: var(--border-w, 1px) solid var(--border, #2a2d33);
+  border-radius: var(--radius, 4px);
+  cursor: pointer;
+}
+
+.pe__tbtn:hover {
+  border-color: var(--text-muted, #8b919b);
+}
+
+.pe__tbtn.is-active {
+  color: #08110b;
+  background: var(--accent, #e6ab30);
+  border-color: var(--accent, #e6ab30);
+}
+
+.pe__tsep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.15rem;
+  background: var(--border, #2a2d33);
+}
+
 /* --- Toggle button (e.g. Lock aspect ratio) --- */
 .pe__togglebtn {
   display: inline-flex;

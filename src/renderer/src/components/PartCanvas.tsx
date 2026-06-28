@@ -24,7 +24,7 @@ import {
   type ResolvedPin
 } from './part-editor.util'
 import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
-import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles } from './part-body'
+import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -1780,9 +1780,21 @@ export function PartCanvas({
               const i = c.index
               const l = labels[i]
               return (
-                <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={l.rotation ? `rotate(${l.rotation} ${px(l.x)} ${py(l.y)})` : undefined}>
-                  {l.text}
-                </text>
+                <g key={`l${i}`}>
+                  {styledText({
+                    text: l.text,
+                    cx: px(l.x),
+                    cy: py(l.y),
+                    fontSize: l.fontSize ?? 12,
+                    bold: l.bold,
+                    italic: l.italic,
+                    underline: l.underline,
+                    align: l.align,
+                    fill: isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)',
+                    baseWeight: 600,
+                    transform: l.rotation ? `rotate(${l.rotation} ${px(l.x)} ${py(l.y)})` : undefined
+                  })}
+                </g>
               )
             }
             const i = c.index
@@ -1794,32 +1806,45 @@ export function PartCanvas({
             let el: JSX.Element
             let lcx: number
             let lcy: number
+            let labelW: number
             if (s.kind === 'circle') {
               const r = (s.r ?? 0.08) * box.w
               el = <circle cx={px(s.x)} cy={py(s.y)} r={r} fill={fill} stroke={stroke} strokeWidth={sw} />
               lcx = px(s.x)
               lcy = py(s.y)
+              labelW = 2 * r
             } else if (s.kind === 'polygon') {
               const pts = s.points ?? []
               el = <polygon points={pts.map((p) => `${px(p.x)},${py(p.y)}`).join(' ')} fill={fill} stroke={stroke} strokeWidth={sw} />
+              const xs = pts.map((p) => px(p.x))
               lcx = pts.length ? px(pts.reduce((a, p) => a + p.x, 0) / pts.length) : px(s.x)
               lcy = pts.length ? py(pts.reduce((a, p) => a + p.y, 0) / pts.length) : py(s.y)
+              labelW = xs.length ? Math.max(...xs) - Math.min(...xs) : 80
             } else {
               const w = (s.w ?? 0.2) * box.w
               const h = (s.h ?? 0.15) * box.h
               el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={s.cornerRadius ?? 3} fill={fill} stroke={stroke} strokeWidth={sw} />
               lcx = px(s.x) + w / 2
               lcy = py(s.y) + h / 2
+              labelW = w
             }
             const rot = s.rotation ?? 0
             return (
               <g key={`s${i}`} transform={rot ? `rotate(${rot} ${lcx} ${lcy})` : undefined}>
                 {el}
-                {s.label && (
-                  <text x={lcx} y={lcy} className="pcv__feat-label">
-                    {s.label}
-                  </text>
-                )}
+                {s.label &&
+                  styledText({
+                    text: s.label,
+                    cx: lcx,
+                    cy: lcy,
+                    fontSize: s.labelFontSize ?? 10,
+                    bold: s.labelBold,
+                    italic: s.labelItalic,
+                    underline: s.labelUnderline,
+                    align: s.labelAlign,
+                    wrapWidth: s.labelWrap ? labelW : undefined,
+                    fill: '#cfd6dd'
+                  })}
               </g>
             )
           })}

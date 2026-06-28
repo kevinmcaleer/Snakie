@@ -274,6 +274,17 @@ function normaliseShape(s: ComponentShape): ComponentShape {
   if (kind === 'rect' && typeof s.cornerRadius === 'number' && Number.isFinite(s.cornerRadius)) {
     out.cornerRadius = clamp(s.cornerRadius, 0, 60)
   }
+  // Shape-label text styling (kept only when set; false/center default omitted).
+  if (typeof s.labelFontSize === 'number' && Number.isFinite(s.labelFontSize)) {
+    out.labelFontSize = clamp(s.labelFontSize, 4, 96)
+  }
+  if (s.labelBold) out.labelBold = true
+  if (s.labelItalic) out.labelItalic = true
+  if (s.labelUnderline) out.labelUnderline = true
+  if (s.labelAlign === 'left' || s.labelAlign === 'center' || s.labelAlign === 'right') {
+    out.labelAlign = s.labelAlign
+  }
+  if (s.labelWrap) out.labelWrap = true
   return out
 }
 
@@ -619,6 +630,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           const r = ((((Math.round(l.rotation / 90) * 90) % 360) + 360) % 360)
           if (r) lbl.rotation = r
         }
+        if (l.bold) lbl.bold = true
+        if (l.italic) lbl.italic = true
+        if (l.underline) lbl.underline = true
+        if (l.align === 'left' || l.align === 'center' || l.align === 'right') lbl.align = l.align
         return lbl
       })
       .filter((l) => l.text !== '')

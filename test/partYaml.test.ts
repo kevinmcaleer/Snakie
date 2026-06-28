@@ -274,6 +274,36 @@ describe('component rotation round-trip', () => {
     expect(normalisePart(back)).toEqual(part)
   })
 
+  it('round-trips shape-label + free-label text styling', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
+      shapes: [
+        {
+          kind: 'rect',
+          x: 0.1,
+          y: 0.1,
+          w: 0.3,
+          h: 0.2,
+          label: 'Motor A',
+          labelFontSize: 14,
+          labelBold: true,
+          labelUnderline: true,
+          labelAlign: 'left',
+          labelWrap: true
+        }
+      ],
+      labels: [{ text: 'Title', x: 0.5, y: 0.5, italic: true, align: 'right' }]
+    })
+    const s = part.shapes?.[0]
+    expect(s).toMatchObject({ labelFontSize: 14, labelBold: true, labelUnderline: true, labelAlign: 'left', labelWrap: true })
+    expect(s?.labelItalic).toBeUndefined() // unset flags stay absent
+    expect(part.labels?.[0]).toMatchObject({ italic: true, align: 'right' })
+    expect(part.labels?.[0].bold).toBeUndefined()
+    expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
+  })
+
   it('drops a 0° (and full-turn 360°) rotation rather than persisting it', () => {
     const part = normalisePart({
       id: 'p',

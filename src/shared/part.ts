@@ -189,7 +189,18 @@ export interface ComponentShape {
   /** Rectangle corner radius in canvas (viewBox) units; `0` = sharp corners.
    *  Absent ⇒ the legacy default (3). Only meaningful when `kind === 'rect'`. */
   cornerRadius?: number
+  /** Styling for the shape's `label` caption (font size in viewBox units, weight,
+   *  slant, underline, alignment, and whether it wraps to the shape's width). */
+  labelFontSize?: number
+  labelBold?: boolean
+  labelItalic?: boolean
+  labelUnderline?: boolean
+  labelAlign?: TextAlign
+  labelWrap?: boolean
 }
+
+/** Horizontal text alignment for labels. */
+export type TextAlign = 'left' | 'center' | 'right'
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
 export interface PartLabel {
@@ -202,6 +213,12 @@ export interface PartLabel {
   z?: number
   /** Clockwise rotation in degrees (0/90/180/270), about the label's position. */
   rotation?: number
+  /** Inline text styling. */
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  /** Horizontal alignment (multi-line); default `center`. */
+  align?: TextAlign
 }
 
 /**

@@ -9,7 +9,7 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import type { PartDefinition, PartPinCapability, PartPinShape, PartPinType } from '../../../shared/part'
+import type { PartDefinition, PartPinCapability, PartPinShape, PartPinType, TextAlign } from '../../../shared/part'
 import './PartCanvas.css'
 
 /** Capability → hover-badge text + pastel colour (#…). Shared by the Part Editor
@@ -307,6 +307,92 @@ export function boxedPinLabel(
       <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
       {variable && <text x={cx} y={ly + L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
     </>
+  )
+}
+
+/** Greedy word-wrap into lines that fit `maxWidthPx` at `fontSize` (the mono font
+ *  is ≈0.6·size per glyph). Honours explicit newlines and hard-breaks an
+ *  over-long word. Pure + exported for unit testing. */
+export function wrapTextLines(text: string, maxWidthPx: number, fontSize: number): string[] {
+  const charW = 0.6 * fontSize
+  const maxChars = Math.max(1, Math.floor(maxWidthPx / charW))
+  const out: string[] = []
+  for (const para of text.split('\n')) {
+    const words = para.split(/\s+/).filter((w) => w.length > 0)
+    if (words.length === 0) {
+      out.push('')
+      continue
+    }
+    let line = ''
+    for (let word of words) {
+      while (word.length > maxChars) {
+        if (line) {
+          out.push(line)
+          line = ''
+        }
+        out.push(word.slice(0, maxChars))
+        word = word.slice(maxChars)
+      }
+      if (!line) line = word
+      else if (line.length + 1 + word.length <= maxChars) line += ` ${word}`
+      else {
+        out.push(line)
+        line = word
+      }
+    }
+    if (line) out.push(line)
+  }
+  return out
+}
+
+/**
+ * Render a styled text block as a single `<text>` with one `<tspan>` per line —
+ * shared by free labels and shape captions so they style identically. Supports
+ * bold / italic / underline, horizontal `align`, and (with `wrapWidth`) wrapping
+ * to a shape's width; otherwise it splits on explicit newlines. Vertically
+ * centred on `cy`. Pure SVG (no foreignObject) so it survives PNG/PDF export.
+ */
+export function styledText(opts: {
+  text: string
+  cx: number
+  cy: number
+  fontSize: number
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: TextAlign
+  /** When set, wrap to this width (px) and left/right-align within it. */
+  wrapWidth?: number
+  fill?: string
+  transform?: string
+  /** Weight when NOT bold (e.g. 600 for free labels, which were semibold). */
+  baseWeight?: number
+}): JSX.Element {
+  const align: TextAlign = opts.align ?? 'center'
+  const lines = opts.wrapWidth ? wrapTextLines(opts.text, opts.wrapWidth, opts.fontSize) : opts.text.split('\n')
+  const lineH = opts.fontSize * 1.25
+  const anchor = align === 'left' ? 'start' : align === 'right' ? 'end' : 'middle'
+  const half = (opts.wrapWidth ?? 0) / 2
+  const pad = opts.wrapWidth ? 3 : 0
+  const lineX = align === 'left' ? opts.cx - half + pad : align === 'right' ? opts.cx + half - pad : opts.cx
+  const top = opts.cy - ((lines.length - 1) * lineH) / 2
+  return (
+    <text
+      style={{ fontFamily: 'var(--font-mono)' }}
+      fontSize={opts.fontSize}
+      fontWeight={opts.bold ? 700 : opts.baseWeight}
+      fontStyle={opts.italic ? 'italic' : undefined}
+      textDecoration={opts.underline ? 'underline' : undefined}
+      textAnchor={anchor}
+      fill={opts.fill}
+      transform={opts.transform}
+    >
+      {lines.map((ln, i) => (
+        <tspan key={i} x={lineX} y={top + i * lineH + opts.fontSize * 0.34}>
+          {ln === '' ? '​' : ln}
+        </tspan>
+      ))}
+    </text>
   )
 }
 
@@ -630,9 +716,21 @@ export function PartBody({
             const i = c.index
             const l = labels[i]
             return (
-              <text key={`l${i}`} x={px(l.x)} y={py(l.y)} className="pcv__label" fontSize={l.fontSize ?? 12} fill={isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)'} textAnchor="middle" transform={uprightRotate(px(l.x), py(l.y), l.rotation ?? 0)}>
-                {l.text}
-              </text>
+              <g key={`l${i}`}>
+                {styledText({
+                  text: l.text,
+                  cx: px(l.x),
+                  cy: py(l.y),
+                  fontSize: l.fontSize ?? 12,
+                  bold: l.bold,
+                  italic: l.italic,
+                  underline: l.underline,
+                  align: l.align,
+                  fill: isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)',
+                  baseWeight: 600,
+                  transform: uprightRotate(px(l.x), py(l.y), l.rotation ?? 0)
+                })}
+              </g>
             )
           }
           const i = c.index
@@ -644,32 +742,46 @@ export function PartBody({
           let el: JSX.Element
           let lcx: number
           let lcy: number
+          let labelW: number
           if (s.kind === 'circle') {
             const r = (s.r ?? 0.08) * box.w
             el = <circle cx={px(s.x)} cy={py(s.y)} r={r} fill={fill} stroke={stroke} strokeWidth={sw} />
             lcx = px(s.x)
             lcy = py(s.y)
+            labelW = 2 * r
           } else if (s.kind === 'polygon') {
             const pts = s.points ?? []
             el = <polygon points={pts.map((p) => `${px(p.x)},${py(p.y)}`).join(' ')} fill={fill} stroke={stroke} strokeWidth={sw} />
+            const xs = pts.map((p) => px(p.x))
             lcx = pts.length ? px(pts.reduce((a, p) => a + p.x, 0) / pts.length) : px(s.x)
             lcy = pts.length ? py(pts.reduce((a, p) => a + p.y, 0) / pts.length) : py(s.y)
+            labelW = xs.length ? Math.max(...xs) - Math.min(...xs) : 80
           } else {
             const w = (s.w ?? 0.2) * box.w
             const h = (s.h ?? 0.15) * box.h
             el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={s.cornerRadius ?? 3} fill={fill} stroke={stroke} strokeWidth={sw} />
             lcx = px(s.x) + w / 2
             lcy = py(s.y) + h / 2
+            labelW = w
           }
           const rot = s.rotation ?? 0
           return (
             <g key={`s${i}`} transform={rot ? `rotate(${rot} ${lcx} ${lcy})` : undefined}>
               {el}
-              {s.label && (
-                <text x={lcx} y={lcy} className="pcv__feat-label" transform={uprightRotate(lcx, lcy)}>
-                  {s.label}
-                </text>
-              )}
+              {s.label &&
+                styledText({
+                  text: s.label,
+                  cx: lcx,
+                  cy: lcy,
+                  fontSize: s.labelFontSize ?? 10,
+                  bold: s.labelBold,
+                  italic: s.labelItalic,
+                  underline: s.labelUnderline,
+                  align: s.labelAlign,
+                  wrapWidth: s.labelWrap ? labelW : undefined,
+                  fill: '#cfd6dd',
+                  transform: uprightRotate(lcx, lcy)
+                })}
             </g>
           )
         })}

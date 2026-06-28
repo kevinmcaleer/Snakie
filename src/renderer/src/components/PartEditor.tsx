@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
 import { PartSchematicView } from './PartSchematicView'
 import {
   PartCanvas,
@@ -46,7 +46,8 @@ import type {
   PartPin,
   PartPinCapability,
   PartPinShape,
-  PartPinType
+  PartPinType,
+  TextAlign
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
 import './PartEditor.css'
@@ -1115,6 +1116,67 @@ function SliderField({
   )
 }
 
+/** Inline text-style controls (bold / italic / underline, alignment, optional
+ *  wrap) shared by the free-label and shape-label inspectors. `onChange` is
+ *  called with ONLY the field that changed. */
+function TextStyleRow({
+  bold,
+  italic,
+  underline,
+  align,
+  wrap,
+  showWrap,
+  onChange
+}: {
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  align?: TextAlign
+  wrap?: boolean
+  showWrap?: boolean
+  onChange: (p: { bold?: boolean; italic?: boolean; underline?: boolean; align?: TextAlign; wrap?: boolean }) => void
+}): JSX.Element {
+  const a: TextAlign = align ?? 'center'
+  const btn = (
+    active: boolean,
+    label: string,
+    title: string,
+    on: () => void,
+    style?: CSSProperties
+  ): JSX.Element => (
+    <button
+      type="button"
+      className={`pe__tbtn${active ? ' is-active' : ''}`}
+      title={title}
+      aria-pressed={active}
+      onClick={on}
+      style={style}
+    >
+      {label}
+    </button>
+  )
+  return (
+    <label className="pe__field">
+      <span>Text style</span>
+      <div className="pe__tbtns">
+        {btn(!!bold, 'B', 'Bold', () => onChange({ bold: !bold }), { fontWeight: 700 })}
+        {btn(!!italic, 'I', 'Italic', () => onChange({ italic: !italic }), { fontStyle: 'italic' })}
+        {btn(!!underline, 'U', 'Underline', () => onChange({ underline: !underline }), { textDecoration: 'underline' })}
+        <span className="pe__tsep" />
+        {btn(a === 'left', 'L', 'Align left', () => onChange({ align: 'left' }))}
+        {btn(a === 'center', 'C', 'Align centre', () => onChange({ align: 'center' }))}
+        {btn(a === 'right', 'R', 'Align right', () => onChange({ align: 'right' }))}
+        {showWrap && (
+          <>
+            <span className="pe__tsep" />
+            {btn(!!wrap, '↵', 'Wrap text to the shape', () => onChange({ wrap: !wrap }))}
+          </>
+        )}
+      </div>
+    </label>
+  )
+}
+
 /** The editable fields for whatever is selected on the canvas. */
 function SelectionInspector({
   part,
@@ -1328,6 +1390,31 @@ function SelectionInspector({
               onChange={(v) => upd({ cornerRadius: v })}
             />
           )}
+          <SliderField
+            label="Label size"
+            value={shp.labelFontSize ?? 10}
+            min={4}
+            max={48}
+            step={1}
+            onChange={(v) => upd({ labelFontSize: v })}
+          />
+          <TextStyleRow
+            bold={shp.labelBold}
+            italic={shp.labelItalic}
+            underline={shp.labelUnderline}
+            align={shp.labelAlign}
+            wrap={shp.labelWrap}
+            showWrap
+            onChange={(p) => {
+              const m: Partial<ComponentShape> = {}
+              if ('bold' in p) m.labelBold = p.bold
+              if ('italic' in p) m.labelItalic = p.italic
+              if ('underline' in p) m.labelUnderline = p.underline
+              if ('align' in p) m.labelAlign = p.align
+              if ('wrap' in p) m.labelWrap = p.wrap
+              upd(m)
+            }}
+          />
           {shp.kind === 'polygon' && (
             <p className="pe__hint">Drag the polygon vertices on the canvas to reshape it.</p>
           )}
@@ -1351,6 +1438,20 @@ function SelectionInspector({
             {num('y', lbl.y, (v) => upd({ y: v }))}
             {num('size', lbl.fontSize ?? 12, (v) => upd({ fontSize: v }), 1)}
           </div>
+          <TextStyleRow
+            bold={lbl.bold}
+            italic={lbl.italic}
+            underline={lbl.underline}
+            align={lbl.align}
+            onChange={(p) => {
+              const m: Partial<PartLabel> = {}
+              if ('bold' in p) m.bold = p.bold
+              if ('italic' in p) m.italic = p.italic
+              if ('underline' in p) m.underline = p.underline
+              if ('align' in p) m.align = p.align
+              upd(m)
+            }}
+          />
         </>
       )
     }
