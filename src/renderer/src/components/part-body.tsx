@@ -235,6 +235,81 @@ export function pinLabelLayout(
   }
 }
 
+/**
+ * The boxed pin annotation: a grey board-pin-number box at the board edge, then
+ * the silk label, then (optionally) the code variable — ordered OUTWARD per pin
+ * facing and mirrored for each edge. Shared by the breadboard MCU, the mini board
+ * view and the Part Editor so they all render pins the same way. Assumes an
+ * unrotated, unscaled body.
+ */
+export function boxedPinLabel(
+  box: { x: number; y: number; w: number; h: number },
+  cx: number,
+  cy: number,
+  dir: 'left' | 'right' | 'top' | 'bottom',
+  num: string,
+  label: string,
+  variable: string | undefined,
+  color: string
+): JSX.Element {
+  const B = 14
+  const G = 3
+  const L = 13
+  const labelW = label.length * 6.2
+  const numBox = (bx: number, by: number): JSX.Element => (
+    <>
+      <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
+      {num && (
+        <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
+          {num}
+        </text>
+      )}
+    </>
+  )
+  if (dir === 'left') {
+    const bx = box.x - G - B
+    const lx = bx - G
+    return (
+      <>
+        {numBox(bx, cy - B / 2)}
+        <text x={lx} y={cy + 3.5} textAnchor="end" className="pcv__pin-label">{label}</text>
+        {variable && <text x={lx - labelW - G} y={cy + 3.5} textAnchor="end" className="pcv__pin-var" fill={color}>{variable}</text>}
+      </>
+    )
+  }
+  if (dir === 'right') {
+    const bx = box.x + box.w + G
+    const lx = bx + B + G
+    return (
+      <>
+        {numBox(bx, cy - B / 2)}
+        <text x={lx} y={cy + 3.5} textAnchor="start" className="pcv__pin-label">{label}</text>
+        {variable && <text x={lx + labelW + G} y={cy + 3.5} textAnchor="start" className="pcv__pin-var" fill={color}>{variable}</text>}
+      </>
+    )
+  }
+  if (dir === 'top') {
+    const by = box.y - G - B
+    const ly = by - G
+    return (
+      <>
+        {numBox(cx - B / 2, by)}
+        <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
+        {variable && <text x={cx} y={ly - L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+      </>
+    )
+  }
+  const by = box.y + box.h + G
+  const ly = by + B + L - 4
+  return (
+    <>
+      {numBox(cx - B / 2, by)}
+      <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
+      {variable && <text x={cx} y={ly + L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+    </>
+  )
+}
+
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
   /** The PCB body (outline + fill) — separate from the photo (board-less parts). */
@@ -344,76 +419,6 @@ export function PartBody({
     if (!r && s === 1) return undefined
     return `translate(${x} ${y}) rotate(${r}) scale(${s}) translate(${-x} ${-y})`
   }
-  // Boxed pin annotation (breadboard MCU): a grey GPIO number box at the board
-  // edge, then the silk label, then the code variable — ordered OUTWARD per pin
-  // facing, mirrored left/right/top/bottom. Assumes an unrotated, unscaled body.
-  const boxedPinLabel = (
-    cx: number,
-    cy: number,
-    dir: 'left' | 'right' | 'top' | 'bottom',
-    num: string,
-    label: string,
-    variable: string | undefined,
-    color: string
-  ): JSX.Element => {
-    const B = 14
-    const G = 3
-    const L = 13
-    const labelW = label.length * 6.2
-    const numBox = (bx: number, by: number): JSX.Element => (
-      <>
-        <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
-        {num && (
-          <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
-            {num}
-          </text>
-        )}
-      </>
-    )
-    if (dir === 'left') {
-      const bx = box.x - G - B
-      const lx = bx - G
-      return (
-        <>
-          {numBox(bx, cy - B / 2)}
-          <text x={lx} y={cy + 3.5} textAnchor="end" className="pcv__pin-label">{label}</text>
-          {variable && <text x={lx - labelW - G} y={cy + 3.5} textAnchor="end" className="pcv__pin-var" fill={color}>{variable}</text>}
-        </>
-      )
-    }
-    if (dir === 'right') {
-      const bx = box.x + box.w + G
-      const lx = bx + B + G
-      return (
-        <>
-          {numBox(bx, cy - B / 2)}
-          <text x={lx} y={cy + 3.5} textAnchor="start" className="pcv__pin-label">{label}</text>
-          {variable && <text x={lx + labelW + G} y={cy + 3.5} textAnchor="start" className="pcv__pin-var" fill={color}>{variable}</text>}
-        </>
-      )
-    }
-    if (dir === 'top') {
-      const by = box.y - G - B
-      const ly = by - G
-      return (
-        <>
-          {numBox(cx - B / 2, by)}
-          <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
-          {variable && <text x={cx} y={ly - L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
-        </>
-      )
-    }
-    const by = box.y + box.h + G
-    const ly = by + B + L - 4
-    return (
-      <>
-        {numBox(cx - B / 2, by)}
-        <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
-        {variable && <text x={cx} y={ly + L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
-      </>
-    )
-  }
-
   // Honour the part's own saved layer visibility (so the Board View / library
   // preview hide what the author hid, e.g. a traced PCB image) unless the caller
   // overrides it.
@@ -578,6 +583,7 @@ export function PartBody({
               {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
               {boxedPins
                 ? boxedPinLabel(
+                    box,
                     cx,
                     cy,
                     pinOutwardDir(rp.pin.rotation, rp.x, rp.y),

@@ -55,12 +55,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Settings → *Firmware updates* toggle disables the check.
 
 ### Changed
-- **Boxed pin annotations on the board.** In the **mini board view** and the
-  **breadboard (life-like)** microcontroller, each pin now shows a **grey board
-  pin-number box** (the physical pin number, not the GPIO) next to the pad, then the
-  **pin label**, then (for pins used in the code) the **code variable** — laid out
-  outward from the pin and mirrored for each facing (left/right/top/bottom). The
-  Part Editor's own pin labels are unchanged.
+- **Boxed pin annotations everywhere.** In the **mini board view**, the
+  **breadboard (life-like)** microcontroller, **and the Part Editor**, each pin now
+  shows a **grey board pin-number box** (the physical pin number, not the GPIO) next
+  to the pad, then the **pin label**, then (for pins used in the code) the **code
+  variable** — laid out outward from the pin and mirrored for each facing
+  (left/right/top/bottom), so the editor preview matches the board views.
 - **Zoomable mini board view.** The mini board now keeps the **whole board at its
   correct aspect ratio** (same representation as the breadboard view), scaled to
   fill the dock width, with **hover-revealed zoom controls** (in / out / fit) and a

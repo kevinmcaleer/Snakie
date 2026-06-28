@@ -23,7 +23,7 @@ import {
   type ResolvedPin
 } from './part-editor.util'
 import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
-import { capabilityBadges, castellatedPad, pinLabelLayout, pinThroughHoles } from './part-body'
+import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -1616,10 +1616,6 @@ export function PartCanvas({
                 </>
               )
             }
-            const text = `${rp.pin.number != null ? `${rp.pin.number} ` : ''}${rp.pin.label || rp.pin.name}`
-            // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
-            // 90° on the top/bottom edges (never upside-down) so rows don't collide.
-            const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
             return (
               <g
                 key={`p${i}`}
@@ -1629,16 +1625,17 @@ export function PartCanvas({
                 {/* Mask the pad (not its label) so the through-hole shows the real
                     background, not a painted dot (#171). */}
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
-                {text && (
-                  <text
-                    x={ll.lx}
-                    y={ll.ly}
-                    className="pcv__pin-label"
-                    textAnchor={ll.anchor}
-                    transform={ll.rotate ? `rotate(${ll.rotate} ${ll.lx} ${ll.ly})` : undefined}
-                  >
-                    {text}
-                  </text>
+                {/* Boxed annotation: a grey board-pin-number box at the edge then the
+                    label — the same style as the breadboard / mini board view. */}
+                {boxedPinLabel(
+                  box,
+                  cx,
+                  cy,
+                  pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                  String(rp.pin.number ?? rp.pin.gpio ?? ''),
+                  rp.pin.label || rp.pin.name,
+                  undefined,
+                  '#cfd6dd'
                 )}
               </g>
             )
