@@ -1,0 +1,166 @@
+/*
+ * Driver Install Banner (#184) — the consent-first "this part needs a driver"
+ * prompt shown inside the Board View. Self-contained dark colours (no theme
+ * tokens) so it reads identically in every theme, matching BoardGraph.
+ *
+ * Unique BEM prefix `drvbanner__` (instrument/board CSS is global — see the
+ * i2c-detect vs i2c-display collision) so nothing here leaks onto other panels.
+ */
+
+.drvbanner {
+  flex: 0 0 auto;
+  margin: 10px 12px 0;
+  border: 1px solid #4a3a16;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a2516, #211d12);
+  color: #f0e7d2;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  overflow: hidden;
+}
+
+.drvbanner__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+}
+
+.drvbanner__icon {
+  display: inline-flex;
+  color: #e8b84b;
+  flex: 0 0 auto;
+}
+
+.drvbanner__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.drvbanner__title {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #f6dd92;
+}
+
+.drvbanner__sub {
+  font-size: 11px;
+  color: #cdbf9c;
+}
+
+.drvbanner__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.drvbanner__install {
+  appearance: none;
+  border: 1px solid #caa23e;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #f6dd92, #caa23e);
+  color: #2a2210;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.drvbanner__install:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.drvbanner__install:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.drvbanner__dismiss {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #cdbf9c;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0;
+  border-radius: 4px;
+}
+
+.drvbanner__dismiss:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.drvbanner__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.drvbanner__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #d8cdb0;
+  flex-wrap: wrap;
+}
+
+.drvbanner__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background: #6b6353;
+}
+
+.drvbanner__dot--installing {
+  background: #e8b84b;
+  animation: drvbanner-pulse 1s ease-in-out infinite;
+}
+
+.drvbanner__dot--ok {
+  background: #46e06a;
+}
+
+.drvbanner__dot--error {
+  background: #e0564a;
+}
+
+@keyframes drvbanner-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.drvbanner__row-part {
+  font-weight: 700;
+  color: #f0e7d2;
+}
+
+.drvbanner__row-driver {
+  color: #cdbf9c;
+}
+
+.drvbanner__row-target {
+  color: #9b937e;
+  font-size: 10px;
+}
+
+.drvbanner__row-error {
+  color: #f0a59c;
+  width: 100%;
+  padding-left: 16px;
+}

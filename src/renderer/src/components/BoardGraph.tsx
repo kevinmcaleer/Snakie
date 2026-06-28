@@ -14,7 +14,8 @@ import {
   type BoardFeature,
   type BoardPadType
 } from './board-defs'
-import { boardPartFor, resolveBoards } from './part-editor.util'
+import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
+import { DriverInstallBanner } from './DriverInstallBanner'
 import {
   boardBox,
   busLabel,
@@ -356,6 +357,13 @@ export function BoardGraph({
   // The source part behind the selected board (if any) — so the Breadboard view
   // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
   const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])
+
+  // Placed parts that declare MicroPython drivers needing install (#184). Drives
+  // the consent-first install banner; empty (so hidden) without a robot/parts.
+  const driverNeeds = useMemo(
+    () => placedPartsNeedingDrivers(robot, libraries ?? []),
+    [robot, libraries]
+  )
 
   // Custom dropdown open state — a native <select> popup is unreliable inside a
   // frameless, always-on-top window with a drag region (same as BoardView).
@@ -755,6 +763,8 @@ export function BoardGraph({
           )}
         </div>
       </header>
+
+      {wiringEnabled && <DriverInstallBanner needs={driverNeeds} />}
 
       <div className="boardgraph__body">
       {effectiveView !== 'graph' ? (

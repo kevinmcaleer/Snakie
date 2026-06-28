@@ -6,8 +6,11 @@ import {
   boardsFromLibraries,
   captureStyle,
   derivePinPosition,
+  driverDeviceDirs,
+  driverInstallMethod,
   insertPolygonPoint,
   isBoardPart,
+  placedPartsNeedingDrivers,
   nearestCenter,
   nearestPolygonEdge,
   nextComponentZ,
@@ -809,5 +812,94 @@ describe('captureStyle / pasteStyle (per-type style clipboard)', () => {
     const clip = captureStyle(part, { kind: 'shape', index: 0 })
     pasteStyle(part, { kind: 'shape', index: 1 }, clip)
     expect(JSON.stringify(part)).toBe(before)
+  })
+})
+
+// --- Driver install (#184) --------------------------------------------------
+
+describe('driverInstallMethod', () => {
+  it('treats github:/gitlab:/pypi: specs + bare package names as mip', () => {
+    expect(driverInstallMethod('github:kevinmcaleer/vl53l0x')).toBe('mip')
+    expect(driverInstallMethod('gitlab:org/repo')).toBe('mip')
+    expect(driverInstallMethod('pypi:micropython-bme280')).toBe('mip')
+    expect(driverInstallMethod('bme280')).toBe('mip') // micropython-lib package
+    expect(driverInstallMethod('  umqtt.simple  ')).toBe('mip') // dotted pkg, trimmed
+  })
+
+  it('treats URLs + bundled/relative files as copy', () => {
+    expect(driverInstallMethod('https://example.com/vl53l0x.py')).toBe('copy')
+    expect(driverInstallMethod('http://host/x.mpy')).toBe('copy')
+    expect(driverInstallMethod('vl53l0x.py')).toBe('copy') // bundled with the part
+    expect(driverInstallMethod('drivers/vl53l0x.py')).toBe('copy') // relative path
+  })
+})
+
+describe('driverDeviceDirs', () => {
+  it('returns each ancestor folder shallowest→deepest', () => {
+    expect(driverDeviceDirs('lib/drivers/x.py')).toEqual(['lib', 'lib/drivers'])
+    expect(driverDeviceDirs('lib/x.py')).toEqual(['lib'])
+    expect(driverDeviceDirs('/lib/x.py')).toEqual(['/lib'])
+    expect(driverDeviceDirs('/lib/drivers/x.py')).toEqual(['/lib', '/lib/drivers'])
+  })
+
+  it('returns no folders for a root-level file', () => {
+    expect(driverDeviceDirs('x.py')).toEqual([])
+    expect(driverDeviceDirs('/x.py')).toEqual([])
+    expect(driverDeviceDirs('')).toEqual([])
+  })
+
+  it('normalises back-slashes', () => {
+    expect(driverDeviceDirs('lib\\drivers\\x.py')).toEqual(['lib', 'lib/drivers'])
+  })
+})
+
+describe('placedPartsNeedingDrivers', () => {
+  const tof: PartDefinition = {
+    id: 'vl53l0x',
+    name: 'VL53L0X ToF',
+    headers: [{ edge: 'bottom', pins: [{ name: 'SDA', type: 'io' }] }],
+    drivers: [{ source: 'vl53l0x.py', target: 'lib/vl53l0x.py', label: 'VL53L0X driver' }]
+  }
+  const plain: PartDefinition = {
+    id: 'led',
+    name: 'LED',
+    headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }]
+  }
+  const libraries = [{ id: 'snakie-basics', parts: [tof, plain] }]
+
+  it('returns the placed parts whose part declares drivers', () => {
+    const robot = {
+      parts: [
+        { id: 'tof1', lib: 'snakie-basics', part: 'vl53l0x' },
+        { id: 'led1', lib: 'snakie-basics', part: 'led' }
+      ]
+    }
+    const needs = placedPartsNeedingDrivers(robot, libraries)
+    expect(needs).toHaveLength(1)
+    expect(needs[0]).toMatchObject({
+      key: 'snakie-basics:vl53l0x',
+      libraryId: 'snakie-basics',
+      partId: 'vl53l0x',
+      label: 'VL53L0X ToF'
+    })
+    expect(needs[0].drivers).toHaveLength(1)
+  })
+
+  it('dedupes the same part placed twice', () => {
+    const robot = {
+      parts: [
+        { id: 'tof1', lib: 'snakie-basics', part: 'vl53l0x' },
+        { id: 'tof2', lib: 'snakie-basics', part: 'vl53l0x' }
+      ]
+    }
+    expect(placedPartsNeedingDrivers(robot, libraries)).toHaveLength(1)
+  })
+
+  it('skips unresolved parts and an empty/absent robot', () => {
+    expect(
+      placedPartsNeedingDrivers({ parts: [{ id: 'x', lib: 'missing', part: 'nope' }] }, libraries)
+    ).toEqual([])
+    expect(placedPartsNeedingDrivers(undefined, libraries)).toEqual([])
+    expect(placedPartsNeedingDrivers({ parts: [] }, libraries)).toEqual([])
   })
 })

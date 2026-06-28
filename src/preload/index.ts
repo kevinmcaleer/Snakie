@@ -800,6 +800,17 @@ export interface PartsWriteResult {
 }
 
 /**
+ * Result of reading a part driver file's source (#184). Mirrors the main-process
+ * `DriverSourceResult` — never rejects, so the install banner shows errors inline.
+ */
+export interface DriverSourceResult {
+  ok: boolean
+  /** The driver file's UTF-8 contents, when `ok`. */
+  contents?: string
+  error?: string
+}
+
+/**
  * Parts Library + Part Editor API (#129 / #130). All filesystem + network
  * access lives in the main process; the renderer drives it through these
  * invokes. `listLibraries` returns every installed library (image assets inlined
@@ -833,6 +844,17 @@ const parts = {
   /** Delete a whole library folder (no-op if it doesn't exist). */
   deleteLibrary: (libraryId: string): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:deleteLibrary', libraryId),
+  /**
+   * Read a part driver file's contents so the renderer can copy it onto the
+   * board (#184). The `source` is a bundled filename inside the part folder or an
+   * `http(s)://` URL (fetched in main). Resolves to {@link DriverSourceResult}.
+   */
+  readDriverSource: (
+    libraryId: string,
+    partId: string,
+    source: string
+  ): Promise<DriverSourceResult> =>
+    ipcRenderer.invoke('parts:readDriverSource', { libraryId, partId, source }),
   /** Fetch the master community registry (optionally from a custom URL). */
   fetchRegistry: (url?: string): Promise<PartRegistry> =>
     ipcRenderer.invoke('parts:fetchRegistry', url),

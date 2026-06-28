@@ -50,3 +50,10 @@ mountingHoles:
   - x: 0.88
     y: 0.5
     diameter: 2.5
+# MicroPython driver this part needs on the board (#184). `source` is a file
+# shipped alongside this parts.yml; `target` is where it lands on the Pico
+# (folders are created as needed). The Board View offers to install it.
+drivers:
+  - source: vl53l0x.py
+    target: lib/vl53l0x.py
+    label: VL53L0X driver

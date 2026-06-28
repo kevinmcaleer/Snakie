@@ -178,6 +178,52 @@ describe('library link (#166) round-trips', () => {
   })
 })
 
+describe('drivers (#184) round-trip', () => {
+  it('keeps source / target / label through normalise + YAML', () => {
+    const part = normalisePart({
+      id: 'tof',
+      name: 'ToF',
+      headers: [{ edge: 'left', pins: [{ name: 'SDA', type: 'io' }] }],
+      drivers: [
+        { source: 'vl53l0x.py', target: 'lib/vl53l0x.py', label: 'VL53L0X driver' },
+        { source: 'github:org/repo', target: 'lib' }
+      ]
+    })
+    expect(part.drivers).toEqual([
+      { source: 'vl53l0x.py', target: 'lib/vl53l0x.py', label: 'VL53L0X driver' },
+      { source: 'github:org/repo', target: 'lib' }
+    ])
+    const back = partFromYaml(partToYaml(part))
+    expect(back.drivers).toEqual(part.drivers)
+    expect(normalisePart(back)).toEqual(part)
+  })
+
+  it('drops driver entries missing source or target', () => {
+    const part = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }],
+      drivers: [
+        { source: '  ', target: 'lib/x.py' },
+        { source: 'x.py', target: '' },
+        { source: 'ok.py', target: 'lib/ok.py' }
+      ]
+    })
+    expect(part.drivers).toEqual([{ source: 'ok.py', target: 'lib/ok.py' }])
+  })
+
+  it('drops the drivers key entirely when none are valid', () => {
+    const part = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }],
+      drivers: [{ source: '', target: '' }]
+    })
+    expect(part.drivers).toBeUndefined()
+    expect(partToYaml(part)).not.toContain('drivers')
+  })
+})
+
 describe('pin rotation + uart capability round-trip', () => {
   it('snaps rotation to 90° and keeps the uart capability through normalise + YAML', () => {
     const part = normalisePart({

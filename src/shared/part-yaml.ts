@@ -20,6 +20,7 @@ import { parse, stringify } from 'yaml'
 import type {
   ComponentShape,
   ComponentShapeKind,
+  DriverFile,
   PartDefinition,
   PartEdge,
   PartFeature,
@@ -186,6 +187,26 @@ function coerceHeader(raw: unknown): PartHeader | null {
   return { edge, pins }
 }
 
+/** Coerce one raw driver entry from YAML into a {@link DriverFile} (or null). */
+function coerceDriver(raw: unknown): DriverFile | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const source = str(r.source)
+  const target = str(r.target)
+  if (source === undefined || target === undefined) return null
+  const driver: DriverFile = { source, target }
+  const label = str(r.label)
+  if (label !== undefined) driver.label = label
+  return driver
+}
+
+/** Serialise a {@link DriverFile} to a tidy plain object for YAML. */
+function driverToObj(d: DriverFile): Record<string, unknown> {
+  const out: Record<string, unknown> = { source: d.source, target: d.target }
+  if (d.label) out.label = d.label
+  return out
+}
+
 /** Serialise a {@link PartPin} to a tidy plain object for YAML. */
 function pinToObj(p: PartPin): Record<string, unknown> {
   const out: Record<string, unknown> = { name: p.name, type: p.type }
@@ -237,6 +258,7 @@ export function partToYaml(part: PartDefinition): string {
     imageLayer: part.imageLayer,
     schematic: part.schematic,
     library: part.library,
+    drivers: part.drivers?.map(driverToObj),
     layerVisibility: part.layerVisibility
   })
   return stringify(obj, { lineWidth: 0 })
@@ -425,6 +447,11 @@ export function partFromYaml(text: string): PartDefinition {
     if (url !== undefined) lib.url = url
     if (docs !== undefined) lib.docs = docs
     if (Object.keys(lib).length) part.library = lib
+  }
+
+  if (Array.isArray(raw.drivers)) {
+    const drivers = raw.drivers.map(coerceDriver).filter((d): d is DriverFile => d !== null)
+    if (drivers.length) part.drivers = drivers
   }
 
   if (raw.layerVisibility && typeof raw.layerVisibility === 'object' && !Array.isArray(raw.layerVisibility)) {

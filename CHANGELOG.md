@@ -18,6 +18,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   toolbar (like shapes/labels) with **Duplicate**, a **Size** control (a diameter
   slider + mm value) and **Delete**. Pins gained a small toolbar too (Duplicate +
   Copy/Paste style).
+- **Install a part's MicroPython drivers from the Board View (#184).** A part can
+  declare the driver file(s) it needs on the board (`drivers:` in `parts.yml` — a
+  `source` + a `target` path, plus an optional label). When such a part is placed
+  on the breadboard, the Board View shows a consent-first banner listing the parts
+  that need a driver with an **Install drivers** action (nothing is copied without
+  your click). Files are copied into place — creating folders as needed — via the
+  device file-write API, and `github:`/`pypi:` specs install with `mip`; the banner
+  shows per-driver progress + errors and waits for a connected board. The bundled
+  `vl53l0x` example part ships a driver to demonstrate it.
 - **Edit shape text inline + on multiple lines.** A shape's caption is now a
   multi-line **Text** field (Enter = new line), and you can **double-click a shape**
   to edit its text right on the canvas. Alignment buttons use proper left/centre/

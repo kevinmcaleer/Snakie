@@ -22,6 +22,7 @@ import {
   STANDARD_PIN_SPACING_MM,
   type ComponentShape,
   type ComponentShapeKind,
+  type DriverFile,
   type ImageLayer,
   type MountingHole,
   type PartDefinition,
@@ -36,6 +37,7 @@ import {
   type PartPackage,
   type PolygonPoint
 } from '../../../shared/part'
+import type { RobotPart } from '../../../shared/robot'
 
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
@@ -848,6 +850,20 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     if (docs !== undefined) lib.docs = docs
     if (Object.keys(lib).length) out.library = lib
   }
+  if (Array.isArray(part.drivers) && part.drivers.length) {
+    const drivers = part.drivers
+      .map((d): DriverFile | null => {
+        const source = text(d?.source)
+        const target = text(d?.target)
+        if (source === undefined || target === undefined) return null
+        const driver: DriverFile = { source, target }
+        const label = text(d?.label)
+        if (label !== undefined) driver.label = label
+        return driver
+      })
+      .filter((d): d is DriverFile => d !== null)
+    if (drivers.length) out.drivers = drivers
+  }
   if (part.layerVisibility && typeof part.layerVisibility === 'object') {
     const lv: NonNullable<PartDefinition['layerVisibility']> = {}
     for (const key of ['pcb', 'image', 'holes', 'pins', 'components'] as const) {
@@ -1014,6 +1030,95 @@ export function resolveBoards(
     if (!byId.has(b.id)) byId.set(b.id, b)
   }
   return [...byId.values()]
+}
+
+// --- Driver install (#184) --------------------------------------------------
+
+/** A placed part that declares MicroPython driver file(s) to install (#184). */
+export interface PartDriverNeed {
+  /** Stable key (`<libraryId>:<partId>`) — dedup + React list key. */
+  key: string
+  /** The library the part comes from. */
+  libraryId: string
+  /** The part id within that library. */
+  partId: string
+  /** Display label for the prompt (the part's name, else its id). */
+  label: string
+  /** The resolved part definition. */
+  part: PartDefinition
+  /** The driver files it needs on the board (non-empty). */
+  drivers: DriverFile[]
+}
+
+/**
+ * Which placed parts on the breadboard declare drivers that need installing
+ * (#184). Resolves each `robot.parts` entry against the installed libraries and
+ * keeps those whose part defines a non-empty `drivers` list. Deduped by
+ * `<lib>:<part>` (the same part placed twice prompts once). Pure + DOM-free, so
+ * the Board View banner and the tests share one source of truth.
+ */
+export function placedPartsNeedingDrivers(
+  robot: { parts?: RobotPart[] } | null | undefined,
+  libraries: { id: string; parts?: PartDefinition[] }[]
+): PartDriverNeed[] {
+  const out: PartDriverNeed[] = []
+  const seen = new Set<string>()
+  for (const rp of robot?.parts ?? []) {
+    const key = `${rp.lib}:${rp.part}`
+    if (seen.has(key)) continue
+    const part = libraries.find((l) => l.id === rp.lib)?.parts?.find((p) => p.id === rp.part)
+    if (!part || !part.drivers || part.drivers.length === 0) continue
+    seen.add(key)
+    out.push({
+      key,
+      libraryId: rp.lib,
+      partId: rp.part,
+      label: part.name || rp.part,
+      part,
+      drivers: part.drivers
+    })
+  }
+  return out
+}
+
+/** How a driver's {@link DriverFile.source} is installed (#184). */
+export type DriverInstallMethod = 'mip' | 'copy'
+
+/**
+ * Classify a driver source into its install mechanism (#184). A `github:` /
+ * `gitlab:` / `pypi:` spec, or a bare micropython-lib package name (no scheme,
+ * no slash, no file extension), installs via `mip`; everything else — an
+ * `http(s)://` URL or a bundled / relative file path — is copied to its target.
+ * Pure.
+ */
+export function driverInstallMethod(source: string): DriverInstallMethod {
+  const s = String(source ?? '').trim()
+  if (/^(github|gitlab|pypi):/i.test(s)) return 'mip'
+  const hasScheme = /:\/\//.test(s)
+  const isBareName = !hasScheme && !s.includes('/') && !/\.(py|mpy)$/i.test(s)
+  return isBareName ? 'mip' : 'copy'
+}
+
+/**
+ * The on-device folder(s) a copied driver's {@link DriverFile.target} needs,
+ * ordered shallowest→deepest so each can be `os.mkdir`'d in turn (MicroPython has
+ * no recursive mkdir). e.g. `"lib/drivers/x.py"` → `["lib", "lib/drivers"]`,
+ * `"/lib/x.py"` → `["/lib"]`, a root-level `"x.py"` → `[]`. Pure.
+ */
+export function driverDeviceDirs(target: string): string[] {
+  const norm = String(target ?? '').trim().replace(/\\/g, '/')
+  const slash = norm.lastIndexOf('/')
+  if (slash <= 0) return [] // no folder, or only a leading "/"
+  const dir = norm.slice(0, slash)
+  const abs = dir.startsWith('/')
+  const segs = dir.split('/').filter((s) => s !== '')
+  const dirs: string[] = []
+  let acc = ''
+  for (const seg of segs) {
+    acc = acc === '' ? (abs ? `/${seg}` : seg) : `${acc}/${seg}`
+    dirs.push(acc)
+  }
+  return dirs
 }
 
 /** Every pin name declared on the part (for ledLabel / schematic pickers). */

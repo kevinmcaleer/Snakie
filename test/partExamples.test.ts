@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'fs'
+import { existsSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { libraryFromYaml, partFromYaml } from '../src/shared/part-yaml'
 import { parseRegistry } from '../src/shared/part-registry'
@@ -25,6 +25,19 @@ describe('example parts library', () => {
     expect(lib.id).toBe('snakie-basics')
     expect(lib.name).toBe('Snakie Basics')
     expect(lib.version).toBe('1.0.0')
+  })
+
+  it('vl53l0x declares a driver (#184) whose bundled file ships alongside it', () => {
+    const part = partFromYaml(read('snakie-basics', 'vl53l0x', 'parts.yml'))
+    expect(part.drivers?.length).toBeGreaterThan(0)
+    for (const d of part.drivers ?? []) {
+      expect(d.target).toMatch(/\S/)
+      // A bundled (bare filename) source must exist next to parts.yml.
+      const bundled = !/:/.test(d.source) && !d.source.includes('/')
+      if (bundled) {
+        expect(existsSync(join(ROOT, 'snakie-basics', 'vl53l0x', d.source))).toBe(true)
+      }
+    }
   })
 
   it.each(['vl53l0x', 'pico-2w'])('%s/parts.yml parses, validates and round-trips', (partId) => {

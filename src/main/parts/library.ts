@@ -337,6 +337,49 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
   }
 }
 
+/** Result of reading a part driver file's source (never throws across IPC). */
+export interface DriverSourceResult {
+  ok: boolean
+  /** The driver file's UTF-8 contents, when `ok`. */
+  contents?: string
+  error?: string
+}
+
+/**
+ * Read a part driver file's contents so the renderer can copy it onto the board
+ * (#184). `source` is either a bare filename shipped inside the part's own folder
+ * (`<parts>/<lib>/<part>/<source>`, path-traversal guarded) or an `http(s)://`
+ * URL fetched HERE in main (the renderer's CSP forbids outbound requests, exactly
+ * like the parts registry fetch). Returns the text; never throws across IPC.
+ */
+export async function readDriverSource(
+  libraryId: string,
+  partId: string,
+  source: string
+): Promise<DriverSourceResult> {
+  const src = String(source ?? '').trim()
+  if (!src) return { ok: false, error: 'Driver source is empty.' }
+  try {
+    if (/^https?:\/\//i.test(src)) {
+      const res = await fetch(src, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) return { ok: false, error: `Fetch ${src} → HTTP ${res.status}` }
+      return { ok: true, contents: await res.text() }
+    }
+    // Otherwise a bundled file inside the part folder. Guard path traversal.
+    const libId = sanitiseId(libraryId)
+    const pId = sanitiseId(partId)
+    if (!libId || !pId) return { ok: false, error: 'Unknown part for driver source.' }
+    const partDir = join(partsDir(), libId, pId)
+    if (!isContainedFile(partDir, src)) {
+      return { ok: false, error: `Unsafe driver path: ${src}` }
+    }
+    const contents = await fsp.readFile(join(partDir, src), 'utf-8')
+    return { ok: true, contents }
+  } catch (err) {
+    return { ok: false, error: (err as Error).message }
+  }
+}
+
 /**
  * DEV workflow (#52/issue-3): promote a microcontroller board part into the
  * "Standard Boards" library so it becomes a shipped default. Writes it into the

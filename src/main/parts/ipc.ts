@@ -27,6 +27,7 @@ import {
   ensureLibrary,
   partsDir,
   promoteToStandard,
+  readDriverSource,
   readLibraries,
   seedStandardLibrary,
   writePart
@@ -93,6 +94,12 @@ export function registerPartsIpc(): void {
   ipcMain.handle('parts:createLibrary', (_e, meta: PartLibrary) => createLibrary(meta))
 
   ipcMain.handle('parts:deleteLibrary', (_e, libraryId: string) => deleteLibrary(libraryId))
+
+  ipcMain.handle(
+    'parts:readDriverSource',
+    (_e, args: { libraryId: string; partId: string; source: string }) =>
+      readDriverSource(args?.libraryId ?? '', args?.partId ?? '', args?.source ?? '')
+  )
 
   ipcMain.handle('parts:fetchRegistry', (_e, url?: string) => fetchRegistry(url || undefined))
 

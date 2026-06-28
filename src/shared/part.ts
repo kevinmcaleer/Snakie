@@ -357,6 +357,15 @@ export interface PartDefinition {
   /** A MicroPython driver/library linked to this part. */
   library?: PartLibraryLink
 
+  // --- Drivers to install on the board (#184) ------------------------------
+  /**
+   * MicroPython driver file(s) this part needs on the board to work. When the
+   * part is placed on the breadboard (Board View), Snakie prompts to install
+   * these onto the connected device — copying explicit files into place (creating
+   * folders as needed) or `mip`-installing a spec. Absent / empty ⇒ no driver.
+   */
+  drivers?: DriverFile[]
+
   // --- Editor display state (persisted) ------------------------------------
   /**
    * Which layers are shown when the part is drawn (Part Editor, Parts Library
@@ -390,6 +399,28 @@ export interface PartLibraryLink {
   url?: string
   /** URL of the library's docs / README. */
   docs?: string
+}
+
+/**
+ * A MicroPython driver FILE a part needs on the board (#184). The Board View
+ * offers to install these when the part is placed on the breadboard.
+ *
+ * The {@link source} decides the install mechanism (see `driverInstallMethod`):
+ *  - a `github:`/`gitlab:`/`pypi:` spec, or a bare micropython-lib package name,
+ *    is installed with `mip` — and {@link target} is then the **install folder**
+ *    (e.g. `"lib"`; omit for the device default `/lib`);
+ *  - an `http(s)://` URL, or a bare filename shipped alongside the part in its
+ *    library folder, is **copied** verbatim — and {@link target} is then the full
+ *    destination **path** on the board (folder + filename, e.g. `"lib/vl53l0x.py"`).
+ *    Any intermediate folders are created.
+ */
+export interface DriverFile {
+  /** Where the driver comes from: a `mip` spec, a URL, or a bundled filename. */
+  source: string
+  /** Where it lands on the board — an install folder (mip) or a full path (copy). */
+  target: string
+  /** Optional human label shown in the install prompt (defaults to the source). */
+  label?: string
 }
 
 /**
