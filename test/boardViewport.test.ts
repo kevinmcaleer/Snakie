@@ -12,6 +12,7 @@ import {
   fitTransform,
   oneToOneTransform,
   labelCounterRotation,
+  zoomAround,
   zoomPercent
 } from '../src/renderer/src/components/board-viewport'
 
@@ -162,6 +163,50 @@ describe('labelCounterRotation (legibility rule #96)', () => {
       const { counter, net } = labelCounterRotation(rot)
       expect(((rot + counter) % 360)).toBe(net)
     }
+  })
+})
+
+describe('zoomAround', () => {
+  it('keeps the anchor point fixed on screen as zoom changes', () => {
+    const v = { panX: 100, panY: 60, zoom: 1 }
+    const ax = 300
+    const ay = 200
+    // The stage points currently under the anchor:
+    const sx = (ax - v.panX) / v.zoom
+    const sy = (ay - v.panY) / v.zoom
+    const next = zoomAround(v, 2, ax, ay)
+    expect(next.zoom).toBe(2)
+    // Those same stage points must still land on the anchor after the zoom.
+    expect(next.panX + sx * next.zoom).toBeCloseTo(ax, 6)
+    expect(next.panY + sy * next.zoom).toBeCloseTo(ay, 6)
+  })
+
+  it('with the anchor at the current top (ay = panY) leaves panY untouched', () => {
+    // The −/+ button case: horizontal centre + top in view → top stays pinned.
+    const v = { panX: 40, panY: 75, zoom: 1 }
+    const next = zoomAround(v, 1.2, 460, v.panY)
+    expect(next.panY).toBeCloseTo(75, 6) // top does not drift
+    expect(next.zoom).toBeCloseTo(1.2, 6)
+  })
+
+  it('zooming in then out about the same anchor round-trips the pan', () => {
+    const v = { panX: 100, panY: 60, zoom: 1 }
+    const back = zoomAround(zoomAround(v, 2, 300, 200), 1, 300, 200)
+    expect(back.panX).toBeCloseTo(v.panX, 6)
+    expect(back.panY).toBeCloseTo(v.panY, 6)
+    expect(back.zoom).toBeCloseTo(1, 6)
+  })
+
+  it('clamps the resulting zoom to the range', () => {
+    expect(zoomAround({ panX: 0, panY: 0, zoom: MAX_ZOOM }, 999, 100, 100).zoom).toBe(MAX_ZOOM)
+    expect(zoomAround({ panX: 0, panY: 0, zoom: MIN_ZOOM }, 0.001, 100, 100).zoom).toBe(MIN_ZOOM)
+  })
+
+  it('is a no-op on pan when the zoom does not change', () => {
+    const v = { panX: 12, panY: 34, zoom: 1.5 }
+    const same = zoomAround(v, 1.5, 200, 200)
+    expect(same.panX).toBeCloseTo(12, 6)
+    expect(same.panY).toBeCloseTo(34, 6)
   })
 })
 

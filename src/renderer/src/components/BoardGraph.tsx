@@ -30,11 +30,11 @@ import {
   type PadPoint
 } from './board-layout'
 import {
-  clampZoom,
   fitTransform,
   labelCounterRotation,
   oneToOneTransform,
   rotateCW,
+  zoomAround,
   zoomIn as zoomInTransform,
   zoomOut as zoomOutTransform,
   zoomPercent,
@@ -122,6 +122,8 @@ export interface BoardGraphProps {
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
 const STORAGE_KEY = 'snakie.board.id'
+/** localStorage key remembering the last-used view tab (graph / lifelike / schematic). */
+const VIEW_KEY = 'snakie.board.view'
 
 // --- Node-graph geometry ----------------------------------------------------
 // The view has TWO regions in one SVG coordinate space: a vertical column of
@@ -328,7 +330,26 @@ export function BoardGraph({
   // the Life-like / Schematic wiring canvas. Wiring is only available when the
   // host supplies a robot definition + a persist callback (the board window).
   const wiringEnabled = !!(robot && onChangeRobot)
-  const [viewType, setViewType] = useState<'graph' | WiringRenderMode>('graph')
+  // Default to the life-like Breadboard view so the full Board View matches the
+  // main window's mini board preview (both draw the authored part body); the
+  // node-graph + schematic are one tab away. The last-used tab is remembered.
+  const [viewType, setViewType] = useState<'graph' | WiringRenderMode>(() => {
+    try {
+      const saved = window.localStorage.getItem(VIEW_KEY)
+      if (saved === 'graph' || saved === 'lifelike' || saved === 'schematic') return saved
+    } catch {
+      // Ignore storage read failures (disabled / quota).
+    }
+    return 'lifelike'
+  })
+  const selectView = useCallback((v: 'graph' | WiringRenderMode): void => {
+    setViewType(v)
+    try {
+      window.localStorage.setItem(VIEW_KEY, v)
+    } catch {
+      // Ignore storage write failures (disabled / quota).
+    }
+  }, [])
   const [dockOpen, setDockOpen] = useState(true)
   // If wiring gets disabled (e.g. props change), never strand a wiring view.
   const effectiveView = wiringEnabled ? viewType : 'graph'
@@ -532,17 +553,20 @@ export function BoardGraph({
     setIsOneToOne(false)
   }, [hasRows, vp.w, vp.h, stageW, stageH, rotation, def.id])
 
+  // −/+ buttons zoom about the horizontal centre while keeping the current top in
+  // view (anchor Y = the stage's current top), so the board stays centred and its
+  // top stays on screen instead of the view ballooning out of the top-left corner.
   const onZoomIn = useCallback((): void => {
     touchedRef.current = true
-    setView((v) => ({ ...v, zoom: zoomInTransform(v.zoom) }))
+    setView((v) => zoomAround(v, zoomInTransform(v.zoom), vp.w > 0 ? vp.w / 2 : v.panX, v.panY))
     setIsOneToOne(false)
-  }, [])
+  }, [vp.w])
 
   const onZoomOut = useCallback((): void => {
     touchedRef.current = true
-    setView((v) => ({ ...v, zoom: zoomOutTransform(v.zoom) }))
+    setView((v) => zoomAround(v, zoomOutTransform(v.zoom), vp.w > 0 ? vp.w / 2 : v.panX, v.panY))
     setIsOneToOne(false)
-  }, [])
+  }, [vp.w])
 
   const onFit = useCallback((): void => {
     touchedRef.current = true
@@ -575,13 +599,17 @@ export function BoardGraph({
     }
   }, [rotation, vp.w, vp.h, stageW, stageH])
 
-  // Wheel-zoom (inside the fixed viewport) — a nice-to-have on top of the buttons.
+  // Wheel-zoom (inside the fixed viewport) — anchored at the cursor so the spot
+  // under the pointer stays put (the natural "zoom where you point").
   const onWheel = useCallback((e: React.WheelEvent): void => {
     touchedRef.current = true
+    const rect = canvasRef.current?.getBoundingClientRect()
+    const ax = rect ? e.clientX - rect.left : vp.w / 2
+    const ay = rect ? e.clientY - rect.top : vp.h / 2
     const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
-    setView((v) => ({ ...v, zoom: clampZoom(v.zoom * factor) }))
+    setView((v) => zoomAround(v, v.zoom * factor, ax, ay))
     setIsOneToOne(false)
-  }, [])
+  }, [vp.w, vp.h])
 
   // Drag-to-pan on empty canvas (pointer drag). Clicks on node cards / the
   // control cluster don't start a pan (their elements are excluded below).
@@ -643,7 +671,7 @@ export function BoardGraph({
                 role="tab"
                 aria-selected={effectiveView === id}
                 className={`boardgraph__viewtab ${effectiveView === id ? 'is-active' : ''}`}
-                onClick={() => setViewType(id)}
+                onClick={() => selectView(id)}
               >
                 {label}
               </button>

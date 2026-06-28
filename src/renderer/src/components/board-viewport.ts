@@ -39,6 +39,29 @@ export function zoomOut(z: number): number {
   return clampZoom(z / ZOOM_STEP)
 }
 
+/**
+ * Re-pan so the viewport point `(ax, ay)` (CSS px, relative to the clip box)
+ * stays put as the zoom goes from `view.zoom` to `next` (clamped). The stage
+ * transform is `translate(pan) scale(zoom) rotate(rot)` about origin (0,0), so
+ * the rotated-stage point under the anchor is invariant of zoom — anchoring
+ * there is what makes the view zoom *toward* a chosen point instead of ballooning
+ * out of the stage's top-left corner (the old bug: only `zoom` changed, so the
+ * pinned origin sat at the top-left).
+ *
+ * For the −/+ buttons we anchor at the horizontal centre and the current top
+ * (`ay = view.panY`), which keeps the board centred with its top in view; for the
+ * wheel we anchor at the cursor.
+ */
+export function zoomAround(view: ViewTransform, next: number, ax: number, ay: number): ViewTransform {
+  const zoom = clampZoom(next)
+  const k = view.zoom > 0 ? zoom / view.zoom : 1
+  return {
+    panX: ax - (ax - view.panX) * k,
+    panY: ay - (ay - view.panY) * k,
+    zoom
+  }
+}
+
 /** Normalise any (possibly negative / >360) angle to one of 0 | 90 | 180 | 270. */
 export function normaliseRotation(deg: number): 0 | 90 | 180 | 270 {
   const r = (((Math.round(deg / 90) * 90) % 360) + 360) % 360
