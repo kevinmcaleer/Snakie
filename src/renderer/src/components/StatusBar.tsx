@@ -7,7 +7,12 @@ import { FirmwareFlasher } from './FirmwareFlasher'
 import { CoffeeLink } from './CoffeeLink'
 import { updateButtonView } from './updateButton'
 import { liveWarningVisible } from './instrument-host'
-import { micropythonVersionFromBanner, newerFirmware } from './firmware-version'
+import {
+  lastMicropythonBanner,
+  micropythonVersionFromBanner,
+  firmwareFamilyFromBanner,
+  newerFirmware
+} from './firmware-version'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
 
@@ -179,7 +184,11 @@ export function StatusBar({
     let done = false
     const run = async (): Promise<void> => {
       if (done) return
-      const v = micropythonVersionFromBanner(consoleStore.getAll())
+      // Read the MOST-RECENT banner only: the console buffer still holds an
+      // earlier device's banner (e.g. a micro:bit unplugged just before), so
+      // both the version AND the family must come from the live device's line.
+      const banner = lastMicropythonBanner(consoleStore.getAll())
+      const v = micropythonVersionFromBanner(banner ?? '')
       if (!v) return // no banner yet — wait for device output
       done = true
       if (!catalog) {
@@ -189,7 +198,11 @@ export function StatusBar({
           return // offline / catalog unreachable — degrade silently
         }
       }
-      if (alive) setFwUpdate(newerFirmware(v, catalog))
+      // Scope the "newer?" check to the connected device's own family so a
+      // micro:bit's 2.x build is never offered to an rp2/esp device (and vice
+      // versa) — those ports run independent version lines.
+      const family = firmwareFamilyFromBanner(banner)
+      if (alive) setFwUpdate(newerFirmware(v, catalog, family))
     }
     void run() // seed from any banner already in the console
     const decoder = new TextDecoder()
