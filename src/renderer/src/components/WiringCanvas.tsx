@@ -22,7 +22,8 @@ import type { PartDefinition, PartLibraryWithParts } from '../../../preload/inde
 import type { PartPinCapability } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { capabilityBadges, partBodyBox, PartBody, pinOutwardDir } from './part-body'
-import { serializeLiveSvg, exportSvgString, type ExportFmt } from './svg-export'
+import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
+import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
@@ -830,6 +831,22 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     })
   }
 
+  // A safe, lower-cased file stem from the project name (shared with image export).
+  const fileBase = (): string =>
+    (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() ||
+    'board'
+
+  // Export a generated documentation table as Markdown (#142 BOM, #143 pinouts).
+  // Driven by the Robot Definition File + the resolved library parts.
+  const doExportMarkdown = (kind: 'bom' | 'pinouts'): void => {
+    setExportOpen(false)
+    const md =
+      kind === 'bom'
+        ? bomMarkdown(robot, resolvePart, { mcu: boardPart ?? null, mcuName: boardDef?.name })
+        : pinoutMarkdown(robot, resolvePart, { mcuName: boardDef?.name })
+    downloadBlob(new Blob([md], { type: 'text/markdown;charset=utf-8' }), `${fileBase()}-${kind}.md`)
+  }
+
   // Close the export menu on an outside click.
   useEffect(() => {
     if (!exportOpen) return
@@ -1184,6 +1201,13 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                   </button>
                   <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExport('pdf')}>
                     PDF document
+                  </button>
+                  <span className="wc__export-sep" role="separator" />
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExportMarkdown('bom')}>
+                    BOM (Markdown)
+                  </button>
+                  <button type="button" role="menuitem" className="wc__export-item" onClick={() => doExportMarkdown('pinouts')}>
+                    Pinouts (Markdown)
                   </button>
                 </div>
               )}

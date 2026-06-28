@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Generate project docs from the Board View — BOM & pinouts (#127/#142/#143).**
+  The Export menu now also produces two portable **Markdown** documents from the
+  project's `robot.yml`: a **Bill of Materials** (microcontroller first, then parts
+  grouped by type with quantities + the metadata from each `parts.yml`) and a
+  **pinouts table** (MCU-pin-first rows for board wires, with part↔part wires
+  listed separately). Both save as `<project>-bom.md` / `<project>-pinouts.md`.
 - **Flash MicroPython to the BBC micro:bit (v1 & v2).** The firmware flasher now
   **detects a connected micro:bit** (the `MICROBIT` DAPLink drive, reading
   `DETAILS.TXT` to tell v1 from v2) and flashes the **latest MicroPython** by

@@ -134,6 +134,13 @@
   background: rgba(255, 255, 255, 0.07);
 }
 
+/* Divider between the image exports and the Markdown (BOM / pinouts) exports. */
+.wc__export-sep {
+  height: 1px;
+  margin: 0.2rem 0.1rem;
+  background: #2c2e33;
+}
+
 /* Selected-part ring + mini-toolbar (#176). */
 .wc__sel-ring {
   fill: none;

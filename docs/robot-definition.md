@@ -80,6 +80,23 @@ view.)
 Beneath the canvas, every wire is listed (from · to · net · colour), with a
 colour picker and a delete button — the same data that lives in `robot.yml`.
 
+## Generated documentation (BOM + pinouts)
+
+The Board View can turn a project into two portable **Markdown** documents you can
+paste straight into a README — from the **Export** menu on the zoom toolbar:
+
+- **BOM (Markdown)** — a Bill of Materials. The microcontroller is listed first,
+  then every placed part **grouped by type with a quantity**. Columns: Qty · Part ·
+  Description · Manufacturer · Family · Part #, filled from each part's `parts.yml`
+  (missing fields show `—`). Saved as `<project>-bom.md`.
+- **Pinouts (Markdown)** — a generated pin-assignment table. Wires that touch the
+  board become **MCU-pin-first** rows (sorted GPIO-number first, then named pins
+  like `3V3`/`GND`) with columns MCU Pin · Part · Part Pin · Net; any part↔part
+  wires follow under an **Other connections** table. Saved as `<project>-pinouts.md`.
+
+Both are generated purely from `robot.yml` + the resolved library parts
+(`src/shared/robot-docs.ts`), so they always match what's on the canvas.
+
 ## See also
 
 - [Parts Library](parts-library.md) / [Part Editor](part-editor.md) — where the
