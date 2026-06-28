@@ -20,13 +20,22 @@ import { app, Menu, type MenuItemConstructorOptions } from 'electron'
  *
  * @param onCheckForUpdates handler for the "Check for Updates…" item.
  */
-export function buildAppMenu(onCheckForUpdates: () => void): Menu {
+export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => void): Menu {
   const isMac = process.platform === 'darwin'
   const appName = app.name
 
   const checkForUpdatesItem: MenuItemConstructorOptions = {
     label: 'Check for Updates…',
     click: () => onCheckForUpdates()
+  }
+
+  // The Board View is a separate (frameless) window, so it isn't reliably picked
+  // up by the macOS auto window-list — list it explicitly so it's reachable from
+  // the keyboard / Window menu (#185).
+  const boardViewItem: MenuItemConstructorOptions = {
+    label: 'Board View',
+    accelerator: 'CmdOrCtrl+Shift+B',
+    click: () => onOpenBoard()
   }
 
   const template: MenuItemConstructorOptions[] = [
@@ -95,6 +104,8 @@ export function buildAppMenu(onCheckForUpdates: () => void): Menu {
       submenu: [
         { role: 'minimize' },
         { role: 'zoom' },
+        { type: 'separator' },
+        boardViewItem,
         ...(isMac
           ? ([
               { type: 'separator' },
@@ -102,7 +113,7 @@ export function buildAppMenu(onCheckForUpdates: () => void): Menu {
               { type: 'separator' },
               { role: 'window' }
             ] as MenuItemConstructorOptions[])
-          : ([{ role: 'close' }] as MenuItemConstructorOptions[]))
+          : ([{ type: 'separator' }, { role: 'close' }] as MenuItemConstructorOptions[]))
       ]
     },
     {
@@ -123,6 +134,6 @@ export function buildAppMenu(onCheckForUpdates: () => void): Menu {
  * Build the application menu and install it as the global menu. Called once at
  * startup from `app.whenReady`.
  */
-export function setupAppMenu(onCheckForUpdates: () => void): void {
-  Menu.setApplicationMenu(buildAppMenu(onCheckForUpdates))
+export function setupAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => void): void {
+  Menu.setApplicationMenu(buildAppMenu(onCheckForUpdates, onOpenBoard))
 }

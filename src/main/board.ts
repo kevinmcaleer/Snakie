@@ -144,19 +144,27 @@ function openBoardWindow(getMainWindow: () => BrowserWindow | null): void {
   }
 }
 
+/** Resolver for the main editor window, captured at IPC registration so the
+ *  app menu's "Board View" item can open/focus the board window too (#185). */
+let resolveMainWindow: () => BrowserWindow | null = () => null
+
+/**
+ * Open (or focus) the Board View window and tell the main renderer it's open.
+ * Shared by the `board:open` IPC and the application menu's Window item so any
+ * entry point streams the active file (mini-board open used to leave it blank).
+ */
+export function openBoardView(): void {
+  openBoardWindow(resolveMainWindow)
+  resolveMainWindow()?.webContents.send('board:opened')
+}
+
 /**
  * Register the Board View IPC handlers. `getMainWindow` resolves the live
  * editor window (used to notify it when the board window closes).
  */
 export function registerBoardIpc(getMainWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('board:open', () => {
-    openBoardWindow(getMainWindow)
-    // Tell the main renderer the window is open (no matter who opened it — toolbar
-    // OR the mini board's open button) so it marks the board opened and streams the
-    // active file. Without this, opening from the mini board left the full viewer
-    // blank ("Open a Python file…") because no source was ever relayed.
-    getMainWindow()?.webContents.send('board:opened')
-  })
+  resolveMainWindow = getMainWindow
+  ipcMain.handle('board:open', () => openBoardView())
 
   // Close the window from the renderer (its own ✕/Esc, or the toolbar toggle).
   // The window's own `closed` handler resets state + notifies the main renderer.

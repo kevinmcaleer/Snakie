@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Board View in the Window menu (#185).** The (frameless) Board View window wasn't
+  reliably listed by the OS, so it's now an explicit **Window → Board View** item
+  (⌘/Ctrl+Shift+B) that opens or focuses it — keyboard-reachable like any window.
 - **Styled text on Part Editor labels & shapes.** Free text labels and a shape's
   caption can now be **bold / italic / underlined**, sized, **coloured**, and
   **aligned** (left / centre / right); shape captions can also **wrap to the shape**

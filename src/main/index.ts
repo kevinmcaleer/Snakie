@@ -11,7 +11,7 @@ import { registerFirmwareIpc } from './firmware/ipc'
 import { registerGitIpc } from './git/ipc'
 import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater, checkForUpdatesManual } from './updater'
-import { registerBoardIpc, disposeBoard } from './board'
+import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
@@ -156,7 +156,7 @@ app.whenReady().then(() => {
   // Build the application menu (issue #89). Its "Check for Updates…" item and
   // the clickable status-bar version both invoke the same user-initiated check.
   // Installed after `registerUpdater` so `checkForUpdatesManual` is assigned.
-  setupAppMenu(() => void checkForUpdatesManual())
+  setupAppMenu(() => void checkForUpdatesManual(), openBoardView)
 
   // Register the LLM (Claude) chat layer. All Anthropic API calls happen in the
   // main process; deltas stream back to whichever window is currently live.
