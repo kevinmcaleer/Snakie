@@ -254,6 +254,14 @@ export function PartEditor({
   const [selection, setSelection] = useState<CanvasSelection>(null)
   const [fitSignal, setFitSignal] = useState(0)
   const [status, setStatus] = useState<Status | null>(null)
+  // Auto-dismiss the status notification (e.g. "Saved …") so it doesn't linger
+  // forever; errors hang around a bit longer than confirmations. Each new status
+  // resets the timer via the effect cleanup.
+  useEffect(() => {
+    if (!status) return
+    const t = setTimeout(() => setStatus(null), status.kind === 'error' ? 8000 : 4000)
+    return () => clearTimeout(t)
+  }, [status])
   const [detailsOpen, setDetailsOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   // The content + version of the last save (or the opened part), so a save can
