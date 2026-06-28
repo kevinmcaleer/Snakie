@@ -88,6 +88,8 @@ export const COMPONENT_SHAPE_LABEL: Record<ComponentShapeKind, string> = {
 export const DEFAULT_SHAPE_FILL = '#1c2227'
 export const DEFAULT_SHAPE_STROKE = '#8a8f96'
 export const DEFAULT_SHAPE_STROKE_WIDTH = 1
+/** Default rectangle corner radius (viewBox units) when a shape sets none. */
+export const DEFAULT_SHAPE_CORNER = 3
 
 /** The effective pad shape for a pin (honours the legacy `castellated` flag). */
 export function pinShapeOf(pin: PartPin): PartPinShape {
@@ -268,6 +270,9 @@ function normaliseShape(s: ComponentShape): ComponentShape {
   if (typeof s.rotation === 'number' && Number.isFinite(s.rotation)) {
     const r = ((((Math.round(s.rotation / 90) * 90) % 360) + 360) % 360)
     if (r) out.rotation = r
+  }
+  if (kind === 'rect' && typeof s.cornerRadius === 'number' && Number.isFinite(s.cornerRadius)) {
+    out.cornerRadius = clamp(s.cornerRadius, 0, 60)
   }
   return out
 }

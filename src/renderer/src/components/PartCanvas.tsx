@@ -8,6 +8,7 @@ import {
   type WheelEvent
 } from 'react'
 import {
+  DEFAULT_SHAPE_CORNER,
   DEFAULT_SHAPE_FILL,
   DEFAULT_SHAPE_STROKE,
   DEFAULT_SHAPE_STROKE_WIDTH,
@@ -1806,7 +1807,7 @@ export function PartCanvas({
             } else {
               const w = (s.w ?? 0.2) * box.w
               const h = (s.h ?? 0.15) * box.h
-              el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={3} fill={fill} stroke={stroke} strokeWidth={sw} />
+              el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={s.cornerRadius ?? 3} fill={fill} stroke={stroke} strokeWidth={sw} />
               lcx = px(s.x) + w / 2
               lcy = py(s.y) + h / 2
             }
@@ -2077,6 +2078,32 @@ export function PartCanvas({
                             aria-label="Border colour"
                           />
                         </div>
+                        {shape.kind === 'rect' && (
+                          <div className="pcv__ctb-row">
+                            <span>Corner</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={40}
+                              step={1}
+                              value={shape.cornerRadius ?? DEFAULT_SHAPE_CORNER}
+                              onChange={(e) => updateShape(sel.index, { cornerRadius: Number(e.target.value) })}
+                              aria-label="Corner radius"
+                            />
+                            <input
+                              type="number"
+                              min={0}
+                              max={40}
+                              step={1}
+                              className="pcv__ctb-num"
+                              value={shape.cornerRadius ?? DEFAULT_SHAPE_CORNER}
+                              onChange={(e) =>
+                                updateShape(sel.index, { cornerRadius: Math.max(0, Number(e.target.value) || 0) })
+                              }
+                              aria-label="Corner radius value"
+                            />
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

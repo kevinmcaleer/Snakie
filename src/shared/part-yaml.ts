@@ -148,6 +148,8 @@ function coerceShape(raw: unknown): ComponentShape | null {
   if (z !== undefined) shape.z = z
   const rotation = num(r.rotation)
   if (rotation) shape.rotation = ((((Math.round(rotation / 90) * 90) % 360) + 360) % 360) || undefined
+  const cornerRadius = num(r.cornerRadius)
+  if (cornerRadius !== undefined) shape.cornerRadius = Math.max(0, cornerRadius)
   return shape
 }
 

@@ -256,6 +256,24 @@ describe('component rotation round-trip', () => {
     expect(normalisePart(back)).toEqual(part)
   })
 
+  it('round-trips a rect corner radius, including an explicit 0 (sharp)', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', gpio: 0 }] }],
+      shapes: [
+        { kind: 'rect', x: 0.1, y: 0.1, w: 0.2, h: 0.2, cornerRadius: 12 },
+        { kind: 'rect', x: 0.4, y: 0.1, w: 0.2, h: 0.2, cornerRadius: 0 }
+      ]
+    })
+    expect(part.shapes?.[0].cornerRadius).toBe(12)
+    expect(part.shapes?.[1].cornerRadius).toBe(0) // explicit sharp corners survive
+    const back = partFromYaml(partToYaml(part))
+    expect(back.shapes?.[0].cornerRadius).toBe(12)
+    expect(back.shapes?.[1].cornerRadius).toBe(0)
+    expect(normalisePart(back)).toEqual(part)
+  })
+
   it('drops a 0° (and full-turn 360°) rotation rather than persisting it', () => {
     const part = normalisePart({
       id: 'p',

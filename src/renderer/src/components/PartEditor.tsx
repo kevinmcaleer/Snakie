@@ -1318,6 +1318,16 @@ function SelectionInspector({
             {shp.kind === 'rect' && num('h', shp.h ?? 0.15, (v) => upd({ h: v }))}
             {shp.kind === 'circle' && num('r', shp.r ?? 0.08, (v) => upd({ r: v }))}
           </div>
+          {shp.kind === 'rect' && (
+            <SliderField
+              label="Corner radius"
+              value={shp.cornerRadius ?? 3}
+              min={0}
+              max={40}
+              step={1}
+              onChange={(v) => upd({ cornerRadius: v })}
+            />
+          )}
           {shp.kind === 'polygon' && (
             <p className="pe__hint">Drag the polygon vertices on the canvas to reshape it.</p>
           )}

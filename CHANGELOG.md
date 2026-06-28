@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Adjustable rectangle corner radius in the Part Editor.** Rectangle shapes were
+  always drawn with rounded corners; you can now set the **corner radius** (down to
+  0 for sharp corners) from a slider + value box in the **Properties** panel and in
+  the selected-shape mini-toolbar's **Border** dropdown. Round-trips in `parts.yml`.
 - **Generate project docs from the Board View — BOM & pinouts (#127/#142/#143).**
   The Export menu now also produces two portable **Markdown** documents from the
   project's `robot.yml`: a **Bill of Materials** (microcontroller first, then parts

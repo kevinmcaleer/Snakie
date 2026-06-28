@@ -186,6 +186,9 @@ export interface ComponentShape {
   z?: number
   /** Clockwise rotation in degrees (0/90/180/270), about the shape's centre. */
   rotation?: number
+  /** Rectangle corner radius in canvas (viewBox) units; `0` = sharp corners.
+   *  Absent ⇒ the legacy default (3). Only meaningful when `kind === 'rect'`. */
+  cornerRadius?: number
 }
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */

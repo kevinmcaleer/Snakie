@@ -657,7 +657,7 @@ export function PartBody({
           } else {
             const w = (s.w ?? 0.2) * box.w
             const h = (s.h ?? 0.15) * box.h
-            el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={3} fill={fill} stroke={stroke} strokeWidth={sw} />
+            el = <rect x={px(s.x)} y={py(s.y)} width={w} height={h} rx={s.cornerRadius ?? 3} fill={fill} stroke={stroke} strokeWidth={sw} />
             lcx = px(s.x) + w / 2
             lcy = py(s.y) + h / 2
           }
