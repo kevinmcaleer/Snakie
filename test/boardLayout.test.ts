@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
+  authoredPads,
   boardBox,
   busLabel,
+  edgeFromXY,
   enumerateBoardPads,
   layoutPads,
   mcuSymbolLayout,
@@ -431,5 +433,65 @@ describe('mcuSymbolLayout — power rails merge by label', () => {
     // Power rails go on top; signals keep their edge.
     expect(v3.every((t) => t.side === 'top')).toBe(true)
     expect(lay.terminals.find((t) => t.pad.label === 'GP0')?.side).toBe('left')
+  })
+})
+
+describe('edgeFromXY', () => {
+  it('classifies left / right by x first', () => {
+    expect(edgeFromXY(0.1, 0.5)).toBe('left')
+    expect(edgeFromXY(0.9, 0.5)).toBe('right')
+  })
+  it('falls back to top / bottom by y in the middle band', () => {
+    expect(edgeFromXY(0.5, 0.2)).toBe('top')
+    expect(edgeFromXY(0.5, 0.8)).toBe('bottom')
+  })
+})
+
+describe('authoredPads', () => {
+  const BOX: BoardBox = { x: 100, y: 200, w: 300, h: 400 }
+
+  it('uses each pad’s real x/y (× box) when the board carries positions', () => {
+    const def: BoardDefinition = {
+      id: 'authored',
+      name: 'Authored',
+      mcu: 'X',
+      aspect: 1,
+      headers: [
+        { edge: 'left', pins: [{ gpio: 0, label: 'GP0', x: 0.1, y: 0.25 }] },
+        { edge: 'right', pins: [{ gpio: 1, label: 'GP1', x: 0.9, y: 0.75 }] }
+      ]
+    }
+    const pads = authoredPads(def, BOX)
+    // Placed with the SAME formula PartBody draws pins (box + n·box).
+    expect(pads[0]).toMatchObject({ x: 100 + 0.1 * 300, y: 200 + 0.25 * 400, edge: 'left' })
+    expect(pads[1]).toMatchObject({ x: 100 + 0.9 * 300, y: 200 + 0.75 * 400, edge: 'right' })
+  })
+
+  it('falls back to the edge-laid layoutPads when no pad has a position', () => {
+    const def: BoardDefinition = {
+      id: 'builtin',
+      name: 'Builtin',
+      mcu: 'X',
+      aspect: 1,
+      headers: [{ edge: 'left', pins: [{ gpio: 0, label: 'GP0' }, { gpio: 1, label: 'GP1' }] }]
+    }
+    expect(authoredPads(def, BOX)).toEqual(layoutPads(def, BOX))
+  })
+
+  it('mixes positioned + edge-laid pads index-for-index', () => {
+    const def: BoardDefinition = {
+      id: 'mixed',
+      name: 'Mixed',
+      mcu: 'X',
+      aspect: 1,
+      headers: [
+        { edge: 'left', pins: [{ gpio: 0, label: 'GP0', x: 0.2, y: 0.5 }, { gpio: 1, label: 'GP1' }] }
+      ]
+    }
+    const edgeLaid = layoutPads(def, BOX)
+    const pads = authoredPads(def, BOX)
+    // First pad honours its x/y; the position-less second falls back to edge-laid.
+    expect(pads[0]).toMatchObject({ x: 100 + 0.2 * 300, y: 200 + 0.5 * 400 })
+    expect(pads[1]).toEqual(edgeLaid[1])
   })
 })

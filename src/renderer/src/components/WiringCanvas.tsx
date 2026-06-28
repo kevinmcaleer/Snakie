@@ -59,9 +59,12 @@ const WC_MAX_ZOOM = 3
 const WC_ZOOM_STEP = 1.2
 const clampScale = (s: number): number => Math.min(WC_MAX_ZOOM, Math.max(WC_MIN_ZOOM, s))
 
-// Life-like body footprints (fitted by aspect within these).
-const BOARD_BODY_W = 190
-const BOARD_BODY_H = 300
+// Life-like body footprints (fitted by aspect within these). Exported so the
+// node-graph board view sizes the board's PartBody box IDENTICALLY — PartBody
+// draws pads at a fixed pixel size, so a different box would make the
+// castellations look a different relative size between the two views.
+export const BOARD_BODY_W = 190
+export const BOARD_BODY_H = 300
 const PART_BODY_W = 140
 
 // Real-world scale for the breadboard: parts are drawn at their REAL dimensions

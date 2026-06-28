@@ -17,9 +17,9 @@ import {
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import {
+  authoredPads,
   boardBox,
   busLabel,
-  layoutPads,
   ledPoint,
   nodeSide,
   padForToken,
@@ -29,6 +29,7 @@ import {
   type BoardBox,
   type PadPoint
 } from './board-layout'
+import { PartBody, partBodyBox } from './part-body'
 import {
   fitTransform,
   labelCounterRotation,
@@ -46,7 +47,7 @@ import {
   parseProbeOutput,
   type LiveValue
 } from './board-values'
-import { WiringCanvas, type WiringRenderMode } from './WiringCanvas'
+import { WiringCanvas, BOARD_BODY_W, BOARD_BODY_H, type WiringRenderMode } from './WiringCanvas'
 import { PartsPanel } from './PartsPanel'
 import type { RobotDefinition } from '../../../shared/robot'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
@@ -432,21 +433,25 @@ export function BoardGraph({
   const nodeBottom = conns.length > 0 ? rowY(conns.length - 1) + NODE_H / 2 : FIRST_Y
   const nodeMidY = (FIRST_Y + nodeBottom) / 2
 
-  // The PHYSICAL board: fit the outline from the board's aspect and lay out
-  // EVERY pad of every header (left/right/top/bottom) at its real edge position.
-  // Reactive to `def`, so switching board in the picker redraws the whole pinout.
-  const box = useMemo<BoardBox>(
-    () =>
-      boardBox(def.aspect, {
-        cx: BOARD_REGION_CX,
-        // Centre the board vertically on the node column so the wires read.
-        cy: Math.max(FIRST_Y + BOARD_MAX_H / 2 - 10, nodeMidY),
-        maxW: BOARD_MAX_W,
-        maxH: BOARD_MAX_H
-      }),
-    [def.aspect, nodeMidY]
-  )
-  const pads = useMemo<PadPoint[]>(() => layoutPads(def, box), [def, box])
+  // The PHYSICAL board: fit the outline from the board's aspect and lay out EVERY
+  // pad at its REAL position — the authored part body's pin x/y when the board is
+  // an authored Microcontroller part (so the node-graph matches the Part Editor /
+  // mini view), else evenly along each header's edge. Reactive to `def`, so
+  // switching board in the picker redraws the whole pinout.
+  const box = useMemo<BoardBox>(() => {
+    // Centre the board vertically on the node column so the wires read.
+    const cy = Math.max(FIRST_Y + BOARD_MAX_H / 2 - 10, nodeMidY)
+    if (boardPart) {
+      // Size the authored body's box EXACTLY like the breadboard view
+      // (`partBodyBox` with the SAME footprint constants), then position it in the
+      // board region. PartBody draws pads at a fixed pixel size, so matching the
+      // box is what makes the castellations identical across the two views.
+      const nb = partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      return { x: BOARD_REGION_CX - nb.w / 2, y: cy - nb.h / 2, w: nb.w, h: nb.h }
+    }
+    return boardBox(def.aspect, { cx: BOARD_REGION_CX, cy, maxW: BOARD_MAX_W, maxH: BOARD_MAX_H })
+  }, [def.aspect, boardPart, nodeMidY])
+  const pads = useMemo<PadPoint[]>(() => authoredPads(def, box), [def, box])
 
   // One row per connection: its node card + its FIRST pin's REAL pad coordinate
   // (which may be on any edge). A bus's remaining pins become faint extra pads.
@@ -498,6 +503,15 @@ export function BoardGraph({
     }
     return m
   }, [rows, pads])
+
+  // Same usage, shaped for PartBody's `pinVariables` (keyed by pad/flat index), so
+  // the authored body highlights the code variable on each used pin — exactly like
+  // the mini board view.
+  const pinVars = useMemo<Map<number, { variable: string; color: string }>>(() => {
+    const m = new Map<number, { variable: string; color: string }>()
+    for (const [idx, v] of usedByCode) m.set(idx, { variable: v.label, color: v.color })
+    return m
+  }, [usedByCode])
 
   // Stage extent spans BOTH the node column and the physical board (with its
   // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
@@ -880,15 +894,31 @@ export function BoardGraph({
                 <BoardDefs def={def} />
 
                 {/* The physical board (full pinout) UNDER the wires + dots so the
-                    coloured noodles read on top of the green PCB. */}
-                <Board
-                  def={def}
-                  box={box}
-                  pads={pads}
-                  usedPadKeys={usedPadKeys}
-                  ledLit={ledLit}
-                  rotation={rotation}
-                />
+                    coloured noodles read on top of it. When the board is an
+                    authored Microcontroller part, draw its REAL life-like body
+                    (image + shapes + pins) — identical to the mini board view and
+                    the Part Editor — so the node-graph no longer shows a stylised
+                    pinout. The noodles target `pads` (the authored pin x/y), which
+                    coincide with PartBody's pin centres. Built-in boards with no
+                    authored body fall back to the stylised <Board>. */}
+                {boardPart ? (
+                  <PartBody
+                    part={boardPart}
+                    box={box}
+                    boxedPins
+                    pinVariables={pinVars}
+                    rotation={rotation}
+                  />
+                ) : (
+                  <Board
+                    def={def}
+                    box={box}
+                    pads={pads}
+                    usedPadKeys={usedPadKeys}
+                    ledLit={ledLit}
+                    rotation={rotation}
+                  />
+                )}
 
                 {/* Bus groups (#147): outline + bus tag + per-pin roles. */}
                 <g className="boardgraph__bus">

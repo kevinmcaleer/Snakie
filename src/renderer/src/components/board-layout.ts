@@ -125,6 +125,39 @@ export function layoutPads(def: BoardDefinition, box: BoardBox): PadPoint[] {
   })
 }
 
+/** Which edge a freely-placed pad faces, from its normalised position — biased to
+ *  left/right (the common column layout) unless it's clearly near the top/bottom. */
+export function edgeFromXY(x: number, y: number): 'left' | 'right' | 'top' | 'bottom' {
+  if (x < 0.3) return 'left'
+  if (x > 0.7) return 'right'
+  return y < 0.5 ? 'top' : 'bottom'
+}
+
+/**
+ * Pad coordinates preferring the AUTHORED part body's REAL pin x/y, so the board
+ * views match the Part Editor exactly. When a board's pads carry positions (an
+ * authored Microcontroller part) each pad is placed at `box + (x,y)·box`, the
+ * same formula {@link PartBody} draws its pins with — so wires/labels line up on
+ * the life-like body. Built-in boards with no positioned pads fall back to the
+ * even edge-laid {@link layoutPads}. Used by BOTH the mini board view and the
+ * node-graph so they can never drift apart.
+ */
+export function authoredPads(def: BoardDefinition, box: BoardBox): PadPoint[] {
+  const refs = enumerateBoardPads(def)
+  if (!refs.some((r) => r.pad.x != null && r.pad.y != null)) return layoutPads(def, box)
+  const edgeLaid = layoutPads(def, box)
+  return refs.map((r, idx) =>
+    r.pad.x != null && r.pad.y != null
+      ? {
+          x: box.x + r.pad.x * box.w,
+          y: box.y + r.pad.y * box.h,
+          edge: edgeFromXY(r.pad.x, r.pad.y),
+          pad: r.pad
+        }
+      : edgeLaid[idx]
+  )
+}
+
 /** The onboard-LED dot position (top-right corner of the board). */
 export function ledPoint(box: BoardBox): { x: number; y: number } {
   return { x: box.x + box.w - 26, y: box.y + 26 }
