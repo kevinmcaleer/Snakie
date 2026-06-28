@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
+import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
 import {
   PartCanvas,
@@ -138,6 +139,22 @@ const ICON: Record<string, JSX.Element> = {
         <circle cx="8" cy="8" r="2.2" />
       </g>
     </svg>
+  ),
+  undo: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 4L2 7l3 3" />
+        <path d="M2 7h7.5A3.5 3.5 0 0 1 13 10.5v0A3.5 3.5 0 0 1 9.5 14H6" />
+      </g>
+    </svg>
+  ),
+  redo: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11 4l3 3-3 3" />
+        <path d="M14 7H6.5A3.5 3.5 0 0 0 3 10.5v0A3.5 3.5 0 0 0 6.5 14H10" />
+      </g>
+    </svg>
   )
 }
 
@@ -231,7 +248,20 @@ export function PartEditor({
   if (!initialSeedRef.current) {
     initialSeedRef.current = withShapesFromFeatures(withPinPositions(initial ?? blankPart()))
   }
-  const [part, setPart] = useState<PartDefinition>(() => initialSeedRef.current as PartDefinition)
+  // The editable part lives in an undo/redo history (#187). EVERY edit routes
+  // through `setPart` (incl. `patch` and the canvas's drag commits), so wrapping
+  // this one value gives Ctrl+Z over all operations. `set` coalesces a drag's
+  // many commits into one undo step; `resetHistory` clears it when a new part is
+  // loaded (you can't undo across part loads).
+  const {
+    state: part,
+    set: setPart,
+    undo: undoHistory,
+    redo: redoHistory,
+    reset: resetHistory,
+    canUndo,
+    canRedo
+  } = useHistory<PartDefinition>(initialSeedRef.current as PartDefinition)
   const [libId, setLibId] = useState<string>(libraryId)
   // A NEW part (incl. a pre-seeded starter) has no "opened" id, so the collision
   // guard treats its id as fresh and warns before overwriting an existing part.
@@ -407,15 +437,54 @@ export function PartEditor({
     setSelection(null)
   }
 
-  // Delete / Backspace removes the selected object — but not while typing in a
-  // field (so editing a name/number isn't hijacked).
+  // --- undo / redo (#187) ---------------------------------------------------
+  // The property-rows table is editable state derived from part.properties, so
+  // after an undo/redo (which restores the part) we resync it. The flag defers
+  // the resync to the effect that fires once the restored `part` is committed.
+  const resyncPropsRef = useRef(false)
+  const undo = (): void => {
+    if (!canUndo) return
+    resyncPropsRef.current = true
+    setSelection(null) // the previously selected object may not exist post-undo
+    undoHistory()
+  }
+  const redo = (): void => {
+    if (!canRedo) return
+    resyncPropsRef.current = true
+    setSelection(null)
+    redoHistory()
+  }
+  useEffect(() => {
+    if (!resyncPropsRef.current) return
+    resyncPropsRef.current = false
+    setPropRows(Object.entries(part.properties ?? {}))
+  }, [part])
+
+  // Delete / Backspace removes the selected object; Ctrl/Cmd+Z undoes and
+  // Ctrl/Cmd+Shift+Z (or Ctrl+Y) redoes — but never while typing in a field, so
+  // editing a name/number (and a text input's own native undo) isn't hijacked.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (!selection) return
       const el = document.activeElement as HTMLElement | null
       const tag = el?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable) return
+      const typing = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el?.isContentEditable
+      const mod = e.metaKey || e.ctrlKey
+      if (mod && (e.key === 'z' || e.key === 'Z')) {
+        if (typing) return
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+        return
+      }
+      if (mod && (e.key === 'y' || e.key === 'Y')) {
+        if (typing) return
+        e.preventDefault()
+        redo()
+        return
+      }
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return
+      if (!selection) return
+      if (typing) return
       e.preventDefault()
       deleteSelection()
     }
@@ -426,7 +495,7 @@ export function PartEditor({
   // --- persistence ----------------------------------------------------------
   const newPart = (): void => {
     const seed = withShapesFromFeatures(withPinPositions(blankPart()))
-    setPart(seed)
+    resetHistory(seed) // a new part starts a fresh undo history
     setPropRows([])
     setOpenedId(null)
     setSelection(null)
@@ -561,6 +630,13 @@ export function PartEditor({
                 </button>
                 <button type="button" className="pe__iconbtn" onClick={() => setFitSignal((n) => n + 1)} title="Fit / reset the view" aria-label="Fit">
                   {ICON.fit}
+                </button>
+                <span className="pe__divider" />
+                <button type="button" className="pe__iconbtn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">
+                  {ICON.undo}
+                </button>
+                <button type="button" className="pe__iconbtn" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+                  {ICON.redo}
                 </button>
                 <span className="pe__divider" />
                 <ShapesMenu tool={tool} setTool={setTool} />

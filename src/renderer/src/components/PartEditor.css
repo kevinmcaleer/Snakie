@@ -939,6 +939,16 @@
   border-color: var(--text-muted);
 }
 
+.pe__iconbtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pe__iconbtn:disabled:hover {
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+
 .pe__iconbtn.is-active {
   color: #fff;
   background: var(--accent, #2f6b2a);
