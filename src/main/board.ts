@@ -107,14 +107,16 @@ function openBoardWindow(getMainWindow: () => BrowserWindow | null): void {
   const window = new BrowserWindow({
     width: 980,
     height: 720,
-    // A floor so the frameless title bar can't be dragged so narrow that its
-    // right-docked controls (the close ✕) overflow and clip (#…). Must clear the
-    // header's non-shrinkable budget (grip + view tabs + picker-min + actions),
-    // ~680px with the Node graph/Life-like/Schematic tabs present.
+    // A floor so the header's non-shrinkable budget (grip + view tabs +
+    // picker-min + actions, ~680px with the Node graph/Life-like/Schematic tabs)
+    // never overflows.
     minWidth: 720,
     minHeight: 440,
     show: false,
-    frame: false,
+    // Native window chrome (#185): a standard OS title bar with close/min/max so
+    // the window shows in the OS Window menu and is accessible (the in-app close
+    // ✕ was removed in favour of the native one). The styled header sits below it.
+    frame: true,
     alwaysOnTop: false,
     resizable: true,
     title: 'Board View',

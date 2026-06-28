@@ -256,7 +256,6 @@ function BoardWindowApp(): JSX.Element {
         asWindow
         onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
         onEnterCreator={newBoard}
-        onClose={() => window.api.board.close()}
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}

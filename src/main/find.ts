@@ -5,8 +5,8 @@ import { is } from '@electron-toolkit/utils'
 /**
  * Find & Replace window + IPC layer (issue #146).
  *
- * Find & Replace is a separate frameless, always-on-top OS `BrowserWindow` (not
- * an in-editor panel). It cannot reach the Monaco editor — that lives in the
+ * Find & Replace is a separate native-framed, always-on-top OS `BrowserWindow`
+ * (#185) — not an in-editor panel. It cannot reach the Monaco editor — that lives in the
  * MAIN window's renderer — so it drives find/replace over IPC, and the main
  * window replies with the match status:
  *
@@ -32,9 +32,13 @@ function openFindWindow(getMainWindow: () => BrowserWindow | null): void {
 
   const window = new BrowserWindow({
     width: 520,
-    height: 188,
+    // A touch taller than the body needs: the native title bar (#185) takes the
+    // top ~28px, replacing the in-app titlebar that was removed.
+    height: 206,
     show: false,
-    frame: false,
+    // Native window chrome (#185): standard OS title bar with close/min/max, so
+    // the window appears in the OS Window menu and is accessible.
+    frame: true,
     alwaysOnTop: true,
     resizable: true,
     title: 'Find & Replace',

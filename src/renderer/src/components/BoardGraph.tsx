@@ -102,8 +102,6 @@ export interface BoardGraphProps {
   userBoards?: BoardDefinition[]
   /** When true, render the window title-bar chrome (drag region + selector). */
   asWindow?: boolean
-  /** Close the view. When set, a ✕ key is shown in the header. */
-  onClose?: () => void
   /** Enter the Board Creator. When set, the gold edit knob is shown. */
   onEnterCreator?: () => void
   /** Open the user's boards folder (wired in the floating window). */
@@ -315,7 +313,6 @@ export function BoardGraph({
   isPython,
   userBoards,
   asWindow = false,
-  onClose,
   onEnterCreator,
   onOpenBoardsFolder,
   robot,
@@ -790,19 +787,8 @@ export function BoardGraph({
               📁
             </button>
           )}
-          {onClose && (
-            <button
-              type="button"
-              className="boardgraph__key boardgraph__key--close"
-              onClick={onClose}
-              title="Close board view (Esc)"
-              aria-label="Close board view"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.9" />
-              </svg>
-            </button>
-          )}
+          {/* Close is handled by the native window chrome now (#185); Esc also
+              closes via board-main's key handler. */}
         </div>
       </header>
 

@@ -90,29 +90,8 @@ export function FindReplace(): JSX.Element {
       aria-label="Find and replace"
       onKeyDown={onRootKeyDown}
     >
-      <div className="find-replace__titlebar" title="Drag to move">
-        <span className="find-replace__grip" aria-hidden="true">
-          <span className="find-replace__grip-dots" aria-hidden="true">
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-            <i />
-          </span>
-        </span>
-        <span className="find-replace__title">FIND &amp; REPLACE</span>
-        <button
-          type="button"
-          className="find-replace__close"
-          onClick={close}
-          aria-label="Close find and replace"
-          title="Close (Esc)"
-        >
-          ✕
-        </button>
-      </div>
-
+      {/* Title bar, drag and close are the native window chrome now (#185); Esc
+          still closes via onRootKeyDown. */}
       <div className="find-replace__body">
         <div className="find-replace__row">
           <input

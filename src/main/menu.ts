@@ -29,9 +29,9 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
     click: () => onCheckForUpdates()
   }
 
-  // The Board View is a separate (frameless) window, so it isn't reliably picked
-  // up by the macOS auto window-list — list it explicitly so it's reachable from
-  // the keyboard / Window menu (#185).
+  // Opener for the Board View window (#185). The open windows themselves are
+  // listed automatically by the `role: 'windowMenu'` Window menu (now that the
+  // window has native chrome); this item just opens/focuses it from the keyboard.
   const boardViewItem: MenuItemConstructorOptions = {
     label: 'Board View',
     accelerator: 'CmdOrCtrl+Shift+B',
@@ -92,6 +92,8 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
         { role: 'forceReload' },
         { role: 'toggleDevTools' },
         { type: 'separator' },
+        boardViewItem,
+        { type: 'separator' },
         { role: 'resetZoom' },
         { role: 'zoomIn' },
         { role: 'zoomOut' },
@@ -99,23 +101,11 @@ export function buildAppMenu(onCheckForUpdates: () => void, onOpenBoard: () => v
         { role: 'togglefullscreen' }
       ]
     },
-    {
-      label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        { type: 'separator' },
-        boardViewItem,
-        ...(isMac
-          ? ([
-              { type: 'separator' },
-              { role: 'front' },
-              { type: 'separator' },
-              { role: 'window' }
-            ] as MenuItemConstructorOptions[])
-          : ([{ type: 'separator' }, { role: 'close' }] as MenuItemConstructorOptions[]))
-      ]
-    },
+    // The Window menu uses the standard `windowMenu` role so the OS manages it —
+    // on macOS that AUTO-LISTS every open window (the main editor, the Board View
+    // and Find & Replace), which is what #185 wanted; this works now that those
+    // windows have native chrome (frameless windows were skipped by the OS list).
+    { role: 'windowMenu' },
     {
       role: 'help',
       submenu: [
