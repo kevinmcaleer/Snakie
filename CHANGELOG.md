@@ -86,12 +86,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   to the pad, then the **pin label**, then (for pins used in the code) the **code
   variable** — laid out outward from the pin and mirrored for each facing
   (left/right/top/bottom), so the editor preview matches the board views.
-- **Zoomable mini board view.** The mini board now keeps the **whole board at its
-  correct aspect ratio** (same representation as the breadboard view), scaled to
-  fill the dock width, with **hover-revealed zoom controls** (in / out / fit) and a
-  scrollable viewport for panning around when zoomed in. It also draws pins at
-  their **real authored positions** (matching the full board view) rather than
-  stacking them along one edge.
+- **Mini board view renders the authored part.** For a board backed by a Parts
+  Library microcontroller, the mini board now draws the part's **real body** (board
+  image + component shapes + pins at their authored positions) via the same
+  `PartBody` renderer as the Part Editor / full Board Viewer — with the boxed pin
+  numbers + the code variable on used pins — instead of a stylised PCB. Built-in
+  boards (no source part) keep the stylised fallback. The view is framed to its live
+  content, with **hover zoom controls** (in / out / fit) and a scrollable viewport.
 - **Collapsible connections table.** The Board Viewer's bottom connections table
   can now be **collapsed to its header** (and restored) to free up canvas space.
 - **Cleaner part on the breadboard.** Removed the small ✕ remove badge from each

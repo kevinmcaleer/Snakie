@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_TAG } from './parse-pins'
 import { BUILTIN_BOARDS, DEFAULT_BOARD_ID, boardIdFromReplText } from './board-defs'
 import {
@@ -10,6 +10,8 @@ import {
   padKey,
   type PadPoint
 } from './board-layout'
+import { PartBody } from './part-body'
+import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
 import { useConsole } from '../store/console'
 import './MiniBoardView.css'
@@ -249,45 +251,63 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     return { usedByKey: map, usedList: [...map.values()], ledLit: led }
   }, [source, isPython, def, pads, box])
 
-  // Frame the WHOLE board (always — same aspect/representation as the breadboard
-  // view, never cropped) plus any used pins' node labels so nothing clips. The SVG
-  // then scales this to fill the dock width (CSS), so the board stays proportional
-  // whether or not pins are in use.
-  const viewBox = useMemo(() => {
-    let minX = box.x
-    let minY = box.y
-    let maxX = box.x + box.w
-    let maxY = box.y + box.h
-    for (const u of usedList) {
-      const px = u.p.x
-      const py = u.p.y
-      const labelW = u.p.pad.label.length * CHAR_W
-      const varW = u.variable ? u.variable.length * CHAR_W : 0
-      // Outward run of [box][label][variable] for left/right, or stacked rows up/down.
-      const run = STUB + NUM_BOX + SLOT_GAP + labelW + (u.variable ? SLOT_GAP + varW : 0)
-      const edge = pinEdge(u.p.edge)
-      if (edge === 'left') {
-        minX = Math.min(minX, px - run)
-        minY = Math.min(minY, py - NUM_BOX / 2)
-        maxY = Math.max(maxY, py + NUM_BOX / 2)
-      } else if (edge === 'right') {
-        maxX = Math.max(maxX, px + run)
-        minY = Math.min(minY, py - NUM_BOX / 2)
-        maxY = Math.max(maxY, py + NUM_BOX / 2)
-      } else {
-        const halfW = Math.max(NUM_BOX, labelW, varW) / 2
-        minX = Math.min(minX, px - halfW)
-        maxX = Math.max(maxX, px + halfW)
-        const stack = STUB + NUM_BOX + SLOT_GAP + LINE_H + (u.variable ? LINE_H : 0)
-        if (edge === 'top') minY = Math.min(minY, py - stack)
-        else maxY = Math.max(maxY, py + stack)
-      }
+  // The installed libraries, so we can resolve the board's SOURCE part and draw it
+  // with its REAL authored body (image + shapes + pins) — exactly like the Part
+  // Editor / full Board Viewer — instead of the stylised PCB. Reloads on a board
+  // broadcast (a freshly-created board may not be loaded yet).
+  const [libraries, setLibraries] = useState<Parameters<typeof boardPartFor>[0]>([])
+  useEffect(() => {
+    let alive = true
+    const load = (): void => {
+      void window.api.parts
+        .listLibraries()
+        .then((libs) => {
+          if (alive) setLibraries(libs)
+        })
+        .catch(() => undefined)
     }
-    const m = 12
-    const w = maxX - minX + m * 2
-    const h = maxY - minY + m * 2
-    return { str: `${minX - m} ${minY - m} ${w} ${h}`, w, h }
-  }, [box, usedList])
+    load()
+    const off = window.api.board.onSelectBoard(() => load())
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+  const boardPart = useMemo(() => boardPartFor(libraries, def.id), [libraries, def.id])
+
+  // Used pins → PartBody's pinVariables (keyed by pin flat-index == pad index), so
+  // the authored body shows the code variable on the pins the program uses.
+  const pinVars = useMemo(() => {
+    const m = new Map<number, { variable: string; color: string }>()
+    pads.forEach((p, i) => {
+      const u = usedByKey.get(padKey(p))
+      if (u?.variable) m.set(i, { variable: u.variable, color: u.color })
+    })
+    return m
+  }, [pads, usedByKey])
+
+  // Frame whatever is actually drawn — measured from the live content's bounding
+  // box (so the authored body's image/shapes + every boxed pin label is included
+  // and nothing clips), then scaled to fill the dock (CSS). Falls back to the
+  // board box before the first measure.
+  const contentRef = useRef<SVGGElement>(null)
+  const [frame, setFrame] = useState(() => ({ x: box.x, y: box.y, w: box.w, h: box.h }))
+  useLayoutEffect(() => {
+    const g = contentRef.current
+    if (!g) return
+    try {
+      const b = g.getBBox()
+      if (b.width > 0 && b.height > 0) setFrame({ x: b.x, y: b.y, w: b.width, h: b.height })
+    } catch {
+      // getBBox can throw if the content isn't laid out yet — keep the fallback.
+    }
+  }, [boardPart, def, source, isPython, pinVars, box])
+  const M = 12
+  const viewBox = {
+    str: `${frame.x - M} ${frame.y - M} ${frame.w + M * 2} ${frame.h + M * 2}`,
+    w: frame.w + M * 2,
+    h: frame.h + M * 2
+  }
 
   const led = ledPoint(box)
   const gradId = `mini-pcb-${def.id}`
@@ -354,38 +374,42 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           </linearGradient>
         </defs>
 
-        {/* PCB + dashed silkscreen inset. */}
-        <rect x={box.x} y={box.y} width={box.w} height={box.h} rx="14" fill={`url(#${gradId})`} stroke="#0c3a23" strokeWidth="1.5" />
-        <rect
-          x={box.x + 8}
-          y={box.y + 8}
-          width={box.w - 16}
-          height={box.h - 16}
-          rx="10"
-          fill="none"
-          stroke="rgba(255,255,255,.28)"
-          strokeWidth="1"
-          strokeDasharray="2 5"
-        />
-
-        {/* A central MCU block so the board reads as "the microcontroller". */}
-        <rect x={box.x + box.w / 2 - 34} y={box.y + box.h / 2 - 22} width="68" height="44" rx="5" fill="#15171b" stroke="#2a2d33" strokeWidth="1" />
-        <text x={box.x + box.w / 2} y={box.y + box.h / 2 + 4} textAnchor="middle" className="mini-board__mcu">
-          {def.mcu}
-        </text>
-
-        {/* Onboard-LED dot when a connection taps it. */}
-        {ledLit && <circle cx={led.x} cy={led.y} r="5" fill="#46e06a" stroke="rgba(0,0,0,.5)" strokeWidth="1" />}
-
-        {/* EVERY pad: idle ones are a dim hole (no label), used ones get a coloured
-            node label showing the variable + pin type — like the main board view. */}
-        {pads.map((p, i) => {
-          const u = usedByKey.get(padKey(p))
-          if (!u) {
-            return <circle key={`p${i}`} cx={p.x} cy={p.y} r={2.6} className="mini-board__hole" />
-          }
-          return <PinAnnotation key={`p${i}`} u={u} />
-        })}
+        <g ref={contentRef}>
+          {boardPart ? (
+            /* Part-backed board → draw its REAL authored body (image + shapes +
+               pins), identical to the Part Editor / full Board Viewer, with the
+               boxed pin annotations + code variables on the used pins. */
+            <PartBody part={boardPart} box={box} boxedPins pinVariables={pinVars} />
+          ) : (
+            /* Built-in board (no source part) → the stylised PCB fallback. */
+            <>
+              <rect x={box.x} y={box.y} width={box.w} height={box.h} rx="14" fill={`url(#${gradId})`} stroke="#0c3a23" strokeWidth="1.5" />
+              <rect
+                x={box.x + 8}
+                y={box.y + 8}
+                width={box.w - 16}
+                height={box.h - 16}
+                rx="10"
+                fill="none"
+                stroke="rgba(255,255,255,.28)"
+                strokeWidth="1"
+                strokeDasharray="2 5"
+              />
+              <rect x={box.x + box.w / 2 - 34} y={box.y + box.h / 2 - 22} width="68" height="44" rx="5" fill="#15171b" stroke="#2a2d33" strokeWidth="1" />
+              <text x={box.x + box.w / 2} y={box.y + box.h / 2 + 4} textAnchor="middle" className="mini-board__mcu">
+                {def.mcu}
+              </text>
+              {ledLit && <circle cx={led.x} cy={led.y} r="5" fill="#46e06a" stroke="rgba(0,0,0,.5)" strokeWidth="1" />}
+              {pads.map((p, i) => {
+                const u = usedByKey.get(padKey(p))
+                if (!u) {
+                  return <circle key={`p${i}`} cx={p.x} cy={p.y} r={2.6} className="mini-board__hole" />
+                }
+                return <PinAnnotation key={`p${i}`} u={u} />
+              })}
+            </>
+          )}
+        </g>
       </svg>
       </div>
       {/* Zoom controls — hidden until the user hovers the mini board (keeps it clean). */}
