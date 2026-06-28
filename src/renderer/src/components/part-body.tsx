@@ -254,7 +254,6 @@ export function boxedPinLabel(
 ): JSX.Element {
   const B = 14
   const G = 3
-  const L = 13
   const labelW = label.length * 6.2
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
@@ -288,24 +287,32 @@ export function boxedPinLabel(
       </>
     )
   }
+  // Top/bottom pins read VERTICALLY (rotated ±90° away from the board) so a dense
+  // column of pins doesn't collide — the box stays upright, the label/variable run
+  // outward along the pin. `C` re-centres the rotated glyphs on the pin line.
+  const C = 3.5
   if (dir === 'top') {
     const by = box.y - G - B
-    const ly = by - G
+    const lx = cx + C
+    const labelY = by - G
+    const varY = labelY - labelW - G
     return (
       <>
         {numBox(cx - B / 2, by)}
-        <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
-        {variable && <text x={cx} y={ly - L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+        <text x={lx} y={labelY} textAnchor="start" transform={`rotate(-90 ${lx} ${labelY})`} className="pcv__pin-label">{label}</text>
+        {variable && <text x={lx} y={varY} textAnchor="start" transform={`rotate(-90 ${lx} ${varY})`} className="pcv__pin-var" fill={color}>{variable}</text>}
       </>
     )
   }
   const by = box.y + box.h + G
-  const ly = by + B + L - 4
+  const lx = cx - C
+  const labelY = by + B + G
+  const varY = labelY + labelW + G
   return (
     <>
       {numBox(cx - B / 2, by)}
-      <text x={cx} y={ly} textAnchor="middle" className="pcv__pin-label">{label}</text>
-      {variable && <text x={cx} y={ly + L} textAnchor="middle" className="pcv__pin-var" fill={color}>{variable}</text>}
+      <text x={lx} y={labelY} textAnchor="start" transform={`rotate(90 ${lx} ${labelY})`} className="pcv__pin-label">{label}</text>
+      {variable && <text x={lx} y={varY} textAnchor="start" transform={`rotate(90 ${lx} ${varY})`} className="pcv__pin-var" fill={color}>{variable}</text>}
     </>
   )
 }

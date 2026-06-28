@@ -1207,6 +1207,14 @@ function SelectionInspector({
     </label>
   )
 
+  // A size field shown in millimetres: `norm` is a 0..1 fraction of `dimMm` (the
+  // board's real dimension). Edits convert mm back to the stored fraction. With no
+  // board dimension it degrades to the raw fraction so nothing breaks.
+  const mmSize = (label: string, norm: number, dimMm: number | undefined, onNorm: (n: number) => void): JSX.Element =>
+    dimMm && dimMm > 0
+      ? num(`${label} (mm)`, Math.round(norm * dimMm * 10) / 10, (mm) => onNorm(mm / dimMm), 0.5)
+      : num(label, norm, onNorm)
+
   let body: JSX.Element = <></>
   let title = 'Inspector'
 
@@ -1376,9 +1384,11 @@ function SelectionInspector({
           <div className="pe__row">
             {num('x', shp.x, (v) => upd({ x: v }))}
             {num('y', shp.y, (v) => upd({ y: v }))}
-            {shp.kind === 'rect' && num('w', shp.w ?? 0.2, (v) => upd({ w: v }))}
-            {shp.kind === 'rect' && num('h', shp.h ?? 0.15, (v) => upd({ h: v }))}
-            {shp.kind === 'circle' && num('r', shp.r ?? 0.08, (v) => upd({ r: v }))}
+            {/* Size shown in mm (a fraction of the board's real dimensions) so equal
+                w/h is a true square; falls back to the raw fraction with no board size. */}
+            {shp.kind === 'rect' && mmSize('w', shp.w ?? 0.2, part.dimensions?.width, (v) => upd({ w: v }))}
+            {shp.kind === 'rect' && mmSize('h', shp.h ?? 0.15, part.dimensions?.height, (v) => upd({ h: v }))}
+            {shp.kind === 'circle' && mmSize('r', shp.r ?? 0.08, part.dimensions?.width, (v) => upd({ r: v }))}
           </div>
           {shp.kind === 'rect' && (
             <SliderField

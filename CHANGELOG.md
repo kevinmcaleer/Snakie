@@ -98,6 +98,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   right-angle routing.)
 
 ### Fixed
+- **Part Editor pin labels on the top/bottom edges read vertically again.** After
+  the boxed pin-number annotation landed, top/bottom pins drew their labels
+  horizontally (so a dense column collided); they now rotate ±90° to run outward
+  along the pin, matching the left/right edges and the previous behaviour.
+- **Shape size shown in millimetres in the Part Editor.** A rectangle's width/height
+  (and a circle's radius) are now edited in **mm** (a fraction of the board's real
+  dimensions) instead of an opaque 0–1 fraction — so entering equal w/h gives a true
+  square. Falls back to the raw fraction when the part has no board dimensions.
 - **Opening the full Board Viewer from the mini board panel.** Its open button left
   the full viewer blank ("Open a Python file…") because the active file was never
   relayed to it — the main window now starts streaming the file whenever the board
