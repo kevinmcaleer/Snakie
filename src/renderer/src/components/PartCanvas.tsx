@@ -14,6 +14,7 @@ import {
   DEFAULT_SHAPE_STROKE,
   DEFAULT_SHAPE_STROKE_WIDTH,
   addComponentOnTop,
+  collectUsedColors,
   derivePinPosition,
   insertPolygonPoint,
   nearestCenter,
@@ -308,11 +309,9 @@ export function PartCanvas({
   const interactive = !readOnly && !!onChange
 
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
-  // Colours already used in this part (shape fills + strokes), for the fill
-  // dropdown's quick-pick swatch grid. Deduped, in first-seen order.
-  const usedColors = Array.from(
-    new Set(shapes.flatMap((s) => [s.fill, s.stroke]).filter((c): c is string => !!c))
-  )
+  // Colours already used in this part, for the quick-pick swatch grids on every
+  // colour well (fill / border / label). Deduped, in first-seen order.
+  const usedColors = collectUsedColors(part)
 
   // --- geometry helpers -----------------------------------------------------
   const px = (nx: number): number => box.x + nx * box.w
@@ -884,6 +883,25 @@ export function PartCanvas({
       commit({ ...part, labels: labels.map((l, i) => (i === sel.index ? { ...l, ...m } : l)) })
     }
   }
+
+  /** A quick-pick grid of the part's used colours for a mini-toolbar colour well;
+   *  `onPick` applies the chosen colour. Null when there are none yet. */
+  const ctbSwatches = (onPick: (c: string) => void): JSX.Element | null =>
+    usedColors.length > 0 ? (
+      <div className="pcv__ctb-swatches" role="group" aria-label="Colours used in this part">
+        {usedColors.map((col) => (
+          <button
+            key={col}
+            type="button"
+            className="pcv__ctb-swatch"
+            style={{ background: col }}
+            title={col}
+            aria-label={`Use ${col}`}
+            onClick={() => onPick(col)}
+          />
+        ))}
+      </div>
+    ) : null
 
   /** Normalised top-centre of a shape/label, for floating its toolbar above it. */
   const componentTopCenter = (sel: CanvasSelection): { nx: number; ny: number } | null => {
@@ -2165,6 +2183,7 @@ export function PartCanvas({
                             aria-label="Label text colour"
                           />
                         </div>
+                        {ctbSwatches((col) => setLabelStyle(sel, { color: col }))}
                         <div className="pcv__ctb-row pcv__ctb-tbtns">
                           {tbtn(ls.bold, 'B', 'Bold', () => setLabelStyle(sel, { bold: !ls.bold }), { fontWeight: 700 })}
                           {tbtn(ls.italic, 'I', 'Italic', () => setLabelStyle(sel, { italic: !ls.italic }), { fontStyle: 'italic' })}
@@ -2212,21 +2231,7 @@ export function PartCanvas({
                             aria-label="Fill colour"
                           />
                         </div>
-                        {usedColors.length > 0 && (
-                          <div className="pcv__ctb-swatches" role="group" aria-label="Colours used in this part">
-                            {usedColors.map((col) => (
-                              <button
-                                key={col}
-                                type="button"
-                                className="pcv__ctb-swatch"
-                                style={{ background: col }}
-                                title={col}
-                                aria-label={`Use ${col}`}
-                                onClick={() => updateShape(sel.index, { fill: col })}
-                              />
-                            ))}
-                          </div>
-                        )}
+                        {ctbSwatches((col) => updateShape(sel.index, { fill: col }))}
                       </div>
                     )}
                   </div>
@@ -2280,6 +2285,7 @@ export function PartCanvas({
                             aria-label="Border colour"
                           />
                         </div>
+                        {ctbSwatches((col) => updateShape(sel.index, { stroke: col }))}
                         {shape.kind === 'rect' && (
                           <div className="pcv__ctb-row">
                             <span>Corner</span>

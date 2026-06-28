@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Used-colour swatches on every Part Editor colour well.** The quick-pick grid of
+  colours already used in the part (fills, strokes, label/text colours, PCB colour)
+  now appears on **all** colour wells — the mini-toolbar fill/border/text dropdowns
+  and the Properties panel's fill, outline, label, free-label and background pickers
+  — so you can reuse a colour in one click anywhere.
 - **Board View in the Window menu (#185).** The (frameless) Board View window wasn't
   reliably listed by the OS, so it's now an explicit **Window → Board View** item
   (⌘/Ctrl+Shift+B) that opens or focuses it — keyboard-reachable like any window.

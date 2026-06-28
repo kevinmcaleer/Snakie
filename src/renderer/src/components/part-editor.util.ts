@@ -91,6 +91,28 @@ export const DEFAULT_SHAPE_STROKE_WIDTH = 1
 /** Default rectangle corner radius (viewBox units) when a shape sets none. */
 export const DEFAULT_SHAPE_CORNER = 3
 
+/**
+ * Every distinct colour already used in the part (shape fills/strokes/label
+ * colours, free-label colours, the PCB colour), in first-seen order. Powers the
+ * quick-pick swatch grids on the Part Editor's colour wells so authors can reuse
+ * a colour in one click.
+ */
+export function collectUsedColors(part: PartDefinition): string[] {
+  const seen = new Set<string>()
+  const add = (c: string | undefined): void => {
+    const v = c?.trim()
+    if (v) seen.add(v)
+  }
+  for (const s of part.shapes ?? []) {
+    add(s.fill)
+    add(s.stroke)
+    add(s.labelColor)
+  }
+  for (const l of part.labels ?? []) add(l.color)
+  add(part.pcbColor)
+  return [...seen]
+}
+
 /** The effective pad shape for a pin (honours the legacy `castellated` flag). */
 export function pinShapeOf(pin: PartPin): PartPinShape {
   if (pin.shape) return pin.shape

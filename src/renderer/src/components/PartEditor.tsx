@@ -23,6 +23,7 @@ import {
   PIN_TYPES,
   PIN_TYPE_LABEL,
   blankPart,
+  collectUsedColors,
   normalisePart,
   orderedComponents,
   pinNames,
@@ -999,11 +1000,12 @@ function Inspector(props: InspectorProps): JSX.Element {
         <div className="pe__row">
           <label className="pe__field">
             <span>Background</span>
-            <input
-              type="color"
-              value={/^#[0-9a-f]{6}$/i.test(part.pcbColor ?? '') ? (part.pcbColor as string) : '#0f5a2e'}
-              onChange={(e) => patch({ pcbColor: e.target.value })}
-              title="PCB / board background colour"
+            <SwatchPicker
+              value={part.pcbColor}
+              fallback="#0f5a2e"
+              used={collectUsedColors(part)}
+              onChange={(c) => patch({ pcbColor: c })}
+              ariaLabel="PCB / board background colour"
             />
           </label>
         </div>
@@ -1113,6 +1115,48 @@ function SliderField({
         />
       </div>
     </label>
+  )
+}
+
+/** A native colour input plus a quick-pick grid of the colours already used in
+ *  the part — shared by every colour well in the Properties panel. */
+function SwatchPicker({
+  value,
+  fallback,
+  used,
+  onChange,
+  ariaLabel
+}: {
+  value?: string
+  fallback: string
+  used: string[]
+  onChange: (c: string) => void
+  ariaLabel?: string
+}): JSX.Element {
+  return (
+    <div className="pe__swatchpick">
+      <input
+        type="color"
+        value={/^#[0-9a-f]{6}$/i.test(value ?? '') ? (value as string) : fallback}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+      />
+      {used.length > 0 && (
+        <div className="pe__swatches">
+          {used.map((c) => (
+            <button
+              key={c}
+              type="button"
+              className="pe__swatch"
+              style={{ background: c }}
+              title={c}
+              aria-label={`Use ${c}`}
+              onClick={() => onChange(c)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -1358,8 +1402,9 @@ function SelectionInspector({
       title = `Component (${shp.kind})`
       const upd = (p: Partial<ComponentShape>): void =>
         patch({ shapes: (part.shapes ?? []).map((s, i) => (i === si ? { ...s, ...p } : s)) })
+      const used = collectUsedColors(part)
       const colour = (val: string | undefined, fallback: string, on: (v: string) => void): JSX.Element => (
-        <input type="color" value={/^#[0-9a-f]{6}$/i.test(val ?? '') ? (val as string) : fallback} onChange={(e) => on(e.target.value)} />
+        <SwatchPicker value={val} fallback={fallback} used={used} onChange={on} />
       )
       body = (
         <>
@@ -1455,10 +1500,12 @@ function SelectionInspector({
             {num('size', lbl.fontSize ?? 12, (v) => upd({ fontSize: v }), 1)}
             <label className="pe__field">
               <span>Colour</span>
-              <input
-                type="color"
-                value={/^#[0-9a-f]{6}$/i.test(lbl.color ?? '') ? (lbl.color as string) : '#e9edf1'}
-                onChange={(e) => upd({ color: e.target.value })}
+              <SwatchPicker
+                value={lbl.color}
+                fallback="#e9edf1"
+                used={collectUsedColors(part)}
+                onChange={(c) => upd({ color: c })}
+                ariaLabel="Label colour"
               />
             </label>
           </div>
