@@ -130,6 +130,14 @@ const ICON: Record<string, JSX.Element> = {
         <circle cx="11" cy="5" r="3.2" />
       </g>
     </svg>
+  ),
+  hole: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.4">
+        <circle cx="8" cy="8" r="6" />
+        <circle cx="8" cy="8" r="2.2" />
+      </g>
+    </svg>
   )
 }
 
@@ -550,6 +558,9 @@ export function PartEditor({
                 <ShapesMenu tool={tool} setTool={setTool} />
                 <button type="button" className={`pe__iconbtn${tool === 'text' ? ' is-active' : ''}`} onClick={() => setTool('text')} title="Add a text label" aria-label="Text">
                   {ICON.text}
+                </button>
+                <button type="button" className={`pe__iconbtn${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Add a mounting hole" aria-label="Mounting hole">
+                  {ICON.hole}
                 </button>
               </div>
               <div className="pe__canvas-stage">
@@ -1160,6 +1171,25 @@ function SwatchPicker({
   )
 }
 
+/** Text-alignment icon (rows of lines anchored left / centred / right). */
+function alignIcon(a: TextAlign): JSX.Element {
+  const lines =
+    a === 'left'
+      ? ['M2 4h12', 'M2 8h7', 'M2 12h10']
+      : a === 'right'
+        ? ['M2 4h12', 'M7 8h7', 'M4 12h10']
+        : ['M2 4h12', 'M4.5 8h7', 'M3 12h10']
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+      <g stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
+        {lines.map((d, k) => (
+          <path key={k} d={d} />
+        ))}
+      </g>
+    </svg>
+  )
+}
+
 /** Inline text-style controls (bold / italic / underline, alignment, optional
  *  wrap) shared by the free-label and shape-label inspectors. `onChange` is
  *  called with ONLY the field that changed. */
@@ -1183,7 +1213,7 @@ function TextStyleRow({
   const a: TextAlign = align ?? 'center'
   const btn = (
     active: boolean,
-    label: string,
+    label: JSX.Element | string,
     title: string,
     on: () => void,
     style?: CSSProperties
@@ -1207,9 +1237,9 @@ function TextStyleRow({
         {btn(!!italic, 'I', 'Italic', () => onChange({ italic: !italic }), { fontStyle: 'italic' })}
         {btn(!!underline, 'U', 'Underline', () => onChange({ underline: !underline }), { textDecoration: 'underline' })}
         <span className="pe__tsep" />
-        {btn(a === 'left', 'L', 'Align left', () => onChange({ align: 'left' }))}
-        {btn(a === 'center', 'C', 'Align centre', () => onChange({ align: 'center' }))}
-        {btn(a === 'right', 'R', 'Align right', () => onChange({ align: 'right' }))}
+        {btn(a === 'left', alignIcon('left'), 'Align left', () => onChange({ align: 'left' }))}
+        {btn(a === 'center', alignIcon('center'), 'Align centre', () => onChange({ align: 'center' }))}
+        {btn(a === 'right', alignIcon('right'), 'Align right', () => onChange({ align: 'right' }))}
         {showWrap && (
           <>
             <span className="pe__tsep" />
@@ -1409,8 +1439,14 @@ function SelectionInspector({
       body = (
         <>
           <label className="pe__field">
-            <span>Label</span>
-            <input type="text" value={shp.label ?? ''} onChange={(e) => upd({ label: e.target.value })} placeholder="(optional)" />
+            <span>Text</span>
+            <textarea
+              className="pe__textarea"
+              value={shp.label ?? ''}
+              onChange={(e) => upd({ label: e.target.value })}
+              placeholder="(optional — Enter for a new line)"
+              rows={2}
+            />
           </label>
           <div className="pe__row">
             <label className="pe__field">

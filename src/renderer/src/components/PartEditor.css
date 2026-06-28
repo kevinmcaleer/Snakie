@@ -677,6 +677,20 @@
   width: 3.4rem;
 }
 
+/* Multi-line text field (shape caption — Enter inserts a new line). */
+.pe__textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--text, #e9edf1);
+  background: var(--bg-sunken, #0c0f12);
+  border: var(--border-w, 1px) solid var(--border, #2a2d33);
+  border-radius: var(--radius, 4px);
+  padding: 0.25rem 0.35rem;
+  resize: vertical;
+}
+
 /* --- Colour well + used-colour quick-pick swatches --- */
 .pe__swatchpick {
   display: flex;

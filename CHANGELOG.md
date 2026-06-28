@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Edit shape text inline + on multiple lines.** A shape's caption is now a
+  multi-line **Text** field (Enter = new line), and you can **double-click a shape**
+  to edit its text right on the canvas. Alignment buttons use proper left/centre/
+  right icons (kept together on one row).
+- **Mounting-hole tool in the Part Editor toolbar.** A dedicated toolbar button
+  arms the add-mounting-hole tool (previously only reachable from the Layers panel).
 - **Used-colour swatches on every Part Editor colour well.** The quick-pick grid of
   colours already used in the part (fills, strokes, label/text colours, PCB colour)
   now appears on **all** colour wells — the mini-toolbar fill/border/text dropdowns

@@ -290,6 +290,8 @@ export function PartCanvas({
   const [borderMenuOpen, setBorderMenuOpen] = useState(false)
   const [fillMenuOpen, setFillMenuOpen] = useState(false)
   const [textMenuOpen, setTextMenuOpen] = useState(false)
+  // Index of the shape whose caption is being edited inline (double-click), or null.
+  const [editLabelIdx, setEditLabelIdx] = useState<number | null>(null)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -971,6 +973,12 @@ export function PartCanvas({
     setFillMenuOpen(false)
     setTextMenuOpen(false)
   }, [selection])
+  // Leave inline text-edit when the selection moves off the edited shape.
+  useEffect(() => {
+    if (editLabelIdx !== null && !(selection?.type === 'shape' && selection.index === editLabelIdx)) {
+      setEditLabelIdx(null)
+    }
+  }, [selection, editLabelIdx])
   // Drop any multi-selection when switching to a different part (stale indices).
   useEffect(() => {
     setSelectedPins([])
@@ -1546,6 +1554,62 @@ export function PartCanvas({
     else if (d.kind === 'move-shape-vertex' && d.sel?.type === 'shape-vertex') deleteShapeVertex(d.sel.index, d.sel.vi)
   }
 
+  // Double-click a shape → edit its caption inline (an overlay textarea).
+  const onDoubleClick = (e: { clientX: number; clientY: number }): void => {
+    if (!interactive || locked.components) return
+    const { nx, ny } = toNorm(e)
+    const hit = hitTest(nx, ny)
+    if (hit?.type === 'shape') {
+      onSelect?.(hit)
+      setEditLabelIdx(hit.index)
+    }
+  }
+
+  /** Container-pixel rect for the inline caption editor over a shape. */
+  const labelEditRect = (idx: number): { left: number; top: number; width: number; height: number } | null => {
+    const s = shapes[idx]
+    const svg = svgRef.current
+    if (!s || !svg) return null
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return null
+    // Normalised bounding box of the shape.
+    let bx = s.x
+    let by = s.y
+    let bw = s.w ?? 0.2
+    let bh = s.h ?? 0.15
+    if (s.kind === 'circle') {
+      const r = s.r ?? 0.08
+      bx = s.x - r
+      by = s.y - (r * box.w) / box.h
+      bw = 2 * r
+      bh = 2 * ((r * box.w) / box.h)
+    } else if (s.kind === 'polygon' && s.points?.length) {
+      const xs = s.points.map((p) => p.x)
+      const ys = s.points.map((p) => p.y)
+      bx = Math.min(...xs)
+      by = Math.min(...ys)
+      bw = Math.max(...xs) - bx
+      bh = Math.max(...ys) - by
+    }
+    const base = (svg.closest('.pcv__wrap') as HTMLElement | null) ?? svg
+    const rect = base.getBoundingClientRect()
+    const toPx = (nx: number, ny: number): { x: number; y: number } => {
+      const pt = svg.createSVGPoint()
+      pt.x = view.tx + px(nx) * view.scale
+      pt.y = view.ty + py(ny) * view.scale
+      const p = pt.matrixTransform(ctm)
+      return { x: p.x - rect.left, y: p.y - rect.top }
+    }
+    const tl = toPx(bx, by)
+    const br = toPx(bx + bw, by + bh)
+    return {
+      left: tl.x,
+      top: tl.y,
+      width: Math.max(48, br.x - tl.x),
+      height: Math.max(24, br.y - tl.y)
+    }
+  }
+
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
     if (!interactive) return
     const svg = svgRef.current
@@ -1622,6 +1686,7 @@ export function PartCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onDoubleClick={onDoubleClick}
       onWheel={onWheel}
     >
       <defs>
@@ -2038,6 +2103,35 @@ export function PartCanvas({
   return (
     <div className="pcv__wrap">
       {svg}
+      {/* Inline caption editor — a textarea over the shape (double-click). Enter
+          inserts a new line; Esc / blur commits and closes. */}
+      {interactive &&
+        editLabelIdx !== null &&
+        (() => {
+          const idx = editLabelIdx
+          const s = shapes[idx]
+          if (!s) return null
+          const r = labelEditRect(idx)
+          if (!r) return null
+          return (
+            <textarea
+              className="pcv__label-edit"
+              autoFocus
+              style={{ left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` }}
+              value={s.label ?? ''}
+              placeholder="Text…"
+              onChange={(e) => updateShape(idx, { label: e.target.value })}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setEditLabelIdx(null)
+                }
+              }}
+              onBlur={() => setEditLabelIdx(null)}
+              onPointerDown={(e) => e.stopPropagation()}
+            />
+          )
+        })()}
       {/* Alignment toolbar — floats above the LAST selected item (≥2 pins and/or
           components selected). */}
       {interactive &&
@@ -2115,7 +2209,7 @@ export function PartCanvas({
                 if (!ls) return null
                 const tbtn = (
                   active: boolean,
-                  label: string,
+                  label: JSX.Element | string,
                   title: string,
                   on: () => void,
                   st?: CSSProperties
@@ -2131,6 +2225,24 @@ export function PartCanvas({
                     {label}
                   </button>
                 )
+                // Text-alignment icons (rows of lines anchored left / centred / right).
+                const alignIco = (a: 'left' | 'center' | 'right'): JSX.Element => {
+                  const lines =
+                    a === 'left'
+                      ? ['M2 4h12', 'M2 8h7', 'M2 12h10']
+                      : a === 'right'
+                        ? ['M2 4h12', 'M7 8h7', 'M4 12h10']
+                        : ['M2 4h12', 'M4.5 8h7', 'M3 12h10']
+                  return (
+                    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      <g stroke="currentColor" strokeWidth={1.4} strokeLinecap="round">
+                        {lines.map((d, k) => (
+                          <path key={k} d={d} />
+                        ))}
+                      </g>
+                    </svg>
+                  )
+                }
                 return (
                   <div className="pcv__ctb-text">
                     <button
@@ -2188,10 +2300,12 @@ export function PartCanvas({
                           {tbtn(ls.bold, 'B', 'Bold', () => setLabelStyle(sel, { bold: !ls.bold }), { fontWeight: 700 })}
                           {tbtn(ls.italic, 'I', 'Italic', () => setLabelStyle(sel, { italic: !ls.italic }), { fontStyle: 'italic' })}
                           {tbtn(ls.underline, 'U', 'Underline', () => setLabelStyle(sel, { underline: !ls.underline }), { textDecoration: 'underline' })}
-                          <span className="pcv__ctb-tsep" />
-                          {tbtn(ls.align === 'left', 'L', 'Align left', () => setLabelStyle(sel, { align: 'left' }))}
-                          {tbtn(ls.align === 'center', 'C', 'Align centre', () => setLabelStyle(sel, { align: 'center' }))}
-                          {tbtn(ls.align === 'right', 'R', 'Align right', () => setLabelStyle(sel, { align: 'right' }))}
+                        </div>
+                        {/* Alignment (+ wrap) kept together on their own row. */}
+                        <div className="pcv__ctb-row pcv__ctb-tbtns">
+                          {tbtn(ls.align === 'left', alignIco('left'), 'Align left', () => setLabelStyle(sel, { align: 'left' }))}
+                          {tbtn(ls.align === 'center', alignIco('center'), 'Align centre', () => setLabelStyle(sel, { align: 'center' }))}
+                          {tbtn(ls.align === 'right', alignIco('right'), 'Align right', () => setLabelStyle(sel, { align: 'right' }))}
                           {ls.canWrap && (
                             <>
                               <span className="pcv__ctb-tsep" />
