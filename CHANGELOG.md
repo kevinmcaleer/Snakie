@@ -6,7 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-06-28
+
 ### Added
+- **Undo / redo for every Part Editor operation (#187).** **Ctrl/Cmd+Z** undoes and
+  **Ctrl/Cmd+Shift+Z** (or **Ctrl+Y**) redoes any change — pins, shapes, holes, text,
+  image, dimensions, properties, drag/resize, alignment, paste-style and deletes —
+  with **Undo / Redo toolbar buttons** too. A drag collapses into a single undo step,
+  and the history resets when you start a new part.
 - **Copy style / Paste style across the Part Editor.** Every element's mini-toolbar
   (shapes, text labels, pins and mounting holes) now has **Copy style** and **Paste
   style** buttons. Copy captures just the element's styling — a shape's fill /
@@ -38,9 +45,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   now appears on **all** colour wells — the mini-toolbar fill/border/text dropdowns
   and the Properties panel's fill, outline, label, free-label and background pickers
   — so you can reuse a colour in one click anywhere.
-- **Board View in the Window menu (#185).** The (frameless) Board View window wasn't
-  reliably listed by the OS, so it's now an explicit **Window → Board View** item
-  (⌘/Ctrl+Shift+B) that opens or focuses it — keyboard-reachable like any window.
+- **Native window chrome + Window-menu listing for secondary windows (#185).** The
+  **Board View** and **Find & Replace** windows now use the standard OS title bar
+  (close / minimize / maximize) instead of being frameless, so the OS **Window menu
+  auto-lists** every open window and they're more accessible. The in-app close
+  button was removed in favour of the native one; a **View → Board View** item
+  (⌘/Ctrl+Shift+B) still opens or focuses the Board View.
 - **Styled text on Part Editor labels & shapes.** Free text labels and a shape's
   caption can now be **bold / italic / underlined**, sized, **coloured**, and
   **aligned** (left / centre / right); shape captions can also **wrap to the shape**
@@ -100,6 +110,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Settings → *Firmware updates* toggle disables the check.
 
 ### Changed
+- **The node-graph Board View shows the authored life-like board.** Instead of a
+  stylised edge-laid pinout, the node-graph now draws the board's **real authored
+  body** (image + component shapes + pins at their true positions) — identical to the
+  Breadboard view and the Part Editor — and routes the connection wires to the real
+  pad positions. The full Board View also opens on the **Breadboard** tab by default
+  (remembered), so it matches the main window's mini board preview.
+- **Centred Board View zoom.** The node-graph zoom (−/+ buttons and the mouse wheel)
+  now keeps the board **centred with its top in view** (the wheel zooms toward the
+  cursor) instead of growing out of the top-left corner.
 - **Boxed pin annotations everywhere.** In the **mini board view**, the
   **breadboard (life-like)** microcontroller, **and the Part Editor**, each pin now
   shows a **grey board pin-number box** (the physical pin number, not the GPIO) next
@@ -135,6 +154,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   right-angle routing.)
 
 ### Fixed
+- **Firmware-update check no longer crosses board families.** With the micro:bit's
+  separate **2.x** firmware line now in the catalog, a Pico (rp2, on 1.28.0) was
+  wrongly told the micro:bit's **2.1.2** was a newer build — and the reported device
+  version could come from a previously-connected board still in the console buffer.
+  The check now reads the **most-recent** boot banner and compares only within the
+  **connected board's own family**.
 - **Part Editor pin labels on the top/bottom edges read vertically again.** After
   the boxed pin-number annotation landed, top/bottom pins drew their labels
   horizontally (so a dense column collided); they now rotate ±90° to run outward
@@ -1002,7 +1027,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.11.0...v0.12.0
