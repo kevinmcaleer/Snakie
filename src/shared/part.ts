@@ -197,6 +197,8 @@ export interface ComponentShape {
   labelUnderline?: boolean
   labelAlign?: TextAlign
   labelWrap?: boolean
+  /** Colour of the shape's `label` caption (any CSS colour). */
+  labelColor?: string
 }
 
 /** Horizontal text alignment for labels. */
@@ -219,6 +221,8 @@ export interface PartLabel {
   underline?: boolean
   /** Horizontal alignment (multi-line); default `center`. */
   align?: TextAlign
+  /** Text colour (any CSS colour); defaults to the theme text colour. */
+  color?: string
 }
 
 /**

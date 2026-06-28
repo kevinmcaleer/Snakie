@@ -285,6 +285,7 @@ function normaliseShape(s: ComponentShape): ComponentShape {
     out.labelAlign = s.labelAlign
   }
   if (s.labelWrap) out.labelWrap = true
+  if (typeof s.labelColor === 'string' && s.labelColor.trim()) out.labelColor = s.labelColor.trim()
   return out
 }
 
@@ -634,6 +635,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         if (l.italic) lbl.italic = true
         if (l.underline) lbl.underline = true
         if (l.align === 'left' || l.align === 'center' || l.align === 'right') lbl.align = l.align
+        if (typeof l.color === 'string' && l.color.trim()) lbl.color = l.color.trim()
         return lbl
       })
       .filter((l) => l.text !== '')

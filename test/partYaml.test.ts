@@ -291,15 +291,16 @@ describe('component rotation round-trip', () => {
           labelBold: true,
           labelUnderline: true,
           labelAlign: 'left',
-          labelWrap: true
+          labelWrap: true,
+          labelColor: '#ff8800'
         }
       ],
-      labels: [{ text: 'Title', x: 0.5, y: 0.5, italic: true, align: 'right' }]
+      labels: [{ text: 'Title', x: 0.5, y: 0.5, italic: true, align: 'right', color: '#00aaff' }]
     })
     const s = part.shapes?.[0]
-    expect(s).toMatchObject({ labelFontSize: 14, labelBold: true, labelUnderline: true, labelAlign: 'left', labelWrap: true })
+    expect(s).toMatchObject({ labelFontSize: 14, labelBold: true, labelUnderline: true, labelAlign: 'left', labelWrap: true, labelColor: '#ff8800' })
     expect(s?.labelItalic).toBeUndefined() // unset flags stay absent
-    expect(part.labels?.[0]).toMatchObject({ italic: true, align: 'right' })
+    expect(part.labels?.[0]).toMatchObject({ italic: true, align: 'right', color: '#00aaff' })
     expect(part.labels?.[0].bold).toBeUndefined()
     expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
   })

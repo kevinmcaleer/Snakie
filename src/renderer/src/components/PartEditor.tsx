@@ -1400,14 +1400,20 @@ function SelectionInspector({
               onChange={(v) => upd({ cornerRadius: v })}
             />
           )}
-          <SliderField
-            label="Label size"
-            value={shp.labelFontSize ?? 10}
-            min={4}
-            max={48}
-            step={1}
-            onChange={(v) => upd({ labelFontSize: v })}
-          />
+          <div className="pe__row">
+            <SliderField
+              label="Label size"
+              value={shp.labelFontSize ?? 10}
+              min={4}
+              max={48}
+              step={1}
+              onChange={(v) => upd({ labelFontSize: v })}
+            />
+            <label className="pe__field">
+              <span>Label colour</span>
+              {colour(shp.labelColor, '#cfd6dd', (v) => upd({ labelColor: v }))}
+            </label>
+          </div>
           <TextStyleRow
             bold={shp.labelBold}
             italic={shp.labelItalic}
@@ -1447,6 +1453,14 @@ function SelectionInspector({
             {num('x', lbl.x, (v) => upd({ x: v }))}
             {num('y', lbl.y, (v) => upd({ y: v }))}
             {num('size', lbl.fontSize ?? 12, (v) => upd({ fontSize: v }), 1)}
+            <label className="pe__field">
+              <span>Colour</span>
+              <input
+                type="color"
+                value={/^#[0-9a-f]{6}$/i.test(lbl.color ?? '') ? (lbl.color as string) : '#e9edf1'}
+                onChange={(e) => upd({ color: e.target.value })}
+              />
+            </label>
           </div>
           <TextStyleRow
             bold={lbl.bold}

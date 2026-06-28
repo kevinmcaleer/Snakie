@@ -305,6 +305,50 @@
   padding: 0.1rem 0.25rem;
 }
 
+/* Text (A) dropdown — label size / colour / B-I-U / align / wrap. */
+.pcv__ctb-text {
+  position: relative;
+  display: inline-flex;
+}
+
+.pcv__ctb-tbtns {
+  flex-wrap: wrap;
+  gap: 0.2rem;
+}
+
+.pcv__ctb-tbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  padding: 0 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.pcv__ctb-tbtn:hover {
+  border-color: #565b63;
+}
+
+.pcv__ctb-tbtn.is-active {
+  color: #08110b;
+  background: #e6ab30;
+  border-color: #e6ab30;
+}
+
+.pcv__ctb-tsep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.1rem 0.1rem;
+  background: #3a3d44;
+}
+
 .pcv__svg--interactive {
   cursor: default;
 }

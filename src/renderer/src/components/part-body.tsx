@@ -733,7 +733,7 @@ export function PartBody({
                   italic: l.italic,
                   underline: l.underline,
                   align: l.align,
-                  fill: isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)',
+                  fill: isSel({ type: 'label', index: i }) ? '#fff' : (l.color ?? 'var(--text, #e9edf1)'),
                   baseWeight: 600,
                   transform: uprightRotate(px(l.x), py(l.y), l.rotation ?? 0)
                 })}
@@ -786,7 +786,7 @@ export function PartBody({
                   underline: s.labelUnderline,
                   align: s.labelAlign,
                   wrapWidth: s.labelWrap ? labelW : undefined,
-                  fill: '#cfd6dd',
+                  fill: s.labelColor ?? '#cfd6dd',
                   transform: uprightRotate(lcx, lcy)
                 })}
             </g>

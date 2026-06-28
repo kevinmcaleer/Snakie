@@ -167,6 +167,8 @@ function coerceShape(raw: unknown): ComponentShape | null {
   const la = textAlign(r.labelAlign)
   if (la) shape.labelAlign = la
   if (bool(r.labelWrap)) shape.labelWrap = true
+  const lc = str(r.labelColor)
+  if (lc) shape.labelColor = lc
   return shape
 }
 
@@ -369,6 +371,8 @@ export function partFromYaml(text: string): PartDefinition {
         if (bool(rec?.underline)) out.underline = true
         const al = textAlign(rec?.align)
         if (al) out.align = al
+        const col = str(rec?.color)
+        if (col) out.color = col
         return out
       })
       .filter((l): l is PartLabel => l !== null)

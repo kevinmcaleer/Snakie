@@ -3,6 +3,7 @@ import {
   useId,
   useRef,
   useState,
+  type CSSProperties,
   type JSX,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
@@ -23,7 +24,7 @@ import {
   resolvedPins,
   type ResolvedPin
 } from './part-editor.util'
-import type { ComponentShape, ComponentShapeKind, PartDefinition, PartPinType } from '../../../shared/part'
+import type { ComponentShape, ComponentShapeKind, PartDefinition, PartLabel, PartPinType, TextAlign } from '../../../shared/part'
 import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
@@ -287,6 +288,7 @@ export function PartCanvas({
   // The selected-component toolbar's border dropdown (width + colour).
   const [borderMenuOpen, setBorderMenuOpen] = useState(false)
   const [fillMenuOpen, setFillMenuOpen] = useState(false)
+  const [textMenuOpen, setTextMenuOpen] = useState(false)
   const rawId = useId()
   const uid = rawId.replace(/:/g, '') // colons are awkward in funcIRI refs
   const clipId = `pcb-clip-${uid}`
@@ -813,6 +815,76 @@ export function PartCanvas({
     }
   }
 
+  // --- text/label styling (the mini-toolbar "A" dropdown) -------------------
+  interface LabelStyle {
+    fontSize: number
+    color: string
+    bold: boolean
+    italic: boolean
+    underline: boolean
+    align: TextAlign
+    wrap: boolean
+    canWrap: boolean
+  }
+  /** Read the effective label style of the selected shape/label (or null). */
+  const labelStyle = (sel: CanvasSelection): LabelStyle | null => {
+    if (sel?.type === 'shape') {
+      const s = shapes[sel.index]
+      if (!s) return null
+      return {
+        fontSize: s.labelFontSize ?? 10,
+        color: s.labelColor ?? '#cfd6dd',
+        bold: !!s.labelBold,
+        italic: !!s.labelItalic,
+        underline: !!s.labelUnderline,
+        align: s.labelAlign ?? 'center',
+        wrap: !!s.labelWrap,
+        canWrap: true
+      }
+    }
+    if (sel?.type === 'label') {
+      const l = labels[sel.index]
+      if (!l) return null
+      return {
+        fontSize: l.fontSize ?? 12,
+        color: l.color ?? '#e9edf1',
+        bold: !!l.bold,
+        italic: !!l.italic,
+        underline: !!l.underline,
+        align: l.align ?? 'center',
+        wrap: false,
+        canWrap: false
+      }
+    }
+    return null
+  }
+  /** Patch the label style of the selected shape/label (only the given keys). */
+  const setLabelStyle = (
+    sel: CanvasSelection,
+    patch: Partial<{ fontSize: number; color: string; bold: boolean; italic: boolean; underline: boolean; align: TextAlign; wrap: boolean }>
+  ): void => {
+    if (sel?.type === 'shape') {
+      const m: Partial<ComponentShape> = {}
+      if ('fontSize' in patch) m.labelFontSize = patch.fontSize
+      if ('color' in patch) m.labelColor = patch.color
+      if ('bold' in patch) m.labelBold = patch.bold
+      if ('italic' in patch) m.labelItalic = patch.italic
+      if ('underline' in patch) m.labelUnderline = patch.underline
+      if ('align' in patch) m.labelAlign = patch.align
+      if ('wrap' in patch) m.labelWrap = patch.wrap
+      updateShape(sel.index, m)
+    } else if (sel?.type === 'label') {
+      const m: Partial<PartLabel> = {}
+      if ('fontSize' in patch) m.fontSize = patch.fontSize
+      if ('color' in patch) m.color = patch.color
+      if ('bold' in patch) m.bold = patch.bold
+      if ('italic' in patch) m.italic = patch.italic
+      if ('underline' in patch) m.underline = patch.underline
+      if ('align' in patch) m.align = patch.align
+      commit({ ...part, labels: labels.map((l, i) => (i === sel.index ? { ...l, ...m } : l)) })
+    }
+  }
+
   /** Normalised top-centre of a shape/label, for floating its toolbar above it. */
   const componentTopCenter = (sel: CanvasSelection): { nx: number; ny: number } | null => {
     if (sel?.type === 'shape') {
@@ -867,9 +939,19 @@ export function PartCanvas({
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [fillMenuOpen])
+  // Same for the text (A) dropdown — label size/colour/style controls.
+  useEffect(() => {
+    if (!textMenuOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.pcv__ctb-text')) setTextMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [textMenuOpen])
   useEffect(() => {
     setBorderMenuOpen(false)
     setFillMenuOpen(false)
+    setTextMenuOpen(false)
   }, [selection])
   // Drop any multi-selection when switching to a different part (stale indices).
   useEffect(() => {
@@ -1790,7 +1872,7 @@ export function PartCanvas({
                     italic: l.italic,
                     underline: l.underline,
                     align: l.align,
-                    fill: isSel({ type: 'label', index: i }) ? '#fff' : 'var(--text, #e9edf1)',
+                    fill: isSel({ type: 'label', index: i }) ? '#fff' : (l.color ?? 'var(--text, #e9edf1)'),
                     baseWeight: 600,
                     transform: l.rotation ? `rotate(${l.rotation} ${px(l.x)} ${py(l.y)})` : undefined
                   })}
@@ -1843,7 +1925,7 @@ export function PartCanvas({
                     underline: s.labelUnderline,
                     align: s.labelAlign,
                     wrapWidth: s.labelWrap ? labelW : undefined,
-                    fill: '#cfd6dd'
+                    fill: s.labelColor ?? '#cfd6dd'
                   })}
               </g>
             )
@@ -2008,6 +2090,101 @@ export function PartCanvas({
                   <path d="M12.8 3v3.6H9.2" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
+              {/* Text (A) dropdown — label size / colour / B-I-U / align / wrap, for
+                  both shape captions and free labels. */}
+              {(() => {
+                const ls = labelStyle(sel)
+                if (!ls) return null
+                const tbtn = (
+                  active: boolean,
+                  label: string,
+                  title: string,
+                  on: () => void,
+                  st?: CSSProperties
+                ): JSX.Element => (
+                  <button
+                    type="button"
+                    className={`pcv__ctb-tbtn${active ? ' is-active' : ''}`}
+                    title={title}
+                    aria-pressed={active}
+                    onClick={on}
+                    style={st}
+                  >
+                    {label}
+                  </button>
+                )
+                return (
+                  <div className="pcv__ctb-text">
+                    <button
+                      type="button"
+                      className="pcv__ctb-btn"
+                      title="Text style"
+                      aria-label="Text style"
+                      aria-haspopup="menu"
+                      aria-expanded={textMenuOpen}
+                      onClick={() => {
+                        setFillMenuOpen(false)
+                        setBorderMenuOpen(false)
+                        setTextMenuOpen((o) => !o)
+                      }}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <path d="M3.5 13 8 3l4.5 10M5.4 9.4h5.2" fill="none" stroke="currentColor" strokeWidth={1.4} strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                    {textMenuOpen && (
+                      <div className="pcv__ctb-menu" role="menu" aria-label="Text style">
+                        <div className="pcv__ctb-row">
+                          <span>Size</span>
+                          <input
+                            type="range"
+                            min={4}
+                            max={48}
+                            step={1}
+                            value={ls.fontSize}
+                            onChange={(e) => setLabelStyle(sel, { fontSize: Number(e.target.value) })}
+                            aria-label="Label font size"
+                          />
+                          <input
+                            type="number"
+                            min={4}
+                            max={48}
+                            step={1}
+                            className="pcv__ctb-num"
+                            value={ls.fontSize}
+                            onChange={(e) => setLabelStyle(sel, { fontSize: Math.max(1, Number(e.target.value) || 0) })}
+                            aria-label="Label font size value"
+                          />
+                        </div>
+                        <div className="pcv__ctb-row">
+                          <span>Colour</span>
+                          <input
+                            type="color"
+                            value={/^#[0-9a-f]{6}$/i.test(ls.color) ? ls.color : '#cfd6dd'}
+                            onChange={(e) => setLabelStyle(sel, { color: e.target.value })}
+                            aria-label="Label text colour"
+                          />
+                        </div>
+                        <div className="pcv__ctb-row pcv__ctb-tbtns">
+                          {tbtn(ls.bold, 'B', 'Bold', () => setLabelStyle(sel, { bold: !ls.bold }), { fontWeight: 700 })}
+                          {tbtn(ls.italic, 'I', 'Italic', () => setLabelStyle(sel, { italic: !ls.italic }), { fontStyle: 'italic' })}
+                          {tbtn(ls.underline, 'U', 'Underline', () => setLabelStyle(sel, { underline: !ls.underline }), { textDecoration: 'underline' })}
+                          <span className="pcv__ctb-tsep" />
+                          {tbtn(ls.align === 'left', 'L', 'Align left', () => setLabelStyle(sel, { align: 'left' }))}
+                          {tbtn(ls.align === 'center', 'C', 'Align centre', () => setLabelStyle(sel, { align: 'center' }))}
+                          {tbtn(ls.align === 'right', 'R', 'Align right', () => setLabelStyle(sel, { align: 'right' }))}
+                          {ls.canWrap && (
+                            <>
+                              <span className="pcv__ctb-tsep" />
+                              {tbtn(ls.wrap, '↵', 'Wrap text to the shape', () => setLabelStyle(sel, { wrap: !ls.wrap }))}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
               {shape && (
                 <>
                   <div className="pcv__ctb-fill">

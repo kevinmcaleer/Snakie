@@ -8,10 +8,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **Styled text on Part Editor labels & shapes.** Free text labels and a shape's
-  caption can now be **bold / italic / underlined**, sized, and **aligned**
-  (left / centre / right) from the Properties panel; shape captions can also
-  **wrap to the shape** (multi-line). Rendered as pure SVG (manual word-wrapping),
-  so it still exports cleanly to PNG/SVG/PDF. Round-trips in `parts.yml`.
+  caption can now be **bold / italic / underlined**, sized, **coloured**, and
+  **aligned** (left / centre / right); shape captions can also **wrap to the shape**
+  (multi-line). Edit it from the Properties panel or from an **"A" text dropdown on
+  the selected-component mini-toolbar** (size, colour, B/I/U, align, wrap). Rendered
+  as pure SVG (manual word-wrapping) so it still exports to PNG/SVG/PDF; round-trips
+  in `parts.yml`.
 - **Adjustable rectangle corner radius in the Part Editor.** Rectangle shapes were
   always drawn with rounded corners; you can now set the **corner radius** (down to
   0 for sharp corners) from a slider + value box in the **Properties** panel and in
