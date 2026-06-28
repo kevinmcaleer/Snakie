@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Copy style / Paste style across the Part Editor.** Every element's mini-toolbar
+  (shapes, text labels, pins and mounting holes) now has **Copy style** and **Paste
+  style** buttons. Copy captures just the element's styling — a shape's fill /
+  outline / corner radius + all caption styling, a label's font size / colour /
+  bold-italic-underline / alignment, a pin's pad shape + type + capabilities, a
+  hole's diameter — and Paste applies it to another element **of the same type**
+  (Paste is disabled for a different type or an empty clipboard).
+- **Mounting-hole mini-toolbar.** Selecting a mounting hole now shows a floating
+  toolbar (like shapes/labels) with **Duplicate**, a **Size** control (a diameter
+  slider + mm value) and **Delete**. Pins gained a small toolbar too (Duplicate +
+  Copy/Paste style).
 - **Edit shape text inline + on multiple lines.** A shape's caption is now a
   multi-line **Text** field (Enter = new line), and you can **double-click a shape**
   to edit its text right on the canvas. Alignment buttons use proper left/centre/

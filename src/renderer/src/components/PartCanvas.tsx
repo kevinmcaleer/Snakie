@@ -14,6 +14,7 @@ import {
   DEFAULT_SHAPE_STROKE,
   DEFAULT_SHAPE_STROKE_WIDTH,
   addComponentOnTop,
+  captureStyle,
   collectUsedColors,
   derivePinPosition,
   insertPolygonPoint,
@@ -21,11 +22,23 @@ import {
   nearestPolygonEdge,
   nextComponentZ,
   orderedComponents,
+  pasteStyle,
   pinShapeOf,
   resolvedPins,
-  type ResolvedPin
+  type PartStyleClipboard,
+  type ResolvedPin,
+  type StyleTarget
 } from './part-editor.util'
-import type { ComponentShape, ComponentShapeKind, PartDefinition, PartLabel, PartPinType, TextAlign } from '../../../shared/part'
+import type {
+  ComponentShape,
+  ComponentShapeKind,
+  MountingHole,
+  PartDefinition,
+  PartLabel,
+  PartPin,
+  PartPinType,
+  TextAlign
+} from '../../../shared/part'
 import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
@@ -290,6 +303,12 @@ export function PartCanvas({
   const [borderMenuOpen, setBorderMenuOpen] = useState(false)
   const [fillMenuOpen, setFillMenuOpen] = useState(false)
   const [textMenuOpen, setTextMenuOpen] = useState(false)
+  // The selected mounting hole's size (diameter) dropdown.
+  const [holeMenuOpen, setHoleMenuOpen] = useState(false)
+  // Per-type "style clipboard" (copy style / paste style). State (not a ref) so a
+  // copy re-renders the toolbars and enables their "Paste style" button. Persists
+  // across selections + part switches within a session.
+  const [styleClip, setStyleClip] = useState<PartStyleClipboard | null>(null)
   // Index of the shape whose caption is being edited inline (double-click), or null.
   const [editLabelIdx, setEditLabelIdx] = useState<number | null>(null)
   const rawId = useId()
@@ -802,6 +821,68 @@ export function PartCanvas({
     onSelect?.(null)
   }
 
+  // --- mounting-hole toolbar (#…): duplicate / size / delete -----------------
+  /** Patch a mounting hole's geometry (mirrors {@link updateShape}). */
+  const updateHole = (index: number, patch: Partial<MountingHole>): void =>
+    commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, ...patch } : h)) })
+
+  /** Duplicate a mounting hole (offset a little) and select the copy. */
+  const duplicateHole = (index: number): void => {
+    const h = holes[index]
+    if (!h) return
+    const off = 0.04
+    const next = [...holes, { x: clamp01(h.x + off), y: clamp01(h.y + off), diameter: h.diameter }]
+    commit({ ...part, mountingHoles: next })
+    onSelect?.({ type: 'hole', index: next.length - 1 })
+  }
+
+  /** Delete a mounting hole. */
+  const deleteHole = (index: number): void => {
+    commit({ ...part, mountingHoles: holes.filter((_, i) => i !== index) })
+    onSelect?.(null)
+  }
+
+  /** Duplicate the selected pin (offset a little, same header) and select the copy. */
+  const duplicatePin = (sel: CanvasSelection): void => {
+    if (sel?.type !== 'pin') return
+    const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
+    const src = part.headers[sel.hi]?.pins[sel.pi]
+    if (!rp || !src) return
+    const off = 0.04
+    const copy: PartPin = {
+      ...src,
+      capabilities: src.capabilities ? [...src.capabilities] : undefined,
+      x: clamp01(rp.x + off),
+      y: clamp01(rp.y + off)
+    }
+    const newPi = part.headers[sel.hi].pins.length
+    commit({ ...part, headers: part.headers.map((h, i) => (i === sel.hi ? { ...h, pins: [...h.pins, copy] } : h)) })
+    onSelect?.({ type: 'pin', hi: sel.hi, pi: newPi })
+  }
+
+  // --- copy style / paste style (per-type style clipboard) ------------------
+  /** Flatten a selection to a {@link StyleTarget} (or null for non-styleable). */
+  const selToStyleTarget = (sel: CanvasSelection): StyleTarget | null => {
+    if (sel?.type === 'shape') return { kind: 'shape', index: sel.index }
+    if (sel?.type === 'label') return { kind: 'label', index: sel.index }
+    if (sel?.type === 'pin') return { kind: 'pin', hi: sel.hi, pi: sel.pi }
+    if (sel?.type === 'hole') return { kind: 'hole', index: sel.index }
+    return null
+  }
+  /** Copy the selected element's style onto the clipboard. */
+  const copyStyleFrom = (sel: CanvasSelection): void => {
+    const t = selToStyleTarget(sel)
+    if (!t) return
+    const c = captureStyle(part, t)
+    if (c) setStyleClip(c)
+  }
+  /** Apply the clipboard style to the selected element (same kind only; no-op otherwise). */
+  const pasteStyleTo = (sel: CanvasSelection): void => {
+    const t = selToStyleTarget(sel)
+    if (!t || !styleClip) return
+    commit(pasteStyle(part, t, styleClip))
+  }
+
   /** Rotate the selected shape/label by +90° (about its own centre). */
   const rotateComponent = (sel: CanvasSelection): void => {
     const next = (r: number | undefined): number | undefined => (((r ?? 0) + 90) % 360) || undefined
@@ -922,6 +1003,14 @@ export function PartCanvas({
       const l = labels[sel.index]
       return l ? { nx: l.x, ny: l.y } : null
     }
+    if (sel?.type === 'hole') {
+      const h = holes[sel.index]
+      return h ? { nx: h.x, ny: h.y - holeR(h.diameter) / box.h } : null
+    }
+    if (sel?.type === 'pin') {
+      const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
+      return rp ? { nx: rp.x, ny: rp.y - 6 / box.h } : null
+    }
     return null
   }
 
@@ -968,10 +1057,20 @@ export function PartCanvas({
     document.addEventListener('pointerdown', onDown)
     return () => document.removeEventListener('pointerdown', onDown)
   }, [textMenuOpen])
+  // Same for the mounting-hole size dropdown.
+  useEffect(() => {
+    if (!holeMenuOpen) return
+    const onDown = (e: PointerEvent): void => {
+      if (!(e.target as Element | null)?.closest?.('.pcv__ctb-size')) setHoleMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onDown)
+    return () => document.removeEventListener('pointerdown', onDown)
+  }, [holeMenuOpen])
   useEffect(() => {
     setBorderMenuOpen(false)
     setFillMenuOpen(false)
     setTextMenuOpen(false)
+    setHoleMenuOpen(false)
   }, [selection])
   // Leave inline text-edit when the selection moves off the edited shape.
   useEffect(() => {
@@ -1673,6 +1772,60 @@ export function PartCanvas({
 
   const isSel = (s: CanvasSelection): boolean => !!selection && JSON.stringify(selection) === JSON.stringify(s)
 
+  // --- mini-toolbar icons (shared across the shape/label/pin/hole toolbars) ---
+  const dupIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
+      <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+    </svg>
+  )
+  const delIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M3.5 4.5h9M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1V4.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+      <path d="M4.5 4.5 5 13a1 1 0 0 0 1 .9h4a1 1 0 0 0 1-.9l.5-8.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+  // Copy style = a brush (picks up a style); paste = a brush dabbing onto a bar.
+  const copyStyleIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M10.6 2.4 13.6 5.4 7.5 11.5 4.5 8.5z" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" />
+      <path d="M4.5 8.5 2.6 13.4 7.5 11.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" />
+    </svg>
+  )
+  const pasteStyleIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M10.6 1.9 14.1 5.4 9 10.5 5.5 7z" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinejoin="round" />
+      <path d="M2.5 13.5h7" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" />
+    </svg>
+  )
+  // Diameter (⌀): a circle with its diameter chord.
+  const diaIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <circle cx={8} cy={8} r={5} fill="none" stroke="currentColor" strokeWidth={1.3} />
+      <path d="M4.5 11.5 11.5 4.5" stroke="currentColor" strokeWidth={1.1} />
+    </svg>
+  )
+
+  /** The "Copy style" + "Paste style" buttons for a mini-toolbar. Paste is
+   *  disabled unless the clipboard holds a style of the SAME `kind`. */
+  const styleClipButtons = (sel: CanvasSelection, kind: PartStyleClipboard['kind']): JSX.Element => (
+    <>
+      <button type="button" className="pcv__ctb-btn" title="Copy style" aria-label="Copy style" onClick={() => copyStyleFrom(sel)}>
+        {copyStyleIcon}
+      </button>
+      <button
+        type="button"
+        className="pcv__ctb-btn"
+        title="Paste style"
+        aria-label="Paste style"
+        disabled={!styleClip || styleClip.kind !== kind}
+        onClick={() => pasteStyleTo(sel)}
+      >
+        {pasteStyleIcon}
+      </button>
+    </>
+  )
+
   const svg = (
     <svg
       ref={svgRef}
@@ -2191,10 +2344,7 @@ export function PartCanvas({
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit component" style={style}>
               <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateComponent(sel)}>
-                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <rect x={5.5} y={5.5} width={7.5} height={8} rx={1.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
-                  <path d="M3 10.5V3.2A1.2 1.2 0 0 1 4.2 2H10" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
-                </svg>
+                {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate component 90 degrees" onClick={() => rotateComponent(sel)}>
                 <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -2431,11 +2581,103 @@ export function PartCanvas({
                   </div>
                 </>
               )}
+              {styleClipButtons(sel, sel.type)}
               <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete component" onClick={() => deleteComponent(sel)}>
-                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <path d="M3.5 4.5h9M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1V4.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
-                  <path d="M4.5 4.5 5 13a1 1 0 0 0 1 .9h4a1 1 0 0 0 1-.9l.5-8.5" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {delIcon}
+              </button>
+            </div>
+          )
+        })()}
+
+      {/* Selected-pin toolbar — duplicate + copy/paste style (single pin only). */}
+      {interactive &&
+        !locked.pins &&
+        alignCount === 0 &&
+        selection?.type === 'pin' &&
+        (() => {
+          const sel = selection
+          const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
+          if (!rp) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit pin" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicatePin(sel)}>
+                {dupIcon}
+              </button>
+              {styleClipButtons(sel, 'pin')}
+            </div>
+          )
+        })()}
+
+      {/* Selected-mounting-hole toolbar — duplicate / size / copy-paste style /
+          delete (single hole only). */}
+      {interactive &&
+        !locked.holes &&
+        alignCount === 0 &&
+        selection?.type === 'hole' &&
+        (() => {
+          const sel = selection
+          const hole = holes[sel.index]
+          if (!hole) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit mounting hole" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate hole" onClick={() => duplicateHole(sel.index)}>
+                {dupIcon}
+              </button>
+              <div className="pcv__ctb-size">
+                <button
+                  type="button"
+                  className="pcv__ctb-btn"
+                  title="Size (diameter)"
+                  aria-label="Hole size"
+                  aria-haspopup="menu"
+                  aria-expanded={holeMenuOpen}
+                  onClick={() => {
+                    setFillMenuOpen(false)
+                    setBorderMenuOpen(false)
+                    setTextMenuOpen(false)
+                    setHoleMenuOpen((o) => !o)
+                  }}
+                >
+                  {diaIcon}
+                </button>
+                {holeMenuOpen && (
+                  <div className="pcv__ctb-menu" role="menu" aria-label="Hole size">
+                    <div className="pcv__ctb-row">
+                      <span>⌀ mm</span>
+                      <input
+                        type="range"
+                        min={0.5}
+                        max={10}
+                        step={0.1}
+                        value={hole.diameter}
+                        onChange={(e) => updateHole(sel.index, { diameter: Number(e.target.value) })}
+                        aria-label="Hole diameter"
+                      />
+                      <input
+                        type="number"
+                        min={0.5}
+                        max={10}
+                        step={0.1}
+                        className="pcv__ctb-num"
+                        value={hole.diameter}
+                        onChange={(e) => updateHole(sel.index, { diameter: Math.max(0.1, Number(e.target.value) || 0) })}
+                        aria-label="Hole diameter value"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              {styleClipButtons(sel, 'hole')}
+              <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete hole" onClick={() => deleteHole(sel.index)}>
+                {delIcon}
               </button>
             </div>
           )

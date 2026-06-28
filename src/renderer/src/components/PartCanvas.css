@@ -194,10 +194,28 @@
   border-color: #565b63;
 }
 
+/* Disabled mini-toolbar button (e.g. "Paste style" with an empty/mismatched
+   clipboard) — dimmed and inert, no hover affordance. */
+.pcv__ctb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pcv__ctb-btn:disabled:hover {
+  border-color: #3a3d44;
+}
+
 .pcv__ctb-btn--danger:hover {
   color: #fff;
   background: #c0392b;
   border-color: #a5281b;
+}
+
+/* The mounting-hole size (diameter) dropdown wrapper — same anchoring as the
+   fill/border/text dropdowns. */
+.pcv__ctb-size {
+  position: relative;
+  display: inline-flex;
 }
 
 /* Colour wells (fill + border). The fill well is a borderless swatch button

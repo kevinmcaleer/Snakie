@@ -23,6 +23,7 @@ import {
   type ComponentShape,
   type ComponentShapeKind,
   type ImageLayer,
+  type MountingHole,
   type PartDefinition,
   type PartEdge,
   type PartFeature,
@@ -528,6 +529,148 @@ export function insertPolygonPoint(
   y: number
 ): PolygonPoint[] {
   return [...points.slice(0, edgeIndex + 1), { x, y }, ...points.slice(edgeIndex + 1)]
+}
+
+// --- Per-type style clipboard (copy style / paste style) -------------------
+// A small "format painter" for the Part Editor: capture the STYLE of the
+// selected element, then apply it to another element OF THE SAME TYPE. The
+// `kind` discriminator gates the paste (pasting onto a different element type is
+// a no-op), so each toolbar can disable "Paste style" when the clipboard holds a
+// different kind. Pure data-in / data-out so it's unit-testable.
+
+/** A shape's copy-able style: paint (fill/stroke/width/corner) + every label*
+ *  caption-styling field. Every key is captured (value or `undefined`) so a
+ *  paste OVERWRITES the target's style rather than merging — pasting an
+ *  un-bolded style un-bolds the target. */
+export type ShapeStyleClip = Pick<
+  ComponentShape,
+  | 'fill'
+  | 'stroke'
+  | 'strokeWidth'
+  | 'cornerRadius'
+  | 'labelFontSize'
+  | 'labelBold'
+  | 'labelItalic'
+  | 'labelUnderline'
+  | 'labelAlign'
+  | 'labelWrap'
+  | 'labelColor'
+>
+/** A free label's copy-able text style. */
+export type LabelStyleClip = Pick<PartLabel, 'fontSize' | 'color' | 'bold' | 'italic' | 'underline' | 'align'>
+/** A pin's copy-able style: pad shape + electrical role + IO capabilities. */
+export type PinStyleClip = Pick<PartPin, 'shape' | 'type' | 'capabilities'>
+/** A mounting hole's copy-able style: just its diameter. */
+export type HoleStyleClip = Pick<MountingHole, 'diameter'>
+
+/** The Part Editor's style clipboard — a captured style tagged with its element
+ *  type, so a paste only applies to the same type. */
+export type PartStyleClipboard =
+  | { kind: 'shape'; style: ShapeStyleClip }
+  | { kind: 'label'; style: LabelStyleClip }
+  | { kind: 'pin'; style: PinStyleClip }
+  | { kind: 'hole'; style: HoleStyleClip }
+
+/** Which element a copy/paste-style acts on (a selection flattened to indices).
+ *  Kept here rather than importing the canvas' `CanvasSelection` so this stays
+ *  DOM/React-free and free of an import cycle with the canvas components. */
+export type StyleTarget =
+  | { kind: 'shape'; index: number }
+  | { kind: 'label'; index: number }
+  | { kind: 'pin'; hi: number; pi: number }
+  | { kind: 'hole'; index: number }
+
+/** Capture the style of the targeted element, or null if it doesn't exist. Pure. */
+export function captureStyle(part: PartDefinition, target: StyleTarget): PartStyleClipboard | null {
+  if (target.kind === 'shape') {
+    const s = (part.shapes ?? [])[target.index]
+    if (!s) return null
+    return {
+      kind: 'shape',
+      style: {
+        fill: s.fill,
+        stroke: s.stroke,
+        strokeWidth: s.strokeWidth,
+        cornerRadius: s.cornerRadius,
+        labelFontSize: s.labelFontSize,
+        labelBold: s.labelBold,
+        labelItalic: s.labelItalic,
+        labelUnderline: s.labelUnderline,
+        labelAlign: s.labelAlign,
+        labelWrap: s.labelWrap,
+        labelColor: s.labelColor
+      }
+    }
+  }
+  if (target.kind === 'label') {
+    const l = (part.labels ?? [])[target.index]
+    if (!l) return null
+    return {
+      kind: 'label',
+      style: { fontSize: l.fontSize, color: l.color, bold: l.bold, italic: l.italic, underline: l.underline, align: l.align }
+    }
+  }
+  if (target.kind === 'pin') {
+    const p = part.headers?.[target.hi]?.pins?.[target.pi]
+    if (!p) return null
+    // Resolve the effective pad shape (honours the legacy `castellated` flag) so
+    // the clip is always concrete.
+    return { kind: 'pin', style: { shape: pinShapeOf(p), type: p.type, capabilities: p.capabilities ? [...p.capabilities] : undefined } }
+  }
+  const h = (part.mountingHoles ?? [])[target.index]
+  if (!h) return null
+  return { kind: 'hole', style: { diameter: h.diameter } }
+}
+
+/**
+ * Apply a captured style to the targeted element. A no-op (returns the SAME part)
+ * when the clipboard is empty, holds a different `kind`, or the element is gone.
+ * Pure: returns a new part on success.
+ */
+export function pasteStyle(part: PartDefinition, target: StyleTarget, clip: PartStyleClipboard | null): PartDefinition {
+  if (!clip || clip.kind !== target.kind) return part
+  if (clip.kind === 'shape' && target.kind === 'shape') {
+    const shapes = part.shapes ?? []
+    if (!shapes[target.index]) return part
+    return { ...part, shapes: shapes.map((s, i) => (i === target.index ? { ...s, ...clip.style } : s)) }
+  }
+  if (clip.kind === 'label' && target.kind === 'label') {
+    const labels = part.labels ?? []
+    if (!labels[target.index]) return part
+    return { ...part, labels: labels.map((l, i) => (i === target.index ? { ...l, ...clip.style } : l)) }
+  }
+  if (clip.kind === 'pin' && target.kind === 'pin') {
+    if (!part.headers?.[target.hi]?.pins?.[target.pi]) return part
+    const shape = clip.style.shape
+    return {
+      ...part,
+      headers: part.headers.map((h, i) =>
+        i === target.hi
+          ? {
+              ...h,
+              pins: h.pins.map((p, j) =>
+                j === target.pi
+                  ? {
+                      ...p,
+                      type: clip.style.type,
+                      shape,
+                      // Keep the legacy `castellated` flag consistent with the shape.
+                      castellated: shape === 'castellated' ? true : undefined,
+                      capabilities: clip.style.capabilities ? [...clip.style.capabilities] : undefined
+                    }
+                  : p
+              )
+            }
+          : h
+      )
+    }
+  }
+  if (clip.kind === 'hole' && target.kind === 'hole') {
+    const holes = part.mountingHoles ?? []
+    if (!holes[target.index]) return part
+    return { ...part, mountingHoles: holes.map((h, i) => (i === target.index ? { ...h, ...clip.style } : h)) }
+  }
+  return part
 }
 
 /**

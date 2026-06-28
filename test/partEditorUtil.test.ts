@@ -4,6 +4,7 @@ import {
   blankPart,
   boardPartFor,
   boardsFromLibraries,
+  captureStyle,
   derivePinPosition,
   insertPolygonPoint,
   isBoardPart,
@@ -12,6 +13,7 @@ import {
   nextComponentZ,
   normalisePart,
   orderedComponents,
+  pasteStyle,
   resolveBoards,
   partToBoardDefinition,
   pinNames,
@@ -659,5 +661,153 @@ describe('nearestCenter (#169 alignment guides)', () => {
   it('picks the closest of several near centres', () => {
     // 0.50: 0.515 is 6px (excluded, not < 6), 0.49 is 4px → 0.49.
     expect(nearestCenter([0.515, 0.49], 0.5, 400, 6)).toBe(0.49)
+  })
+})
+
+describe('captureStyle / pasteStyle (per-type style clipboard)', () => {
+  const stylePart = (): PartDefinition => ({
+    id: 'p',
+    name: 'P',
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'A', type: 'io', gpio: 0, capabilities: ['digital', 'pwm'], shape: 'round' },
+          { name: 'B', type: 'pwr' }
+        ]
+      }
+    ],
+    shapes: [
+      {
+        kind: 'rect',
+        x: 0.1,
+        y: 0.1,
+        w: 0.2,
+        h: 0.2,
+        fill: '#111111',
+        stroke: '#222222',
+        strokeWidth: 2,
+        cornerRadius: 5,
+        labelFontSize: 14,
+        labelBold: true,
+        labelColor: '#ff0000'
+      },
+      { kind: 'circle', x: 0.5, y: 0.5, r: 0.1 }
+    ],
+    labels: [
+      { text: 'hi', x: 0.3, y: 0.3, fontSize: 18, bold: true, color: '#00ff00', align: 'left' },
+      { text: 'bye', x: 0.6, y: 0.6 }
+    ],
+    mountingHoles: [
+      { x: 0.2, y: 0.2, diameter: 3 },
+      { x: 0.8, y: 0.8, diameter: 2 }
+    ]
+  })
+
+  it('copies a shape style (paint + label*) onto another shape, keeping geometry', () => {
+    const part = stylePart()
+    const clip = captureStyle(part, { kind: 'shape', index: 0 })
+    expect(clip?.kind).toBe('shape')
+    const next = pasteStyle(part, { kind: 'shape', index: 1 }, clip)
+    const s = next.shapes![1]
+    expect(s.fill).toBe('#111111')
+    expect(s.stroke).toBe('#222222')
+    expect(s.strokeWidth).toBe(2)
+    expect(s.cornerRadius).toBe(5)
+    expect(s.labelFontSize).toBe(14)
+    expect(s.labelBold).toBe(true)
+    expect(s.labelColor).toBe('#ff0000')
+    // Geometry of the target is untouched (style only).
+    expect(s.kind).toBe('circle')
+    expect(s.r).toBe(0.1)
+    expect(s.x).toBe(0.5)
+  })
+
+  it('paste OVERWRITES (clears) a target field the source did not set', () => {
+    const part = stylePart()
+    const plain = captureStyle(part, { kind: 'shape', index: 1 }) // the unstyled circle
+    const cleared = pasteStyle(part, { kind: 'shape', index: 0 }, plain)
+    expect(cleared.shapes![0].labelBold).toBeUndefined()
+    expect(cleared.shapes![0].fill).toBeUndefined()
+    expect(cleared.shapes![0].cornerRadius).toBeUndefined()
+  })
+
+  it('copies a label text style, preserving the label text + position', () => {
+    const part = stylePart()
+    const clip = captureStyle(part, { kind: 'label', index: 0 })
+    const next = pasteStyle(part, { kind: 'label', index: 1 }, clip)
+    const l = next.labels![1]
+    expect(l.fontSize).toBe(18)
+    expect(l.bold).toBe(true)
+    expect(l.color).toBe('#00ff00')
+    expect(l.align).toBe('left')
+    expect(l.text).toBe('bye')
+    expect(l.x).toBe(0.6)
+  })
+
+  it('copies a pin style (shape + type + capabilities), cloning the caps array', () => {
+    const part = stylePart()
+    const clip = captureStyle(part, { kind: 'pin', hi: 0, pi: 0 })
+    expect(clip).toEqual({ kind: 'pin', style: { shape: 'round', type: 'io', capabilities: ['digital', 'pwm'] } })
+    const next = pasteStyle(part, { kind: 'pin', hi: 0, pi: 1 }, clip)
+    const p = next.headers[0].pins[1]
+    expect(p.shape).toBe('round')
+    expect(p.type).toBe('io')
+    expect(p.capabilities).toEqual(['digital', 'pwm'])
+    expect(p.name).toBe('B') // identity preserved
+    // The pasted caps are a fresh array, not aliased to the source pin's.
+    expect(p.capabilities).not.toBe(part.headers[0].pins[0].capabilities)
+  })
+
+  it('resolves the legacy castellated flag on copy, and re-derives it on paste', () => {
+    const legacy: PartDefinition = {
+      id: 'l',
+      name: 'L',
+      headers: [{ edge: 'left', pins: [{ name: 'C', type: 'io', castellated: true }] }]
+    }
+    expect(captureStyle(legacy, { kind: 'pin', hi: 0, pi: 0 })).toEqual({
+      kind: 'pin',
+      style: { shape: 'castellated', type: 'io', capabilities: undefined }
+    })
+    const part = stylePart()
+    const next = pasteStyle(part, { kind: 'pin', hi: 0, pi: 1 }, {
+      kind: 'pin',
+      style: { shape: 'castellated', type: 'gnd', capabilities: undefined }
+    })
+    expect(next.headers[0].pins[1].shape).toBe('castellated')
+    expect(next.headers[0].pins[1].castellated).toBe(true)
+    expect(next.headers[0].pins[1].capabilities).toBeUndefined()
+  })
+
+  it('copies a mounting hole diameter, preserving its position', () => {
+    const part = stylePart()
+    const clip = captureStyle(part, { kind: 'hole', index: 0 })
+    const next = pasteStyle(part, { kind: 'hole', index: 1 }, clip)
+    expect(next.mountingHoles![1].diameter).toBe(3)
+    expect(next.mountingHoles![1].x).toBe(0.8)
+  })
+
+  it('is a no-op (same reference) for a mismatched kind, empty clipboard, or missing element', () => {
+    const part = stylePart()
+    const shapeClip = captureStyle(part, { kind: 'shape', index: 0 })
+    expect(pasteStyle(part, { kind: 'hole', index: 0 }, shapeClip)).toBe(part)
+    expect(pasteStyle(part, { kind: 'shape', index: 0 }, null)).toBe(part)
+    expect(pasteStyle(part, { kind: 'shape', index: 9 }, shapeClip)).toBe(part)
+  })
+
+  it('returns null when capturing a missing element', () => {
+    const part = stylePart()
+    expect(captureStyle(part, { kind: 'shape', index: 9 })).toBeNull()
+    expect(captureStyle(part, { kind: 'label', index: 9 })).toBeNull()
+    expect(captureStyle(part, { kind: 'pin', hi: 0, pi: 9 })).toBeNull()
+    expect(captureStyle(part, { kind: 'hole', index: 9 })).toBeNull()
+  })
+
+  it('does not mutate the input part', () => {
+    const part = stylePart()
+    const before = JSON.stringify(part)
+    const clip = captureStyle(part, { kind: 'shape', index: 0 })
+    pasteStyle(part, { kind: 'shape', index: 1 }, clip)
+    expect(JSON.stringify(part)).toBe(before)
   })
 })
