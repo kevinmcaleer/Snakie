@@ -290,6 +290,19 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     await checkNow()
   }
 
+  // DEV: publish the Standard library to GitHub (#197).
+  const publishStandard = async (): Promise<void> => {
+    setBusyLib(STANDARD_LIBRARY_ID)
+    setNote('Publishing the Standard library to GitHub…')
+    try {
+      const res = await window.api.parts.publishStandard()
+      setNote(res.ok ? `Published the Standard library (v${res.version}).` : (res.error ?? 'Publish failed.'))
+      if (res.ok) await refresh()
+    } finally {
+      setBusyLib(null)
+    }
+  }
+
   const deletePart = async (libraryId: string, part: PartDefinition): Promise<void> => {
     if (!window.confirm(`Delete the part "${part.name}"? This cannot be undone.`)) return
     await window.api.parts.deletePart(libraryId, part.id)
@@ -493,6 +506,18 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                       }}
                     >
                       ⬆ v{update.available}
+                    </button>
+                  )}
+                  {/* DEV-only: publish the Standard library to GitHub (#197). */}
+                  {import.meta.env.DEV && lib.id === STANDARD_LIBRARY_ID && (
+                    <button
+                      type="button"
+                      className="pl__badge pl__badge--publish"
+                      title="Publish the Standard library to GitHub (developer)"
+                      disabled={busyLib === STANDARD_LIBRARY_ID}
+                      onClick={() => void publishStandard()}
+                    >
+                      {busyLib === STANDARD_LIBRARY_ID ? 'Publishing…' : '⇧ Publish'}
                     </button>
                   )}
                   <button

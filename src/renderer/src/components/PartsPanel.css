@@ -280,6 +280,18 @@
   padding: 0.2rem 0 0.2rem 0.9rem;
 }
 
+/* DEV-only publish badge on the Standard library (#197). */
+.pl__badge--publish {
+  cursor: pointer;
+  border: var(--border-w) solid var(--accent, #2f6b2a);
+  color: var(--accent, #2f6b2a);
+  background: transparent;
+}
+.pl__badge--publish:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* Library update indicator (#196). */
 .pl__updates {
   display: flex;

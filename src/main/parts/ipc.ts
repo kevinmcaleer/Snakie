@@ -27,6 +27,7 @@ import {
   ensureLibrary,
   partsDir,
   promoteToStandard,
+  publishStandardLibrary,
   readDriverSource,
   readLibraries,
   seedStandardLibrary,
@@ -93,6 +94,10 @@ export function registerPartsIpc(): void {
 
   ipcMain.handle('parts:promoteToStandard', (_e, args: { libraryId: string; partId: string }) =>
     promoteToStandard(args?.libraryId ?? '', args?.partId ?? '')
+  )
+
+  ipcMain.handle('parts:publishStandard', (_e, message?: string) =>
+    publishStandardLibrary(message || undefined)
   )
 
   ipcMain.handle('parts:createLibrary', (_e, meta: PartLibrary) => createLibrary(meta))

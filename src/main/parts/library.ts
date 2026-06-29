@@ -24,12 +24,14 @@
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
 import { existsSync, promises as fsp } from 'fs'
+import { simpleGit } from 'simple-git'
 import {
   libraryFromYaml,
   libraryToYaml,
   partFromYaml,
   partToYaml
 } from '../../shared/part-yaml'
+import { bumpPatch } from '../../shared/part-registry'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
 /** Absolute path to the user's parts folder (`<userData>/parts`). */
@@ -420,6 +422,44 @@ export async function promoteToStandard(
     }
   }
   return { ...res, shipped }
+}
+
+/**
+ * DEV workflow (#197): publish the runtime Standard library to GitHub. Bumps its
+ * `library.yml` PATCH version, then commits + pushes the library's git checkout —
+ * so editing parts in the app and clicking Publish ships a newer version users
+ * pick up via the update check (#194/#196).
+ *
+ * Requires the Standard library to be a **git checkout** (i.e. installed from the
+ * registry, which clones the snakie-parts repo) with a push remote configured.
+ * Returns the new version on success, or a guiding error. Never throws.
+ */
+export async function publishStandardLibrary(
+  message?: string
+): Promise<WriteResult & { version?: string }> {
+  try {
+    const dir = join(partsDir(), STANDARD_LIBRARY_ID)
+    if (!existsSync(join(dir, '.git'))) {
+      return {
+        ok: false,
+        error:
+          "The Standard library isn't a git checkout. Install it from the registry first (so it clones the snakie-parts repo), then Publish."
+      }
+    }
+    // Bump the manifest PATCH version so the update check sees the new release.
+    const manifestPath = join(dir, 'library.yml')
+    const manifest = libraryFromYaml(await fsp.readFile(manifestPath, 'utf-8'))
+    const version = bumpPatch(manifest.version)
+    await fsp.writeFile(manifestPath, libraryToYaml({ ...manifest, version }), 'utf-8')
+
+    const git = simpleGit(dir)
+    await git.add('.')
+    await git.commit(message?.trim() || `Publish ${STANDARD_LIBRARY_ID} v${version}`)
+    await git.push()
+    return { ok: true, id: STANDARD_LIBRARY_ID, version }
+  } catch (err) {
+    return { ok: false, error: `Publish failed: ${(err as Error).message}` }
+  }
 }
 
 /** Delete a part folder (and its assets). A missing folder is a success. */

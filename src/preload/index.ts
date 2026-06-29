@@ -838,6 +838,9 @@ const parts = {
    *  (and, when unpackaged, mirror it into the bundled repo copy so it ships). */
   promoteToStandard: (libraryId: string, partId: string): Promise<PartsWriteResult & { shipped?: boolean }> =>
     ipcRenderer.invoke('parts:promoteToStandard', { libraryId, partId }),
+  /** DEV: publish the Standard library to GitHub (bump version + commit + push). */
+  publishStandard: (message?: string): Promise<PartsWriteResult & { version?: string }> =>
+    ipcRenderer.invoke('parts:publishStandard', message),
   /** Create a new (empty) library from its manifest. */
   createLibrary: (meta: PartLibrary): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:createLibrary', meta),
