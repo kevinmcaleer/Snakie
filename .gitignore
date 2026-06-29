@@ -7,8 +7,11 @@ dist-electron/
 .vite/
 .eslintcache
 
-# Claude Code worktrees / local agent state and the local preview helper
-.claude/
+# Claude Code worktrees / local agent state and the local preview helper.
+# Track shared project skills (.claude/skills/) but ignore the rest (local config,
+# worktrees, scheduled-task locks).
+.claude/*
+!.claude/skills/
 vite.preview.config.mjs
 
 # Python bytecode (plugin SDK/host)
