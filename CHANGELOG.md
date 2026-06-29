@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-06-29
+
+### Fixed
+- **Firmware-update check no longer offers a cross-family build on connect.** The
+  device's boot banner arrives over serial in chunks, so `MicroPython v1.28.0 …`
+  could be read before the trailing `… with RP2040`. The check latched onto that
+  partial line, couldn't identify the board family, and fell back to the
+  catalog-wide newest — briefly offering a Raspberry Pi Pico the **micro:bit's
+  2.1.2** (a separate 2.x version line). The check now finalises only once it can
+  identify **both** the version and the board family from the banner (re-checking
+  as the rest of the banner arrives), and never falls back to the catalog-wide
+  maximum, so an rp2/esp device is only ever offered its own family's firmware.
+
 ## [0.15.0] - 2026-06-28
 
 ### Added
@@ -1027,7 +1040,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...HEAD
+[0.15.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.12.0...v0.13.0
