@@ -79,6 +79,12 @@ describe('standard parts library (snakie-standard)', () => {
     { id: 'tiny2350', pads: 15, mcu: 'RP2350' } // authored via the build-part-from-image skill (#198)
   ]
 
+  it('the Tiny 2350 ships a life-like background photo', () => {
+    const part = partFromYaml(read('snakie-standard', 'tiny2350', 'parts.yml'))
+    expect(part.image).toBeTruthy() // build-part-from-image skill embeds a top-down photo
+    expect(part.version).toBe('0.1.1') // bumped on regeneration (version capability)
+  })
+
   it.each(boards)('$id parses, validates, round-trips and converts to a board', ({ id, pads, mcu }) => {
     const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
     expect(part.id).toBe(id)
