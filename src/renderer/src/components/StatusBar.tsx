@@ -301,8 +301,9 @@ export function StatusBar({
           <span
             className="statusbar__item"
             title={`${changedCount} changed file(s) in the current repository`}
+            aria-label={`${changedCount} changed files`}
           >
-            ⎇ {changedCount}
+            <span aria-hidden="true">⎇</span> {changedCount}
           </span>
         )}
         {lines != null && (

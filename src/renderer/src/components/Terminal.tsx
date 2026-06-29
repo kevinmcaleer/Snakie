@@ -115,14 +115,21 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     const container = containerRef.current
     if (!container) return undefined
 
+    // Respect the OS "reduce motion" preference: the blinking cursor is a
+    // continuous animation, so disable it when the user has asked for less motion.
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     const term = new XTerm({
-      cursorBlink: true,
+      cursorBlink: !prefersReducedMotion,
       convertEol: true,
       fontFamily: "'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace",
       fontSize: 13,
       scrollback: 5000,
       theme: terminalThemeFor(document.documentElement.getAttribute('data-theme')),
-      allowProposedApi: true
+      allowProposedApi: true,
+      // Mirror device output into an off-screen live region xterm maintains, so
+      // screen readers can read the REPL — the IDE's core surface (a11y, #188).
+      screenReaderMode: true
     })
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
@@ -177,5 +184,7 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     }
   }, [])
 
-  return <div className="terminal" ref={containerRef} />
+  return (
+    <div className="terminal" ref={containerRef} role="group" aria-label="Device REPL console" />
+  )
 })

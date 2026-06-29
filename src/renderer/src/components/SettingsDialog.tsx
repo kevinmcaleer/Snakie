@@ -6,6 +6,7 @@ import {
   type EditorPaper
 } from '../store/settings'
 import { EDITOR_THEME_LIST } from '../store/editorThemes'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import { ChatSettings } from './ChatSettings'
 import './SettingsDialog.css'
 
@@ -52,6 +53,8 @@ export function SettingsDialog({
   initialTab?: SettingsTab
 }): JSX.Element {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
+  // Move focus into the dialog on open, trap Tab, and restore it on close.
+  const dialogRef = useFocusTrap<HTMLDivElement>()
 
   // Re-sync the active tab if the caller re-opens with a different deep link.
   useEffect(() => {
@@ -71,6 +74,7 @@ export function SettingsDialog({
     <div className="settings-backdrop" onClick={onClose} role="presentation">
       <div
         className="settings-dialog"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Settings"

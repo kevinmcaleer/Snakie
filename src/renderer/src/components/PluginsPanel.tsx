@@ -461,11 +461,12 @@ function RackHeader({
       <button
         type="button"
         className="rack__reload"
+        aria-label="Reload plugins"
         title={python ? `Reload plugin host (${python})` : 'Reload plugin host'}
         disabled={loading}
         onClick={onReload}
       >
-        ⟳
+        <span aria-hidden="true">⟳</span>
       </button>
       <span className="rack__pwr">
         <span className="rack__pwr-label">PWR</span>

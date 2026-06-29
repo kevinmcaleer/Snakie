@@ -108,6 +108,7 @@ export function FindReplace(): JSX.Element {
               type="button"
               className={`find-replace__key${matchCase ? ' is-active' : ''}`}
               aria-pressed={matchCase}
+              aria-label="Match case"
               onClick={() => setMatchCase((v) => !v)}
               title="Match case"
             >
@@ -117,6 +118,7 @@ export function FindReplace(): JSX.Element {
               type="button"
               className={`find-replace__key${wholeWord ? ' is-active' : ''}`}
               aria-pressed={wholeWord}
+              aria-label="Whole word"
               onClick={() => setWholeWord((v) => !v)}
               title="Whole word"
             >
@@ -186,6 +188,8 @@ export function FindReplace(): JSX.Element {
         <div className="find-replace__status">
           <span
             className={`find-replace__count${statusIsEmpty ? ' find-replace__count--empty' : ''}`}
+            role="status"
+            aria-live="polite"
           >
             {statusText}
           </span>
