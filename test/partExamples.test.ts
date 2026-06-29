@@ -62,11 +62,12 @@ describe('example parts library', () => {
   })
 })
 
-describe('standard boards library (snakie-standard)', () => {
+describe('standard parts library (snakie-standard)', () => {
   it('library.yml parses', () => {
     const lib = libraryFromYaml(read('snakie-standard', 'library.yml'))
     expect(lib.id).toBe('snakie-standard')
-    expect(lib.name).toBe('Standard Boards')
+    // Renamed from "Standard Boards" — it now holds any component type (#192).
+    expect(lib.name).toBe('Standard Parts')
   })
 
   // Each board is a full microcontroller part that must convert cleanly to a

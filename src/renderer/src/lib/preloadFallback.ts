@@ -129,7 +129,8 @@ if (!w.api) {
       deleteLibrary: P({ ok: false }),
       fetchRegistry: P({ libraries: [] }),
       installLibrary: P({ ok: false }),
-      checkUpdates: P([])
+      checkUpdates: P([]),
+      cachedUpdates: P([])
     },
     git: {
       openRepo: P(null),

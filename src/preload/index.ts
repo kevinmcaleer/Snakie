@@ -863,7 +863,10 @@ const parts = {
     ipcRenderer.invoke('parts:installLibrary', entry),
   /** Which installed libraries have a newer version available in the registry. */
   checkUpdates: (url?: string): Promise<LibraryUpdate[]> =>
-    ipcRenderer.invoke('parts:checkUpdates', url)
+    ipcRenderer.invoke('parts:checkUpdates', url),
+  /** The result of the on-startup update check (cached in main), for an instant
+   *  indicator without re-hitting the network (#194). */
+  cachedUpdates: (): Promise<LibraryUpdate[]> => ipcRenderer.invoke('parts:cachedUpdates')
 }
 
 /**

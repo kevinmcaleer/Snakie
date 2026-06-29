@@ -165,7 +165,7 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     async (libraryId: string, part: PartDefinition): Promise<void> => {
       const res = await window.api.parts.promoteToStandard(libraryId, part.id)
       if (res.ok) {
-        setNote(`Promoted "${part.name}" to Standard Boards${res.shipped ? ' + bundled repo copy' : ''}.`)
+        setNote(`Promoted "${part.name}" to the Standard library${res.shipped ? ' + bundled repo copy' : ''}.`)
         await refresh()
       } else {
         setNote(res.error ?? 'Promote failed.')
@@ -174,20 +174,38 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     [refresh]
   )
 
-  // Quietly check for updates once libraries are known.
+  // Check GitHub (the registry) for newer library versions, including the Standard
+  // library (#194). Runs on load and from the Refresh button (#195).
+  const checkNow = useCallback(async (): Promise<void> => {
+    try {
+      const u = await window.api.parts.checkUpdates()
+      setUpdates(u.filter((x) => x.updateAvailable))
+    } catch {
+      // Offline / registry unreachable — leave the last known result.
+    }
+  }, [])
+
+  // Seed from the main process's on-startup check (#194) for an instant indicator,
+  // then re-check live once libraries are known.
+  useEffect(() => {
+    window.api.parts
+      .cachedUpdates()
+      .then((u) => setUpdates(u.filter((x) => x.updateAvailable)))
+      .catch(() => undefined)
+  }, [])
   useEffect(() => {
     if (libraries.length === 0) return
-    let cancelled = false
-    window.api.parts
-      .checkUpdates()
-      .then((u) => {
-        if (!cancelled) setUpdates(u.filter((x) => x.updateAvailable))
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [libraries])
+    void checkNow()
+  }, [libraries, checkNow])
+
+  // Refresh the library: re-read parts from disk AND re-check GitHub (#195).
+  const refreshAll = useCallback((): void => {
+    setNote(null)
+    // Parts are read fresh from disk on every list call; the shared event also
+    // reloads the board graph in this window.
+    window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+    void checkNow()
+  }, [checkNow])
 
   const allParts = useMemo(
     () =>
@@ -259,6 +277,17 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     } finally {
       setBusyLib(null)
     }
+  }
+
+  // Pull + apply every available library update right away (#196). Each install
+  // is a fresh clone of the registry repo, so the new version is used immediately.
+  const updateAll = async (): Promise<void> => {
+    const reg = (await window.api.parts.fetchRegistry().catch(() => null))?.libraries ?? registry ?? []
+    for (const u of updates) {
+      const entry = reg.find((e) => e.id === u.id)
+      if (entry) await install(entry)
+    }
+    await checkNow()
   }
 
   const deletePart = async (libraryId: string, part: PartDefinition): Promise<void> => {
@@ -333,16 +362,10 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
         </button>
         <button
           type="button"
-          className="pl__btn pl__btn--icon"
-          onClick={() => {
-            setNote(null)
-            // Parts are read fresh from disk on every list call, so this picks up
-            // on-disk edits with no app restart; the shared event also reloads the
-            // board graph in this window.
-            window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
-          }}
-          title="Reload parts from disk (no restart needed)"
-          aria-label="Reload parts from disk"
+          className={`pl__btn pl__btn--icon${updates.length > 0 ? ' pl__btn--has-update' : ''}`}
+          onClick={refreshAll}
+          title="Refresh library — reload parts from disk and check GitHub for updates"
+          aria-label="Refresh library (reload from disk + check for updates)"
         >
           {actionIcon('refresh')}
         </button>
@@ -369,6 +392,18 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
       </div>
 
       {note && <p className="pl__note">{note}</p>}
+
+      {/* Library update indicator (#196) — one click pulls + uses the latest. */}
+      {updates.length > 0 && (
+        <div className="pl__updates" role="status">
+          <span className="pl__updates-text">
+            ⬆ {updates.length} library update{updates.length === 1 ? '' : 's'} available
+          </span>
+          <button type="button" className="pl__link" onClick={() => void updateAll()}>
+            Update all
+          </button>
+        </div>
+      )}
 
       {/* Registry browser */}
       {showRegistry && (
@@ -526,10 +561,9 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                   onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
                 }
                 onPromote={
-                  // DEV-only: a Microcontroller part that isn't already the standard one.
-                  import.meta.env.DEV &&
-                  (selectedPart.part.family ?? '').trim().toLowerCase() === 'microcontroller' &&
-                  selectedPart.libraryId !== STANDARD_LIBRARY_ID
+                  // DEV-only: any part not already in the Standard library (#192 —
+                  // the standard library holds any component type, not just boards).
+                  import.meta.env.DEV && selectedPart.libraryId !== STANDARD_LIBRARY_ID
                     ? () => void promote(selectedPart.libraryId, selectedPart.part)
                     : undefined
                 }

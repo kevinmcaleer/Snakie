@@ -280,6 +280,40 @@
   padding: 0.2rem 0 0.2rem 0.9rem;
 }
 
+/* Library update indicator (#196). */
+.pl__updates {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin: 0.3rem 0.4rem;
+  padding: 0.3rem 0.55rem;
+  border: var(--border-w) solid var(--accent, #2f6b2a);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent, #2f6b2a) 12%, transparent);
+  font-size: 0.78rem;
+}
+
+.pl__updates-text {
+  font-weight: 600;
+}
+
+/* A dot on the Refresh button when updates are available. */
+.pl__btn--has-update {
+  position: relative;
+}
+
+.pl__btn--has-update::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent, #2f6b2a);
+}
+
 /* Category section header within a library (#193). */
 .pl__cat {
   margin-top: 0.2rem;

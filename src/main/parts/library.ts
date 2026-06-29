@@ -381,12 +381,13 @@ export async function readDriverSource(
 }
 
 /**
- * DEV workflow (#52/issue-3): promote a microcontroller board part into the
- * "Standard Boards" library so it becomes a shipped default. Writes it into the
- * runtime `<userData>/parts/snakie-standard` (so it shows immediately) AND, when
- * running unpackaged (dev), mirrors it into the bundled repo copy so it commits +
- * ships. Re-promoting an existing id is an UPDATE (overwrites). Returns whether the
- * repo copy was written (`shipped`).
+ * DEV workflow (#52/issue-3, #192): promote ANY part into the Standard library so
+ * it becomes a shipped default — not just microcontrollers, so the standard
+ * library can also hold sensors, ICs, power parts, displays, etc. Writes it into
+ * the runtime `<userData>/parts/snakie-standard` (so it shows immediately) AND,
+ * when running unpackaged (dev), mirrors it into the bundled repo copy so it
+ * commits + ships. Re-promoting an existing id is an UPDATE (overwrites). Returns
+ * whether the repo copy was written (`shipped`).
  */
 export async function promoteToStandard(
   sourceLibraryId: string,
@@ -395,9 +396,6 @@ export async function promoteToStandard(
   const srcLib = sanitiseId(sourceLibraryId) || LOCAL_LIBRARY_ID
   const part = await readPart(join(partsDir(), srcLib), sanitiseId(partId))
   if (!part) return { ok: false, error: 'Source part not found.' }
-  if ((part.family ?? '').trim().toLowerCase() !== 'microcontroller') {
-    return { ok: false, error: 'Only Microcontroller-family parts can be promoted to a board.' }
-  }
   // 1) Runtime copy (shows in the board selector immediately).
   const res = await writePart(STANDARD_LIBRARY_ID, part)
   if (!res.ok) return res
