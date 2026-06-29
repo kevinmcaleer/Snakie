@@ -75,7 +75,8 @@ describe('standard parts library (snakie-standard)', () => {
   const boards = [
     { id: 'pico', pads: 40, mcu: 'RP2040' },
     { id: 'pico2w', pads: 40, mcu: 'RP2350' }, // canonical id, matches the built-in
-    { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' }
+    { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' },
+    { id: 'tiny2350', pads: 15, mcu: 'RP2350' } // authored via the build-part-from-image skill (#198)
   ]
 
   it.each(boards)('$id parses, validates, round-trips and converts to a board', ({ id, pads, mcu }) => {

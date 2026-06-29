@@ -1,0 +1,220 @@
+id: tiny2350
+name: Pimoroni Tiny 2350
+description: RP2350A in a tiny castellated board with an RGB LED + USB-C
+manufacturer: Pimoroni
+family: Microcontroller
+mcu: RP2350
+partNumber: PIM721
+package: SMD
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#2a1745"
+aspect: 0.786
+dimensions:
+  width: 18
+  height: 22.9
+shape:
+  kind: rect
+  cornerRadius: 0.08
+headers:
+  - edge: left
+    pins:
+      - name: 5V
+        type: pwr
+        number: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.20
+      - name: GND
+        type: gnd
+        number: 2
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.32
+      - name: 3V3
+        type: pwr
+        number: 3
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.44
+      - name: GP0
+        type: io
+        number: 4
+        gpio: 0
+        capabilities: [digital, pwm, spi, i2c, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.56
+      - name: GP1
+        type: io
+        number: 5
+        gpio: 1
+        capabilities: [digital, pwm, spi, i2c, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.68
+      - name: GP2
+        type: io
+        number: 6
+        gpio: 2
+        capabilities: [digital, pwm, spi, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.80
+      - name: GP3
+        type: io
+        number: 7
+        gpio: 3
+        capabilities: [digital, pwm, spi, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.08
+        y: 0.92
+  - edge: right
+    pins:
+      - name: GP7
+        type: io
+        number: 8
+        gpio: 7
+        capabilities: [digital, pwm, spi, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.16
+      - name: GP6
+        type: io
+        number: 9
+        gpio: 6
+        capabilities: [digital, pwm, spi, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.27
+      - name: GP5
+        type: io
+        number: 10
+        gpio: 5
+        capabilities: [digital, pwm, spi, i2c, uart]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.38
+      - name: GP4
+        type: io
+        number: 11
+        gpio: 4
+        capabilities: [digital, pwm, spi, i2c, uart]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.49
+      - name: A3
+        type: io
+        number: 12
+        gpio: 26
+        capabilities: [digital, pwm, adc, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.60
+      - name: A2
+        type: io
+        number: 13
+        gpio: 27
+        capabilities: [digital, pwm, adc, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.71
+      - name: A1
+        type: io
+        number: 14
+        gpio: 28
+        capabilities: [digital, pwm, adc, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.82
+      - name: A0
+        type: io
+        number: 15
+        gpio: 29
+        capabilities: [digital, pwm, adc, i2c]
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.92
+        y: 0.93
+shapes:
+  - kind: rect
+    x: 0.32
+    y: 0.0
+    w: 0.36
+    h: 0.08
+    fill: "#b7bcc4"
+    stroke: "#6c727b"
+    label: USB-C
+    labelFontSize: 8
+  - kind: rect
+    x: 0.30
+    y: 0.34
+    w: 0.40
+    h: 0.26
+    cornerRadius: 3
+    fill: "#15171b"
+    stroke: "#2a2d33"
+    label: RP2350
+    labelColor: "#b9bdc6"
+  - kind: circle
+    x: 0.50
+    y: 0.69
+    r: 0.055
+    fill: "#2c3a30"
+    stroke: "#46e06a"
+    label: RGB
+    labelFontSize: 7
+  - kind: rect
+    x: 0.17
+    y: 0.83
+    w: 0.18
+    h: 0.10
+    cornerRadius: 2
+    fill: "#3a3f44"
+    label: BOOT
+    labelFontSize: 7
+  - kind: rect
+    x: 0.65
+    y: 0.83
+    w: 0.18
+    h: 0.10
+    cornerRadius: 2
+    fill: "#3a3f44"
+    label: RST
+    labelFontSize: 7
+labels:
+  - text: Qw/ST
+    x: 0.5
+    y: 0.985
+    fontSize: 7
+    color: "#9aa0a8"
