@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Pimoroni Tiny 2350 in the Standard library.** Authored with the
+  build-part-from-image skill (#198) — 15 castellated pads (5V/GND/3V3 + GP0–GP7
+  + A0–A3), RP2350A, USB-C, RGB LED, BOOT/RST buttons and the Qw/ST connector at
+  the real 22.9×18 mm footprint. Its id matches the built-in board, so the Board
+  View now renders the Tiny 2350 life-like.
+
 ## [0.16.0] - 2026-06-29
 
 ### Added
