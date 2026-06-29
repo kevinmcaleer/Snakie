@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
+import { groupByCategory } from './part-categories'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
   LibraryUpdate,
@@ -468,32 +469,42 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                     ✕
                   </button>
                 </div>
-                {!isCollapsed && (
-                  <ul className="pl__parts">
-                    {parts.length === 0 && <li className="pl__muted pl__parts-empty">No parts in this library.</li>}
-                    {parts.map((part) => (
-                      <li
-                        key={part.id}
-                        className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}`}
-                      >
-                        <button
-                          type="button"
-                          className="pl__part-btn"
-                          onClick={() =>
-                            setSelected(
-                              selected?.libraryId === lib.id && selected?.partId === part.id
-                                ? null
-                                : { libraryId: lib.id, partId: part.id }
-                            )
-                          }
-                        >
-                          <span className="pl__part-name">{part.name}</span>
-                          {part.family && <span className="pl__part-fam">{part.family}</span>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {!isCollapsed &&
+                  (parts.length === 0 ? (
+                    <p className="pl__muted pl__parts-empty">No parts in this library.</p>
+                  ) : (
+                    // Group the library's parts under category section headers (#193).
+                    groupByCategory(parts).map(({ category, items }) => (
+                      <div className="pl__cat" key={category}>
+                        <div className="pl__cat-head">
+                          <span className="pl__cat-name">{category}</span>
+                          <span className="pl__cat-count">{items.length}</span>
+                        </div>
+                        <ul className="pl__parts">
+                          {items.map((part) => (
+                            <li
+                              key={part.id}
+                              className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}`}
+                            >
+                              <button
+                                type="button"
+                                className="pl__part-btn"
+                                onClick={() =>
+                                  setSelected(
+                                    selected?.libraryId === lib.id && selected?.partId === part.id
+                                      ? null
+                                      : { libraryId: lib.id, partId: part.id }
+                                  )
+                                }
+                              >
+                                <span className="pl__part-name">{part.name}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  ))}
               </div>
             )
           })}

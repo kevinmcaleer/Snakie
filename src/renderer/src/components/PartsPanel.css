@@ -277,7 +277,33 @@
 }
 
 .pl__parts-empty {
-  padding: 0.2rem 0;
+  padding: 0.2rem 0 0.2rem 0.9rem;
+}
+
+/* Category section header within a library (#193). */
+.pl__cat {
+  margin-top: 0.2rem;
+}
+
+.pl__cat-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  padding: 0.2rem 0.4rem 0.1rem 0.9rem;
+}
+
+.pl__cat-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.pl__cat-count {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .pl__part-btn {
