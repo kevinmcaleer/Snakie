@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-06-29
+
+### Added
+- **Standard library updates (epic #191).** The Parts Library now keeps a
+  versioned **Standard library** in step with GitHub:
+  - **Categories with section headers** — parts are grouped under their category
+    (Microcontroller, Computer, Sensor, Input, Output, Motor, Display,
+    Communication, Power, IC, …) instead of a flat list (#193).
+  - **Any component type** — the Standard library holds any part, not just
+    microcontrollers (renamed *Standard Boards → Standard Parts*) (#192).
+  - **Update check on startup** — Snakie checks GitHub for newer library versions
+    at launch and caches the result (#194).
+  - **Refresh** reloads parts from disk **and** re-checks GitHub (#195).
+  - **"Updates available" indicator** with one-click **Update all** — each install
+    is a fresh clone, so the new version is used immediately (#196).
+  - **Publish (developer mode)** — a dev-only button bumps the Standard library
+    version and pushes its git checkout to GitHub (#197).
+- **Part-builder skill (#198).** A Claude skill (`.claude/skills/build-part-from-image`)
+  that turns a product-page / part image + pinout into a Snakie part — extracting
+  pins and drawing the defining components with the shapes & text tools
+  (important features only; no copper traces).
+- **Common robotic parts list (#199).** `docs/common-parts.md` — a curated
+  wishlist of common parts to drive the part-builder skill.
+
 ## [0.15.1] - 2026-06-29
 
 ### Fixed
@@ -1040,7 +1064,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.13.0...v0.14.0
