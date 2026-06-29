@@ -71,11 +71,30 @@ export function seedStandardLibrary(): Promise<void> {
 
 async function doSeedStandardLibrary(): Promise<void> {
   const dest = join(partsDir(), STANDARD_LIBRARY_ID)
-  if (existsSync(dest)) return
   const src = bundledStandardLibraryDir()
   if (!existsSync(src)) return
-  // Copy into a temp dir first, then rename — so an interrupted copy can't leave a
-  // half-written library that the existsSync guard would then skip.
+
+  // Already seeded: additively sync any NEW bundled part folders (e.g. parts added
+  // in an app update, like the Tiny 2350) into the existing library — WITHOUT
+  // overwriting parts the user has already (so their edits + the in-app GitHub
+  // updates survive). Only copies folders that aren't there yet.
+  if (existsSync(dest)) {
+    try {
+      const entries = await fsp.readdir(src, { withFileTypes: true })
+      for (const e of entries) {
+        if (!e.isDirectory()) continue
+        const target = join(dest, e.name)
+        if (existsSync(target)) continue
+        await fsp.cp(join(src, e.name), target, { recursive: true })
+      }
+    } catch {
+      // best-effort — a missing part just falls back to the built-in board
+    }
+    return
+  }
+
+  // First run: full copy into a temp dir then rename — so an interrupted copy
+  // can't leave a half-written library that the existsSync guard would then skip.
   const tmp = `${dest}.seeding-${process.pid}`
   try {
     await fsp.mkdir(partsDir(), { recursive: true })
