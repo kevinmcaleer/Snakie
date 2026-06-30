@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
+import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from './simulation'
 import type {
   ConnectionState,
@@ -13,32 +14,39 @@ import type {
 /** How often the simulated board "prints" a telemetry frame (ms). */
 const TELEMETRY_INTERVAL_MS = 120
 
-/** Boot banner the simulated friendly REPL greets with. */
-const BANNER =
-  '\r\nMicroPython v1.24.0 (Snakie simulator) on rp2; Virtual board with RP2040\r\n' +
-  'Type "help()" for more information.\r\n>>> '
-
 /**
  * SIMULATED MicroPython device (issue #135).
  *
- * A drop-in {@link SnakieDevice} that needs no hardware: it fakes the friendly
- * REPL (banner + keystroke echo), continuously emits realistic `SNK …` telemetry
- * so the instruments animate, and answers the Board Viewer's `<<SNKV>>` live-pin
- * probe with plausible values — letting users explore Snakie, the instruments
- * and the Board Viewer Live View completely offline.
+ * A drop-in {@link SnakieDevice} that needs no hardware. It runs a REAL
+ * MicroPython interpreter (compiled to WebAssembly, via {@link MicroPythonRuntime})
+ * so the REPL, the Run button (paste mode) and `print()` all work — and, on top
+ * of that, continuously emits realistic `SNK …` telemetry so the instruments
+ * animate and answers the Board Viewer's `<<SNKV>>` live-pin probe with plausible
+ * values. The result: you can write and run Python, watch instruments and use the
+ * Board Viewer Live View completely offline.
  *
- * It deliberately mirrors {@link MicroPythonDevice}'s public surface (and emits
- * the same `data` / `status` events) so `device/ipc.ts` can route to it for the
- * reserved virtual port without any special-casing downstream. All the signal
- * generation lives in the pure `simulation.ts` helpers; this class only owns the
- * connection lifecycle, the telemetry timer and the fake REPL/filesystem.
+ * Hardware modules (`machine`, etc.) don't exist in the WASM port, so the
+ * synthetic telemetry/probe stand in for a board's sensors — the instruments and
+ * Live View stay useful without real pins. The REPL output and the telemetry
+ * share the `data` channel safely: the Terminal's telemetry filter drops whole
+ * `SNK …` lines wherever they fall, and the two are emitted as separate complete
+ * chunks, so they never splice into one another.
+ *
+ * The interpreter is injected as a {@link ReplRuntime} so the device can be
+ * unit-tested against a lightweight fake without loading WebAssembly.
  */
 export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private state: ConnectionState = 'disconnected'
   private timer: ReturnType<typeof setInterval> | null = null
   private tick = 0
+  private readonly runtime: ReplRuntime
   /** Latest control payload per target (for inspection / future feedback). */
   private readonly control = new Map<string, string>()
+
+  constructor(runtime: ReplRuntime = new MicroPythonRuntime()) {
+    super()
+    this.runtime = runtime
+  }
 
   on(event: 'data', listener: (chunk: Buffer) => void): this
   on(event: 'status', listener: (status: DeviceStatus) => void): this
@@ -62,15 +70,30 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     if (this.state === 'connected') return
     // Mimic the real flow: a brief "connecting" then "connected".
     this.setState('connecting')
+    try {
+      // Boot the interpreter; its banner + prompt stream out via `data`.
+      await this.runtime.init((chunk) => this.emit('data', chunk))
+    } catch (err) {
+      // The REPL couldn't start — still connect so the instruments + Board
+      // Viewer work; just print a notice instead of a live Python prompt.
+      const reason = err instanceof Error ? err.message : String(err)
+      this.emit(
+        'data',
+        Buffer.from(
+          `\r\nSimulated device — Python REPL unavailable (${reason}).\r\n` +
+            'Instruments and the Board Viewer still work.\r\n>>> ',
+          'utf8'
+        )
+      )
+    }
     this.setState('connected')
-    // Greet on the friendly REPL, then start the telemetry stream.
-    this.emit('data', Buffer.from(BANNER, 'utf8'))
     this.startTelemetry()
   }
 
   async disconnect(): Promise<void> {
     this.stopTelemetry()
     this.control.clear()
+    this.runtime.dispose()
     if (this.state !== 'disconnected') this.setState('disconnected')
   }
 
@@ -111,8 +134,9 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   /**
    * Run code in the "raw REPL". The only snippet we meaningfully answer is the
-   * Board Viewer's `<<SNKV>>` live-pin probe; anything else returns empty output
-   * (no traceback), which is enough for the offline experience.
+   * Board Viewer's `<<SNKV>>` live-pin probe (with synthetic values, since there
+   * is no hardware to read); anything else returns empty output (no traceback).
+   * Interactive code execution flows through {@link sendData} → the real REPL.
    */
   async exec(code: string): Promise<ExecResult> {
     if (this.state !== 'connected') throw new Error('Not connected')
@@ -128,22 +152,10 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     return stdout
   }
 
-  /** Echo user keystrokes back to the fake REPL so typing feels alive. */
+  /** Feed user keystrokes / Run paste-mode payloads to the real MicroPython REPL. */
   async sendData(data: string): Promise<void> {
     if (this.state !== 'connected') return
-    if (data.includes('\x03')) {
-      // Ctrl-C → KeyboardInterrupt and a fresh prompt.
-      this.emit('data', Buffer.from('\r\nKeyboardInterrupt\r\n>>> ', 'utf8'))
-      return
-    }
-    if (data.includes('\x04')) {
-      // Ctrl-D → soft reset: re-print the banner.
-      this.emit('data', Buffer.from(BANNER, 'utf8'))
-      return
-    }
-    // Echo what was typed; on Enter, drop to a new prompt line.
-    const echoed = data.replace(/\r/g, '\r\n>>> ')
-    this.emit('data', Buffer.from(echoed, 'utf8'))
+    await this.runtime.feed(data)
   }
 
   /** Record an IDE→board control command (latest-wins per target). */
@@ -151,10 +163,12 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     this.control.set(target, payload)
   }
 
+  /** Ctrl-C — interrupt the running program in the real REPL. */
   async interrupt(): Promise<void> {
     await this.sendData('\x03')
   }
 
+  /** Ctrl-D — soft-reset the real REPL. */
   async softReset(): Promise<void> {
     await this.sendData('\x04')
   }
@@ -202,6 +216,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   async dispose(): Promise<void> {
     this.stopTelemetry()
+    this.runtime.dispose()
     this.removeAllListeners()
     this.state = 'disconnected'
   }
