@@ -17,6 +17,17 @@ import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
 import { setupAppMenu } from './menu'
 
+// Disable GPU / hardware-accelerated rendering on the Raspberry Pi build (Linux
+// arm64). The Pi's GL stack can't report VSync timing to Chromium, which floods
+// the console with harmless `ERROR:gl_surface_presentation_helper.cc …
+// GetVSyncParametersIfAvailable() failed` lines and can make GPU compositing
+// unreliable; software rendering is steadier for this UI on a Pi 4/5. Set
+// SNAKIE_ENABLE_GPU=1 to keep hardware acceleration. Must run before app `ready`
+// (before the GPU process spawns).
+if (process.platform === 'linux' && process.arch === 'arm64' && !process.env.SNAKIE_ENABLE_GPU) {
+  app.disableHardwareAcceleration()
+}
+
 /** The single application window, used to route device push-events. */
 let mainWindow: BrowserWindow | null = null
 
