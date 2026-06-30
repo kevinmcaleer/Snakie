@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Simulated device: file operations no longer fail with "NULL object".** The
+  offline device's filesystem helpers (list/read/write/stat) now run their Python
+  via the interpreter's **synchronous** exec instead of the Asyncify path, whose
+  reentrancy could make a nested call return a NULL object — which surfaced as
+  "NULL object" in the device-files panel and when installing the instruments
+  library. `writeFile` now also **creates missing parent directories** (the
+  in-memory VFS starts empty, so `/lib` is made on demand).
+- **Simulated device: clearer message for `mip` installs.** Installing a `mip`
+  package (e.g. the SAM speech library) on the offline device now reports that
+  package install needs a network connection and a real board, instead of a
+  cryptic "mip failed" (the WASM port has no `mip`/network).
+- **No more `MaxListenersExceededWarning` for device status.** `useDeviceStatus`
+  (used by ~18 components) now shares a single `device:status` subscription that
+  fans out to all callers, and the preload raises the IPC listener ceiling for
+  the legitimately multi-subscriber broadcast channels (`device:data`/`status`).
+
 ## [0.18.1] - 2026-06-30
 
 ### Fixed
