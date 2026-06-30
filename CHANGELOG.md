@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-06-30
+
 ### Added
 - **Undocked instruments are true OS windows (#205).** Undocking an instrument now
   opens it in its own native, **resizable** OS window (the Board View / Find
@@ -1201,6 +1203,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.19.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.1...v0.17.0
