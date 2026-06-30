@@ -57,3 +57,48 @@
   width: 100%;
   max-width: 404px;
 }
+
+/* --- Detached instrument OS window (#205) --------------------------------- */
+/* In its own resizable OS window the single instrument FILLS the frame (no fixed
+ * 404×172), so dragging the native window edge resizes the instrument and the
+ * Plotter / scope reflow via their ResizeObserver. */
+.instr-window {
+  display: flex;
+  height: 100vh;
+  padding: 10px;
+  box-sizing: border-box;
+  background: #15171a;
+}
+.instr-window > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+.instr-window .instr {
+  width: 100% !important;
+  max-width: none !important;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.instr-window .instr__body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+/* The green scope/meter screen has a fixed 172px height in the dock; let it grow
+ * to fill the window so the waveform/readout scales. The Plotter has its own
+ * flexing screen (Plotter.css) and just needs the body to flex, above. */
+.instr-window .instr__screen {
+  height: auto !important;
+  flex: 1 1 auto;
+  min-height: 130px;
+}
+.instr-window__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  color: #9aa0a8;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  background: #15171a;
+}

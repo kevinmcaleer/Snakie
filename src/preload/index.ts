@@ -77,6 +77,7 @@ import type {
   RegistryEntry
 } from '../shared/part'
 import type { RobotDefinition } from '../shared/robot'
+import type { InstrumentWindowPayload } from '../shared/instrument-window'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -758,7 +759,29 @@ const instruments = {
    * library can't be read (the main handler never throws), which the banner
    * treats as "unavailable".
    */
-  librarySource: (): Promise<string> => ipcRenderer.invoke('instruments:librarySource')
+  librarySource: (): Promise<string> => ipcRenderer.invoke('instruments:librarySource'),
+
+  // --- Detached instrument OS windows (#205) ---
+  /** Open (or focus) a true OS window rendering one undocked instrument. */
+  openWindow: (payload: InstrumentWindowPayload): Promise<void> =>
+    ipcRenderer.invoke('instruments:openWindow', payload),
+  /** Close the detached window for `key` (re-docks via `onWindowClosed`). */
+  closeWindow: (key: string): void => ipcRenderer.send('instruments:closeWindow', key),
+  /** (In a detached window) pull this window's payload on mount. */
+  requestWindowPayload: (): Promise<InstrumentWindowPayload | null> =>
+    ipcRenderer.invoke('instruments:requestPayload'),
+  /** (In a detached window) the main process refreshed this window's payload. */
+  onWindowPayload: (cb: (payload: InstrumentWindowPayload) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: InstrumentWindowPayload): void => cb(payload)
+    ipcRenderer.on('instruments:payload', listener)
+    return () => ipcRenderer.removeListener('instruments:payload', listener)
+  },
+  /** (In the MAIN window) a detached instrument window was closed → re-dock it. */
+  onWindowClosed: (cb: (e: { key: string }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, payload: { key: string }): void => cb(payload)
+    ipcRenderer.on('instruments:windowClosed', listener)
+    return () => ipcRenderer.removeListener('instruments:windowClosed', listener)
+  }
 }
 
 /**

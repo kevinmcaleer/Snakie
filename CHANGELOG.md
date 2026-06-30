@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Undocked instruments are true OS windows (#205).** Undocking an instrument now
+  opens it in its own native, **resizable** OS window (the Board View / Find
+  precedent) instead of an in-app floating overlay — so you can move it to another
+  monitor, and the **Plotter** (and the scope/meter) reflow as you resize the
+  window. The detached instrument stays live: the device telemetry stream is
+  relayed to every instrument window. Closing the window (native ✕ or the in-window
+  Dock key) re-docks the instrument. The **Plotter is now undockable** too.
 - **Status-bar messages for file syncing (#178).** The status bar now narrates
   what file syncing is doing: when you tag/untag a file, when you turn the sync
   toggle on or off, and for every automatic push on save (`Syncing main.py…` →
