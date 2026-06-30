@@ -104,3 +104,14 @@
   color: var(--text);
   font-weight: 600;
 }
+
+/* Sync indicator on a file that's tagged to keep in sync with the device (#178).
+   Right-aligned so it sits at the row's trailing edge, accent-coloured. */
+.tree-row__sync {
+  margin-left: auto;
+  flex: 0 0 auto;
+  padding-left: 0.3rem;
+  font-size: 0.8em;
+  line-height: 1;
+  color: var(--accent-2);
+}

@@ -49,6 +49,27 @@ import {
 
 export type FileSource = 'local' | 'device'
 
+/**
+ * Window event dispatched after a file is successfully saved (#178). The sync
+ * store listens for this to auto-upload tagged local files on save — a decoupled
+ * seam so the workspace store doesn't depend on the sync store.
+ */
+export const FILE_SAVED_EVENT = 'snakie:file-saved'
+
+/** Detail payload of {@link FILE_SAVED_EVENT}. */
+export interface FileSavedDetail {
+  source: FileSource
+  path: string
+  content: string
+}
+
+/** Announce a successful save so listeners (e.g. file sync, #178) can react. */
+function announceSaved(source: FileSource, path: string, content: string): void {
+  window.dispatchEvent(
+    new CustomEvent<FileSavedDetail>(FILE_SAVED_EVENT, { detail: { source, path, content } })
+  )
+}
+
 /** localStorage key for the last opened working folder (#177), restored on launch. */
 const LAST_FOLDER_KEY = 'snakie.lastFolder'
 
@@ -276,6 +297,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         if (!chosen) return
         await window.api.fs.writeFile(chosen, file.content)
         dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen) })
+        announceSaved('local', chosen, file.content)
         return
       }
       if (!file.path) return
@@ -285,6 +307,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         await window.api.device.writeFile(file.path, file.content)
       }
       dispatch({ type: 'markSaved', id })
+      announceSaved(file.source, file.path, file.content)
     },
     [state.openFiles]
   )

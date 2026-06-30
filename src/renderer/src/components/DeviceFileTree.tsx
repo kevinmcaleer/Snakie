@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { useSync } from '../store/sync'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { Placeholder } from './Placeholder'
 import { usePrompt } from './PromptModal'
@@ -72,6 +73,30 @@ const NewFolderIcon = (): JSX.Element => (
       <rect x="7" y="8" width="2" height="5" fill="var(--bg-elevated)" />
       <rect x="5.5" y="9.5" width="5" height="2" fill="var(--bg-elevated)" />
     </g>
+  </svg>
+)
+
+// two opposing arrows (sync) — push tagged local files to the device (#178)
+const SyncIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <g fill="currentColor">
+      <path d="M2 5h9V2l4 4-4 4V7H2z" />
+      <path d="M14 11H5v3l-4-4 4-4v3h9z" />
+    </g>
+  </svg>
+)
+
+// checkmark — shown briefly when a sync completes (#178)
+const CheckIcon = (): JSX.Element => (
+  <svg {...iconProps}>
+    <path
+      d="M2 8l4 4 8-9"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   </svg>
 )
 
@@ -211,6 +236,15 @@ export function DeviceFileTree(): JSX.Element {
   const connected = status.state === 'connected'
   const { openFile } = useWorkspace()
   const prompt = usePrompt()
+  // File sync (#178): tagged local files pushed to the device.
+  const {
+    syncedPaths,
+    syncOnSave,
+    status: syncStatus,
+    error: syncError,
+    setSyncOnSave,
+    syncNow
+  } = useSync()
 
   const [entries, setEntries] = useState<DirEntry[]>([])
   const [selectedPath, setSelectedPath] = useState<string | null>(null)
@@ -246,6 +280,11 @@ export function DeviceFileTree(): JSX.Element {
       setError(null)
     }
   }, [connected, refresh])
+
+  // When a sync finishes, re-list the root so the just-pushed files appear.
+  useEffect(() => {
+    if (syncStatus === 'done' && connected) void refresh()
+  }, [syncStatus, connected, refresh])
 
   const handleSelect = useCallback((path: string, isDir: boolean): void => {
     setSelectedPath(path)
@@ -461,8 +500,43 @@ export function DeviceFileTree(): JSX.Element {
           <span aria-hidden>{'▦'}</span> Device files
         </span>
         {/* Icon-only header actions mirroring the local section (issue #104):
-            Refresh sits left of New file, then New folder. */}
+            the file-sync status/controls (#178), then Refresh, New file, New
+            folder. */}
         <div className="devicetree__header-actions">
+          {/* Sync status + manual "Sync now": the sync icon turns into a green
+              tick for a moment when a sync completes. */}
+          <button
+            className={`btn btn--ghost btn--icon devicetree__sync devicetree__sync--${syncStatus}`}
+            onClick={() => void syncNow()}
+            disabled={syncStatus === 'syncing' || syncedPaths.length === 0}
+            title={
+              syncedPaths.length === 0
+                ? 'Tag local files (right-click → Keep in sync) to sync them here'
+                : syncStatus === 'syncing'
+                  ? 'Syncing…'
+                  : syncStatus === 'done'
+                    ? 'Synced'
+                    : syncStatus === 'error'
+                      ? `Sync failed: ${syncError ?? 'unknown error'}`
+                      : `Sync ${syncedPaths.length} tagged file${syncedPaths.length === 1 ? '' : 's'} now`
+            }
+            aria-label={
+              syncStatus === 'done'
+                ? 'Files synced'
+                : `Sync ${syncedPaths.length} tagged files to the device now`
+            }
+          >
+            {syncStatus === 'done' ? <CheckIcon /> : <SyncIcon />}
+          </button>
+          {/* Toggle: auto-push tagged files on every save. */}
+          <button
+            className={`btn btn--ghost devicetree__autosync${syncOnSave ? ' is-active' : ''}`}
+            onClick={() => setSyncOnSave(!syncOnSave)}
+            aria-pressed={syncOnSave}
+            title="Sync tagged files automatically on save"
+          >
+            Auto
+          </button>
           <button
             className="btn btn--ghost btn--icon"
             onClick={() => void refresh()}

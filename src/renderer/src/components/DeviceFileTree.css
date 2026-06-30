@@ -56,3 +56,44 @@
 .devicetree__tree {
   min-height: 4rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * File sync controls (#178): a status/Sync-now button whose icon turns into a
+ * green tick when a sync completes, plus a compact "Auto" sync-on-save toggle.
+ * ------------------------------------------------------------------------- */
+
+/* Spin the sync arrows while a sync is in progress (paused under
+   prefers-reduced-motion by the global rule in index.css). */
+.devicetree__sync--syncing svg {
+  animation: devicetree-sync-spin 0.9s linear infinite;
+}
+
+@keyframes devicetree-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Green tick on completion; red on failure. */
+.devicetree__sync--done {
+  color: var(--accent-2);
+}
+
+.devicetree__sync--error {
+  color: var(--danger);
+}
+
+/* Compact text toggle for "sync on save"; lit when enabled. */
+.devicetree__autosync {
+  padding: 0.15rem 0.4rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.devicetree__autosync.is-active {
+  background: var(--bg-sunken);
+  border-color: var(--accent);
+  color: var(--accent);
+}
