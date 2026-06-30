@@ -14,7 +14,6 @@ import {
   InstrumentToggle,
   InstrumentToggleGroup,
   InstrumentWindow,
-  useFloatPlacement,
   type FloatProps
 } from './InstrumentWindow'
 import { Oscilloscope } from './Oscilloscope'
@@ -51,12 +50,12 @@ import {
 export { normaliseVisibility }
 export type { InstrumentVisibility }
 import {
-  initialOffset,
   instrumentKey,
   redockKind as redockKindMap,
   redockOne,
   unionByVariable
 } from './instrument-host'
+import type { InstrumentWindowPayload } from '../../../shared/instrument-window'
 import { parseTelemetry } from './instrument-telemetry'
 import {
   emptyFeed,
@@ -217,7 +216,7 @@ const telemetryDecoder = new TextDecoder()
  * thrashing React, samples accumulate in a ref and we publish a snapshot on a
  * gentle interval only when something changed.
  */
-function useTelemetryFeed(): TelemetryFeed {
+export function useTelemetryFeed(): TelemetryFeed {
   const [snapshot, setSnapshot] = useState<TelemetryFeed>(emptyFeed)
   const feedRef = useRef<TelemetryFeed>(emptyFeed())
   const lineBuf = useRef('')
@@ -339,6 +338,12 @@ export interface UseInstrumentsResult {
   singletonDocked: Record<string, boolean>
   /** Flip a singleton between docked and floating (the dock-to-side key). */
   toggleSingletonDock: (id: string) => void
+  /**
+   * Re-dock the instrument identified by a detached-window key
+   * (`scope:var` / `meter:var` / `singleton:id`). Called when its OS window
+   * closes (#205) so the instrument returns to the dock rather than vanishing.
+   */
+  redockByKey: (key: string) => void
 }
 
 export function useInstruments({
@@ -442,6 +447,19 @@ export function useInstruments({
     setSingletonDocked((d) => ({ ...d, [id]: !(d[id] ?? true) }))
   }, [])
 
+  // Re-dock the instrument behind a detached OS window when it closes (#205). The
+  // key is `singleton:<id>` for a singleton, else `<kind>:<variable>` (the same
+  // shape as instrumentKey), so we set the matching docked override back to true.
+  const redockByKey = useCallback((key: string): void => {
+    const SINGLETON_PREFIX = 'singleton:'
+    if (key.startsWith(SINGLETON_PREFIX)) {
+      const id = key.slice(SINGLETON_PREFIX.length)
+      setSingletonDocked((d) => ({ ...d, [id]: true }))
+    } else {
+      setDocked((d) => ({ ...d, [key]: true }))
+    }
+  }, [])
+
   // Live device values: build the probe from the OPEN INSTRUMENTS' OWN conns (not
   // the main-file parse) so live readings work regardless of the active file. The
   // values are keyed by instrument index (the same order we resolve below). Poll
@@ -532,7 +550,8 @@ export function useInstruments({
     retargetInstrument,
     redockKind,
     singletonDocked,
-    toggleSingletonDock
+    toggleSingletonDock,
+    redockByKey
   }
 }
 
@@ -827,12 +846,13 @@ export function InstrumentDockRegion({
         meterDocked.map((r) => (
           <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
         ))}
-      {isVisible(vis, 'plotter') && (
+      {isVisible(vis, 'plotter') && host.singletonDocked['plotter'] !== false && (
         <DockItem>
           <InstrumentWindow
             name="PLOTTER"
             source="serial · live"
             docked
+            onToggleDock={() => host.toggleSingletonDock('plotter')}
             onClose={() => onToggleVisible('plotter')}
           >
             <Plotter />
@@ -865,7 +885,7 @@ function DockItem({ children }: { children: JSX.Element }): JSX.Element {
  * panel shares the prop shape `{ def, onClose, docked }` (see PlaceholderInstrument),
  * so this switch is the single integration seam the panel issues plug into.
  */
-function renderSingleton(
+export function renderSingleton(
   def: InstrumentDef,
   onClose: () => void,
   chrome?: { onToggleDock?: () => void; docked?: boolean; float?: FloatProps }
@@ -908,106 +928,96 @@ function renderSingleton(
 }
 
 /**
- * THE APP-ROOT FLOAT LAYER — a `position:fixed; inset:0` click-through layer
- * over the WHOLE window (above the panels, below modals). The undocked
- * scope/meter windows float here, draggable by their title bar and clamped to
- * the whole window. `visible` is the toolbar Instruments toggle (it hides the
- * whole layer; positions survive because it's CSS-hidden, kept mounted).
- * Scope/meter floats are gated by their kind visibility (`vis`).
+ * DETACHED INSTRUMENT WINDOWS CONTROLLER (#205).
+ *
+ * Undocking an instrument no longer floats it inside the app — it opens a true,
+ * natively-resizable OS window (see `src/main/instrumentWindows.ts`), so the
+ * Plotter and the scope/meter reflow with the window. This component renders
+ * NOTHING; it reconciles the set of UNDOCKED instruments with the open OS
+ * windows: open a window for each newly-undocked instrument, close it when the
+ * instrument re-docks, and re-dock an instrument when the user closes its window
+ * (native ✕ or the in-window Dock key). The detached window reads the live
+ * device stream, which the main process relays to every instrument window.
+ *
+ * `visible`/`onToggleVisible` are accepted for call-site compatibility (the
+ * Toolbar still passes them) but unused now the in-app float layer is gone.
  */
 export function InstrumentFloatLayer({
   host,
-  vis,
-  visible,
-  onToggleVisible
+  vis
 }: {
   host: UseInstrumentsResult
   vis: InstrumentVisibility
-  visible: boolean
-  /** Close (hide) a singleton floated here — same close→hide model as the dock. */
-  onToggleVisible: (id: string) => void
-}): JSX.Element | null {
-  const floats = host.floatItems.filter((r) =>
-    isVisible(vis, r.it.kind === 'scope' ? 'scope' : 'meter')
-  )
-  // Undocked singletons (every visible non-plotter singleton whose dock override
-  // is off) float here alongside the scope/meter floats.
-  const singletonFloats = SINGLETON_IDS.filter(
-    (id) => id !== 'plotter' && isVisible(vis, id) && host.singletonDocked[id] === false
-  )
-    .map((id) => instrumentById(id))
-    .filter((d): d is InstrumentDef => d !== undefined)
-  if (floats.length === 0 && singletonFloats.length === 0) return null
-  return (
-    <div
-      className={`instr-floats ${visible ? '' : 'instr-floats--hidden'}`}
-      aria-hidden={!visible}
-    >
-      {floats.map((r) => (
-        <FloatingInstrument key={`${r.it.kind}:${r.it.conn.variable}`} r={r} host={host} />
-      ))}
-      {singletonFloats.map((def, i) => (
-        <FloatingSingleton
-          key={def.id}
-          def={def}
-          cascade={floats.length + i}
-          host={host}
-          onClose={() => onToggleVisible(def.id)}
-        />
-      ))}
-    </div>
-  )
-}
+  visible?: boolean
+  onToggleVisible?: (id: string) => void
+}): null {
+  // The instruments that should each own an OS window right now: undocked
+  // scope/meters (gated by kind visibility) + undocked singletons incl. the
+  // Plotter (gated by their own visibility).
+  const desired = new Map<string, InstrumentWindowPayload>()
+  for (const r of host.floatItems) {
+    if (!isVisible(vis, r.it.kind === 'scope' ? 'scope' : 'meter')) continue
+    const key = instrumentKey(r.it.kind, r.it.conn.variable)
+    desired.set(key, {
+      key,
+      kind: r.it.kind,
+      conn: {
+        type: r.conn.type,
+        pins: r.conn.pins,
+        variable: r.conn.variable,
+        constructor: r.conn.constructor,
+        instrument: r.conn.instrument,
+        roles: r.conn.roles,
+        bus: r.conn.bus
+      },
+      title: `${r.it.kind === 'scope' ? 'Oscilloscope' : 'Multimeter'} · ${r.it.conn.variable}`
+    })
+  }
+  for (const id of SINGLETON_IDS) {
+    if (host.singletonDocked[id] !== false || !isVisible(vis, id)) continue
+    const key = `singleton:${id}`
+    desired.set(key, { key, kind: 'singleton', defId: id, title: instrumentById(id)?.name ?? id })
+  }
 
-/**
- * One floating SINGLETON instrument (e.g. an undocked Wi-Fi scan): owns its drag
- * offset via {@link useFloatPlacement} and renders the panel with float chrome +
- * the dock-to-side key. Mirrors {@link FloatingInstrument} for the scope/meter.
- */
-function FloatingSingleton({
-  def,
-  cascade,
-  host,
-  onClose
-}: {
-  def: InstrumentDef
-  cascade: number
-  host: UseInstrumentsResult
-  onClose: () => void
-}): JSX.Element {
-  const getHostSize = useCallback((): { w: number; h: number } => {
-    const el = document.querySelector('.shell') as HTMLElement | null
-    if (!el) return { w: window.innerWidth, h: window.innerHeight }
-    return { w: el.clientWidth, h: el.clientHeight }
-  }, [])
-  const float = useFloatPlacement(initialOffset(cascade), getHostSize)
-  return renderSingleton(def, onClose, {
-    onToggleDock: () => host.toggleSingletonDock(def.id),
-    docked: false,
-    float
-  })
-}
+  // A stable signature of the desired SET (its keys) so the reconcile effect runs
+  // when an instrument is (un)docked — NOT on every telemetry-driven re-render.
+  const signature = [...desired.keys()].sort().join('|')
+  const desiredRef = useRef(desired)
+  desiredRef.current = desired
+  const openedRef = useRef<Set<string>>(new Set())
 
-/**
- * One floating instrument: owns its drag offset via {@link useFloatPlacement}
- * (so each window drags independently) and renders the scope/meter body. Split
- * into its own component because the hook must be called once per window.
- */
-function FloatingInstrument({
-  r,
-  host
-}: {
-  r: ResolvedInstrument
-  host: UseInstrumentsResult
-}): JSX.Element {
-  // The host box = the WHOLE app window (the `.shell` root), measured live so the
-  // drag clamp tracks window resizes and undocked windows can roam over every
-  // panel. Read at drag time (not on every render).
-  const getHostSize = useCallback((): { w: number; h: number } => {
-    const host = document.querySelector('.shell') as HTMLElement | null
-    if (!host) return { w: window.innerWidth, h: window.innerHeight }
-    return { w: host.clientWidth, h: host.clientHeight }
+  useEffect(() => {
+    const opened = openedRef.current
+    for (const [key, payload] of desiredRef.current) {
+      if (!opened.has(key)) {
+        void window.api.instruments.openWindow(payload)
+        opened.add(key)
+      }
+    }
+    for (const key of [...opened]) {
+      if (!desiredRef.current.has(key)) {
+        window.api.instruments.closeWindow(key)
+        opened.delete(key)
+      }
+    }
+  }, [signature])
+
+  // Re-dock the instrument when its OS window is closed (native ✕ or Dock key).
+  useEffect(() => {
+    return window.api.instruments.onWindowClosed(({ key }) => {
+      openedRef.current.delete(key)
+      host.redockByKey(key)
+    })
+  }, [host])
+
+  // Close any detached windows if this controller unmounts (e.g. a window reload).
+  useEffect(() => {
+    const opened = openedRef.current
+    return () => {
+      for (const key of opened) window.api.instruments.closeWindow(key)
+      opened.clear()
+    }
   }, [])
-  const float = useFloatPlacement(initialOffset(r.cascade), getHostSize)
-  return renderResolved(r, host, float)
+
+  return null
 }

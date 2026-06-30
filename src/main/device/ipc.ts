@@ -2,6 +2,7 @@ import { ipcMain, type WebContents } from 'electron'
 import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../shared/virtual-device'
 import { MicroPythonDevice } from './MicroPythonDevice'
 import { SimulatedDevice } from './SimulatedDevice'
+import { instrumentWindowWebContents } from '../instrumentWindows'
 import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
@@ -70,20 +71,17 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
 
   // Forward raw output and status from BOTH backends; only the connected one
   // ever emits, so there is no cross-talk between real and simulated devices.
+  // Detached instrument windows (#205) also receive the stream so a floated
+  // scope/plotter/robotics panel stays live in its own OS window.
+  const broadcast = (channel: string, payload: unknown): void => {
+    const main = getWebContents()
+    if (main && !main.isDestroyed()) main.send(channel, payload)
+    for (const wc of instrumentWindowWebContents()) wc.send(channel, payload)
+  }
   const forward = (dev: SnakieDevice): void => {
-    dev.on('data', (chunk) => {
-      const wc = getWebContents()
-      if (wc && !wc.isDestroyed()) {
-        // Send as a Uint8Array; it survives structured clone across IPC.
-        wc.send(DEVICE_CHANNELS.data, new Uint8Array(chunk))
-      }
-    })
-    dev.on('status', (status: DeviceStatus) => {
-      const wc = getWebContents()
-      if (wc && !wc.isDestroyed()) {
-        wc.send(DEVICE_CHANNELS.status, status)
-      }
-    })
+    // Send as a Uint8Array; it survives structured clone across IPC.
+    dev.on('data', (chunk) => broadcast(DEVICE_CHANNELS.data, new Uint8Array(chunk)))
+    dev.on('status', (status: DeviceStatus) => broadcast(DEVICE_CHANNELS.status, status))
   }
   forward(realDev)
   forward(simDev)

@@ -13,6 +13,7 @@ import { registerPluginsIpc, disposePlugins } from './plugins/ipc'
 import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
+import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
 import { setupAppMenu } from './menu'
@@ -182,6 +183,11 @@ app.whenReady().then(() => {
   // always-on-top window that drives the main editor's find/replace over IPC.
   registerFindIpc(() => mainWindow)
 
+  // Register detached instrument windows (#205): undocking an instrument opens it
+  // as a true resizable OS window; the main window is told when one closes so it
+  // can re-dock the instrument.
+  registerInstrumentWindowsIpc(() => mainWindow)
+
   // Register the Parts Library + Part Editor layer (#129 / #130): portable,
   // community-authored parts on disk (<userData>/parts/<lib>/<part>/parts.yml)
   // plus the master community registry (fetch + install + update checks).
@@ -214,4 +220,5 @@ app.on('before-quit', () => {
   void disposePlugins()
   disposeBoard()
   disposeFind()
+  disposeInstrumentWindows()
 })
