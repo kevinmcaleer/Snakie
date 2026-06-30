@@ -838,6 +838,9 @@ const parts = {
    *  (and, when unpackaged, mirror it into the bundled repo copy so it ships). */
   promoteToStandard: (libraryId: string, partId: string): Promise<PartsWriteResult & { shipped?: boolean }> =>
     ipcRenderer.invoke('parts:promoteToStandard', { libraryId, partId }),
+  /** DEV: publish the Standard library to GitHub (bump version + commit + push). */
+  publishStandard: (message?: string): Promise<PartsWriteResult & { version?: string }> =>
+    ipcRenderer.invoke('parts:publishStandard', message),
   /** Create a new (empty) library from its manifest. */
   createLibrary: (meta: PartLibrary): Promise<PartsWriteResult> =>
     ipcRenderer.invoke('parts:createLibrary', meta),
@@ -863,7 +866,10 @@ const parts = {
     ipcRenderer.invoke('parts:installLibrary', entry),
   /** Which installed libraries have a newer version available in the registry. */
   checkUpdates: (url?: string): Promise<LibraryUpdate[]> =>
-    ipcRenderer.invoke('parts:checkUpdates', url)
+    ipcRenderer.invoke('parts:checkUpdates', url),
+  /** The result of the on-startup update check (cached in main), for an instant
+   *  indicator without re-hitting the network (#194). */
+  cachedUpdates: (): Promise<LibraryUpdate[]> => ipcRenderer.invoke('parts:cachedUpdates')
 }
 
 /**

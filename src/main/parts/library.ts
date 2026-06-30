@@ -24,12 +24,14 @@
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
 import { existsSync, promises as fsp } from 'fs'
+import { simpleGit } from 'simple-git'
 import {
   libraryFromYaml,
   libraryToYaml,
   partFromYaml,
   partToYaml
 } from '../../shared/part-yaml'
+import { bumpPatch } from '../../shared/part-registry'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
 /** Absolute path to the user's parts folder (`<userData>/parts`). */
@@ -69,11 +71,30 @@ export function seedStandardLibrary(): Promise<void> {
 
 async function doSeedStandardLibrary(): Promise<void> {
   const dest = join(partsDir(), STANDARD_LIBRARY_ID)
-  if (existsSync(dest)) return
   const src = bundledStandardLibraryDir()
   if (!existsSync(src)) return
-  // Copy into a temp dir first, then rename — so an interrupted copy can't leave a
-  // half-written library that the existsSync guard would then skip.
+
+  // Already seeded: additively sync any NEW bundled part folders (e.g. parts added
+  // in an app update, like the Tiny 2350) into the existing library — WITHOUT
+  // overwriting parts the user has already (so their edits + the in-app GitHub
+  // updates survive). Only copies folders that aren't there yet.
+  if (existsSync(dest)) {
+    try {
+      const entries = await fsp.readdir(src, { withFileTypes: true })
+      for (const e of entries) {
+        if (!e.isDirectory()) continue
+        const target = join(dest, e.name)
+        if (existsSync(target)) continue
+        await fsp.cp(join(src, e.name), target, { recursive: true })
+      }
+    } catch {
+      // best-effort — a missing part just falls back to the built-in board
+    }
+    return
+  }
+
+  // First run: full copy into a temp dir then rename — so an interrupted copy
+  // can't leave a half-written library that the existsSync guard would then skip.
   const tmp = `${dest}.seeding-${process.pid}`
   try {
     await fsp.mkdir(partsDir(), { recursive: true })
@@ -381,12 +402,13 @@ export async function readDriverSource(
 }
 
 /**
- * DEV workflow (#52/issue-3): promote a microcontroller board part into the
- * "Standard Boards" library so it becomes a shipped default. Writes it into the
- * runtime `<userData>/parts/snakie-standard` (so it shows immediately) AND, when
- * running unpackaged (dev), mirrors it into the bundled repo copy so it commits +
- * ships. Re-promoting an existing id is an UPDATE (overwrites). Returns whether the
- * repo copy was written (`shipped`).
+ * DEV workflow (#52/issue-3, #192): promote ANY part into the Standard library so
+ * it becomes a shipped default — not just microcontrollers, so the standard
+ * library can also hold sensors, ICs, power parts, displays, etc. Writes it into
+ * the runtime `<userData>/parts/snakie-standard` (so it shows immediately) AND,
+ * when running unpackaged (dev), mirrors it into the bundled repo copy so it
+ * commits + ships. Re-promoting an existing id is an UPDATE (overwrites). Returns
+ * whether the repo copy was written (`shipped`).
  */
 export async function promoteToStandard(
   sourceLibraryId: string,
@@ -395,9 +417,6 @@ export async function promoteToStandard(
   const srcLib = sanitiseId(sourceLibraryId) || LOCAL_LIBRARY_ID
   const part = await readPart(join(partsDir(), srcLib), sanitiseId(partId))
   if (!part) return { ok: false, error: 'Source part not found.' }
-  if ((part.family ?? '').trim().toLowerCase() !== 'microcontroller') {
-    return { ok: false, error: 'Only Microcontroller-family parts can be promoted to a board.' }
-  }
   // 1) Runtime copy (shows in the board selector immediately).
   const res = await writePart(STANDARD_LIBRARY_ID, part)
   if (!res.ok) return res
@@ -422,6 +441,44 @@ export async function promoteToStandard(
     }
   }
   return { ...res, shipped }
+}
+
+/**
+ * DEV workflow (#197): publish the runtime Standard library to GitHub. Bumps its
+ * `library.yml` PATCH version, then commits + pushes the library's git checkout —
+ * so editing parts in the app and clicking Publish ships a newer version users
+ * pick up via the update check (#194/#196).
+ *
+ * Requires the Standard library to be a **git checkout** (i.e. installed from the
+ * registry, which clones the snakie-parts repo) with a push remote configured.
+ * Returns the new version on success, or a guiding error. Never throws.
+ */
+export async function publishStandardLibrary(
+  message?: string
+): Promise<WriteResult & { version?: string }> {
+  try {
+    const dir = join(partsDir(), STANDARD_LIBRARY_ID)
+    if (!existsSync(join(dir, '.git'))) {
+      return {
+        ok: false,
+        error:
+          "The Standard library isn't a git checkout. Install it from the registry first (so it clones the snakie-parts repo), then Publish."
+      }
+    }
+    // Bump the manifest PATCH version so the update check sees the new release.
+    const manifestPath = join(dir, 'library.yml')
+    const manifest = libraryFromYaml(await fsp.readFile(manifestPath, 'utf-8'))
+    const version = bumpPatch(manifest.version)
+    await fsp.writeFile(manifestPath, libraryToYaml({ ...manifest, version }), 'utf-8')
+
+    const git = simpleGit(dir)
+    await git.add('.')
+    await git.commit(message?.trim() || `Publish ${STANDARD_LIBRARY_ID} v${version}`)
+    await git.push()
+    return { ok: true, id: STANDARD_LIBRARY_ID, version }
+  } catch (err) {
+    return { ok: false, error: `Publish failed: ${(err as Error).message}` }
+  }
 }
 
 /** Delete a part folder (and its assets). A missing folder is a success. */

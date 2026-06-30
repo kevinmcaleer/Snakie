@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
+import { groupByCategory } from './part-categories'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
   LibraryUpdate,
@@ -164,7 +165,7 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     async (libraryId: string, part: PartDefinition): Promise<void> => {
       const res = await window.api.parts.promoteToStandard(libraryId, part.id)
       if (res.ok) {
-        setNote(`Promoted "${part.name}" to Standard Boards${res.shipped ? ' + bundled repo copy' : ''}.`)
+        setNote(`Promoted "${part.name}" to the Standard library${res.shipped ? ' + bundled repo copy' : ''}.`)
         await refresh()
       } else {
         setNote(res.error ?? 'Promote failed.')
@@ -173,20 +174,38 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     [refresh]
   )
 
-  // Quietly check for updates once libraries are known.
+  // Check GitHub (the registry) for newer library versions, including the Standard
+  // library (#194). Runs on load and from the Refresh button (#195).
+  const checkNow = useCallback(async (): Promise<void> => {
+    try {
+      const u = await window.api.parts.checkUpdates()
+      setUpdates(u.filter((x) => x.updateAvailable))
+    } catch {
+      // Offline / registry unreachable — leave the last known result.
+    }
+  }, [])
+
+  // Seed from the main process's on-startup check (#194) for an instant indicator,
+  // then re-check live once libraries are known.
+  useEffect(() => {
+    window.api.parts
+      .cachedUpdates()
+      .then((u) => setUpdates(u.filter((x) => x.updateAvailable)))
+      .catch(() => undefined)
+  }, [])
   useEffect(() => {
     if (libraries.length === 0) return
-    let cancelled = false
-    window.api.parts
-      .checkUpdates()
-      .then((u) => {
-        if (!cancelled) setUpdates(u.filter((x) => x.updateAvailable))
-      })
-      .catch(() => undefined)
-    return () => {
-      cancelled = true
-    }
-  }, [libraries])
+    void checkNow()
+  }, [libraries, checkNow])
+
+  // Refresh the library: re-read parts from disk AND re-check GitHub (#195).
+  const refreshAll = useCallback((): void => {
+    setNote(null)
+    // Parts are read fresh from disk on every list call; the shared event also
+    // reloads the board graph in this window.
+    window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+    void checkNow()
+  }, [checkNow])
 
   const allParts = useMemo(
     () =>
@@ -255,6 +274,30 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
       } else {
         setNote(res.error ?? `Could not install "${entry.name}".`)
       }
+    } finally {
+      setBusyLib(null)
+    }
+  }
+
+  // Pull + apply every available library update right away (#196). Each install
+  // is a fresh clone of the registry repo, so the new version is used immediately.
+  const updateAll = async (): Promise<void> => {
+    const reg = (await window.api.parts.fetchRegistry().catch(() => null))?.libraries ?? registry ?? []
+    for (const u of updates) {
+      const entry = reg.find((e) => e.id === u.id)
+      if (entry) await install(entry)
+    }
+    await checkNow()
+  }
+
+  // DEV: publish the Standard library to GitHub (#197).
+  const publishStandard = async (): Promise<void> => {
+    setBusyLib(STANDARD_LIBRARY_ID)
+    setNote('Publishing the Standard library to GitHub…')
+    try {
+      const res = await window.api.parts.publishStandard()
+      setNote(res.ok ? `Published the Standard library (v${res.version}).` : (res.error ?? 'Publish failed.'))
+      if (res.ok) await refresh()
     } finally {
       setBusyLib(null)
     }
@@ -332,16 +375,10 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
         </button>
         <button
           type="button"
-          className="pl__btn pl__btn--icon"
-          onClick={() => {
-            setNote(null)
-            // Parts are read fresh from disk on every list call, so this picks up
-            // on-disk edits with no app restart; the shared event also reloads the
-            // board graph in this window.
-            window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
-          }}
-          title="Reload parts from disk (no restart needed)"
-          aria-label="Reload parts from disk"
+          className={`pl__btn pl__btn--icon${updates.length > 0 ? ' pl__btn--has-update' : ''}`}
+          onClick={refreshAll}
+          title="Refresh library — reload parts from disk and check GitHub for updates"
+          aria-label="Refresh library (reload from disk + check for updates)"
         >
           {actionIcon('refresh')}
         </button>
@@ -368,6 +405,18 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
       </div>
 
       {note && <p className="pl__note">{note}</p>}
+
+      {/* Library update indicator (#196) — one click pulls + uses the latest. */}
+      {updates.length > 0 && (
+        <div className="pl__updates" role="status">
+          <span className="pl__updates-text">
+            ⬆ {updates.length} library update{updates.length === 1 ? '' : 's'} available
+          </span>
+          <button type="button" className="pl__link" onClick={() => void updateAll()}>
+            Update all
+          </button>
+        </div>
+      )}
 
       {/* Registry browser */}
       {showRegistry && (
@@ -459,6 +508,18 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                       ⬆ v{update.available}
                     </button>
                   )}
+                  {/* DEV-only: publish the Standard library to GitHub (#197). */}
+                  {import.meta.env.DEV && lib.id === STANDARD_LIBRARY_ID && (
+                    <button
+                      type="button"
+                      className="pl__badge pl__badge--publish"
+                      title="Publish the Standard library to GitHub (developer)"
+                      disabled={busyLib === STANDARD_LIBRARY_ID}
+                      onClick={() => void publishStandard()}
+                    >
+                      {busyLib === STANDARD_LIBRARY_ID ? 'Publishing…' : '⇧ Publish'}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className="pl__icon pl__icon--danger"
@@ -468,32 +529,42 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                     ✕
                   </button>
                 </div>
-                {!isCollapsed && (
-                  <ul className="pl__parts">
-                    {parts.length === 0 && <li className="pl__muted pl__parts-empty">No parts in this library.</li>}
-                    {parts.map((part) => (
-                      <li
-                        key={part.id}
-                        className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}`}
-                      >
-                        <button
-                          type="button"
-                          className="pl__part-btn"
-                          onClick={() =>
-                            setSelected(
-                              selected?.libraryId === lib.id && selected?.partId === part.id
-                                ? null
-                                : { libraryId: lib.id, partId: part.id }
-                            )
-                          }
-                        >
-                          <span className="pl__part-name">{part.name}</span>
-                          {part.family && <span className="pl__part-fam">{part.family}</span>}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {!isCollapsed &&
+                  (parts.length === 0 ? (
+                    <p className="pl__muted pl__parts-empty">No parts in this library.</p>
+                  ) : (
+                    // Group the library's parts under category section headers (#193).
+                    groupByCategory(parts).map(({ category, items }) => (
+                      <div className="pl__cat" key={category}>
+                        <div className="pl__cat-head">
+                          <span className="pl__cat-name">{category}</span>
+                          <span className="pl__cat-count">{items.length}</span>
+                        </div>
+                        <ul className="pl__parts">
+                          {items.map((part) => (
+                            <li
+                              key={part.id}
+                              className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}`}
+                            >
+                              <button
+                                type="button"
+                                className="pl__part-btn"
+                                onClick={() =>
+                                  setSelected(
+                                    selected?.libraryId === lib.id && selected?.partId === part.id
+                                      ? null
+                                      : { libraryId: lib.id, partId: part.id }
+                                  )
+                                }
+                              >
+                                <span className="pl__part-name">{part.name}</span>
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))
+                  ))}
               </div>
             )
           })}
@@ -515,10 +586,9 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                   onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
                 }
                 onPromote={
-                  // DEV-only: a Microcontroller part that isn't already the standard one.
-                  import.meta.env.DEV &&
-                  (selectedPart.part.family ?? '').trim().toLowerCase() === 'microcontroller' &&
-                  selectedPart.libraryId !== STANDARD_LIBRARY_ID
+                  // DEV-only: any part not already in the Standard library (#192 —
+                  // the standard library holds any component type, not just boards).
+                  import.meta.env.DEV && selectedPart.libraryId !== STANDARD_LIBRARY_ID
                     ? () => void promote(selectedPart.libraryId, selectedPart.part)
                     : undefined
                 }

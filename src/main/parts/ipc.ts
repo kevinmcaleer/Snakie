@@ -27,13 +27,18 @@ import {
   ensureLibrary,
   partsDir,
   promoteToStandard,
+  publishStandardLibrary,
   readDriverSource,
   readLibraries,
   seedStandardLibrary,
   writePart
 } from './library'
 import { checkUpdates, fetchRegistry, installLibrary } from './registry'
-import type { PartDefinition, PartLibrary, RegistryEntry } from '../../shared/part'
+import type { LibraryUpdate, PartDefinition, PartLibrary, RegistryEntry } from '../../shared/part'
+
+/** Result of the most recent update check — primed once on startup (#194) so the
+ *  parts UI can show an "update available" indicator instantly. */
+let cachedUpdates: LibraryUpdate[] = []
 
 /** Payload for `parts:savePart`. */
 interface SavePartArgs {
@@ -91,6 +96,10 @@ export function registerPartsIpc(): void {
     promoteToStandard(args?.libraryId ?? '', args?.partId ?? '')
   )
 
+  ipcMain.handle('parts:publishStandard', (_e, message?: string) =>
+    publishStandardLibrary(message || undefined)
+  )
+
   ipcMain.handle('parts:createLibrary', (_e, meta: PartLibrary) => createLibrary(meta))
 
   ipcMain.handle('parts:deleteLibrary', (_e, libraryId: string) => deleteLibrary(libraryId))
@@ -105,5 +114,21 @@ export function registerPartsIpc(): void {
 
   ipcMain.handle('parts:installLibrary', (_e, entry: RegistryEntry) => installLibrary(entry))
 
-  ipcMain.handle('parts:checkUpdates', (_e, url?: string) => checkUpdates(url || undefined))
+  ipcMain.handle('parts:checkUpdates', async (_e, url?: string) => {
+    cachedUpdates = await checkUpdates(url || undefined)
+    return cachedUpdates
+  })
+
+  ipcMain.handle('parts:cachedUpdates', () => cachedUpdates)
+
+  // On startup (#194): check GitHub for newer library versions — including the
+  // Standard library — once, in the background, and cache the result so the parts
+  // UI shows the indicator immediately. Failures (offline) are swallowed.
+  void checkUpdates()
+    .then((u) => {
+      cachedUpdates = u
+      const n = u.filter((x) => x.updateAvailable).length
+      if (n > 0) console.log(`[parts] ${n} library update(s) available`)
+    })
+    .catch(() => undefined)
 }

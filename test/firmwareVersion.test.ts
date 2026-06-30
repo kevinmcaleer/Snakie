@@ -4,7 +4,8 @@ import {
   micropythonVersionFromBanner,
   firmwareFamilyFromBanner,
   latestCatalogVersion,
-  newerFirmware
+  newerFirmware,
+  firmwareUpdateFromConsole
 } from '../src/renderer/src/components/firmware-version'
 import type { FirmwareCatalog } from '../src/main/firmware/types'
 
@@ -129,5 +130,48 @@ describe('newerFirmware', () => {
     expect(newerFirmware('1.18', mixedCatalog, 'nrf')).toEqual({ current: '1.18', latest: '2.1.2' })
     // And the unscoped (legacy) call is exactly what produced the bug.
     expect(newerFirmware('1.28.0', mixedCatalog)).toEqual({ current: '1.28.0', latest: '2.1.2' })
+  })
+})
+
+describe('firmwareUpdateFromConsole (cross-family race, 0.15.1)', () => {
+  const pico = (ver, board = 'Raspberry Pi Pico with RP2040') =>
+    `MicroPython v${ver} on 2026-04-06; ${board}`
+
+  it('returns null for a PARTIAL banner (version arrived, MCU token has not)', () => {
+    // The boot banner streams in chunks; this is the chunk before "… with RP2040".
+    // The OLD bug fell back to the catalog-wide max here and offered 2.1.2.
+    const partial = 'MicroPython v1.28.0 on 2026-04-06; Raspberry Pi Pico'
+    expect(firmwareFamilyFromBanner(partial)).toBeNull() // no MCU token yet
+    expect(firmwareUpdateFromConsole(partial, mixedCatalog)).toBeNull()
+  })
+
+  it('does NOT offer a micro:bit build to a Pico once the banner is complete', () => {
+    expect(firmwareUpdateFromConsole(pico('1.28.0'), mixedCatalog)).toBeNull()
+  })
+
+  it('offers the rp2 update to a Pico that is behind', () => {
+    expect(firmwareUpdateFromConsole(pico('1.26.0'), mixedCatalog)).toEqual({
+      current: '1.26.0',
+      latest: '1.28.0'
+    })
+  })
+
+  it('offers the micro:bit its OWN 2.x update', () => {
+    const mb = 'MicroPython v2.1.1 on 2024-01-01; micro:bit v2 with nRF52833'
+    expect(firmwareUpdateFromConsole(mb, mixedCatalog)).toEqual({ current: '2.1.1', latest: '2.1.2' })
+  })
+
+  it('uses the LAST banner (ignores a previous device left in the buffer)', () => {
+    const buffer = [
+      'MicroPython v2.1.1 on 2024; micro:bit v2 with nRF52833', // unplugged micro:bit
+      '>>> ',
+      pico('1.26.0') // the live Pico, behind
+    ].join('\r\n')
+    expect(firmwareUpdateFromConsole(buffer, mixedCatalog)).toEqual({ current: '1.26.0', latest: '1.28.0' })
+  })
+
+  it('returns null with no banner', () => {
+    expect(firmwareUpdateFromConsole('>>> print(1)\n1\n', mixedCatalog)).toBeNull()
+    expect(firmwareUpdateFromConsole('', mixedCatalog)).toBeNull()
   })
 })

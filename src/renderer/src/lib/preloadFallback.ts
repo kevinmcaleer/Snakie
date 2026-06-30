@@ -125,11 +125,13 @@ if (!w.api) {
       savePart: P({ ok: false, error: 'window.api is unavailable (preload not loaded).' }),
       deletePart: P({ ok: false }),
       promoteToStandard: P({ ok: false }),
+      publishStandard: P({ ok: false }),
       createLibrary: P({ ok: false }),
       deleteLibrary: P({ ok: false }),
       fetchRegistry: P({ libraries: [] }),
       installLibrary: P({ ok: false }),
-      checkUpdates: P([])
+      checkUpdates: P([]),
+      cachedUpdates: P([])
     },
     git: {
       openRepo: P(null),

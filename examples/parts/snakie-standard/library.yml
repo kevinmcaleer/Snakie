@@ -1,6 +1,6 @@
 id: snakie-standard
-name: Standard Boards
-description: Standard microcontroller boards (Raspberry Pi Pico family, ESP32) — the canonical board set for the Board Viewer.
+name: Standard Parts
+description: The canonical Snakie parts — microcontrollers, sensors, ICs, power and more — kept up to date from github.com/kevinmcaleer/snakie-parts.
 author: Snakie
 homepage: https://github.com/kevinmcaleer/snakie-parts
 version: 1.0.0

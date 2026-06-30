@@ -117,3 +117,30 @@ export function newerFirmware(
   const latest = latestCatalogVersion(catalog, family)
   return latest && isNewer(latest, deviceVersion) ? { current: deviceVersion, latest } : null
 }
+
+/**
+ * Decide the firmware-update notification from the raw console text — the single,
+ * unit-testable source of truth the StatusBar uses. Returns the {current, latest}
+ * pair only when we can CONFIDENTLY identify both the device version AND its board
+ * family from the most-recent banner; otherwise null.
+ *
+ * Returning null when the family is unknown is the fix for the cross-family RACE
+ * (issue: a Pico wrongly offered the micro:bit's 2.x): the boot banner arrives
+ * over serial in CHUNKS, and `MicroPython v1.28.0 …` lands before `… with RP2040`,
+ * so a check that fired on the partial line saw no MCU token, fell back to the
+ * catalog-wide max, and surfaced a micro:bit build. By requiring a known family
+ * here (and never falling back to the global max in the live path), a partial or
+ * unidentifiable banner yields NO notification rather than a wrong cross-family
+ * one — and the caller simply re-checks as more banner text arrives.
+ */
+export function firmwareUpdateFromConsole(
+  consoleText: string,
+  catalog: FirmwareCatalog | null | undefined
+): { current: string; latest: string } | null {
+  const banner = lastMicropythonBanner(consoleText)
+  if (!banner) return null
+  const version = micropythonVersionFromBanner(banner)
+  const family = firmwareFamilyFromBanner(banner)
+  if (!version || !family) return null // partial banner / unidentified board — wait
+  return newerFirmware(version, catalog, family)
+}

@@ -11,7 +11,7 @@ import {
   lastMicropythonBanner,
   micropythonVersionFromBanner,
   firmwareFamilyFromBanner,
-  newerFirmware
+  firmwareUpdateFromConsole
 } from './firmware-version'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
@@ -189,7 +189,14 @@ export function StatusBar({
       // both the version AND the family must come from the live device's line.
       const banner = lastMicropythonBanner(consoleStore.getAll())
       const v = micropythonVersionFromBanner(banner ?? '')
-      if (!v) return // no banner yet — wait for device output
+      // Don't finalise until we can identify BOTH the version AND the board family
+      // from the banner. The banner arrives over serial in chunks, so the version
+      // can land before the trailing `… with RP2040`; latching then would lose the
+      // family and fall back to the catalog-wide max (a micro:bit build offered to
+      // a Pico). Returning early — without setting `done` — re-checks as the rest
+      // of the banner arrives.
+      const family = firmwareFamilyFromBanner(banner)
+      if (!v || !family) return
       done = true
       if (!catalog) {
         try {
@@ -198,11 +205,9 @@ export function StatusBar({
           return // offline / catalog unreachable — degrade silently
         }
       }
-      // Scope the "newer?" check to the connected device's own family so a
-      // micro:bit's 2.x build is never offered to an rp2/esp device (and vice
-      // versa) — those ports run independent version lines.
-      const family = firmwareFamilyFromBanner(banner)
-      if (alive) setFwUpdate(newerFirmware(v, catalog, family))
+      // The pure decision (scoped to the device's own family) lives in
+      // `firmwareUpdateFromConsole` so it's unit-tested against the race.
+      if (alive) setFwUpdate(firmwareUpdateFromConsole(consoleStore.getAll(), catalog))
     }
     void run() // seed from any banner already in the console
     const decoder = new TextDecoder()
