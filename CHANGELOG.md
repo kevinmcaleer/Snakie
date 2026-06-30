@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Raspberry Pi build (Linux arm64).** Releases now include an arm64 AppImage,
+  `Snakie-<version>-arm64.AppImage`, for **Raspberry Pi 4 / 5 on 64-bit Pi OS**.
+  It's built on a native `ubuntu-24.04-arm` runner (so the `serialport` native
+  module is the correct arm64 build) and ships as an AppImage only (the arm64
+  `.deb` is skipped because electron-builder's bundled `fpm` is x86-only).
+- **Add Snakie to the Raspberry Pi / Linux menu.** A helper script
+  (`scripts/install-linux-menu.sh`) installs a desktop entry + icon for the
+  AppImage so Snakie appears in the menu under **Programming** (`Categories=
+  Development`). Re-run it after updating, or `--uninstall` to remove it.
+
 ## [0.17.0] - 2026-06-30
 
 ### Added

@@ -19,15 +19,14 @@ jobs:
     #   - macos-latest     -> macOS arm64 + x64 dmgs (both archs build on the
     #                         arm64 hosted runner; see electron-builder.yml)
     #   - ubuntu-latest    -> Linux x64 AppImage + deb
-    #   - ubuntu-24.04-arm -> Linux arm64 AppImage + deb (native arm64 hosted
-    #                         runner — no QEMU/emulation; packaging tools run
-    #                         on their native arch). Falls back to needing a
-    #                         self-hosted arm64 runner if the hosted arm pool
-    #                         is ever unavailable.
+    #   - ubuntu-24.04-arm -> Linux arm64 AppImage (Raspberry Pi 4/5, 64-bit Pi
+    #                         OS). Native arm64 hosted runner — no QEMU/emulation;
+    #                         the serialport rebuild uses the arm64 toolchain and
+    #                         appimagetool runs on its own arch. AppImage ONLY:
+    #                         the arm64 .deb is skipped because the bundled fpm is
+    #                         x86 (see electron-builder.yml).
     # macOS builds both arm64+x64 on the arm64 runner (serialport ships a
-    # universal darwin prebuild). Linux is x64-only for now — arm64 packaging is
-    # deferred (electron-builder's bundled fpm is x86 and the serialport rebuild
-    # emits -m64); see electron-builder.yml.
+    # universal darwin prebuild).
     strategy:
       fail-fast: false
       matrix:
@@ -41,6 +40,11 @@ jobs:
           - os: ubuntu-latest
             platform_flag: --linux --x64
             artifact: installers-linux-x64
+          - os: ubuntu-24.04-arm
+            # AppImage ONLY for arm64 (the arm64 .deb's fpm is x86 — see
+            # electron-builder.yml). Naming the target skips deb.
+            platform_flag: --linux AppImage --arm64
+            artifact: installers-linux-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout

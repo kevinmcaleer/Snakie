@@ -20,9 +20,26 @@ Grab the latest installer for your platform from the
 - 🍎 macOS (Apple Silicon) — `Snakie-<version>-arm64.dmg`
 - 🍎 macOS (Intel) — `Snakie-<version>.dmg`
 - 🐧 Linux (x64) — `Snakie-<version>.AppImage` or `snakie_<version>_amd64.deb`
+- 🍓 Linux (arm64 — Raspberry Pi 4 / 5, 64-bit Pi OS) — `Snakie-<version>-arm64.AppImage`
 
-> Windows and Linux are x64 only for now; Linux arm64 (Raspberry Pi) and
-> Windows arm64 are not yet built — see "Building installers" below for why.
+> Windows is x64 only for now; Windows arm64 isn't built yet — see "Building
+> installers" below for why. The Raspberry Pi build is an **AppImage** (no
+> `.deb`); make it executable (`chmod +x`) and run it.
+
+### Raspberry Pi: add Snakie to the menu
+
+An AppImage is a single file and doesn't register itself in the menu. To make
+Snakie show up under **Programming** (with its icon), run the helper once after
+downloading the AppImage:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kevinmcaleer/Snakie/master/scripts/install-linux-menu.sh -o install-linux-menu.sh
+bash install-linux-menu.sh ~/Downloads/Snakie-<version>-arm64.AppImage
+```
+
+It installs a desktop entry + icon under `~/.local/share` with
+`Categories=Development` — which the Raspberry Pi menu lists under **Programming**.
+Re-run it after updating to a new version, or pass `--uninstall` to remove it.
 
 ## Features
 
@@ -133,6 +150,7 @@ matrix and collects them into a single draft GitHub Release.
 | macOS    | arm64 | `Snakie-<v>-arm64.dmg`             | `macos-latest`     |
 | macOS    | x64   | `Snakie-<v>.dmg`                   | `macos-latest`     |
 | Linux    | x64   | `.AppImage` + `_amd64.deb`         | `ubuntu-latest`    |
+| Linux    | arm64 | `Snakie-<v>-arm64.AppImage`        | `ubuntu-24.04-arm` |
 | Windows  | x64   | `Snakie.Setup.<v>.exe`             | `windows-latest`   |
 
 Notes on arch coverage:
@@ -142,12 +160,12 @@ Notes on arch coverage:
   fragile, and two per-arch dmgs are smaller. Both build on the arm64
   `macos-latest` runner because `@serialport/bindings-cpp` provides a universal
   (`darwin-x64+arm64`) prebuilt binary, so no per-arch recompilation is needed.
-- **Linux arm64 (Raspberry Pi) is not yet built** — deferred. Even on a native
-  `ubuntu-24.04-arm` runner, electron-builder's bundled `fpm` (for `.deb`) is an
-  x86 binary that won't execute on arm64, and the `serialport` native rebuild
-  emits the x86-only `-m64` flag that arm64 g++ rejects. Producing arm64 Linux
-  packages needs dedicated work (AppImage-only + arm64 fpm/appimagetool + a
-  clean serialport rebuild).
+- **Linux arm64 (Raspberry Pi 4 / 5)** ships as an **AppImage only**, built on
+  the native `ubuntu-24.04-arm` hosted runner so the `serialport` rebuild uses
+  the arm64 toolchain (no cross-compile `-m64` failure). The `.deb` is skipped on
+  arm64 because electron-builder's bundled `fpm` is an x86 binary that fails on
+  arm64 — the arm64 job names just the `AppImage` target so `fpm` is never
+  invoked. Targets 64-bit Raspberry Pi OS (aarch64); 32-bit Pi OS is not built.
 - **Windows is x64 only.** GitHub's hosted Windows runners are x64 and there is
   no native arm64 Windows runner in the hosted pool, so a reliable arm64 nsis
   installer can't be produced here yet. (`serialport` does ship a `win32-arm64`
