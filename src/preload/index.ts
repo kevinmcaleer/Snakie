@@ -1,5 +1,14 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
+
+// Broadcast channels (`device:data`, `device:status`) are legitimately observed
+// by many components at once — the Terminal, status bar, board views and every
+// open instrument. Each subscribes/unsubscribes correctly (no leak), but with a
+// bench of instruments open the count can exceed Node's default 10-listener
+// ceiling and log a spurious MaxListenersExceededWarning. `device:status` is
+// additionally de-duplicated to a single shared listener (see useDeviceStatus),
+// and this raises the ceiling so the per-channel fan-out never warns.
+ipcRenderer.setMaxListeners(40)
 import type {
   ConnectOptions,
   DeviceStatus,
