@@ -95,7 +95,7 @@ export class MicroPythonRuntime implements ReplRuntime {
   }
 
   runCaptured(code: string): Promise<string> {
-    const op = this.queue.then(async () => {
+    const op = this.queue.then(() => {
       const mp = this.mp
       if (!mp) throw new Error('MicroPython runtime is not running')
       // Emit any console output buffered so far, then divert this snippet's
@@ -103,7 +103,13 @@ export class MicroPythonRuntime implements ReplRuntime {
       this.flush()
       this.capturing = []
       try {
-        await mp.runPythonAsync(code)
+        // Run SYNCHRONOUSLY (mp_js_do_exec), NOT the Asyncify path. The FS
+        // helpers (listdir/read/write/stat/…) are plain synchronous Python, and
+        // the sync exec avoids the Asyncify reentrancy that can make a nested
+        // call return a NULL object — surfaced as "NULL object" on the simulated
+        // device's file ops and the instruments-library install. Output is
+        // captured the same way; a Python exception throws (rejecting the op).
+        mp.runPython(code)
         return Buffer.from(this.capturing).toString('utf8')
       } finally {
         this.capturing = null

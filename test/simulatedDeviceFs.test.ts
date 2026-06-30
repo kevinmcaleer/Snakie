@@ -53,6 +53,21 @@ describe('SimulatedDevice filesystem (real VFS)', () => {
     }
   }, 30000)
 
+  it('writeFile creates missing parent directories (no manual mkdir)', async () => {
+    const dev = new SimulatedDevice()
+    await dev.connect()
+    try {
+      // The VFS starts empty (no /lib), and /lib/auto is nested — writeFile must
+      // create the whole parent chain rather than failing with OSError.
+      await dev.writeFile('/lib/auto/mod.py', 'V=1\n')
+      const ls = await dev.listDir('/lib/auto')
+      expect(ls.map((e) => e.name)).toContain('mod.py')
+      expect(await dev.readFile('/lib/auto/mod.py')).toBe('V=1\n')
+    } finally {
+      await dev.dispose()
+    }
+  }, 30000)
+
   it('rejects filesystem errors (e.g. removing a missing file)', async () => {
     const dev = new SimulatedDevice()
     await dev.connect()

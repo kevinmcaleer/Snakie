@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
+import { INSTALL_START, INSTALL_ERR } from '../packages/install'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
 import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from './simulation'
 import type {
@@ -143,6 +144,18 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     if (isProbeCode(code)) {
       return { stdout: simulateProbeResponse(code, this.tick), stderr: '' }
     }
+    // `mip` package installs can't run on the WASM device (no network, and no
+    // `mip` module in the port). Detect the install snippet and answer with a
+    // clear, sentinel'd result so the Packages / SAM / driver UIs explain it —
+    // instead of the cryptic "mip failed" an empty response parses to (#135).
+    if (code.includes(INSTALL_START)) {
+      return {
+        stdout:
+          `${INSTALL_START}\n${INSTALL_ERR} Package install needs a network connection and a ` +
+          "real board — it isn't available on the simulated device (offline).",
+        stderr: ''
+      }
+    }
     return { stdout: '', stderr: '' }
   }
 
@@ -215,8 +228,18 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   async writeFile(path: string, contents: string | Buffer): Promise<void> {
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
-    // Hex-encode so arbitrary (incl. binary) content survives without escaping.
-    const code = `_d=bytes.fromhex(${pyStr(data.toString('hex'))})\nwith open(${pyStr(path)},'wb') as f:\n    f.write(_d)`
+    // The VFS starts EMPTY (no `/lib` by default), so create any missing parent
+    // directories first — otherwise writing e.g. `/lib/instruments.py` fails with
+    // OSError. Then hex-encode the body so arbitrary (incl. binary) content
+    // survives without escaping.
+    const code = [
+      mkParentsSnippet(path),
+      `_d=bytes.fromhex(${pyStr(data.toString('hex'))})`,
+      `with open(${pyStr(path)},'wb') as f:`,
+      '    f.write(_d)'
+    ]
+      .filter(Boolean)
+      .join('\n')
     await this.runtime.runCaptured(code)
   }
 
@@ -250,6 +273,28 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     this.removeAllListeners()
     this.state = 'disconnected'
   }
+}
+
+/**
+ * Python that creates each parent directory of `path` (e.g. `/lib` for
+ * `/lib/instruments.py`), ignoring "already exists". Returns '' for a root-level
+ * path with no parent to create. MicroPython has no `os.makedirs`, so build the
+ * chain segment by segment.
+ */
+function mkParentsSnippet(path: string): string {
+  const slash = path.lastIndexOf('/')
+  const dir = slash > 0 ? path.slice(0, slash) : ''
+  if (!dir || dir === '/') return ''
+  return [
+    'import os',
+    '_cur=""',
+    `for _s in ${pyStr(dir)}.strip("/").split("/"):`,
+    '    _cur+="/"+_s',
+    '    try:',
+    '        os.mkdir(_cur)',
+    '    except OSError:',
+    '        pass'
+  ].join('\n')
 }
 
 /**
