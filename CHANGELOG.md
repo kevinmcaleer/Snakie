@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-06-30
+
 ### Added
 - **Raspberry Pi build (Linux arm64).** Releases now include an arm64 AppImage,
   `Snakie-<version>-arm64.AppImage`, for **Raspberry Pi 4 / 5 on 64-bit Pi OS**.
@@ -1157,7 +1159,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.18.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...v0.16.0
