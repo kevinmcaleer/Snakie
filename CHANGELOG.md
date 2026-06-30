@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-06-30
+
 ### Added
 - **Keep local files in sync with the device (#178).** Tick the **checkbox** next
   to a file in the Local files tree to keep it in sync with the connected board
@@ -1144,7 +1146,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...v0.15.1
