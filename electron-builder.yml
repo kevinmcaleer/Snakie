@@ -62,21 +62,21 @@ extraResources:
 # (run via the postinstall script / electron-builder) handles serialport.
 npmRebuild: true
 
-# Linux
-# x64 only for now. Linux arm64 packaging is deferred (tracked separately):
-# even on a native ubuntu-24.04-arm runner, electron-builder's bundled `fpm`
-# (used for .deb) is an x86 binary ("Exec format error" on arm64), and the
-# serialport native rebuild emits the x86-only `-m64` flag that arm64 g++
-# rejects. Making arm64 work needs more than a runner swap (e.g. AppImage-only
-# + an arm64 fpm/appimagetool + a clean serialport rebuild).
+# Linux. The ARCH is chosen by the CLI flag per release job (NOT pinned here):
+# pinning `arch` in the target list makes electron-builder build EVERY listed
+# arch regardless of the `--x64`/`--arm64` flag, which cross-compiles and fails.
+#   - x64  job: `--linux --x64`          → AppImage + deb (both x64).
+#   - arm64 job: `--linux AppImage --arm64` → AppImage ONLY (Raspberry Pi 4/5 on
+#     64-bit Pi OS). The arm64 job names just the AppImage target so the .deb is
+#     skipped: electron-builder's bundled `fpm` is an x86 binary that fails on
+#     arm64 ("Exec format error"), whereas appimagetool ships an arm64 build.
+# Both Linux jobs run on their NATIVE arch (ubuntu-latest / ubuntu-24.04-arm), so
+# the serialport native rebuild uses the matching toolchain — no cross-compile
+# `-m64` failure.
 linux:
   target:
-    - target: AppImage
-      arch:
-        - x64
-    - target: deb
-      arch:
-        - x64
+    - AppImage
+    - deb
   category: Development
   maintainer: Kevin McAleer <kevinmcaleer@gmail.com>
   icon: build/icon.png
