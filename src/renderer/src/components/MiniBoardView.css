@@ -34,6 +34,22 @@
   white-space: nowrap;
 }
 
+/* Offline-mode badge (#135): connected to the simulated device, not hardware.
+   Amber to match the status-bar "Simulated device" indicator. Pushed to the
+   right (next to the expand button) so the board name keeps the left. */
+.mini-board__sim {
+  flex: 0 0 auto;
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--accent-contrast, #15161a);
+  background: var(--warn, #d6a23f);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+}
+
 .mini-board__open {
   flex: 0 0 auto;
   display: inline-flex;

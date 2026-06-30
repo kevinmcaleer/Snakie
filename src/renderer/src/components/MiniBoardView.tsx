@@ -13,6 +13,8 @@ import { PartBody } from './part-body'
 import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
 import { useConsole } from '../store/console'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { isVirtualPort } from '../../../shared/virtual-device'
 import './MiniBoardView.css'
 
 /** Shared with BoardView/BoardGraph so the full viewer adopts the same board. */
@@ -147,6 +149,10 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
  */
 export function MiniBoardView({ source, isPython }: { source: string; isPython: boolean }): JSX.Element {
   const consoleStore = useConsole()
+  // Connected to the built-in simulator rather than real hardware (#135)? Surface
+  // it here so the board's pins/values are clearly understood as simulated.
+  const deviceStatus = useDeviceStatus()
+  const simulated = deviceStatus.state === 'connected' && isVirtualPort(deviceStatus.path)
   // Boards from the installed parts libraries (microcontroller parts), built-ins
   // as a fallback — the same source the full Board Viewer uses (#52).
   const boards = useBoards()
@@ -322,6 +328,14 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
         <span className="mini-board__name" title={`${def.name} · ${def.mcu}`}>
           {def.name}
         </span>
+        {simulated && (
+          <span
+            className="mini-board__sim"
+            title="Connected to the simulated device — no hardware connected (offline mode)"
+          >
+            SIM
+          </span>
+        )}
         <button
           type="button"
           className="mini-board__open"

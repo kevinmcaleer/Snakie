@@ -19,9 +19,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
     telemetry, so the **instruments** (oscilloscope, multimeter, plotter, IMU,
     distance, encoder, button…) animate immediately, and it answers the **Board
     Viewer Live View**'s pin probe with plausible values that drift over time.
-  - A distinct **"Simulated device · offline"** status-bar badge (amber LED) so
-    it's never mistaken for real hardware, and switching between the simulator
-    and a real board is seamless (connecting to one disconnects the other).
+  - A distinct **"Simulated device · offline"** status-bar badge (amber LED) and
+    a matching **SIM** badge on the mini board viewer, so the board's pins are
+    never mistaken for real hardware. Switching between the simulator and a real
+    board is seamless (connecting to one disconnects the other).
+  - Typing in the simulated REPL now handles spaces correctly (the console
+    telemetry filter no longer absorbs a lone echoed space into the next `SNK …`
+    line).
 - **Accessibility quick wins (#188).** First pass over the renderer's
   accessibility audit:
   - The device REPL is now readable by screen readers — the xterm terminal runs
