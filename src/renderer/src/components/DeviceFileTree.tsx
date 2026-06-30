@@ -286,6 +286,17 @@ export function DeviceFileTree(): JSX.Element {
     if (syncStatus === 'done' && connected) void refresh()
   }, [syncStatus, connected, refresh])
 
+  // The single sync toggle: ON pushes the tagged files now AND auto-syncs on
+  // every save; OFF stops auto-syncing.
+  const toggleAutoSync = useCallback((): void => {
+    if (syncOnSave) {
+      setSyncOnSave(false)
+    } else {
+      setSyncOnSave(true)
+      void syncNow()
+    }
+  }, [syncOnSave, setSyncOnSave, syncNow])
+
   const handleSelect = useCallback((path: string, isDir: boolean): void => {
     setSelectedPath(path)
     setSelectedIsDir(isDir)
@@ -500,42 +511,30 @@ export function DeviceFileTree(): JSX.Element {
           <span aria-hidden>{'▦'}</span> Device files
         </span>
         {/* Icon-only header actions mirroring the local section (issue #104):
-            the file-sync status/controls (#178), then Refresh, New file, New
-            folder. */}
+            the file-sync toggle (#178), then Refresh, New file, New folder. */}
         <div className="devicetree__header-actions">
-          {/* Sync status + manual "Sync now": the sync icon turns into a green
-              tick for a moment when a sync completes. */}
+          {/* One sync toggle: turning it ON syncs the tagged files now AND keeps
+              them auto-syncing on every save; turning it OFF stops auto-syncing.
+              The icon turns into a green tick for a moment when a sync completes. */}
           <button
-            className={`btn btn--ghost btn--icon devicetree__sync devicetree__sync--${syncStatus}`}
-            onClick={() => void syncNow()}
-            disabled={syncStatus === 'syncing' || syncedPaths.length === 0}
+            className={`btn btn--ghost btn--icon devicetree__sync devicetree__sync--${syncStatus}${syncOnSave ? ' is-active' : ''}`}
+            onClick={toggleAutoSync}
+            disabled={syncStatus === 'syncing'}
+            aria-pressed={syncOnSave}
             title={
-              syncedPaths.length === 0
-                ? 'Tag local files (right-click → Keep in sync) to sync them here'
-                : syncStatus === 'syncing'
-                  ? 'Syncing…'
-                  : syncStatus === 'done'
-                    ? 'Synced'
-                    : syncStatus === 'error'
-                      ? `Sync failed: ${syncError ?? 'unknown error'}`
-                      : `Sync ${syncedPaths.length} tagged file${syncedPaths.length === 1 ? '' : 's'} now`
+              syncStatus === 'syncing'
+                ? 'Syncing…'
+                : syncStatus === 'error'
+                  ? `Sync failed: ${syncError ?? 'unknown error'}`
+                  : syncOnSave
+                    ? `Auto-sync on (${syncedPaths.length} file${syncedPaths.length === 1 ? '' : 's'}) — click to stop`
+                    : syncedPaths.length === 0
+                      ? 'Turn on auto-sync (tick files in the Local tree to sync them)'
+                      : `Sync ${syncedPaths.length} tagged file${syncedPaths.length === 1 ? '' : 's'} now and keep them in sync on save`
             }
-            aria-label={
-              syncStatus === 'done'
-                ? 'Files synced'
-                : `Sync ${syncedPaths.length} tagged files to the device now`
-            }
+            aria-label={syncOnSave ? 'Turn off automatic file sync' : 'Turn on automatic file sync'}
           >
             {syncStatus === 'done' ? <CheckIcon /> : <SyncIcon />}
-          </button>
-          {/* Toggle: auto-push tagged files on every save. */}
-          <button
-            className={`btn btn--ghost devicetree__autosync${syncOnSave ? ' is-active' : ''}`}
-            onClick={() => setSyncOnSave(!syncOnSave)}
-            aria-pressed={syncOnSave}
-            title="Sync tagged files automatically on save"
-          >
-            Auto
           </button>
           <button
             className="btn btn--ghost btn--icon"

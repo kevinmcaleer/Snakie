@@ -105,13 +105,22 @@
   font-weight: 600;
 }
 
-/* Sync indicator on a file that's tagged to keep in sync with the device (#178).
-   Right-aligned so it sits at the row's trailing edge, accent-coloured. */
-.tree-row__sync {
+/* Per-file "keep in sync with the device" checkbox (#178). Right-aligned at the
+   row's trailing edge. Hidden until the row is hovered/focused, EXCEPT when it's
+   ticked (a synced file always shows its checked box). */
+.tree-row__sync-check {
   margin-left: auto;
   flex: 0 0 auto;
-  padding-left: 0.3rem;
-  font-size: 0.8em;
-  line-height: 1;
-  color: var(--accent-2);
+  margin-right: 0.1rem;
+  accent-color: var(--accent-2);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.tree-row:hover .tree-row__sync-check,
+.tree-row:focus-within .tree-row__sync-check,
+.tree-row__sync-check:checked {
+  opacity: 1;
+  pointer-events: auto;
 }

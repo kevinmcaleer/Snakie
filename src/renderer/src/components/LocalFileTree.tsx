@@ -83,6 +83,8 @@ interface TreeNodeProps {
   onContextMenu: (e: React.MouseEvent, entry: FsEntry) => void
   /** Whether a (file) path is tagged to keep in sync with the device (#178). */
   isSynced: (path: string) => boolean
+  /** Tag / untag a (file) path for device sync (#178). */
+  toggleSync: (path: string) => void
 }
 
 /** Recursively renders a directory entry and (when expanded) its children. */
@@ -94,7 +96,8 @@ function TreeNode({
   onOpenFile,
   onChanged,
   onContextMenu,
-  isSynced
+  isSynced,
+  toggleSync
 }: TreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsEntry[] | null>(null)
@@ -143,14 +146,18 @@ function TreeNode({
           {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
-        {!entry.isDir && isSynced(entry.path) && (
-          <span
-            className="tree-row__sync"
-            title="Kept in sync with the device"
-            aria-label="Kept in sync with the device"
-          >
-            ⇄
-          </span>
+        {!entry.isDir && (
+          <input
+            type="checkbox"
+            className="tree-row__sync-check"
+            checked={isSynced(entry.path)}
+            onChange={() => toggleSync(entry.path)}
+            // Don't let toggling the checkbox also open the file / fire the row.
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            title="Keep this file in sync with the device"
+            aria-label={`Keep ${entry.name} in sync with the device`}
+          />
         )}
       </div>
       {error && (
@@ -171,6 +178,7 @@ function TreeNode({
             onChanged={onChanged}
             onContextMenu={onContextMenu}
             isSynced={isSynced}
+            toggleSync={toggleSync}
           />
         ))}
     </div>
@@ -510,6 +518,7 @@ export function LocalFileTree(): JSX.Element {
                 onChanged={refresh}
                 onContextMenu={handleContextMenu}
                 isSynced={isSynced}
+                toggleSync={toggleSync}
               />
             ))}
           </div>

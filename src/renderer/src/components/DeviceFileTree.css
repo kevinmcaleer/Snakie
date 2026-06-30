@@ -58,8 +58,10 @@
 }
 
 /* ---------------------------------------------------------------------------
- * File sync controls (#178): a status/Sync-now button whose icon turns into a
- * green tick when a sync completes, plus a compact "Auto" sync-on-save toggle.
+ * File sync toggle (#178): one button that turns auto-sync on (syncing now) /
+ * off. Its icon spins while syncing and becomes a green tick when a sync
+ * completes (red on failure); the global `.btn--ghost.is-active` lights the "on"
+ * state.
  * ------------------------------------------------------------------------- */
 
 /* Spin the sync arrows while a sync is in progress (paused under
@@ -74,26 +76,13 @@
   }
 }
 
-/* Green tick on completion; red on failure. */
-.devicetree__sync--done {
+/* Green tick on completion; red on failure. The doubled class keeps these at
+   the same specificity as the global `.btn--ghost.is-active` (the toggle's "on"
+   state) but later in the cascade, so the status colour wins when both apply. */
+.devicetree__sync.devicetree__sync--done {
   color: var(--accent-2);
 }
 
-.devicetree__sync--error {
+.devicetree__sync.devicetree__sync--error {
   color: var(--danger);
-}
-
-/* Compact text toggle for "sync on save"; lit when enabled. */
-.devicetree__autosync {
-  padding: 0.15rem 0.4rem;
-  font-size: 0.66rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.devicetree__autosync.is-active {
-  background: var(--bg-sunken);
-  border-color: var(--accent);
-  color: var(--accent);
 }

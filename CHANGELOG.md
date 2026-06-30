@@ -7,16 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Keep local files in sync with the device (#178).** Right-click a file in the
-  Local files tree and choose **Keep in sync with device** to tag it — a small
-  **⇄** marker shows on tagged files. Tagged files are pushed to the board:
-  immediately when you tag them (if connected), automatically on every save when
-  the **Auto** toggle on the device-files toolbar is on, and all at once with the
-  **Sync now** button. The device-files toolbar shows a **sync status** — the
-  sync icon turns into a **green tick** for a moment when a sync completes (and
-  the device tree refreshes so the pushed files appear). Each tagged file maps to
-  `/<filename>` on the device; the tagged set and the Auto toggle persist across
-  reloads.
+- **Keep local files in sync with the device (#178).** Tick the **checkbox** next
+  to a file in the Local files tree to keep it in sync with the connected board
+  (untick to stop); the box stays visible while ticked and reveals on hover
+  otherwise. A single **sync toggle** on the device-files toolbar turns syncing
+  on — pushing the tagged files immediately **and** keeping them in sync on every
+  save — and off again. Its icon spins while syncing and becomes a **green tick**
+  for a moment when a sync completes (the device tree refreshes so the pushed
+  files appear). Each tagged file maps to `/<filename>` on the device; the tagged
+  set and the toggle persist across reloads. Device-file editor tabs are now shown
+  in **brackets** (e.g. `[main.py]`) to tell them apart from local files.
 - **Offline mode — a simulated MicroPython device (#135).** Snakie now ships a
   built-in **Simulated device (offline)** that appears in the shell's port
   dropdown, so you can explore, learn and demo with **no hardware connected**:
