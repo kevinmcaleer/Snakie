@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
+import { useSync } from '../store/sync'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
 import './LocalFileTree.css'
@@ -80,6 +81,10 @@ interface TreeNodeProps {
   onOpenFile: (path: string) => void
   onChanged: () => void
   onContextMenu: (e: React.MouseEvent, entry: FsEntry) => void
+  /** Whether a (file) path is tagged to keep in sync with the device (#178). */
+  isSynced: (path: string) => boolean
+  /** Tag / untag a (file) path for device sync (#178). */
+  toggleSync: (path: string) => void
 }
 
 /** Recursively renders a directory entry and (when expanded) its children. */
@@ -90,7 +95,9 @@ function TreeNode({
   onSelect,
   onOpenFile,
   onChanged,
-  onContextMenu
+  onContextMenu,
+  isSynced,
+  toggleSync
 }: TreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsEntry[] | null>(null)
@@ -139,6 +146,26 @@ function TreeNode({
           {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
         </span>
         <span className="tree-row__name">{entry.name}</span>
+        {!entry.isDir && (
+          <span className="tree-row__sync">
+            <input
+              type="checkbox"
+              className="tree-row__sync-check"
+              checked={isSynced(entry.path)}
+              onChange={() => toggleSync(entry.path)}
+              // Don't let toggling the checkbox also open the file / fire the row.
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              title="Keep this file in sync with the device"
+              aria-label={`Keep ${entry.name} in sync with the device`}
+            />
+            {/* At rest a tagged file shows this green sync glyph in place of the
+                box; hovering/focusing the row swaps the real checkbox back in. */}
+            <span className="tree-row__sync-icon" aria-hidden>
+              ⇄
+            </span>
+          </span>
+        )}
       </div>
       {error && (
         <div className="tree-error" style={{ paddingLeft: `${depth * 14 + 22}px` }}>
@@ -157,6 +184,8 @@ function TreeNode({
             onOpenFile={onOpenFile}
             onChanged={onChanged}
             onContextMenu={onContextMenu}
+            isSynced={isSynced}
+            toggleSync={toggleSync}
           />
         ))}
     </div>
@@ -175,6 +204,7 @@ export function LocalFileTree(): JSX.Element {
   const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
+  const { isSynced, toggleSync } = useSync()
   // The working folder now lives in the workspace store so the toolbar and tree
   // share one entry point; `root` is just a local alias for readability.
   const root = currentFolder
@@ -357,6 +387,11 @@ export function LocalFileTree(): JSX.Element {
             disabled: !connected,
             onSelect: () => uploadToBoard(target)
           })
+          items.push({
+            key: 'sync',
+            label: isSynced(target.path) ? 'Stop syncing with device' : 'Keep in sync with device',
+            onSelect: () => toggleSync(target.path)
+          })
         }
         items.push({ key: 'rename', label: 'Rename', onSelect: () => renamePath(target.path) })
         items.push({
@@ -368,7 +403,17 @@ export function LocalFileTree(): JSX.Element {
       }
       return items
     },
-    [connected, deletePath, handleOpenFile, newFileIn, newFolderIn, renamePath, uploadToBoard]
+    [
+      connected,
+      deletePath,
+      handleOpenFile,
+      isSynced,
+      newFileIn,
+      newFolderIn,
+      renamePath,
+      toggleSync,
+      uploadToBoard
+    ]
   )
 
   // Breadcrumb of the working folder: split on either separator and rebuild the
@@ -479,6 +524,8 @@ export function LocalFileTree(): JSX.Element {
                 onOpenFile={handleOpenFile}
                 onChanged={refresh}
                 onContextMenu={handleContextMenu}
+                isSynced={isSynced}
+                toggleSync={toggleSync}
               />
             ))}
           </div>

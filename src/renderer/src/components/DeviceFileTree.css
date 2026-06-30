@@ -56,3 +56,33 @@
 .devicetree__tree {
   min-height: 4rem;
 }
+
+/* ---------------------------------------------------------------------------
+ * File sync toggle (#178): one button that turns auto-sync on (syncing now) /
+ * off. Its icon spins while syncing and becomes a green tick when a sync
+ * completes (red on failure); the global `.btn--ghost.is-active` lights the "on"
+ * state.
+ * ------------------------------------------------------------------------- */
+
+/* Spin the sync arrows while a sync is in progress (paused under
+   prefers-reduced-motion by the global rule in index.css). */
+.devicetree__sync--syncing svg {
+  animation: devicetree-sync-spin 0.9s linear infinite;
+}
+
+@keyframes devicetree-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Green tick on completion; red on failure. The doubled class keeps these at
+   the same specificity as the global `.btn--ghost.is-active` (the toggle's "on"
+   state) but later in the cascade, so the status colour wins when both apply. */
+.devicetree__sync.devicetree__sync--done {
+  color: var(--accent-2);
+}
+
+.devicetree__sync.devicetree__sync--error {
+  color: var(--danger);
+}

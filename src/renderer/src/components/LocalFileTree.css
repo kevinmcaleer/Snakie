@@ -104,3 +104,55 @@
   color: var(--text);
   font-weight: 600;
 }
+
+/* Per-file "keep in sync with the device" control (#178), at the row's trailing
+   edge. A tagged file shows a green sync glyph AT REST; hovering/focusing the row
+   swaps in the real checkbox so it can be ticked/unticked. An untagged file shows
+   the (empty) checkbox only on hover/focus. The checkbox stays in the DOM (just
+   transparent) so it remains keyboard-focusable. */
+.tree-row__sync {
+  position: relative;
+  margin-left: auto;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+.tree-row__sync-check {
+  margin: 0;
+  accent-color: var(--accent-2);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.tree-row__sync-icon {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-2);
+  font-size: 0.85em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* At rest, a ticked file shows the green icon (the box sits transparent under it). */
+.tree-row__sync-check:checked + .tree-row__sync-icon {
+  display: inline-flex;
+}
+
+/* Hovering/focusing the row (or focusing the box) reveals the real checkbox… */
+.tree-row:hover .tree-row__sync-check,
+.tree-row:focus-within .tree-row__sync-check {
+  opacity: 1;
+}
+
+/* …and hides the green icon so the checkbox can be ticked/unticked. */
+.tree-row:hover .tree-row__sync-check:checked + .tree-row__sync-icon,
+.tree-row:focus-within .tree-row__sync-check:checked + .tree-row__sync-icon {
+  display: none;
+}

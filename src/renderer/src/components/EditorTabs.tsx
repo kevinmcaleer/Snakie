@@ -93,10 +93,18 @@ export function EditorTabs(): JSX.Element | null {
                 requestClose(file.id)
               }
             }}
-            title={file.path || file.name}
+            title={
+              file.source === 'device'
+                ? `${file.path || file.name} (on device)`
+                : file.path || file.name
+            }
           >
             {file.dirty && <span className="editor-tab__dirty" aria-hidden="true" />}
-            <span className="editor-tab__label">{file.name}</span>
+            {/* Device files are bracketed — [name] — to distinguish them from
+                local files at a glance in the tab strip (#178 follow-up). */}
+            <span className="editor-tab__label">
+              {file.source === 'device' ? `[${file.name}]` : file.name}
+            </span>
             <button
               type="button"
               className="editor-tab__close"
