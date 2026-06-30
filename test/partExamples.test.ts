@@ -76,13 +76,13 @@ describe('standard parts library (snakie-standard)', () => {
     { id: 'pico', pads: 40, mcu: 'RP2040' },
     { id: 'pico2w', pads: 40, mcu: 'RP2350' }, // canonical id, matches the built-in
     { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' },
-    { id: 'tiny2350', pads: 15, mcu: 'RP2350' } // authored via the build-part-from-image skill (#198)
+    { id: 'tiny2350', pads: 16, mcu: 'RP2350' } // authored via the build-part-from-image skill (#198)
   ]
 
   it('the Tiny 2350 ships a life-like background photo', () => {
     const part = partFromYaml(read('snakie-standard', 'tiny2350', 'parts.yml'))
     expect(part.image).toBeTruthy() // build-part-from-image skill embeds a top-down photo
-    expect(part.version).toBe('0.1.1') // bumped on regeneration (version capability)
+    expect(part.version).toBe('0.1.3') // bumped on each regeneration (version capability)
   })
 
   it.each(boards)('$id parses, validates, round-trips and converts to a board', ({ id, pads, mcu }) => {
