@@ -40,6 +40,7 @@
 .mini-board__sim {
   flex: 0 0 auto;
   margin-left: auto;
+  white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 0.54rem;
   font-weight: 700;

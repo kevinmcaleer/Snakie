@@ -333,7 +333,7 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
             className="mini-board__sim"
             title="Connected to the simulated device — no hardware connected (offline mode)"
           >
-            SIM
+            SIMULATION
           </span>
         )}
         <button
