@@ -15,6 +15,9 @@ import {
  */
 class FakeRuntime implements ReplRuntime {
   feeds: string[] = []
+  capturedCalls: string[] = []
+  /** Canned response returned by the next runCaptured call. */
+  nextCaptured = ''
   private emit: ((chunk: Buffer) => void) | null = null
   async init(onOutput: (chunk: Buffer) => void): Promise<void> {
     this.emit = onOutput
@@ -23,6 +26,10 @@ class FakeRuntime implements ReplRuntime {
   async feed(data: string): Promise<void> {
     this.feeds.push(data)
     this.emit?.(Buffer.from(`echo:${data}`, 'utf8'))
+  }
+  async runCaptured(code: string): Promise<string> {
+    this.capturedCalls.push(code)
+    return this.nextCaptured
   }
   dispose(): void {}
 }
@@ -148,13 +155,23 @@ describe('SimulatedDevice lifecycle', () => {
     await dev.dispose()
   })
 
-  it('exposes a small simulated filesystem so the device tree is usable', async () => {
-    const dev = new SimulatedDevice(new FakeRuntime())
+  it('lists the interpreter VFS via runCaptured, hiding Emscripten system dirs', async () => {
+    const runtime = new FakeRuntime()
+    const dev = new SimulatedDevice(runtime)
     await dev.connect()
+    // The runtime returns the raw os.ilistdir JSON; the device hides the MEMFS
+    // system mounts (dev/proc/tmp/home) at the root so it reads like a board.
+    runtime.nextCaptured = JSON.stringify([
+      ['main.py', false, 12],
+      ['lib', true, 0],
+      ['dev', true, 0],
+      ['proc', true, 0]
+    ])
     const root = await dev.listDir('/')
-    expect(root.some((e) => e.name === 'main.py')).toBe(true)
-    expect(root.some((e) => e.isDir)).toBe(true)
-    expect(await dev.readFile('/main.py')).toContain('simulator')
+    expect(root.map((e) => e.name)).toEqual(['main.py', 'lib'])
+    // FS ops are routed out-of-band through the runtime, not the REPL.
+    expect(runtime.capturedCalls.at(-1)).toContain('ilistdir')
+    expect(runtime.feeds).toHaveLength(0)
     await dev.dispose()
   })
 })

@@ -174,44 +174,74 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   }
 
   // ---------------------------------------------------------------------------
-  // Filesystem — a tiny, read-only simulated FS so the device tree isn't broken
+  // Filesystem — backed by the interpreter's REAL in-memory VFS (#135), so
+  // uploaded files persist and are importable (e.g. `import instruments`, since
+  // `/lib` is on sys.path). It's RAM-backed, so it resets on disconnect.
   // ---------------------------------------------------------------------------
 
+  /** Emscripten MEMFS mounts that aren't part of a "board" — hidden at root. */
+  private static readonly SYSTEM_DIRS = new Set(['dev', 'proc', 'tmp', 'home'])
+
   async listDir(path = '/'): Promise<DirEntry[]> {
-    const root = path === '' || path === '/'
-    if (root) {
-      return [
-        { name: 'boot.py', isDir: false, size: 24 },
-        { name: 'main.py', isDir: false, size: 96 },
-        { name: 'lib', isDir: true, size: 0 }
-      ]
-    }
-    if (path === '/lib' || path === 'lib') {
-      return [{ name: 'snakie_instruments.py', isDir: false, size: 0 }]
-    }
-    return []
+    const code = [
+      'import os, json',
+      'def _ls(p):',
+      '    out=[]',
+      '    try: it=os.ilistdir(p)',
+      '    except AttributeError: it=[(n,0,0) for n in os.listdir(p)]',
+      '    for e in it:',
+      '        name=e[0]; typ=e[1] if len(e)>1 else 0',
+      '        full=(p.rstrip("/")+"/"+name) if p else name',
+      '        isdir=(typ & 0x4000)!=0',
+      '        try: size=0 if isdir else os.stat(full)[6]',
+      '        except OSError: size=0',
+      '        out.append([name,isdir,size])',
+      '    return out',
+      `print(json.dumps(_ls(${pyStr(path)})))`
+    ].join('\n')
+    const raw = (await this.runtime.runCaptured(code)).trim()
+    const parsed = JSON.parse(raw) as [string, boolean, number][]
+    const isRoot = path === '' || path === '/'
+    return parsed
+      .filter(([name, isDir]) => !(isRoot && isDir && SimulatedDevice.SYSTEM_DIRS.has(name)))
+      .map(([name, isDir, size]) => ({ name, isDir, size }))
   }
 
   async readFile(path: string): Promise<string> {
-    if (path.endsWith('main.py')) {
-      return '# Simulated device — connect real hardware to edit files.\nprint("hello from the simulator")\n'
-    }
-    return ''
+    // Text read (the simulator's files are source); exact bytes via stdout.write.
+    const code = `import sys\nwith open(${pyStr(path)}) as f:\n    sys.stdout.write(f.read())`
+    return this.runtime.runCaptured(code)
   }
 
-  async writeFile(): Promise<void> {
-    // Writes are accepted but not persisted on the simulated device.
+  async writeFile(path: string, contents: string | Buffer): Promise<void> {
+    const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
+    // Hex-encode so arbitrary (incl. binary) content survives without escaping.
+    const code = `_d=bytes.fromhex(${pyStr(data.toString('hex'))})\nwith open(${pyStr(path)},'wb') as f:\n    f.write(_d)`
+    await this.runtime.runCaptured(code)
   }
 
-  async remove(): Promise<void> {}
+  async remove(path: string): Promise<void> {
+    await this.runtime.runCaptured(`import os\nos.remove(${pyStr(path)})`)
+  }
 
-  async mkdir(): Promise<void> {}
+  async mkdir(path: string): Promise<void> {
+    await this.runtime.runCaptured(`import os\nos.mkdir(${pyStr(path)})`)
+  }
 
-  async rename(): Promise<void> {}
+  async rename(from: string, to: string): Promise<void> {
+    await this.runtime.runCaptured(`import os\nos.rename(${pyStr(from)}, ${pyStr(to)})`)
+  }
 
   async stat(path: string): Promise<StatResult> {
-    const isDir = path.endsWith('/lib') || path === '/' || path === ''
-    return { isDir, size: isDir ? 0 : 96 }
+    const code = [
+      'import os, json',
+      `st=os.stat(${pyStr(path)})`,
+      'isdir=(st[0] & 0x4000)!=0',
+      'print(json.dumps([isdir, st[6], st[8] if len(st)>8 else None]))'
+    ].join('\n')
+    const raw = (await this.runtime.runCaptured(code)).trim()
+    const [isDir, size, mtime] = JSON.parse(raw) as [boolean, number, number | null]
+    return { isDir, size, mtime: mtime ?? undefined }
   }
 
   async dispose(): Promise<void> {
@@ -220,4 +250,17 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     this.removeAllListeners()
     this.state = 'disconnected'
   }
+}
+
+/**
+ * Render a JS string as a Python string literal, escaping characters that would
+ * break out of the quotes. Used to inject paths/data into generated Python.
+ */
+function pyStr(value: string): string {
+  const escaped = value
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+  return `'${escaped}'`
 }

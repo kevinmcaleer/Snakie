@@ -26,6 +26,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - Typing in the simulated REPL now handles spaces correctly (the console
     telemetry filter no longer absorbs a lone echoed space into the next `SNK …`
     line).
+  - The simulated device has a **real in-memory filesystem** (the interpreter's
+    VFS): uploaded files persist, list, read back and are **importable** — e.g.
+    you can upload `instruments.py` to `/lib` and `import instruments` from the
+    REPL (`/lib` is on `sys.path`). It's RAM-backed (not a fixed flash size) and
+    resets on disconnect.
 - **Accessibility quick wins (#188).** First pass over the renderer's
   accessibility audit:
   - The device REPL is now readable by screen readers — the xterm terminal runs

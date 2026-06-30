@@ -24,6 +24,13 @@ export interface ReplRuntime {
   init(onOutput: (chunk: Buffer) => void): Promise<void>
   /** Feed raw input bytes (keystrokes, paste-mode payloads, control chars). */
   feed(data: string): Promise<void>
+  /**
+   * Run a snippet OUT-OF-BAND (not through the interactive REPL) and return what
+   * it printed, WITHOUT that output reaching the console — used for filesystem
+   * helpers (listdir/read/write/…) that should be invisible. Rejects if the
+   * snippet raises a Python exception.
+   */
+  runCaptured(code: string): Promise<string>
   /** Tear the runtime down. */
   dispose(): void
 }
@@ -46,6 +53,8 @@ export class MicroPythonRuntime implements ReplRuntime {
   private mp: MicroPythonInstance | null = null
   private onOutput: ((chunk: Buffer) => void) | null = null
   private pending: number[] = []
+  /** When set, interpreter output is diverted here instead of the console. */
+  private capturing: number[] | null = null
   private flushTimer: ReturnType<typeof setInterval> | null = null
   /** Serializes input so bytes are processed strictly in order. */
   private queue: Promise<unknown> = Promise.resolve()
@@ -85,6 +94,25 @@ export class MicroPythonRuntime implements ReplRuntime {
     return op
   }
 
+  runCaptured(code: string): Promise<string> {
+    const op = this.queue.then(async () => {
+      const mp = this.mp
+      if (!mp) throw new Error('MicroPython runtime is not running')
+      // Emit any console output buffered so far, then divert this snippet's
+      // output into a private buffer so it stays off the console.
+      this.flush()
+      this.capturing = []
+      try {
+        await mp.runPythonAsync(code)
+        return Buffer.from(this.capturing).toString('utf8')
+      } finally {
+        this.capturing = null
+      }
+    })
+    this.queue = op.catch(() => undefined)
+    return op
+  }
+
   dispose(): void {
     if (this.flushTimer) {
       clearInterval(this.flushTimer)
@@ -94,11 +122,14 @@ export class MicroPythonRuntime implements ReplRuntime {
     this.mp = null
     this.onOutput = null
     this.pending = []
+    this.capturing = null
   }
 
-  /** Accumulate one byte of interpreter output. */
+  /** Accumulate interpreter output — into the capture buffer if one is active
+   * (a `runCaptured` snippet), otherwise the console-bound pending buffer. */
   private collect(bytes: Uint8Array): void {
-    for (const b of bytes) this.pending.push(b)
+    const sink = this.capturing ?? this.pending
+    for (const b of bytes) sink.push(b)
   }
 
   /** Emit any buffered output as a single chunk. */
