@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { isVirtualPort, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
 import type { DeviceStatus, PortInfo } from '../../../preload/index.d'
 
 interface ConnectionControlProps {
@@ -71,6 +72,15 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
       >
         {ports.length === 0 && <option value="">No ports</option>}
         {ports.map((p) => {
+          // The simulated device shows just its friendly label (its sentinel
+          // path, `snakie://virtual`, is an implementation detail).
+          if (isVirtualPort(p.path)) {
+            return (
+              <option key={p.path} value={p.path}>
+                {VIRTUAL_PORT_LABEL}
+              </option>
+            )
+          }
           const detail = p.friendlyName ?? p.manufacturer
           return (
             <option key={p.path} value={p.path}>

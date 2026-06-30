@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Offline mode — a simulated MicroPython device (#135).** Snakie now ships a
+  built-in **Simulated device (offline)** that appears in the shell's port
+  dropdown, so you can explore, learn and demo with **no hardware connected**:
+  - Connecting to it greets you with a friendly REPL banner and a live, animated
+    stream of `SNK …` telemetry, so the **instruments** (oscilloscope,
+    multimeter, plotter, IMU, distance, encoder, button…) work immediately.
+  - The **Board Viewer Live View** works too — the simulated device answers the
+    live-pin probe with plausible values that drift over time.
+  - A distinct **"Simulated device · offline"** status-bar badge (amber LED) so
+    it's never mistaken for real hardware, and switching between the simulator
+    and a real board is seamless (connecting to one disconnects the other).
 - **Accessibility quick wins (#188).** First pass over the renderer's
   accessibility audit:
   - The device REPL is now readable by screen readers — the xterm terminal runs

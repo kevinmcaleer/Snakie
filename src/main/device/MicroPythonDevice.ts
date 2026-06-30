@@ -8,6 +8,7 @@ import type {
   DirEntry,
   ExecResult,
   PortInfo,
+  SnakieDevice,
   StatResult
 } from './types'
 
@@ -54,7 +55,7 @@ export interface MicroPythonDeviceEvents {
  * `data` / `status` events. The IPC layer (see `device/ipc.ts`) wires those to
  * `webContents.send`.
  */
-export class MicroPythonDevice extends EventEmitter {
+export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   private port: SerialPort | null = null
   private state: ConnectionState = 'disconnected'
   private currentPath?: string

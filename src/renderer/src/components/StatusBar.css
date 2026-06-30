@@ -108,6 +108,18 @@
   color: var(--text);
 }
 
+/* Simulated / offline device (#135): an amber "hollow" LED + accented text so
+   it reads as "alive but not real hardware" — clearly distinct from a green
+   connected board and a grey disconnected one. */
+.statusbar__conn--sim .statusbar__dot {
+  background: var(--warn);
+  box-shadow: inset 0 0 0 2px var(--bg-elevated);
+}
+
+.statusbar__conn--sim {
+  color: var(--text);
+}
+
 /* Clickable items (plugin links, update restart). */
 .statusbar__link {
   background: transparent;
