@@ -1,6 +1,8 @@
 import { ipcMain, type WebContents } from 'electron'
+import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../shared/virtual-device'
 import { MicroPythonDevice } from './MicroPythonDevice'
-import type { ConnectOptions, DeviceStatus, IpcResult } from './types'
+import { SimulatedDevice } from './SimulatedDevice'
+import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
  * IPC channel names for the device layer. Renderer-facing channels are prefixed
@@ -12,14 +14,34 @@ export const DEVICE_CHANNELS = {
 } as const
 
 /**
- * A single shared {@link MicroPythonDevice} instance. The app talks to one
- * board at a time; later issues can extend this to a registry keyed by path.
+ * The device layer routes between two backends (issue #135):
+ *  - {@link MicroPythonDevice} — a real board over serial,
+ *  - {@link SimulatedDevice}   — the offline/virtual board.
+ *
+ * Both implement {@link SnakieDevice} and emit the same `data` / `status`
+ * events. `active` is whichever the user last connected to (default: the real
+ * device, so a fresh launch behaves exactly as before). `device:connect` picks
+ * the backend from the selected port and disconnects the other first, so the two
+ * never run at once.
  */
-let device: MicroPythonDevice | null = null
+let real: MicroPythonDevice | null = null
+let sim: SimulatedDevice | null = null
+let active: SnakieDevice | null = null
 
-function getDevice(): MicroPythonDevice {
-  if (!device) device = new MicroPythonDevice()
-  return device
+function getReal(): MicroPythonDevice {
+  if (!real) real = new MicroPythonDevice()
+  return real
+}
+
+function getSim(): SimulatedDevice {
+  if (!sim) sim = new SimulatedDevice()
+  return sim
+}
+
+/** The currently-targeted backend (defaults to the real serial device). */
+function getActive(): SnakieDevice {
+  if (!active) active = getReal()
+  return active
 }
 
 /**
@@ -43,72 +65,103 @@ async function wrap<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
  *   destroyed window after reloads).
  */
 export function registerDeviceIpc(getWebContents: () => WebContents | undefined): void {
-  const dev = getDevice()
+  const realDev = getReal()
+  const simDev = getSim()
 
-  // Forward raw serial output and status changes to the renderer.
-  dev.on('data', (chunk) => {
-    const wc = getWebContents()
-    if (wc && !wc.isDestroyed()) {
-      // Send as a Uint8Array; it survives structured clone across IPC.
-      wc.send(DEVICE_CHANNELS.data, new Uint8Array(chunk))
-    }
-  })
-  dev.on('status', (status: DeviceStatus) => {
-    const wc = getWebContents()
-    if (wc && !wc.isDestroyed()) {
-      wc.send(DEVICE_CHANNELS.status, status)
-    }
-  })
+  // Forward raw output and status from BOTH backends; only the connected one
+  // ever emits, so there is no cross-talk between real and simulated devices.
+  const forward = (dev: SnakieDevice): void => {
+    dev.on('data', (chunk) => {
+      const wc = getWebContents()
+      if (wc && !wc.isDestroyed()) {
+        // Send as a Uint8Array; it survives structured clone across IPC.
+        wc.send(DEVICE_CHANNELS.data, new Uint8Array(chunk))
+      }
+    })
+    dev.on('status', (status: DeviceStatus) => {
+      const wc = getWebContents()
+      if (wc && !wc.isDestroyed()) {
+        wc.send(DEVICE_CHANNELS.status, status)
+      }
+    })
+  }
+  forward(realDev)
+  forward(simDev)
 
-  ipcMain.handle('device:listPorts', () => wrap(() => MicroPythonDevice.listPorts()))
-
-  ipcMain.handle('device:connect', (_e, path: string, opts?: ConnectOptions) =>
-    wrap(() => dev.connect(path, opts ?? {}))
+  // Real serial ports, plus the built-in simulated device so users can work
+  // offline (#135). The virtual port is appended so real hardware lists first.
+  ipcMain.handle('device:listPorts', () =>
+    wrap(async () => {
+      const ports = await MicroPythonDevice.listPorts()
+      const virtual: PortInfo = { path: VIRTUAL_PORT_PATH, friendlyName: VIRTUAL_PORT_LABEL }
+      return [...ports, virtual]
+    })
   )
 
-  ipcMain.handle('device:disconnect', () => wrap(() => dev.disconnect()))
+  ipcMain.handle('device:connect', (_e, path: string, opts?: ConnectOptions) =>
+    wrap(async () => {
+      if (isVirtualPort(path)) {
+        // Switch to the simulated board, disconnecting any real one first.
+        if (realDev.isConnected()) await realDev.disconnect()
+        active = simDev
+        await simDev.connect()
+      } else {
+        // Switch to the real board, stopping the simulator first.
+        if (simDev.isConnected()) await simDev.disconnect()
+        active = realDev
+        await realDev.connect(path, opts ?? {})
+      }
+    })
+  )
 
-  ipcMain.handle('device:getStatus', () => wrap(async () => dev.getStatus()))
+  ipcMain.handle('device:disconnect', () => wrap(() => getActive().disconnect()))
 
-  ipcMain.handle('device:exec', (_e, code: string) => wrap(() => dev.exec(code)))
+  ipcMain.handle('device:getStatus', () => wrap(async () => getActive().getStatus()))
 
-  ipcMain.handle('device:eval', (_e, code: string) => wrap(() => dev.eval(code)))
+  ipcMain.handle('device:exec', (_e, code: string) => wrap(() => getActive().exec(code)))
 
-  ipcMain.handle('device:sendData', (_e, data: string) => wrap(() => dev.sendData(data)))
+  ipcMain.handle('device:eval', (_e, code: string) => wrap(() => getActive().eval(code)))
+
+  ipcMain.handle('device:sendData', (_e, data: string) => wrap(() => getActive().sendData(data)))
 
   // IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
   ipcMain.handle('device:sendControl', (_e, target: string, payload?: string) =>
-    wrap(() => dev.sendControl(target, payload ?? ''))
+    wrap(() => getActive().sendControl(target, payload ?? ''))
   )
 
-  ipcMain.handle('device:interrupt', () => wrap(() => dev.interrupt()))
+  ipcMain.handle('device:interrupt', () => wrap(() => getActive().interrupt()))
 
-  ipcMain.handle('device:softReset', () => wrap(() => dev.softReset()))
+  ipcMain.handle('device:softReset', () => wrap(() => getActive().softReset()))
 
   // Filesystem helpers.
-  ipcMain.handle('device:listDir', (_e, path?: string) => wrap(() => dev.listDir(path ?? '/')))
+  ipcMain.handle('device:listDir', (_e, path?: string) => wrap(() => getActive().listDir(path ?? '/')))
 
-  ipcMain.handle('device:readFile', (_e, path: string) => wrap(() => dev.readFile(path)))
+  ipcMain.handle('device:readFile', (_e, path: string) => wrap(() => getActive().readFile(path)))
 
   ipcMain.handle('device:writeFile', (_e, path: string, contents: string) =>
-    wrap(() => dev.writeFile(path, contents))
+    wrap(() => getActive().writeFile(path, contents))
   )
 
-  ipcMain.handle('device:remove', (_e, path: string) => wrap(() => dev.remove(path)))
+  ipcMain.handle('device:remove', (_e, path: string) => wrap(() => getActive().remove(path)))
 
-  ipcMain.handle('device:mkdir', (_e, path: string) => wrap(() => dev.mkdir(path)))
+  ipcMain.handle('device:mkdir', (_e, path: string) => wrap(() => getActive().mkdir(path)))
 
   ipcMain.handle('device:rename', (_e, from: string, to: string) =>
-    wrap(() => dev.rename(from, to))
+    wrap(() => getActive().rename(from, to))
   )
 
-  ipcMain.handle('device:stat', (_e, path: string) => wrap(() => dev.stat(path)))
+  ipcMain.handle('device:stat', (_e, path: string) => wrap(() => getActive().stat(path)))
 }
 
-/** Dispose the shared device (call on app quit). */
+/** Dispose both device backends (call on app quit). */
 export async function disposeDevice(): Promise<void> {
-  if (device) {
-    await device.dispose()
-    device = null
+  if (real) {
+    await real.dispose()
+    real = null
   }
+  if (sim) {
+    await sim.dispose()
+    sim = null
+  }
+  active = null
 }

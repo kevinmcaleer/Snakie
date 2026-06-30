@@ -70,3 +70,33 @@ export interface StatResult {
  * Electron's lossy error re-throwing.
  */
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: string }
+
+/**
+ * The common device surface the IPC layer talks to. Both the real
+ * `MicroPythonDevice` (serial) and the `SimulatedDevice` (offline mode, #135)
+ * implement this, so `device/ipc.ts` can route to whichever backend is active
+ * without caring which is which. The `data` / `status` events carry the same
+ * payloads from both backends.
+ */
+export interface SnakieDevice {
+  connect(path: string, options?: ConnectOptions): Promise<void>
+  disconnect(): Promise<void>
+  getStatus(): DeviceStatus
+  isConnected(): boolean
+  exec(code: string, timeoutMs?: number): Promise<ExecResult>
+  eval(code: string, timeoutMs?: number): Promise<string>
+  sendData(data: string): Promise<void>
+  sendControl(target: string, payload?: string): Promise<void>
+  interrupt(): Promise<void>
+  softReset(): Promise<void>
+  listDir(path?: string): Promise<DirEntry[]>
+  readFile(path: string): Promise<string>
+  writeFile(path: string, contents: string | Buffer): Promise<void>
+  remove(path: string): Promise<void>
+  mkdir(path: string): Promise<void>
+  rename(from: string, to: string): Promise<void>
+  stat(path: string): Promise<StatResult>
+  dispose(): Promise<void>
+  on(event: 'data', listener: (chunk: Buffer) => void): this
+  on(event: 'status', listener: (status: DeviceStatus) => void): this
+}

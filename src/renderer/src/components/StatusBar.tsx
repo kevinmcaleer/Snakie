@@ -13,6 +13,7 @@ import {
   firmwareFamilyFromBanner,
   firmwareUpdateFromConsole
 } from './firmware-version'
+import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
 
@@ -161,14 +162,20 @@ export function StatusBar({
   }, [refreshGit])
 
   const connected = status.state === 'connected'
+  // Offline mode (#135): connected to the built-in simulated device, not real
+  // hardware — surfaced with a distinct label + badge so it's never mistaken
+  // for a physical board.
+  const simulated = connected && isVirtualPort(status.path)
   const connLabel =
     status.state === 'connecting'
       ? 'Connecting…'
-      : connected
-        ? `Connected${status.path ? ` · ${status.path}` : ''}`
-        : status.state === 'error'
-          ? 'Error'
-          : 'Disconnected'
+      : simulated
+        ? `${VIRTUAL_PORT_SHORT} · offline`
+        : connected
+          ? `Connected${status.path ? ` · ${status.path}` : ''}`
+          : status.state === 'error'
+            ? 'Error'
+            : 'Disconnected'
 
   // Detect a newer MicroPython for the connected device (#173): read its running
   // version from the REPL boot banner and compare against the firmware catalog's
@@ -251,8 +258,20 @@ export function StatusBar({
     <footer className="statusbar" role="contentinfo" aria-label="Status bar">
       <div className="statusbar__group statusbar__group--left">
         <span
-          className={`statusbar__item statusbar__conn ${connected ? 'statusbar__conn--connected' : 'statusbar__conn--disconnected'}`}
-          title={status.error ? `Connection error: ${status.error}` : 'Device connection status'}
+          className={`statusbar__item statusbar__conn ${
+            simulated
+              ? 'statusbar__conn--sim'
+              : connected
+                ? 'statusbar__conn--connected'
+                : 'statusbar__conn--disconnected'
+          }`}
+          title={
+            status.error
+              ? `Connection error: ${status.error}`
+              : simulated
+                ? 'Simulated device — no hardware connected (offline mode)'
+                : 'Device connection status'
+          }
         >
           <span className="statusbar__dot" aria-hidden="true" />
           <span>{connLabel}</span>
