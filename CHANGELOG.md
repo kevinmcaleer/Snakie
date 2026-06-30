@@ -6,12 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-06-30
+
 ### Added
 - **Pimoroni Tiny 2350 in the Standard library.** Authored with the
-  build-part-from-image skill (#198) — 15 castellated pads (5V/GND/3V3 + GP0–GP7
-  + A0–A3), RP2350A, USB-C, RGB LED, BOOT/RST buttons and the Qw/ST connector at
-  the real 22.9×18 mm footprint. Its id matches the built-in board, so the Board
-  View now renders the Tiny 2350 life-like.
+  build-part-from-image skill (#198) — **16 castellated pads (8 per edge)** whose
+  pinout is verified against Pimoroni's official Pins-and-Dims diagram: left edge
+  (USB at top) **5V, GND, 3V3, A3 (GP29), A2 (GP28), A1 (GP27), A0 (GP26), GND**;
+  right edge **GP0–GP7**. RP2350A, USB-C, RGB LED, BOOT/RST buttons and the Qw/ST
+  connector. Ships a **life-like background photo with the background removed**
+  (transparent) so the castellated edge renders cleanly. Its id matches the
+  built-in board, so the Board View renders the Tiny 2350 life-like.
+
+### Changed
+- **build-part-from-image skill hardened for correctness + realism.** Pin
+  assignments must now be verified against a real **pinout diagram** (not the
+  product photo), with a **pad-count reconciliation** and a power/ground safety
+  check, then confirmed with the user before finalising — this caught a dangerous
+  5V/GND swap and a dropped GND pad on the Tiny 2350. The skill also **removes
+  image backgrounds** (macOS Vision foreground mask, via the bundled `rmbg.swift`)
+  and **assesses** the cutout, telling the user to use a smarter tool when it fails.
 
 ## [0.16.0] - 2026-06-29
 
@@ -1072,6 +1086,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...HEAD
+[0.16.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...v0.16.1
 [0.16.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.14.0...v0.15.0
