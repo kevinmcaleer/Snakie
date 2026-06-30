@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.18.1] - 2026-06-30
+
+### Fixed
+- **Raspberry Pi: disable GPU rendering to stop VSync errors.** On the Linux
+  arm64 (Pi) build, hardware acceleration is now disabled — the Pi's GL stack
+  can't report VSync timing to Chromium, which spammed the console with harmless
+  `GetVSyncParametersIfAvailable() failed` errors and could make GPU compositing
+  unreliable. Software rendering is steadier for this UI on a Pi 4/5. Set
+  `SNAKIE_ENABLE_GPU=1` to keep hardware acceleration.
+
 ## [0.18.0] - 2026-06-30
 
 ### Added
@@ -1160,6 +1170,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.18.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...v0.18.0
 [0.17.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.1...v0.17.0
 [0.16.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.16.0...v0.16.1
