@@ -147,17 +147,24 @@ function TreeNode({
         </span>
         <span className="tree-row__name">{entry.name}</span>
         {!entry.isDir && (
-          <input
-            type="checkbox"
-            className="tree-row__sync-check"
-            checked={isSynced(entry.path)}
-            onChange={() => toggleSync(entry.path)}
-            // Don't let toggling the checkbox also open the file / fire the row.
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            title="Keep this file in sync with the device"
-            aria-label={`Keep ${entry.name} in sync with the device`}
-          />
+          <span className="tree-row__sync">
+            <input
+              type="checkbox"
+              className="tree-row__sync-check"
+              checked={isSynced(entry.path)}
+              onChange={() => toggleSync(entry.path)}
+              // Don't let toggling the checkbox also open the file / fire the row.
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              title="Keep this file in sync with the device"
+              aria-label={`Keep ${entry.name} in sync with the device`}
+            />
+            {/* At rest a tagged file shows this green sync glyph in place of the
+                box; hovering/focusing the row swaps the real checkbox back in. */}
+            <span className="tree-row__sync-icon" aria-hidden>
+              ⇄
+            </span>
+          </span>
         )}
       </div>
       {error && (

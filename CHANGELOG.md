@@ -9,8 +9,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Keep local files in sync with the device (#178).** Tick the **checkbox** next
   to a file in the Local files tree to keep it in sync with the connected board
-  (untick to stop); the box stays visible while ticked and reveals on hover
-  otherwise. A single **sync toggle** on the device-files toolbar turns syncing
+  (untick to stop). A tagged file shows a green **⇄** sync glyph at rest; hovering
+  the row swaps the checkbox back in so you can untick it. A single **sync toggle**
+  on the device-files toolbar turns syncing
   on — pushing the tagged files immediately **and** keeping them in sync on every
   save — and off again. Its icon spins while syncing and becomes a **green tick**
   for a moment when a sync completes (the device tree refreshes so the pushed
