@@ -1,11 +1,38 @@
 import { describe, it, expect } from 'vitest'
 import { SimulatedDevice } from '../src/main/device/SimulatedDevice'
+import type { ReplRuntime } from '../src/main/device/MicroPythonRuntime'
 import { isTelemetry } from '../src/renderer/src/components/instrument-telemetry'
 import {
   isVirtualPort,
   VIRTUAL_PORT_PATH,
   VIRTUAL_PORT_LABEL
 } from '../src/shared/virtual-device'
+
+/**
+ * A lightweight {@link ReplRuntime} so the device tests stay fast and
+ * deterministic (no WebAssembly load). It prints a fake prompt on init and
+ * echoes whatever it's fed, and records the feeds for assertions.
+ */
+class FakeRuntime implements ReplRuntime {
+  feeds: string[] = []
+  capturedCalls: string[] = []
+  /** Canned response returned by the next runCaptured call. */
+  nextCaptured = ''
+  private emit: ((chunk: Buffer) => void) | null = null
+  async init(onOutput: (chunk: Buffer) => void): Promise<void> {
+    this.emit = onOutput
+    onOutput(Buffer.from('MicroPython (fake)\r\n>>> ', 'utf8'))
+  }
+  async feed(data: string): Promise<void> {
+    this.feeds.push(data)
+    this.emit?.(Buffer.from(`echo:${data}`, 'utf8'))
+  }
+  async runCaptured(code: string): Promise<string> {
+    this.capturedCalls.push(code)
+    return this.nextCaptured
+  }
+  dispose(): void {}
+}
 
 describe('virtual-device identity', () => {
   it('recognises only the reserved sentinel path', () => {
@@ -24,15 +51,15 @@ describe('virtual-device identity', () => {
 
 describe('SimulatedDevice lifecycle', () => {
   it('starts disconnected and reports the virtual path', () => {
-    const dev = new SimulatedDevice()
+    const dev = new SimulatedDevice(new FakeRuntime())
     const status = dev.getStatus()
     expect(status.state).toBe('disconnected')
     expect(status.path).toBe(VIRTUAL_PORT_PATH)
     expect(dev.isConnected()).toBe(false)
   })
 
-  it('emits connecting → connected status and a REPL banner on connect', async () => {
-    const dev = new SimulatedDevice()
+  it('emits connecting → connected status and boots the REPL on connect', async () => {
+    const dev = new SimulatedDevice(new FakeRuntime())
     const states: string[] = []
     const data: string[] = []
     dev.on('status', (s) => states.push(s.state))
@@ -41,13 +68,35 @@ describe('SimulatedDevice lifecycle', () => {
     await dev.connect()
     expect(states).toEqual(['connecting', 'connected'])
     expect(dev.isConnected()).toBe(true)
+    // The runtime's banner streamed out via the data channel.
     expect(data.join('')).toContain('MicroPython')
 
     await dev.dispose()
   })
 
+  it('feeds keystrokes / Run payloads to the REPL runtime', async () => {
+    const runtime = new FakeRuntime()
+    const dev = new SimulatedDevice(runtime)
+    const data: string[] = []
+    dev.on('data', (c) => data.push(c.toString('utf8')))
+    await dev.connect()
+
+    // The Run button sends paste mode: Ctrl-E … Ctrl-D.
+    await dev.sendData('\x05print("hi")\x04')
+    expect(runtime.feeds).toContain('\x05print("hi")\x04')
+    expect(data.join('')).toContain('echo:')
+
+    // interrupt / softReset feed the control bytes too.
+    await dev.interrupt()
+    await dev.softReset()
+    expect(runtime.feeds).toContain('\x03')
+    expect(runtime.feeds).toContain('\x04')
+
+    await dev.dispose()
+  })
+
   it('streams parseable SNK telemetry while connected', async () => {
-    const dev = new SimulatedDevice()
+    const dev = new SimulatedDevice(new FakeRuntime())
     const chunks: string[] = []
     dev.on('data', (c) => chunks.push(c.toString('utf8')))
     await dev.connect()
@@ -67,7 +116,7 @@ describe('SimulatedDevice lifecycle', () => {
   })
 
   it('stops emitting telemetry after disconnect', async () => {
-    const dev = new SimulatedDevice()
+    const dev = new SimulatedDevice(new FakeRuntime())
     await dev.connect()
     await dev.disconnect()
 
@@ -83,7 +132,7 @@ describe('SimulatedDevice lifecycle', () => {
   })
 
   it('answers the live-pin probe via exec and rejects exec when disconnected', async () => {
-    const dev = new SimulatedDevice()
+    const dev = new SimulatedDevice(new FakeRuntime())
     await expect(dev.exec('print(1)')).rejects.toThrow(/Not connected/)
 
     await dev.connect()
@@ -99,21 +148,30 @@ describe('SimulatedDevice lifecycle', () => {
   })
 
   it('records control commands (latest-wins per target)', async () => {
-    const dev = new SimulatedDevice()
+    const dev = new SimulatedDevice(new FakeRuntime())
     await dev.connect()
-    // Should not throw; the simulator accepts any control line.
     await dev.sendControl('led', 'pwm 0.5')
     await dev.sendControl('teleop', 'axes=drive:0.5')
     await dev.dispose()
   })
 
-  it('exposes a small simulated filesystem so the device tree is usable', async () => {
-    const dev = new SimulatedDevice()
+  it('lists the interpreter VFS via runCaptured, hiding Emscripten system dirs', async () => {
+    const runtime = new FakeRuntime()
+    const dev = new SimulatedDevice(runtime)
     await dev.connect()
+    // The runtime returns the raw os.ilistdir JSON; the device hides the MEMFS
+    // system mounts (dev/proc/tmp/home) at the root so it reads like a board.
+    runtime.nextCaptured = JSON.stringify([
+      ['main.py', false, 12],
+      ['lib', true, 0],
+      ['dev', true, 0],
+      ['proc', true, 0]
+    ])
     const root = await dev.listDir('/')
-    expect(root.some((e) => e.name === 'main.py')).toBe(true)
-    expect(root.some((e) => e.isDir)).toBe(true)
-    expect(await dev.readFile('/main.py')).toContain('simulator')
+    expect(root.map((e) => e.name)).toEqual(['main.py', 'lib'])
+    // FS ops are routed out-of-band through the runtime, not the REPL.
+    expect(runtime.capturedCalls.at(-1)).toContain('ilistdir')
+    expect(runtime.feeds).toHaveLength(0)
     await dev.dispose()
   })
 })

@@ -48,7 +48,11 @@ function isHidden(line: string): boolean {
  */
 function couldBecomeTelemetry(tail: string): boolean {
   const t = tail.trimStart()
-  if (t === '') return true // still only whitespace — wait and see
+  // Pure whitespace is never a telemetry line on its own — flush it immediately.
+  // Holding it would let a lone echoed space (e.g. typed at the simulated REPL,
+  // #135) be concatenated onto the NEXT `SNK …` telemetry line and dropped with
+  // it. Telemetry the device prints starts at column 0, so nothing is lost.
+  if (t === '') return false
   // `t` is a prefix of a header (e.g. "S", "SN", "SNK", "SNK ", "SNKC", "SNKCMD ").
   if (SENTINEL_PREFIXES.some((p) => p.startsWith(t))) return true
   // Already a full `SNK `/`SNKCMD ` header but no newline yet → wait for the rest.

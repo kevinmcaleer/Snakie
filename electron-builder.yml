@@ -13,6 +13,13 @@ files:
   - out/**
   - package.json
 
+# Keep the MicroPython WebAssembly runtime (offline simulated device, #135)
+# OUTSIDE the asar so the loader can read the `.wasm` binary by file path at
+# runtime. The main bundle externalizes the package (externalizeDepsPlugin) and
+# resolves it from node_modules, so the `.wasm` must exist as a real file.
+asarUnpack:
+  - node_modules/@micropython/micropython-webassembly-pyscript/**
+
 # Ship the Python plugin SDK + host and the bundled example plugins (issue #61)
 # into the packaged app's resources/ dir. PluginHost resolves them from
 # process.resourcesPath when app.isPackaged, and from the repo root in dev.
