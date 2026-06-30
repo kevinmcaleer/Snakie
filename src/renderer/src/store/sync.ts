@@ -44,6 +44,39 @@ const ON_SAVE_KEY = 'snakie.sync.onSave'
 const DONE_LINGER_MS = 2000
 const ERROR_LINGER_MS = 4000
 
+/**
+ * Surface a short, transient SYNC message in the status bar so the user can see
+ * what file syncing is doing (tagging, the sync toggle, and each automatic push)
+ * — not just the small toolbar glyph. We reuse the shared status-bar slot driven
+ * by the `snakie:status` window event (StatusBar's `PLUGIN_STATUS_EVENT`): the
+ * detail carries `{ text, priority }`, and an empty `text` clears the slot.
+ * In-progress messages (`Syncing …`) are dispatched with no linger so the next
+ * message replaces them; terminal messages auto-clear after `lingerMs`.
+ */
+const SYNC_STATUS_EVENT = 'snakie:status'
+let syncStatusClearTimer: ReturnType<typeof setTimeout> | null = null
+
+function emitSyncStatus(text: string, lingerMs?: number): void {
+  try {
+    window.dispatchEvent(new CustomEvent(SYNC_STATUS_EVENT, { detail: { text, priority: 2 } }))
+  } catch {
+    return
+  }
+  if (syncStatusClearTimer) {
+    clearTimeout(syncStatusClearTimer)
+    syncStatusClearTimer = null
+  }
+  if (lingerMs && text) {
+    syncStatusClearTimer = setTimeout(() => {
+      try {
+        window.dispatchEvent(new CustomEvent(SYNC_STATUS_EVENT, { detail: { text: '' } }))
+      } catch {
+        // ignore — the slot will be overwritten by the next message anyway
+      }
+    }, lingerMs)
+  }
+}
+
 /** Coarse status backing the toolbar indicator. */
 export type SyncStatus = 'idle' | 'syncing' | 'done' | 'error'
 
@@ -146,10 +179,18 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
     }
   }, [])
 
-  /** Set a terminal status and auto-revert it to idle after a short linger. */
-  const settle = useCallback((next: 'done' | 'error', err: string | null): void => {
+  /** Set a terminal status, surface a status-bar message, and auto-revert to idle. */
+  const settle = useCallback((next: 'done' | 'error', err: string | null, label?: string): void => {
     setStatus(next)
     setError(err)
+    if (next === 'done') {
+      emitSyncStatus(label ? `${label} synced to the board` : 'Synced to the board', DONE_LINGER_MS)
+    } else {
+      emitSyncStatus(
+        label ? `Couldn't sync ${label}: ${err ?? 'failed'}` : `Sync failed: ${err ?? ''}`,
+        ERROR_LINGER_MS
+      )
+    }
     if (lingerTimer.current) clearTimeout(lingerTimer.current)
     lingerTimer.current = setTimeout(
       () => setStatus('idle'),
@@ -161,17 +202,20 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const pushPaths = useCallback(
     async (paths: string[]): Promise<void> => {
       if (paths.length === 0) return
+      const label =
+        paths.length === 1 ? baseName(paths[0]) : `${paths.length} files`
       if (lingerTimer.current) clearTimeout(lingerTimer.current)
       setStatus('syncing')
       setError(null)
+      emitSyncStatus(`Syncing ${label}…`)
       try {
         for (const path of paths) {
           const content = await window.api.fs.readFile(path)
           await window.api.device.writeFile(deviceDestForLocal(path), content)
         }
-        settle('done', null)
+        settle('done', null, label)
       } catch (err) {
-        settle('error', err instanceof Error ? err.message : String(err))
+        settle('error', err instanceof Error ? err.message : String(err), label)
       }
     },
     [settle]
@@ -189,8 +233,16 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
         const has = prev.includes(path)
         const next = has ? prev.filter((p) => p !== path) : [...prev, path]
         saveSyncedPaths(next)
-        // Newly tagged + a board is connected → push it once so it's in sync now.
-        if (!has && connectedRef.current) void pushPaths([path])
+        const name = baseName(path)
+        if (has) {
+          emitSyncStatus(`Stopped syncing ${name}`, DONE_LINGER_MS)
+        } else if (connectedRef.current) {
+          // Newly tagged + a board is connected → push it once (this emits its
+          // own "Syncing …" → "… synced" messages).
+          void pushPaths([path])
+        } else {
+          emitSyncStatus(`${name} tagged — will sync when a board connects`, DONE_LINGER_MS)
+        }
         return next
       })
     },
@@ -200,6 +252,15 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
   const setSyncOnSave = useCallback((on: boolean): void => {
     setSyncOnSaveState(on)
     saveSyncOnSave(on)
+    if (on) {
+      const n = syncedRef.current.length
+      emitSyncStatus(
+        `File sync on — ${n} file${n === 1 ? '' : 's'} kept in sync on save`,
+        DONE_LINGER_MS
+      )
+    } else {
+      emitSyncStatus('File sync off', DONE_LINGER_MS)
+    }
   }, [])
 
   // Auto-sync on save: when enabled + connected, a saved tagged local file is
@@ -210,15 +271,17 @@ export function SyncProvider({ children }: { children: ReactNode }): JSX.Element
       if (!detail || detail.source !== 'local') return
       if (!onSaveRef.current || !connectedRef.current) return
       if (!syncedRef.current.includes(detail.path)) return
+      const label = baseName(detail.path)
       void (async (): Promise<void> => {
         if (lingerTimer.current) clearTimeout(lingerTimer.current)
         setStatus('syncing')
         setError(null)
+        emitSyncStatus(`Syncing ${label}…`)
         try {
           await window.api.device.writeFile(deviceDestForLocal(detail.path), detail.content)
-          settle('done', null)
+          settle('done', null, label)
         } catch (err) {
-          settle('error', err instanceof Error ? err.message : String(err))
+          settle('error', err instanceof Error ? err.message : String(err), label)
         }
       })()
     }

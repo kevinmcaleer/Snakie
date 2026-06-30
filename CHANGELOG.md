@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Status-bar messages for file syncing (#178).** The status bar now narrates
+  what file syncing is doing: when you tag/untag a file, when you turn the sync
+  toggle on or off, and for every automatic push on save (`Syncing main.py…` →
+  `main.py synced to the board`, or a clear error). Messages are transient and
+  auto-clear, complementing the small toolbar glyph.
+
 ### Fixed
 - **Simulated device: file operations no longer fail with "NULL object".** The
   offline device's filesystem helpers (list/read/write/stat) now run their Python
