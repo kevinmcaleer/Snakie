@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode
 } from 'react'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import './PromptModal.css'
 
 /**
@@ -39,6 +40,8 @@ export function PromptProvider({ children }: { children: ReactNode }): JSX.Eleme
   const [request, setRequest] = useState<PromptRequest | null>(null)
   const [value, setValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
+  // Trap Tab focus within the modal and restore focus to the trigger on close.
+  const dialogRef = useFocusTrap<HTMLDivElement>(!!request)
 
   const prompt = useCallback<PromptFn>((message, defaultValue = '') => {
     return new Promise<string | null>((resolve) => {
@@ -83,9 +86,17 @@ export function PromptProvider({ children }: { children: ReactNode }): JSX.Eleme
         >
           <div
             className="prompt-modal"
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={request.message}
+            onKeyDown={(e) => {
+              // Escape cancels from anywhere in the dialog (not just the input).
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                onCancel()
+              }
+            }}
           >
             <label className="prompt-modal__label" htmlFor="prompt-modal-input">
               {request.message}

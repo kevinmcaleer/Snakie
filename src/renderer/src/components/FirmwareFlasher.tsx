@@ -6,6 +6,7 @@ import type {
   FirmwareCatalog,
   FlashProgress
 } from '../../../preload/index.d'
+import { useFocusTrap } from '../hooks/useFocusTrap'
 import './FirmwareFlasher.css'
 
 interface FirmwareFlasherProps {
@@ -89,6 +90,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [flashing, setFlashing] = useState(false)
   const [outcome, setOutcome] = useState<'idle' | 'success' | 'error'>('idle')
   const logRef = useRef<HTMLDivElement>(null)
+  // Move focus into the dialog on open, trap Tab, and restore it on close.
+  const dialogRef = useFocusTrap<HTMLDivElement>()
 
   // --- Catalog (download-from-MicroPython.org) state (issue #64) ---
   const [source, setSource] = useState<Source>('local')
@@ -120,6 +123,16 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     const el = logRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [log])
+
+  // Escape closes the dialog (consistent with the other modals), but never
+  // mid-flash — interrupting a flash could leave the device half-written.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape' && !flashing) onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [flashing, onClose])
 
   const refreshDetection = useCallback(async (): Promise<void> => {
     try {
@@ -353,6 +366,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     >
       <div
         className="firmware-modal"
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Flash MicroPython firmware"
@@ -677,6 +691,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
               <div
                 className="firmware-progress"
                 role="progressbar"
+                aria-label="Flash progress"
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={percent}
@@ -706,14 +721,20 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
             </div>
           )}
 
-          {outcome === 'success' && (
-            <p className="firmware-banner firmware-banner--success">Firmware flashed successfully.</p>
-          )}
-          {outcome === 'error' && (
-            <p className="firmware-banner firmware-banner--error">
-              Flashing failed. Check the log above.
-            </p>
-          )}
+          {/* Persistent live region so the flash outcome is announced (the log
+              block above is live, but the summary banner wasn't) — a11y, #188. */}
+          <div role="status" aria-live="polite">
+            {outcome === 'success' && (
+              <p className="firmware-banner firmware-banner--success">
+                Firmware flashed successfully.
+              </p>
+            )}
+            {outcome === 'error' && (
+              <p className="firmware-banner firmware-banner--error">
+                Flashing failed. Check the log above.
+              </p>
+            )}
+          </div>
         </div>
 
         <footer className="firmware-modal__footer">

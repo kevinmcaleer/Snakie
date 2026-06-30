@@ -687,27 +687,32 @@ export function AppShell(): JSX.Element {
           `.shell` (a column flex) so it reads as a full-width banner above the
           toolbar; shown only when the dock is open, a board is connected, the
           library isn't installed, and it hasn't been dismissed this session. */}
-      {showLibBanner && (
-        <InstrumentLibBanner
-          installing={libInstalling}
-          error={libError}
-          outdated={libState === 'outdated'}
-          onInstall={installInstrumentsLib}
-          onDismiss={dismissLibBanner}
-        />
-      )}
-      {/* #166: the project's parts need libraries this file doesn't import / the
-          board doesn't have — offer to install the missing ones. */}
-      {showPartsBanner && (
-        <PartsImportBanner
-          missingImports={missImports}
-          missingOnBoard={missBoard}
-          installing={partsInstalling}
-          error={partsInstallError}
-          onInstall={installMissingLibs}
-          onDismiss={() => setPartsDismissed(true)}
-        />
-      )}
+      {/* Persistent live region so a banner is ANNOUNCED when it appears: the
+          container stays mounted (empty when no banner is shown), so screen
+          readers pick up the injected banner text (a11y, #188). */}
+      <div aria-live="polite">
+        {showLibBanner && (
+          <InstrumentLibBanner
+            installing={libInstalling}
+            error={libError}
+            outdated={libState === 'outdated'}
+            onInstall={installInstrumentsLib}
+            onDismiss={dismissLibBanner}
+          />
+        )}
+        {/* #166: the project's parts need libraries this file doesn't import / the
+            board doesn't have — offer to install the missing ones. */}
+        {showPartsBanner && (
+          <PartsImportBanner
+            missingImports={missImports}
+            missingOnBoard={missBoard}
+            installing={partsInstalling}
+            error={partsInstallError}
+            onInstall={installMissingLibs}
+            onDismiss={() => setPartsDismissed(true)}
+          />
+        )}
+      </div>
       <Toolbar
         theme={theme}
         onToggleTheme={toggleTheme}

@@ -38,7 +38,9 @@
   --bg-sunken: #202226; /* recessed controls */
   --border: #3a3d44; /* metal edge */
   --text: #d8dbe0;
-  --text-muted: #8a8f98;
+  /* Lightened from #8a8f98 so small muted text clears WCAG AA (≥4.5:1) on the
+   * dark chrome surfaces (--bg / --bg-elevated), not just the deepest --bg (#188). */
+  --text-muted: #9aa0aa;
 
   --accent: #d6a23f; /* brass — active/selected/links */
   --accent-2: #3fae5a; /* green — connected / run / saved */
@@ -116,7 +118,9 @@
   --bg-sunken: #cdd1d8; /* recessed controls */
   --border: #9498a1; /* metal edge */
   --text: #34373d;
-  --text-muted: #6c7178;
+  /* Darkened from #6c7178 so small muted text clears WCAG AA (≥4.5:1) on the
+   * warm parchment / brushed-metal surfaces of the light skin (#188). */
+  --text-muted: #5c616a;
 
   --accent: #b07d1e; /* brass — active/selected/links */
   --accent-2: #1c7a34; /* green — connected / run / saved */
@@ -2212,4 +2216,47 @@ body {
   flex-direction: column;
   min-height: 0;
   overflow: auto;
+}
+
+/* --------------------------------------------------------------------------
+ * Global accessibility baseline (issue #188)
+ *
+ * One app-wide focus-visible ring for every interactive element that doesn't
+ * already carry its own themed focus rule, so keyboard users always see where
+ * focus is. The `:where(...)` wrapper has ZERO specificity, so any component
+ * rule (e.g. `.btn:focus-visible`) still wins and overrides this baseline.
+ * ------------------------------------------------------------------------ */
+:where(
+    a[href],
+    button,
+    input,
+    select,
+    textarea,
+    summary,
+    [tabindex]:not([tabindex='-1']),
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='option'],
+    [role='slider'],
+    [role='treeitem']
+  ):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Respect the OS "reduce motion" preference app-wide: near-instant durations
+ * still fire transition/animation end events (so any animationend-driven logic
+ * keeps working) while removing the perceived motion, and infinite pulses
+ * (LIVE LED, scan rings, E-STOP flash) settle after a single iteration. The
+ * xterm cursor blink is disabled in Terminal.tsx, which reads the same query. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

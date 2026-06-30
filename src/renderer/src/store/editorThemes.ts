@@ -242,7 +242,7 @@ export const EDITOR_THEMES: Record<string, EditorThemeDef> = {
     monaco: {
       background: '#161823',
       gutterBackground: '#161823',
-      lineNumber: '#5a5f73',
+      lineNumber: '#6a7088', // ≥3:1 on the midnight surface (a11y, #188)
       lineNumberActive: '#cdd3ea',
       foreground: '#d7dbe8',
       selection: '#2c3350',
@@ -256,7 +256,7 @@ export const EDITOR_THEMES: Record<string, EditorThemeDef> = {
       string: 'c3e88d', // lime
       stringEscape: '89ddff',
       number: 'f78c6c', // coral
-      comment: '6a7390', // slate
+      comment: '8089a8', // slate — lightened to ≥4.5:1 on midnight (a11y, #188)
       type: 'ffcb6b', // amber
       func: '82aaff', // blue
       decorator: 'ffcb6b', // amber
@@ -281,7 +281,7 @@ export const DARK_PAPER_RULES: EditorTokenRule[] = buildRules({
   string: 'c3e88d', // lime
   stringEscape: '89ddff',
   number: 'f78c6c', // coral
-  comment: '6f7896', // slate
+  comment: '8a93b2', // slate — lightened to ≥4.5:1 on the dark ruled paper (a11y, #188)
   type: 'ffcb6b', // amber
   func: '82aaff', // blue
   decorator: 'ffcb6b', // amber

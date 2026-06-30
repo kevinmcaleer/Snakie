@@ -6,6 +6,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Accessibility quick wins (#188).** First pass over the renderer's
+  accessibility audit:
+  - The device REPL is now readable by screen readers — the xterm terminal runs
+    in `screenReaderMode` and its container is a labelled `group` ("Device REPL
+    console").
+  - A single global `:focus-visible` ring now covers every interactive element
+    that lacked a themed focus indicator, so keyboard focus is always visible.
+  - A global `prefers-reduced-motion` block (plus gating the terminal cursor
+    blink on the same preference) stops infinite pulses and transitions for users
+    who ask for reduced motion.
+  - A contrast pass raised the muted-text tokens (dark + light skins) and the
+    dark editor's inactive line numbers / comment syntax to meet WCAG AA.
+  - Glyph-only controls now expose real accessible names (Find's Match-case /
+    Whole-word toggles, the plugin reload knob, the status-bar git branch count),
+    with the decorative glyphs hidden from assistive tech.
+  - Live regions announce async status that was previously silent: the Find
+    match count, the top install banners, and the firmware flash progress /
+    outcome.
+  - Modal dialogs (Prompt, Settings, Firmware flasher) now trap Tab focus, move
+    focus in on open and restore it to the trigger on close via a shared
+    `useFocusTrap` hook; the Firmware flasher and Prompt modals also close on
+    Escape from any control.
+
 ## [0.16.1] - 2026-06-30
 
 ### Added

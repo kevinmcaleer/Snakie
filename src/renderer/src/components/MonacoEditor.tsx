@@ -125,7 +125,9 @@ function ensureThemes(): void {
     colors: {
       'editor.background': '#00000000',
       'editorGutter.background': '#00000000',
-      'editorLineNumber.foreground': '#5a5f6e',
+      // Lightened from #5a5f6e so inactive line numbers clear ≥3:1 on the dark
+      // ruled-paper band (a11y, #188).
+      'editorLineNumber.foreground': '#6e7488',
       'editorLineNumber.activeForeground': '#d6a23f',
       'minimap.background': '#1c1e24',
       'editorWidget.background': '#23262f',
