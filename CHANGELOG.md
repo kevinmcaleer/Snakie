@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.1] - 2026-07-01
+
 ### Changed
 - **Bug reporter is now a non-modal left panel (#206).** "Report Bug" opens a
   docked left-sidebar view (above Help) instead of a modal, so the editor and
@@ -1242,6 +1244,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.20.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...v0.18.1
