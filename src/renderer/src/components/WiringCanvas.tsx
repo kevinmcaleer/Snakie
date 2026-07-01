@@ -1085,6 +1085,10 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 if (!s) return null
                 const pins = s.pins.filter((p) => p.primary !== false && p.caps?.length)
                 if (!pins.length) return null
+                // Pins/labels are drawn at the part's bodyScale, so scale the chips
+                // (their outward offset + size) by the same factor around each pin —
+                // otherwise they land on the labels when the part is scaled.
+                const k = s.scale ?? 1
                 // Centre = mean pin position (canvas space) → stagger inside-out.
                 const cx0 = s.x + pins.reduce((a, p) => a + p.anchors[0].x, 0) / pins.length
                 const cy0 = s.y + pins.reduce((a, p) => a + p.anchors[0].y, 0) / pins.length
@@ -1103,7 +1107,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                   return (
                     <g key={p.index} className="wc__caps" style={{ animationDelay: `${delay}ms` }}>
                       <g style={{ opacity: dim ? 0.4 : 1, transition: 'opacity 120ms ease-out' }}>
-                        {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board')}
+                        <g transform={`translate(${px} ${py}) scale(${k}) translate(${-px} ${-py})`}>
+                          {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board')}
+                        </g>
                       </g>
                     </g>
                   )
@@ -1524,21 +1530,20 @@ function SubjectBody({
   const dy = s.bodyDY ?? 0 // visible (rotated) top, so the title sits above it (#180)
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
   return (
-    <g transform={`translate(${s.x} ${s.y})`}>
-      {/* Transparent hover target over the whole body — hovering anywhere on the
-          part reveals its pins' capability chips (breadboard). It sits under the
-          connection dots (which set the specific-pin hover) and doesn't stop
-          pointerdown, so dragging via the svg-level hit-test still works. */}
+    <g
+      transform={`translate(${s.x} ${s.y})`}
+      // Part-level hover (reveals the pin capability chips) on the OUTER group so
+      // moving between the body and its pin dots — both DESCENDANTS — doesn't count
+      // as leaving; `pointerleave` fires only when the pointer truly exits the part,
+      // which clears the chips. (Handlers here don't stop pointerdown, so dragging
+      // via the svg-level hit-test still works.)
+      onPointerEnter={onHoverPart ? () => onHoverPart(true) : undefined}
+      onPointerLeave={onHoverPart ? () => onHoverPart(false) : undefined}
+    >
+      {/* Transparent fill over the whole body box so the part-level hover also
+          registers over the margins around the drawn body (not just its shapes). */}
       {onHoverPart && s.mode !== 'schematic' && (
-        <rect
-          x={0}
-          y={0}
-          width={s.w}
-          height={s.h}
-          fill="transparent"
-          onPointerEnter={() => onHoverPart(true)}
-          onPointerLeave={() => onHoverPart(false)}
-        />
+        <rect x={0} y={0} width={s.w} height={s.h} fill="transparent" />
       )}
       {/* --- The body --- */}
       {s.missing ? (
