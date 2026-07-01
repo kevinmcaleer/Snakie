@@ -326,10 +326,12 @@ export function AppShell(): JSX.Element {
   //    it docked — the in-window twin of the board-view node launchers. Turning a
   //    kind back ON also RE-DOCKS every instrument of that kind (via the host) so
   //    a previously-undocked/closed one reappears DOCKED.
-  //  - Every singleton (Plotter + the #110–#121 placeholders): a plain show/hide
-  //    flip of its boolean — visibility ONLY, never touches docked state.
-  // Defined after the host so it can call `redockKind`.
-  const { redockKind } = instruments
+  //  - Every singleton (Plotter + the #110–#121 placeholders): a show/hide flip,
+  //    and — like the kinds above — RE-DOCK it when turning it back ON, so a
+  //    singleton that was undocked into its own OS window (#205) returns to the
+  //    dock instead of reappearing windowed (or vanishing).
+  // Defined after the host so it can call `redockKind` / `redockByKey`.
+  const { redockKind, redockByKey } = instruments
   const toggleVisible = useCallback(
     (id: string): void => {
       if (id === 'scope' || id === 'meter') {
@@ -354,10 +356,12 @@ export function AppShell(): JSX.Element {
         if (next) redockKind(kind)
         return
       }
-      // A singleton (Plotter or a placeholder): plain show/hide flip.
-      setVisibility({ ...visibility, [id]: !visibility[id] })
+      // A singleton (Plotter or a placeholder): show/hide flip; re-dock on show.
+      const next = !visibility[id]
+      setVisibility({ ...visibility, [id]: next })
+      if (next) redockByKey(`singleton:${id}`)
     },
-    [visibility, setVisibility, setKindVisible, redockKind, openInstruments, fileConns]
+    [visibility, setVisibility, setKindVisible, redockKind, redockByKey, openInstruments, fileConns]
   )
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the

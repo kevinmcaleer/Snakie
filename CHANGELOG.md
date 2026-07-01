@@ -12,6 +12,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (double-click the handle to reset). The split is per-session — it always opens
   at the current default size and isn't persisted.
 
+### Fixed
+- **Re-showing an undocked instrument returns it to the dock.** After undocking a
+  singleton instrument into its own OS window (#205) — the Plotter or any of the
+  panels (gamepad, scanners, LED, buzzer, …) — hiding then re-showing it via its
+  dock-header icon brought it back windowed (or made it vanish) because its
+  undocked state wasn't reset. Toggling a singleton back on now re-docks it, the
+  same way the oscilloscope/multimeter already did.
+
 ## [0.19.0] - 2026-06-30
 
 ### Added
