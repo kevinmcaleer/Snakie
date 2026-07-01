@@ -29,6 +29,7 @@ import type {
   PartLabel,
   PartLibrary,
   PartPin,
+  PartPinBuses,
   PartPinCapability,
   PartPinShape,
   PartPinSignals,
@@ -55,6 +56,18 @@ function coerceSignals(raw: unknown): PartPinSignals | undefined {
   if (uart === 'TX' || uart === 'RX') out.uart = uart
   const pwm = String(r.pwm ?? '').toUpperCase()
   if (pwm === 'A' || pwm === 'B') out.pwm = pwm
+  return Object.keys(out).length ? out : undefined
+}
+
+/** Coerce a raw `buses` map from YAML into a clean {@link PartPinBuses}. */
+function coerceBuses(raw: unknown): PartPinBuses | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const out: PartPinBuses = {}
+  for (const k of ['i2c', 'spi', 'uart', 'adc'] as const) {
+    const n = num(r[k])
+    if (n !== undefined) out[k] = n
+  }
   return Object.keys(out).length ? out : undefined
 }
 const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
@@ -127,6 +140,8 @@ function coercePin(raw: unknown): PartPin | null {
     }
     const signals = coerceSignals(r.signals)
     if (signals) pin.signals = signals
+    const buses = coerceBuses(r.buses)
+    if (buses) pin.buses = buses
   }
   const label = str(r.label)
   if (label && label !== name) pin.label = label
@@ -236,6 +251,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.type === 'io' && p.gpio !== undefined) out.gpio = p.gpio
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
   if (p.type === 'io' && p.signals && Object.keys(p.signals).length) out.signals = p.signals
+  if (p.type === 'io' && p.buses && Object.keys(p.buses).length) out.buses = p.buses
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
   if (p.shape) out.shape = p.shape

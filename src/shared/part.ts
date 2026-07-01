@@ -52,6 +52,19 @@ export interface PartPinSignals {
   pwm?: 'A' | 'B'
 }
 
+/**
+ * The peripheral bus / instance number a capability pin belongs to, when the part
+ * exposes more than one: i2c, spi and uart carry a bus id (e.g. `I2C0`, `SPI1`,
+ * `UART0`) and adc carries its channel number (e.g. `ADC0`). Set per-capability
+ * in the pin inspector alongside {@link PartPinSignals}.
+ */
+export interface PartPinBuses {
+  i2c?: number
+  spi?: number
+  uart?: number
+  adc?: number
+}
+
 /** How the part is mounted: through-hole vs surface-mount. */
 export type PartPackage = 'THT' | 'SMD'
 
@@ -85,6 +98,8 @@ export interface PartPin {
   /** Per-capability signal designation (e.g. i2c → SDA/SCL, spi → SCK). Only the
    *  entries for the pin's {@link capabilities} apply. */
   signals?: PartPinSignals
+  /** Per-capability bus / instance / channel number (e.g. I2C0, SPI1, ADC2). */
+  buses?: PartPinBuses
   /**
    * Whether this pad is a castellated edge pad. Legacy flag — superseded by
    * {@link shape}` === 'castellated'`; still read for backward compatibility.

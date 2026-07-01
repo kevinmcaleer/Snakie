@@ -15,12 +15,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the Seeed XIAO RP2350's GP22 + GP23). Each is drawn on the board as a glowing
   glyph with a `LED · GP25` / `RGB · GP18 GP19 GP20` / `NeoPixel · GP22 · PWR GP23`
   label, is draggable, and persists in `parts.yml` under `onboardLeds`.
-- **Pin signal designations + GP## labels (Part Editor).** When a pin's capability
-  is ticked, a dropdown lets you designate its signal — **I2C** → SDA/SCL, **SPI**
-  → RX/CSn/SCK/TX, **UART** → TX/RX, **PWM** → the A/B channel — and the capability
-  chip shows the chosen signal (e.g. `SDA`, `SCK`, `PWM A`). The pin's **GP##**
-  GPIO is now drawn next to it in the editor when the silk label differs from the
-  GPIO. Persisted in `parts.yml` under each pin's `signals`.
+- **Pin signal designations, bus numbers + GP## labels (Part Editor).** When a
+  pin's capability is ticked, controls let you designate its **signal** — **I2C** →
+  SDA/SCL, **SPI** → RX/CSn/SCK/TX, **UART** → TX/RX, **PWM** → the A/B channel —
+  and its **bus / channel number** — **I2C**/**SPI**/**UART** bus id and the **ADC**
+  channel. The capability chip shows both (e.g. `I2C0 SDA`, `SPI1 SCK`, `ADC2`,
+  `PWM A`). The pin's **GP##** GPIO is drawn next to it when the silk label differs
+  from the GPIO. Persisted in `parts.yml` under each pin's `signals` / `buses`.
 - **Rotate a pin from its mini-toolbar.** Selecting a pin in the Part Editor now
   shows a **Rotate 90°** button in its floating mini-toolbar (next to Duplicate),
   so you can spin a pin — its silk label and, on castellated pads, the outward

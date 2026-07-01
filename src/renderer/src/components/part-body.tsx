@@ -12,6 +12,7 @@ import {
 import type {
   OnboardLed,
   PartDefinition,
+  PartPinBuses,
   PartPinCapability,
   PartPinShape,
   PartPinSignals,
@@ -35,18 +36,24 @@ export const CAP_BADGE: Record<PartPinCapability, { text: string; color: string 
  *  the implied default for an io pin, so it isn't chipped. */
 export const CAP_CHIP_ORDER: PartPinCapability[] = ['pwm', 'adc', 'spi', 'i2c', 'uart']
 
-/** The chip text for a capability — refined to its designated signal when set
- *  (i2c → SDA/SCL, spi → SCK/CSn/…, uart → TX/RX, pwm → "PWM A"). */
-function signalChipText(cap: PartPinCapability, signals?: PartPinSignals): string {
+/** The chip text for a capability — refined to its designated signal and bus/
+ *  channel when set: `SDA` / `I2C0 SDA` / `SPI1 SCK` / `UART0 TX` / `ADC2` /
+ *  `PWM A`. The peripheral+bus prefix appears only once a bus number is set, so
+ *  bus-less parts keep the compact signal chip. */
+function signalChipText(cap: PartPinCapability, signals?: PartPinSignals, buses?: PartPinBuses): string {
+  const withBus = (periph: string, bus: number | undefined, sig: string | undefined): string =>
+    bus != null ? `${periph}${bus}${sig ? ` ${sig}` : ''}` : (sig ?? periph)
   switch (cap) {
     case 'pwm':
       return signals?.pwm ? `PWM ${signals.pwm}` : 'PWM'
+    case 'adc':
+      return buses?.adc != null ? `ADC${buses.adc}` : 'ADC'
     case 'spi':
-      return signals?.spi ?? 'SPI'
+      return withBus('SPI', buses?.spi, signals?.spi)
     case 'i2c':
-      return signals?.i2c ?? 'I2C'
+      return withBus('I2C', buses?.i2c, signals?.i2c)
     case 'uart':
-      return signals?.uart ?? 'UART'
+      return withBus('UART', buses?.uart, signals?.uart)
     default:
       return CAP_BADGE[cap].text
   }
@@ -69,11 +76,12 @@ export function capabilityChips(
   caps: PartPinCapability[] | undefined,
   signals?: PartPinSignals,
   /** Text drawn beyond the label (e.g. the GP## variable); chips clear past it. */
-  variable?: string
+  variable?: string,
+  buses?: PartPinBuses
 ): JSX.Element | null {
   const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => ({
     color: CAP_BADGE[c].color,
-    text: signalChipText(c, signals)
+    text: signalChipText(c, signals, buses)
   }))
   if (chips.length === 0) return null
   const B = 14 // pin-number box (matches boxedPinLabel)

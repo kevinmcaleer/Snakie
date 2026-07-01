@@ -2043,7 +2043,8 @@ export function PartCanvas({
                   pinLabel,
                   rp.pin.capabilities,
                   rp.pin.signals,
-                  gpioVar
+                  gpioVar,
+                  rp.pin.buses
                 )}
               </g>
             )

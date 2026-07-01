@@ -48,6 +48,7 @@ import type {
   PartLabel,
   PartLibrary,
   PartPin,
+  PartPinBuses,
   PartPinCapability,
   PartPinShape,
   PartPinSignals,
@@ -57,13 +58,22 @@ import type {
 import type { PartsWriteResult } from '../../../preload/index.d'
 import './PartEditor.css'
 
-/** Per-capability signal choices shown as dropdowns when the capability is ticked
- *  (i2c → SDA/SCL, spi → RX/CSn/SCK/TX, uart → TX/RX, pwm → A/B channel). */
-const SIGNAL_OPTIONS: { cap: keyof PartPinSignals; label: string; values: string[] }[] = [
-  { cap: 'pwm', label: 'PWM', values: ['A', 'B'] },
-  { cap: 'spi', label: 'SPI', values: ['RX', 'CSn', 'SCK', 'TX'] },
-  { cap: 'i2c', label: 'I2C', values: ['SDA', 'SCL'] },
-  { cap: 'uart', label: 'UART', values: ['TX', 'RX'] }
+/** Per-capability bus/channel + signal controls shown when the capability is
+ *  ticked: i2c/spi/uart carry a bus number + a signal, adc a channel number, pwm
+ *  an A/B channel. */
+const PIN_CAP_CONFIG: {
+  cap: PartPinCapability
+  label: string
+  /** Show a numeric bus/channel field, keyed into {@link PartPinBuses}. */
+  bus?: 'bus' | 'channel'
+  /** Show a signal dropdown with these values, keyed into {@link PartPinSignals}. */
+  signals?: string[]
+}[] = [
+  { cap: 'pwm', label: 'PWM', signals: ['A', 'B'] },
+  { cap: 'adc', label: 'ADC', bus: 'channel' },
+  { cap: 'spi', label: 'SPI', bus: 'bus', signals: ['RX', 'CSn', 'SCK', 'TX'] },
+  { cap: 'i2c', label: 'I2C', bus: 'bus', signals: ['SDA', 'SCL'] },
+  { cap: 'uart', label: 'UART', bus: 'bus', signals: ['TX', 'RX'] }
 ]
 
 /**
@@ -1507,6 +1517,12 @@ function SelectionInspector({
         else delete signals[cap]
         updatePin({ signals: Object.keys(signals).length ? (signals as PartPinSignals) : undefined })
       }
+      const setBus = (cap: keyof PartPinBuses, value: number | undefined): void => {
+        const buses: Record<string, number> = { ...(pin.buses ?? {}) }
+        if (value != null && Number.isFinite(value)) buses[cap] = value
+        else delete buses[cap]
+        updatePin({ buses: Object.keys(buses).length ? (buses as PartPinBuses) : undefined })
+      }
       body = (
         <>
           <div className="pe__row">
@@ -1547,26 +1563,46 @@ function SelectionInspector({
               ))}
             </div>
           )}
-          {/* Signal designation per ticked capability (SDA/SCL, RX/CSn/SCK/TX, …). */}
+          {/* Bus/channel number + signal per ticked capability (I2C0 SDA, SPI1 SCK,
+              UART0 TX, ADC2, PWM A, …). */}
           {pin.type === 'io' &&
-            SIGNAL_OPTIONS.some((o) => pin.capabilities?.includes(o.cap)) && (
+            PIN_CAP_CONFIG.some((o) => pin.capabilities?.includes(o.cap)) && (
               <div className="pe__row pe__signals">
-                {SIGNAL_OPTIONS.filter((o) => pin.capabilities?.includes(o.cap)).map((o) => (
-                  <label key={o.cap} className="pe__field">
-                    <span>{o.label} signal</span>
-                    <select
-                      value={pin.signals?.[o.cap] ?? ''}
-                      onChange={(e) => setSignal(o.cap, e.target.value)}
-                    >
-                      <option value="">—</option>
-                      {o.values.map((v) => (
-                        <option key={v} value={v}>
-                          {v}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
+                {PIN_CAP_CONFIG.filter((o) => pin.capabilities?.includes(o.cap)).flatMap((o) => {
+                  const controls: JSX.Element[] = []
+                  if (o.bus) {
+                    const bk = o.cap as keyof PartPinBuses
+                    controls.push(
+                      <label key={`${o.cap}-bus`} className="pe__field">
+                        <span>
+                          {o.label} {o.bus}
+                        </span>
+                        <input
+                          type="number"
+                          value={pin.buses?.[bk] ?? ''}
+                          onChange={(e) => setBus(bk, e.target.value === '' ? undefined : Number(e.target.value))}
+                        />
+                      </label>
+                    )
+                  }
+                  if (o.signals) {
+                    const sk = o.cap as keyof PartPinSignals
+                    controls.push(
+                      <label key={`${o.cap}-sig`} className="pe__field">
+                        <span>{o.label} signal</span>
+                        <select value={pin.signals?.[sk] ?? ''} onChange={(e) => setSignal(sk, e.target.value)}>
+                          <option value="">—</option>
+                          {o.signals.map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )
+                  }
+                  return controls
+                })}
               </div>
             )}
           <label className="pe__field">

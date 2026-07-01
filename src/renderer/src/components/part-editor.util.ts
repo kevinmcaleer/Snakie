@@ -32,6 +32,7 @@ import {
   type PartHeader,
   type PartLabel,
   type PartPin,
+  type PartPinBuses,
   type PartPinCapability,
   type PartPinShape,
   type PartPinSignals,
@@ -229,6 +230,17 @@ function normaliseSignals(signals: PartPinSignals | undefined): PartPinSignals |
   return Object.keys(out).length ? out : undefined
 }
 
+/** Normalise a per-capability bus/channel map: keep finite numbers, drop if empty. */
+function normaliseBuses(buses: PartPinBuses | undefined): PartPinBuses | undefined {
+  if (!buses || typeof buses !== 'object') return undefined
+  const out: PartPinBuses = {}
+  for (const k of ['i2c', 'spi', 'uart', 'adc'] as const) {
+    const v = buses[k]
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = v
+  }
+  return Object.keys(out).length ? out : undefined
+}
+
 /**
  * Even fractional positions for `n` items along an edge (inset from the ends) —
  * the layout legacy edge-based pins are migrated onto. Mirrors the canvas.
@@ -271,6 +283,8 @@ function normalisePin(pin: PartPin): PartPin {
     if (caps) out.capabilities = caps
     const signals = normaliseSignals(pin.signals)
     if (signals) out.signals = signals
+    const buses = normaliseBuses(pin.buses)
+    if (buses) out.buses = buses
   }
   const label = String(pin.label ?? '').trim()
   if (label && label !== name) out.label = label

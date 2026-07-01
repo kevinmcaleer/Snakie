@@ -332,6 +332,26 @@ describe('pin signal designations round-trip', () => {
     expect(back[1].signals).toEqual({ spi: 'CSn', uart: 'TX' })
   })
 
+  it('keeps per-capability bus / channel numbers (I2C0, SPI1, UART0, ADC2)', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'GP26', type: 'io', gpio: 26, capabilities: ['i2c', 'adc'], signals: { i2c: 'SDA' }, buses: { i2c: 0, adc: 2 } },
+            { name: 'GP15', type: 'io', gpio: 15, capabilities: ['spi', 'uart'], buses: { spi: 1, uart: 0 } }
+          ]
+        }
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).headers[0].pins
+    expect(back[0].buses).toEqual({ i2c: 0, adc: 2 })
+    expect(back[0].signals).toEqual({ i2c: 'SDA' })
+    expect(back[1].buses).toEqual({ spi: 1, uart: 0 })
+  })
+
   it('coerces case + drops signals on non-io pins and empty maps', () => {
     // Case-insensitive read (spi CSn is mixed-case canonical); junk dropped.
     const yaml =
