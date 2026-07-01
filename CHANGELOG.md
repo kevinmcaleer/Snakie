@@ -6,6 +6,58 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Rotate a pin from its mini-toolbar.** Selecting a pin in the Part Editor now
+  shows a **Rotate 90°** button in its floating mini-toolbar (next to Duplicate),
+  so you can spin a pin — its silk label and, on castellated pads, the outward
+  half-hole — without opening the inspector.
+- **Pin capabilities show next to the label.** A pin's ticked capabilities now
+  appear as persistent colour-coded chips beside its label — in the fixed order
+  **PWM, ADC, SPI, I2C, UART**, using the shared capability palette — instead of
+  only on hover, so a board's signals are readable at a glance.
+
+### Changed
+- **Two themes: Light & Dark.** The default textured skin is now called **Light**
+  and the old flat light theme has been removed (any saved "light" preference maps
+  to the new Light). The theme picker moved off the toolbar into **Settings →
+  Appearance**.
+- **Settings moved to the shelf.** The Settings gear left the toolbar for a
+  **Settings** item on the activity bar (below Help), styled like the other shelf
+  icons; it opens Settings on the new Appearance tab.
+- **Part Editor's Pins list is sorted.** It now orders pins by board number
+  (numbered pins first, ascending) and falls back to label text (numeric-aware,
+  so `GP2` sorts before `GP10`) for pins without a number.
+- **Line spacing is always adjustable.** The Settings line-spacing slider is no
+  longer disabled when notebook paper is turned off (it's also the editor line
+  height).
+- **Zero-padded board pin numbers.** Single-digit pin numbers are drawn as `01`,
+  `02`, … on the breadboard, Board View and Mini Board View, so pin columns and
+  their capability chips line up.
+
+### Fixed
+- **Popped-out console is no longer blank.** When you pop the console into its own
+  window it now redraws the existing scrollback instead of starting empty — the
+  docked console's output is handed to the detached window and replayed through
+  the same telemetry filter (so `SNK` telemetry stays hidden and colours are
+  kept) before it follows the live stream.
+- **Part Editor's save notice no longer nudges the UI.** The "Saved …" / error
+  notification now floats as a toast over the top of the editor instead of
+  taking layout space, so the canvas and panels stay put when it appears.
+- **Readable pin labels in the Light theme.** The Part Editor's pin label text and
+  board numbers now render near-black on its light canvas (they were tuned as
+  light-grey for the dark theme). This is scoped to the Part Editor — the Board
+  View and Mini Board View are intentionally dark in every theme, so they keep
+  their light labels + dark number chips.
+- **Readable instrument-dock labels.** The dock's title, the Inputs/Outputs group
+  captions and the inactive toggle icons were a very dark grey on the near-black
+  dock (low-contrast in both themes); they're now a lighter grey.
+- **Readable accent text.** The SAM instrument's "Open demo" link and the
+  bug-report "sent" confirmation used a low-contrast brass; they now use the
+  editor text / success-green colours so they read in both themes.
+- **Bug-report screenshot keeps its aspect ratio.** Enlarging a multi-window
+  screenshot no longer squashes it vertically — the preview keeps the true aspect
+  (and scrolls if tall), matching the thumbnail.
+
 ## [0.21.0] - 2026-07-01
 
 ### Added
