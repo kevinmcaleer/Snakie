@@ -121,6 +121,7 @@ if (!w.api) {
     },
     console: {
       open: P(undefined),
+      requestSeed: P(''),
       close: noop,
       onClosed: unsub
     },

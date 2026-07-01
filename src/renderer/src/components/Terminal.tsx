@@ -13,6 +13,17 @@ export interface TerminalHandle {
   clear: () => void
 }
 
+/** Props for {@link Terminal}. */
+export interface TerminalProps {
+  /**
+   * Prior console text to REDRAW on mount, before the live stream (used by the
+   * popped-out console window so it isn't blank). It's pushed through the same
+   * telemetry filter as live output, so `SNK …` lines are dropped and ANSI
+   * colours are preserved.
+   */
+  seed?: string
+}
+
 /**
  * Dark terminal theme used by the REPL. ANSI colours are kept vivid so device
  * output (tracebacks, prompts, coloured logging) reads clearly — the reviewer
@@ -95,9 +106,14 @@ const decoder = new TextDecoder()
  *
  * The terminal is created once and resized to its container via the fit addon.
  */
-export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref): JSX.Element {
+export const Terminal = forwardRef<TerminalHandle, TerminalProps>(function Terminal(
+  { seed },
+  ref
+): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<XTerm | null>(null)
+  // Read once in the mount effect (the seed is fixed for this terminal's life).
+  const seedRef = useRef(seed)
 
   // Expose an imperative `clear` so the ShellPanel header trashcan can wipe the
   // scrollback without lifting ownership of the xterm instance out of here.
@@ -154,6 +170,13 @@ export const Terminal = forwardRef<TerminalHandle>(function Terminal(_props, ref
     // across chunks) and only ever drops WHOLE telemetry lines, so normal device
     // output (tracebacks, prompts, plain prints) is untouched.
     const telemetryFilter = makeTelemetryFilter()
+    // Redraw any prior console content first (the popped-out window seeds this so
+    // it isn't blank), through the SAME filter so SNK lines are dropped and ANSI
+    // colours are kept; the live stream then continues seamlessly.
+    if (seedRef.current) {
+      const visibleSeed = telemetryFilter.push(seedRef.current)
+      if (visibleSeed) term.write(visibleSeed)
+    }
     const unsubscribeData = window.api.device.onData((chunk) => {
       const visible = telemetryFilter.push(decoder.decode(chunk, { stream: true }))
       if (visible) term.write(visible)

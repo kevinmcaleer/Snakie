@@ -830,8 +830,13 @@ const find = {
  * re-docks. Named `consoleApi` to avoid shadowing the global `console`.
  */
 const consoleApi = {
-  /** Open (or focus) the detached console window. */
-  open: (): Promise<void> => ipcRenderer.invoke('console:open'),
+  /**
+   * Open (or focus) the detached console window. `seed` is the docked console's
+   * current scrollback, which the popped-out window redraws so it isn't blank.
+   */
+  open: (seed?: string): Promise<void> => ipcRenderer.invoke('console:open', seed),
+  /** Fetch the prior scrollback to redraw (called by the console window on mount). */
+  requestSeed: (): Promise<string> => ipcRenderer.invoke('console:requestSeed'),
   /** Close the console window (Redock; no-op if not open). Fire-and-forget. */
   close: (): void => ipcRenderer.send('console:close'),
   /** Subscribe (in the MAIN window) to the console window closing. Returns unsubscribe. */

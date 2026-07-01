@@ -16,7 +16,7 @@
 
 // Install the preload-bridge fallback BEFORE anything renders (mirrors main.tsx).
 import './lib/preloadFallback'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import { Terminal } from './components/Terminal'
 import '@fontsource/jetbrains-mono'
@@ -30,6 +30,11 @@ function applyTheme(theme: string): void {
 }
 
 function ConsoleWindowApp(): JSX.Element {
+  // `null` until the prior console content has been fetched; we wait for it so
+  // the terminal seeds (redraws the existing scrollback) before mounting and
+  // following the live stream — otherwise the popped-out console starts blank.
+  const [seed, setSeed] = useState<string | null>(null)
+
   useEffect(() => {
     let initial = 'skeuomorph'
     try {
@@ -39,11 +44,17 @@ function ConsoleWindowApp(): JSX.Element {
       // Ignore — fall back to the default.
     }
     applyTheme(initial)
+
+    window.api.console
+      .requestSeed()
+      .then((s) => setSeed(s ?? ''))
+      .catch(() => setSeed(''))
   }, [])
 
+  if (seed === null) return <div className="console-window" />
   return (
     <div className="console-window">
-      <Terminal />
+      <Terminal seed={seed || undefined} />
     </div>
   )
 }

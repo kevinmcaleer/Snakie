@@ -40,7 +40,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
   const { diagnostics } = useDiagnostics()
-  const { getSinceRun } = useConsole()
+  const { getSinceRun, getAll } = useConsole()
   const [lintingEnabled, setLintingEnabled] = useLocalStorage<boolean>(
     'snakie.lintingEnabled',
     true
@@ -55,8 +55,10 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
 
   const popOut = useCallback(() => {
     setPoppedOut(true)
-    void window.api.console.open()
-  }, [])
+    // Seed the detached window with the current scrollback so it redraws prior
+    // output instead of starting blank.
+    void window.api.console.open(getAll())
+  }, [getAll])
   const redock = useCallback(() => {
     // Closing the window fires `console:closed`, which clears `poppedOut`.
     window.api.console.close()

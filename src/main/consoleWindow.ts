@@ -11,20 +11,31 @@ import { is } from '@electron-toolkit/utils'
  * back over the shared `device.sendData` channel, so the popped-out console is
  * fully interactive. Mirrors the Find / instrument window precedent:
  *
- *   console:open    (renderer → main, invoke)   open / focus the window
- *   console:close   (renderer → main, send)     close it (Redock)
- *   console:closed  (main → main window, send)   window closed → re-dock
+ *   console:open        (renderer → main, invoke)   open / focus the window
+ *   console:requestSeed (renderer → main, invoke)   fetch prior scrollback to redraw
+ *   console:close       (renderer → main, send)     close it (Redock)
+ *   console:closed      (main → main window, send)   window closed → re-dock
  */
 
 /** The live console window, or null when docked. One at a time. */
 let consoleWindow: BrowserWindow | null = null
 
+/**
+ * The docked console's scrollback at pop-out time, handed to the detached window
+ * so it redraws prior output instead of starting blank. The console window
+ * fetches it once (`console:requestSeed`) as it mounts, then follows the live
+ * device stream; cleared when the window closes.
+ */
+let pendingSeed = ''
+
 /** Create (or focus) the detached console window. */
-function openConsoleWindow(getMainWindow: () => BrowserWindow | null): void {
+function openConsoleWindow(getMainWindow: () => BrowserWindow | null, seed?: string): void {
   if (consoleWindow && !consoleWindow.isDestroyed()) {
     consoleWindow.focus()
     return
   }
+
+  pendingSeed = typeof seed === 'string' ? seed : ''
 
   const window = new BrowserWindow({
     width: 720,
@@ -51,6 +62,7 @@ function openConsoleWindow(getMainWindow: () => BrowserWindow | null): void {
 
   window.on('closed', () => {
     if (consoleWindow === window) consoleWindow = null
+    pendingSeed = ''
     // Tell the main renderer so it re-docks the console.
     getMainWindow()?.webContents.send('console:closed')
   })
@@ -70,9 +82,12 @@ export function consoleWindowWebContents(): WebContents[] {
 /** Register the console-window IPC handlers. `getMainWindow` resolves the live
  *  editor window (the recipient of `console:closed`). */
 export function registerConsoleWindowIpc(getMainWindow: () => BrowserWindow | null): void {
-  ipcMain.handle('console:open', () => {
-    openConsoleWindow(getMainWindow)
+  ipcMain.handle('console:open', (_e, seed?: string) => {
+    openConsoleWindow(getMainWindow, seed)
   })
+
+  // The detached window fetches the prior scrollback once, as it mounts.
+  ipcMain.handle('console:requestSeed', () => pendingSeed)
 
   ipcMain.on('console:close', () => {
     // close() (not destroy()): graceful; the `closed` handler re-docks.
