@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Bug reporter is now a non-modal left panel (#206).** "Report Bug" opens a
+  docked left-sidebar view (above Help) instead of a modal, so the editor and
+  console/REPL stay fully interactive — you can copy error output or code straight
+  into the report while it's open. Reports can now land without a kevsrobots.com
+  login: the app sends an `X-Snakie-Key` (`SNAKIE_FEEDBACK_KEY`) for the server's
+  anonymous, key-gated `_SNAKIE_` feedback path.
+
 ## [0.20.0] - 2026-07-01
 
 ### Added

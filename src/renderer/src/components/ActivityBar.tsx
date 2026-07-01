@@ -7,10 +7,10 @@ import type { JSX, ReactNode } from 'react'
  * AppShell (persisted via useLocalStorage under `snakie.activityView`) and
  * passed down here; clicking an item calls `onSelect`.
  *
- * Items are split into a top group (primary views) and a bottom group (Help),
- * mirroring the familiar VS Code-style activity bar. Icons are inline pixel
- * SVGs (drawn with crisp edges) so they render identically on every platform
- * and match the 8-bit theme — the pixel UI font has no emoji glyphs.
+ * Items are split into a top group (primary views) and a bottom group (Report
+ * Bug + Help), mirroring the familiar VS Code-style activity bar. Icons are
+ * inline pixel SVGs (drawn with crisp edges) so they render identically on every
+ * platform and match the 8-bit theme — the pixel UI font has no emoji glyphs.
  */
 
 /** Stable, persisted view ids. Default is `files`. */
@@ -20,6 +20,7 @@ export type ActivityView =
   | 'packages'
   | 'plugins'
   | 'inspect'
+  | 'report-bug'
   | 'help'
 
 const SVG = (children: ReactNode): JSX.Element => (
@@ -68,6 +69,18 @@ const ICONS: Record<ActivityView, JSX.Element> = {
       <path d="M9.8 9.8 14 14" />
     </g>
   ),
+  // bug (beetle): rounded body, head, antennae + legs
+  'report-bug': SVG(
+    <g stroke="currentColor" strokeWidth="1.3" fill="none">
+      <ellipse cx="8" cy="9" rx="3.2" ry="4" fill="currentColor" stroke="none" />
+      <circle cx="8" cy="4" r="1.4" fill="currentColor" stroke="none" />
+      <path d="M6.8 3 6 1.6M9.2 3 10 1.6" strokeLinecap="round" />
+      <path
+        d="M4.8 7.5 2.5 6.5M4.6 9.5H2.3M4.8 11.5 2.5 12.5M11.2 7.5l2.3-1M11.4 9.5h2.3M11.2 11.5l2.3 1"
+        strokeLinecap="round"
+      />
+    </g>
+  ),
   // question mark in a box
   help: SVG(
     <g fill="currentColor">
@@ -76,17 +89,6 @@ const ICONS: Record<ActivityView, JSX.Element> = {
     </g>
   )
 }
-
-// bug (Report Bug) — a beetle: rounded body, head, antennae + legs. Standalone
-// (not in ICONS) because Report Bug is an ACTION that opens a modal, not a view.
-const BUG_ICON = SVG(
-  <g stroke="currentColor" strokeWidth="1.3" fill="none">
-    <ellipse cx="8" cy="9" rx="3.2" ry="4" fill="currentColor" stroke="none" />
-    <circle cx="8" cy="4" r="1.4" fill="currentColor" stroke="none" />
-    <path d="M6.8 3 6 1.6M9.2 3 10 1.6" strokeLinecap="round" />
-    <path d="M4.8 7.5 2.5 6.5M4.6 9.5H2.3M4.8 11.5 2.5 12.5M11.2 7.5l2.3-1M11.4 9.5h2.3M11.2 11.5l2.3 1" strokeLinecap="round" />
-  </g>
-)
 
 interface ActivityItem {
   id: ActivityView
@@ -101,13 +103,16 @@ const TOP_ITEMS: ActivityItem[] = [
   { id: 'inspect', label: 'Inspect' }
 ]
 
-const BOTTOM_ITEMS: ActivityItem[] = [{ id: 'help', label: 'Help' }]
+// Report Bug sits ABOVE Help (issue #206). It's a normal VIEW now — a non-modal
+// left panel — so the editor + console stay usable while a report is open.
+const BOTTOM_ITEMS: ActivityItem[] = [
+  { id: 'report-bug', label: 'Report Bug' },
+  { id: 'help', label: 'Help' }
+]
 
 interface ActivityBarProps {
   active: ActivityView
   onSelect: (view: ActivityView) => void
-  /** Open the Bug Report modal (issue #206) — an action, not a view switch. */
-  onReportBug: () => void
 }
 
 function renderItem(
@@ -131,24 +136,13 @@ function renderItem(
   )
 }
 
-export function ActivityBar({ active, onSelect, onReportBug }: ActivityBarProps): JSX.Element {
+export function ActivityBar({ active, onSelect }: ActivityBarProps): JSX.Element {
   return (
     <nav className="activitybar" aria-label="Activity bar">
       <div className="activitybar__group">
         {TOP_ITEMS.map((item) => renderItem(item, active, onSelect))}
       </div>
       <div className="activitybar__group activitybar__group--bottom">
-        {/* Report Bug (#206) — sits ABOVE Help; opens a modal instead of a view. */}
-        <button
-          type="button"
-          className="activitybar__item"
-          title="Report Bug"
-          aria-label="Report a bug"
-          onClick={onReportBug}
-        >
-          <span className="activitybar__item-icon">{BUG_ICON}</span>
-          <span className="activitybar__item-label">Report Bug</span>
-        </button>
         {BOTTOM_ITEMS.map((item) => renderItem(item, active, onSelect))}
       </div>
     </nav>

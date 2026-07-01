@@ -11,13 +11,13 @@ import { app, ipcMain } from 'electron'
  * (mirrors packages/search.ts + parts/registry.ts): main-process `fetch`,
  * `AbortSignal.timeout`, and we NEVER throw — always return `{ ok, error? }`.
  *
- * AUTH CAVEAT: the feedback endpoint authenticates the reporter (a Chatter JWT
- * sent as a cookie by the website widget). A desktop app has no such session, so
- * we send an optional bearer token from `SNAKIE_FEEDBACK_TOKEN` when configured;
- * without it the endpoint returns 401/403 and we surface a clear message.
- * `SNAKIE_FEEDBACK_URL` overrides the endpoint. Provisioning a token — or an
- * anonymous `_SNAKIE_` path on the server — makes submissions land without a
- * user session.
+ * AUTH: the website widget posts with a logged-in cookie, which a desktop app
+ * has no equivalent for. Two configurable options let reports land without a
+ * user session: `SNAKIE_FEEDBACK_KEY` is sent as `X-Snakie-Key` for the server's
+ * anonymous, key-gated `_SNAKIE_` path (the primary route); `SNAKIE_FEEDBACK_TOKEN`
+ * is sent as `Authorization: Bearer …` if a service token is used instead.
+ * `SNAKIE_FEEDBACK_URL` overrides the endpoint. With neither configured the
+ * endpoint returns 401/403 and we surface a clear message.
  */
 
 const DEFAULT_FEEDBACK_URL = 'https://projects.kevsrobots.com/api/feedback'
@@ -68,6 +68,7 @@ export function registerFeedbackIpc(): void {
 
       const url = process.env.SNAKIE_FEEDBACK_URL || DEFAULT_FEEDBACK_URL
       const token = process.env.SNAKIE_FEEDBACK_TOKEN
+      const appKey = process.env.SNAKIE_FEEDBACK_KEY
 
       // `_SNAKIE_` prefix so Snakie bugs are filterable in the shared feedback DB.
       const message = `_SNAKIE_ ${title}\n\n${description}`.slice(0, MAX_MESSAGE)
@@ -89,6 +90,10 @@ export function registerFeedbackIpc(): void {
 
       const headers: Record<string, string> = {}
       if (token) headers.Authorization = `Bearer ${token}`
+      // App key for the anonymous, key-gated `_SNAKIE_` feedback path on the
+      // server (no user session): the endpoint accepts the report when this
+      // matches, so desktop bug reports can land without a logged-in user.
+      if (appKey) headers['X-Snakie-Key'] = appKey
 
       try {
         const res = await fetch(url, {

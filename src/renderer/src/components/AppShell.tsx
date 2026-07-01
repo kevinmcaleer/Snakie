@@ -4,7 +4,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView } from './ActivityBar'
-import { useBugReport } from './BugReportModal'
+import { BugReportPanel } from './BugReportPanel'
 import { PanelHeader } from './PanelHeader'
 import { FilePanel } from './FilePanel'
 import { GitPanel } from './GitPanel'
@@ -104,6 +104,14 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
       )
     case 'inspect':
       return <InspectPanel />
+    case 'report-bug':
+      // A NON-modal left panel (#206) so the editor + console stay usable while
+      // the user copies error output into the report.
+      return (
+        <LeftRegion title="Report Bug">
+          <BugReportPanel />
+        </LeftRegion>
+      )
     case 'help':
       return (
         <LeftRegion title="Help">
@@ -661,9 +669,6 @@ export function AppShell(): JSX.Element {
     'files'
   )
 
-  // Open the Bug Report modal from the activity bar (#206).
-  const openBugReport = useBugReport()
-
   // Settings dialog (issues #80/#81, tabbed in #83/#84) — opened from the
   // toolbar gear (Editor tab) or the chat's ⚙ (Chat tab, via settingsBus).
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -740,7 +745,6 @@ export function AppShell(): JSX.Element {
       <div className="shell__body shell__main">
         <ActivityBar
           active={activityView}
-          onReportBug={openBugReport}
           onSelect={(view) => {
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
