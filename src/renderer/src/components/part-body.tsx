@@ -419,6 +419,7 @@ export const DEFAULT_LAYERS: LayerVisibility = { pcb: true, image: true, holes: 
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
+  | { type: 'button'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -485,6 +486,32 @@ export interface PartBodyProps {
   pinVariables?: Map<number, { variable: string; color: string }>
 }
 
+/** On-board push-button size (viewBox units) — the tactile-switch cap + base. */
+export const PART_BUTTON_SIZE = 18
+
+/**
+ * A push-button (tactile switch) glyph centred at (cx, cy): a metal base with two
+ * faint solder shoulders and a round pressable cap. `selected` outlines it white
+ * for the Part Editor's selection highlight (read-only everywhere else).
+ */
+export function partButtonGlyph(cx: number, cy: number, size: number, selected = false): JSX.Element {
+  const half = size / 2
+  const capR = size * 0.28
+  const stroke = selected ? '#fff' : '#0b0d10'
+  const sw = selected ? 2.5 : 1
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <rect x={cx - half} y={cy - half} width={size} height={size} rx={size * 0.18} fill="#20262d" stroke={stroke} strokeWidth={sw} />
+      {/* faint solder shoulders top + bottom */}
+      <rect x={cx - half} y={cy - half} width={size} height={size * 0.16} fill="#12161a" opacity={0.55} />
+      <rect x={cx - half} y={cy + half - size * 0.16} width={size} height={size * 0.16} fill="#12161a" opacity={0.55} />
+      {/* pressable cap + specular highlight */}
+      <circle cx={cx} cy={cy} r={capR} fill="#3a424b" stroke="#12161a" strokeWidth={1} />
+      <circle cx={cx - capR * 0.3} cy={cy - capR * 0.32} r={capR * 0.34} fill="#525c66" />
+    </g>
+  )
+}
+
 /** The static life-like scene of a part, drawn into `box`. */
 export function PartBody({
   part,
@@ -526,6 +553,7 @@ export function PartBody({
   const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
+  const buttons = part.buttons ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
 
@@ -788,6 +816,28 @@ export function PartBody({
                   wrapWidth: s.labelWrap ? labelW : undefined,
                   fill: s.labelColor ?? '#cfd6dd',
                   transform: uprightRotate(lcx, lcy)
+                })}
+            </g>
+          )
+        })}
+
+      {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + silk label. */}
+      {visible.components &&
+        buttons.map((b, i) => {
+          const cx = px(b.x)
+          const cy = py(b.y)
+          const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
+          return (
+            <g key={`btn${i}`}>
+              {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
+              {b.label &&
+                styledText({
+                  text: b.label,
+                  cx,
+                  cy: labelY,
+                  fontSize: 9,
+                  fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd',
+                  transform: uprightRotate(cx, labelY)
                 })}
             </g>
           )

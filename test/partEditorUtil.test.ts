@@ -106,6 +106,20 @@ describe('normalisePart', () => {
     const once = normalisePart(blankPart())
     expect(normalisePart(once)).toEqual(once)
   })
+
+  it('keeps on-board buttons — trims the label + clamps x/y to 0..1 (#130)', () => {
+    const p = normalisePart({
+      ...blankPart(),
+      buttons: [
+        { label: '  BOOT  ', x: 0.4, y: 0.6 },
+        { label: 'RST', x: 1.5, y: -0.3 }
+      ]
+    } as PartDefinition)
+    expect(p.buttons).toEqual([
+      { label: 'BOOT', x: 0.4, y: 0.6 },
+      { label: 'RST', x: 1, y: 0 }
+    ])
+  })
 })
 
 describe('snapToGrid', () => {

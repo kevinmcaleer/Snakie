@@ -41,6 +41,7 @@ import type {
   ComponentShapeKind,
   ImageLayer,
   MountingHole,
+  PartButton,
   PartDefinition,
   PartHeader,
   PartLabel,
@@ -140,6 +141,14 @@ const ICON: Record<string, JSX.Element> = {
       </g>
     </svg>
   ),
+  button: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.4">
+        <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+        <circle cx="8" cy="8" r="3" />
+      </g>
+    </svg>
+  ),
   undo: (
     <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
       <g fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -217,6 +226,7 @@ function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
       return 'pins'
     case 'hole':
       return 'holes'
+    case 'button':
     case 'shape':
     case 'shape-vertex':
     case 'label':
@@ -415,6 +425,8 @@ export function PartEditor({
       }))
     } else if (sel.type === 'hole') {
       patch({ mountingHoles: (part.mountingHoles ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'button') {
+      patch({ buttons: (part.buttons ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'shape') {
       patch({ shapes: (part.shapes ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'shape-vertex') {
@@ -646,6 +658,9 @@ export function PartEditor({
                 <button type="button" className={`pe__iconbtn${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Add a mounting hole" aria-label="Mounting hole">
                   {ICON.hole}
                 </button>
+                <button type="button" className={`pe__iconbtn${tool === 'button' ? ' is-active' : ''}`} onClick={() => setTool('button')} title="Add a push-button" aria-label="Push-button">
+                  {ICON.button}
+                </button>
               </div>
               <div className="pe__canvas-stage">
                 <PartCanvas
@@ -799,12 +814,14 @@ function LayersPanel({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
+  const buttons = part.buttons ?? []
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const counts = {
     components: shapes.length + labels.length,
     pins: pins.length,
     holes: holes.length,
+    buttons: buttons.length,
     image: part.imageData ? 1 : 0
   }
   const toggleVis = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
@@ -987,6 +1004,32 @@ function LayersPanel({
                 <button type="button" disabled={locked.holes} className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
                   <span className="pe__item-name">Hole {i + 1}</span>
                   <span className="pe__item-sub">⌀{h.diameter}mm</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* On-board buttons (#130) — push-buttons like BOOT/RESET. They live on the
+          Components layer, so its eye/lock govern their visibility. */}
+      <div className={`pe__layer${tool === 'button' ? ' is-active' : ''}`}>
+        <div className="pe__layer-head">
+          {caret('buttons')}
+          <span className="pe__layer-name">Buttons</span>
+          <span className="pe__layer-count">{counts.buttons}</span>
+          <button type="button" className={`pe__chip pe__chip--add${tool === 'button' ? ' is-active' : ''}`} onClick={() => setTool('button')} title="Click the board to add a push-button">
+            ＋
+          </button>
+          {delBtn(selection?.type === 'button' && !locked.components)}
+        </div>
+        {isOpen('buttons') && (
+          <ul className="pe__layer-list">
+            {buttons.length === 0 && <li className="pe__layer-empty">No buttons yet.</li>}
+            {buttons.map((b, i) => (
+              <li key={`btn${i}`}>
+                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'button', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'button', index: i })}>
+                  <span className="pe__item-name">{b.label || `Button ${i + 1}`}</span>
                 </button>
               </li>
             ))}
@@ -1507,6 +1550,25 @@ function SelectionInspector({
           {num('y', hole.y, (v) => upd({ y: v }))}
           {num('⌀mm', hole.diameter, (v) => upd({ diameter: v }), 0.1)}
         </div>
+      )
+    }
+  } else if (selection.type === 'button') {
+    const btn = (part.buttons ?? [])[selection.index]
+    if (btn) {
+      title = 'Button'
+      const upd = (p: Partial<PartButton>): void =>
+        patch({ buttons: (part.buttons ?? []).map((b, i) => (i === selection.index ? { ...b, ...p } : b)) })
+      body = (
+        <>
+          <label className="pe__field">
+            <span>Label</span>
+            <input type="text" value={btn.label} onChange={(e) => upd({ label: e.target.value })} placeholder="e.g. BOOT" />
+          </label>
+          <div className="pe__row">
+            {num('x', btn.x, (v) => upd({ x: v }))}
+            {num('y', btn.y, (v) => upd({ y: v }))}
+          </div>
+        </>
       )
     }
   } else if (selection.type === 'shape' || selection.type === 'shape-vertex') {
