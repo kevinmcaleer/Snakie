@@ -185,6 +185,28 @@ normalised `x`/`y` position:
   data line). E.g. the Seeed XIAO RP2350's DATA **GP22** + POWER **GP23**:
   `{ kind: neopixel, gpio: 22, power: 23, x: …, y: … }`.
 
+## Connectors (QWIIC / STEMMA QT / JST)
+
+Capture physical connectors under `connectors`. Each has a `kind`, a normalised
+`x`/`y`, and `pins` that are **full pins** (same fields as header pins):
+- **`qwiic`** — a 4-pin JST-SH I2C socket (STEMMA QT is the same), in the standard
+  order **GND · 3V3 · SDA · SCL**. Give SDA/SCL their `gpio`, `capabilities: [i2c]`,
+  `signals: { i2c: SDA|SCL }` and the `buses: { i2c: N }`; 3V3 is `pwr`, GND is `gnd`.
+- **`jst`** — a generic JST header; author its pins as needed.
+
+```yaml
+connectors:
+  - kind: qwiic
+    label: QWIIC
+    x: 0.5
+    y: 0.9
+    pins:
+      - { name: GND, type: gnd }
+      - { name: '3V3', type: pwr }
+      - { name: SDA, type: io, gpio: 4, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 } }
+      - { name: SCL, type: io, gpio: 5, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 } }
+```
+
 ## `parts.yml` shape (the fields you'll write)
 
 Pins use `name` (the silk name), not `label`.
@@ -234,6 +256,8 @@ Allowed values:
 - pad `shape`: `round` · `square` · `castellated` · `header`
 - `onboardLeds[].kind`: `single` (uses `gpio`) · `rgb` (uses `rgb.r/g/b`) ·
   `neopixel` (uses `gpio` data + optional `power`)
+- `connectors[].kind`: `qwiic` (4-pin JST-SH I2C: GND/3V3/SDA/SCL) · `jst`
+  (generic); `connectors[].pins` are full pins (same fields as header pins)
 - shape `kind`: `rect` · `circle` · `polygon`
 - For an **MCU board** (so it appears in the Board View's board picker) set
   `family: Microcontroller` and give each GPIO pin its `gpio` number.
