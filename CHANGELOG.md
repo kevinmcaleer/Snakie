@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Breadboard hover reveals pin capabilities.** In the board view, hovering a
+  placed microcontroller now shows **every** pin's capability chips — positioned to
+  the pin's left/right/top/bottom like the Part Editor (`SDA`, `SPI1 SCK`, `ADC2`,
+  `PWM A`, …) — fading in from the board centre outward, and clearing the pin names.
+  Hovering a specific pin dims the other pins' chips to 40% so its own stand out;
+  everything disappears when you mouse off the part.
 - **Connectors — QWIIC / STEMMA QT / JST (Part Editor).** A new **Connectors**
   layer adds a **QWIIC** / STEMMA QT socket (a 4-pin JST-SH I2C connector,
   prefilled GND · 3V3 · SDA · SCL) or a generic **JST** header. Its contacts are

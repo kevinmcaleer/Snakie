@@ -19,9 +19,9 @@ import {
 } from '../../../shared/robot'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
-import type { PartPinCapability } from '../../../shared/part'
+import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { capabilityBadges, partBodyBox, PartBody, pinOutwardDir } from './part-body'
+import { capabilityChipsAt, partBodyBox, PartBody, pinOutwardDir } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
@@ -129,6 +129,9 @@ interface PlacedPin {
   railIndices?: number[]
   /** Pin capabilities (for the breadboard hover badges); part pins only. */
   caps?: PartPinCapability[]
+  /** Per-capability signal designation + bus/channel (for the hover chips). */
+  signals?: PartPinSignals
+  buses?: PartPinBuses
 }
 /** Board pads used by the parsed code, keyed by board pad index (combine view). */
 export type UsedByCode = Map<number, { color: string; label: string }>
@@ -234,7 +237,9 @@ function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
       index: pp.index,
       anchors: [{ x: pp.x, y: pp.y, ox, oy }],
       label: { x: pp.x, y: pp.y, anchor: 'middle' as const }, // label drawn by PartBody
-      caps: rps[pp.index]?.pin.capabilities
+      caps: rps[pp.index]?.pin.capabilities,
+      signals: rps[pp.index]?.pin.signals,
+      buses: rps[pp.index]?.pin.buses
     }
   })
 }
@@ -320,8 +325,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
-  // The pin under the pointer — shows its capability badges (breadboard view).
-  const [hover, setHover] = useState<{ key: string; index: number } | null>(null)
+  // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
+  // its pins' capability chips; a specific pin emphasises its own.
+  const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
   // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   // Inline rename: the draft alias being typed, or null when not renaming.
@@ -1008,7 +1014,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               <SubjectBody
                 key={s.key}
                 subject={s}
-                onHoverPin={(idx) => setHover(idx == null ? null : { key: s.key, index: idx })}
+                onHoverPart={(on) =>
+                  setHover((h) => (on ? { key: s.key, pin: null } : h?.key === s.key ? null : h))
+                }
+                onHoverPin={(idx) =>
+                  setHover((h) =>
+                    idx == null
+                      ? h?.key === s.key
+                        ? { key: s.key, pin: null }
+                        : h
+                      : { key: s.key, pin: idx }
+                  )
+                }
               />
             ))}
 
@@ -1056,16 +1073,41 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               />
             )}
 
-            {/* Hover capability badges (breadboard) — over everything. */}
+            {/* Breadboard hover: hovering a part reveals ALL its pins' capability
+                chips (edge-positioned like the Part Editor), fading in from the
+                centre outward; hovering a specific pin dims the others so its own
+                capabilities stand out. Cleared when the pointer leaves the part. */}
             {renderMode === 'lifelike' &&
               hover &&
               !dragRef.current &&
               (() => {
                 const s = subjByKey.get(hover.key)
-                const p = s?.pins.find((pp) => pp.index === hover.index)
-                if (!s || !p || !p.caps?.length) return null
-                const a = p.anchors[0]
-                return capabilityBadges(s.x + a.x, s.y + a.y, p.caps)
+                if (!s) return null
+                const pins = s.pins.filter((p) => p.primary !== false && p.caps?.length)
+                if (!pins.length) return null
+                // Centre = mean pin position (canvas space) → stagger inside-out.
+                const cx0 = s.x + pins.reduce((a, p) => a + p.anchors[0].x, 0) / pins.length
+                const cy0 = s.y + pins.reduce((a, p) => a + p.anchors[0].y, 0) / pins.length
+                const maxD = Math.max(
+                  1,
+                  ...pins.map((p) => Math.hypot(s.x + p.anchors[0].x - cx0, s.y + p.anchors[0].y - cy0))
+                )
+                return pins.map((p) => {
+                  const a = p.anchors[0]
+                  const px = s.x + a.x
+                  const py = s.y + a.y
+                  const dir: 'left' | 'right' | 'top' | 'bottom' =
+                    a.ox > 0.5 ? 'right' : a.ox < -0.5 ? 'left' : a.oy > 0.5 ? 'bottom' : 'top'
+                  const delay = Math.round((Math.hypot(px - cx0, py - cy0) / maxD) * 150)
+                  const dim = hover.pin != null && hover.pin !== p.index
+                  return (
+                    <g key={p.index} className="wc__caps" style={{ animationDelay: `${delay}ms` }}>
+                      <g style={{ opacity: dim ? 0.4 : 1, transition: 'opacity 120ms ease-out' }}>
+                        {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board')}
+                      </g>
+                    </g>
+                  )
+                })
               })()}
           </g>
         </svg>
@@ -1468,10 +1510,13 @@ function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: n
  *  the wiring canvas draws the connectable dots + combine labels on top. */
 function SubjectBody({
   subject: s,
-  onHoverPin
+  onHoverPin,
+  onHoverPart
 }: {
   subject: Subject
   onHoverPin?: (index: number | null) => void
+  /** Pointer entered (true) / left (false) the whole part body. */
+  onHoverPart?: (hovering: boolean) => void
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -1480,6 +1525,21 @@ function SubjectBody({
   const highlightIndices = s.codeUsed ? new Set(s.codeUsed.keys()) : undefined
   return (
     <g transform={`translate(${s.x} ${s.y})`}>
+      {/* Transparent hover target over the whole body — hovering anywhere on the
+          part reveals its pins' capability chips (breadboard). It sits under the
+          connection dots (which set the specific-pin hover) and doesn't stop
+          pointerdown, so dragging via the svg-level hit-test still works. */}
+      {onHoverPart && s.mode !== 'schematic' && (
+        <rect
+          x={0}
+          y={0}
+          width={s.w}
+          height={s.h}
+          fill="transparent"
+          onPointerEnter={() => onHoverPart(true)}
+          onPointerLeave={() => onHoverPart(false)}
+        />
+      )}
       {/* --- The body --- */}
       {s.missing ? (
         <>

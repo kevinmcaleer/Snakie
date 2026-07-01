@@ -135,6 +135,67 @@ export function capabilityChips(
   )
 }
 
+/**
+ * Like {@link capabilityChips} but anchored directly AT a pin (cx, cy) rather than
+ * relative to a part-editor box — used by the breadboard/board view, where each
+ * placed pin already sits in canvas space. The chip strip starts just outside the
+ * pin and runs OUTWARD in `dir`, refined to the pin's signal + bus.
+ */
+export function capabilityChipsAt(
+  cx: number,
+  cy: number,
+  dir: 'left' | 'right' | 'top' | 'bottom',
+  caps: PartPinCapability[] | undefined,
+  signals?: PartPinSignals,
+  buses?: PartPinBuses,
+  /** The pin's name/label — chips clear PAST it so they don't overlap it. */
+  label = '',
+  /** True for boxed MCU pins (a number box sits between the pad and the label). */
+  boxed = false
+): JSX.Element | null {
+  const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => ({
+    color: CAP_BADGE[c].color,
+    text: signalChipText(c, signals, buses)
+  }))
+  if (chips.length === 0) return null
+  const h = 12
+  const fs = 8.5
+  const cg = 2
+  const B = 14 // pin-number box width (matches boxedPinLabel)
+  const Gp = 3 // internal gap (matches boxedPinLabel)
+  // Distance from the pad out to the first chip: clear the number box (boxed pins)
+  // + the name label so the chips never sit on top of the pin name.
+  const G = (boxed ? 2 * Gp + B : Gp) + label.length * 6.2 + 6
+  const widths = chips.map((b) => b.text.length * 5.4 + 7)
+  const stripW = widths.reduce((a, w) => a + w, 0) + cg * Math.max(0, chips.length - 1)
+  let acc = 0
+  const strip = chips.map((b, i) => {
+    const x = acc
+    acc += widths[i] + cg
+    return (
+      <g key={i}>
+        <rect x={x} y={-h / 2} width={widths[i]} height={h} rx={2.5} fill={b.color} />
+        <text x={x + widths[i] / 2} y={3} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#1a1d20" fontFamily="var(--font-mono)">
+          {b.text}
+        </text>
+      </g>
+    )
+  })
+  const transform =
+    dir === 'right'
+      ? `translate(${cx + G}, ${cy})`
+      : dir === 'left'
+        ? `translate(${cx - G - stripW}, ${cy})`
+        : dir === 'top'
+          ? `translate(${cx}, ${cy - G}) rotate(-90)`
+          : `translate(${cx}, ${cy + G}) rotate(90)`
+  return (
+    <g style={{ pointerEvents: 'none' }} aria-hidden="true" transform={transform}>
+      {strip}
+    </g>
+  )
+}
+
 /** A row of pastel capability badges centred above (cx, cy), sized to the pin
  *  labels. Returns null when there are no capabilities to show. */
 export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability[] | undefined): JSX.Element | null {
