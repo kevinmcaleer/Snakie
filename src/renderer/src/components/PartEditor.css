@@ -119,24 +119,54 @@
 }
 
 /* --- Status line --- */
+/* A floating toast anchored below the toolbar, centred over the top of the
+   editor. Absolutely positioned (in the fixed `.pe` context) + pointer-events:
+   none so it OVERLAYS the UI instead of pushing the body down when it appears. */
 .pe__status {
+  position: absolute;
+  top: 3.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: min(92%, 34rem);
+  width: max-content;
   padding: 0.4rem 0.8rem;
   font-size: 0.76rem;
-  border-bottom: var(--border-w) solid var(--border);
+  text-align: center;
+  background-color: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  animation: pe-status-in 140ms ease-out;
 }
 
+@keyframes pe-status-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+/* Semantic tint layered OVER the solid base (background-image, not background)
+   so the text stays readable when the toast floats over the canvas. */
 .pe__status--ok {
-  background: rgba(47, 107, 42, 0.18);
+  background-image: linear-gradient(rgba(47, 107, 42, 0.22), rgba(47, 107, 42, 0.22));
+  border-color: rgba(47, 107, 42, 0.55);
   color: var(--accent-2, #46e06a);
 }
 
 .pe__status--error {
-  background: rgba(192, 57, 43, 0.18);
+  background-image: linear-gradient(rgba(192, 57, 43, 0.22), rgba(192, 57, 43, 0.22));
+  border-color: rgba(192, 57, 43, 0.55);
   color: #ff8b7e;
 }
 
 .pe__status--info {
-  background: var(--bg-sunken);
   color: var(--text-muted);
 }
 

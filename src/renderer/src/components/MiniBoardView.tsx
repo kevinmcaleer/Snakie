@@ -17,7 +17,7 @@ import {
   padKey,
   type PadPoint
 } from './board-layout'
-import { PartBody } from './part-body'
+import { PartBody, padPinNumber } from './part-body'
 import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
 import { useConsole } from '../store/console'
@@ -70,7 +70,9 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
   const py = u.p.y
   // Prefer the physical board pin number; fall back to GPIO for built-in boards
   // that don't carry pin numbers (so the box is never blank).
-  const num = String(u.p.pad.number ?? u.p.pad.gpio ?? '')
+  // Zero-pad single-digit numbers (1 → "01") so the pin column + capability
+  // badges line up (matches boxedPinLabel on the breadboard/board view).
+  const num = padPinNumber(String(u.p.pad.number ?? u.p.pad.gpio ?? ''))
   const label = u.p.pad.label
   const variable = u.variable
   const labelW = label.length * CHAR_W

@@ -429,6 +429,20 @@
   font-weight: 600;
 }
 
+/* Light (skeuomorph) theme, PART EDITOR ONLY: the silk label + pin number sit on
+   the light editor canvas, so render them near-black (the default light-grey is
+   tuned for dark surfaces). Scoped to `.pe` on purpose — the Board View and Mini
+   Board View render the same `.pcv__*` labels but are intentionally DARK islands
+   in every theme (#181), so they must keep the default light-on-dark palette. */
+:root[data-theme='skeuomorph'] .pe .pcv__pin-label,
+:root[data-theme='skeuomorph'] .pe .pcv__pin-num {
+  fill: var(--text);
+}
+
+:root[data-theme='skeuomorph'] .pe .pcv__pin-numbox {
+  fill: rgba(0, 0, 0, 0.05);
+}
+
 .pcv__feat-label {
   font-family: var(--font-mono);
   font-size: 10px;

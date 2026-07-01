@@ -813,6 +813,20 @@ function LayersPanel({
 }: LayersPanelProps): JSX.Element {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
+  // The Pins list reads best sorted: by board number when a pin has one (numbered
+  // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
+  // GP2 sorts before GP10). Selection still keys off the stable hi/pi.
+  const sortedPins = [...pins].sort((a, b) => {
+    const an = a.pin.number
+    const bn = b.pin.number
+    const aHas = typeof an === 'number'
+    const bHas = typeof bn === 'number'
+    if (aHas && bHas) return an - bn
+    if (aHas !== bHas) return aHas ? -1 : 1
+    const al = a.pin.label || a.pin.name || ''
+    const bl = b.pin.label || b.pin.name || ''
+    return al.localeCompare(bl, undefined, { numeric: true, sensitivity: 'base' })
+  })
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
   const shapes = part.shapes ?? []
@@ -966,7 +980,7 @@ function LayersPanel({
         {isOpen('pins') && (
           <ul className="pe__layer-list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
-            {pins.map((rp) => (
+            {sortedPins.map((rp) => (
               <li key={`p${rp.hi}-${rp.pi}`}>
                 <button type="button" disabled={locked.pins} className={`pe__item${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                   <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>

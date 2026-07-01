@@ -23,6 +23,75 @@ export const CAP_BADGE: Record<PartPinCapability, { text: string; color: string 
   uart: { text: 'UART', color: '#cdb4f0' }
 }
 
+/** Fixed display order for the persistent pin-capability chips. `digital`/GPIO is
+ *  the implied default for an io pin, so it isn't chipped. */
+export const CAP_CHIP_ORDER: PartPinCapability[] = ['pwm', 'adc', 'spi', 'i2c', 'uart']
+
+/**
+ * A compact row of capability chips drawn NEXT TO a pin's label (persistent, not
+ * hover-only), in the fixed {@link CAP_CHIP_ORDER} using the shared
+ * {@link CAP_BADGE} colours. The strip is a horizontal run of chips that's
+ * positioned — and, for top/bottom pins, rotated — to continue OUTWARD from the
+ * label, mirroring {@link boxedPinLabel}'s per-direction geometry. Returns null
+ * when the pin has none of the chipped capabilities.
+ */
+export function capabilityChips(
+  box: { x: number; y: number; w: number; h: number },
+  cx: number,
+  cy: number,
+  dir: 'left' | 'right' | 'top' | 'bottom',
+  label: string,
+  caps: PartPinCapability[] | undefined
+): JSX.Element | null {
+  const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => CAP_BADGE[c])
+  if (chips.length === 0) return null
+  const B = 14 // pin-number box (matches boxedPinLabel)
+  const G = 3 // gap (matches boxedPinLabel)
+  const C = 3.5 // re-centre for rotated top/bottom glyphs (matches boxedPinLabel)
+  const h = 12
+  const fs = 8.5
+  const cg = 2 // gap between chips
+  const labelW = label.length * 6.2
+  const widths = chips.map((b) => b.text.length * 5.4 + 7)
+  const stripW = widths.reduce((a, w) => a + w, 0) + cg * Math.max(0, chips.length - 1)
+
+  // The chips as a horizontal strip from local (0,0), vertically centred on y=0.
+  let acc = 0
+  const strip = chips.map((b, i) => {
+    const x = acc
+    acc += widths[i] + cg
+    return (
+      <g key={i}>
+        <rect x={x} y={-h / 2} width={widths[i]} height={h} rx={2.5} fill={b.color} />
+        <text x={x + widths[i] / 2} y={3} textAnchor="middle" fontSize={fs} fontWeight={700} fill="#1a1d20" fontFamily="var(--font-mono)">
+          {b.text}
+        </text>
+      </g>
+    )
+  })
+
+  // Position/orient the strip so its first chip sits just past the label end.
+  let transform: string
+  if (dir === 'right') {
+    const lx = box.x + box.w + G + B + G // label start (left-anchored), extends right
+    transform = `translate(${lx + labelW + G}, ${cy})`
+  } else if (dir === 'left') {
+    const lx = box.x - G - B - G // label end (right-anchored), extends left
+    transform = `translate(${lx - labelW - G - stripW}, ${cy})`
+  } else if (dir === 'top') {
+    const labelY = box.y - G - B - G // label baseline; rotated -90 it runs upward
+    transform = `translate(${cx + C}, ${labelY - labelW - G}) rotate(-90)`
+  } else {
+    const labelY = box.y + box.h + G + B + G // rotated +90 it runs downward
+    transform = `translate(${cx - C}, ${labelY + labelW + G}) rotate(90)`
+  }
+  return (
+    <g className="pcv__caps" style={{ pointerEvents: 'none' }} aria-hidden="true" transform={transform}>
+      {strip}
+    </g>
+  )
+}
+
 /** A row of pastel capability badges centred above (cx, cy), sized to the pin
  *  labels. Returns null when there are no capabilities to show. */
 export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability[] | undefined): JSX.Element | null {
@@ -242,6 +311,13 @@ export function pinLabelLayout(
  * view and the Part Editor so they all render pins the same way. Assumes an
  * unrotated, unscaled body.
  */
+/** Zero-pad a single-digit pin number ("1" → "01") so a column of board pins
+ *  reads uniformly and their capability chips line up. Multi-digit / non-numeric
+ *  / empty values are left unchanged. */
+export function padPinNumber(num: string): string {
+  return /^\d$/.test(num) ? `0${num}` : num
+}
+
 export function boxedPinLabel(
   box: { x: number; y: number; w: number; h: number },
   cx: number,
@@ -255,12 +331,13 @@ export function boxedPinLabel(
   const B = 14
   const G = 3
   const labelW = label.length * 6.2
+  const shownNum = padPinNumber(num)
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
       <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
-      {num && (
+      {shownNum && (
         <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
-          {num}
+          {shownNum}
         </text>
       )}
     </>

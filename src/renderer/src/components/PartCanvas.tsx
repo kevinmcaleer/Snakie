@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityBadges, castellatedPad, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -299,8 +299,6 @@ export function PartCanvas({
   // Smart alignment guides (#169): green center-lines shown while dragging a pin /
   // hole that lines up with another's centre. Normalised x (vertical line) / y.
   const [guides, setGuides] = useState<{ x?: number; y?: number } | null>(null)
-  // The pin under the pointer — shows its capability badges (breadboard view).
-  const [hoverPin, setHoverPin] = useState<{ hi: number; pi: number } | null>(null)
   // The selected-component toolbar's border dropdown (width + colour).
   const [borderMenuOpen, setBorderMenuOpen] = useState(false)
   const [fillMenuOpen, setFillMenuOpen] = useState(false)
@@ -906,6 +904,28 @@ export function PartCanvas({
       if (!l) return
       commit({ ...part, labels: labels.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
     }
+  }
+
+  /** Rotate the selected pin by +90° — turns the silk label and, on castellated
+   *  pads, the outward half-hole. Mirrors the pin inspector's Rotation control:
+   *  an absent rotation first resolves to the pin's nearest-border direction, so
+   *  the first click turns from what's drawn rather than from 0°. */
+  const rotatePin = (sel: CanvasSelection): void => {
+    if (sel?.type !== 'pin') return
+    const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
+    const src = part.headers[sel.hi]?.pins[sel.pi]
+    if (!rp || !src) return
+    const dir = pinOutwardDir(src.rotation, rp.x, rp.y)
+    const rot = src.rotation ?? { right: 0, bottom: 90, left: 180, top: 270 }[dir]
+    const nextRot = (rot + 90) % 360
+    commit({
+      ...part,
+      headers: part.headers.map((h, i) =>
+        i === sel.hi
+          ? { ...h, pins: h.pins.map((p, j) => (j === sel.pi ? { ...p, rotation: nextRot } : p)) }
+          : h
+      )
+    })
   }
 
   // --- text/label styling (the mini-toolbar "A" dropdown) -------------------
@@ -1834,6 +1854,13 @@ export function PartCanvas({
       <path d="M4.5 11.5 11.5 4.5" stroke="currentColor" strokeWidth={1.1} />
     </svg>
   )
+  // Rotate 90°: a circular arrow (shared by the component + pin toolbars).
+  const rotateIcon = (
+    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+      <path d="M12.5 6.5A5 5 0 1 0 13 9" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
+      <path d="M12.8 3v3.6H9.2" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
 
   /** The "Copy style" + "Paste style" buttons for a mini-toolbar. Paste is
    *  disabled unless the clipboard holds a style of the SAME `kind`. */
@@ -1965,11 +1992,7 @@ export function PartCanvas({
               )
             }
             return (
-              <g
-                key={`p${i}`}
-                onPointerEnter={() => setHoverPin({ hi: rp.hi, pi: rp.pi })}
-                onPointerLeave={() => setHoverPin((h) => (h?.hi === rp.hi && h?.pi === rp.pi ? null : h))}
-              >
+              <g key={`p${i}`}>
                 {/* Mask the pad (not its label) so the through-hole shows the real
                     background, not a painted dot (#171). */}
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
@@ -1984,6 +2007,16 @@ export function PartCanvas({
                   rp.pin.label || rp.pin.name,
                   undefined,
                   '#cfd6dd'
+                )}
+                {/* Persistent capability chips next to the label (#…): PWM, ADC,
+                    SPI, I2C, UART, in that order, in the shared pastel colours. */}
+                {capabilityChips(
+                  box,
+                  cx,
+                  cy,
+                  pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                  rp.pin.label || rp.pin.name,
+                  rp.pin.capabilities
                 )}
               </g>
             )
@@ -2097,16 +2130,6 @@ export function PartCanvas({
             )}
           </g>
         )}
-
-        {/* Hover badges (#…): the hovered pin's capabilities, in pastel chips. */}
-        {interactive &&
-          hoverPin &&
-          !dragRef.current &&
-          (() => {
-            const rp = pins.find((p) => p.hi === hoverPin.hi && p.pi === hoverPin.pi)
-            if (!rp) return null
-            return capabilityBadges(px(rp.x), py(rp.y), rp.pin.capabilities)
-          })()}
 
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&
@@ -2397,10 +2420,7 @@ export function PartCanvas({
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate component 90 degrees" onClick={() => rotateComponent(sel)}>
-                <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <path d="M12.5 6.5A5 5 0 1 0 13 9" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" />
-                  <path d="M12.8 3v3.6H9.2" fill="none" stroke="currentColor" strokeWidth={1.3} strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+                {rotateIcon}
               </button>
               {/* Text (A) dropdown — label size / colour / B-I-U / align / wrap, for
                   both shape captions and free labels. */}
@@ -2656,6 +2676,9 @@ export function PartCanvas({
             <div className="pcv__ctb" role="toolbar" aria-label="Edit pin" style={style}>
               <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicatePin(sel)}>
                 {dupIcon}
+              </button>
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90° (turns the label; the half-hole on castellated pads)" aria-label="Rotate pin 90 degrees" onClick={() => rotatePin(sel)}>
+                {rotateIcon}
               </button>
               {styleClipButtons(sel, 'pin')}
             </div>
