@@ -450,6 +450,20 @@
   color: var(--text-muted);
 }
 
+/* Breadboard hover capability chips fade in; the inline animation-delay staggers
+   them from the board centre outward (inside-out). */
+.pcv__caps-hover {
+  animation: pcv-caps-in 160ms ease-out both;
+}
+@keyframes pcv-caps-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .pcv__feat-label {
   font-family: var(--font-mono);
   font-size: 10px;

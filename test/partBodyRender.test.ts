@@ -55,6 +55,26 @@ describe('PartBody onboard LEDs + connectors', () => {
     expect(html).toContain('NeoPixel · GP22 · PWR GP23')
   })
 
+  it('draws capability chips inside the body only when capsPins is set', () => {
+    const part: PartDefinition = {
+      ...blankPart(),
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'GP4', type: 'io', gpio: 4, capabilities: ['i2c'], signals: { i2c: 'SDA' }, buses: { i2c: 0 }, x: 0.1, y: 0.5 }
+          ]
+        }
+      ]
+    }
+    // No caps prop → no chips.
+    expect(renderToStaticMarkup(createElement(PartBody, { part, box }))).not.toContain('I2C0 SDA')
+    // capsPins 'all' → the chip renders (box-relative, inside the body).
+    const html = renderToStaticMarkup(createElement(PartBody, { part, box, boxedPins: true, capsPins: 'all' }))
+    expect(html).toContain('I2C0 SDA')
+    expect(html).toContain('pcv__caps-hover')
+  })
+
   it('draws a QWIIC connector summarising its signal pins', () => {
     const part: PartDefinition = {
       ...blankPart(),

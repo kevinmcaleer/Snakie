@@ -78,7 +78,11 @@ export function capabilityChips(
   signals?: PartPinSignals,
   /** Text drawn beyond the label (e.g. the GP## variable); chips clear past it. */
   variable?: string,
-  buses?: PartPinBuses
+  buses?: PartPinBuses,
+  /** The caller's bodyScale — counter-scaled (like the pin labels) so the chips
+   *  stay a consistent on-screen size regardless of the part's scale. 1 in the
+   *  Part Editor (no-op). */
+  bodyScale = 1
 ): JSX.Element | null {
   const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => ({
     color: CAP_BADGE[c].color,
@@ -113,24 +117,35 @@ export function capabilityChips(
     )
   })
 
-  // Position/orient the strip so its first chip sits just past the label end.
+  // Position/orient the strip so its first chip sits just past the label end. `na`
+  // is the strip's NEAR-label anchor — the counter-scale pivots there so the chips
+  // stay pinned just past the label while their size normalises across parts.
   let transform: string
+  let na: { x: number; y: number }
   if (dir === 'right') {
     const lx = box.x + box.w + G + B + G // label start (left-anchored), extends right
-    transform = `translate(${lx + labelW + G + varW}, ${cy})`
+    na = { x: lx + labelW + G + varW, y: cy }
+    transform = `translate(${na.x}, ${na.y})`
   } else if (dir === 'left') {
     const lx = box.x - G - B - G // label end (right-anchored), extends left
-    transform = `translate(${lx - labelW - G - varW - stripW}, ${cy})`
+    na = { x: lx - labelW - G - varW, y: cy }
+    transform = `translate(${na.x - stripW}, ${na.y})`
   } else if (dir === 'top') {
     const labelY = box.y - G - B - G // label baseline; rotated -90 it runs upward
-    transform = `translate(${cx + C}, ${labelY - labelW - G - varW}) rotate(-90)`
+    na = { x: cx + C, y: labelY - labelW - G - varW }
+    transform = `translate(${na.x}, ${na.y}) rotate(-90)`
   } else {
     const labelY = box.y + box.h + G + B + G // rotated +90 it runs downward
-    transform = `translate(${cx - C}, ${labelY + labelW + G + varW}) rotate(90)`
+    na = { x: cx - C, y: labelY + labelW + G + varW }
+    transform = `translate(${na.x}, ${na.y}) rotate(90)`
   }
+  const counter =
+    bodyScale !== 1
+      ? `translate(${na.x} ${na.y}) scale(${1 / bodyScale}) translate(${-na.x} ${-na.y})`
+      : undefined
   return (
-    <g className="pcv__caps" style={{ pointerEvents: 'none' }} aria-hidden="true" transform={transform}>
-      {strip}
+    <g className="pcv__caps" style={{ pointerEvents: 'none' }} aria-hidden="true" transform={counter}>
+      <g transform={transform}>{strip}</g>
     </g>
   )
 }
@@ -698,6 +713,12 @@ export interface PartBodyProps {
   /** Per pin flat-index, the code variable + colour to show (boxed mode only;
    *  used pins only — others show just the number box + label). */
   pinVariables?: Map<number, { variable: string; color: string }>
+  /** Which pins draw their capability chips (the breadboard hover): `'all'` or a
+   *  set of pin flat-indices. Chips clear the number box/label and fade in from the
+   *  board centre outward. Absent ⇒ none (the default everywhere else). */
+  capsPins?: 'all' | ReadonlySet<number>
+  /** The hovered pin's flat-index — the other pins' chips dim to 40%. */
+  capsHoverPin?: number | null
 }
 
 /** On-board push-button size (viewBox units) — the tactile-switch cap + base. */
@@ -829,7 +850,9 @@ export function PartBody({
   rotation = 0,
   bodyScale = 1,
   boxedPins = false,
-  pinVariables
+  pinVariables,
+  capsPins,
+  capsHoverPin
 }: PartBodyProps): JSX.Element {
   // Text-orientation/size correction for a rotated/scaled body (#180): counter the
   // caller's rotation so text is never upside down, and (pin labels only) counter
@@ -1032,6 +1055,37 @@ export function PartBody({
                       {text}
                     </text>
                   )}
+              {/* Capability chips (breadboard hover) — box-relative like the labels
+                  so they always clear the number box + label; fade in from the board
+                  centre outward, dimming when another pin is hovered. */}
+              {(capsPins === 'all' || !!capsPins?.has(i)) &&
+                (rp.pin.capabilities?.length ?? 0) > 0 &&
+                (() => {
+                  const cf = capabilityChips(
+                    box,
+                    cx,
+                    cy,
+                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                    rp.pin.label || rp.pin.name,
+                    rp.pin.capabilities,
+                    rp.pin.signals,
+                    boxedPins ? pinVariables?.get(i)?.variable : undefined,
+                    rp.pin.buses,
+                    bodyScale
+                  )
+                  if (!cf) return null
+                  const delay = Math.round(
+                    (Math.hypot(cx - (box.x + box.w / 2), cy - (box.y + box.h / 2)) /
+                      Math.max(1, 0.5 * Math.hypot(box.w, box.h))) *
+                      150
+                  )
+                  const dim = capsHoverPin != null && capsHoverPin !== i
+                  return (
+                    <g className="pcv__caps-hover" style={{ animationDelay: `${delay}ms` }}>
+                      <g style={{ opacity: dim ? 0.4 : 1, transition: 'opacity 120ms ease-out' }}>{cf}</g>
+                    </g>
+                  )
+                })()}
             </g>
           )
         })}

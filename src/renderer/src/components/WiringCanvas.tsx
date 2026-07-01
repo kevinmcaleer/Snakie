@@ -21,7 +21,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { capabilityChipsAt, partBodyBox, PartBody, pinOutwardDir } from './part-body'
+import { partBodyBox, PartBody, pinOutwardDir } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
@@ -1030,24 +1030,29 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
-            {subjects.map((s) => (
-              <SubjectBody
-                key={s.key}
-                subject={s}
-                onHoverPart={(on) =>
-                  setHover((h) => (on ? { key: s.key, pin: null } : h?.key === s.key ? null : h))
-                }
-                onHoverPin={(idx) =>
-                  setHover((h) =>
-                    idx == null
-                      ? h?.key === s.key
-                        ? { key: s.key, pin: null }
-                        : h
-                      : { key: s.key, pin: idx }
-                  )
-                }
-              />
-            ))}
+            {subjects.map((s) => {
+              const capsOn = renderMode === 'lifelike' && !dragRef.current && hover?.key === s.key
+              return (
+                <SubjectBody
+                  key={s.key}
+                  subject={s}
+                  capsPins={capsOn ? 'all' : undefined}
+                  capsHoverPin={capsOn && hover ? hover.pin : null}
+                  onHoverPart={(on) =>
+                    setHover((h) => (on ? { key: s.key, pin: null } : h?.key === s.key ? null : h))
+                  }
+                  onHoverPin={(idx) =>
+                    setHover((h) =>
+                      idx == null
+                        ? h?.key === s.key
+                          ? { key: s.key, pin: null }
+                          : h
+                        : { key: s.key, pin: idx }
+                    )
+                  }
+                />
+              )
+            })}
 
             {/* Committed wires, ON TOP of the parts so a noodle to a far-side pin
                 isn't hidden under the body (#182). Pins stay grabbable via the
@@ -1093,46 +1098,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               />
             )}
 
-            {/* Breadboard hover: hovering a part reveals ALL its pins' capability
-                chips (edge-positioned like the Part Editor), fading in from the
-                centre outward; hovering a specific pin dims the others so its own
-                capabilities stand out. Cleared when the pointer leaves the part. */}
-            {renderMode === 'lifelike' &&
-              hover &&
-              !dragRef.current &&
-              (() => {
-                const s = subjByKey.get(hover.key)
-                if (!s) return null
-                const pins = s.pins.filter((p) => p.primary !== false && p.caps?.length)
-                if (!pins.length) return null
-                // Pass the part's bodyScale as the chips' OFFSET scale so they clear
-                // labels drawn at that scale; the chip SIZE is constant, so a placed
-                // part's chips match the main board's (they were different sizes).
-                const k = s.scale ?? 1
-                // Centre = mean pin position (canvas space) → stagger inside-out.
-                const cx0 = s.x + pins.reduce((a, p) => a + p.anchors[0].x, 0) / pins.length
-                const cy0 = s.y + pins.reduce((a, p) => a + p.anchors[0].y, 0) / pins.length
-                const maxD = Math.max(
-                  1,
-                  ...pins.map((p) => Math.hypot(s.x + p.anchors[0].x - cx0, s.y + p.anchors[0].y - cy0))
-                )
-                return pins.map((p) => {
-                  const a = p.anchors[0]
-                  const px = s.x + a.x
-                  const py = s.y + a.y
-                  const dir: 'left' | 'right' | 'top' | 'bottom' =
-                    a.ox > 0.5 ? 'right' : a.ox < -0.5 ? 'left' : a.oy > 0.5 ? 'bottom' : 'top'
-                  const delay = Math.round((Math.hypot(px - cx0, py - cy0) / maxD) * 150)
-                  const dim = hover.pin != null && hover.pin !== p.index
-                  return (
-                    <g key={p.index} className="wc__caps" style={{ animationDelay: `${delay}ms` }}>
-                      <g style={{ opacity: dim ? 0.4 : 1, transition: 'opacity 120ms ease-out' }}>
-                        {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board', k)}
-                      </g>
-                    </g>
-                  )
-                })
-              })()}
+            {/* Breadboard hover capability chips are drawn INSIDE each part's body
+                (PartBody, via `capsPins`) so they use the same box-relative geometry
+                as the pin labels and always clear them. See SubjectBody below. */}
           </g>
         </svg>
 
@@ -1535,12 +1503,17 @@ function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: n
 function SubjectBody({
   subject: s,
   onHoverPin,
-  onHoverPart
+  onHoverPart,
+  capsPins,
+  capsHoverPin
 }: {
   subject: Subject
   onHoverPin?: (index: number | null) => void
   /** Pointer entered (true) / left (false) the whole part body. */
   onHoverPart?: (hovering: boolean) => void
+  /** Which pins draw hover capability chips (forwarded to PartBody). */
+  capsPins?: 'all' | ReadonlySet<number>
+  capsHoverPin?: number | null
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -1606,6 +1579,8 @@ function SubjectBody({
                   bodyScale={k}
                   boxedPins={s.kind === 'board'}
                   pinVariables={pinVars}
+                  capsPins={capsPins}
+                  capsHoverPin={capsHoverPin}
                 />
               )
               return tf ? <g transform={tf}>{body}</g> : body
