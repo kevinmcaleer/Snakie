@@ -45,6 +45,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   only on hover, so a board's signals are readable at a glance.
 
 ### Changed
+- **Clearer breadboard wire routing.** A wire between two pins that face away from
+  each other (e.g. two 5V pins on opposite sides of their boards) no longer
+  U-turns back over itself — it now bows up/over or down/under so it's clear where
+  it starts and ends.
 - **Pin capability controls stack one row per capability.** The bus + signal
   fields for each ticked capability now sit on their own row (instead of one
   crowded line), so the labels and dropdowns no longer clash.

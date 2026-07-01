@@ -955,10 +955,30 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     }
     const e = wireEnds(c)
     if (!e) return null
-    const d = Math.max(WIRE_CLEARANCE, Math.hypot(e.bx - e.ax, e.by - e.ay) * 0.4)
-    return {
-      d: `M ${e.ax} ${e.ay} C ${e.ax + e.aox * d} ${e.ay + e.aoy * d}, ${e.bx + e.box * d} ${e.by + e.boy * d}, ${e.bx} ${e.by}`
+    const dx = e.bx - e.ax
+    const dy = e.by - e.ay
+    // Outward push along each pin's normal (clean exit off the pad), capped so
+    // far-apart pins don't fling huge loops.
+    const d = Math.min(160, Math.max(WIRE_CLEARANCE, Math.hypot(dx, dy) * 0.4))
+    let c1x = e.ax + e.aox * d
+    let c1y = e.ay + e.aoy * d
+    let c2x = e.bx + e.box * d
+    let c2y = e.by + e.boy * d
+    // When a HORIZONTAL-facing pin points AWAY from the other end (e.g. two 5V
+    // pins on opposite sides of their boards), a pure normal push makes the noodle
+    // U-turn back over itself. Bias that end's control point VERTICALLY toward the
+    // other pin so the wire routes up/over or down/under instead — clearer where it
+    // starts and ends. (The toward-facing common case is unchanged.)
+    const vbow = Math.max(70, Math.abs(dy) * 0.6)
+    if (e.aox !== 0 && e.aox * dx < 0) {
+      c1x = e.ax + e.aox * WIRE_CLEARANCE
+      c1y += Math.sign(dy || 1) * vbow
     }
+    if (e.box !== 0 && e.box * dx > 0) {
+      c2x = e.bx + e.box * WIRE_CLEARANCE
+      c2y -= Math.sign(dy || 1) * vbow
+    }
+    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}` }
   }
 
   const drag = dragRef.current
