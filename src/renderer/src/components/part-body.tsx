@@ -1049,11 +1049,16 @@ export function PartBody({
             boxedPins && bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
+          // Manual label placement (#…): shift the whole annotation by the pin's
+          // saved labelOffset (a fraction of the board box).
+          const lo = rp.pin.labelOffset
+          const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
+              <g transform={labelShift}>
               {boxedPins
                 ? (
                     <g transform={boxedCounter}>
@@ -1111,6 +1116,7 @@ export function PartBody({
                     </g>
                   )
                 })()}
+              </g>
             </g>
           )
         })}

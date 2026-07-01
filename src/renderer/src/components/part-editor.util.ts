@@ -296,6 +296,14 @@ function normalisePin(pin: PartPin): PartPin {
   }
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
   if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
+  if (
+    pin.labelOffset &&
+    Number.isFinite(pin.labelOffset.x) &&
+    Number.isFinite(pin.labelOffset.y) &&
+    (pin.labelOffset.x !== 0 || pin.labelOffset.y !== 0)
+  ) {
+    out.labelOffset = { x: clamp(pin.labelOffset.x, -1.5, 1.5), y: clamp(pin.labelOffset.y, -1.5, 1.5) }
+  }
   return out
 }
 

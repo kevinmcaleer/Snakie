@@ -1731,6 +1731,14 @@ function SelectionInspector({
             {num('x', pin.x ?? 0, (v) => updatePin({ x: v }))}
             {num('y', pin.y ?? 0, (v) => updatePin({ y: v }))}
           </div>
+          {/* Manual label placement: the label is dragged on the canvas; offer a
+              reset once it's been moved off its default spot. */}
+          {pin.labelOffset && (
+            <button type="button" className="pe__btn pe__btn--sm" onClick={() => updatePin({ labelOffset: undefined })} title="Move this pin's label back to its default position">
+              Reset label position
+            </button>
+          )}
+          <p className="pe__hint pe__hint--muted">Drag a pin&apos;s label on the canvas to place it by hand.</p>
         </>
       )
     }

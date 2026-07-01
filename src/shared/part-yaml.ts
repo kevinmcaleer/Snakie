@@ -154,6 +154,12 @@ function coercePin(raw: unknown): PartPin | null {
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
+  if (r.labelOffset && typeof r.labelOffset === 'object') {
+    const lo = r.labelOffset as Record<string, unknown>
+    const lx = num(lo.x)
+    const ly = num(lo.y)
+    if (lx !== undefined && ly !== undefined) pin.labelOffset = { x: lx, y: ly }
+  }
   return pin
 }
 
@@ -259,6 +265,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.rotation !== undefined) out.rotation = p.rotation
   if (p.x !== undefined) out.x = p.x
   if (p.y !== undefined) out.y = p.y
+  if (p.labelOffset) out.labelOffset = { x: p.labelOffset.x, y: p.labelOffset.y }
   return out
 }
 

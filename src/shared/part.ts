@@ -100,6 +100,10 @@ export interface PartPin {
   signals?: PartPinSignals
   /** Per-capability bus / instance / channel number (e.g. I2C0, SPI1, ADC2). */
   buses?: PartPinBuses
+  /** Manual offset for this pin's label annotation (number box + label + chips),
+   *  as a fraction of the board box (dragged in the Part Editor). Absent ⇒ the
+   *  default position at the board edge. Lets labels be hand-placed off the board. */
+  labelOffset?: { x: number; y: number }
   /**
    * Whether this pad is a castellated edge pad. Legacy flag — superseded by
    * {@link shape}` === 'castellated'`; still read for backward compatibility.

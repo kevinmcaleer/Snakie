@@ -450,6 +450,11 @@
   color: var(--text-muted);
 }
 
+/* A pin's label annotation can be dragged to a hand-placed spot (#…). */
+.pcv__svg--interactive .pcv__pinlabel--drag {
+  cursor: move;
+}
+
 /* Breadboard hover capability chips fade in; the inline animation-delay staggers
    them from the board centre outward (inside-out). */
 .pcv__caps-hover {

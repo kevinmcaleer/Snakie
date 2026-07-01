@@ -268,6 +268,27 @@ describe('pin rotation + uart capability round-trip', () => {
   })
 })
 
+describe('pin label offset (manual placement) round-trip', () => {
+  it('keeps a non-zero labelOffset and drops a zero one', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'SDA', type: 'io', gpio: 4, labelOffset: { x: 0.2, y: -0.1 } },
+            { name: 'SCL', type: 'io', gpio: 5, labelOffset: { x: 0, y: 0 } }
+          ]
+        }
+      ]
+    })
+    const pins = partFromYaml(partToYaml(part)).headers[0].pins
+    expect(pins[0].labelOffset).toEqual({ x: 0.2, y: -0.1 })
+    expect(pins[1].labelOffset).toBeUndefined()
+  })
+})
+
 describe('onboard LEDs round-trip', () => {
   it('keeps single + RGB onboard LEDs through normalise + YAML', () => {
     const part = normalisePart({

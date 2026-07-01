@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Manual pin-label placement (Part Editor).** Drag a pin's label annotation
+  (number box + label + capability chips) to a hand-placed spot — e.g. clear of the
+  board outline — to declutter dense boards. It's persisted per pin as `labelOffset`
+  in `parts.yml`, reflected in the Board View + Mini Board too, and a **Reset label
+  position** button in the pin inspector returns it to the default.
 - **Breadboard hover reveals pin capabilities.** In the board view, hovering a
   placed microcontroller now shows **every** pin's capability chips — positioned to
   the pin's left/right/top/bottom like the Part Editor (`SDA`, `SPI1 SCK`, `ADC2`,

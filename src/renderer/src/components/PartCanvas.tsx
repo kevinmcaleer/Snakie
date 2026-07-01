@@ -244,7 +244,16 @@ function clamp01(n: number): number {
 
 /** Drag state while a pointer is down. */
 interface Drag {
-  kind: 'move-obj' | 'pan' | 'resize-image' | 'resize-shape' | 'move-vertex' | 'move-shape-vertex' | 'create-array' | 'marquee'
+  kind:
+    | 'move-obj'
+    | 'move-label'
+    | 'pan'
+    | 'resize-image'
+    | 'resize-shape'
+    | 'move-vertex'
+    | 'move-shape-vertex'
+    | 'create-array'
+    | 'marquee'
   sel: CanvasSelection
   corner?: number
   startNX: number
@@ -474,6 +483,35 @@ export function PartCanvas({
       ...part,
       connectors: connectors.map((c, i) => (i === index ? { ...c, x: snapX(nx), y: snapY(ny) } : c))
     })
+  }
+  /** Set a pin's manual label offset (a fraction of the board box); undefined near
+   *  zero so a label dragged back home reverts to the default. */
+  const setLabelOffset = (hi: number, pi: number, x: number, y: number): void => {
+    const off = Math.abs(x) < 0.004 && Math.abs(y) < 0.004 ? undefined : { x, y }
+    commit({
+      ...part,
+      headers: part.headers.map((h, i) =>
+        i === hi ? { ...h, pins: h.pins.map((p, j) => (j === pi ? { ...p, labelOffset: off } : p)) } : h
+      )
+    })
+  }
+  /** Begin dragging a pin's label annotation (manual placement). The label element
+   *  is the drag target; the svg's pointermove/up drive it via `move-label`. */
+  const startLabelDrag = (e: ReactPointerEvent, rp: ResolvedPin): void => {
+    if (!interactive || locked.pins) return
+    e.stopPropagation()
+    svgRef.current?.setPointerCapture?.(e.pointerId)
+    const { nx, ny } = toNorm(e)
+    const lo = rp.pin.labelOffset ?? { x: 0, y: 0 }
+    dragRef.current = {
+      kind: 'move-label',
+      sel: { type: 'pin', hi: rp.hi, pi: rp.pi },
+      startNX: nx,
+      startNY: ny,
+      ox: lo.x,
+      oy: lo.y
+    }
+    onSelect?.({ type: 'pin', hi: rp.hi, pi: rp.pi })
   }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
     const sx = presnapped ? nx : snapX(nx)
@@ -1497,6 +1535,11 @@ export function PartCanvas({
     const dy = ny - d.startNY
     // Only count a real drag (so a click on a vertex stays a click → delete).
     if (Math.abs(dx) > 0.004 || Math.abs(dy) > 0.004) d.moved = true
+    if (d.kind === 'move-label' && d.sel?.type === 'pin') {
+      // Move the pin's label annotation by the drag delta (fraction of the box).
+      setLabelOffset(d.sel.hi, d.sel.pi, d.ox + dx, d.oy + dy)
+      return
+    }
     if (d.kind === 'marquee') {
       setMarquee({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
       return
@@ -2032,37 +2075,49 @@ export function PartCanvas({
                 </>
               )
             }
+            const lo = rp.pin.labelOffset
+            const labelTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+            const labelDraggable = interactive && !locked.pins
             return (
               <g key={`p${i}`}>
                 {/* Mask the pad (not its label) so the through-hole shows the real
                     background, not a painted dot (#171). */}
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
-                {/* Boxed annotation: a grey board-pin-number box at the edge then the
-                    label — the same style as the breadboard / mini board view. */}
-                {boxedPinLabel(
-                  box,
-                  cx,
-                  cy,
-                  pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
-                  String(rp.pin.number ?? rp.pin.gpio ?? ''),
-                  pinLabel,
-                  gpioVar,
-                  'currentColor'
-                )}
-                {/* Persistent capability chips next to the label (#…): PWM, ADC,
-                    SPI, I2C, UART, in that order — refined to the pin's signal
-                    (SDA/SCL, SCK, …) — clearing past the GP## label. */}
-                {capabilityChips(
-                  box,
-                  cx,
-                  cy,
-                  pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
-                  pinLabel,
-                  rp.pin.capabilities,
-                  rp.pin.signals,
-                  gpioVar,
-                  rp.pin.buses
-                )}
+                {/* The pin's label annotation (number box + label + chips) — a single
+                    group so it can be DRAGGED to a hand-placed spot (#…), stored as
+                    `labelOffset` and applied here as a translate. */}
+                <g
+                  transform={labelTf}
+                  className={labelDraggable ? 'pcv__pinlabel--drag' : undefined}
+                  onPointerDown={labelDraggable ? (e) => startLabelDrag(e, rp) : undefined}
+                >
+                  {/* Boxed annotation: a grey board-pin-number box at the edge then
+                      the label — the same style as the breadboard / mini board view. */}
+                  {boxedPinLabel(
+                    box,
+                    cx,
+                    cy,
+                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                    String(rp.pin.number ?? rp.pin.gpio ?? ''),
+                    pinLabel,
+                    gpioVar,
+                    'currentColor'
+                  )}
+                  {/* Persistent capability chips next to the label (#…): PWM, ADC,
+                      SPI, I2C, UART, in that order — refined to the pin's signal
+                      (SDA/SCL, SCK, …) — clearing past the GP## label. */}
+                  {capabilityChips(
+                    box,
+                    cx,
+                    cy,
+                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                    pinLabel,
+                    rp.pin.capabilities,
+                    rp.pin.signals,
+                    gpioVar,
+                    rp.pin.buses
+                  )}
+                </g>
               </g>
             )
           })}
