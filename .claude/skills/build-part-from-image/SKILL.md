@@ -143,7 +143,13 @@ not infer. Required:
    electrical `type` (`io`/`pwr`/`gnd`/`other`), `capabilities`, and which **edge**
    it's on, in physical top→bottom order from a stated origin. Use `x`/`y` (0..1)
    for real positions; else spread evenly along the `edge`. **Cross-check every
-   5V/3V3/GND** against the source.
+   5V/3V3/GND** against the source. Also record, per capability, from the pinout:
+   - the **signal** under `signals` — I2C → `SDA`/`SCL`, SPI → `RX`/`CSn`/`SCK`/`TX`,
+     UART → `TX`/`RX`, PWM → the `A`/`B` channel;
+   - the **bus / channel number** under `buses` — the I2C/SPI/UART instance
+     (`I2C0`, `SPI1`, `UART0` → `0`/`1`) and the ADC channel (`ADC2` → `2`).
+   Note the **GP## GPIO** even when the silk label differs (e.g. a pad silk-printed
+   `SDA` that is really `GP4`) — set both `name: SDA` and `gpio: 4`.
 3. **Draw the board.** Preferably embed a cropped top-down **photo** + overlay the
    pads (see *Background photo*). Only if no clean photo exists, lay out
    `shapes` (grey `rect` for chips/connectors) + `labels` + `mountingHoles`.
@@ -164,6 +170,20 @@ not infer. Required:
 8. **Confirm with the user**: present the **full pin table** (number · name · type ·
    gpio), highlighting **power/ground**, and get the user (who has the board) to
    confirm before the part is considered done — see the safety section.
+
+## Onboard LEDs, RGB & NeoPixels
+
+Many boards carry an onboard indicator tied to GPIO(s) — capture these under
+`onboardLeds` so the board reproduces accurately. Each has a `kind` and a
+normalised `x`/`y` position:
+- **`single`** — one LED on one GPIO (e.g. the Pico's onboard LED on **GP25**):
+  `{ kind: single, gpio: 25, x: …, y: … }` (optional `color`).
+- **`rgb`** — an analog RGB LED with three GPIO channels (e.g. the Tiny 2350's
+  **GP18/19/20**): `{ kind: rgb, rgb: { r: 18, g: 19, b: 20 }, x: …, y: … }`.
+- **`neopixel`** — an addressable WS2812/SK6812 driven over a single **data** GPIO;
+  some boards add a **power-enable** GPIO (optional — most NeoPixels need only the
+  data line). E.g. the Seeed XIAO RP2350's DATA **GP22** + POWER **GP23**:
+  `{ kind: neopixel, gpio: 22, power: 23, x: …, y: … }`.
 
 ## `parts.yml` shape (the fields you'll write)
 
@@ -190,8 +210,14 @@ headers:
     pins:
       - { number: 1, name: VIN, type: pwr, x: 0.08, y: 0.20 }
       - { number: 2, name: GND, type: gnd, x: 0.08, y: 0.40 }
-      - { number: 3, name: SDA, type: io, capabilities: [i2c], x: 0.08, y: 0.60, shape: castellated }
-      - { number: 4, name: SCL, type: io, capabilities: [i2c], x: 0.08, y: 0.80, shape: castellated }
+      # capabilities + per-capability signals + bus numbers (I2C0 SDA, ADC2, …):
+      - { number: 3, name: SDA, type: io, gpio: 4, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 }, x: 0.08, y: 0.60, shape: castellated }
+      - { number: 4, name: SCL, type: io, gpio: 5, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 }, x: 0.08, y: 0.80, shape: castellated }
+# Onboard indicators tied to GPIO(s): single LED / analog RGB / addressable NeoPixel.
+onboardLeds:
+  - { kind: single, gpio: 25, x: 0.5, y: 0.15 }             # e.g. Pico LED
+  - { kind: rgb, rgb: { r: 18, g: 19, b: 20 }, x: 0.5, y: 0.5 }   # e.g. Tiny 2350
+  - { kind: neopixel, gpio: 22, power: 23, x: 0.7, y: 0.5 } # e.g. XIAO RP2350 (power optional)
 # Only when there is NO photo, draw the board instead:
 # shapes:
 #   - { kind: rect, x: 0.35, y: 0.30, w: 0.3, h: 0.4, fill: '#1c2227', label: VL53L0X }
@@ -202,7 +228,12 @@ headers:
 Allowed values:
 - pin `type`: `io` · `pwr` · `gnd` · `other`
 - pin `capabilities`: `digital` · `pwm` · `adc` · `i2c` · `spi` · `uart`
+- pin `signals` (per capability): `i2c: SDA|SCL` · `spi: RX|CSn|SCK|TX` ·
+  `uart: TX|RX` · `pwm: A|B`
+- pin `buses` (per capability, a number): `i2c` · `spi` · `uart` bus id · `adc` channel
 - pad `shape`: `round` · `square` · `castellated` · `header`
+- `onboardLeds[].kind`: `single` (uses `gpio`) · `rgb` (uses `rgb.r/g/b`) ·
+  `neopixel` (uses `gpio` data + optional `power`)
 - shape `kind`: `rect` · `circle` · `polygon`
 - For an **MCU board** (so it appears in the Board View's board picker) set
   `family: Microcontroller` and give each GPIO pin its `gpio` number.
