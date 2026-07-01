@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-07-01
+
 ### Added
 - **Part Editor: author on-board buttons (#130).** Add push-buttons (BOOT/RESET/…)
   with a new "Push-button" tool and a "Buttons" layer panel: place, drag (grid-snap
@@ -1232,6 +1234,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.20.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.1...v0.19.0
 [0.18.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...v0.18.1
 [0.18.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.17.0...v0.18.0
