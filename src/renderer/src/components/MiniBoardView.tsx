@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type JSX } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type JSX,
+  type PointerEvent as ReactPointerEvent
+} from 'react'
 import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_TAG } from './parse-pins'
 import { BUILTIN_BOARDS, DEFAULT_BOARD_ID, boardIdFromReplText } from './board-defs'
 import {
@@ -137,6 +145,15 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
     </>
   )
 }
+
+/**
+ * The mini board viewport height (px). `DEFAULT` is the current size and the size
+ * every launch opens at — the drag handle below the board resizes the split with
+ * the instrument deck for the session only, and is intentionally NOT persisted.
+ */
+const DEFAULT_MINI_SCROLL_H = 190
+const MIN_MINI_SCROLL_H = 90
+const MAX_MINI_SCROLL_H = 640
 
 /**
  * MINI BOARD VIEW (#168) — a compact node-graph board atop the instruments panel.
@@ -322,6 +339,30 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
   const svgH = Math.max(1, Math.round(svgW * aspect))
   const setZoomClamped = (z: number): void => setZoom(Math.min(5, Math.max(0.5, z)))
 
+  // Resizable split between the mini board and the instrument deck below it. The
+  // handle drags the board viewport's height; kept in component state only (never
+  // persisted) so every launch opens at DEFAULT_MINI_SCROLL_H — the current size.
+  const [scrollH, setScrollH] = useState(DEFAULT_MINI_SCROLL_H)
+  const resizeRef = useRef<{ startY: number; startH: number } | null>(null)
+  const onResizeDown = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    e.preventDefault()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    resizeRef.current = { startY: e.clientY, startH: scrollH }
+  }
+  const onResizeMove = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    const drag = resizeRef.current
+    if (!drag) return
+    const next = drag.startH + (e.clientY - drag.startY)
+    setScrollH(Math.min(MAX_MINI_SCROLL_H, Math.max(MIN_MINI_SCROLL_H, next)))
+  }
+  const onResizeUp = (e: ReactPointerEvent<HTMLDivElement>): void => {
+    resizeRef.current = null
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+  const resetSize = (): void => setScrollH(DEFAULT_MINI_SCROLL_H)
+
   return (
     <section className="mini-board" aria-label="Board pins in use">
       <div className="mini-board__head">
@@ -355,7 +396,7 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
           </svg>
         </button>
       </div>
-      <div className="mini-board__scroll" ref={scrollRef}>
+      <div className="mini-board__scroll" ref={scrollRef} style={{ height: scrollH }}>
       <svg
         className="mini-board__svg"
         viewBox={viewBox.str}
@@ -442,6 +483,21 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
       {usedList.length === 0 && (
         <p className="mini-board__hint">{isPython ? 'No pins used in this file yet.' : 'Open a MicroPython (.py) file to see its pins.'}</p>
       )}
+      {/* Drag the split between the board and the instrument deck. Double-click to
+          reset to the default size. Per-session only (never persisted). */}
+      <div
+        className="mini-board__resize"
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="Resize the board view — drag, or double-click to reset"
+        title="Drag to resize · double-click to reset"
+        onPointerDown={onResizeDown}
+        onPointerMove={onResizeMove}
+        onPointerUp={onResizeUp}
+        onDoubleClick={resetSize}
+      >
+        <span className="mini-board__resize-grip" aria-hidden="true" />
+      </div>
     </section>
   )
 }

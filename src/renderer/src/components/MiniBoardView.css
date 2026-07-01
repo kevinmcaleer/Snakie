@@ -71,14 +71,47 @@
   border-color: #aeb4bd;
 }
 
-/* Fixed-height viewport: the board fills the width at 1× zoom and this wrapper
-   scrolls (both axes) when the user zooms in past the visible area. */
+/* The board viewport: fills the width at 1× zoom and scrolls (both axes) when the
+   user zooms in past the visible area. The 190px here is the DEFAULT height (and
+   the size every launch opens at); the resize handle below sets it live via an
+   inline style, per session only (never persisted). */
 .mini-board__scroll {
   height: 190px;
   overflow: auto;
   /* Reserve the scrollbar gutter so the measured width (and thus the 1× fit) does
      not change when a scrollbar appears — avoids a resize feedback loop. */
   scrollbar-gutter: stable;
+}
+
+/* Resize handle for the split between the mini board and the instrument deck. A
+   thin grabbable bar on the board's bottom edge; drag to resize, double-click to
+   reset (see MiniBoardView.tsx). */
+.mini-board__resize {
+  flex: 0 0 auto;
+  height: 10px;
+  /* Sit on the section's bottom edge and span its full width (cancel the padding). */
+  margin: 0 -0.5rem -0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  touch-action: none;
+}
+
+.mini-board__resize-grip {
+  width: 34px;
+  height: 3px;
+  border-radius: 2px;
+  background: #2a2d33;
+  transition: background 0.12s ease;
+}
+
+.mini-board__resize:hover .mini-board__resize-grip {
+  background: #4a4f57;
+}
+
+.mini-board__resize:active .mini-board__resize-grip {
+  background: var(--accent, #46e06a);
 }
 
 /* The SVG is sized in px to the viewBox aspect (no CSS width/height to fight it),

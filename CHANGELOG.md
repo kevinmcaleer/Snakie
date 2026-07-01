@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Resizable mini board / instrument-deck split.** Drag the handle beneath the
+  mini board view to give it more or less room versus the instrument deck below
+  (double-click the handle to reset). The split is per-session — it always opens
+  at the current default size and isn't persisted.
+
 ## [0.19.0] - 2026-06-30
 
 ### Added
