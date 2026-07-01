@@ -854,8 +854,9 @@ function LayersPanel({
     leds: onboardLeds.length,
     image: part.imageData ? 1 : 0
   }
-  /** Append an onboard LED (single/RGB) at the board centre and select it. */
-  const addLed = (kind: 'single' | 'rgb'): void => {
+  /** Append an onboard LED at the board centre and select it (type set in the
+   *  inspector: LED / RGB / NeoPixel). */
+  const addLed = (kind: 'single' | 'rgb' | 'neopixel' = 'single'): void => {
     const next = [...onboardLeds, { kind, x: 0.5, y: 0.5 } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
@@ -1014,6 +1015,36 @@ function LayersPanel({
         )}
       </div>
 
+      {/* Onboard LEDs (LED / RGB / NeoPixel) tied to GPIO(s). Kept in the top
+          panel — right above the selection inspector — so their GPIO config is one
+          click away (no scrolling). Added here, then dragged into place. */}
+      <div className="pe__layer">
+        <div className="pe__layer-head">
+          {caret('leds')}
+          <span className="pe__layer-name">Onboard LEDs</span>
+          <span className="pe__layer-count">{counts.leds}</span>
+          <button type="button" className="pe__chip pe__chip--add" onClick={() => addLed()} title="Add an onboard LED — pick LED / RGB / NeoPixel and assign GPIO(s) in the inspector">
+            ＋ LED
+          </button>
+          {delBtn(selection?.type === 'led' && !locked.components)}
+        </div>
+        {isOpen('leds') && (
+          <ul className="pe__layer-list">
+            {onboardLeds.length === 0 && <li className="pe__layer-empty">No onboard LEDs yet.</li>}
+            {onboardLeds.map((l, i) => (
+              <li key={`led${i}`}>
+                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'led', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'led', index: i })}>
+                  <span className="pe__item-name">
+                    {l.label || (l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED')} {i + 1}
+                  </span>
+                  <span className="pe__item-sub">{l.kind}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
         </>
       )}
 
@@ -1066,36 +1097,6 @@ function LayersPanel({
               <li key={`btn${i}`}>
                 <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'button', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'button', index: i })}>
                   <span className="pe__item-name">{b.label || `Button ${i + 1}`}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Onboard LEDs (single / RGB) tied to GPIO(s). They live on the Components
-          layer; added directly (no canvas tool) then dragged into place. */}
-      <div className="pe__layer">
-        <div className="pe__layer-head">
-          {caret('leds')}
-          <span className="pe__layer-name">Onboard LEDs</span>
-          <span className="pe__layer-count">{counts.leds}</span>
-          <button type="button" className="pe__chip pe__chip--add" onClick={() => addLed('single')} title="Add a single onboard LED (tied to one GPIO)">
-            ＋LED
-          </button>
-          <button type="button" className="pe__chip pe__chip--add" onClick={() => addLed('rgb')} title="Add an onboard RGB LED (tied to three GPIOs)">
-            ＋RGB
-          </button>
-          {delBtn(selection?.type === 'led' && !locked.components)}
-        </div>
-        {isOpen('leds') && (
-          <ul className="pe__layer-list">
-            {onboardLeds.length === 0 && <li className="pe__layer-empty">No onboard LEDs yet.</li>}
-            {onboardLeds.map((l, i) => (
-              <li key={`led${i}`}>
-                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'led', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'led', index: i })}>
-                  <span className="pe__item-name">{l.label || (l.kind === 'rgb' ? 'RGB LED' : 'LED')} {i + 1}</span>
-                  <span className="pe__item-sub">{l.kind === 'rgb' ? 'RGB' : 'single'}</span>
                 </button>
               </li>
             ))}
@@ -1668,38 +1669,54 @@ function SelectionInspector({
   } else if (selection.type === 'led') {
     const led = (part.onboardLeds ?? [])[selection.index]
     if (led) {
-      title = led.kind === 'rgb' ? 'Onboard RGB LED' : 'Onboard LED'
+      title =
+        led.kind === 'rgb' ? 'Onboard RGB LED' : led.kind === 'neopixel' ? 'Onboard NeoPixel' : 'Onboard LED'
       const upd = (p: Partial<OnboardLed>): void =>
         patch({ onboardLeds: (part.onboardLeds ?? []).map((l, i) => (i === selection.index ? { ...l, ...p } : l)) })
       const updRgb = (ch: 'r' | 'g' | 'b', v: number | undefined): void =>
         upd({ rgb: { ...(led.rgb ?? {}), [ch]: v } })
+      const gpioField = (label: string, value: number | undefined, on: (v: number | undefined) => void, ph?: string): JSX.Element => (
+        <label className="pe__field">
+          <span>{label}</span>
+          <input
+            type="number"
+            value={value ?? ''}
+            placeholder={ph}
+            onChange={(e) => on(e.target.value === '' ? undefined : Number(e.target.value))}
+          />
+        </label>
+      )
       body = (
         <>
-          <label className="pe__field">
-            <span>Label</span>
-            <input
-              type="text"
-              value={led.label ?? ''}
-              onChange={(e) => upd({ label: e.target.value || undefined })}
-              placeholder={led.kind === 'rgb' ? 'RGB' : 'LED'}
-            />
-          </label>
-          {led.kind === 'single' ? (
+          <div className="pe__row">
+            <label className="pe__field">
+              <span>Type</span>
+              <select value={led.kind} onChange={(e) => upd({ kind: e.target.value as OnboardLed['kind'] })}>
+                <option value="single">LED</option>
+                <option value="rgb">RGB</option>
+                <option value="neopixel">NeoPixel</option>
+              </select>
+            </label>
+            <label className="pe__field">
+              <span>Label</span>
+              <input
+                type="text"
+                value={led.label ?? ''}
+                onChange={(e) => upd({ label: e.target.value || undefined })}
+                placeholder={led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED'}
+              />
+            </label>
+          </div>
+          {led.kind === 'single' && (
             <div className="pe__row">
-              <label className="pe__field">
-                <span>GPIO</span>
-                <input
-                  type="number"
-                  value={led.gpio ?? ''}
-                  onChange={(e) => upd({ gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
-                />
-              </label>
+              {gpioField('GPIO', led.gpio, (v) => upd({ gpio: v }))}
               <label className="pe__field">
                 <span>Colour</span>
                 <input type="color" value={led.color ?? '#39d353'} onChange={(e) => upd({ color: e.target.value })} />
               </label>
             </div>
-          ) : (
+          )}
+          {led.kind === 'rgb' && (
             <div className="pe__row">
               {(['r', 'g', 'b'] as const).map((ch) => (
                 <label key={ch} className="pe__field">
@@ -1711,6 +1728,12 @@ function SelectionInspector({
                   />
                 </label>
               ))}
+            </div>
+          )}
+          {led.kind === 'neopixel' && (
+            <div className="pe__row">
+              {gpioField('Data GPIO', led.gpio, (v) => upd({ gpio: v }))}
+              {gpioField('Power GPIO', led.power, (v) => upd({ power: v }), 'optional')}
             </div>
           )}
           <div className="pe__row">

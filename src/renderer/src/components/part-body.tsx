@@ -631,6 +631,20 @@ export function partButtonGlyph(cx: number, cy: number, size: number, selected =
  */
 export function onboardLedGlyph(cx: number, cy: number, led: OnboardLed, selected = false): JSX.Element {
   const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
+  if (led.kind === 'neopixel') {
+    // A 5050 addressable pixel: a white package with a glowing RGB centre.
+    const s = 7
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <circle cx={cx} cy={cy} r={10} fill="#fff" opacity={0.16} />
+        <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} rx={2} fill="#f2f2f2" stroke="#b9bec6" strokeWidth={0.8} />
+        <circle cx={cx} cy={cy - 2} r={2.1} fill="#ff5555" />
+        <circle cx={cx - 2.2} cy={cy + 1.6} r={2.1} fill="#54e08a" />
+        <circle cx={cx + 2.2} cy={cy + 1.6} r={2.1} fill="#5aa0ff" />
+        {ring}
+      </g>
+    )
+  }
   if (led.kind === 'rgb') {
     const rr = 3.6
     const off = 3.4
@@ -653,6 +667,23 @@ export function onboardLedGlyph(cx: number, cy: number, led: OnboardLed, selecte
       {ring}
     </g>
   )
+}
+
+/** The silk label for an onboard LED: its name + GPIO(s) — e.g. `LED · GP25`,
+ *  `RGB · GP18 GP19 GP20`, `NeoPixel · GP22 · PWR GP23`. */
+export function onboardLedLabel(led: OnboardLed): string {
+  const name = led.label || (led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED')
+  let gps = ''
+  if (led.kind === 'rgb') {
+    gps = [led.rgb?.r, led.rgb?.g, led.rgb?.b]
+      .filter((g): g is number => g != null)
+      .map((g) => `GP${g}`)
+      .join(' ')
+  } else {
+    if (led.gpio != null) gps = `GP${led.gpio}`
+    if (led.kind === 'neopixel' && led.power != null) gps += `${gps ? ' · ' : ''}PWR GP${led.power}`
+  }
+  return gps ? `${name} · ${gps}` : name
 }
 
 /** The static life-like scene of a part, drawn into `box`. */
@@ -995,22 +1026,11 @@ export function PartBody({
           const cy = py(led.y)
           const labelY = cy + 18
           const sel = isSel({ type: 'led', index: i })
-          const gps =
-            led.kind === 'rgb'
-              ? [led.rgb?.r, led.rgb?.g, led.rgb?.b]
-                  .filter((g): g is number => g != null)
-                  .map((g) => `GP${g}`)
-                  .join(' ')
-              : led.gpio != null
-                ? `GP${led.gpio}`
-                : ''
-          const name = led.label || (led.kind === 'rgb' ? 'RGB' : 'LED')
-          const labelText = gps ? `${name} · ${gps}` : name
           return (
             <g key={`led${i}`}>
               {onboardLedGlyph(cx, cy, led, sel)}
               {styledText({
-                text: labelText,
+                text: onboardLedLabel(led),
                 cx,
                 cy: labelY,
                 fontSize: 9,

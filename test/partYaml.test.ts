@@ -286,6 +286,23 @@ describe('onboard LEDs round-trip', () => {
     ])
   })
 
+  it('round-trips a NeoPixel with a data + optional power GPIO', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      onboardLeds: [
+        { kind: 'neopixel', label: 'NeoPixel', gpio: 22, power: 23, x: 0.5, y: 0.5 },
+        { kind: 'neopixel', gpio: 16, x: 0.3, y: 0.3 } // no power pin (common case)
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).onboardLeds
+    expect(back).toEqual([
+      { kind: 'neopixel', label: 'NeoPixel', gpio: 22, power: 23, x: 0.5, y: 0.5 },
+      { kind: 'neopixel', gpio: 16, x: 0.3, y: 0.3 }
+    ])
+  })
+
   it('drops onboard LEDs missing a position', () => {
     const yaml =
       'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +

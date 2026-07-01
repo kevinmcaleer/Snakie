@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, onboardLedGlyph, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -2273,21 +2273,11 @@ export function PartCanvas({
             const cx = px(led.x)
             const cy = py(led.y)
             const sel = isSel({ type: 'led', index: i })
-            const gps =
-              led.kind === 'rgb'
-                ? [led.rgb?.r, led.rgb?.g, led.rgb?.b]
-                    .filter((g): g is number => g != null)
-                    .map((g) => `GP${g}`)
-                    .join(' ')
-                : led.gpio != null
-                  ? `GP${led.gpio}`
-                  : ''
-            const name = led.label || (led.kind === 'rgb' ? 'RGB' : 'LED')
             return (
               <g key={`led${i}`}>
                 {onboardLedGlyph(cx, cy, led, sel)}
                 {styledText({
-                  text: gps ? `${name} · ${gps}` : name,
+                  text: onboardLedLabel(led),
                   cx,
                   cy: cy + 18,
                   fontSize: 9,

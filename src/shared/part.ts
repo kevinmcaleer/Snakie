@@ -138,16 +138,22 @@ export interface PartButton {
 
 /**
  * An onboard indicator LED tied to GPIO(s), drawn on the board:
- *  - `single` — one LED on a single GPIO (e.g. the Pico's onboard LED on GP25).
- *  - `rgb`    — an RGB LED whose R/G/B channels are on three GPIOs (e.g. the
- *               Pimoroni Tiny 2350's RGB on GP18/19/20).
+ *  - `single`   — one LED on a single GPIO (e.g. the Pico's onboard LED on GP25).
+ *  - `rgb`      — an analog RGB LED whose R/G/B channels are on three GPIOs (e.g.
+ *                 the Pimoroni Tiny 2350's RGB on GP18/19/20).
+ *  - `neopixel` — an addressable WS2812/SK6812 pixel driven over a single DATA
+ *                 line ({@link gpio}); some boards gate its supply with a
+ *                 power-enable GPIO ({@link power}, e.g. the Seeed XIAO RP2350's
+ *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
-  kind: 'single' | 'rgb'
-  /** Silk label (defaults to `"LED"` / `"RGB"`). */
+  kind: 'single' | 'rgb' | 'neopixel'
+  /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"`). */
   label?: string
-  /** GPIO driving a `single` LED. */
+  /** GPIO driving a `single` LED, or the DATA line of a `neopixel`. */
   gpio?: number
+  /** Optional power-enable GPIO for a `neopixel` (drive high to power it). */
+  power?: number
   /** R/G/B channel GPIOs for an `rgb` LED. */
   rgb?: { r?: number; g?: number; b?: number }
   /** Body colour for a `single` LED (any CSS colour; default green). */
