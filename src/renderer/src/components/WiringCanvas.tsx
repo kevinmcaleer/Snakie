@@ -1577,7 +1577,7 @@ function SubjectBody({
                   box={s.box}
                   rotation={s.rotation ?? 0}
                   bodyScale={k}
-                  boxedPins={s.kind === 'board'}
+                  boxedPins
                   pinVariables={pinVars}
                   capsPins={capsPins}
                   capsHoverPin={capsHoverPin}

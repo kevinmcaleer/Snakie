@@ -139,9 +139,20 @@ export function capabilityChips(
     na = { x: cx - C, y: labelY + labelW + G + varW }
     transform = `translate(${na.x}, ${na.y}) rotate(90)`
   }
+  // Counter-scale (like the pin labels) so chips keep a constant on-screen size —
+  // pivoted at the BOARD EDGE (same pivot boxedPinLabel uses) so the chips stay
+  // aligned just past the edge-anchored number box + label at any part scale.
+  const pv =
+    dir === 'right'
+      ? { x: box.x + box.w, y: cy }
+      : dir === 'left'
+        ? { x: box.x, y: cy }
+        : dir === 'top'
+          ? { x: cx, y: box.y }
+          : { x: cx, y: box.y + box.h }
   const counter =
     bodyScale !== 1
-      ? `translate(${na.x} ${na.y}) scale(${1 / bodyScale}) translate(${-na.x} ${-na.y})`
+      ? `translate(${pv.x} ${pv.y}) scale(${1 / bodyScale}) translate(${-pv.x} ${-pv.y})`
       : undefined
   return (
     <g className="pcv__caps" style={{ pointerEvents: 'none' }} aria-hidden="true" transform={counter}>
@@ -1028,21 +1039,35 @@ export function PartBody({
           // Node-graph style: grey label pushed OUTWARD from the pin's edge, turned
           // 90° on the top/bottom edges so dense rows don't collide.
           const ll = pinLabelLayout(cx, cy, rp.pin.rotation, rp.x, rp.y, size, box)
+          const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
+          // Counter-scale the boxed annotation, pivoted at the board EDGE, so the
+          // number box + label stay edge-anchored at a constant on-screen size on a
+          // scaled placed part (matching the main board). No-op at scale 1.
+          const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
+          const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
+          const boxedCounter =
+            boxedPins && bodyScale !== 1
+              ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
+              : undefined
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
               {boxedPins
-                ? boxedPinLabel(
-                    box,
-                    cx,
-                    cy,
-                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
-                    String(rp.pin.number ?? rp.pin.gpio ?? ''),
-                    rp.pin.label || rp.pin.name,
-                    pinVariables?.get(i)?.variable,
-                    pinVariables?.get(i)?.color ?? '#cfd6dd'
+                ? (
+                    <g transform={boxedCounter}>
+                      {boxedPinLabel(
+                        box,
+                        cx,
+                        cy,
+                        bdir,
+                        String(rp.pin.number ?? rp.pin.gpio ?? ''),
+                        rp.pin.label || rp.pin.name,
+                        pinVariables?.get(i)?.variable,
+                        pinVariables?.get(i)?.color ?? '#cfd6dd'
+                      )}
+                    </g>
                   )
                 : text && (
                     <text
@@ -1065,7 +1090,7 @@ export function PartBody({
                     box,
                     cx,
                     cy,
-                    pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
+                    bdir,
                     rp.pin.label || rp.pin.name,
                     rp.pin.capabilities,
                     rp.pin.signals,
