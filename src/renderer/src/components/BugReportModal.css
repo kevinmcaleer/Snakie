@@ -1,0 +1,132 @@
+/*
+ * Styles for the in-app Bug Report modal (BugReportModal.tsx, issue #206).
+ *
+ * A centered dialog over a dimmed backdrop, matching the NES/pixel app chrome via
+ * the shared design tokens (mirrors PromptModal.css) so it feels native without
+ * touching the shared index.css.
+ */
+
+.bugreport-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  padding: 1rem;
+}
+
+.bugreport-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  width: min(30rem, 100%);
+  max-height: calc(100vh - 3rem);
+  overflow: auto;
+  padding: 1.1rem 1.2rem;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--pixel-shadow);
+}
+
+.bugreport-modal__title {
+  margin: 0;
+  font-family: var(--font-pixel);
+  font-size: 0.95rem;
+}
+
+.bugreport-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.bugreport-modal__label {
+  font-family: var(--font-pixel);
+  font-size: 0.72rem;
+  color: var(--text-muted, var(--text));
+}
+
+.bugreport-modal__label em {
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.bugreport-modal__input,
+.bugreport-modal__textarea {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.6rem;
+  width: 100%;
+}
+
+.bugreport-modal__textarea {
+  resize: vertical;
+  min-height: 5rem;
+}
+
+.bugreport-modal__input:focus-visible,
+.bugreport-modal__textarea:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 2px;
+}
+
+.bugreport-modal__shot {
+  display: flex;
+}
+
+.bugreport-modal__preview {
+  position: relative;
+  display: inline-block;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.bugreport-modal__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 8rem;
+}
+
+.bugreport-modal__remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 1.3rem;
+  height: 1.3rem;
+  line-height: 1;
+  font-size: 1rem;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.65);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.bugreport-modal__status {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.bugreport-modal__status--error {
+  color: var(--danger, #e0463a);
+}
+
+.bugreport-modal__status--ok {
+  color: var(--accent, #34ad4f);
+}
+
+.bugreport-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

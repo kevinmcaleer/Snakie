@@ -16,6 +16,7 @@ import { registerFindIpc, disposeFind } from './find'
 import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
+import { registerFeedbackIpc } from './feedback/ipc'
 import { setupAppMenu } from './menu'
 
 // Disable GPU / hardware-accelerated rendering on the Raspberry Pi build (Linux
@@ -127,6 +128,20 @@ app.whenReady().then(() => {
     }
   })
 
+  // Capture a PNG screenshot of the main window (issue #206: attach to a bug
+  // report). Returns a data URL, or null if the window is gone. Runs in main
+  // because only it can reach webContents.capturePage().
+  ipcMain.handle('app:captureScreenshot', async (): Promise<string | null> => {
+    const wc = mainWindow?.webContents
+    if (!wc || wc.isDestroyed()) return null
+    try {
+      const image = await wc.capturePage()
+      return image.toDataURL()
+    } catch {
+      return null
+    }
+  })
+
   // Register the serial device layer. Push events are routed to whichever
   // window is currently live.
   registerDeviceIpc(() => mainWindow?.webContents)
@@ -139,6 +154,10 @@ app.whenReady().then(() => {
   // runs here (main) to satisfy the renderer CSP; installs run `mip` on the
   // device via the renderer's existing device.exec channel.
   registerPackagesIpc()
+
+  // Bug-report submission (issue #206): forwards the Report Bug form to the
+  // kevsrobots.com feedback API from the main process (past the renderer CSP).
+  registerFeedbackIpc()
 
   // Register the per-module installer layer (issue #120). Generalises the #108
   // instrument-library install to ANY catalog driver: it enumerates the module

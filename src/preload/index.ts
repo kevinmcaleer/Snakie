@@ -78,6 +78,7 @@ import type {
 } from '../shared/part'
 import type { RobotDefinition } from '../shared/robot'
 import type { InstrumentWindowPayload } from '../shared/instrument-window'
+import type { BugReportPayload, BugReportResult } from '../main/feedback/ipc'
 
 /** The active-file snapshot the main renderer streams to the Board View window. */
 export interface BoardSourcePayload {
@@ -920,11 +921,21 @@ const robot = {
 
 // Minimal, typed API exposed to the renderer. This establishes the IPC
 // pattern that later feature work will extend.
+/** In-app bug reporting (#206): submit the Report Bug form to the feedback API. */
+const feedback = {
+  submitBugReport: (payload: BugReportPayload): Promise<BugReportResult> =>
+    ipcRenderer.invoke('feedback:submitBugReport', payload)
+}
+
 const api = {
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
   /** The application version (from package.json), shown in the status bar. */
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
+  /** Capture a PNG screenshot of the main window as a data URL (#206). */
+  captureScreenshot: (): Promise<string | null> => ipcRenderer.invoke('app:captureScreenshot'),
+  /** In-app bug reporting (#206). */
+  feedback,
   /** Open an http(s) URL externally in the default browser. */
   openExternal: (url: string): Promise<void> =>
     ipcRenderer.invoke('app:openExternal', url),
