@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityBadges, castellatedPad, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityBadges, castellatedPad, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -83,6 +83,7 @@ export type CanvasTool =
   | 'shape'
   | 'pin'
   | 'hole'
+  | 'button'
   | 'text'
   | 'rect'
   | 'circle'
@@ -111,6 +112,7 @@ export const DEFAULT_LOCKS: LayerLocks = { pcb: false, image: false, holes: fals
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
+  | { type: 'button'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -323,6 +325,7 @@ export function PartCanvas({
   const box = fitBox(boardAspect(part))
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
+  const buttons = part.buttons ?? []
   const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
@@ -410,7 +413,7 @@ export function PartCanvas({
   const alignDrag = (
     nx: number,
     ny: number,
-    kind: 'pin' | 'hole',
+    kind: 'pin' | 'hole' | 'button',
     exclude: { hi?: number; pi?: number; index?: number },
     off: boolean
   ): { x: number; y: number; gx?: number; gy?: number } => {
@@ -418,7 +421,9 @@ export function PartCanvas({
     const centres =
       kind === 'pin'
         ? pins.filter((p) => !(p.hi === exclude.hi && p.pi === exclude.pi)).map((p) => ({ x: p.x, y: p.y }))
-        : holes.filter((_, i) => i !== exclude.index).map((h) => ({ x: h.x, y: h.y }))
+        : kind === 'hole'
+          ? holes.filter((_, i) => i !== exclude.index).map((h) => ({ x: h.x, y: h.y }))
+          : buttons.filter((_, i) => i !== exclude.index).map((b) => ({ x: b.x, y: b.y }))
     const gx = nearestCenter(centres.map((c) => c.x), nx, box.w, ALIGN_PX)
     const gy = nearestCenter(centres.map((c) => c.y), ny, box.h, ALIGN_PX)
     return { x: gx ?? snapX(nx), y: gy ?? snapY(ny), gx: gx ?? undefined, gy: gy ?? undefined }
@@ -447,6 +452,12 @@ export function PartCanvas({
     // The reverse invariant: a hole can't be dragged onto a pin.
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
+  }
+  /** Move an on-board button (#130) — buttons may sit anywhere, incl. over pins. */
+  const moveButtonTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
+    commit({ ...part, buttons: buttons.map((b, i) => (i === index ? { ...b, x: sx, y: sy } : b)) })
   }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
     const sx = presnapped ? nx : snapX(nx)
@@ -1095,6 +1106,13 @@ export function PartCanvas({
     commit({ ...part, mountingHoles: next })
     onSelect?.({ type: 'hole', index: next.length - 1 })
   }
+
+  /** Add an on-board push-button at the clicked point (#130). */
+  const addButton = (nx: number, ny: number): void => {
+    const next = [...buttons, { label: 'BTN', x: snapX(nx), y: snapY(ny) }]
+    commit({ ...part, buttons: next })
+    onSelect?.({ type: 'button', index: next.length - 1 })
+  }
   const addShape = (kind: ComponentShapeKind, nx: number, ny: number): void => {
     const base = {
       kind,
@@ -1213,6 +1231,9 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+    if (visible.components && !locked.components)
+      for (let i = buttons.length - 1; i >= 0; i--)
+        if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -1231,6 +1252,7 @@ export function PartCanvas({
     // Creation tools no-op on a locked layer.
     if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
+    if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
     if (tool === 'circle') return locked.components ? undefined : addShape('circle', nx, ny)
     if (tool === 'cpoly') return locked.components ? undefined : addShape('polygon', nx, ny)
@@ -1391,6 +1413,9 @@ export function PartCanvas({
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
+    } else if (hit.type === 'button') {
+      ox = buttons[hit.index]?.x ?? nx
+      oy = buttons[hit.index]?.y ?? ny
     } else if (hit.type === 'shape') {
       ox = shapes[hit.index]?.x ?? nx
       oy = shapes[hit.index]?.y ?? ny
@@ -1562,6 +1587,10 @@ export function PartCanvas({
         const a = alignDrag(x, y, 'hole', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
         moveHoleTo(d.sel.index, a.x, a.y, true)
+      } else if (d.sel.type === 'button') {
+        const a = alignDrag(x, y, 'button', { index: d.sel.index }, noSnap)
+        setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
+        moveButtonTo(d.sel.index, a.x, a.y, true)
       } else if (d.sel.type === 'shape') {
         // Smart-align the shape's CENTRE (the stored x/y is a corner for rects /
         // a reference for polygons), then convert the snapped centre back.
@@ -2162,6 +2191,27 @@ export function PartCanvas({
                     align: s.labelAlign,
                     wrapWidth: s.labelWrap ? labelW : undefined,
                     fill: s.labelColor ?? '#cfd6dd'
+                  })}
+              </g>
+            )
+          })}
+
+        {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + label. */}
+        {visible.components &&
+          buttons.map((b, i) => {
+            const cx = px(b.x)
+            const cy = py(b.y)
+            const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
+            return (
+              <g key={`btn${i}`}>
+                {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
+                {b.label &&
+                  styledText({
+                    text: b.label,
+                    cx,
+                    cy: labelY,
+                    fontSize: 9,
+                    fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
                   })}
               </g>
             )
