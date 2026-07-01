@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.3] - 2026-07-01
+
+### Changed
+- **Richer bug reports (#206).** A report now captures **every open Snakie
+  window** — the main window plus the Board View and any undocked instrument
+  windows — composited into one screenshot, and the thumbnail is
+  **click-to-enlarge** so you can review it (for anything sensitive) before
+  sending. Reports also auto-attach **environment diagnostics** (Snakie version,
+  platform/OS, connected board, date & time) and, only if you opt in, the
+  **recent console output** — previewable first in a small scrollable dialog.
+  The privacy confirmation now covers the console output too.
+
+### Fixed
+- **Console terminal no longer overlaps the skeuomorphic screen.** The black
+  xterm is clipped to the recessed console screen, so resizing never spills it
+  over the bezel or rounded corners.
+
 ## [0.20.2] - 2026-07-01
 
 ### Changed
@@ -1254,6 +1271,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.20.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.19.0...v0.20.0

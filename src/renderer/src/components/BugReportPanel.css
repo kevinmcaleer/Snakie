@@ -158,3 +158,135 @@
   display: flex;
   justify-content: flex-end;
 }
+
+/* Auto-attached environment diagnostics summary (#206). */
+.bugpanel__diag {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.bugpanel__diag-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.bugpanel__diag-body {
+  font-family: var(--font-mono);
+  word-break: break-word;
+}
+
+/* Opt-in console-output row. */
+.bugpanel__console {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.bugpanel__check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* Small, scrollable console-output preview dialog. */
+.bugpanel__dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bugpanel__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, 86vw);
+  max-height: 70vh;
+  background: var(--bg);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.bugpanel__dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.bugpanel__dialog-close {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.bugpanel__dialog-body {
+  margin: 0;
+  padding: 0.6rem 0.7rem;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--text);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bugpanel__dialog-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  border-top: var(--border-w) solid var(--border);
+}
+
+/* Clickable thumbnail → opens the full-size screenshot preview (#206). */
+.bugpanel__thumb-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+/* Full-size screenshot preview dialog (wider than the console preview). */
+.bugpanel__dialog--image {
+  width: min(920px, 92vw);
+}
+
+.bugpanel__dialog-imgwrap {
+  display: flex;
+  justify-content: center;
+  overflow: auto;
+  padding: 0.6rem;
+  background: #0b0d10;
+}
+
+.bugpanel__dialog-imgwrap img {
+  max-width: 100%;
+  height: auto;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}

@@ -932,8 +932,18 @@ const api = {
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),
   /** The application version (from package.json), shown in the status bar. */
   appVersion: (): Promise<string> => ipcRenderer.invoke('app:version'),
-  /** Capture a PNG screenshot of the main window as a data URL (#206). */
-  captureScreenshot: (): Promise<string | null> => ipcRenderer.invoke('app:captureScreenshot'),
+  /** Environment diagnostics (platform / OS / versions) for a bug report (#206). */
+  diagnostics: (): Promise<{
+    platform: string
+    arch: string
+    osVersion: string
+    electron: string
+    snakieVersion: string
+  }> => ipcRenderer.invoke('app:diagnostics'),
+  /** Capture every open Snakie window (main + Board View + undocked instrument
+   *  windows) as labelled data URLs, for a bug report (#206). */
+  captureScreenshot: (): Promise<{ title: string; dataUrl: string }[]> =>
+    ipcRenderer.invoke('app:captureScreenshot'),
   /** In-app bug reporting (#206). */
   feedback,
   /** Open an http(s) URL externally in the default browser. */

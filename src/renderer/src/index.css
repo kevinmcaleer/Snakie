@@ -1825,6 +1825,11 @@ body {
   height: 100%;
   padding: 0.35rem 0.45rem;
   box-sizing: border-box;
+  /* Clip the (black) xterm to the recessed screen so it never spills over the
+     skeuomorphic bezel / rounded corners — e.g. when a resize briefly leaves the
+     terminal taller than its box (#206 follow-up). xterm scrolls internally, so
+     this doesn't affect scrollback. */
+  overflow: hidden;
 }
 
 .terminal .xterm {

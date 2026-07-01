@@ -23,7 +23,10 @@ import { app, ipcMain } from 'electron'
 const DEFAULT_FEEDBACK_URL = 'https://projects.kevsrobots.com/api/feedback'
 const TIMEOUT_MS = 20_000
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024 // server cap: 4 MB
-const MAX_MESSAGE = 2000 // server cap on `message`
+// Server cap on `message`. Raised alongside the API (kevsrobots.com #216) so a
+// report can carry the diagnostics block + opt-in console output, not just a
+// couple of sentences. The renderer already bounds the console tail it appends.
+const MAX_MESSAGE = 16_000
 
 /** Payload the renderer sends. `screenshot` is a PNG **data URL**, if attached. */
 export interface BugReportPayload {

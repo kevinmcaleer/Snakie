@@ -114,6 +114,24 @@ app.whenReady().then(() => {
   // App version, surfaced in the status bar.
   ipcMain.handle('app:version', () => app.getVersion())
 
+  // Environment diagnostics for a bug report (#206): platform / OS version /
+  // arch / Snakie + Electron versions. Only the main process can read these.
+  ipcMain.handle('app:diagnostics', () => {
+    let osVersion = ''
+    try {
+      osVersion = (process as { getSystemVersion?: () => string }).getSystemVersion?.() ?? ''
+    } catch {
+      osVersion = ''
+    }
+    return {
+      platform: process.platform,
+      arch: process.arch,
+      osVersion,
+      electron: process.versions.electron,
+      snakieVersion: app.getVersion()
+    }
+  })
+
   // Return the bundled MicroPython instrument library source (issue #108), so the
   // renderer can offer a one-click "install onto the board" of `instruments.py`
   // (issue #107). Reads from resources when packaged, the repo in dev; never
@@ -128,19 +146,36 @@ app.whenReady().then(() => {
     }
   })
 
-  // Capture a PNG screenshot of the main window (issue #206: attach to a bug
-  // report). Returns a data URL, or null if the window is gone. Runs in main
-  // because only it can reach webContents.capturePage().
-  ipcMain.handle('app:captureScreenshot', async (): Promise<string | null> => {
-    const wc = mainWindow?.webContents
-    if (!wc || wc.isDestroyed()) return null
-    try {
-      const image = await wc.capturePage()
-      return image.toDataURL()
-    } catch {
-      return null
+  // Capture a PNG of EVERY open Snakie window (issue #206: attach to a bug
+  // report) — the main window plus the Board View and any undocked instrument
+  // windows — so a bug that only shows in a detached window is still captured.
+  // The main window is first; each entry is labelled by its window title. The
+  // renderer composites them into one image (the feedback API takes one file).
+  // Runs in main because only it can reach webContents.capturePage().
+  ipcMain.handle(
+    'app:captureScreenshot',
+    async (): Promise<{ title: string; dataUrl: string }[]> => {
+      const all = BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed())
+      // Main window first, then the rest (Board View, instrument windows, Find)
+      // in creation order.
+      const ordered =
+        mainWindow && !mainWindow.isDestroyed()
+          ? [mainWindow, ...all.filter((w) => w !== mainWindow)]
+          : all
+      const shots: { title: string; dataUrl: string }[] = []
+      for (const w of ordered) {
+        try {
+          const image = await w.webContents.capturePage()
+          if (!image.isEmpty()) {
+            shots.push({ title: w.getTitle() || 'Snakie', dataUrl: image.toDataURL() })
+          }
+        } catch {
+          // Skip a window that can't be captured; keep the others.
+        }
+      }
+      return shots
     }
-  })
+  )
 
   // Register the serial device layer. Push events are routed to whichever
   // window is currently live.
