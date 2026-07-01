@@ -77,29 +77,6 @@
   --toolbar-h: 60px;
 }
 
-/* Lighter retro variant (keeps the toggle working). */
-:root[data-theme='light'] {
-  color-scheme: light;
-
-  --bg: #d8d8f0;
-  --bg-elevated: #ececff;
-  --bg-sunken: #c4c4e4;
-  --border: #5a5a8c;
-  --text: #14141f;
-  --text-muted: #4a4a6a;
-
-  --accent: #0058f8;
-  --accent-2: #008000;
-  --accent-contrast: #ffffff;
-  --danger: #d80000;
-  --success: #008000;
-  --warn: #ac7c00;
-  --disconnected: #7a7aa0;
-
-  --handle: #5a5a8c;
-  --handle-hover: var(--accent);
-}
-
 /* ===========================================================================
  * Skeuomorph skin (default look) — concept 08 of the "MicroPython IDE
  * Concepts" design: brushed metal chrome, green-felt source control, cream

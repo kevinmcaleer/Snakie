@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 
-export type Theme = 'light' | 'dark' | 'skeuomorph'
+// Two themes: the textured default (id `skeuomorph`, shown to users as "Light")
+// and `dark`. The earlier flat `light` theme was removed; any persisted `light`
+// value is migrated to `skeuomorph` on load.
+export type Theme = 'dark' | 'skeuomorph'
 
 // Bumped from `snakie.theme` so the new Skeuomorph default takes effect for
 // users who had only ever run the previous dark-first build (their old value
@@ -20,8 +23,18 @@ function getInitialTheme(): Theme {
  * document root so all token overrides in `index.css` apply globally, and
  * persists the choice across restarts.
  */
-export function useTheme(): { theme: Theme; toggleTheme: () => void } {
-  const [theme, setTheme] = useLocalStorage<Theme>(STORAGE_KEY, getInitialTheme())
+export function useTheme(): {
+  theme: Theme
+  toggleTheme: () => void
+  setTheme: (t: Theme) => void
+} {
+  const [stored, setTheme] = useLocalStorage<Theme>(STORAGE_KEY, getInitialTheme())
+  // Migrate the removed flat `light` theme to the textured "Light" (skeuomorph).
+  const theme: Theme = (stored as string) === 'light' ? 'skeuomorph' : stored
+
+  useEffect(() => {
+    if ((stored as string) === 'light') setTheme('skeuomorph')
+  }, [stored, setTheme])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -30,5 +43,7 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
   // Flip between the Skeuomorph skin and the dark "lights out" theme.
   const toggleTheme = (): void => setTheme(theme === 'dark' ? 'skeuomorph' : 'dark')
 
-  return { theme, toggleTheme }
+  // `setTheme` is exposed so the Settings "Appearance" tab can pick any of the
+  // three themes directly (the old toolbar toggle only flipped dark↔skeuomorph).
+  return { theme, toggleTheme, setTheme }
 }

@@ -8,9 +8,11 @@ import type { JSX, ReactNode } from 'react'
  * passed down here; clicking an item calls `onSelect`.
  *
  * Items are split into a top group (primary views) and a bottom group (Report
- * Bug + Help), mirroring the familiar VS Code-style activity bar. Icons are
- * inline pixel SVGs (drawn with crisp edges) so they render identically on every
- * platform and match the 8-bit theme — the pixel UI font has no emoji glyphs.
+ * Bug + Help + Settings), mirroring the familiar VS Code-style activity bar.
+ * Icons are inline pixel SVGs (drawn with crisp edges) so they render identically
+ * on every platform and match the 8-bit theme — the pixel UI font has no emoji
+ * glyphs. Settings is an ACTION (opens the Settings dialog via `onOpenSettings`),
+ * not a persisted view, so it sits below Help without an active/pressed state.
  */
 
 /** Stable, persisted view ids. Default is `files`. */
@@ -90,6 +92,25 @@ const ICONS: Record<ActivityView, JSX.Element> = {
   )
 }
 
+// Gear — the Settings action (a view-less button below Help). Pixel-styled to
+// match the other shelf icons: 8 teeth around a ringed body.
+const SETTINGS_ICON = SVG(
+  <g fill="currentColor">
+    <rect x="7" y="0" width="2" height="4" />
+    <rect x="7" y="12" width="2" height="4" />
+    <rect x="0" y="7" width="4" height="2" />
+    <rect x="12" y="7" width="4" height="2" />
+    <rect x="2" y="2" width="2.5" height="2.5" />
+    <rect x="11.5" y="2" width="2.5" height="2.5" />
+    <rect x="2" y="11.5" width="2.5" height="2.5" />
+    <rect x="11.5" y="11.5" width="2.5" height="2.5" />
+    <path
+      fillRule="evenodd"
+      d="M8 3.4a4.6 4.6 0 1 0 0 9.2 4.6 4.6 0 0 0 0-9.2Zm0 2.7a1.9 1.9 0 1 1 0 3.8 1.9 1.9 0 0 1 0-3.8Z"
+    />
+  </g>
+)
+
 interface ActivityItem {
   id: ActivityView
   label: string
@@ -113,6 +134,8 @@ const BOTTOM_ITEMS: ActivityItem[] = [
 interface ActivityBarProps {
   active: ActivityView
   onSelect: (view: ActivityView) => void
+  /** Open the Settings dialog (the Settings item is an action, not a view). */
+  onOpenSettings: () => void
 }
 
 function renderItem(
@@ -136,7 +159,7 @@ function renderItem(
   )
 }
 
-export function ActivityBar({ active, onSelect }: ActivityBarProps): JSX.Element {
+export function ActivityBar({ active, onSelect, onOpenSettings }: ActivityBarProps): JSX.Element {
   return (
     <nav className="activitybar" aria-label="Activity bar">
       <div className="activitybar__group">
@@ -144,6 +167,17 @@ export function ActivityBar({ active, onSelect }: ActivityBarProps): JSX.Element
       </div>
       <div className="activitybar__group activitybar__group--bottom">
         {BOTTOM_ITEMS.map((item) => renderItem(item, active, onSelect))}
+        {/* Settings — an action, not a view (opens the Settings dialog), so no
+            aria-pressed / is-active. Same markup as the other shelf items. */}
+        <button
+          type="button"
+          className="activitybar__item"
+          title="Settings"
+          onClick={onOpenSettings}
+        >
+          <span className="activitybar__item-icon">{SETTINGS_ICON}</span>
+          <span className="activitybar__item-label">Settings</span>
+        </button>
       </div>
     </nav>
   )

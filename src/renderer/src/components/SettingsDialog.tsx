@@ -7,6 +7,7 @@ import {
 } from '../store/settings'
 import { EDITOR_THEME_LIST } from '../store/editorThemes'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import type { Theme } from '../hooks/useTheme'
 import { ChatSettings } from './ChatSettings'
 import './SettingsDialog.css'
 
@@ -32,11 +33,19 @@ import './SettingsDialog.css'
  */
 
 /** Which settings tab is shown. Extend by adding to {@link TABS}. */
-export type SettingsTab = 'editor' | 'chat'
+export type SettingsTab = 'appearance' | 'editor' | 'chat'
 
 const TABS: { id: SettingsTab; label: string }[] = [
+  { id: 'appearance', label: 'Appearance' },
   { id: 'editor', label: 'Editor' },
   { id: 'chat', label: 'Chat' }
+]
+
+/** The app-wide skins (moved here from the toolbar toggle). "Light" is the
+ *  textured default skin (id `skeuomorph`); the other is the dark theme. */
+const THEME_OPTIONS: { value: Theme; label: string; hint: string }[] = [
+  { value: 'skeuomorph', label: 'Light', hint: 'The bright default skin — brushed metal, felt and cream paper' },
+  { value: 'dark', label: 'Dark', hint: 'A dark, lights-out theme' }
 ]
 
 const PAPER_OPTIONS: { value: EditorPaper; label: string; hint: string }[] = [
@@ -47,10 +56,14 @@ const PAPER_OPTIONS: { value: EditorPaper; label: string; hint: string }[] = [
 
 export function SettingsDialog({
   onClose,
-  initialTab = 'editor'
+  initialTab = 'editor',
+  theme,
+  setTheme
 }: {
   onClose: () => void
   initialTab?: SettingsTab
+  theme: Theme
+  setTheme: (t: Theme) => void
 }): JSX.Element {
   const [tab, setTab] = useState<SettingsTab>(initialTab)
   // Move focus into the dialog on open, trap Tab, and restore it on close.
@@ -108,11 +121,50 @@ export function SettingsDialog({
           ))}
         </div>
 
-        {tab === 'editor' ? <EditorTab /> : <ChatSettings />}
+        {tab === 'appearance' ? (
+          <AppearanceTab theme={theme} setTheme={setTheme} />
+        ) : tab === 'editor' ? (
+          <EditorTab />
+        ) : (
+          <ChatSettings />
+        )}
 
         <p className="settings-dialog__foot">Changes are saved automatically.</p>
       </div>
     </div>
+  )
+}
+
+/** The Appearance tab: the app-wide skin (Skeuomorph / Dark / Light). */
+function AppearanceTab({
+  theme,
+  setTheme
+}: {
+  theme: Theme
+  setTheme: (t: Theme) => void
+}): JSX.Element {
+  return (
+    <section className="settings-section">
+      <h3 className="settings-section__title">Theme</h3>
+      <p className="settings-section__hint">
+        The overall Snakie skin — a bright Light theme or a dark theme.
+      </p>
+      <div className="settings-segment" role="radiogroup" aria-label="Theme">
+        {THEME_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            role="radio"
+            aria-checked={theme === opt.value}
+            className={`settings-segment__btn${theme === opt.value ? ' is-active' : ''}`}
+            onClick={() => setTheme(opt.value)}
+            title={opt.hint}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+    </section>
   )
 }
 
@@ -159,7 +211,7 @@ function EditorTab(): JSX.Element {
           <span className="settings-value">{lineSpacing} px</span>
         </div>
         <p className="settings-section__hint">
-          Space between the ruled lines (also the editor line height).
+          The editor line height — and the gap between ruled lines when paper is on.
         </p>
         <input
           type="range"
@@ -168,7 +220,6 @@ function EditorTab(): JSX.Element {
           max={MAX_LINE_SPACING}
           step={1}
           value={lineSpacing}
-          disabled={paper === 'off'}
           onChange={(e) => setLineSpacing(Number(e.target.value))}
           aria-label="Line spacing in pixels"
         />

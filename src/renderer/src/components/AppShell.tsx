@@ -138,7 +138,7 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
  * toggles and resize handles stay in sync across restarts.
  */
 export function AppShell(): JSX.Element {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
 
   // The active file feeds the floating Board View window. Reading it here lets
   // us stream every edit / theme change to that window over IPC so it updates
@@ -727,15 +727,12 @@ export function AppShell(): JSX.Element {
         )}
       </div>
       <Toolbar
-        theme={theme}
-        onToggleTheme={toggleTheme}
         filesCollapsed={filesCollapsed}
         onToggleFiles={() => toggle(filesRef, filesCollapsed, setFilesCollapsed)}
         shellCollapsed={shellCollapsed}
         onToggleShell={() => toggle(shellRef, shellCollapsed, setShellCollapsed)}
         rightCollapsed={rightCollapsed}
         onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
-        onOpenSettings={() => openSettings('editor')}
         onOpenBoard={toggleBoard}
         onToggleInstruments={toggleInstruments}
         instrumentsVisible={instrumentsVisible}
@@ -745,6 +742,7 @@ export function AppShell(): JSX.Element {
       <div className="shell__body shell__main">
         <ActivityBar
           active={activityView}
+          onOpenSettings={() => openSettings('appearance')}
           onSelect={(view) => {
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
@@ -852,7 +850,12 @@ export function AppShell(): JSX.Element {
       />
 
       {settingsOpen && (
-        <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsOpen(false)} />
+        <SettingsDialog
+          initialTab={settingsTab}
+          theme={theme}
+          setTheme={setTheme}
+          onClose={() => setSettingsOpen(false)}
+        />
       )}
     </div>
   )

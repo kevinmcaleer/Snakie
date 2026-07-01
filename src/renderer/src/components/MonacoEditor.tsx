@@ -163,13 +163,11 @@ function ensureThemes(): void {
 }
 
 /** Resolve the app skin + editor-theme id to the Monaco theme name. The
- * Skeuomorph(-light) skin uses the user-selected editor colour theme; the Dark
- * Skeuomorph skin (issue #91) uses `snakie-dark`, the dark ruled-paper theme
- * (transparent surface so the CSS deep-slate paper shows through); the plain
- * `light` skin keeps its plain background. */
+ * Skeuomorph skin (shown as "Light") uses the user-selected editor colour theme;
+ * the Dark theme (issue #91) uses `snakie-dark`, the dark ruled-paper theme
+ * (transparent surface so the CSS deep-slate paper shows through). */
 function monacoTheme(theme: string, editorTheme: string): string {
   if (theme === 'skeuomorph') return monacoThemeName(editorTheme)
-  if (theme === 'light') return 'snakie-light'
   return 'snakie-dark'
 }
 

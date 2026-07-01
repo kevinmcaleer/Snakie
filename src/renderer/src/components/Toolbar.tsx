@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
-import { Theme } from '../hooks/useTheme'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
@@ -112,15 +111,12 @@ const SNAKE_LOGO = (
 )
 
 interface ToolbarProps {
-  theme: Theme
-  onToggleTheme: () => void
   filesCollapsed: boolean
   onToggleFiles: () => void
   shellCollapsed: boolean
   onToggleShell: () => void
   rightCollapsed: boolean
   onToggleRight: () => void
-  onOpenSettings: () => void
   onOpenBoard: () => void
   /** Toggle the visibility of the docked/floating instruments (#101 / #102). */
   onToggleInstruments: () => void
@@ -142,21 +138,18 @@ interface ToolbarProps {
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Also hosts the utility knobs next to Run/Stop (Settings / Board View /
- * light-dark toggle) and the right cluster of panel-collapse knobs (Files /
- * Shell / Chat), which render as pressable hardware keys in the Skeuomorph skin
- * (a pressed-in look marks the active / shown panel).
+ * Also hosts the Board View knob next to Run/Stop and the right cluster of
+ * panel-collapse knobs (Files / Shell / Chat), which render as pressable hardware
+ * keys in the Skeuomorph skin (a pressed-in look marks the active / shown panel).
+ * Settings and the theme picker now live on the activity bar + Settings dialog.
  */
 export function Toolbar({
-  theme,
-  onToggleTheme,
   filesCollapsed,
   onToggleFiles,
   shellCollapsed,
   onToggleShell,
   rightCollapsed,
   onToggleRight,
-  onOpenSettings,
   onOpenBoard,
   onToggleInstruments,
   instrumentsVisible,
@@ -303,20 +296,6 @@ export function Toolbar({
         <button
           type="button"
           className="btn btn--ghost btn--icon btn--knob"
-          onClick={onOpenSettings}
-          title="Settings"
-          aria-label="Open settings"
-        >
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
-            <path
-              fill="currentColor"
-              d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.13.22.39.3.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z"
-            />
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon btn--knob"
           onClick={onOpenBoard}
           title="Board View — visualise pin wiring (toggle)"
           aria-label="Toggle Board View"
@@ -335,40 +314,6 @@ export function Toolbar({
               <rect x="17" y="11.5" width="1.6" height="1.6" />
               <rect x="17" y="14.5" width="1.6" height="1.6" />
             </g>
-          </svg>
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon btn--knob"
-          onClick={onToggleTheme}
-          title={theme === 'dark' ? 'Switch to the Skeuomorph theme' : 'Switch to the dark theme'}
-          aria-label="Toggle theme"
-        >
-          <svg
-            viewBox="0 0 16 16"
-            width="16"
-            height="16"
-            shapeRendering="crispEdges"
-            aria-hidden="true"
-            focusable="false"
-          >
-            {theme === 'dark' ? (
-              // sun (currently dark → switch to light)
-              <g fill="currentColor">
-                <rect x="6" y="6" width="4" height="4" />
-                <rect x="7" y="0" width="2" height="2" />
-                <rect x="7" y="14" width="2" height="2" />
-                <rect x="0" y="7" width="2" height="2" />
-                <rect x="14" y="7" width="2" height="2" />
-                <rect x="2" y="2" width="2" height="2" />
-                <rect x="12" y="2" width="2" height="2" />
-                <rect x="2" y="12" width="2" height="2" />
-                <rect x="12" y="12" width="2" height="2" />
-              </g>
-            ) : (
-              // crescent moon (currently light → switch to dark)
-              <path d="M9.5 2A6 6 0 1 0 14 11 A4.5 4.5 0 0 1 9.5 2Z" fill="currentColor" />
-            )}
           </svg>
         </button>
       </div>
