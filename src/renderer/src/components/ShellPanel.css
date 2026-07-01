@@ -207,3 +207,64 @@
   opacity: 0.7;
   font-size: 0.72rem;
 }
+
+/* --- Console pop-out (own OS window) ------------------------------------ */
+
+/* The console fills the view; the hover-revealed pop-out button sits top-right. */
+.shell-console {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+/* Popped out → hide the terminal but keep it mounted (scrollback survives). */
+.shell-console--popped {
+  display: none;
+}
+
+.shell-popout {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+/* Reveal on hover over the console (or when keyboard-focused). */
+.shell-console:hover .shell-popout,
+.shell-popout:focus-visible {
+  opacity: 0.9;
+}
+
+.shell-popout:hover {
+  opacity: 1;
+  background: var(--bg);
+}
+
+/* Placeholder shown in the docked area while the console is popped out. */
+.shell-popped {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
+  height: 100%;
+  color: var(--text-muted);
+}
+
+.shell-popped__text {
+  font-size: 0.8rem;
+}

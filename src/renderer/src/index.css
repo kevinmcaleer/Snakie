@@ -1767,6 +1767,9 @@ body {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 0.35rem;
+  /* Stay right-aligned even when the header has no title (e.g. the Shell header),
+   * where flex `space-between` would otherwise pull a lone actions block left. */
+  margin-left: auto;
   /* Allow the actions block (and its flex children) to shrink rather than
    * overflow the header at narrow widths (issue #85). */
   min-width: 0;
@@ -2264,4 +2267,11 @@ body {
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Detached console OS window (console.html, console-window-main.tsx): fill the
+   window so the terminal (`.terminal { height: 100% }`) takes the whole frame. */
+.console-window {
+  position: absolute;
+  inset: 0;
 }

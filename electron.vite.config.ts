@@ -52,7 +52,9 @@ export default defineConfig({
           // Third entry: the floating Find & Replace window (issue #146).
           find: resolve(__dirname, 'src/renderer/find.html'),
           // Fourth entry: a detached instrument OS window (issue #205).
-          instrument: resolve(__dirname, 'src/renderer/instrument.html')
+          instrument: resolve(__dirname, 'src/renderer/instrument.html'),
+          // Fifth entry: the detached console (bottom REPL, popped out).
+          console: resolve(__dirname, 'src/renderer/console.html')
         },
         output: {
           manualChunks(id: string) {

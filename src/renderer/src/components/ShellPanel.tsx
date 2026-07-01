@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { PanelHeader } from './PanelHeader'
 import { Terminal, type TerminalHandle } from './Terminal'
 import { Problems } from './Problems'
@@ -45,6 +45,22 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
     'snakie.lintingEnabled',
     true
   )
+  // The console can pop out into its own OS window (the instrument-window pattern,
+  // #205). While popped out, the docked terminal is kept MOUNTED but hidden so its
+  // scrollback survives; the docked area shows a "Redock" placeholder instead.
+  const [poppedOut, setPoppedOut] = useState(false)
+
+  // Closing the console window (native ✕ or Redock) returns it to the dock.
+  useEffect(() => window.api.console.onClosed(() => setPoppedOut(false)), [])
+
+  const popOut = useCallback(() => {
+    setPoppedOut(true)
+    void window.api.console.open()
+  }, [])
+  const redock = useCallback(() => {
+    // Closing the window fires `console:closed`, which clears `poppedOut`.
+    window.api.console.close()
+  }, [])
 
   const handleClear = useCallback(() => {
     terminalRef.current?.clear()
@@ -67,7 +83,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
   return (
     <section className="region region--shell" aria-label="Shell">
       <PanelHeader
-        title="Shell"
+        title=""
         actions={
           <div className="shell-actions">
             <div className="shell-toggle" role="tablist" aria-label="Shell view">
@@ -103,7 +119,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
             {view === 'console' && chatOpen && (
               <button
                 type="button"
-                className="btn btn--ghost shell-actions__send-chat"
+                className="btn btn--ghost btn--sm shell-actions__send-chat"
                 onClick={handleSendToChat}
                 title="Send console output (since last Run) to the chat"
                 aria-label="Send console output to chat"
@@ -117,7 +133,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
             {view === 'console' && (
               <button
                 type="button"
-                className="btn btn--ghost shell-actions__clear"
+                className="btn btn--ghost btn--sm shell-actions__clear"
                 onClick={handleClear}
                 title="Clear shell output"
                 aria-label="Clear shell output"
@@ -137,7 +153,39 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
           className={`shell-view${view === 'console' ? '' : ' shell-view--hidden'}`}
           role="tabpanel"
         >
-          <Terminal ref={terminalRef} />
+          {/* Keep the terminal MOUNTED even when popped out, so its scrollback
+              survives; just hide it and show a redock placeholder instead. */}
+          <div className={`shell-console${poppedOut ? ' shell-console--popped' : ''}`}>
+            <Terminal ref={terminalRef} />
+            {!poppedOut && (
+              <button
+                type="button"
+                className="shell-popout"
+                title="Pop out the console into its own window"
+                aria-label="Pop out console"
+                onClick={popOut}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                  <path
+                    d="M6 3H3v10h10v-3M9.5 2.5H13.5V6.5M13 3 8 8"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+          {poppedOut && (
+            <div className="shell-popped">
+              <span className="shell-popped__text">Console popped out to its own window</span>
+              <button type="button" className="btn btn--ghost btn--sm" onClick={redock}>
+                Redock
+              </button>
+            </div>
+          )}
         </div>
         <div
           className={`shell-view shell-view--problems${view === 'problems' ? '' : ' shell-view--hidden'}`}

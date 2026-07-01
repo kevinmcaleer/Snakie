@@ -14,6 +14,7 @@ import { registerUpdater, checkForUpdatesManual } from './updater'
 import { registerBoardIpc, openBoardView, disposeBoard } from './board'
 import { registerFindIpc, disposeFind } from './find'
 import { registerInstrumentWindowsIpc, disposeInstrumentWindows } from './instrumentWindows'
+import { registerConsoleWindowIpc, disposeConsoleWindow } from './consoleWindow'
 import { registerPartsIpc } from './parts/ipc'
 import { registerRobotIpc } from './robot/ipc'
 import { registerFeedbackIpc } from './feedback/ipc'
@@ -242,6 +243,10 @@ app.whenReady().then(() => {
   // can re-dock the instrument.
   registerInstrumentWindowsIpc(() => mainWindow)
 
+  // Register the detached console window: the bottom REPL can pop out into its
+  // own resizable OS window; the main window is told when it closes so it re-docks.
+  registerConsoleWindowIpc(() => mainWindow)
+
   // Register the Parts Library + Part Editor layer (#129 / #130): portable,
   // community-authored parts on disk (<userData>/parts/<lib>/<part>/parts.yml)
   // plus the master community registry (fetch + install + update checks).
@@ -275,4 +280,5 @@ app.on('before-quit', () => {
   disposeBoard()
   disposeFind()
   disposeInstrumentWindows()
+  disposeConsoleWindow()
 })

@@ -1,6 +1,8 @@
 import { ReactNode } from 'react'
 
 interface PanelHeaderProps {
+  /** The panel title. Pass an empty string to hide it (e.g. the Shell header,
+   *  which is all actions) — the actions then fill the row, right-aligned. */
   title: string
   /** Optional action slot (buttons, toggles) rendered right-aligned. */
   actions?: ReactNode
@@ -13,7 +15,7 @@ interface PanelHeaderProps {
 export function PanelHeader({ title, actions }: PanelHeaderProps): JSX.Element {
   return (
     <header className="panel-header">
-      <span className="panel-header__title">{title}</span>
+      {title && <span className="panel-header__title">{title}</span>}
       {actions && <div className="panel-header__actions">{actions}</div>}
     </header>
   )

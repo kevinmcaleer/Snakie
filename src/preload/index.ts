@@ -822,6 +822,27 @@ const find = {
 }
 
 /**
+ * Detached CONSOLE API. The bottom REPL can pop out into its own native window
+ * (`console.html`); the docked terminal stays mounted (hidden) so its scrollback
+ * survives a re-dock. The popped-out window renders a fresh terminal fed by the
+ * relayed device stream. Mirrors the `find` window relay: `open`/`close` drive the
+ * OS window; `onClosed` (in the MAIN window) fires when it closes so the UI
+ * re-docks. Named `consoleApi` to avoid shadowing the global `console`.
+ */
+const consoleApi = {
+  /** Open (or focus) the detached console window. */
+  open: (): Promise<void> => ipcRenderer.invoke('console:open'),
+  /** Close the console window (Redock; no-op if not open). Fire-and-forget. */
+  close: (): void => ipcRenderer.send('console:close'),
+  /** Subscribe (in the MAIN window) to the console window closing. Returns unsubscribe. */
+  onClosed: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('console:closed', listener)
+    return () => ipcRenderer.removeListener('console:closed', listener)
+  }
+}
+
+/**
  * Result of a parts write (save/delete/install/createLibrary). Mirrors the
  * main process `WriteResult` — never rejects, so the UI shows errors inline.
  */
@@ -975,6 +996,8 @@ const api = {
   instruments,
   /** Find & Replace window: native window ↔ main editor find/replace relay. */
   find,
+  /** Detached console window: pop the bottom REPL out into its own OS window. */
+  console: consoleApi,
   /** Parts Library + Part Editor layer: on-disk parts + community registry. */
   parts,
   /** Robot definition layer: the project's robot.yml (parts + wiring). */

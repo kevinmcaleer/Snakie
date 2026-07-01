@@ -119,6 +119,11 @@ if (!w.api) {
       onOpen: unsub,
       librarySource: P('')
     },
+    console: {
+      open: P(undefined),
+      close: noop,
+      onClosed: unsub
+    },
     parts: {
       listLibraries: P([]),
       openPartsFolder: P(undefined),

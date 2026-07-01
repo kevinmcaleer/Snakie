@@ -3,6 +3,7 @@ import { isVirtualPort, VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../shar
 import { MicroPythonDevice } from './MicroPythonDevice'
 import { SimulatedDevice } from './SimulatedDevice'
 import { instrumentWindowWebContents } from '../instrumentWindows'
+import { consoleWindowWebContents } from '../consoleWindow'
 import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
@@ -77,6 +78,8 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     const main = getWebContents()
     if (main && !main.isDestroyed()) main.send(channel, payload)
     for (const wc of instrumentWindowWebContents()) wc.send(channel, payload)
+    // The popped-out console window also needs the live stream.
+    for (const wc of consoleWindowWebContents()) wc.send(channel, payload)
   }
   const forward = (dev: SnakieDevice): void => {
     // Send as a Uint8Array; it survives structured clone across IPC.
