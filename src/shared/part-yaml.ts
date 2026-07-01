@@ -21,6 +21,7 @@ import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
+  OnboardLed,
   PartDefinition,
   PartEdge,
   PartFeature,
@@ -274,6 +275,7 @@ export function partToYaml(part: PartDefinition): string {
     features: part.features,
     shapes: part.shapes,
     labels: part.labels,
+    onboardLeds: part.onboardLeds,
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
@@ -421,6 +423,39 @@ export function partFromYaml(text: string): PartDefinition {
       })
       .filter((l): l is PartLabel => l !== null)
     if (labels.length) part.labels = labels
+  }
+  if (Array.isArray(raw.onboardLeds)) {
+    const leds = raw.onboardLeds
+      .map((l): OnboardLed | null => {
+        if (!l || typeof l !== 'object') return null
+        const r = l as Record<string, unknown>
+        const x = num(r.x)
+        const y = num(r.y)
+        if (x === undefined || y === undefined) return null
+        const kind: OnboardLed['kind'] = r.kind === 'rgb' ? 'rgb' : 'single'
+        const led: OnboardLed = { kind, x, y }
+        const label = str(r.label)
+        if (label) led.label = label
+        if (kind === 'single') {
+          const g = num(r.gpio)
+          if (g !== undefined) led.gpio = g
+          const col = str(r.color)
+          if (col) led.color = col
+        } else if (r.rgb && typeof r.rgb === 'object') {
+          const rc = r.rgb as Record<string, unknown>
+          const obj: { r?: number; g?: number; b?: number } = {}
+          const rr = num(rc.r)
+          const gg = num(rc.g)
+          const bb = num(rc.b)
+          if (rr !== undefined) obj.r = rr
+          if (gg !== undefined) obj.g = gg
+          if (bb !== undefined) obj.b = bb
+          if (Object.keys(obj).length) led.rgb = obj
+        }
+        return led
+      })
+      .filter((l): l is OnboardLed => l !== null)
+    if (leds.length) part.onboardLeds = leds
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))

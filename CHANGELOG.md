@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Onboard LEDs (Part Editor).** A new **Onboard LEDs** layer lets you add a
+  **single** indicator LED tied to one GPIO (e.g. the Pico's GP25) or an **RGB**
+  LED whose R/G/B channels are on three GPIOs (e.g. the Tiny 2350's GP18/19/20).
+  They're drawn on the board as a glowing glyph with a `LED · GP25` /
+  `RGB · GP18 GP19 GP20` label, are draggable, and persist in `parts.yml` under
+  `onboardLeds`.
 - **Pin signal designations + GP## labels (Part Editor).** When a pin's capability
   is ticked, a dropdown lets you designate its signal — **I2C** → SDA/SCL, **SPI**
   → RX/CSn/SCK/TX, **UART** → TX/RX, **PWM** → the A/B channel — and the capability

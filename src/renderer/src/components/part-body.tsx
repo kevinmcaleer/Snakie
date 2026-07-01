@@ -10,6 +10,7 @@ import {
   type ResolvedPin
 } from './part-editor.util'
 import type {
+  OnboardLed,
   PartDefinition,
   PartPinCapability,
   PartPinShape,
@@ -530,6 +531,7 @@ export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
   | { type: 'button'; index: number }
+  | { type: 'led'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -622,6 +624,37 @@ export function partButtonGlyph(cx: number, cy: number, size: number, selected =
   )
 }
 
+/**
+ * An onboard indicator LED glyph at (cx, cy): a soft glowing disc (single) or a
+ * red/green/blue cluster (RGB), with a selection ring in the editor. Read-only
+ * everywhere else. `selected` drives the Part Editor highlight.
+ */
+export function onboardLedGlyph(cx: number, cy: number, led: OnboardLed, selected = false): JSX.Element {
+  const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
+  if (led.kind === 'rgb') {
+    const rr = 3.6
+    const off = 3.4
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <circle cx={cx} cy={cy} r={9} fill="#fff" opacity={0.14} />
+        <circle cx={cx} cy={cy - off} r={rr} fill="#ff5555" />
+        <circle cx={cx - off} cy={cy + off * 0.72} r={rr} fill="#54e08a" />
+        <circle cx={cx + off} cy={cy + off * 0.72} r={rr} fill="#5aa0ff" />
+        {ring}
+      </g>
+    )
+  }
+  const color = led.color || '#39d353'
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <circle cx={cx} cy={cy} r={9} fill={color} opacity={0.3} />
+      <circle cx={cx} cy={cy} r={5} fill={color} stroke="#0006" strokeWidth={0.8} />
+      <circle cx={cx - 1.6} cy={cy - 1.6} r={1.5} fill="#fff" opacity={0.85} />
+      {ring}
+    </g>
+  )
+}
+
 /** The static life-like scene of a part, drawn into `box`. */
 export function PartBody({
   part,
@@ -664,6 +697,7 @@ export function PartBody({
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const buttons = part.buttons ?? []
+  const onboardLeds = part.onboardLeds ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
 
@@ -949,6 +983,40 @@ export function PartBody({
                   fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd',
                   transform: uprightRotate(cx, labelY)
                 })}
+            </g>
+          )
+        })}
+
+      {/* Layer 4e: onboard indicator LEDs (single / RGB) — a glowing glyph + a
+          "LED · GP25" / "RGB · GP18 GP19 GP20" silk label. */}
+      {visible.components &&
+        onboardLeds.map((led, i) => {
+          const cx = px(led.x)
+          const cy = py(led.y)
+          const labelY = cy + 18
+          const sel = isSel({ type: 'led', index: i })
+          const gps =
+            led.kind === 'rgb'
+              ? [led.rgb?.r, led.rgb?.g, led.rgb?.b]
+                  .filter((g): g is number => g != null)
+                  .map((g) => `GP${g}`)
+                  .join(' ')
+              : led.gpio != null
+                ? `GP${led.gpio}`
+                : ''
+          const name = led.label || (led.kind === 'rgb' ? 'RGB' : 'LED')
+          const labelText = gps ? `${name} · ${gps}` : name
+          return (
+            <g key={`led${i}`}>
+              {onboardLedGlyph(cx, cy, led, sel)}
+              {styledText({
+                text: labelText,
+                cx,
+                cy: labelY,
+                fontSize: 9,
+                fill: sel ? '#fff' : '#cfd6dd',
+                transform: uprightRotate(cx, labelY)
+              })}
             </g>
           )
         })}

@@ -136,6 +136,27 @@ export interface PartButton {
   y: number
 }
 
+/**
+ * An onboard indicator LED tied to GPIO(s), drawn on the board:
+ *  - `single` — one LED on a single GPIO (e.g. the Pico's onboard LED on GP25).
+ *  - `rgb`    — an RGB LED whose R/G/B channels are on three GPIOs (e.g. the
+ *               Pimoroni Tiny 2350's RGB on GP18/19/20).
+ */
+export interface OnboardLed {
+  kind: 'single' | 'rgb'
+  /** Silk label (defaults to `"LED"` / `"RGB"`). */
+  label?: string
+  /** GPIO driving a `single` LED. */
+  gpio?: number
+  /** R/G/B channel GPIOs for an `rgb` LED. */
+  rgb?: { r?: number; g?: number; b?: number }
+  /** Body colour for a `single` LED (any CSS colour; default green). */
+  color?: string
+  /** Normalised 0..1 position within the board outline. */
+  x: number
+  y: number
+}
+
 /** A vertex of the physical board outline, in normalised 0..1 coords. */
 export interface PolygonPoint {
   x: number
@@ -343,7 +364,9 @@ export interface PartDefinition {
   shapes?: ComponentShape[]
   /** Free-floating text labels placed on the board canvas. */
   labels?: PartLabel[]
-  /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). */
+  /** Onboard indicator LEDs (single or RGB) tied to GPIO(s), drawn on the board. */
+  onboardLeds?: OnboardLed[]
+  /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). Legacy hint. */
   ledLabel?: string
 
   // --- Assets --------------------------------------------------------------

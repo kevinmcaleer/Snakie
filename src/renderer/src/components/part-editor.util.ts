@@ -27,6 +27,7 @@ import {
   type MountingHole,
   type PartDefinition,
   type PartEdge,
+  type OnboardLed,
   type PartFeature,
   type PartHeader,
   type PartLabel,
@@ -827,6 +828,26 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       })
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
+  }
+  if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
+    out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {
+      const kind: OnboardLed['kind'] = l.kind === 'rgb' ? 'rgb' : 'single'
+      const led: OnboardLed = { kind, x: clamp(l.x, 0, 1), y: clamp(l.y, 0, 1) }
+      const label = text(l.label)
+      if (label) led.label = label
+      if (kind === 'single') {
+        if (typeof l.gpio === 'number' && Number.isFinite(l.gpio)) led.gpio = l.gpio
+        const col = text(l.color)
+        if (col) led.color = col
+      } else if (l.rgb && typeof l.rgb === 'object') {
+        const obj: { r?: number; g?: number; b?: number } = {}
+        if (typeof l.rgb.r === 'number' && Number.isFinite(l.rgb.r)) obj.r = l.rgb.r
+        if (typeof l.rgb.g === 'number' && Number.isFinite(l.rgb.g)) obj.g = l.rgb.g
+        if (typeof l.rgb.b === 'number' && Number.isFinite(l.rgb.b)) obj.b = l.rgb.b
+        if (Object.keys(obj).length) led.rgb = obj
+      }
+      return led
+    })
   }
   set('ledLabel', text(part.ledLabel))
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)

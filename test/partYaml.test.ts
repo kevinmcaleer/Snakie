@@ -268,6 +268,33 @@ describe('pin rotation + uart capability round-trip', () => {
   })
 })
 
+describe('onboard LEDs round-trip', () => {
+  it('keeps single + RGB onboard LEDs through normalise + YAML', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      onboardLeds: [
+        { kind: 'single', label: 'LED', gpio: 25, color: '#39d353', x: 0.5, y: 0.2 },
+        { kind: 'rgb', rgb: { r: 18, g: 19, b: 20 }, x: 0.5, y: 0.6 }
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).onboardLeds
+    expect(back).toEqual([
+      { kind: 'single', label: 'LED', gpio: 25, color: '#39d353', x: 0.5, y: 0.2 },
+      { kind: 'rgb', rgb: { r: 18, g: 19, b: 20 }, x: 0.5, y: 0.6 }
+    ])
+  })
+
+  it('drops onboard LEDs missing a position', () => {
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'onboardLeds:\n  - { kind: single, gpio: 25 }\n  - { kind: rgb, x: 0.4, y: 0.4, rgb: { r: 1, g: 2, b: 3 } }\n'
+    const leds = partFromYaml(yaml).onboardLeds
+    expect(leds).toEqual([{ kind: 'rgb', rgb: { r: 1, g: 2, b: 3 }, x: 0.4, y: 0.4 }])
+  })
+})
+
 describe('pin signal designations round-trip', () => {
   it('keeps per-capability signals (SDA/SCL, SPI CSn, UART TX, PWM A) through YAML', () => {
     const part = normalisePart({

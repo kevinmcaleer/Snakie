@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, onboardLedGlyph, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -113,6 +113,7 @@ export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
   | { type: 'button'; index: number }
+  | { type: 'led'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -324,6 +325,7 @@ export function PartCanvas({
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
+  const onboardLeds = part.onboardLeds ?? []
   const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
@@ -456,6 +458,13 @@ export function PartCanvas({
     const sx = presnapped ? nx : snapX(nx)
     const sy = presnapped ? ny : snapY(ny)
     commit({ ...part, buttons: buttons.map((b, i) => (i === index ? { ...b, x: sx, y: sy } : b)) })
+  }
+  /** Move an onboard LED (anywhere on the board; snapped to the grid). */
+  const moveLedTo = (index: number, nx: number, ny: number): void => {
+    commit({
+      ...part,
+      onboardLeds: onboardLeds.map((l, i) => (i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l))
+    })
   }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
     const sx = presnapped ? nx : snapX(nx)
@@ -1254,6 +1263,9 @@ export function PartCanvas({
     if (visible.components && !locked.components)
       for (let i = buttons.length - 1; i >= 0; i--)
         if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
+    if (visible.components && !locked.components)
+      for (let i = onboardLeds.length - 1; i >= 0; i--)
+        if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -1436,6 +1448,9 @@ export function PartCanvas({
     } else if (hit.type === 'button') {
       ox = buttons[hit.index]?.x ?? nx
       oy = buttons[hit.index]?.y ?? ny
+    } else if (hit.type === 'led') {
+      ox = onboardLeds[hit.index]?.x ?? nx
+      oy = onboardLeds[hit.index]?.y ?? ny
     } else if (hit.type === 'shape') {
       ox = shapes[hit.index]?.x ?? nx
       oy = shapes[hit.index]?.y ?? ny
@@ -1611,6 +1626,8 @@ export function PartCanvas({
         const a = alignDrag(x, y, 'button', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
         moveButtonTo(d.sel.index, a.x, a.y, true)
+      } else if (d.sel.type === 'led') {
+        moveLedTo(d.sel.index, x, y)
       } else if (d.sel.type === 'shape') {
         // Smart-align the shape's CENTRE (the stored x/y is a corner for rects /
         // a reference for polygons), then convert the snapped centre back.
@@ -2246,6 +2263,36 @@ export function PartCanvas({
                     fontSize: 9,
                     fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
                   })}
+              </g>
+            )
+          })}
+
+        {/* Layer 4e: onboard indicator LEDs (single / RGB) — glow glyph + label. */}
+        {visible.components &&
+          onboardLeds.map((led, i) => {
+            const cx = px(led.x)
+            const cy = py(led.y)
+            const sel = isSel({ type: 'led', index: i })
+            const gps =
+              led.kind === 'rgb'
+                ? [led.rgb?.r, led.rgb?.g, led.rgb?.b]
+                    .filter((g): g is number => g != null)
+                    .map((g) => `GP${g}`)
+                    .join(' ')
+                : led.gpio != null
+                  ? `GP${led.gpio}`
+                  : ''
+            const name = led.label || (led.kind === 'rgb' ? 'RGB' : 'LED')
+            return (
+              <g key={`led${i}`}>
+                {onboardLedGlyph(cx, cy, led, sel)}
+                {styledText({
+                  text: gps ? `${name} · ${gps}` : name,
+                  cx,
+                  cy: cy + 18,
+                  fontSize: 9,
+                  fill: sel ? '#fff' : '#cfd6dd'
+                })}
               </g>
             )
           })}
