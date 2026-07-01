@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **In-app bug reporting (#206).** A "Report Bug" button in the activity bar (above
+  Help) opens a form — title, description, optional email, and an attach-a-screenshot
+  button that captures the app window — and submits to kevsrobots.com's feedback API,
+  tagged `_SNAKIE_`. It runs in the main process past the CSP and fails gracefully.
+  (The endpoint authenticates the reporter, so landing reports needs a provisioned
+  `SNAKIE_FEEDBACK_TOKEN` — or an anonymous `_SNAKIE_` path — added server-side.)
 - **Part-level update indicator (#155).** When a part's library has a newer
   version available, an update badge now also appears next to the affected parts
   (not just the library header); clicking it updates the library — and so the
