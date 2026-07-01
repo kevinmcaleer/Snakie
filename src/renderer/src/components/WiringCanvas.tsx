@@ -1085,9 +1085,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 if (!s) return null
                 const pins = s.pins.filter((p) => p.primary !== false && p.caps?.length)
                 if (!pins.length) return null
-                // Pins/labels are drawn at the part's bodyScale, so scale the chips
-                // (their outward offset + size) by the same factor around each pin —
-                // otherwise they land on the labels when the part is scaled.
+                // Pass the part's bodyScale as the chips' OFFSET scale so they clear
+                // labels drawn at that scale; the chip SIZE is constant, so a placed
+                // part's chips match the main board's (they were different sizes).
                 const k = s.scale ?? 1
                 // Centre = mean pin position (canvas space) → stagger inside-out.
                 const cx0 = s.x + pins.reduce((a, p) => a + p.anchors[0].x, 0) / pins.length
@@ -1107,9 +1107,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                   return (
                     <g key={p.index} className="wc__caps" style={{ animationDelay: `${delay}ms` }}>
                       <g style={{ opacity: dim ? 0.4 : 1, transition: 'opacity 120ms ease-out' }}>
-                        <g transform={`translate(${px} ${py}) scale(${k}) translate(${-px} ${-py})`}>
-                          {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board')}
-                        </g>
+                        {capabilityChipsAt(px, py, dir, p.caps, p.signals, p.buses, p.name, s.kind === 'board', k)}
                       </g>
                     </g>
                   )

@@ -151,7 +151,10 @@ export function capabilityChipsAt(
   /** The pin's name/label — chips clear PAST it so they don't overlap it. */
   label = '',
   /** True for boxed MCU pins (a number box sits between the pad and the label). */
-  boxed = false
+  boxed = false,
+  /** The part's bodyScale — scales the OUTWARD OFFSET (so chips clear labels drawn
+   *  at that scale) while the chip SIZE stays constant across parts. */
+  offsetScale = 1
 ): JSX.Element | null {
   const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => ({
     color: CAP_BADGE[c].color,
@@ -164,8 +167,9 @@ export function capabilityChipsAt(
   const B = 14 // pin-number box width (matches boxedPinLabel)
   const Gp = 3 // internal gap (matches boxedPinLabel)
   // Distance from the pad out to the first chip: clear the number box (boxed pins)
-  // + the name label so the chips never sit on top of the pin name.
-  const G = (boxed ? 2 * Gp + B : Gp) + label.length * 6.2 + 6
+  // or the plain-label margin (pinLabelLayout ≈ 12) PLUS the name label — then
+  // scale by the part's bodyScale so it matches the label's on-screen extent.
+  const G = ((boxed ? 2 * Gp + B : 12) + label.length * 6.2 + 6) * offsetScale
   const widths = chips.map((b) => b.text.length * 5.4 + 7)
   const stripW = widths.reduce((a, w) => a + w, 0) + cg * Math.max(0, chips.length - 1)
   let acc = 0
