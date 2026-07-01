@@ -1629,34 +1629,34 @@ function SelectionInspector({
               ))}
             </div>
           )}
-          {/* Bus/channel number + signal per ticked capability (I2C0 SDA, SPI1 SCK,
-              UART0 TX, ADC2, PWM A, …). */}
+          {/* Bus/channel number + signal per ticked capability — ONE ROW EACH so
+              the labels + dropdowns don't clash (I2C0 SDA, SPI1 SCK, ADC2, PWM A). */}
           {pin.type === 'io' &&
             PIN_CAP_CONFIG.some((o) => pin.capabilities?.includes(o.cap)) && (
-              <div className="pe__row pe__signals">
-                {PIN_CAP_CONFIG.filter((o) => pin.capabilities?.includes(o.cap)).flatMap((o) => {
-                  const controls: JSX.Element[] = []
-                  if (o.bus) {
-                    const bk = o.cap as keyof PartPinBuses
-                    controls.push(
-                      <label key={`${o.cap}-bus`} className="pe__field">
+              <div className="pe__signals">
+                {PIN_CAP_CONFIG.filter((o) => pin.capabilities?.includes(o.cap)).map((o) => (
+                  <div key={o.cap} className="pe__row">
+                    {o.bus && (
+                      <label className="pe__field">
                         <span>
                           {o.label} {o.bus}
                         </span>
                         <input
                           type="number"
-                          value={pin.buses?.[bk] ?? ''}
-                          onChange={(e) => setBus(bk, e.target.value === '' ? undefined : Number(e.target.value))}
+                          value={pin.buses?.[o.cap as keyof PartPinBuses] ?? ''}
+                          onChange={(e) =>
+                            setBus(o.cap as keyof PartPinBuses, e.target.value === '' ? undefined : Number(e.target.value))
+                          }
                         />
                       </label>
-                    )
-                  }
-                  if (o.signals) {
-                    const sk = o.cap as keyof PartPinSignals
-                    controls.push(
-                      <label key={`${o.cap}-sig`} className="pe__field">
+                    )}
+                    {o.signals && (
+                      <label className="pe__field">
                         <span>{o.label} signal</span>
-                        <select value={pin.signals?.[sk] ?? ''} onChange={(e) => setSignal(sk, e.target.value)}>
+                        <select
+                          value={pin.signals?.[o.cap as keyof PartPinSignals] ?? ''}
+                          onChange={(e) => setSignal(o.cap as keyof PartPinSignals, e.target.value)}
+                        >
                           <option value="">—</option>
                           {o.signals.map((v) => (
                             <option key={v} value={v}>
@@ -1665,10 +1665,9 @@ function SelectionInspector({
                           ))}
                         </select>
                       </label>
-                    )
-                  }
-                  return controls
-                })}
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           <label className="pe__field">

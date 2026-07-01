@@ -208,9 +208,11 @@ export function castellationGeom(
   nx: number,
   rotationDeg?: number
 ): { hR: number; half: number; ox: number; oy: number; ex: number; ey: number } {
-  const hR = size * 0.28 // hole radius
-  const half = hR + 2.5 // pad half-thickness (perpendicular to the run)
-  const ext = size * 0.95 // distance from the main hole out to the edge half-hole
+  // Chunkier than a header pad — a real castellation is ≈2.5mm (run) × 1.7mm
+  // (along the edge); these keep that ~1.47 aspect while reading a bit larger.
+  const hR = size * 0.26 // hole radius
+  const half = hR + 3.6 // pad half-thickness (perpendicular to the run) → ~2·half tall
+  const ext = size * 1.06 // distance from the main hole out to the edge half-hole
   let ox: number
   let oy: number
   if (rotationDeg !== undefined) {
@@ -239,28 +241,53 @@ export function castellatedPad(
 ): JSX.Element {
   const GOLD = '#f0ce5c'
   const { hR, half, ox, oy, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
-  let rx2: number
-  let ry2: number
-  let rw: number
-  let rh: number
-  if (ox !== 0) {
-    const inner = cx - ox * half
-    rx2 = Math.min(inner, ex)
-    rw = Math.abs(ex - inner)
-    ry2 = cy - half
-    rh = 2 * half
-  } else {
-    const inner = cy - oy * half
-    ry2 = Math.min(inner, ey)
-    rh = Math.abs(ey - inner)
-    rx2 = cx - half
-    rw = 2 * half
-  }
-  return (
+  const holes = (
     <>
-      <rect x={rx2} y={ry2} width={rw} height={rh} rx={isGnd ? 2 : half} fill={GOLD} stroke={stroke} strokeWidth={sw} />
       <circle cx={cx} cy={cy} r={hR} fill="var(--bc-mat, #0c0f12)" />
       <circle cx={ex} cy={ey} r={hR} fill="var(--bc-mat, #0c0f12)" />
+    </>
+  )
+  if (isGnd) {
+    // GND: a square pad — sharp corners all round.
+    let rx2: number
+    let ry2: number
+    let rw: number
+    let rh: number
+    if (ox !== 0) {
+      const inner = cx - ox * half
+      rx2 = Math.min(inner, ex)
+      rw = Math.abs(ex - inner)
+      ry2 = cy - half
+      rh = 2 * half
+    } else {
+      const inner = cy - oy * half
+      ry2 = Math.min(inner, ey)
+      rh = Math.abs(ey - inner)
+      rx2 = cx - half
+      rw = 2 * half
+    }
+    return (
+      <>
+        <rect x={rx2} y={ry2} width={rw} height={rh} fill={GOLD} stroke={stroke} strokeWidth={sw} />
+        {holes}
+      </>
+    )
+  }
+  // Signal/power: a half-stadium — rounded on the INNER end (around the main hole),
+  // FLAT with SHARP corners on the castellated (board-edge) end. `n` is the pad's
+  // perpendicular (the run direction rotated +90°); the inner semicircle bulges
+  // inward (−d) with a consistent sweep of 0.
+  const nX = -oy
+  const nY = ox
+  const oT = `${ex - half * nX} ${ey - half * nY}`
+  const iT = `${cx - half * nX} ${cy - half * nY}`
+  const iB = `${cx + half * nX} ${cy + half * nY}`
+  const oB = `${ex + half * nX} ${ey + half * nY}`
+  const d = `M ${oT} L ${iT} A ${half} ${half} 0 0 0 ${iB} L ${oB} Z`
+  return (
+    <>
+      <path d={d} fill={GOLD} stroke={stroke} strokeWidth={sw} />
+      {holes}
     </>
   )
 }

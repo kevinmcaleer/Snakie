@@ -39,6 +39,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   only on hover, so a board's signals are readable at a glance.
 
 ### Changed
+- **Pin capability controls stack one row per capability.** The bus + signal
+  fields for each ticked capability now sit on their own row (instead of one
+  crowded line), so the labels and dropdowns no longer clash.
+- **Bigger, sharper castellated pads.** Castellated pads render a touch larger at
+  the real ~2.5 × 1.7 mm aspect, with **sharp corners on the board-edge (castellated)
+  end** and a rounded inner end.
 - **Two themes: Light & Dark.** The default textured skin is now called **Light**
   and the old flat light theme has been removed (any saved "light" preference maps
   to the new Light). The theme picker moved off the toolbar into **Settings →
