@@ -4,6 +4,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView } from './ActivityBar'
+import { useBugReport } from './BugReportModal'
 import { PanelHeader } from './PanelHeader'
 import { FilePanel } from './FilePanel'
 import { GitPanel } from './GitPanel'
@@ -660,6 +661,9 @@ export function AppShell(): JSX.Element {
     'files'
   )
 
+  // Open the Bug Report modal from the activity bar (#206).
+  const openBugReport = useBugReport()
+
   // Settings dialog (issues #80/#81, tabbed in #83/#84) — opened from the
   // toolbar gear (Editor tab) or the chat's ⚙ (Chat tab, via settingsBus).
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -736,6 +740,7 @@ export function AppShell(): JSX.Element {
       <div className="shell__body shell__main">
         <ActivityBar
           active={activityView}
+          onReportBug={openBugReport}
           onSelect={(view) => {
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.

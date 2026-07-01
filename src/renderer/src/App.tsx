@@ -1,5 +1,6 @@
 import { AppShell } from './components/AppShell'
 import { PromptProvider } from './components/PromptModal'
+import { BugReportProvider } from './components/BugReportModal'
 import { UpdateNotifier } from './components/UpdateNotifier'
 import { WorkspaceProvider } from './store/workspace'
 import { DiagnosticsProvider } from './store/diagnostics'
@@ -15,7 +16,9 @@ function App(): JSX.Element {
           <SyncProvider>
             <DiagnosticsProvider>
               <ConsoleProvider>
-                <AppShell />
+                <BugReportProvider>
+                  <AppShell />
+                </BugReportProvider>
                 <UpdateNotifier />
               </ConsoleProvider>
             </DiagnosticsProvider>
