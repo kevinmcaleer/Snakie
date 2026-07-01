@@ -559,6 +559,24 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                               >
                                 <span className="pl__part-name">{part.name}</span>
                               </button>
+                              {/* Part-level update hint (#155): the registry tracks versions per
+                                  library, so when a part's library has an update we flag the part
+                                  too — updating pulls the newest version of this part. */}
+                              {update && (
+                                <button
+                                  type="button"
+                                  className="pl__part-update"
+                                  title={`Update available (v${update.installed ?? '?'} → v${update.available}) — updates this part via its library`}
+                                  aria-label={`Update ${part.name} (via its library)`}
+                                  onClick={() => {
+                                    const entry = (registry ?? []).find((e) => e.id === lib.id)
+                                    if (entry) void install(entry)
+                                    else void loadRegistry().then(() => setShowRegistry(true))
+                                  }}
+                                >
+                                  ⬆
+                                </button>
+                              )}
                             </li>
                           ))}
                         </ul>

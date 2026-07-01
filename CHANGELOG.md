@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Part-level update indicator (#155).** When a part's library has a newer
+  version available, an update badge now also appears next to the affected parts
+  (not just the library header); clicking it updates the library — and so the
+  part — to the latest version.
 - **Resizable mini board / instrument-deck split.** Drag the handle beneath the
   mini board view to give it more or less room versus the instrument deck below
   (double-click the handle to reset). The split is per-session — it always opens
