@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Part Editor: author on-board buttons (#130).** Add push-buttons (BOOT/RESET/…)
+  with a new "Push-button" tool and a "Buttons" layer panel: place, drag (grid-snap
+  + smart-alignment), label and delete them, with full undo/redo. They render as a
+  tactile-switch glyph in the Part Editor and the Board Views. This completes the
+  #130 Part Editor checklist (buttons were the only remaining item).
 - **In-app bug reporting (#206).** A "Report Bug" button in the activity bar (above
   Help) opens a form — title, description, optional email, and an attach-a-screenshot
   button that captures the app window — and submits to kevsrobots.com's feedback API,
