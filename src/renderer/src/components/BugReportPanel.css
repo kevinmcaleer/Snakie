@@ -151,7 +151,9 @@
 }
 
 .bugpanel__status--ok {
-  color: var(--accent);
+  /* Green (success), not brass --accent — semantically right and readable on the
+     light parchment / dark panel in both themes. */
+  color: var(--success);
 }
 
 .bugpanel__actions {
@@ -279,6 +281,13 @@
 .bugpanel__dialog-imgwrap {
   display: flex;
   justify-content: center;
+  /* Don't let flexbox stretch the image: with the default `align-items: stretch`,
+     a tall multi-window composite is squeezed to the (shrunk) wrap height while
+     its width stays 100% — distorting the aspect ratio. Pinning to the top keeps
+     the intrinsic ratio; `min-height: 0` lets the wrap shrink in the column so
+     `overflow: auto` scrolls a tall image instead of squashing it. */
+  align-items: flex-start;
+  min-height: 0;
   overflow: auto;
   padding: 0.6rem;
   background: #0b0d10;
@@ -287,6 +296,7 @@
 .bugpanel__dialog-imgwrap img {
   max-width: 100%;
   height: auto;
+  object-fit: contain;
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
 }

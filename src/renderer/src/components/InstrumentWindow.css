@@ -294,7 +294,9 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  color: #5a5f67;
+  /* Lightened from #5a5f67 — the dock is a fixed near-black island in every
+     theme, so the old dark grey was low-contrast (hard to read) in both. */
+  color: #a7adb6;
   text-transform: uppercase;
 }
 .instr-dock__stack {
@@ -319,7 +321,8 @@
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 0.18em;
-  color: #4a4f57;
+  /* Lightened from #4a4f57 for contrast on the dark dock (see __title). */
+  color: #868c96;
   text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
 }
 /* The icon-only toggles wrap so 13+ instruments stay readable in the narrow dock. */
@@ -344,14 +347,15 @@
   transition: all 0.12s ease;
   background: #15171a;
   border: 1px solid #26282b;
-  color: #4a4f57;
+  /* Lightened from #4a4f57 so the inactive toggle icons read on the dark dock. */
+  color: #868c96;
 }
 .instr-dock__toggle svg {
   flex: none;
 }
 .instr-dock__toggle:hover {
   border-color: #34373c;
-  color: #6b7079;
+  color: #c7cbd1;
 }
 .instr-dock__toggle--active {
   background: rgba(255, 255, 255, 0.04);

@@ -115,7 +115,9 @@
   flex: 0 0 auto;
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  color: var(--accent, #f6a96b);
+  /* Use the theme text colour (not brass --accent, which is low-contrast on the
+     light parchment) so the underlined link reads clearly in both themes. */
+  color: var(--text, #e9edf1);
   background: none;
   border: none;
   cursor: pointer;
