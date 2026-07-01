@@ -427,6 +427,9 @@
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
+  /* Drives `fill: currentColor` when the Part Editor draws the GP## label here;
+     board-view/mini callers pass an explicit inline fill that wins over this. */
+  color: #9aa0a8;
 }
 
 /* Light (skeuomorph) theme, PART EDITOR ONLY: the silk label + pin number sit on
@@ -441,6 +444,10 @@
 
 :root[data-theme='skeuomorph'] .pe .pcv__pin-numbox {
   fill: rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme='skeuomorph'] .pe .pcv__pin-var {
+  color: var(--text-muted);
 }
 
 .pcv__feat-label {

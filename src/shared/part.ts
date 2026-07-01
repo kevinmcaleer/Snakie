@@ -36,6 +36,22 @@ export type PartPinType = 'pwr' | 'gnd' | 'io' | 'other'
  */
 export type PartPinCapability = 'digital' | 'pwm' | 'adc' | 'spi' | 'i2c' | 'uart'
 
+/**
+ * The specific signal a capability pin carries, when the part designates one:
+ *  - **i2c**  → `SDA` or `SCL`
+ *  - **spi**  → `RX` (MISO) / `CSn` (chip-select) / `SCK` / `TX` (MOSI)
+ *  - **uart** → `TX` or `RX`
+ *  - **pwm**  → the `A` or `B` output channel
+ * Only the entries matching the pin's {@link PartPin.capabilities} are meaningful;
+ * authored via the per-capability dropdowns in the pin inspector.
+ */
+export interface PartPinSignals {
+  i2c?: 'SDA' | 'SCL'
+  spi?: 'RX' | 'CSn' | 'SCK' | 'TX'
+  uart?: 'TX' | 'RX'
+  pwm?: 'A' | 'B'
+}
+
 /** How the part is mounted: through-hole vs surface-mount. */
 export type PartPackage = 'THT' | 'SMD'
 
@@ -66,6 +82,9 @@ export interface PartPin {
   type: PartPinType
   /** For `io` pins: what the pin supports. Ignored for non-io pins. */
   capabilities?: PartPinCapability[]
+  /** Per-capability signal designation (e.g. i2c → SDA/SCL, spi → SCK). Only the
+   *  entries for the pin's {@link capabilities} apply. */
+  signals?: PartPinSignals
   /**
    * Whether this pad is a castellated edge pad. Legacy flag — superseded by
    * {@link shape}` === 'castellated'`; still read for backward compatibility.

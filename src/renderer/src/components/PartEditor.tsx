@@ -49,11 +49,21 @@ import type {
   PartPin,
   PartPinCapability,
   PartPinShape,
+  PartPinSignals,
   PartPinType,
   TextAlign
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
 import './PartEditor.css'
+
+/** Per-capability signal choices shown as dropdowns when the capability is ticked
+ *  (i2c → SDA/SCL, spi → RX/CSn/SCK/TX, uart → TX/RX, pwm → A/B channel). */
+const SIGNAL_OPTIONS: { cap: keyof PartPinSignals; label: string; values: string[] }[] = [
+  { cap: 'pwm', label: 'PWM', values: ['A', 'B'] },
+  { cap: 'spi', label: 'SPI', values: ['RX', 'CSn', 'SCK', 'TX'] },
+  { cap: 'i2c', label: 'I2C', values: ['SDA', 'SCL'] },
+  { cap: 'uart', label: 'UART', values: ['TX', 'RX'] }
+]
 
 /**
  * PART EDITOR (#130, layered-canvas redesign)
@@ -1448,6 +1458,12 @@ function SelectionInspector({
         const has = pin.capabilities?.includes(c)
         updatePin({ capabilities: has ? (pin.capabilities ?? []).filter((x) => x !== c) : [...(pin.capabilities ?? []), c] })
       }
+      const setSignal = (cap: keyof PartPinSignals, value: string): void => {
+        const signals: Record<string, string> = { ...(pin.signals ?? {}) }
+        if (value) signals[cap] = value
+        else delete signals[cap]
+        updatePin({ signals: Object.keys(signals).length ? (signals as PartPinSignals) : undefined })
+      }
       body = (
         <>
           <div className="pe__row">
@@ -1488,6 +1504,28 @@ function SelectionInspector({
               ))}
             </div>
           )}
+          {/* Signal designation per ticked capability (SDA/SCL, RX/CSn/SCK/TX, …). */}
+          {pin.type === 'io' &&
+            SIGNAL_OPTIONS.some((o) => pin.capabilities?.includes(o.cap)) && (
+              <div className="pe__row pe__signals">
+                {SIGNAL_OPTIONS.filter((o) => pin.capabilities?.includes(o.cap)).map((o) => (
+                  <label key={o.cap} className="pe__field">
+                    <span>{o.label} signal</span>
+                    <select
+                      value={pin.signals?.[o.cap] ?? ''}
+                      onChange={(e) => setSignal(o.cap, e.target.value)}
+                    >
+                      <option value="">—</option>
+                      {o.values.map((v) => (
+                        <option key={v} value={v}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            )}
           <label className="pe__field">
             <span>Pad shape</span>
             <select

@@ -9,7 +9,14 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import type { PartDefinition, PartPinCapability, PartPinShape, PartPinType, TextAlign } from '../../../shared/part'
+import type {
+  PartDefinition,
+  PartPinCapability,
+  PartPinShape,
+  PartPinSignals,
+  PartPinType,
+  TextAlign
+} from '../../../shared/part'
 import './PartCanvas.css'
 
 /** Capability → hover-badge text + pastel colour (#…). Shared by the Part Editor
@@ -27,6 +34,23 @@ export const CAP_BADGE: Record<PartPinCapability, { text: string; color: string 
  *  the implied default for an io pin, so it isn't chipped. */
 export const CAP_CHIP_ORDER: PartPinCapability[] = ['pwm', 'adc', 'spi', 'i2c', 'uart']
 
+/** The chip text for a capability — refined to its designated signal when set
+ *  (i2c → SDA/SCL, spi → SCK/CSn/…, uart → TX/RX, pwm → "PWM A"). */
+function signalChipText(cap: PartPinCapability, signals?: PartPinSignals): string {
+  switch (cap) {
+    case 'pwm':
+      return signals?.pwm ? `PWM ${signals.pwm}` : 'PWM'
+    case 'spi':
+      return signals?.spi ?? 'SPI'
+    case 'i2c':
+      return signals?.i2c ?? 'I2C'
+    case 'uart':
+      return signals?.uart ?? 'UART'
+    default:
+      return CAP_BADGE[cap].text
+  }
+}
+
 /**
  * A compact row of capability chips drawn NEXT TO a pin's label (persistent, not
  * hover-only), in the fixed {@link CAP_CHIP_ORDER} using the shared
@@ -41,9 +65,15 @@ export function capabilityChips(
   cy: number,
   dir: 'left' | 'right' | 'top' | 'bottom',
   label: string,
-  caps: PartPinCapability[] | undefined
+  caps: PartPinCapability[] | undefined,
+  signals?: PartPinSignals,
+  /** Text drawn beyond the label (e.g. the GP## variable); chips clear past it. */
+  variable?: string
 ): JSX.Element | null {
-  const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => CAP_BADGE[c])
+  const chips = CAP_CHIP_ORDER.filter((c) => caps?.includes(c)).map((c) => ({
+    color: CAP_BADGE[c].color,
+    text: signalChipText(c, signals)
+  }))
   if (chips.length === 0) return null
   const B = 14 // pin-number box (matches boxedPinLabel)
   const G = 3 // gap (matches boxedPinLabel)
@@ -52,6 +82,9 @@ export function capabilityChips(
   const fs = 8.5
   const cg = 2 // gap between chips
   const labelW = label.length * 6.2
+  // Space already consumed beyond the label by the variable (GP##), so the chips
+  // sit past it instead of on top of it.
+  const varW = variable ? variable.length * 6.2 + G : 0
   const widths = chips.map((b) => b.text.length * 5.4 + 7)
   const stripW = widths.reduce((a, w) => a + w, 0) + cg * Math.max(0, chips.length - 1)
 
@@ -74,16 +107,16 @@ export function capabilityChips(
   let transform: string
   if (dir === 'right') {
     const lx = box.x + box.w + G + B + G // label start (left-anchored), extends right
-    transform = `translate(${lx + labelW + G}, ${cy})`
+    transform = `translate(${lx + labelW + G + varW}, ${cy})`
   } else if (dir === 'left') {
     const lx = box.x - G - B - G // label end (right-anchored), extends left
-    transform = `translate(${lx - labelW - G - stripW}, ${cy})`
+    transform = `translate(${lx - labelW - G - varW - stripW}, ${cy})`
   } else if (dir === 'top') {
     const labelY = box.y - G - B - G // label baseline; rotated -90 it runs upward
-    transform = `translate(${cx + C}, ${labelY - labelW - G}) rotate(-90)`
+    transform = `translate(${cx + C}, ${labelY - labelW - G - varW}) rotate(-90)`
   } else {
     const labelY = box.y + box.h + G + B + G // rotated +90 it runs downward
-    transform = `translate(${cx - C}, ${labelY + labelW + G}) rotate(90)`
+    transform = `translate(${cx - C}, ${labelY + labelW + G + varW}) rotate(90)`
   }
   return (
     <g className="pcv__caps" style={{ pointerEvents: 'none' }} aria-hidden="true" transform={transform}>

@@ -33,6 +33,7 @@ import {
   type PartPin,
   type PartPinCapability,
   type PartPinShape,
+  type PartPinSignals,
   type PartPinType,
   type PartPackage,
   type PolygonPoint
@@ -210,6 +211,23 @@ function normaliseCaps(caps: PartPinCapability[] | undefined): PartPinCapability
   return out.length ? out : undefined
 }
 
+const SPI_SIGNALS = ['RX', 'CSn', 'SCK', 'TX']
+
+/** Normalise a per-capability signal map: keep only valid values, drop if empty. */
+function normaliseSignals(signals: PartPinSignals | undefined): PartPinSignals | undefined {
+  if (!signals || typeof signals !== 'object') return undefined
+  const out: PartPinSignals = {}
+  const i2c = String(signals.i2c ?? '').toUpperCase()
+  if (i2c === 'SDA' || i2c === 'SCL') out.i2c = i2c
+  const spi = SPI_SIGNALS.find((s) => s.toLowerCase() === String(signals.spi ?? '').toLowerCase())
+  if (spi) out.spi = spi as PartPinSignals['spi']
+  const uart = String(signals.uart ?? '').toUpperCase()
+  if (uart === 'TX' || uart === 'RX') out.uart = uart
+  const pwm = String(signals.pwm ?? '').toUpperCase()
+  if (pwm === 'A' || pwm === 'B') out.pwm = pwm
+  return Object.keys(out).length ? out : undefined
+}
+
 /**
  * Even fractional positions for `n` items along an edge (inset from the ends) —
  * the layout legacy edge-based pins are migrated onto. Mirrors the canvas.
@@ -250,6 +268,8 @@ function normalisePin(pin: PartPin): PartPin {
     if (typeof pin.gpio === 'number' && Number.isFinite(pin.gpio)) out.gpio = pin.gpio
     const caps = normaliseCaps(pin.capabilities)
     if (caps) out.capabilities = caps
+    const signals = normaliseSignals(pin.signals)
+    if (signals) out.signals = signals
   }
   const label = String(pin.label ?? '').trim()
   if (label && label !== name) out.label = label

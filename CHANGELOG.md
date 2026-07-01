@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Pin signal designations + GP## labels (Part Editor).** When a pin's capability
+  is ticked, a dropdown lets you designate its signal — **I2C** → SDA/SCL, **SPI**
+  → RX/CSn/SCK/TX, **UART** → TX/RX, **PWM** → the A/B channel — and the capability
+  chip shows the chosen signal (e.g. `SDA`, `SCK`, `PWM A`). The pin's **GP##**
+  GPIO is now drawn next to it in the editor when the silk label differs from the
+  GPIO. Persisted in `parts.yml` under each pin's `signals`.
 - **Rotate a pin from its mini-toolbar.** Selecting a pin in the Part Editor now
   shows a **Rotate 90°** button in its floating mini-toolbar (next to Duplicate),
   so you can spin a pin — its silk label and, on castellated pads, the outward

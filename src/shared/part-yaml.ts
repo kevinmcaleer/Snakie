@@ -30,6 +30,7 @@ import type {
   PartPin,
   PartPinCapability,
   PartPinShape,
+  PartPinSignals,
   PartPinType,
   SchematicPin,
   TextAlign
@@ -37,6 +38,24 @@ import type {
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
 const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
+const SPI_SIGNALS = ['RX', 'CSn', 'SCK', 'TX']
+
+/** Coerce a raw `signals` map from YAML into a clean {@link PartPinSignals}. */
+function coerceSignals(raw: unknown): PartPinSignals | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const out: PartPinSignals = {}
+  const i2c = String(r.i2c ?? '').toUpperCase()
+  if (i2c === 'SDA' || i2c === 'SCL') out.i2c = i2c
+  const spi = String(r.spi ?? '')
+  const spiMatch = SPI_SIGNALS.find((s) => s.toLowerCase() === spi.toLowerCase())
+  if (spiMatch) out.spi = spiMatch as PartPinSignals['spi']
+  const uart = String(r.uart ?? '').toUpperCase()
+  if (uart === 'TX' || uart === 'RX') out.uart = uart
+  const pwm = String(r.pwm ?? '').toUpperCase()
+  if (pwm === 'A' || pwm === 'B') out.pwm = pwm
+  return Object.keys(out).length ? out : undefined
+}
 const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
 const SHAPE_KINDS: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
 const EDGES = ['left', 'right', 'top', 'bottom'] as const
@@ -105,6 +124,8 @@ function coercePin(raw: unknown): PartPin | null {
         .filter((c): c is PartPinCapability => CAPABILITIES.includes(c as PartPinCapability))
       if (caps.length) pin.capabilities = caps
     }
+    const signals = coerceSignals(r.signals)
+    if (signals) pin.signals = signals
   }
   const label = str(r.label)
   if (label && label !== name) pin.label = label
@@ -213,6 +234,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.number !== undefined) out.number = p.number
   if (p.type === 'io' && p.gpio !== undefined) out.gpio = p.gpio
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
+  if (p.type === 'io' && p.signals && Object.keys(p.signals).length) out.signals = p.signals
   if (p.label && p.label !== p.name) out.label = p.label
   if (p.castellated) out.castellated = true
   if (p.shape) out.shape = p.shape

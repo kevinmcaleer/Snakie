@@ -1970,6 +1970,13 @@ export function PartCanvas({
             const stroke = sel ? '#fff' : '#0008'
             const sw = sel ? 3 : 1
             const shape = pinShapeOf(rp.pin)
+            const pinLabel = rp.pin.label || rp.pin.name
+            // Show the GP## GPIO next to the pin when the silk label differs from
+            // it (so the actual GPIO is always visible in the editor).
+            const gpioVar =
+              rp.pin.type === 'io' && rp.pin.gpio != null && pinLabel !== `GP${rp.pin.gpio}`
+                ? `GP${rp.pin.gpio}`
+                : undefined
             let pad: JSX.Element
             if (shape === 'round') {
               pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
@@ -2004,19 +2011,22 @@ export function PartCanvas({
                   cy,
                   pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
                   String(rp.pin.number ?? rp.pin.gpio ?? ''),
-                  rp.pin.label || rp.pin.name,
-                  undefined,
-                  '#cfd6dd'
+                  pinLabel,
+                  gpioVar,
+                  'currentColor'
                 )}
                 {/* Persistent capability chips next to the label (#…): PWM, ADC,
-                    SPI, I2C, UART, in that order, in the shared pastel colours. */}
+                    SPI, I2C, UART, in that order — refined to the pin's signal
+                    (SDA/SCL, SCK, …) — clearing past the GP## label. */}
                 {capabilityChips(
                   box,
                   cx,
                   cy,
                   pinOutwardDir(rp.pin.rotation, rp.x, rp.y),
-                  rp.pin.label || rp.pin.name,
-                  rp.pin.capabilities
+                  pinLabel,
+                  rp.pin.capabilities,
+                  rp.pin.signals,
+                  gpioVar
                 )}
               </g>
             )

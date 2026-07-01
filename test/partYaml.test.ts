@@ -268,6 +268,39 @@ describe('pin rotation + uart capability round-trip', () => {
   })
 })
 
+describe('pin signal designations round-trip', () => {
+  it('keeps per-capability signals (SDA/SCL, SPI CSn, UART TX, PWM A) through YAML', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'GP4', type: 'io', gpio: 4, capabilities: ['i2c', 'pwm'], signals: { i2c: 'SDA', pwm: 'A' } },
+            { name: 'GP1', type: 'io', gpio: 1, capabilities: ['spi', 'uart'], signals: { spi: 'CSn', uart: 'TX' } }
+          ]
+        }
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).headers[0].pins
+    expect(back[0].signals).toEqual({ i2c: 'SDA', pwm: 'A' })
+    expect(back[1].signals).toEqual({ spi: 'CSn', uart: 'TX' })
+  })
+
+  it('coerces case + drops signals on non-io pins and empty maps', () => {
+    // Case-insensitive read (spi CSn is mixed-case canonical); junk dropped.
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n' +
+      '      - name: GP2\n        type: io\n        gpio: 2\n        capabilities: [i2c, spi]\n' +
+      '        signals: { i2c: sda, spi: csn, bogus: x }\n' +
+      '      - name: VCC\n        type: pwr\n        signals: { i2c: SDA }\n'
+    const pins = partFromYaml(yaml).headers[0].pins
+    expect(pins[0].signals).toEqual({ i2c: 'SDA', spi: 'CSn' })
+    expect(pins[1].signals).toBeUndefined() // non-io pins carry no signals
+  })
+})
+
 describe('component z-order + layer visibility round-trip', () => {
   it('round-trips component z and persisted layer visibility', () => {
     const part = normalisePart({
