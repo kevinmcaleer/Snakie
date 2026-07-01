@@ -22,6 +22,7 @@ import type {
   ComponentShapeKind,
   DriverFile,
   OnboardLed,
+  PartConnector,
   PartDefinition,
   PartEdge,
   PartFeature,
@@ -292,6 +293,13 @@ export function partToYaml(part: PartDefinition): string {
     shapes: part.shapes,
     labels: part.labels,
     onboardLeds: part.onboardLeds,
+    connectors: part.connectors?.map((c) => ({
+      kind: c.kind,
+      label: c.label,
+      x: c.x,
+      y: c.y,
+      pins: c.pins.map(pinToObj)
+    })),
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
@@ -480,6 +488,26 @@ export function partFromYaml(text: string): PartDefinition {
       })
       .filter((l): l is OnboardLed => l !== null)
     if (leds.length) part.onboardLeds = leds
+  }
+  if (Array.isArray(raw.connectors)) {
+    const connectors = raw.connectors
+      .map((c): PartConnector | null => {
+        if (!c || typeof c !== 'object') return null
+        const r = c as Record<string, unknown>
+        const x = num(r.x)
+        const y = num(r.y)
+        if (x === undefined || y === undefined) return null
+        const kind: PartConnector['kind'] = r.kind === 'jst' ? 'jst' : 'qwiic'
+        const pins = Array.isArray(r.pins)
+          ? r.pins.map(coercePin).filter((p): p is PartPin => p !== null)
+          : []
+        const conn: PartConnector = { kind, x, y, pins }
+        const label = str(r.label)
+        if (label) conn.label = label
+        return conn
+      })
+      .filter((c): c is PartConnector => c !== null)
+    if (connectors.length) part.connectors = connectors
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))

@@ -253,6 +253,13 @@
   font-size: 0.72rem;
 }
 
+/* Connector inspector: a faint rule between each contact's editor block. */
+.pe__conn-pin + .pe__conn-pin {
+  border-top: 1px solid var(--border);
+  padding-top: 0.4rem;
+  margin-top: 0.2rem;
+}
+
 .pe__field > span {
   color: var(--text-muted);
   font-weight: 600;

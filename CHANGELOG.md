@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Connectors — QWIIC / STEMMA QT / JST (Part Editor).** A new **Connectors**
+  layer adds a **QWIIC** / STEMMA QT socket (a 4-pin JST-SH I2C connector,
+  prefilled GND · 3V3 · SDA · SCL) or a generic **JST** header. Its contacts are
+  **full pins**, so you assign each a **GP##** (+ the I2C bus for SDA/SCL) and the
+  usual type/role in the inspector. It's drawn on the board as a JST housing with a
+  `QWIIC · SDA GP4 · SCL GP5` label, is draggable, and persists in `parts.yml`
+  under `connectors`.
 - **Onboard LEDs, RGB & NeoPixels (Part Editor).** A new **Onboard LEDs** layer
   (in the top panel, right above the inspector) lets you add an indicator with
   **＋ LED**, then pick a **type** and assign GPIO(s): **LED** (one GPIO, e.g. the

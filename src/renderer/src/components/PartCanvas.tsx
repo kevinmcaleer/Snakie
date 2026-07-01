@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, connectorGlyph, connectorLabel, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -114,6 +114,7 @@ export type CanvasSelection =
   | { type: 'hole'; index: number }
   | { type: 'button'; index: number }
   | { type: 'led'; index: number }
+  | { type: 'connector'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -326,6 +327,7 @@ export function PartCanvas({
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
+  const connectors = part.connectors ?? []
   const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
@@ -464,6 +466,13 @@ export function PartCanvas({
     commit({
       ...part,
       onboardLeds: onboardLeds.map((l, i) => (i === index ? { ...l, x: snapX(nx), y: snapY(ny) } : l))
+    })
+  }
+  /** Move a connector (anywhere on the board; snapped to the grid). */
+  const moveConnectorTo = (index: number, nx: number, ny: number): void => {
+    commit({
+      ...part,
+      connectors: connectors.map((c, i) => (i === index ? { ...c, x: snapX(nx), y: snapY(ny) } : c))
     })
   }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
@@ -1266,6 +1275,9 @@ export function PartCanvas({
     if (visible.components && !locked.components)
       for (let i = onboardLeds.length - 1; i >= 0; i--)
         if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
+    if (visible.components && !locked.components)
+      for (let i = connectors.length - 1; i >= 0; i--)
+        if (dist(nx, ny, connectors[i].x, connectors[i].y) < HIT) return { type: 'connector', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -1451,6 +1463,9 @@ export function PartCanvas({
     } else if (hit.type === 'led') {
       ox = onboardLeds[hit.index]?.x ?? nx
       oy = onboardLeds[hit.index]?.y ?? ny
+    } else if (hit.type === 'connector') {
+      ox = connectors[hit.index]?.x ?? nx
+      oy = connectors[hit.index]?.y ?? ny
     } else if (hit.type === 'shape') {
       ox = shapes[hit.index]?.x ?? nx
       oy = shapes[hit.index]?.y ?? ny
@@ -1628,6 +1643,8 @@ export function PartCanvas({
         moveButtonTo(d.sel.index, a.x, a.y, true)
       } else if (d.sel.type === 'led') {
         moveLedTo(d.sel.index, x, y)
+      } else if (d.sel.type === 'connector') {
+        moveConnectorTo(d.sel.index, x, y)
       } else if (d.sel.type === 'shape') {
         // Smart-align the shape's CENTRE (the stored x/y is a corner for rects /
         // a reference for polygons), then convert the snapped centre back.
@@ -2281,6 +2298,26 @@ export function PartCanvas({
                   text: onboardLedLabel(led),
                   cx,
                   cy: cy + 18,
+                  fontSize: 9,
+                  fill: sel ? '#fff' : '#cfd6dd'
+                })}
+              </g>
+            )
+          })}
+
+        {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — housing + label. */}
+        {visible.components &&
+          connectors.map((conn, i) => {
+            const cx = px(conn.x)
+            const cy = py(conn.y)
+            const sel = isSel({ type: 'connector', index: i })
+            return (
+              <g key={`conn${i}`}>
+                {connectorGlyph(cx, cy, conn, sel)}
+                {styledText({
+                  text: connectorLabel(conn),
+                  cx,
+                  cy: cy + 16,
                   fontSize: 9,
                   fill: sel ? '#fff' : '#cfd6dd'
                 })}

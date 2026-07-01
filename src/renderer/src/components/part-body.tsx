@@ -11,6 +11,7 @@ import {
 } from './part-editor.util'
 import type {
   OnboardLed,
+  PartConnector,
   PartDefinition,
   PartPinBuses,
   PartPinCapability,
@@ -540,6 +541,7 @@ export type CanvasSelection =
   | { type: 'hole'; index: number }
   | { type: 'button'; index: number }
   | { type: 'led'; index: number }
+  | { type: 'connector'; index: number }
   | { type: 'shape'; index: number }
   | { type: 'shape-vertex'; index: number; vi: number }
   | { type: 'label'; index: number }
@@ -694,6 +696,36 @@ export function onboardLedLabel(led: OnboardLed): string {
   return gps ? `${name} · ${gps}` : name
 }
 
+/** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
+ *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight. */
+export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false): JSX.Element {
+  const n = Math.max(2, conn.pins.length || 4)
+  const w = Math.max(18, n * 5 + 6)
+  const h = 11
+  const x0 = cx - w / 2
+  const y0 = cy - h / 2
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      <rect x={x0} y={y0} width={w} height={h} rx={2} fill="#1c1f24" stroke={selected ? '#fff' : '#3a3f46'} strokeWidth={selected ? 2 : 1} />
+      {Array.from({ length: n }, (_, i) => {
+        const cxp = x0 + (w / (n + 1)) * (i + 1)
+        return <rect key={i} x={cxp - 1} y={y0 + 2} width={2} height={h - 5} rx={0.5} fill="#e6c34a" />
+      })}
+    </g>
+  )
+}
+
+/** The silk label for a connector: its name + the GPIOs of its signal pins —
+ *  e.g. `QWIIC · SDA GP4 · SCL GP5`. */
+export function connectorLabel(conn: PartConnector): string {
+  const name = conn.label || (conn.kind === 'qwiic' ? 'QWIIC' : 'JST')
+  const sig = conn.pins
+    .filter((p) => p.type === 'io' && p.gpio != null)
+    .map((p) => `${p.name} GP${p.gpio}`)
+    .join(' · ')
+  return sig ? `${name} · ${sig}` : name
+}
+
 /** The static life-like scene of a part, drawn into `box`. */
 export function PartBody({
   part,
@@ -737,6 +769,7 @@ export function PartBody({
   const labels = part.labels ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
+  const connectors = part.connectors ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
 
@@ -1039,6 +1072,28 @@ export function PartBody({
               {onboardLedGlyph(cx, cy, led, sel)}
               {styledText({
                 text: onboardLedLabel(led),
+                cx,
+                cy: labelY,
+                fontSize: 9,
+                fill: sel ? '#fff' : '#cfd6dd',
+                transform: uprightRotate(cx, labelY)
+              })}
+            </g>
+          )
+        })}
+
+      {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — a JST housing + label. */}
+      {visible.components &&
+        connectors.map((conn, i) => {
+          const cx = px(conn.x)
+          const cy = py(conn.y)
+          const labelY = cy + 16
+          const sel = isSel({ type: 'connector', index: i })
+          return (
+            <g key={`conn${i}`}>
+              {connectorGlyph(cx, cy, conn, sel)}
+              {styledText({
+                text: connectorLabel(conn),
                 cx,
                 cy: labelY,
                 fontSize: 9,

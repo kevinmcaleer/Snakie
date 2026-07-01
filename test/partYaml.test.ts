@@ -312,6 +312,41 @@ describe('onboard LEDs round-trip', () => {
   })
 })
 
+describe('connectors round-trip', () => {
+  it('keeps a QWIIC connector with full pins (SDA/SCL GP## + i2c bus)', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      connectors: [
+        {
+          kind: 'qwiic',
+          label: 'QWIIC',
+          x: 0.5,
+          y: 0.9,
+          pins: [
+            { name: 'GND', type: 'gnd' },
+            { name: '3V3', type: 'pwr' },
+            { name: 'SDA', type: 'io', gpio: 4, capabilities: ['i2c'], signals: { i2c: 'SDA' }, buses: { i2c: 0 } },
+            { name: 'SCL', type: 'io', gpio: 5, capabilities: ['i2c'], signals: { i2c: 'SCL' }, buses: { i2c: 0 } }
+          ]
+        }
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).connectors
+    expect(back).toEqual(part.connectors)
+    expect(back?.[0].pins[2]).toMatchObject({ name: 'SDA', gpio: 4, signals: { i2c: 'SDA' }, buses: { i2c: 0 } })
+  })
+
+  it('drops connectors missing a position', () => {
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'connectors:\n  - { kind: qwiic, pins: [] }\n  - { kind: jst, x: 0.2, y: 0.2, pins: [{ name: A, type: io, gpio: 1 }] }\n'
+    const conns = partFromYaml(yaml).connectors
+    expect(conns).toEqual([{ kind: 'jst', x: 0.2, y: 0.2, pins: [{ name: 'A', type: 'io', gpio: 1 }] }])
+  })
+})
+
 describe('pin signal designations round-trip', () => {
   it('keeps per-capability signals (SDA/SCL, SPI CSn, UART TX, PWM A) through YAML', () => {
     const part = normalisePart({

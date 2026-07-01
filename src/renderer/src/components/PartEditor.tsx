@@ -43,6 +43,7 @@ import type {
   MountingHole,
   OnboardLed,
   PartButton,
+  PartConnector,
   PartDefinition,
   PartHeader,
   PartLabel,
@@ -75,6 +76,29 @@ const PIN_CAP_CONFIG: {
   { cap: 'i2c', label: 'I2C', bus: 'bus', signals: ['SDA', 'SCL'] },
   { cap: 'uart', label: 'UART', bus: 'bus', signals: ['TX', 'RX'] }
 ]
+
+/** Default contacts for a new connector. QWIIC / STEMMA QT is a 4-pin JST-SH I2C
+ *  socket in the order GND · 3V3 · SDA · SCL (SDA/SCL preset as i2c pins so you
+ *  just assign their GP## + bus); a generic JST starts as four editable io pins. */
+const QWIIC_PINS: PartPin[] = [
+  { name: 'GND', type: 'gnd' },
+  { name: '3V3', type: 'pwr' },
+  { name: 'SDA', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SDA' } },
+  { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } }
+]
+const JST_PINS: PartPin[] = [
+  { name: 'PIN1', type: 'io' },
+  { name: 'PIN2', type: 'io' },
+  { name: 'PIN3', type: 'io' },
+  { name: 'PIN4', type: 'io' }
+]
+/** Deep-clone connector prefill pins so connectors don't share nested refs. */
+const cloneConnPins = (pins: PartPin[]): PartPin[] =>
+  pins.map((p) => ({
+    ...p,
+    capabilities: p.capabilities ? [...p.capabilities] : undefined,
+    signals: p.signals ? { ...p.signals } : undefined
+  }))
 
 /**
  * PART EDITOR (#130, layered-canvas redesign)
@@ -249,6 +273,7 @@ function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
       return 'holes'
     case 'button':
     case 'led':
+    case 'connector':
     case 'shape':
     case 'shape-vertex':
     case 'label':
@@ -451,6 +476,8 @@ export function PartEditor({
       patch({ buttons: (part.buttons ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'led') {
       patch({ onboardLeds: (part.onboardLeds ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'connector') {
+      patch({ connectors: (part.connectors ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'shape') {
       patch({ shapes: (part.shapes ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'shape-vertex') {
@@ -854,6 +881,7 @@ function LayersPanel({
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
+  const connectors = part.connectors ?? []
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
   const counts = {
@@ -862,6 +890,7 @@ function LayersPanel({
     holes: holes.length,
     buttons: buttons.length,
     leds: onboardLeds.length,
+    connectors: connectors.length,
     image: part.imageData ? 1 : 0
   }
   /** Append an onboard LED at the board centre and select it (type set in the
@@ -870,6 +899,13 @@ function LayersPanel({
     const next = [...onboardLeds, { kind, x: 0.5, y: 0.5 } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
+  }
+  /** Append a connector (QWIIC/STEMMA QT or generic JST) at the centre + select it. */
+  const addConnector = (kind: 'qwiic' | 'jst'): void => {
+    const pins = cloneConnPins(kind === 'qwiic' ? QWIIC_PINS : JST_PINS)
+    const next = [...connectors, { kind, x: 0.5, y: 0.5, pins }]
+    patch({ connectors: next })
+    setSelection({ type: 'connector', index: next.length - 1 })
   }
   const toggleVis = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
   const eye = (key: keyof LayerVisibility): JSX.Element => (
@@ -1048,6 +1084,36 @@ function LayersPanel({
                     {l.label || (l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED')} {i + 1}
                   </span>
                   <span className="pe__item-sub">{l.kind}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Connectors (QWIIC / STEMMA QT / JST). Their pins are full pins — assign a
+          GP## + I2C bus to SDA/SCL in the inspector — added here then dragged. */}
+      <div className="pe__layer">
+        <div className="pe__layer-head">
+          {caret('connectors')}
+          <span className="pe__layer-name">Connectors</span>
+          <span className="pe__layer-count">{counts.connectors}</span>
+          <button type="button" className="pe__chip pe__chip--add" onClick={() => addConnector('qwiic')} title="Add a QWIIC / STEMMA QT (4-pin JST-SH I2C) connector">
+            ＋QWIIC
+          </button>
+          <button type="button" className="pe__chip pe__chip--add" onClick={() => addConnector('jst')} title="Add a generic JST connector (4 editable pins)">
+            ＋JST
+          </button>
+          {delBtn(selection?.type === 'connector' && !locked.components)}
+        </div>
+        {isOpen('connectors') && (
+          <ul className="pe__layer-list">
+            {connectors.length === 0 && <li className="pe__layer-empty">No connectors yet.</li>}
+            {connectors.map((c, i) => (
+              <li key={`conn${i}`}>
+                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'connector', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'connector', index: i })}>
+                  <span className="pe__item-name">{c.label || (c.kind === 'qwiic' ? 'QWIIC' : 'JST')} {i + 1}</span>
+                  <span className="pe__item-sub">{c.pins.length}-pin</span>
                 </button>
               </li>
             ))}
@@ -1775,6 +1841,81 @@ function SelectionInspector({
           <div className="pe__row">
             {num('x', led.x, (v) => upd({ x: v }))}
             {num('y', led.y, (v) => upd({ y: v }))}
+          </div>
+        </>
+      )
+    }
+  } else if (selection.type === 'connector') {
+    const conn = (part.connectors ?? [])[selection.index]
+    if (conn) {
+      title = conn.kind === 'qwiic' ? 'QWIIC / STEMMA QT' : 'JST connector'
+      const upd = (p: Partial<PartConnector>): void =>
+        patch({ connectors: (part.connectors ?? []).map((c, i) => (i === selection.index ? { ...c, ...p } : c)) })
+      const updPin = (pi: number, p: Partial<PartPin>): void =>
+        upd({ pins: conn.pins.map((pp, j) => (j === pi ? { ...pp, ...p } : pp)) })
+      const updBus = (pi: number, v: number | undefined): void => {
+        const buses: Record<string, number> = { ...(conn.pins[pi].buses ?? {}) }
+        if (v != null && Number.isFinite(v)) buses.i2c = v
+        else delete buses.i2c
+        updPin(pi, { buses: Object.keys(buses).length ? (buses as PartPin['buses']) : undefined })
+      }
+      body = (
+        <>
+          <label className="pe__field">
+            <span>Label</span>
+            <input
+              type="text"
+              value={conn.label ?? ''}
+              onChange={(e) => upd({ label: e.target.value || undefined })}
+              placeholder={conn.kind === 'qwiic' ? 'QWIIC' : 'JST'}
+            />
+          </label>
+          {/* Each contact is a full pin — assign GP## (+ I2C bus for SDA/SCL). */}
+          {conn.pins.map((p, pi) => (
+            <div key={pi} className="pe__conn-pin">
+              <div className="pe__row">
+                <label className="pe__field">
+                  <span>Pin {pi + 1}</span>
+                  <input type="text" value={p.name} onChange={(e) => updPin(pi, { name: e.target.value })} />
+                </label>
+                <label className="pe__field">
+                  <span>Type</span>
+                  <select value={p.type} onChange={(e) => updPin(pi, { type: e.target.value as PartPinType })}>
+                    {PIN_TYPES.map((t) => (
+                      <option key={t} value={t}>
+                        {PIN_TYPE_LABEL[t]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              {p.type === 'io' && (
+                <div className="pe__row">
+                  <label className="pe__field">
+                    <span>GPIO</span>
+                    <input
+                      type="number"
+                      value={p.gpio ?? ''}
+                      onChange={(e) => updPin(pi, { gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    />
+                  </label>
+                  {p.capabilities?.includes('i2c') && (
+                    <label className="pe__field">
+                      <span>I2C bus</span>
+                      <input
+                        type="number"
+                        value={p.buses?.i2c ?? ''}
+                        onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+          <div className="pe__row">
+            {num('x', conn.x, (v) => upd({ x: v }))}
+            {num('y', conn.y, (v) => upd({ y: v }))}
           </div>
         </>
       )

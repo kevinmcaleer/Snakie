@@ -28,6 +28,7 @@ import {
   type PartDefinition,
   type PartEdge,
   type OnboardLed,
+  type PartConnector,
   type PartFeature,
   type PartHeader,
   type PartLabel,
@@ -868,6 +869,20 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         }
       }
       return led
+    })
+  }
+  if (Array.isArray(part.connectors) && part.connectors.length) {
+    out.connectors = part.connectors.map((c): PartConnector => {
+      const kind: PartConnector['kind'] = c.kind === 'jst' ? 'jst' : 'qwiic'
+      const conn: PartConnector = {
+        kind,
+        x: clamp(c.x, 0, 1),
+        y: clamp(c.y, 0, 1),
+        pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
+      }
+      const label = text(c.label)
+      if (label) conn.label = label
+      return conn
     })
   }
   set('ledLabel', text(part.ledLabel))

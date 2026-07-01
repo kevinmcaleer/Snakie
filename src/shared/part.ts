@@ -131,6 +131,24 @@ export interface PartHeader {
   pins: PartPin[]
 }
 
+/**
+ * A physical connector on the board drawn as a placed body — e.g. a **QWIIC** /
+ * **STEMMA QT** 4-pin JST-SH I2C socket, or a generic **jst** header. Its
+ * {@link pins} are full {@link PartPin}s, so a QWIIC's SDA/SCL carry a GPIO +
+ * `i2c` capability/signal/bus just like any other pin, alongside 3V3 / GND.
+ */
+export interface PartConnector {
+  /** `qwiic` (STEMMA QT — a 4-pin JST-SH I2C socket) or a generic `jst` header. */
+  kind: 'qwiic' | 'jst'
+  /** Silk label (defaults to `"QWIIC"` / `"JST"`). */
+  label?: string
+  /** Normalised 0..1 position of the connector body within the outline. */
+  x: number
+  y: number
+  /** The connector's contacts, in order — full pins (GND/3V3/SDA/SCL for QWIIC). */
+  pins: PartPin[]
+}
+
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
   /** Normalised X within the board outline (0 = left edge, 1 = right edge). */
@@ -387,6 +405,8 @@ export interface PartDefinition {
   labels?: PartLabel[]
   /** Onboard indicator LEDs (single or RGB) tied to GPIO(s), drawn on the board. */
   onboardLeds?: OnboardLed[]
+  /** Physical connectors (QWIIC / STEMMA QT / JST) drawn on the board. */
+  connectors?: PartConnector[]
   /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). Legacy hint. */
   ledLabel?: string
 
