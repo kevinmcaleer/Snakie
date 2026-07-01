@@ -61,38 +61,83 @@
   border-color: var(--accent);
 }
 
-.bugpanel__shot {
-  display: flex;
+.bugpanel__hint {
+  margin-top: 0.25rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  opacity: 0.85;
 }
 
+/* Captured-screenshot thumbnail + a clear confirmation that one was taken. */
 .bugpanel__preview {
-  position: relative;
-  display: inline-block;
-  max-width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.bugpanel__preview img {
+.bugpanel__thumb {
   display: block;
-  max-width: 100%;
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
+  object-position: left top;
+  background: var(--bg-sunken);
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
 }
 
-.bugpanel__remove {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 1.3rem;
-  height: 1.3rem;
+.bugpanel__preview-meta {
   display: flex;
   align-items: center;
-  justify-content: center;
-  line-height: 1;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.6);
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.bugpanel__preview-ok {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.bugpanel__preview-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.bugpanel__linkbtn {
+  padding: 0;
+  font-size: 0.68rem;
+  color: var(--accent);
+  background: none;
   border: none;
-  border-radius: 50%;
   cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Required confirmation — the report + screenshot leave the app, so the user
+   must acknowledge responsibility for excluding personal/sensitive info. */
+.bugpanel__disclaimer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.68rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  background: color-mix(in srgb, var(--warn, #d6a23f) 12%, transparent);
+  border: var(--border-w) solid color-mix(in srgb, var(--warn, #d6a23f) 45%, var(--border));
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.bugpanel__disclaimer input {
+  flex: 0 0 auto;
+  margin-top: 0.1rem;
+}
+
+.bugpanel__disclaimer strong {
+  color: var(--text);
 }
 
 .bugpanel__status {

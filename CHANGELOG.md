@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.20.2] - 2026-07-01
+
+### Changed
+- **Bug report screenshot: thumbnail, Snakie-only, and a privacy confirmation
+  (#206).** Attaching a screenshot now shows a **thumbnail** with a "Snakie window
+  captured" confirmation (plus Retake/Remove), and the copy makes clear it
+  captures **only the Snakie window** — never your whole screen or other apps. A
+  **required checkbox** now confirms the report (screenshot + pasted text/code)
+  contains no personal or sensitive information before it can be sent.
+
 ## [0.20.1] - 2026-07-01
 
 ### Changed
@@ -1244,6 +1254,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.20.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.1...v0.19.0
