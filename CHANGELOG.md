@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-07-01
+
+### Added
+- **Pop the console out into its own window.** A pop-out button appears at the
+  console's top-right on hover and detaches the bottom REPL into its own native,
+  resizable OS window — kept live (the device stream is relayed to it) and fully
+  interactive. Close the window or click **Redock** to bring it back; the docked
+  console keeps its scrollback intact throughout.
+
+### Changed
+- **Decluttered console header.** Removed the "Shell" title (frees space on small
+  screens; the actions fill the row) and sized the **Clear** button to match the
+  Connect/Disconnect control.
+
 ## [0.20.3] - 2026-07-01
 
 ### Changed
@@ -1271,6 +1285,7 @@ MicroPython editor.
 - Placeholder app icon; code signing not yet configured.
 
 [Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[0.21.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.0...v0.20.1
