@@ -90,6 +90,26 @@ describe('parsePins', () => {
     expect(conn.constructor).toBe('I2C(id=0, sda=4, scl=5)')
   })
 
+  it('resolves I2C pins passed as variables (sda=sda) back to their Pin numbers', () => {
+    // Very common pattern: pins defined on their own lines then passed by name.
+    // Previously the tokens `sda`/`scl` couldn't resolve and fell back to pad 0,
+    // mislabelling `i2c` on GP0. They must resolve to GP6/GP7.
+    const src = 'sda = Pin(6)\nscl = Pin(7)\nid = 0\ni2c = I2C(id=0, sda=sda, scl=scl)'
+    const conns = parsePins(src)
+    const i2c = conns.find((c) => c.type === 'i2c')
+    expect(i2c?.pins).toEqual(['6', '7'])
+    expect(i2c?.roles).toEqual(['SDA', 'SCL'])
+    expect(i2c?.bus).toBe(0)
+  })
+
+  it('resolves pins from bare-int constants (SDA_PIN = 6) and named LED vars', () => {
+    const i2c = parsePins('SDA_PIN = 6\nSCL_PIN = 7\nbus = I2C(1, sda=SDA_PIN, scl=SCL_PIN)').find((c) => c.type === 'i2c')
+    expect(i2c?.pins).toEqual(['6', '7'])
+    const [led] = parsePins('pin = Pin("LED")\nled = Pin(pin)')
+    // The Pin("LED") line resolves; a var pointing at it resolves to "LED".
+    expect(led.pins).toEqual(['LED'])
+  })
+
   it('reads the I2C bus number from id= (bus 1) without mistaking it for a pin', () => {
     // `id=1` is the hardware bus (Pico I2C1), not a pad — only sda/scl are pins.
     const [conn] = parsePins('i2c = I2C(id=1, sda=2, scl=3)')

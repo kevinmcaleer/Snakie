@@ -288,17 +288,56 @@ export function parseInstrumentPins(source: string): InstrumentPin[] {
 }
 
 /**
+ * Map simple pin-carrying variables to their pin token, so a bus written as
+ * `sda = Pin(6); i2c = I2C(0, sda=sda, scl=scl)` resolves `sda`/`scl` to `6`/`7`
+ * instead of falling back to the first pad. Recognises the common one-line forms:
+ *   - `sda = Pin(6)` / `led = Pin("LED")`  → the Pin's first arg,
+ *   - `SDA_PIN = 6`  (a bare-int constant)  → the number,
+ *   - `led = "LED"`  (a named pin)          → the string.
+ * Only single-level (no `b = a` chains); that covers the overwhelmingly common case.
+ */
+export function buildPinVarMap(source: string): Map<string, string> {
+  const map = new Map<string, string>()
+  for (const rawLine of source.split('\n')) {
+    const hash = rawLine.indexOf('#')
+    const line = (hash >= 0 ? rawLine.slice(0, hash) : rawLine).trim()
+    if (!line) continue
+    const m = line.match(/^([A-Za-z_]\w*)\s*(?::[^=]+)?=\s*(.+)$/)
+    if (!m) continue
+    const name = m[1]
+    const rhs = m[2].trim()
+    const pinM = rhs.match(/^(?:machine\.)?Pin\(\s*("[^"]*"|'[^']*'|[^,)\s]+)/)
+    if (pinM) {
+      map.set(name, unquote(pinM[1]))
+    } else if (/^\d+$/.test(rhs) || /^(?:"[^"]*"|'[^']*')$/.test(rhs)) {
+      map.set(name, unquote(rhs))
+    }
+  }
+  return map
+}
+
+/** Resolve a captured pin token through the variable map (a number / label passes
+ *  through unchanged; an identifier assigned a `Pin(...)` resolves to its pin). */
+export function resolvePinToken(token: string, varMap: Map<string, string>): string {
+  const t = token.trim()
+  if (/^\d+$/.test(t)) return t
+  return varMap.get(t) ?? t
+}
+
+/**
  * Parse `source` into the list of connections it wires up.
  *
  * Each detected constructor yields one {@link UsedPins}. The scan is line-based
  * but tolerant: comments are stripped, and an assignment without a constructor
  * (or a constructor with no pins) is ignored. Order follows source order.
  * Undirected `Pin(n)` direction is inferred from later use of the variable
- * across the full source, defaulting to `output` when ambiguous.
+ * across the full source, defaulting to `output` when ambiguous. Pins passed as
+ * variables (`sda=sda`) are resolved back to their `Pin(...)` via {@link buildPinVarMap}.
  */
 export function parsePins(source: string): UsedPins[] {
   if (!source) return []
   const out: UsedPins[] = []
+  const varMap = buildPinVarMap(source)
 
   for (const rawLine of source.split('\n')) {
     // Drop trailing comments (naive: a `#` not inside a string is rare in pin
@@ -379,6 +418,9 @@ export function parsePins(source: string): UsedPins[] {
     }
 
     if (pins.length === 0) continue
+    // Resolve any pin passed as a variable (`sda=sda`) back to its Pin(...) number
+    // so it lands on the real pad instead of falling back to the first one.
+    pins = pins.map((tok) => resolvePinToken(tok, varMap))
     const entry: UsedPins = { type, pins, variable, constructor: ctorSrc }
     // Only attach bus extras when meaningful, so non-bus connections keep their
     // exact shape (and any role couldn't-be-named entries are dropped).
