@@ -145,6 +145,7 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
   const dragging = useRef(false)
   const onDialDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     if (sweeping) return
+    e.preventDefault() // don't start a text selection of the SVG labels
     dragging.current = true
     e.currentTarget.setPointerCapture(e.pointerId)
     const d = dialAngle(e)

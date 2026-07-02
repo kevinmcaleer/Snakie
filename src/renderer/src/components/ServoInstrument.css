@@ -20,6 +20,13 @@
   height: 150px;
   touch-action: none;
   cursor: grab;
+  /* Dragging the arm must not text-select the tick / angle labels in the SVG. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.servopanel__dial text {
+  user-select: none;
+  -webkit-user-select: none;
 }
 .servopanel__dial:active {
   cursor: grabbing;
