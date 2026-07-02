@@ -17,7 +17,7 @@ import {
   padKey,
   type PadPoint
 } from './board-layout'
-import { PartBody, padPinNumber } from './part-body'
+import { PartBody, padPinNumber, partBodyBox } from './part-body'
 import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
 import { useConsole } from '../store/console'
@@ -231,9 +231,41 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
 
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
+  // The installed libraries, so we can resolve the board's SOURCE part and draw it
+  // with its REAL authored body (image + shapes + pins) — exactly like the Part
+  // Editor / full Board Viewer — instead of the stylised PCB. Reloads on a board
+  // broadcast (a freshly-created board may not be loaded yet).
+  const [libraries, setLibraries] = useState<Parameters<typeof boardPartFor>[0]>([])
+  useEffect(() => {
+    let alive = true
+    const load = (): void => {
+      void window.api.parts
+        .listLibraries()
+        .then((libs) => {
+          if (alive) setLibraries(libs)
+        })
+        .catch(() => undefined)
+    }
+    load()
+    const off = window.api.board.onSelectBoard(() => load())
+    return () => {
+      alive = false
+      off()
+    }
+  }, [])
+  const boardPart = useMemo(() => boardPartFor(libraries, def.id), [libraries, def.id])
+
+  // Size the board box. A part-backed board draws its REAL authored body (image +
+  // pins) via PartBody with `preserveAspectRatio="none"`, so the box MUST take the
+  // PART's real aspect — identical to the full Board Viewer (WiringCanvas). Using
+  // the board-definition aspect here stretched the image + pins vertically whenever
+  // the two aspects differed (visible as overlapping pins on image-backed boards).
   const box = useMemo(
-    () => boardBox(def.aspect, { cx: VW / 2, cy: VH / 2, maxW: VW - 150, maxH: VH - 80 }),
-    [def.aspect]
+    () =>
+      boardPart
+        ? partBodyBox(boardPart, { maxW: VW - 150, maxH: VH - 80, viewW: VW, viewH: VH })
+        : boardBox(def.aspect, { cx: VW / 2, cy: VH / 2, maxW: VW - 150, maxH: VH - 80 }),
+    [boardPart, def.aspect]
   )
   // When the source part placed its pins freely (real x/y on the pads), draw them
   // at those positions — same distribution as the full board view (shared
@@ -258,30 +290,6 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
     }
     return { usedByKey: map, usedList: [...map.values()], ledLit: led }
   }, [source, isPython, def, pads, box])
-
-  // The installed libraries, so we can resolve the board's SOURCE part and draw it
-  // with its REAL authored body (image + shapes + pins) — exactly like the Part
-  // Editor / full Board Viewer — instead of the stylised PCB. Reloads on a board
-  // broadcast (a freshly-created board may not be loaded yet).
-  const [libraries, setLibraries] = useState<Parameters<typeof boardPartFor>[0]>([])
-  useEffect(() => {
-    let alive = true
-    const load = (): void => {
-      void window.api.parts
-        .listLibraries()
-        .then((libs) => {
-          if (alive) setLibraries(libs)
-        })
-        .catch(() => undefined)
-    }
-    load()
-    const off = window.api.board.onSelectBoard(() => load())
-    return () => {
-      alive = false
-      off()
-    }
-  }, [])
-  const boardPart = useMemo(() => boardPartFor(libraries, def.id), [libraries, def.id])
 
   // Used pins → PartBody's pinVariables (keyed by pin flat-index == pad index), so
   // the authored body shows the code variable on the pins the program uses.
