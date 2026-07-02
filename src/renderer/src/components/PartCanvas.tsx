@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, connectorGlyph, connectorLabel, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, connectorGlyph, connectorLabel, connectorSize, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -376,6 +376,9 @@ export function PartCanvas({
   // --- geometry helpers -----------------------------------------------------
   const px = (nx: number): number => box.x + nx * box.w
   const py = (ny: number): number => box.y + ny * box.h
+  // Board px-per-mm (from real dimensions) so physical parts like JST/QWIIC
+  // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
+  const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
   /** A hole's drawn (and collision) radius in viewBox units. */
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
@@ -2394,14 +2397,15 @@ export function PartCanvas({
           connectors.map((conn, i) => {
             const cx = px(conn.x)
             const cy = py(conn.y)
+            const { h: connH } = connectorSize(conn, connPxPerMm)
             const sel = isSel({ type: 'connector', index: i })
             return (
               <g key={`conn${i}`}>
-                {connectorGlyph(cx, cy, conn, sel)}
+                {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
                 {styledText({
                   text: connectorLabel(conn),
                   cx,
-                  cy: cy + 16,
+                  cy: cy + connH / 2 + 11,
                   fontSize: 9,
                   fill: sel ? '#fff' : '#cfd6dd'
                 })}

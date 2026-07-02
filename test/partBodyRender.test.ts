@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PartBody, capabilityChipsAt } from '../src/renderer/src/components/part-body'
+import { PartBody, capabilityChipsAt, connectorSize } from '../src/renderer/src/components/part-body'
 import { blankPart } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -91,5 +91,34 @@ describe('PartBody onboard LEDs + connectors', () => {
       ]
     }
     expect(render(part)).toContain('QWIIC · SDA GP4')
+  })
+})
+
+describe('connectorSize (mm-accurate connector scaling)', () => {
+  const conn4 = { kind: 'qwiic' as const, x: 0.5, y: 0.5, pins: [{ name: 'A', type: 'io' as const }, { name: 'B', type: 'io' as const }, { name: 'C', type: 'io' as const }, { name: 'D', type: 'io' as const }] }
+
+  it('falls back to the legacy fixed size when there are no mm dimensions (pxPerMm = 0)', () => {
+    const s = connectorSize(conn4, 0)
+    // Legacy: w = max(18, n*5+6) = 26, h = 11 for a 4-pin connector.
+    expect(s).toEqual({ n: 4, w: 26, h: 11 })
+  })
+
+  it('scales the housing to the board when given px-per-mm (a QWIIC ≈ 4.5mm wide)', () => {
+    const pxPerMm = 15 // e.g. the Tiny 2350 (18mm wide) drawn ~267px in the editor
+    const s = connectorSize(conn4, pxPerMm)
+    // QWIIC/JST-SH: (n-1)*1.0 + 2*0.75 = 4.5mm wide, 2.9mm deep → to px.
+    expect(s.w).toBeCloseTo(4.5 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(2.9 * pxPerMm, 5)
+    // Much larger than the tiny legacy size — the reported "really small" bug.
+    expect(s.w).toBeGreaterThan(connectorSize(conn4, 0).w * 2)
+  })
+
+  it('a 2.0mm-pitch JST is wider than a 1.0mm-pitch QWIIC with the same pin count', () => {
+    const jst = { ...conn4, kind: 'jst' as const }
+    expect(connectorSize(jst, 15).w).toBeGreaterThan(connectorSize(conn4, 15).w)
+  })
+
+  it('scales linearly with px-per-mm', () => {
+    expect(connectorSize(conn4, 20).w).toBeCloseTo(connectorSize(conn4, 10).w * 2, 5)
   })
 })

@@ -820,20 +820,51 @@ export function onboardLedLabel(led: OnboardLed): string {
   return gps ? `${name} · ${gps}` : name
 }
 
-/** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
- *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight. */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false): JSX.Element {
+/** Real-world footprint of a connector housing, in **mm** — so it can be drawn
+ *  to scale on a board with accurate dimensions. QWIIC / STEMMA QT are the JST-SH
+ *  1.0 mm-pitch family; a plain JST here is the 2.0 mm-pitch PH family. Values are
+ *  the visible top-down housing (a touch larger than the contact span). */
+function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
+  return conn.kind === 'jst'
+    ? { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 }
+    : { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+}
+
+/**
+ * The connector housing's drawn size (px). When `pxPerMm > 0` (the board has real
+ * mm dimensions) it's the true physical footprint scaled to the board — a JST/QWIIC
+ * then looks life-size next to the pins. Without dimensions it falls back to the
+ * legacy fixed size. A small floor keeps it visible when the board is zoomed right out.
+ */
+export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w: number; h: number } {
   const n = Math.max(2, conn.pins.length || 4)
-  const w = Math.max(18, n * 5 + 6)
-  const h = 11
+  if (pxPerMm > 0) {
+    const { pitch, sideMargin, depthMm } = connectorDims(conn)
+    const wMm = (n - 1) * pitch + 2 * sideMargin
+    return { n, w: Math.max(16, wMm * pxPerMm), h: Math.max(8, depthMm * pxPerMm) }
+  }
+  return { n, w: Math.max(18, n * 5 + 6), h: 11 }
+}
+
+/** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
+ *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight.
+ *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size). */
+export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0): JSX.Element {
+  const { n, w, h } = connectorSize(conn, pxPerMm)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
+  // Contacts scale with the housing; a thin gold pin at each pitch position.
+  const contactW = Math.max(1, w * 0.09)
+  const contactInset = h * 0.2
+  // Real JST/QWIIC housings are a plain dark block with SHARP corners and no white
+  // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
+  // the current selection in the Part Editor, never a white border).
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <rect x={x0} y={y0} width={w} height={h} rx={2} fill="#1c1f24" stroke={selected ? '#fff' : '#3a3f46'} strokeWidth={selected ? 2 : 1} />
+      <rect x={x0} y={y0} width={w} height={h} fill="#1c1f24" stroke={selected ? '#4ea1ff' : '#0b0d10'} strokeWidth={selected ? 2 : 1} />
       {Array.from({ length: n }, (_, i) => {
         const cxp = x0 + (w / (n + 1)) * (i + 1)
-        return <rect key={i} x={cxp - 1} y={y0 + 2} width={2} height={h - 5} rx={0.5} fill="#e6c34a" />
+        return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill="#e6c34a" />
       })}
     </g>
   )
@@ -901,6 +932,9 @@ export function PartBody({
 
   const px = (nx: number): number => box.x + nx * box.w
   const py = (ny: number): number => box.y + ny * box.h
+  // Board px-per-mm (from the real dimensions) so physical parts like JST/QWIIC
+  // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
+  const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -1264,11 +1298,12 @@ export function PartBody({
         connectors.map((conn, i) => {
           const cx = px(conn.x)
           const cy = py(conn.y)
-          const labelY = cy + 16
+          const { h: connH } = connectorSize(conn, connPxPerMm)
+          const labelY = cy + connH / 2 + 11
           const sel = isSel({ type: 'connector', index: i })
           return (
             <g key={`conn${i}`}>
-              {connectorGlyph(cx, cy, conn, sel)}
+              {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
               {styledText({
                 text: connectorLabel(conn),
                 cx,
