@@ -11,11 +11,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **SPI ST7789 colour TFTs** alongside the existing I²C SSD1306/LCD. The **SIZE**
   picker gains four ST7789 variants (**240×240**, 240×320, 135×240, 170×320);
   choosing one swaps the wiring to the SPI pins — **SCK · SDA(MOSI) · DC · RST ·
-  CS** (CS can be **tied**) — with an RP2040 SPI-pair invalid-pin warning, a
-  `screen spi …` retarget over the control channel, and a bundled on-device
-  `ST7789` driver (`inst.start(screen_sck=…, screen_mosi=…, screen_dc=…,
-  screen_rst=…, screen_cs=…)`). Mirror + Push work over both buses; a **Run ST7789
-  demo** fallback (`examples/st7789_demo.py`) wires the panel's pins. (Library 0.6.0.)
+  CS** (RST **and** CS can each be **tied** — e.g. the Pimoroni Pico
+  Explorer/Display has no reset GPIO and a hard-wired backlight) — with an RP2040
+  SPI-pair invalid-pin warning, a `screen spi …` retarget over the control channel,
+  and a bundled on-device `ST7789` driver (`inst.start(screen_sck=…,
+  screen_mosi=…, screen_dc=…, screen_rst=…, screen_cs=…)`) that renders
+  **band-by-band** (a small reusable strip, so it never needs a ~150 KB full-screen
+  framebuffer that fails to allocate on a Pico). Mirror + Push work over both buses;
+  a **Run ST7789 demo** fallback (`examples/st7789_demo.py`) wires the panel's pins.
+  (Library 0.6.1.)
 - **Manual pin-label placement (Part Editor).** Drag a pin's label annotation
   (number box + label + capability chips) to a hand-placed spot — e.g. clear of the
   board outline — to declutter dense boards. It's persisted per pin as `labelOffset`

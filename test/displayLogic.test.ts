@@ -416,6 +416,9 @@ describe('screenSpiPayload (retarget an ST7789 SPI TFT)', () => {
   it('passes cs = -1 straight through (a tied chip-select)', () => {
     expect(screenSpiPayload(18, 19, 16, 20, -1, 240, 320)).toBe('spi 18 19 16 20 -1 240 320')
   })
+  it('passes rst = -1 straight through (no reset pin, e.g. Pico Explorer)', () => {
+    expect(screenSpiPayload(18, 19, 16, -1, 17, 240, 240)).toBe('spi 18 19 16 -1 17 240 240')
+  })
   it('rounds + clamps the GPIO pins (cs stays tied for any negative)', () => {
     expect(screenSpiPayload(18.6, 19.2, 16, 20, -5, 135, 240)).toBe('spi 19 19 16 20 -1 135 240')
   })

@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.6.0"
+__version__ = "0.6.1"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -1195,19 +1195,33 @@ _ST7789_OFFSETS = {
 }
 
 
+# Band height (rows) for the ST7789's chunked renderer. A small reusable strip
+# buffer (w × this × 2 bytes ≈ 7.7 KB at 240 px wide) means we NEVER need a
+# contiguous full-screen framebuffer — a 240×320 RGB565 frame is ~150 KB and fails
+# to allocate on a Pico once a program + this library are loaded (issue: the panel
+# looked dead because set_spi swallowed that MemoryError → telemetry-only).
+_ST7789_BAND = 16
+
+
 class _ST7789:
     """A minimal bundled ST7789 SPI TFT driver (no external driver needed).
 
-    Renders into a full-screen ``framebuf`` RGB565 buffer and blits it over SPI, so
-    it exposes the SAME ``fill``/``text``/``show`` interface as :class:`_SSD1306`
-    and :class:`Display` can drive either transparently. Text is the framebuf 8×8
-    font in white on black. Built ONLY when ``framebuf`` + ``machine`` are present
-    (guarded by the caller); a big panel that can't allocate its buffer raises
-    ``MemoryError``, which the caller catches → telemetry-only (no panel).
+    Exposes the SAME ``fill``/``text``/``show`` interface as :class:`_SSD1306` so
+    :class:`Display` drives either transparently — but renders the screen in narrow
+    horizontal BANDS through ONE small reusable ``framebuf`` strip (``w`` ×
+    :data:`_ST7789_BAND` px) instead of a full-screen buffer. The big buffer failed
+    to allocate on a Pico once a user program was loaded, so the panel stayed dark;
+    the band renderer is what makes it actually light up on real hardware.
 
-    NOTE: intentionally illustrative — one colour, one font, per-size offsets for
-    the common panels. Odd variants may need a different offset/rotation; install a
-    dedicated ST7789 driver for full control (the mirror + push still work either way).
+    ``fill``/``text`` just RECORD the intent (a background colour + a list of text
+    ops); ``show`` paints every band from that record. Text is the framebuf 8×8 font
+    in white on black. Built ONLY when ``framebuf`` + ``machine`` are present.
+
+    NOTE: intentionally illustrative — one text colour, one font, per-size offsets
+    for the common panels; ``rst`` may be ``< 0`` for boards with NO reset GPIO
+    (e.g. the Pimoroni Pico Explorer/Display, whose backlight is hard-wired on and
+    whose GP20/21 are I²C). Odd variants may need a different offset/rotation —
+    install a dedicated ST7789 driver for full control (mirror + push work either way).
     """
 
     def __init__(self, spi, dc, cs, rst, w, h):
@@ -1220,10 +1234,13 @@ class _ST7789:
         self._cs = Pin(int(cs), Pin.OUT) if cs is not None and int(cs) >= 0 else None
         self._rst = Pin(int(rst), Pin.OUT) if rst is not None and int(rst) >= 0 else None
         self._xoff, self._yoff = _ST7789_OFFSETS.get((w, h), (0, 0))
-        # RGB565 = 2 bytes/px. A 240×320 buffer is ~150 KB — may MemoryError on a
-        # low-RAM board; the caller catches it and falls back to telemetry-only.
-        self._buf = bytearray(w * h * 2)
-        self._fb = framebuf.FrameBuffer(self._buf, w, h, framebuf.RGB565)
+        self._fill = 0x0000          # recorded background colour
+        self._ops = []               # recorded (text, x, y, colour) draw ops
+        # ONE reusable strip buffer (w × _ST7789_BAND px) — never a full frame.
+        self._bandh = _ST7789_BAND
+        self._buf = bytearray(w * self._bandh * 2)
+        self._fb = framebuf.FrameBuffer(self._buf, w, self._bandh, framebuf.RGB565)
+        self._mv = memoryview(self._buf)
         self._reset()
         self._init()
         self.fill(0)
@@ -1255,7 +1272,7 @@ class _ST7789:
 
     def _init(self):
         import time
-        self._cmd(0x01)              # SWRESET
+        self._cmd(0x01)              # SWRESET (software — works with no reset GPIO)
         time.sleep_ms(150)
         self._cmd(0x11)              # SLPOUT
         time.sleep_ms(120)
@@ -1267,28 +1284,36 @@ class _ST7789:
         time.sleep_ms(50)
 
     def fill(self, c):
-        # Match the mono interface: 0 → black, non-zero → white.
-        self._fb.fill(0xFFFF if c else 0x0000)
+        # Record the background (0 → black, non-zero → white) + clear text ops.
+        self._fill = 0xFFFF if c else 0x0000
+        self._ops = []
 
     def text(self, s, x, y, c=1):
-        self._fb.text(s, x, y, 0xFFFF if c else 0x0000)
+        # Record a text op; show() paints it into whichever band(s) it lands in.
+        self._ops.append((s, x, y, 0xFFFF if c else 0x0000))
 
-    def _set_window(self):
-        x0 = self._xoff
-        y0 = self._yoff
+    def _paint_band(self, top, rows):
+        # Address-window this band (offset for smaller panels), then stream its strip.
         x1 = self._xoff + self.w - 1
-        y1 = self._yoff + self.h - 1
-        self._cmd(0x2A, (x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF))  # CASET
-        self._cmd(0x2B, (y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF))  # RASET
-
-    def show(self):
-        self._set_window()
+        y0 = self._yoff + top
+        y1 = self._yoff + top + rows - 1
+        self._cmd(0x2A, (self._xoff >> 8, self._xoff & 0xFF, x1 >> 8, x1 & 0xFF))  # CASET
+        self._cmd(0x2B, (y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF))                  # RASET
         self._cs_low()
         self._dc.value(0)
         self._spi.write(bytes((0x2C,)))  # RAMWR
         self._dc.value(1)
-        self._spi.write(self._buf)
+        self._spi.write(self._mv[: self.w * rows * 2])
         self._cs_high()
+
+    def show(self):
+        # Paint the whole panel band-by-band from the recorded fill + text ops.
+        for top in range(0, self.h, self._bandh):
+            rows = self._bandh if top + self._bandh <= self.h else self.h - top
+            self._fb.fill(self._fill)
+            for s, x, y, col in self._ops:
+                self._fb.text(s, x, y - top, col)  # framebuf clips out-of-band rows
+            self._paint_band(top, rows)
 
 
 class Display:

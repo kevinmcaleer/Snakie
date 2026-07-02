@@ -498,15 +498,26 @@ export function DisplayInstrument({
                     retargetSpi({ dc: n })
                   }}
                 />
-                <PinField
-                  label="RST"
-                  ariaLabel="SPI RST (reset) pin"
-                  value={rst}
-                  onChange={(n) => {
-                    setRst(n)
-                    retargetSpi({ rst: n })
-                  }}
-                />
+                <label className="i2cd__field">
+                  <span className="i2cd__field-lbl">RST</span>
+                  <select
+                    className="i2cd__select i2cd__select--pin"
+                    value={rst}
+                    onChange={(e) => {
+                      const n = Number(e.currentTarget.value)
+                      setRst(n)
+                      retargetSpi({ rst: n })
+                    }}
+                    aria-label="SPI RST (reset) pin"
+                  >
+                    <option value={-1}>— tied</option>
+                    {GP_PINS.map((p) => (
+                      <option key={p} value={p}>
+                        GP{p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label className="i2cd__field">
                   <span className="i2cd__field-lbl">CS</span>
                   <select

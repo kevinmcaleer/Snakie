@@ -94,6 +94,7 @@ export function displaySpiDemo(
   const g = (n: number, d = 0): number => (Number.isFinite(n) ? Math.round(n) : d)
   const dim = (n: number, d: number): number => (Number.isFinite(n) && n >= 1 ? Math.round(n) : d)
   const csLit = cs < 0 ? 'None' : String(g(cs))
+  const rstLit = rst < 0 ? 'None' : String(g(rst))
   return `"""ST7789 SPI TFT display demo for Snakie.
 
 Open & Run this, then use the Display instrument: pick a TFT size, and its MIRROR
@@ -104,10 +105,11 @@ screen_cs=..., screen_w=..., screen_h=..., background=False) builds the shared
 display on an ST7789 panel and registers the screen receiver WITHOUT a background
 thread; the loop's inst.control.poll() services the IDE's commands on the main core.
 
-Wire an ST7789 TFT: SCK (clock) + MOSI/SDA (data) to the pins below, DC + RST to
-their pins, CS to its pin (or tie it low and set screen_cs=None), VCC to 3V3, GND to
-GND, BL/BLK to 3V3. SCK + MOSI MUST be a valid RP2040 SPI pair (this matches the
-panel's selectors + its invalid-pin warning). Press Stop in Snakie to halt cleanly.
+Wire an ST7789 TFT: SCK (clock) + MOSI/SDA (data) to the pins below, DC to its pin,
+CS + RST to theirs (or, like the Pimoroni Pico Explorer/Display which have no reset
+GPIO and a hard-wired backlight, set screen_rst=None / screen_cs=None), VCC to 3V3,
+GND to GND, BL/BLK to 3V3. SCK + MOSI MUST be a valid RP2040 SPI pair (this matches
+the panel's selectors + its invalid-pin warning). Press Stop in Snakie to halt cleanly.
 """
 import sys
 import time
@@ -120,7 +122,7 @@ import instruments as inst
 SCREEN_SCK = ${g(sck, 18)}   # GPIO the ST7789 SCK/SCL (clock) is wired to
 SCREEN_MOSI = ${g(mosi, 19)}  # GPIO the ST7789 MOSI/SDA (data) is wired to
 SCREEN_DC = ${g(dc, 16)}    # GPIO the ST7789 DC (data/command) is wired to
-SCREEN_RST = ${g(rst, 20)}   # GPIO the ST7789 RST (reset) is wired to
+SCREEN_RST = ${rstLit}   # GPIO the ST7789 RST is wired to (None = no reset pin)
 SCREEN_CS = ${csLit}    # GPIO the ST7789 CS is wired to (None = tied low)
 SCREEN_W = ${dim(w, 240)}    # panel width in px (from the panel's SIZE picker)
 SCREEN_H = ${dim(h, 240)}    # panel height in px

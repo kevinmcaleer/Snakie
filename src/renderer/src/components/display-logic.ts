@@ -372,7 +372,8 @@ function gpio(n: number, fallback = 0): number {
 /**
  * The `<payload>` that (re)targets an ST7789 SPI display:
  * `spi <sck> <mosi> <dc> <rst> <cs> <w> <h>`. Every pin is a whole GPIO number,
- * except `cs`, which may be `-1` to mean **tied** (no chip-select pin driven).
+ * except `rst` and `cs`, which may each be `-1` to mean **tied** (no reset / no
+ * chip-select pin driven) — e.g. the Pimoroni Pico Explorer has no reset GPIO.
  * `w`/`h` (≥1) tell the on-device driver the panel resolution. Pass to
  * `sendControl('screen', screenSpiPayload(...))` → the device sees
  * `SNKCMD screen spi …`.
@@ -386,10 +387,11 @@ export function screenSpiPayload(
   w: number,
   h: number
 ): string {
+  const rstTok = rst < 0 ? -1 : gpio(rst)
   const csTok = cs < 0 ? -1 : gpio(cs)
   const ww = Math.max(1, Math.round(Number.isFinite(w) ? w : 1))
   const hh = Math.max(1, Math.round(Number.isFinite(h) ? h : 1))
-  return `spi ${gpio(sck)} ${gpio(mosi)} ${gpio(dc)} ${gpio(rst)} ${csTok} ${ww} ${hh}`
+  return `spi ${gpio(sck)} ${gpio(mosi)} ${gpio(dc)} ${rstTok} ${csTok} ${ww} ${hh}`
 }
 
 // ---------------------------------------------------------------------------
