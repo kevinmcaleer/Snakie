@@ -321,6 +321,7 @@ export function EncoderInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="A·B · SW"
       docked={docked}
       onClose={onClose}

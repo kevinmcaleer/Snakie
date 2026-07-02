@@ -38,6 +38,20 @@ export function dispatchOpenFind(withReplace: boolean): void {
   )
 }
 
+/** Cross-panel "open help" event: switch the left sidebar to the Help view and
+ *  open a specific help article (fired by an instrument's `?` button). */
+export const HELP_EVENT = 'snakie:open-help'
+
+export interface HelpEventDetail {
+  /** The help article id to open, e.g. `inst-scope`. */
+  articleId: string
+}
+
+/** Dispatch the open-help event: reveal the Help view + open `articleId`. */
+export function dispatchOpenHelp(articleId: string): void {
+  window.dispatchEvent(new CustomEvent<HelpEventDetail>(HELP_EVENT, { detail: { articleId } }))
+}
+
 let current: Editor | null = null
 const listeners = new Set<(editor: Editor | null) => void>()
 

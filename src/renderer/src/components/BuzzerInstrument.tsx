@@ -480,6 +480,7 @@ export function BuzzerInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={source}
       docked={docked}
       onClose={onClose}

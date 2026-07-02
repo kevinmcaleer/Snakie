@@ -1,120 +1,284 @@
 /*
- * Styles co-located with HelpPanel (issue #22).
+ * HELP LIBRARY — TechNet-style document tree (design handoff: help_library).
  *
- * In-app help content for the right pane. Uses the shared design tokens from
- * index.css (colours, radius) so it tracks light/dark themes automatically.
+ * A skeuomorphic parchment contents pane with a brass header plate. Colours are
+ * SELF-CONTAINED (like the Board View islands) so the panel reads identically in
+ * every theme — the design is a warm parchment library regardless of skin.
  */
-
 .help {
-  padding: 0 0 1.5rem;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: #f1ebdd;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(0, 0, 0, 0.02));
+  color: #33301f;
+  font-family: Helvetica, Arial, sans-serif;
+  overflow: hidden;
 }
 
-/* Welcoming hero so Help feels prominent (the "big Help" the feedback asked
- * for). Accent band across the top of the pane. */
-.help__hero {
+/* Brass header plate. */
+.help__plate {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1rem 1.1rem;
-  margin-bottom: 0.5rem;
-  background: linear-gradient(135deg, var(--accent), var(--bg-elevated));
-  color: var(--accent-contrast);
+  gap: 8px;
+  margin: 12px;
+  padding: 7px 10px;
+  background: linear-gradient(180deg, #eccb7c, #c99b3e);
+  border: 1px solid #8a6a26;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 1px 2px rgba(0, 0, 0, 0.4);
 }
-
-.help__hero-mark {
-  font-size: 2rem;
+.help__plate-icon {
+  display: inline-flex;
+  color: #4a3410;
+}
+.help__plate-title {
+  flex: 1 1 auto;
+  font-family: 'Space Grotesk', Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #4a3410;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.help__plate-caption {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: #6a5322;
+}
+.help__back {
+  width: 20px;
+  height: 20px;
+  font-size: 16px;
   line-height: 1;
+  color: #4a3410;
+  background: rgba(255, 255, 255, 0.35);
+  border: 1px solid #8a6a26;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.help__back:hover {
+  background: rgba(255, 255, 255, 0.6);
 }
 
-.help__hero-title {
-  margin: 0;
-  font-size: 1.15rem;
+/* Search field. */
+.help__search {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 12px 8px;
+  padding: 5px 8px;
+  background: #fbf7ec;
+  border: 1px solid #b3a684;
+  border-radius: 4px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.14);
+}
+.help__search-mag {
+  color: #b0a488;
+  font-size: 13px;
+}
+.help__search input {
+  flex: 1 1 auto;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: #4a4636;
+}
+.help__search input::placeholder {
+  color: #9a8f75;
+}
+
+/* --- Tree ------------------------------------------------------------- */
+.help-tree {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 10px;
+}
+.help-tree__children {
+  margin-left: 21px;
+  border-left: 1px dotted #bcae8c;
+}
+.help-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+.help-tree__row:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+.help-tree__row--leaf {
+  min-height: 24px;
+}
+.help-tree__row.is-selected {
+  background: linear-gradient(180deg, #f4dca0, #e9cd82);
+  border: 1px solid #d7bb7e;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  padding: 0 2px;
+}
+.help-tree__stub {
+  flex: 0 0 auto;
+  width: 12px;
+  border-top: 1px dotted #bcae8c;
+}
+.help-tree__toggle {
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1;
+  color: #6a5f45;
+  background: #fbf7ec;
+  border: 1px solid #a89a78;
+  border-radius: 2px;
+  cursor: pointer;
 }
-
-.help__hero-sub {
-  margin: 0.15rem 0 0;
-  font-size: 0.85rem;
-  opacity: 0.92;
+.help-tree__spacer {
+  flex: 0 0 auto;
+  width: 15px;
 }
-
-.help__section {
-  padding: 0.25rem 1rem;
+.help-tree__icon {
+  flex: 0 0 auto;
+  display: inline-flex;
 }
-
-.help__h2 {
-  margin: 1rem 0 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 700;
+.help-tree__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #3a352b;
 }
-
-.help__h3 {
-  margin: 0.9rem 0 0.35rem;
-  font-size: 0.83rem;
+.help-tree__label--section {
+  font-size: 13px;
   font-weight: 600;
-  color: var(--text-muted);
+  color: #33301f;
+}
+.help-tree__label--collection {
+  font-size: 13px;
+  font-weight: 700;
+  color: #33301f;
+}
+.help-tree__label--article {
+  font-size: 12.5px;
+  color: #4a4636;
+  flex: 0 1 auto;
+}
+.help-tree__meta {
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 9px;
+  color: #9a8f75;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.help-tree__count {
+  margin-left: auto;
+  padding: 1px 6px;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 8.5px;
+  color: #1c7a34;
+  background: #e2eede;
+  border: 1px solid #bcd9c2;
+  border-radius: 8px;
+}
+.help-tree__dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #daffd2, #34d45a 58%, #0e7a2c);
+  box-shadow: 0 0 4px rgba(52, 212, 90, 0.7);
+}
+.help-tree__atcursor {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 1px 5px;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 8px;
+  font-weight: 600;
+  color: #0e2233;
+  background: #f0b94a;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
-.help__steps {
-  margin: 0;
-  padding-left: 1.2rem;
+/* --- Legend ----------------------------------------------------------- */
+.help__legend {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 16px 12px 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #cabf9f;
+}
+.help__legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-family: var(--font-mono), 'IBM Plex Mono', monospace;
+  font-size: 9.5px;
+  color: #8a7f62;
 }
 
-.help__steps li {
-  margin-bottom: 0.5rem;
+/* --- Article view ----------------------------------------------------- */
+.help__article {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 12px 12px;
+  padding: 10px 12px;
+  background: #fbf7ec;
+  border: 1px solid #d7c8a5;
+  border-radius: 5px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
 }
-
-.help__list,
-.help__kbds {
-  margin: 0;
-  padding-left: 1.2rem;
+/* Re-tint the shared Markdown renderer for the parchment article surface. */
+.help__article .md {
+  color: #33301f;
 }
-
-.help__list li,
-.help__kbds li {
-  margin-bottom: 0.4rem;
+.help__article .md h2,
+.help__article .md h3 {
+  color: #4a3410;
 }
-
-.help__muted {
-  color: var(--text-muted);
-  margin: 0;
+.help__article .md a {
+  color: #8a5a12;
 }
-
-.help__link {
-  color: var(--accent);
-  word-break: break-all;
+.help__article .md code {
+  color: #5a3d0e;
+  background: #efe6cf;
+  border-color: #d7c8a5;
 }
-
-.help kbd {
-  display: inline-block;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.75rem;
-  font-family: inherit;
-  color: var(--text);
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: 4px;
+.help__article .md pre {
+  background: #2b2721;
+  border-color: #14110c;
+  color: #e8e2d0;
 }
-
-.help code {
-  padding: 0.05rem 0.3rem;
-  font-size: 0.8rem;
-  background: var(--bg-sunken);
-  border-radius: 4px;
+.help__article .md pre code {
+  color: #e8e2d0;
+  background: none;
 }
-
-.help__snippet {
-  margin: 0;
-  padding: 0.6rem 0.75rem;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: 0.78rem;
-  line-height: 1.5;
-  overflow-x: auto;
-  white-space: pre;
-  color: var(--text);
+.help__empty {
+  color: #9a8f75;
+  font-size: 12px;
 }

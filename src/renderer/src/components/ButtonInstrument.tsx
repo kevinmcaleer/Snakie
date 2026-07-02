@@ -73,6 +73,7 @@ export function ButtonInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="DIGITAL IN"
       docked={docked}
       onClose={onClose}

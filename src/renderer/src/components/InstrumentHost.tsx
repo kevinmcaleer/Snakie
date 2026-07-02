@@ -867,6 +867,7 @@ export function InstrumentDockRegion({
         <DockItem>
           <InstrumentWindow
             name="PLOTTER"
+            helpId="inst-plotter"
             source="serial · live"
             docked
             onToggleDock={() => host.toggleSingletonDock('plotter')}

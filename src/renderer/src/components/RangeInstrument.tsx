@@ -311,6 +311,7 @@ export function RangeInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="ToF · ULTRASONIC"
       docked={docked}
       onClose={onClose}

@@ -83,6 +83,7 @@ export function StandaloneInstrument({
     return (
       <InstrumentWindow
         name="PLOTTER"
+        helpId="inst-plotter"
         source="serial · live"
         docked
         onToggleDock={onDock}

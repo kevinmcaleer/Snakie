@@ -164,6 +164,7 @@ export function LedInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="DIGITAL · PWM · RGB"
       docked={docked}
       onClose={onClose}

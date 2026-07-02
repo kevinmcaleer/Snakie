@@ -65,6 +65,7 @@ export function PlaceholderInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={`${groupTag(def.group)} · coming soon`}
       docked={docked}
       onClose={onClose}

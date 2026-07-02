@@ -157,6 +157,7 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={`GP${pin} · 50 Hz`}
       docked={docked}
       onClose={onClose}

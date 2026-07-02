@@ -125,6 +125,7 @@ export function I2cDetectInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={`I2C${sel.bus}`}
       docked={docked}
       onClose={onClose}

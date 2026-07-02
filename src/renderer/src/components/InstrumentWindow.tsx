@@ -7,6 +7,7 @@ import {
   type ReactNode
 } from 'react'
 import { clampOffset, type Offset } from './instrument-host'
+import { dispatchOpenHelp } from './editorBridge'
 import './InstrumentWindow.css'
 
 /**
@@ -53,6 +54,9 @@ export interface InstrumentWindowProps {
   docked?: boolean
   /** Close this instrument window. */
   onClose?: () => void
+  /** Help article id (e.g. `inst-scope`); shows a `?` key that opens the Help
+   *  view on that article. Omit to hide the help key. */
+  helpId?: string
   /**
    * Start a drag from the title bar (pointer-capture). When set, the title bar
    * shows a move cursor and the grip is the drag handle — used by the floating
@@ -77,6 +81,7 @@ export function InstrumentWindow({
   onToggleDock,
   docked = true,
   onClose,
+  helpId,
   onTitlePointerDown,
   onTitlePointerMove,
   onTitlePointerUp,
@@ -103,6 +108,17 @@ export function InstrumentWindow({
           {source}
         </span>
         <span className="instr__keys">
+          {helpId && (
+            <button
+              type="button"
+              className="instr__key instr__help"
+              onClick={() => dispatchOpenHelp(helpId)}
+              title="Open help for this instrument"
+              aria-label="Open help for this instrument"
+            >
+              ?
+            </button>
+          )}
           {live !== undefined && (
             <button
               type="button"

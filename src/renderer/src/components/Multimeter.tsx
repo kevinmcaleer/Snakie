@@ -100,6 +100,7 @@ export function Multimeter({
   return (
     <InstrumentWindow
       name="MULTIMETER"
+      helpId="inst-meter"
       source={`${channel} ${gp}`}
       live={live}
       onToggleLive={onToggleLive}

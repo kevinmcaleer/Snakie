@@ -29,6 +29,7 @@ import { RightPanel } from './RightPanel'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
+import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { PartsImportBanner } from './PartsImportBanner'
 import {
@@ -82,7 +83,13 @@ function LeftRegion({
  * per issue #79 — the activity bar already labels the active view — except for
  * Help, which keeps its label.
  */
-function LeftView({ view }: { view: ActivityView }): JSX.Element {
+function LeftView({
+  view,
+  helpTarget
+}: {
+  view: ActivityView
+  helpTarget?: { id: string; nonce: number }
+}): JSX.Element {
   switch (view) {
     case 'source-control':
       return (
@@ -113,9 +120,11 @@ function LeftView({ view }: { view: ActivityView }): JSX.Element {
         </LeftRegion>
       )
     case 'help':
+      // The Help Library brings its own brass header plate, so drop the region
+      // title bar.
       return (
-        <LeftRegion title="Help">
-          <HelpPanel />
+        <LeftRegion title="Help" showHeader={false}>
+          <HelpPanel target={helpTarget} />
         </LeftRegion>
       )
     case 'files':
@@ -690,6 +699,20 @@ export function AppShell(): JSX.Element {
     return () => window.removeEventListener(OPEN_SETTINGS_EVENT, handler)
   }, [openSettings])
 
+  // An instrument's `?` (or any deep link) reveals the Help view + opens an
+  // article. `nonce` bumps so re-clicking the same instrument re-opens it.
+  const [helpTarget, setHelpTarget] = useState<{ id: string; nonce: number } | undefined>(undefined)
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<HelpEventDetail>).detail
+      if (!detail?.articleId) return
+      setActivityView('help')
+      setHelpTarget((prev) => ({ id: detail.articleId, nonce: (prev?.nonce ?? 0) + 1 }))
+    }
+    window.addEventListener(HELP_EVENT, handler)
+    return () => window.removeEventListener(HELP_EVENT, handler)
+  }, [setActivityView])
+
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
 
@@ -771,7 +794,7 @@ export function AppShell(): JSX.Element {
             onCollapse={() => setFilesCollapsed(true)}
             onExpand={() => setFilesCollapsed(false)}
           >
-            <LeftView view={activityView} />
+            <LeftView view={activityView} helpTarget={helpTarget} />
           </Panel>
 
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />

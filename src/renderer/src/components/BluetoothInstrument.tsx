@@ -127,6 +127,7 @@ export function BluetoothInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="BLE"
       docked={docked}
       onClose={onClose}

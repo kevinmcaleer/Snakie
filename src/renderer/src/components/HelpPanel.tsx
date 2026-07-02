@@ -1,177 +1,278 @@
+import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { Markdown } from './Markdown'
+import {
+  HELP_SECTIONS,
+  DEFAULT_EXPANDED,
+  detectProjectParts,
+  type HelpNode,
+  type ProjectPart
+} from './help-content'
+import { HELP_ARTICLES } from './help-articles'
+import { ShelfIcon, TomeIcon, OpenBookIcon, ClosedBookIcon, PageIcon, CursorIcon } from './help-icons'
+import { subscribeActiveEditor } from './editorBridge'
+import { PARTS_CHANGED_EVENT } from './PartsPanel'
+import { useWorkspace } from '../store/workspace'
+import type { PartLibraryWithParts } from '../../../preload/index.d'
 import './HelpPanel.css'
 
 /**
- * HELP TAB (issue #22)
- * ====================
+ * HELP LIBRARY — a TechNet/`.chm`-style document tree for the Help side view.
  *
- * In-app, self-contained help. This deliberately keeps users IN the app rather
- * than punting them to GitHub (see docs/feedback.md): a welcoming overview, a
- * "getting started" walkthrough, and a MicroPython syntax quick reference with
- * copy-pasteable snippets.
+ * A parchment contents pane: a brass header plate, a search field, then a
+ * collapsible, indented tree of book-family nodes (shelf → tome → open/closed
+ * book → page). Two evergreen sections (Getting Started, Reference) plus the
+ * Instruments articles (opened by each instrument's `?`), and a project-aware
+ * **In This Project** section built from the active file's hardware usage — with
+ * a **live** dot per part and an **at cursor** badge on the part under the caret.
  *
- * External links are rendered as plain anchors. Wiring them to open in the
- * system browser needs preload/IPC changes that are out of scope for this
- * issue, so they are intentionally NOT click-wired here — a later issue can add
- * a `shell.openExternal` bridge and upgrade these into real links.
+ * Selecting a page switches the panel to the rendered article (sanitised markdown
+ * from {@link ./help-articles}, or a placed part's bundled help). `target` (from
+ * an instrument's `?`, via AppShell) opens a specific article.
  */
-export function HelpPanel(): JSX.Element {
+export function HelpPanel({ target }: { target?: { id: string; nonce: number } }): JSX.Element {
+  const { openFiles, activeId } = useWorkspace()
+  const source = openFiles.find((f) => f.id === activeId)?.content ?? ''
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(DEFAULT_EXPANDED))
+  const [selected, setSelected] = useState<string | null>(null)
+  const [query, setQuery] = useState('')
+  const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
+  const [cursorLine, setCursorLine] = useState('')
+
+  // Installed libraries (for the part-aware section); refresh on save.
+  useEffect(() => {
+    const load = (): void => {
+      window.api.parts.listLibraries().then(setLibraries).catch(() => setLibraries([]))
+    }
+    load()
+    window.addEventListener(PARTS_CHANGED_EVENT, load)
+    return () => window.removeEventListener(PARTS_CHANGED_EVENT, load)
+  }, [])
+
+  // Track the editor caret's line text so the part under the cursor is tagged.
+  useEffect(() => {
+    let offCursor = (): void => {}
+    const off = subscribeActiveEditor((editor) => {
+      offCursor()
+      if (!editor) {
+        setCursorLine('')
+        return
+      }
+      const read = (): void => {
+        const pos = editor.getPosition()
+        setCursorLine(pos ? editor.getModel()?.getLineContent(pos.lineNumber) ?? '' : '')
+      }
+      read()
+      const d = editor.onDidChangeCursorPosition(read)
+      offCursor = () => d.dispose()
+    })
+    return () => {
+      offCursor()
+      off()
+    }
+  }, [])
+
+  // Open a specific article when an instrument's `?` (or a deep link) requests it.
+  useEffect(() => {
+    if (target?.id) setSelected(target.id)
+  }, [target?.nonce, target?.id])
+
+  // The project-aware "In This Project" parts + a lookup for their bundled help.
+  const projectParts = useMemo<ProjectPart[]>(
+    () => detectProjectParts(source, libraries, cursorLine),
+    [source, libraries, cursorLine]
+  )
+  const partHelp = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of projectParts) m.set(p.articleId, p.part.helpText ?? '')
+    return m
+  }, [projectParts])
+
+  // The full tree = the dynamic project section (when any) + the evergreen ones.
+  const tree = useMemo<HelpNode[]>(() => {
+    const roots = [...HELP_SECTIONS]
+    if (projectParts.length > 0) {
+      roots.unshift({
+        id: 'in-this-project',
+        kind: 'section',
+        title: 'In This Project',
+        accent: '#2f7c70',
+        meta: `live · ${projectParts.length}`,
+        children: projectParts.map((p) => ({
+          id: p.articleId,
+          kind: 'article' as const,
+          title: p.name,
+          meta: p.meta,
+          accent: p.accent,
+          live: p.live,
+          atCursor: p.atCursor
+        }))
+      })
+    }
+    return roots
+  }, [projectParts])
+
+  // Highlight the at-cursor part (doesn't force its article open).
+  const cursorPart = projectParts.find((p) => p.atCursor)
+
+  const toggle = useCallback((id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const q = query.trim().toLowerCase()
+  const matches = useCallback(
+    (node: HelpNode): boolean => {
+      if (!q) return true
+      if (node.title.toLowerCase().includes(q)) return true
+      return (node.children ?? []).some(matches)
+    },
+    [q]
+  )
+
+  const renderNode = (node: HelpNode, depth: number): JSX.Element | null => {
+    if (q && !matches(node)) return null
+    const isBranch = node.kind !== 'article'
+    const open = isBranch && (q ? true : expanded.has(node.id))
+    const icon =
+      node.kind === 'collection' ? (
+        <TomeIcon />
+      ) : node.kind === 'section' ? (
+        open ? (
+          <OpenBookIcon />
+        ) : (
+          <ClosedBookIcon />
+        )
+      ) : (
+        <PageIcon />
+      )
+    const isSel = selected === node.id || (!selected && cursorPart?.articleId === node.id)
+    const row = (
+      <div
+        className={`help-tree__row ${isBranch ? 'help-tree__row--branch' : 'help-tree__row--leaf'}${
+          isSel ? ' is-selected' : ''
+        }`}
+        role="treeitem"
+        aria-expanded={isBranch ? open : undefined}
+        aria-selected={isSel}
+        onClick={() => (isBranch ? toggle(node.id) : setSelected(node.id))}
+      >
+        {depth > 0 && <span className="help-tree__stub" aria-hidden="true" />}
+        {isBranch ? (
+          <button
+            type="button"
+            className="help-tree__toggle"
+            onClick={(e) => {
+              e.stopPropagation()
+              toggle(node.id)
+            }}
+            aria-label={open ? 'Collapse' : 'Expand'}
+          >
+            {open ? '−' : '+'}
+          </button>
+        ) : (
+          <span className="help-tree__spacer" aria-hidden="true" />
+        )}
+        <span className="help-tree__icon" style={{ color: node.accent }} aria-hidden="true">
+          {icon}
+        </span>
+        <span className={`help-tree__label help-tree__label--${node.kind}`}>{node.title}</span>
+        {node.meta && node.kind === 'article' && <span className="help-tree__meta">{node.meta}</span>}
+        {node.meta && isBranch && <span className="help-tree__count">{node.meta}</span>}
+        {node.live && <span className="help-tree__dot" title="Wired into the running project" aria-hidden="true" />}
+        {node.atCursor && (
+          <span className="help-tree__atcursor" title="Under the cursor">
+            <CursorIcon size={9} /> at cursor
+          </span>
+        )}
+      </div>
+    )
+    if (!isBranch) return <div key={node.id}>{row}</div>
+    return (
+      <div key={node.id}>
+        {row}
+        {open && node.children && (
+          <div className="help-tree__children">{node.children.map((c) => renderNode(c, depth + 1))}</div>
+        )}
+      </div>
+    )
+  }
+
+  // --- Article view -------------------------------------------------------
+  if (selected) {
+    const title = articleTitle(tree, selected) ?? 'Help'
+    const body = HELP_ARTICLES[selected] ?? partHelp.get(selected) ?? ''
+    return (
+      <div className="help">
+        <div className="help__plate">
+          <button type="button" className="help__back" onClick={() => setSelected(null)} title="Back to contents">
+            ‹
+          </button>
+          <span className="help__plate-title">{title}</span>
+          <span className="help__plate-caption">Article</span>
+        </div>
+        <div className="help__article">
+          {body ? <Markdown source={body} /> : <p className="help__empty">No help written for this page yet.</p>}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="help">
-      <header className="help__hero">
-        <span className="help__hero-mark" aria-hidden="true">
-          🐍
+      <div className="help__plate">
+        <span className="help__plate-icon" aria-hidden="true">
+          <ShelfIcon />
         </span>
-        <div>
-          <h1 className="help__hero-title">Welcome to Snakie</h1>
-          <p className="help__hero-sub">
-            A friendly editor for writing and running MicroPython on your board.
-          </p>
-        </div>
-      </header>
-
-      <section className="help__section" aria-labelledby="help-start">
-        <h2 id="help-start" className="help__h2">
-          Getting started
-        </h2>
-        <ol className="help__steps">
-          <li>
-            <strong>Plug in your board</strong> over USB, then click{' '}
-            <em>Connect</em> in the toolbar and pick its serial port.
-          </li>
-          <li>
-            <strong>Write some code</strong> in the editor. Open a file from the
-            left, or hit <kbd>+</kbd> on the tab strip for a fresh buffer.
-          </li>
-          <li>
-            <strong>Run it</strong> with the Run control to execute the current
-            file on the device, and watch the output in the terminal below.
-          </li>
-          <li>
-            <strong>Save &amp; upload</strong> to copy files to the board so they
-            persist (name it <code>main.py</code> to run automatically on boot).
-          </li>
-        </ol>
-      </section>
-
-      <section className="help__section" aria-labelledby="help-tips">
-        <h2 id="help-tips" className="help__h2">
-          Handy shortcuts
-        </h2>
-        <ul className="help__kbds">
-          <li>
-            <kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>W</kbd> — close the active
-            editor tab
-          </li>
-          <li>
-            <kbd>Ctrl</kbd> + <kbd>Tab</kbd> — cycle between open editor tabs
-          </li>
-          <li>
-            Right-click in a file tree for New File / Folder and other actions
-          </li>
-        </ul>
-      </section>
-
-      <section className="help__section" aria-labelledby="help-ref">
-        <h2 id="help-ref" className="help__h2">
-          MicroPython quick reference
-        </h2>
-
-        <h3 className="help__h3">Common statements</h3>
-        <Snippet
-          code={`# Variables, loops, functions
-name = "Snakie"
-for i in range(3):
-    print(i, name)
-
-def add(a, b):
-    return a + b
-
-if add(1, 2) == 3:
-    print("ok")`}
+        <span className="help__plate-title">HELP LIBRARY</span>
+        <span className="help__plate-caption">Contents</span>
+      </div>
+      <div className="help__search">
+        <span className="help__search-mag" aria-hidden="true">
+          ⌕
+        </span>
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search the library…"
+          aria-label="Search the help library"
         />
-
-        <h3 className="help__h3">
-          Blink an LED — <code>machine.Pin</code>
-        </h3>
-        <Snippet
-          code={`from machine import Pin
-from time import sleep
-
-led = Pin("LED", Pin.OUT)   # or Pin(25, Pin.OUT) on a Pico
-
-while True:
-    led.toggle()
-    sleep(0.5)`}
-        />
-
-        <h3 className="help__h3">
-          Timing &amp; delays — <code>time</code>
-        </h3>
-        <Snippet
-          code={`import time
-
-time.sleep(1)          # seconds (float ok)
-time.sleep_ms(250)     # milliseconds
-start = time.ticks_ms()
-# ... do work ...
-elapsed = time.ticks_diff(time.ticks_ms(), start)
-print(elapsed, "ms")`}
-        />
-
-        <h3 className="help__h3">
-          Read an input pin &amp; analog — <code>machine</code>
-        </h3>
-        <Snippet
-          code={`from machine import Pin, ADC
-
-button = Pin(14, Pin.IN, Pin.PULL_UP)
-print("pressed" if button.value() == 0 else "released")
-
-sensor = ADC(Pin(26))           # ADC0 on a Pico
-print(sensor.read_u16())         # 0..65535`}
-        />
-
-        <h3 className="help__h3">REPL tips</h3>
-        <ul className="help__list">
-          <li>
-            The terminal below is a live MicroPython REPL — type Python and press
-            Enter to run it immediately.
-          </li>
-          <li>
-            <kbd>Ctrl</kbd> + <kbd>C</kbd> interrupts a running program (stops an
-            infinite loop).
-          </li>
-          <li>
-            <kbd>Ctrl</kbd> + <kbd>D</kbd> performs a soft reboot, re-running{' '}
-            <code>main.py</code>.
-          </li>
-          <li>
-            Paste a block of code with <kbd>Ctrl</kbd> + <kbd>E</kbd> (paste
-            mode), then <kbd>Ctrl</kbd> + <kbd>D</kbd> to execute it.
-          </li>
-          <li>
-            Call <code>help(&apos;modules&apos;)</code> to list every module
-            available on your board.
-          </li>
-        </ul>
-      </section>
-
-      <section className="help__section" aria-labelledby="help-more">
-        <h2 id="help-more" className="help__h2">
-          Learn more
-        </h2>
-        <p className="help__muted">
-          Official MicroPython docs (opens in your browser):{' '}
-          <a className="help__link" href="https://docs.micropython.org/">
-            docs.micropython.org
-          </a>
-        </p>
-      </section>
+      </div>
+      <div className="help-tree" role="tree" aria-label="Help contents">
+        {tree.map((n) => renderNode(n, 0))}
+      </div>
+      <div className="help__legend" aria-hidden="true">
+        <span className="help__legend-item" style={{ color: '#b8892b' }}>
+          <ShelfIcon size={13} /> library
+        </span>
+        <span className="help__legend-item" style={{ color: '#b58a2e' }}>
+          <TomeIcon size={13} /> collection
+        </span>
+        <span className="help__legend-item" style={{ color: '#37884a' }}>
+          <OpenBookIcon size={13} /> open
+        </span>
+        <span className="help__legend-item" style={{ color: '#8b5fc0' }}>
+          <ClosedBookIcon size={13} /> closed
+        </span>
+        <span className="help__legend-item" style={{ color: '#8a7f62' }}>
+          <PageIcon size={13} /> article
+        </span>
+      </div>
     </div>
   )
 }
 
-/** Read-only code block for reference snippets. */
-function Snippet({ code }: { code: string }): JSX.Element {
-  return <pre className="help__snippet">{code}</pre>
+/** Depth-first search for an article node's title. */
+function articleTitle(nodes: HelpNode[], id: string): string | undefined {
+  for (const n of nodes) {
+    if (n.id === id) return n.title
+    const found = n.children ? articleTitle(n.children, id) : undefined
+    if (found) return found
+  }
+  return undefined
 }

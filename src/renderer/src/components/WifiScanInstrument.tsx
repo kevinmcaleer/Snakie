@@ -143,6 +143,7 @@ export function WifiScanInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source="WLAN0"
       docked={docked}
       onClose={onClose}

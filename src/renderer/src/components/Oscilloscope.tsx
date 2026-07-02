@@ -136,6 +136,7 @@ export function Oscilloscope({
   return (
     <InstrumentWindow
       name="OSCILLOSCOPE"
+      helpId="inst-scope"
       source={`${gp} ${conn.variable || 'pwm'}`}
       live={live}
       onToggleLive={onToggleLive}

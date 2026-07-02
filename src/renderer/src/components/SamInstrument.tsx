@@ -115,6 +115,7 @@ export function SamInstrument({ def, onClose, docked = true, onToggleDock, float
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={`PIN ${pin}`}
       docked={docked}
       onClose={onClose}

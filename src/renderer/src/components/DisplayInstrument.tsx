@@ -274,6 +274,7 @@ export function DisplayInstrument({
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
+      helpId={`inst-${def.id}`}
       source={`${shownAddr} · SDA GP${sda}/SCL GP${scl}`}
       docked={docked}
       onClose={onClose}
