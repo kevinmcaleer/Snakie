@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import { useWorkspace } from '../store/workspace'
 import {
   SERVO_TARGET,
   SERVO_MIN_DEG,
@@ -9,6 +10,7 @@ import {
   anglePayload,
   pinPayload,
   detachPayload,
+  parseServoPin,
   angleToDuty,
   dutyToAngle,
   sweepAngle
@@ -67,6 +69,18 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
   const dialRef = useRef<SVGSVGElement>(null)
   const phase = useRef(0)
 
+  // Follow the active file's servo pin (`inst.start(servo_pin=0)` / `Servo(16)`)
+  // so the panel's PIN matches the code — until the user picks a pin by hand.
+  const { openFiles, activeId } = useWorkspace()
+  const filePin = useMemo(
+    () => parseServoPin(openFiles.find((f) => f.id === activeId)?.content ?? ''),
+    [openFiles, activeId]
+  )
+  const userSetPin = useRef(false)
+  useEffect(() => {
+    if (filePin !== undefined && !userSetPin.current) setPin(filePin)
+  }, [filePin])
+
   /** Send a servo payload; throttle rapid streams (drag / sweep) like the gamepad. */
   const send = useCallback((payload: string, throttle = false): void => {
     if (throttle) {
@@ -109,6 +123,7 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
   }, [minA, maxA])
 
   const onPin = (n: number): void => {
+    userSetPin.current = true // a manual pick wins over the file-parsed pin
     const g = Math.trunc(clamp(n, 0, 40))
     setPin(g)
     send(pinPayload(g))

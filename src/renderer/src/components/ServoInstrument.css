@@ -14,7 +14,10 @@
 .servopanel__dial {
   display: block;
   width: 100%;
-  height: auto;
+  /* Capped so the whole panel (dial + slider + min/max/pin + readout) fits the
+     detached pop-out window without clipping the bottom controls. The SVG
+     letterboxes (preserveAspectRatio) and the pointer→angle map stays correct. */
+  height: 150px;
   touch-action: none;
   cursor: grab;
 }

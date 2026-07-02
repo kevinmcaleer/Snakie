@@ -52,3 +52,14 @@ export function sweepAngle(a: number, b: number, t: number): number {
   const tri = 1 - Math.abs(((clamp(t, 0, 1) * 2) % 2) - 1) // 0→1→0 triangle
   return a + (b - a) * tri
 }
+
+/**
+ * The servo GPIO declared in the active file, so the panel's PIN follows the code
+ * — `inst.start(servo_pin=0)` or `Servo(16)` / `Servo(pin=16)`. Undefined when
+ * none is found (the panel keeps its current pin).
+ */
+export function parseServoPin(source: string): number | undefined {
+  if (!source) return undefined
+  const m = source.match(/\bservo_pin\s*=\s*(\d+)/) ?? source.match(/\bServo\(\s*(?:pin\s*=\s*)?(\d+)/)
+  return m ? Number(m[1]) : undefined
+}

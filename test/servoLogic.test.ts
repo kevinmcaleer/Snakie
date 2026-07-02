@@ -5,7 +5,8 @@ import {
   detachPayload,
   angleToDuty,
   dutyToAngle,
-  sweepAngle
+  sweepAngle,
+  parseServoPin
 } from '../src/renderer/src/components/servo-logic'
 
 describe('servo-logic payloads', () => {
@@ -40,6 +41,21 @@ describe('servo-logic PWM math', () => {
   it('dutyToAngle clamps out-of-range duty', () => {
     expect(dutyToAngle(0)).toBe(0)
     expect(dutyToAngle(1)).toBe(180)
+  })
+})
+
+describe('parseServoPin', () => {
+  it('reads inst.start(servo_pin=N)', () => {
+    expect(parseServoPin('inst.start(servo_pin=0)')).toBe(0)
+    expect(parseServoPin('inst.start(buzzer_pin=15, servo_pin = 22)')).toBe(22)
+  })
+  it('reads Servo(N) / Servo(pin=N)', () => {
+    expect(parseServoPin('s = Servo(16)')).toBe(16)
+    expect(parseServoPin('s = Servo(pin=5, freq=50)')).toBe(5)
+  })
+  it('is undefined when no servo pin is declared', () => {
+    expect(parseServoPin('print("hi")')).toBeUndefined()
+    expect(parseServoPin('')).toBeUndefined()
   })
 })
 
