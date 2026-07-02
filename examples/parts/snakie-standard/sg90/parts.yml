@@ -128,8 +128,6 @@ labels:
     z: 8
 library:
   module: servo
-  url: "github:kevinmcaleer/snakie-servo"
-  docs: "https://github.com/kevinmcaleer/snakie-servo#readme"
 drivers:
   - source: servo.py
     target: lib/servo.py
