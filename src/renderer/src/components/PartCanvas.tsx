@@ -67,6 +67,13 @@ const VIEW_H = 460
 const MAX_W = 300
 const MAX_H = 340
 
+/** Label the grid-mode modifier by platform: ⌘ on macOS, Ctrl elsewhere. Both
+ *  are handled (`e.metaKey || e.ctrlKey`); this just shows the native key. */
+const cmdOrCtrlLabel =
+  typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent)
+    ? '⌘'
+    : 'Ctrl'
+
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 const PAD_FILL: Record<PartPinType, string> = {
   io: '#d6a531',
@@ -299,6 +306,9 @@ export function PartCanvas({
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // Ctrl/Cmd held = "grid mode": show the selected pin's 2.54mm row/column and let
+  // a drag from it lay pins (anchor locked). Without it, a pin drag just moves it.
+  const [gridKey, setGridKey] = useState(false)
   // Live preview of the pins a "drag from the selected pin" gesture will create.
   const [createPreview, setCreatePreview] = useState<{ axis: 'x' | 'y'; dir: number; n: number } | null>(null)
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
@@ -342,6 +352,21 @@ export function PartCanvas({
   const labels = part.labels ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
   const interactive = !readOnly && !!onChange
+
+  // Track Ctrl/Cmd so the alignment grid shows only WHILE it's held (grid mode).
+  useEffect(() => {
+    if (!interactive) return
+    const sync = (e: KeyboardEvent): void => setGridKey(e.ctrlKey || e.metaKey)
+    const clear = (): void => setGridKey(false)
+    window.addEventListener('keydown', sync)
+    window.addEventListener('keyup', sync)
+    window.addEventListener('blur', clear)
+    return () => {
+      window.removeEventListener('keydown', sync)
+      window.removeEventListener('keyup', sync)
+      window.removeEventListener('blur', clear)
+    }
+  }, [interactive])
 
   const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
   // Colours already used in this part, for the quick-pick swatch grids on every
@@ -1443,10 +1468,13 @@ export function PartCanvas({
 
     const hit = hitTest(nx, ny)
 
-    // Multi-select (#170): shift OR ctrl/cmd click on a pin adds/removes it from
-    // the alignment group on a no-move RELEASE; a drag instead moves it (so
-    // ctrl-drag still free-moves, #169). The toggle fires in onPointerUp.
-    const modSelect = e.shiftKey || e.ctrlKey || e.metaKey
+    // Multi-select (#170): SHIFT-click a pin/shape/label adds/removes it from the
+    // alignment group on a no-move RELEASE; a drag instead moves it. The toggle
+    // fires in onPointerUp.
+    const modSelect = e.shiftKey
+    // Ctrl/Cmd = "grid mode": the selected pin's 2.54mm grid drives placement
+    // (lay a row/column / snap to it). Without it a pin drag just free-moves (#…).
+    const gridMod = e.ctrlKey || e.metaKey
     if (hit?.type === 'pin' && modSelect) {
       const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
       dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox: rp?.x ?? nx, oy: rp?.y ?? ny, toggleSel: true }
@@ -1462,15 +1490,15 @@ export function PartCanvas({
     if (!modSelect && selectedPins.length) setSelectedPins([])
     if (!modSelect && selComponents.length) setSelComponents([])
 
-    // Ghost-array gestures (a pin is selected = the array anchor):
-    if (hit?.type === 'pin' && selPin) {
+    // Grid-mode gestures (Ctrl/Cmd held, a pin is selected = the array anchor):
+    if (hit?.type === 'pin' && selPin && gridMod) {
       if (hit.hi === selPin.hi && hit.pi === selPin.pi) {
-        // Drag FROM the anchor pin → lay down a row/column of new pins.
+        // Ctrl-drag FROM the anchor pin → lay down a row/column of new pins; the
+        // anchor stays put.
         dragRef.current = { kind: 'create-array', sel: hit, startNX: nx, startNY: ny, ox: selPin.x, oy: selPin.y, anchor: { x: selPin.x, y: selPin.y } }
         return
       }
-      // Drag a DIFFERENT pin → align it to the anchor's grid; keep the anchor
-      // selected (a no-move click re-anchors, handled in onPointerUp).
+      // Ctrl-drag a DIFFERENT pin → snap it to the anchor's grid.
       const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
       dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox: rp?.x ?? nx, oy: rp?.y ?? ny, anchor: { x: selPin.x, y: selPin.y } }
       return
@@ -2122,9 +2150,10 @@ export function PartCanvas({
             )
           })}
 
-        {/* Ghost pin array (#…): a faint 2.54mm grid centred on the selected pin,
-            so nearby pins snap to it and a drag-from-it lays down a row of pins. */}
-        {interactive && selPin && visible.pins && !locked.pins && (
+        {/* Ghost pin array (#…): a faint 2.54mm grid centred on the selected pin —
+            shown only WHILE Ctrl/Cmd is held (grid mode), so a plain drag just
+            moves the pin. A drag from the anchor then lays a row/column. */}
+        {interactive && selPin && gridKey && visible.pins && !locked.pins && (
           <g className="pcv__ghosts" aria-hidden="true" style={{ pointerEvents: 'none' }}>
             {([1, 2, 3, 4] as const).flatMap((k) => {
               const opacity = 0.34 * (1 - (k - 1) * 0.2) // fades out further from centre
@@ -2895,6 +2924,25 @@ export function PartCanvas({
             </div>
           )
         })()}
+      {/* Contextual hint: tell the user Ctrl unlocks the alignment grid. Shown
+          only while a single pin is selected (the gesture it describes). It
+          highlights while Ctrl/Cmd is actually held (grid mode live). */}
+      {interactive && selPin && (
+        <div className={`pcv__hint${gridKey ? ' is-active' : ''}`} role="status">
+          {gridKey ? (
+            <>
+              <kbd className="pcv__hint-key">{cmdOrCtrlLabel}</kbd>
+              <span>Grid — drag from the pin to lay a row / column</span>
+            </>
+          ) : (
+            <>
+              <span>Drag to move ·</span>
+              <kbd className="pcv__hint-key">{cmdOrCtrlLabel}</kbd>
+              <span>for the alignment grid</span>
+            </>
+          )}
+        </div>
+      )}
       {interactive && (
         <div className="pcv__zoom" aria-label="View controls">
           {onToggleGrid && (

@@ -162,6 +162,60 @@
   background: var(--border);
 }
 
+/* Contextual pin-placement hint — a small unobtrusive chip at the bottom-left
+   (clear of the bottom-right zoom controls) telling the user Ctrl/⌘ toggles the
+   alignment grid. Highlights while the modifier is held. */
+.pcv__hint {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+
+.pcv__hint.is-active {
+  color: var(--text);
+  border-color: var(--accent, #2f6b2a);
+}
+
+.pcv__hint-key {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: 3px;
+}
+
+.pcv__hint.is-active .pcv__hint-key {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+  border-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pcv__hint.is-active {
+  border-color: #9a6b1e;
+}
+
+:root[data-theme='skeuomorph'] .pcv__hint.is-active .pcv__hint-key {
+  background: #e6ab30;
+  border-color: #9a6b1e;
+  color: #5a3d0e;
+}
+
 /* Selected-component toolbar (duplicate / fill / border / delete) — floats above
    the component, same dark style as the other mini toolbars. */
 .pcv__ctb {
