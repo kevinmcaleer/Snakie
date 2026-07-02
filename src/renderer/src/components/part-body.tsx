@@ -719,8 +719,11 @@ export interface PartBodyProps {
   bodyScale?: number
   /** Render pins with the boxed annotation (grey GPIO number box → label →
    *  variable, ordered outward) instead of the single silk label — used for the
-   *  microcontroller on the breadboard. Assumes an unrotated, unscaled body. */
-  boxedPins?: boolean
+   *  microcontroller on the breadboard. Assumes an unrotated, unscaled body.
+   *  `true` boxes EVERY pin; a `Set` of pin flat-indices boxes only those (the
+   *  rest draw a plain pad, no label) — the mini board boxes only the used pins so
+   *  a dense board's number boxes don't overlap. */
+  boxedPins?: boolean | Set<number>
   /** Per pin flat-index, the code variable + colour to show (boxed mode only;
    *  used pins only — others show just the number box + label). */
   pinVariables?: Map<number, { variable: string; color: string }>
@@ -935,6 +938,11 @@ export function PartBody({
   // Board px-per-mm (from the real dimensions) so physical parts like JST/QWIIC
   // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
   const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
+  // Pad diameter scaled to the board's REAL size (a pad/hole is ~1.9mm) so pins
+  // never dwarf the pitch on a small render (the mini board) or look tiny on a big
+  // one — consistent across the mini board + breadboard. Falls back to the legacy
+  // fixed size when the part has no mm dimensions.
+  const padSize = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -960,7 +968,7 @@ export function PartBody({
   // Pin/castellation through-holes to cut through the PCB + image + copper (#171),
   // so a realistic board shows the real background through its holes.
   const pinHoleList = visible.pins
-    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12, rp.x, rp.pin.rotation))
+    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), padSize, rp.x, rp.pin.rotation))
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
 
@@ -1041,9 +1049,14 @@ export function PartBody({
       {/* Layer 3: pins (square / round / castellated / header) */}
       {visible.pins &&
         pins.map((rp: ResolvedPin, i) => {
+          // `true` boxes every pin; a Set boxes only those indices (mini board:
+          // just the used pins, so a dense board's number boxes don't overlap).
+          const boxAll = boxedPins === true
+          const boxThis = boxAll || (boxedPins instanceof Set && boxedPins.has(i))
+          const boxedActive = boxAll || boxedPins instanceof Set
           const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
           const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-          const size = 12
+          const size = padSize
           const cx = px(rp.x)
           const cy = py(rp.y)
           const stroke = sel ? '#fff' : '#0008'
@@ -1055,17 +1068,19 @@ export function PartBody({
           } else if (shape === 'castellated') {
             pad = castellatedPad(cx, cy, size, rp.x, rp.pin.type === 'gnd', stroke, sw, rp.pin.rotation)
           } else if (shape === 'header') {
+            // Through-hole header pad: copper annular ring; the drill scales with the
+            // pad (proportional, not a fixed subtraction that inverts when small).
             pad = (
               <>
                 <circle cx={cx} cy={cy} r={size / 2} fill="#c79a4e" stroke={stroke} strokeWidth={sw} />
-                <circle cx={cx} cy={cy} r={size / 2 - 3.5} fill="var(--bc-mat, #0c0f12)" />
+                <circle cx={cx} cy={cy} r={size * 0.26} fill="var(--bc-mat, #0c0f12)" />
               </>
             )
           } else {
             pad = (
               <>
                 <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
-                <circle cx={cx} cy={cy} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                <circle cx={cx} cy={cy} r={size * 0.19} fill="var(--bc-mat, #0c0f12)" />
               </>
             )
           }
@@ -1080,7 +1095,7 @@ export function PartBody({
           const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
           const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
           const boxedCounter =
-            boxedPins && bodyScale !== 1
+            boxThis && bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
           // Manual label placement (#…): shift the whole annotation by the pin's
@@ -1093,32 +1108,32 @@ export function PartBody({
                   background, not a painted dot (#171). */}
               {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
               <g transform={labelShift}>
-              {boxedPins
-                ? (
-                    <g transform={boxedCounter}>
-                      {boxedPinLabel(
-                        box,
-                        cx,
-                        cy,
-                        bdir,
-                        String(rp.pin.number ?? rp.pin.gpio ?? ''),
-                        rp.pin.label || rp.pin.name,
-                        pinVariables?.get(i)?.variable,
-                        pinVariables?.get(i)?.color ?? '#cfd6dd'
-                      )}
-                    </g>
-                  )
-                : text && (
-                    <text
-                      x={ll.lx}
-                      y={ll.ly}
-                      className="pcv__pin-label"
-                      textAnchor={ll.anchor}
-                      transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
-                    >
-                      {text}
-                    </text>
+              {boxThis ? (
+                <g transform={boxedCounter}>
+                  {boxedPinLabel(
+                    box,
+                    cx,
+                    cy,
+                    bdir,
+                    String(rp.pin.number ?? rp.pin.gpio ?? ''),
+                    rp.pin.label || rp.pin.name,
+                    pinVariables?.get(i)?.variable,
+                    pinVariables?.get(i)?.color ?? '#cfd6dd'
                   )}
+                </g>
+              ) : boxedActive ? null : (
+                text && (
+                  <text
+                    x={ll.lx}
+                    y={ll.ly}
+                    className="pcv__pin-label"
+                    textAnchor={ll.anchor}
+                    transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
+                  >
+                    {text}
+                  </text>
+                )
+              )}
               {/* Capability chips (breadboard hover) — box-relative like the labels
                   so they always clear the number box + label; fade in from the board
                   centre outward, dimming when another pin is hovered. */}
@@ -1133,7 +1148,7 @@ export function PartBody({
                     rp.pin.label || rp.pin.name,
                     rp.pin.capabilities,
                     rp.pin.signals,
-                    boxedPins ? pinVariables?.get(i)?.variable : undefined,
+                    boxThis ? pinVariables?.get(i)?.variable : undefined,
                     rp.pin.buses,
                     bodyScale
                   )

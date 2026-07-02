@@ -449,9 +449,10 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
         <g ref={contentRef}>
           {boardPart ? (
             /* Part-backed board → draw its REAL authored body (image + shapes +
-               pins), identical to the Part Editor / full Board Viewer, with the
-               boxed pin annotations + code variables on the used pins. */
-            <PartBody part={boardPart} box={box} boxedPins pinVariables={pinVars} />
+               pins), identical to the Part Editor / full Board Viewer. Box ONLY the
+               pins the code USES (pinVars keys) so a dense board's number boxes don't
+               overlap — the mini board is a used-pin summary. */
+            <PartBody part={boardPart} box={box} boxedPins={new Set(pinVars.keys())} pinVariables={pinVars} />
           ) : (
             /* Built-in board (no source part) → the stylised PCB fallback. */
             <>
