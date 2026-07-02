@@ -170,6 +170,20 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['neopixel', 'ws2812', 'led']
   },
   {
+    id: 'servo',
+    name: 'Servo',
+    accent: '#ffd166',
+    border: 'rgba(255,209,102,.5)',
+    // a dial with a pointer arm
+    icon: 'M4 14 a8 8 0 0 1 16 0 M12 14 L17 9',
+    group: 'output',
+    kind: 'singleton',
+    description: 'Set a servo angle with a dial, sweep, and min/max limits.',
+    // `hints` (not `uses:['pwm']`) so it lights up only when a servo library /
+    // name appears — a bare PWM pin already offers the oscilloscope.
+    hints: ['servo', 'sg90', 'mg90', 'mg996', 'pca9685']
+  },
+  {
     id: 'button',
     name: 'Button',
     accent: '#6fb4ee',

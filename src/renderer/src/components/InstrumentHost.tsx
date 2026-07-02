@@ -24,6 +24,7 @@ import { GamepadInstrument } from './GamepadInstrument'
 import { RangeInstrument } from './RangeInstrument'
 import { ImuInstrument } from './ImuInstrument'
 import { LedInstrument } from './LedInstrument'
+import { ServoInstrument } from './ServoInstrument'
 import { ButtonInstrument } from './ButtonInstrument'
 import { BuzzerInstrument } from './BuzzerInstrument'
 import { SamInstrument } from './SamInstrument'
@@ -922,6 +923,8 @@ export function renderSingleton(
       return <ImuInstrument {...p} />
     case 'led':
       return <LedInstrument {...p} />
+    case 'servo':
+      return <ServoInstrument {...p} />
     case 'button':
       return <ButtonInstrument {...p} />
     case 'buzzer':

@@ -585,7 +585,7 @@ control = Control()
 
 # What the board can do, announced to the IDE as ``SNK READY <caps...>`` so a
 # panel knows a Snakie program is live (and which triggers it services).
-READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen")
+READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen", "servo")
 
 _service_running = False
 
@@ -612,7 +612,7 @@ def ready(extra=()):
 
 def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
           screen_sda=None, screen_scl=None, screen_addr=0x3C,
-          background=False, hz=50):
+          servo_pin=None, background=False, hz=50):
     """Register the built-in control handlers + attach the buzzer, then announce.
 
     Then call ``control.poll()`` in your main loop to SERVICE commands — it drains
@@ -660,6 +660,11 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
     if screen_sda is not None and screen_scl is not None:
         display.set_pins(screen_sda, screen_scl, screen_addr)
         control.on("screen", lambda payload: screen_command(payload, display))
+    # The Servo panel attaches on the fly via `pin <n>`, so register it always;
+    # pre-attach only if a servo_pin was given.
+    if servo_pin is not None:
+        servo.set_pin(servo_pin)
+    control.on("servo", lambda payload: servo_command(payload, servo))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
     if background:
@@ -1255,6 +1260,86 @@ def screen_command(payload, disp=None):
     return verb
 
 
+class Servo:
+    """Drive a hobby servo (SG90 etc.) from ``servo`` control commands.
+
+    ``angle(deg)`` moves to an angle (0..180); ``set_pin(n)`` (re)attaches the PWM
+    at 50 Hz; ``detach()`` releases it. Pass a ``machine.PWM`` as ``pwm`` to move
+    real hardware, or build one with ``set_pin`` — with no PWM every call is a
+    no-op (still importable + testable under CPython). Each ``angle`` also emits
+    ``SNK PWM servo <freq> <duty>`` so the IDE Servo panel shows the position.
+    """
+
+    def __init__(self, pwm=None, freq=50, min_us=500, max_us=2500):
+        self._pwm = pwm
+        self._freq = freq
+        self._period_us = 1000000 // freq
+        self.min_us = min_us
+        self.max_us = max_us
+        self.angle_deg = 90
+
+    def set_pin(self, n):
+        """(Re)target the PWM pin: build ``PWM(Pin(n))`` at 50 Hz (no-op w/o hw)."""
+        try:
+            from machine import Pin, PWM
+        except ImportError:
+            return
+        self._pwm = PWM(Pin(int(n)))
+        self._pwm.freq(self._freq)
+
+    def _us(self, deg):
+        deg = 0 if deg < 0 else 180 if deg > 180 else deg
+        return self.min_us + (deg / 180.0) * (self.max_us - self.min_us)
+
+    def angle(self, deg):
+        """Move to ``deg`` (0..180); drive the PWM + report the position."""
+        deg = int(0 if deg < 0 else 180 if deg > 180 else deg)
+        self.angle_deg = deg
+        duty = self._us(deg) / self._period_us
+        if self._pwm is not None:
+            self._pwm.duty_u16(int(duty * 65535))
+        print("%s PWM servo %s %s" % (SENTINEL, self._freq, duty))
+        return deg
+
+    def detach(self):
+        """Release the servo (stop holding torque)."""
+        if self._pwm is not None:
+            self._pwm.duty_u16(0)
+
+
+def servo_command(payload, servo=None):
+    """Drive ``servo`` (a :class:`Servo`) from one ``servo`` control payload.
+
+      * ``angle <deg>`` → ``servo.angle(deg)``
+      * ``pin <n>``     → ``servo.set_pin(n)`` (attach on GP<n>)
+      * ``detach``      → ``servo.detach()``
+
+    Defaults to the shared :data:`servo` singleton. Never raises on a malformed
+    payload; returns the verb handled (or ``None``), so it is easy to unit-test.
+    """
+    srv = servo if servo is not None else globals().get("servo")
+    if srv is None or not payload:
+        return None
+    payload = payload.strip()
+    sp = payload.find(" ")
+    if sp == -1:
+        verb, args = payload, ""
+    else:
+        verb, args = payload[:sp], payload[sp + 1:].strip()
+    try:
+        if verb == "angle":
+            srv.angle(int(float(args.split()[0])))
+        elif verb == "pin":
+            srv.set_pin(int(args.split()[0]))
+        elif verb == "detach":
+            srv.detach()
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
+
+
 # Shared, ready-to-use (hardware-less) singletons — attach hardware as needed,
 # e.g. ``inst.led = inst.Led(pwm=PWM(Pin(15)))``. NOTE: the rangefinder singleton
 # is ``ranger`` (NOT ``range`` — that would shadow the Python builtin).
@@ -1262,3 +1347,4 @@ buzzer = Buzzer()
 led = Led()
 ranger = Rangefinder()
 display = Display()
+servo = Servo()

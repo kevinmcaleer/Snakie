@@ -445,6 +445,33 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIsNone(inst.buzzer_command("wat", inst.Buzzer(_RecordingPWM())))
         self.assertIsNone(inst.buzzer_command("", inst.Buzzer(_RecordingPWM())))
 
+    def test_servo_command_angle(self):
+        pwm = _RecordingPWM()
+        srv = inst.Servo(pwm)
+        self.assertEqual(inst.servo_command("angle 90", srv), "angle")
+        self.assertEqual(srv.angle_deg, 90)
+        # 90° → 1.5 ms of a 20 ms frame → duty ~0.075 → ~4915 u16.
+        self.assertAlmostEqual(pwm.duties[-1], round(1500 / 20000 * 65535), delta=2)
+
+    def test_servo_command_angle_clamps(self):
+        srv = inst.Servo(_RecordingPWM())
+        inst.servo_command("angle 999", srv)
+        self.assertEqual(srv.angle_deg, 180)
+        inst.servo_command("angle -20", srv)
+        self.assertEqual(srv.angle_deg, 0)
+
+    def test_servo_command_detach(self):
+        pwm = _RecordingPWM()
+        srv = inst.Servo(pwm)
+        inst.servo_command("angle 90", srv)
+        self.assertEqual(inst.servo_command("detach", srv), "detach")
+        self.assertEqual(pwm.duties[-1], 0)
+
+    def test_servo_command_unknown_and_empty(self):
+        srv = inst.Servo(_RecordingPWM())
+        self.assertIsNone(inst.servo_command("wat", srv))
+        self.assertIsNone(inst.servo_command("", srv))
+
     def test_buzzer_receiver_via_control_feed(self):
         # Feed real SNKCMD buzzer lines through a Control wired to a fake-PWM
         # Buzzer — the registered handler must actuate it (end-to-end protocol).
@@ -586,7 +613,7 @@ class BackgroundService(unittest.TestCase):
     def test_ready_announces_default_caps(self):
         self.assertEqual(
             _emit(inst.ready),
-            "SNK READY scan:wifi scan:bt teleop led buzzer range screen",
+            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo",
         )
 
     def test_ready_includes_extra_caps(self):

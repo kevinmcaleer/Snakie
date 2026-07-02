@@ -1,0 +1,179 @@
+/* SERVO instrument — global CSS, so every selector uses the UNIQUE `servopanel__`
+   prefix (never reuse another panel's prefix). Themed via --accent/--accent-border. */
+.servopanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem 0.6rem;
+}
+
+.servopanel__screen {
+  padding: 0.3rem;
+}
+
+.servopanel__dial {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: none;
+  cursor: grab;
+}
+.servopanel__dial:active {
+  cursor: grabbing;
+}
+
+.servopanel__track {
+  fill: none;
+  stroke: rgba(130, 230, 160, 0.22);
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+.servopanel__range {
+  fill: none;
+  stroke: var(--accent, #ffd166);
+  stroke-width: 6;
+  stroke-linecap: round;
+  opacity: 0.85;
+}
+.servopanel__tick {
+  fill: rgba(150, 235, 175, 0.7);
+  font-family: var(--font-mono);
+  font-size: 9px;
+}
+.servopanel__body {
+  fill: #14181d;
+  stroke: rgba(150, 235, 175, 0.35);
+  stroke-width: 1;
+}
+.servopanel__arm {
+  stroke: var(--accent, #ffd166);
+  stroke-width: 5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(255, 209, 102, 0.55));
+}
+.servopanel__arm--ghost {
+  stroke: rgba(150, 235, 175, 0.45);
+  stroke-width: 3;
+  filter: none;
+}
+.servopanel__knob {
+  fill: var(--accent, #ffd166);
+  stroke: #1a1d22;
+  stroke-width: 1.5;
+}
+.servopanel__hub {
+  fill: #20262d;
+  stroke: rgba(150, 235, 175, 0.5);
+  stroke-width: 1.5;
+}
+.servopanel__angle {
+  fill: #d7f7e2;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.servopanel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.servopanel__slider {
+  flex: 1 1 auto;
+  accent-color: var(--accent, #ffd166);
+}
+.servopanel__sweep {
+  flex: 0 0 auto;
+  min-width: 4.2rem;
+  padding: 0.3rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text, #d6dade);
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.servopanel__sweep:hover {
+  border-color: var(--accent-border, #565b63);
+}
+.servopanel__sweep.is-on {
+  color: #1a1d22;
+  background: var(--accent, #ffd166);
+  border-color: var(--accent, #ffd166);
+}
+
+.servopanel__opts {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+.servopanel__opt {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1 1 0;
+}
+.servopanel__opt > span {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #9aa0a8);
+}
+.servopanel__opt input {
+  width: 100%;
+  padding: 0.22rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text, #d6dade);
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 5px;
+}
+.servopanel__detach {
+  flex: 0 0 auto;
+  padding: 0.32rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--text-muted, #9aa0a8);
+  background: transparent;
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 5px;
+  cursor: pointer;
+}
+.servopanel__detach:hover {
+  color: var(--text, #d6dade);
+  border-color: var(--text-muted, #565b63);
+}
+
+.servopanel__readout {
+  display: flex;
+  align-items: stretch;
+  gap: 0.4rem;
+}
+.servopanel__cell {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.servopanel__cell-lbl {
+  font-family: var(--font-mono);
+  font-size: 0.54rem;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #9aa0a8);
+}
+.servopanel__cell-val {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text, #d6dade);
+}
+.servopanel__div {
+  width: 1px;
+  background: var(--border, #2c2e33);
+}

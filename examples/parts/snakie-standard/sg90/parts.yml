@@ -1,0 +1,143 @@
+id: sg90
+name: SG90 Micro Servo
+description: 9g hobby micro servo, ~180° range, 50 Hz PWM control.
+manufacturer: TowerPro
+family: Motor
+tags:
+  - servo
+  - pwm
+  - motor
+package: THT
+pinSpacing: 2.54
+voltage: 4.8–6V
+partNumber: SG90
+properties:
+  torque: 1.8 kg·cm @4.8V
+  speed: 0.1 s/60°
+  rotation: "180°"
+  signal: 50 Hz PWM (1–2 ms)
+version: 0.1.0
+pcbColor: "#2b6cb0"
+aspect: 0.38
+dimensions:
+  width: 12.2
+  height: 32.2
+shape:
+  kind: rect
+  cornerRadius: 2
+# The 3 flying leads (orange signal / red VCC / brown GND). `type` drives the pad
+# colour; the true wire colours are the drawn `shapes` rects below.
+headers:
+  - edge: left
+    pins:
+      - name: Signal
+        label: PWM
+        type: io
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: round
+        x: 0.09
+        y: 0.42
+      - name: VCC
+        label: "+5V"
+        type: pwr
+        shape: round
+        x: 0.09
+        y: 0.5
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.09
+        y: 0.58
+shapes:
+  - kind: rect
+    x: 0.16
+    y: 0.15
+    w: 0.68
+    h: 0.58
+    fill: "#2b6cb0"
+    stroke: "#1a4a80"
+    strokeWidth: 1
+    cornerRadius: 3
+    z: 0
+  - kind: rect
+    x: 0.02
+    y: 0.1
+    w: 0.96
+    h: 0.06
+    fill: "#2b6cb0"
+    stroke: "#1a4a80"
+    strokeWidth: 1
+    cornerRadius: 2
+    z: 1
+  - kind: rect
+    x: 0.02
+    y: 0.72
+    w: 0.96
+    h: 0.06
+    fill: "#2b6cb0"
+    stroke: "#1a4a80"
+    strokeWidth: 1
+    cornerRadius: 2
+    z: 2
+  - kind: circle
+    x: 0.5
+    y: 0.31
+    r: 0.15
+    fill: "#f2f2f2"
+    stroke: "#b9bec6"
+    strokeWidth: 1
+    z: 3
+  - kind: circle
+    x: 0.5
+    y: 0.31
+    r: 0.045
+    fill: "#3a3f44"
+    z: 4
+  - kind: rect
+    x: 0.0
+    y: 0.412
+    w: 0.16
+    h: 0.016
+    fill: "#e8862b"
+    z: 5
+  - kind: rect
+    x: 0.0
+    y: 0.492
+    w: 0.16
+    h: 0.016
+    fill: "#c0392b"
+    z: 6
+  - kind: rect
+    x: 0.0
+    y: 0.572
+    w: 0.16
+    h: 0.016
+    fill: "#5a3a22"
+    z: 7
+labels:
+  - text: SG90
+    x: 0.5
+    y: 0.55
+    fontSize: 10
+    color: "#ffffff"
+    z: 8
+library:
+  module: servo
+  url: "github:kevinmcaleer/snakie-servo"
+  docs: "https://github.com/kevinmcaleer/snakie-servo#readme"
+drivers:
+  - source: servo.py
+    target: lib/servo.py
+    label: Servo driver
+help: help.md
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true
