@@ -503,6 +503,16 @@ const modules = {
     } catch {
       return []
     }
+  },
+  /** Tell every window a driver/library was just installed onto the board, so the
+   *  "needs a driver" / "missing library" banners re-probe and clear. */
+  notifyChanged: (): void => ipcRenderer.send('modules:changed'),
+  /** Subscribe to install-changed broadcasts (from any window). Returns an
+   *  unsubscribe. */
+  onChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('modules:didChange', listener)
+    return () => ipcRenderer.removeListener('modules:didChange', listener)
   }
 }
 

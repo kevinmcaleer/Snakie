@@ -577,6 +577,11 @@ export function AppShell(): JSX.Element {
   // required modules import. Including boardFolder avoids a stale probe set when you
   // switch projects while staying connected (modules change but the cache wouldn't).
   useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path, boardFolder])
+  // Re-probe when ANY window installs a driver/library (e.g. the Board View's
+  // Driver Install banner copies a file to the board), so the "missing library"
+  // banner clears once the module is actually present — not only after the main
+  // window's own install.
+  useEffect(() => window.api.modules.onChanged(() => setInstalledModules(null)), [])
   useEffect(() => {
     if (!connected || requiredModules.length === 0 || installedModules !== null) return
     let active = true

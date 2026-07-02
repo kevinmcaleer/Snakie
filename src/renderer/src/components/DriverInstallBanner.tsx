@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   driverDeviceDirs,
   driverInstallMethod,
@@ -24,11 +24,14 @@ import './DriverInstallBanner.css'
  *             renderer CSP) then `device.mkdir` each ancestor folder + write it to
  *             its `target` path with `device.writeFile`.
  *
- * Installing touches the device, so the action is disabled until a board is
- * connected (mirrors the SAM instrument's "is the board connected?" guard).
+ * The banner is BOARD-AWARE: it stats each `copy` driver's target on the connected
+ * board and shows only the drivers that are actually MISSING — so it clears once
+ * they're installed (its own install, or another window's, via the shared
+ * `modules.onChanged` signal), instead of lingering forever. Installing touches the
+ * device, so the action is disabled until a board is connected.
  */
 
-/** Per-driver install state, keyed by `<need.key>#<driverIndex>`. */
+/** Per-driver install state, keyed by {@link driverKey}. */
 type DriverState = 'pending' | 'installing' | 'ok' | 'error'
 interface DriverStatus {
   state: DriverState
@@ -38,6 +41,12 @@ interface DriverStatus {
 export interface DriverInstallBannerProps {
   /** The placed parts that declare drivers (from `placedPartsNeedingDrivers`). */
   needs: PartDriverNeed[]
+}
+
+/** A stable id for one driver ROW, independent of its list position — so filtering
+ *  out already-present drivers never shuffles the status/probe keys. */
+function driverKey(need: PartDriverNeed, d: DriverFile): string {
+  return `${need.key}|${d.source}->${d.target}`
 }
 
 /** A short human label for one driver row (its label, else the source). */
@@ -51,6 +60,10 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
   const [statuses, setStatuses] = useState<Record<string, DriverStatus>>({})
+  // Driver rows already present on the board (keyed by driverKey). Probed on
+  // connect, after an install, and when another window signals a change.
+  const [present, setPresent] = useState<Set<string>>(new Set())
+  const [probeNonce, setProbeNonce] = useState(0)
 
   // Track connection so Install is gated on a present board (it writes to it).
   useEffect(() => {
@@ -74,21 +87,64 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
     setDismissed(false)
   }, [signature])
 
-  if (needs.length === 0 || dismissed) return null
+  // Re-probe when ANY window installs a driver/library (our own install also bumps
+  // the nonce below), so an install elsewhere clears rows here too.
+  useEffect(() => window.api.modules.onChanged(() => setProbeNonce((n) => n + 1)), [])
+
+  // Board-presence probe: stat each COPY driver's target file. mip drivers choose
+  // their own on-device path (`/lib/<pkg>/…`), so we can't cheaply confirm them —
+  // those always show. Any probe error ⇒ treat as absent (offer the install).
+  useEffect(() => {
+    if (!connected) {
+      setPresent(new Set())
+      return
+    }
+    let alive = true
+    void (async (): Promise<void> => {
+      const found = new Set<string>()
+      for (const need of needs) {
+        for (const d of need.drivers) {
+          if (driverInstallMethod(d.source) !== 'copy') continue
+          const target = d.target.trim()
+          if (!target) continue
+          const ok = await window.api.device
+            .stat(target)
+            .then(() => true)
+            .catch(() => false)
+          if (ok) found.add(driverKey(need, d))
+        }
+      }
+      if (alive) setPresent(found)
+    })()
+    return () => {
+      alive = false
+    }
+  }, [connected, signature, probeNonce])
+
+  // The needs with already-present drivers filtered out (empty needs dropped).
+  const visibleNeeds = useMemo(
+    () =>
+      needs
+        .map((need) => ({
+          ...need,
+          drivers: need.drivers.filter((d) => !present.has(driverKey(need, d)))
+        }))
+        .filter((n) => n.drivers.length > 0),
+    [needs, present]
+  )
+
+  if (visibleNeeds.length === 0 || dismissed) return null
 
   const setStatus = (id: string, status: DriverStatus): void =>
     setStatuses((prev) => ({ ...prev, [id]: status }))
 
-  const installOne = async (need: PartDriverNeed, index: number, d: DriverFile): Promise<void> => {
-    const id = `${need.key}#${index}`
+  const installOne = async (need: PartDriverNeed, d: DriverFile): Promise<void> => {
+    const id = driverKey(need, d)
     setStatus(id, { state: 'installing' })
     try {
       if (driverInstallMethod(d.source) === 'mip') {
         const target = d.target.trim()
-        const res = await window.api.packages.install(
-          d.source,
-          target ? { target } : undefined
-        )
+        const res = await window.api.packages.install(d.source, target ? { target } : undefined)
         setStatus(id, {
           state: res.ok ? 'ok' : 'error',
           message: res.ok ? undefined : res.log.split('\n').filter(Boolean).pop() || 'mip failed'
@@ -117,19 +173,26 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
     if (running || !connected) return
     setRunning(true)
     try {
-      for (const need of needs) {
-        for (let i = 0; i < need.drivers.length; i++) {
-          await installOne(need, i, need.drivers[i])
+      for (const need of visibleNeeds) {
+        for (const d of need.drivers) {
+          await installOne(need, d)
         }
       }
     } finally {
       setRunning(false)
+      // Tell every window (incl. the main window's "missing library" banner) to
+      // re-probe, and re-probe ourselves so freshly-installed rows drop out.
+      window.api.modules.notifyChanged()
+      setProbeNonce((n) => n + 1)
     }
   }
 
-  const total = needs.reduce((n, need) => n + need.drivers.length, 0)
-  const done = Object.values(statuses).filter((s) => s.state === 'ok').length
-  const errored = Object.values(statuses).some((s) => s.state === 'error')
+  const rows = visibleNeeds.flatMap((need) =>
+    need.drivers.map((d) => ({ need, d, id: driverKey(need, d) }))
+  )
+  const total = rows.length
+  const done = rows.filter(({ id }) => statuses[id]?.state === 'ok').length
+  const errored = rows.some(({ id }) => statuses[id]?.state === 'error')
   const allOk = total > 0 && done === total
 
   return (
@@ -151,8 +214,8 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
           <strong className="drvbanner__title">
             {allOk
               ? 'Drivers installed'
-              : `${needs.length} part${needs.length === 1 ? '' : 's'} need${
-                  needs.length === 1 ? 's' : ''
+              : `${visibleNeeds.length} part${visibleNeeds.length === 1 ? '' : 's'} need${
+                  visibleNeeds.length === 1 ? 's' : ''
                 } a driver`}
           </strong>
           <span className="drvbanner__sub">
@@ -190,25 +253,22 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
       </div>
 
       <ul className="drvbanner__list">
-        {needs.map((need) =>
-          need.drivers.map((d, i) => {
-            const id = `${need.key}#${i}`
-            const st = statuses[id]?.state ?? 'pending'
-            return (
-              <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
-                <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
-                <span className="drvbanner__row-part">{need.label}</span>
-                <span className="drvbanner__row-driver">{driverLabel(d)}</span>
-                <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
-                  → {d.target}
-                </span>
-                {st === 'error' && statuses[id]?.message && (
-                  <span className="drvbanner__row-error">{statuses[id]?.message}</span>
-                )}
-              </li>
-            )
-          })
-        )}
+        {rows.map(({ need, d, id }) => {
+          const st = statuses[id]?.state ?? 'pending'
+          return (
+            <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
+              <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
+              <span className="drvbanner__row-part">{need.label}</span>
+              <span className="drvbanner__row-driver">{driverLabel(d)}</span>
+              <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
+                → {d.target}
+              </span>
+              {st === 'error' && statuses[id]?.message && (
+                <span className="drvbanner__row-error">{statuses[id]?.message}</span>
+              )}
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

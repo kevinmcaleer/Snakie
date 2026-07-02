@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import type { IpcResult } from '../device/types'
 import { MODULES, type ModuleDef } from '../../shared/modules-catalog'
 import { planForId, type ModuleInstallPlan } from './resolve'
@@ -44,4 +44,16 @@ export function registerModulesIpc(): void {
   ipcMain.handle('modules:installPlan', (_e, id: string) =>
     wrap<ModuleInstallPlan>(async () => planForId(id))
   )
+
+  // A driver/library was installed onto the board from SOME window (e.g. the Board
+  // View's Driver Install banner copies a file; the main window's Parts banner
+  // mip-installs). Fan the event to EVERY window so their "needs a driver" /
+  // "missing library" banners re-probe the board and clear once it's present —
+  // otherwise a driver installed in the board window leaves the main window's
+  // probe stale (it only re-probes on connect / its own install).
+  ipcMain.on('modules:changed', () => {
+    for (const w of BrowserWindow.getAllWindows()) {
+      if (!w.isDestroyed()) w.webContents.send('modules:didChange')
+    }
+  })
 }
