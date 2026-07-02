@@ -57,8 +57,12 @@ export interface DisplayGeometry {
   id: string
   /** Human label shown in the picker + the SIZE readout. */
   label: string
-  /** `pixel` = a graphic OLED (framebuffer); `char` = an HD44780 character LCD. */
+  /** `pixel` = a graphic OLED/TFT (framebuffer); `char` = an HD44780 character LCD. */
   type: 'pixel' | 'char'
+  /** The wire bus: `i2c` (SSD1306/HD44780) or `spi` (ST7789 TFT). Default `i2c`. */
+  bus: 'i2c' | 'spi'
+  /** The chip label shown in the wiring header (e.g. `SSD1306`, `ST7789`). */
+  driver: 'ssd1306' | 'hd44780' | 'st7789'
   /** Pixel displays: width/height in px. */
   w?: number
   h?: number
@@ -69,14 +73,23 @@ export interface DisplayGeometry {
 
 /**
  * The configurable geometries (#118): SSD1306/SH1106 graphic OLEDs and HD44780
- * character LCDs over an I²C backpack. Order = the picker order; the first is the
- * default (the common 128×64 SSD1306).
+ * character LCDs over an I²C backpack, plus ST7789 colour TFTs over SPI. Order =
+ * the picker order; the first is the default (the common 128×64 SSD1306).
+ *
+ * The ST7789 variants (240×240 / 240×320 / 135×240 / 170×320) are `bus: 'spi'`, so
+ * the panel swaps its wiring to the SPI pin selectors (SCK / MOSI / DC / RST / CS)
+ * and drops the I²C address; their `w`/`h` are pushed to the board so the on-device
+ * ST7789 driver initialises at the right resolution.
  */
 export const DISPLAY_GEOMETRIES: DisplayGeometry[] = [
-  { id: 'oled-128x64', label: 'OLED 128×64', type: 'pixel', w: 128, h: 64 },
-  { id: 'oled-128x32', label: 'OLED 128×32', type: 'pixel', w: 128, h: 32 },
-  { id: 'lcd-16x2', label: 'LCD 16×2', type: 'char', cols: 16, charRows: 2 },
-  { id: 'lcd-20x4', label: 'LCD 20×4', type: 'char', cols: 20, charRows: 4 }
+  { id: 'oled-128x64', label: 'OLED 128×64', type: 'pixel', bus: 'i2c', driver: 'ssd1306', w: 128, h: 64 },
+  { id: 'oled-128x32', label: 'OLED 128×32', type: 'pixel', bus: 'i2c', driver: 'ssd1306', w: 128, h: 32 },
+  { id: 'lcd-16x2', label: 'LCD 16×2', type: 'char', bus: 'i2c', driver: 'hd44780', cols: 16, charRows: 2 },
+  { id: 'lcd-20x4', label: 'LCD 20×4', type: 'char', bus: 'i2c', driver: 'hd44780', cols: 20, charRows: 4 },
+  { id: 'tft-240x240', label: 'TFT 240×240', type: 'pixel', bus: 'spi', driver: 'st7789', w: 240, h: 240 },
+  { id: 'tft-240x320', label: 'TFT 240×320', type: 'pixel', bus: 'spi', driver: 'st7789', w: 240, h: 320 },
+  { id: 'tft-135x240', label: 'TFT 135×240', type: 'pixel', bus: 'spi', driver: 'st7789', w: 135, h: 240 },
+  { id: 'tft-170x320', label: 'TFT 170×320', type: 'pixel', bus: 'spi', driver: 'st7789', w: 170, h: 320 }
 ]
 
 /** Look up a geometry by id (falls back to the first / default geometry). */
@@ -316,6 +329,67 @@ export function i2cBlockForPins(sda: number, scl: number): 0 | 1 | null {
 /** Whether `(sda, scl)` is a valid RP2040 I²C pin pair (see {@link i2cBlockForPins}). */
 export function i2cPinsValid(sda: number, scl: number): boolean {
   return i2cBlockForPins(sda, scl) !== null
+}
+
+// ---------------------------------------------------------------------------
+// RP2040 SPI SCK/MOSI(TX) pin mux — the basis for the ST7789 panel's INVALID-PIN
+// warning (mirrors `micropython/instruments.py::_spi_block_for_pins`). Each SPI
+// block drives SCK/TX on a fixed set of GPIOs; a pair is VALID iff BOTH pins live
+// in the SAME block (SCK from its SCK set AND MOSI from its TX set). DC/RST/CS are
+// plain GPIOs (any pin), so only the SCK+MOSI pair is mux-constrained:
+//
+//   SPI0 — SCK ∈ {2,6,18,22}, MOSI ∈ {3,7,19,23}
+//   SPI1 — SCK ∈ {10,14,26},  MOSI ∈ {11,15,27}
+// ---------------------------------------------------------------------------
+
+const SPI0_SCK = new Set([2, 6, 18, 22])
+const SPI0_TX = new Set([3, 7, 19, 23])
+const SPI1_SCK = new Set([10, 14, 26])
+const SPI1_TX = new Set([11, 15, 27])
+
+/**
+ * The RP2040 SPI block (`0` or `1`) a `(sck, mosi)` pair selects, or `null` when
+ * the pair is invalid. Valid only when both pins belong to the SAME block's
+ * SCK/TX sets; any cross-block pair or unknown pin yields `null`. Pure — backs
+ * both {@link spiPinsValid} and the ST7789 panel's pin warning.
+ */
+export function spiBlockForPins(sck: number, mosi: number): 0 | 1 | null {
+  if (SPI0_SCK.has(sck) && SPI0_TX.has(mosi)) return 0
+  if (SPI1_SCK.has(sck) && SPI1_TX.has(mosi)) return 1
+  return null
+}
+
+/** Whether `(sck, mosi)` is a valid RP2040 SPI pin pair (see {@link spiBlockForPins}). */
+export function spiPinsValid(sck: number, mosi: number): boolean {
+  return spiBlockForPins(sck, mosi) !== null
+}
+
+/** A whole, non-negative GPIO number (defaults to `fallback` for a non-finite input). */
+function gpio(n: number, fallback = 0): number {
+  return Math.max(0, Math.round(Number.isFinite(n) ? n : fallback))
+}
+
+/**
+ * The `<payload>` that (re)targets an ST7789 SPI display:
+ * `spi <sck> <mosi> <dc> <rst> <cs> <w> <h>`. Every pin is a whole GPIO number,
+ * except `cs`, which may be `-1` to mean **tied** (no chip-select pin driven).
+ * `w`/`h` (≥1) tell the on-device driver the panel resolution. Pass to
+ * `sendControl('screen', screenSpiPayload(...))` → the device sees
+ * `SNKCMD screen spi …`.
+ */
+export function screenSpiPayload(
+  sck: number,
+  mosi: number,
+  dc: number,
+  rst: number,
+  cs: number,
+  w: number,
+  h: number
+): string {
+  const csTok = cs < 0 ? -1 : gpio(cs)
+  const ww = Math.max(1, Math.round(Number.isFinite(w) ? w : 1))
+  const hh = Math.max(1, Math.round(Number.isFinite(h) ? h : 1))
+  return `spi ${gpio(sck)} ${gpio(mosi)} ${gpio(dc)} ${gpio(rst)} ${csTok} ${ww} ${hh}`
 }
 
 // ---------------------------------------------------------------------------

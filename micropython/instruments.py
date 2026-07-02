@@ -612,6 +612,8 @@ def ready(extra=()):
 
 def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
           screen_sda=None, screen_scl=None, screen_addr=0x3C,
+          screen_sck=None, screen_mosi=None, screen_dc=None, screen_rst=None,
+          screen_cs=None, screen_w=240, screen_h=240,
           servo_pin=None, background=False, hz=50):
     """Register the built-in control handlers + attach the buzzer, then announce.
 
@@ -657,8 +659,15 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
     if range_trig is not None and range_echo is not None:
         ranger.set_pins(range_trig, range_echo)
         control.on("range", lambda payload: range_command(payload, ranger))
+    # The `screen` receiver serves both an I²C SSD1306 (screen_sda/scl) and an
+    # ST7789 SPI TFT (screen_sck/mosi/dc/rst). Pre-attach whichever bus was wired;
+    # the panel can still retarget either at runtime (`pins …` / `spi …`).
     if screen_sda is not None and screen_scl is not None:
         display.set_pins(screen_sda, screen_scl, screen_addr)
+        control.on("screen", lambda payload: screen_command(payload, display))
+    elif screen_sck is not None and screen_mosi is not None:
+        display.set_spi(screen_sck, screen_mosi, screen_dc, screen_rst, screen_cs,
+                        screen_w, screen_h)
         control.on("screen", lambda payload: screen_command(payload, display))
     # The Servo panel attaches on the fly via `pin <n>`, so register it always;
     # pre-attach only if a servo_pin was given.
@@ -1100,6 +1109,35 @@ def _i2c_block_for_pins(sda, scl):
     return None
 
 
+# The RP2040 SPI pin mux: each block drives SCK/MOSI(TX) on a fixed set of GPIOs.
+# A pair is valid iff both pins live in the SAME block. Backs :func:`_spi_block_for_pins`
+# and the IDE's ST7789 invalid-pin warning (kept in lock-step with the panel's mux).
+_SPI0_SCK = (2, 6, 18, 22)
+_SPI0_TX = (3, 7, 19, 23)
+_SPI1_SCK = (10, 14, 26)
+_SPI1_TX = (11, 15, 27)
+
+
+def _spi_block_for_pins(sck, mosi):
+    """Return the RP2040 SPI block (0 or 1) a ``(sck, mosi)`` pair selects, or None.
+
+    Valid only when both pins live in the SAME block's SCK/TX sets: block 0 wants
+    SCK∈{2,6,18,22} & MOSI∈{3,7,19,23}; block 1 wants SCK∈{10,14,26} & MOSI∈{11,15,
+    27}. Any cross-block pair or unknown pin yields ``None`` (the IDE warns and the
+    driver falls back to block 0). Pure + side-effect-free for unit tests.
+    """
+    try:
+        sck = int(sck)
+        mosi = int(mosi)
+    except (TypeError, ValueError):
+        return None
+    if sck in _SPI0_SCK and mosi in _SPI0_TX:
+        return 0
+    if sck in _SPI1_SCK and mosi in _SPI1_TX:
+        return 1
+    return None
+
+
 # The standard SSD1306 init sequence (matches the canonical MicroPython driver).
 _SSD1306_INIT = (
     0xAE, 0x20, 0x00, 0x40, 0xA1, 0xA8, 0x3F, 0xC8, 0xD3, 0x00,
@@ -1144,6 +1182,113 @@ class _SSD1306:
         for c in (0x21, 0, self.w - 1, 0x22, 0, (self.h // 8) - 1):
             self._cmd(c)
         self._i2c.writeto(self._addr, b"\x40" + self._buf)
+
+
+# ST7789 colour TFT (SPI) — the RAM offset per common panel size, so the address
+# window lands on the visible area (ST7789 RAM is 240×320; smaller/rotated panels
+# sit at an offset). Keyed by (w, h); unknown sizes fall back to (0, 0).
+_ST7789_OFFSETS = {
+    (240, 240): (0, 0),
+    (240, 320): (0, 0),
+    (135, 240): (52, 40),
+    (170, 320): (35, 0),
+}
+
+
+class _ST7789:
+    """A minimal bundled ST7789 SPI TFT driver (no external driver needed).
+
+    Renders into a full-screen ``framebuf`` RGB565 buffer and blits it over SPI, so
+    it exposes the SAME ``fill``/``text``/``show`` interface as :class:`_SSD1306`
+    and :class:`Display` can drive either transparently. Text is the framebuf 8×8
+    font in white on black. Built ONLY when ``framebuf`` + ``machine`` are present
+    (guarded by the caller); a big panel that can't allocate its buffer raises
+    ``MemoryError``, which the caller catches → telemetry-only (no panel).
+
+    NOTE: intentionally illustrative — one colour, one font, per-size offsets for
+    the common panels. Odd variants may need a different offset/rotation; install a
+    dedicated ST7789 driver for full control (the mirror + push still work either way).
+    """
+
+    def __init__(self, spi, dc, cs, rst, w, h):
+        import framebuf
+        from machine import Pin
+        self.w = w
+        self.h = h
+        self._spi = spi
+        self._dc = Pin(int(dc), Pin.OUT)
+        self._cs = Pin(int(cs), Pin.OUT) if cs is not None and int(cs) >= 0 else None
+        self._rst = Pin(int(rst), Pin.OUT) if rst is not None and int(rst) >= 0 else None
+        self._xoff, self._yoff = _ST7789_OFFSETS.get((w, h), (0, 0))
+        # RGB565 = 2 bytes/px. A 240×320 buffer is ~150 KB — may MemoryError on a
+        # low-RAM board; the caller catches it and falls back to telemetry-only.
+        self._buf = bytearray(w * h * 2)
+        self._fb = framebuf.FrameBuffer(self._buf, w, h, framebuf.RGB565)
+        self._reset()
+        self._init()
+        self.fill(0)
+        self.show()
+
+    def _cs_low(self):
+        if self._cs is not None:
+            self._cs.value(0)
+
+    def _cs_high(self):
+        if self._cs is not None:
+            self._cs.value(1)
+
+    def _reset(self):
+        import time
+        if self._rst is not None:
+            self._rst.value(1); time.sleep_ms(10)
+            self._rst.value(0); time.sleep_ms(10)
+            self._rst.value(1); time.sleep_ms(120)
+
+    def _cmd(self, c, data=None):
+        self._cs_low()
+        self._dc.value(0)
+        self._spi.write(bytes((c,)))
+        if data is not None:
+            self._dc.value(1)
+            self._spi.write(bytes(data))
+        self._cs_high()
+
+    def _init(self):
+        import time
+        self._cmd(0x01)              # SWRESET
+        time.sleep_ms(150)
+        self._cmd(0x11)              # SLPOUT
+        time.sleep_ms(120)
+        self._cmd(0x3A, (0x55,))     # COLMOD: 16-bit/px (RGB565)
+        self._cmd(0x36, (0x00,))     # MADCTL: row/col order
+        self._cmd(0x21)              # INVON — ST7789 needs inversion for true colour
+        self._cmd(0x13)              # NORON
+        self._cmd(0x29)              # DISPON
+        time.sleep_ms(50)
+
+    def fill(self, c):
+        # Match the mono interface: 0 → black, non-zero → white.
+        self._fb.fill(0xFFFF if c else 0x0000)
+
+    def text(self, s, x, y, c=1):
+        self._fb.text(s, x, y, 0xFFFF if c else 0x0000)
+
+    def _set_window(self):
+        x0 = self._xoff
+        y0 = self._yoff
+        x1 = self._xoff + self.w - 1
+        y1 = self._yoff + self.h - 1
+        self._cmd(0x2A, (x0 >> 8, x0 & 0xFF, x1 >> 8, x1 & 0xFF))  # CASET
+        self._cmd(0x2B, (y0 >> 8, y0 & 0xFF, y1 >> 8, y1 & 0xFF))  # RASET
+
+    def show(self):
+        self._set_window()
+        self._cs_low()
+        self._dc.value(0)
+        self._spi.write(bytes((0x2C,)))  # RAMWR
+        self._dc.value(1)
+        self._spi.write(self._buf)
+        self._cs_high()
 
 
 class Display:
@@ -1193,6 +1338,33 @@ class Display:
             self._oled = _SSD1306(w, h, self._i2c, int(addr))
         except Exception:
             self._oled = None  # no framebuf / panel — telemetry-only
+
+    def set_spi(self, sck, mosi, dc, rst, cs, w=240, h=240):
+        """(Re)build an ST7789 colour TFT on an SPI bus (issue: SPI displays).
+
+        Derives the SPI block from ``sck``/``mosi`` (block 0 when invalid — the IDE
+        warns), builds ``SPI(block, sck=Pin(sck), mosi=Pin(mosi))`` at 30 MHz, then
+        the bundled :class:`_ST7789` on ``dc``/``rst``/``cs`` at ``w``×``h``. ``cs``
+        may be ``None`` / ``< 0`` (tied low, no CS pin). The echo label becomes
+        ``st7789`` so the IDE's mirror tags the source. Guards every hardware import
+        (inert under CPython — the panel stays unbuilt; ``text`` still echoes
+        telemetry); a buffer too big for RAM falls back to telemetry-only.
+        """
+        self._addr = "st7789"  # single-token label for the SNK SCR echo
+        block = _spi_block_for_pins(sck, mosi)
+        if block is None:
+            block = 0  # invalid pair → block 0 (the IDE warns)
+        cs_pin = None if cs is None or int(cs) < 0 else int(cs)
+        try:
+            from machine import Pin, SPI
+        except ImportError:
+            self._oled = None
+            return  # no hardware (CPython) — inert; text() still echoes telemetry
+        try:
+            spi = SPI(block, baudrate=30_000_000, sck=Pin(int(sck)), mosi=Pin(int(mosi)))
+            self._oled = _ST7789(spi, dc, cs_pin if cs_pin is not None else -1, rst, int(w), int(h))
+        except Exception:
+            self._oled = None  # no framebuf / not enough RAM — telemetry-only
 
     def set_addr(self, addr):
         """Set the bus-address label used in the ``SNK SCR`` echo (e.g. ``0x3D``)."""
@@ -1246,6 +1418,14 @@ def screen_command(payload, disp=None):
         if verb == "pins":
             parts = args.split()
             disp.set_pins(int(parts[0]), int(parts[1]))
+        elif verb == "spi":
+            # spi <sck> <mosi> <dc> <rst> <cs> <w> <h> — retarget an ST7789 TFT.
+            # cs may be -1 (tied). w/h default to 240 when omitted.
+            p = args.split()
+            cs = int(p[4]) if len(p) > 4 else -1
+            w = int(p[5]) if len(p) > 5 else 240
+            h = int(p[6]) if len(p) > 6 else 240
+            disp.set_spi(int(p[0]), int(p[1]), int(p[2]), int(p[3]), cs, w, h)
         elif verb == "addr":
             if not args:
                 return None

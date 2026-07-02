@@ -736,9 +736,13 @@ class _FakeDisplay:
         self.pins = None       # the (sda, scl) of the last set_pins call
         self.addr = None       # the last set_addr argument
         self.rows = None       # the rows of the last text() call
+        self.spi = None        # the (sck, mosi, dc, rst, cs, w, h) of set_spi
 
     def set_pins(self, sda, scl):
         self.pins = (int(sda), int(scl))
+
+    def set_spi(self, sck, mosi, dc, rst, cs, w=240, h=240):
+        self.spi = (int(sck), int(mosi), int(dc), int(rst), int(cs), int(w), int(h))
 
     def set_addr(self, addr):
         self.addr = int(addr)
@@ -776,6 +780,82 @@ class I2CPinMux(unittest.TestCase):
         self.assertIsNone(inst._i2c_block_for_pins(28, 22))  # not an I²C pin
         self.assertIsNone(inst._i2c_block_for_pins("a", "b"))  # non-numeric
         self.assertIsNone(inst._i2c_block_for_pins(None, None))
+
+
+class SpiPinMux(unittest.TestCase):
+    """The RP2040 SPI SCK/MOSI pin mux backing the ST7789 panel's invalid-pin warning."""
+
+    def test_valid_block0_pairs(self):
+        # Block 0: SCK∈{2,6,18,22}, MOSI∈{3,7,19,23}.
+        self.assertEqual(inst._spi_block_for_pins(2, 3), 0)
+        self.assertEqual(inst._spi_block_for_pins(18, 19), 0)
+        self.assertEqual(inst._spi_block_for_pins(22, 23), 0)
+
+    def test_valid_block1_pairs(self):
+        # Block 1: SCK∈{10,14,26}, MOSI∈{11,15,27}.
+        self.assertEqual(inst._spi_block_for_pins(10, 11), 1)
+        self.assertEqual(inst._spi_block_for_pins(14, 15), 1)
+        self.assertEqual(inst._spi_block_for_pins(26, 27), 1)
+
+    def test_cross_block_and_unknown_are_invalid(self):
+        self.assertIsNone(inst._spi_block_for_pins(18, 11))   # SCK b0, MOSI b1
+        self.assertIsNone(inst._spi_block_for_pins(10, 19))   # SCK b1, MOSI b0
+        self.assertIsNone(inst._spi_block_for_pins(19, 18))   # roles swapped
+        self.assertIsNone(inst._spi_block_for_pins(0, 1))     # I²C pins
+        self.assertIsNone(inst._spi_block_for_pins("a", "b"))  # non-numeric
+
+
+class DisplaySpiDevice(unittest.TestCase):
+    """The on-device ST7789 SPI display: set_spi fallback, the `screen spi` verb."""
+
+    def test_set_spi_inert_without_machine(self):
+        # No `machine` under CPython -> set_spi builds no panel but never raises,
+        # and re-labels the SNK SCR echo as `st7789`.
+        disp = inst.Display()
+        disp.set_spi(18, 19, 16, 20, 17, 240, 240)
+        self.assertIsNone(disp._oled)
+        self.assertEqual(disp._addr, "st7789")
+
+    def test_set_spi_accepts_tied_cs(self):
+        # cs = -1 (tied) is accepted the same as a real pin (still inert here).
+        disp = inst.Display()
+        disp.set_spi(18, 19, 16, 20, -1, 240, 320)
+        self.assertIsNone(disp._oled)
+
+    def test_text_after_set_spi_echoes_st7789_label(self):
+        disp = inst.Display()
+        disp.set_spi(18, 19, 16, 20, -1)
+        line = _emit(disp.text, ["Snakie", "ready"])
+        self.assertEqual(line, "SNK SCR st7789 text Snakie ready")
+
+    def test_screen_command_spi_parsing(self):
+        disp = _FakeDisplay()
+        self.assertEqual(
+            inst.screen_command("spi 18 19 16 20 17 240 320", disp), "spi"
+        )
+        self.assertEqual(disp.spi, (18, 19, 16, 20, 17, 240, 320))
+
+    def test_screen_command_spi_defaults_size_and_tied_cs(self):
+        disp = _FakeDisplay()
+        # Omitted cs/w/h default to -1 (tied) / 240 / 240.
+        self.assertEqual(inst.screen_command("spi 10 11 12 13", disp), "spi")
+        self.assertEqual(disp.spi, (10, 11, 12, 13, -1, 240, 240))
+
+    def test_screen_command_spi_malformed(self):
+        disp = _FakeDisplay()
+        self.assertIsNone(inst.screen_command("spi 18", disp))       # missing pins
+        self.assertIsNone(inst.screen_command("spi a b c d", disp))  # non-numeric
+        self.assertIsNone(disp.spi)
+
+    def test_start_with_screen_spi_registers_receiver(self):
+        # start(screen_sck=, screen_mosi=) must register the `screen` handler
+        # (set_spi stays inert under CPython, but the receiver is wired).
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False, screen_sck=18, screen_mosi=19,
+                       screen_dc=16, screen_rst=20, screen_cs=17)
+        self.assertIn("screen", inst.control._handlers)
+        # The wired handler dispatches a `screen spi …` line to the singleton.
+        self.assertEqual(inst.screen_command("spi 18 19 16 20 17 240 240"), "spi")
 
 
 class DisplayDevice(unittest.TestCase):

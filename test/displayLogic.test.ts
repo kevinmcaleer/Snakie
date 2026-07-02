@@ -18,7 +18,10 @@ import {
   readingToView,
   screenAddrPayload,
   screenPinsPayload,
-  setScreenPinsInCode
+  screenSpiPayload,
+  setScreenPinsInCode,
+  spiBlockForPins,
+  spiPinsValid
 } from '../src/renderer/src/components/display-logic'
 import type { ScreenTelemetry } from '../src/renderer/src/components/instrument-telemetry'
 
@@ -217,6 +220,31 @@ describe('geometries', () => {
     expect(ids).toContain('lcd-20x4')
   })
 
+  it('exposes the ST7789 SPI TFT variants (240×240 + others)', () => {
+    const spi = DISPLAY_GEOMETRIES.filter((g) => g.bus === 'spi')
+    expect(spi.map((g) => g.id)).toEqual([
+      'tft-240x240',
+      'tft-240x320',
+      'tft-135x240',
+      'tft-170x320'
+    ])
+    // Every SPI geometry is an ST7789 pixel display with real px dimensions.
+    for (const g of spi) {
+      expect(g.driver).toBe('st7789')
+      expect(g.type).toBe('pixel')
+      expect(g.w).toBeGreaterThan(0)
+      expect(g.h).toBeGreaterThan(0)
+    }
+    expect(geometryById('tft-240x240').w).toBe(240)
+    expect(geometryById('tft-240x320').h).toBe(320)
+  })
+
+  it('tags the existing OLED/LCD geometries as the I²C bus', () => {
+    for (const g of DISPLAY_GEOMETRIES.filter((g) => g.id.startsWith('oled') || g.id.startsWith('lcd'))) {
+      expect(g.bus).toBe('i2c')
+    }
+  })
+
   it('looks up by id and falls back to the default', () => {
     expect(geometryById('lcd-16x2').cols).toBe(16)
     expect(geometryById('nope').id).toBe(DISPLAY_GEOMETRIES[0].id)
@@ -353,5 +381,45 @@ describe('setScreenPinsInCode (one-click sync of both pins)', () => {
   it('round-trips with findScreenPinsInCode', () => {
     const updated = setScreenPinsInCode('SCREEN_SDA = 0\nSCREEN_SCL = 1', 26, 27)
     expect(findScreenPinsInCode(updated)).toEqual({ sda: 26, scl: 27 })
+  })
+})
+
+describe('spiBlockForPins (RP2040 SPI pin mux — matches _spi_block_for_pins)', () => {
+  it('resolves SPI0 SCK/MOSI pairs to block 0', () => {
+    expect(spiBlockForPins(2, 3)).toBe(0)
+    expect(spiBlockForPins(6, 7)).toBe(0)
+    expect(spiBlockForPins(18, 19)).toBe(0)
+    expect(spiBlockForPins(22, 23)).toBe(0)
+  })
+  it('resolves SPI1 SCK/MOSI pairs to block 1', () => {
+    expect(spiBlockForPins(10, 11)).toBe(1)
+    expect(spiBlockForPins(14, 15)).toBe(1)
+    expect(spiBlockForPins(26, 27)).toBe(1)
+  })
+  it('rejects cross-block, role-swapped, and unknown pins', () => {
+    expect(spiBlockForPins(18, 11)).toBeNull() // SCK b0, MOSI b1
+    expect(spiBlockForPins(10, 19)).toBeNull() // SCK b1, MOSI b0
+    expect(spiBlockForPins(19, 18)).toBeNull() // roles swapped
+    expect(spiBlockForPins(0, 1)).toBeNull() // I²C pins, not SPI
+    expect(spiBlockForPins(99, 3)).toBeNull()
+  })
+  it('spiPinsValid mirrors the block lookup', () => {
+    expect(spiPinsValid(18, 19)).toBe(true)
+    expect(spiPinsValid(18, 11)).toBe(false)
+  })
+})
+
+describe('screenSpiPayload (retarget an ST7789 SPI TFT)', () => {
+  it('emits `spi <sck> <mosi> <dc> <rst> <cs> <w> <h>`', () => {
+    expect(screenSpiPayload(18, 19, 16, 20, 17, 240, 240)).toBe('spi 18 19 16 20 17 240 240')
+  })
+  it('passes cs = -1 straight through (a tied chip-select)', () => {
+    expect(screenSpiPayload(18, 19, 16, 20, -1, 240, 320)).toBe('spi 18 19 16 20 -1 240 320')
+  })
+  it('rounds + clamps the GPIO pins (cs stays tied for any negative)', () => {
+    expect(screenSpiPayload(18.6, 19.2, 16, 20, -5, 135, 240)).toBe('spi 19 19 16 20 -1 135 240')
+  })
+  it('floors dimensions to at least 1×1 on a bad size', () => {
+    expect(screenSpiPayload(18, 19, 16, 20, 17, 0, NaN)).toBe('spi 18 19 16 20 17 1 1')
   })
 })

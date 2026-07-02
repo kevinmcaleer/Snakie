@@ -287,6 +287,15 @@
   gap: 10px;
   flex-wrap: wrap;
 }
+/* The ST7789 SPI wiring packs five selectors (SCK/SDA/DC/RST/CS) — tighten the gap
+   + selects so the row fits the window (wrapping to a second line if it must). */
+.i2cd__pins--spi {
+  gap: 7px;
+}
+.i2cd__pins--spi .i2cd__select--pin {
+  padding: 0 6px;
+  font-size: 11px;
+}
 .i2cd__field {
   display: flex;
   flex-direction: column;

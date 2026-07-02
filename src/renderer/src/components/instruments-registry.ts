@@ -233,16 +233,16 @@ export const INSTRUMENTS: InstrumentDef[] = [
   },
   {
     id: 'i2c-display',
-    name: 'I²C display',
+    name: 'Display',
     accent: '#5fd6f0',
     border: 'rgba(95,214,240,.5)',
     // small screen with text lines
     icon: 'M4 5 h16 a1 1 0 0 1 1 1 v12 a1 1 0 0 1 -1 1 H4 a1 1 0 0 1 -1 -1 V6 a1 1 0 0 1 1 -1 Z M7 9 h10 M7 12 h10 M7 15 h6',
     group: 'both',
     kind: 'singleton',
-    description: 'Preview text/graphics for an I²C OLED / LCD display.',
+    description: 'Preview text/graphics for an I²C OLED / LCD or an ST7789 SPI TFT.',
     uses: ['i2c'],
-    hints: ['ssd1306', 'sh1106', 'lcd', 'oled']
+    hints: ['ssd1306', 'sh1106', 'lcd', 'oled', 'st7789', 'tft', 'spi']
   },
   {
     id: 'wifi-scan',

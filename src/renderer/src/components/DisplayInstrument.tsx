@@ -5,7 +5,7 @@ import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
-import { displayDemo, DISPLAY_DEMO_NAME } from './display-demo'
+import { displayDemo, DISPLAY_DEMO_NAME, displaySpiDemo, DISPLAY_SPI_DEMO_NAME } from './display-demo'
 import {
   DISPLAY_GEOMETRIES,
   blankGrid,
@@ -19,7 +19,10 @@ import {
   readingToView,
   screenAddrPayload,
   screenPinsPayload,
+  screenSpiPayload,
   setScreenPinsInCode,
+  spiBlockForPins,
+  spiPinsValid,
   type PixelGrid,
   type ScreenView
 } from './display-logic'
@@ -132,6 +135,14 @@ export function DisplayInstrument({
   const [sda, setSda] = useState<number>(0)
   const [scl, setScl] = useState<number>(1)
   const [addr, setAddr] = useState<string>(DEFAULT_ADDR)
+  // SPI (ST7789) wiring — used when the selected geometry is `bus: 'spi'`. Defaults
+  // are a valid RP2040 SPI0 set (SCK GP18 / MOSI GP19) + common DC/RST/CS pins.
+  const [sck, setSck] = useState<number>(18)
+  const [mosi, setMosi] = useState<number>(19)
+  const [dc, setDc] = useState<number>(16)
+  const [rst, setRst] = useState<number>(20)
+  const [cs, setCs] = useState<number>(17) // -1 = tied (no CS pin driven)
+  const isSpi = geo.bus === 'spi'
   // Shown when a retarget can't reach a live program (offer to run the demo).
   const [prompt, setPrompt] = useState(false)
   // True while opening + running the demo (disables the prompt buttons).
@@ -198,6 +209,32 @@ export function DisplayInstrument({
     [txScreen, connected, present]
   )
 
+  // --- SPI (ST7789) retarget: send `screen spi <sck> <mosi> <dc> <rst> <cs> <w> <h>`.
+  // Every SPI pin selector merges its new value over the current wiring and pushes
+  // the full config atomically (the on-device receiver rebuilds the panel each time).
+  const retargetSpi = useCallback(
+    (next: Partial<{ sck: number; mosi: number; dc: number; rst: number; cs: number }>): void => {
+      const v = { sck, mosi, dc, rst, cs, ...next }
+      txScreen(screenSpiPayload(v.sck, v.mosi, v.dc, v.rst, v.cs, geo.w ?? 240, geo.h ?? 240))
+      setPrompt(connected && !present && !everPresent.current)
+    },
+    [sck, mosi, dc, rst, cs, geo, txScreen, connected, present]
+  )
+
+  // Switch display size: for an ST7789 (SPI) target, the new W×H is part of its
+  // config, so push a fresh `spi …` retarget; I²C sizes carry no wire change.
+  const onGeoChange = useCallback(
+    (id: string): void => {
+      setGeoId(id)
+      const g = geometryById(id)
+      if (g.bus === 'spi') {
+        txScreen(screenSpiPayload(sck, mosi, dc, rst, cs, g.w ?? 240, g.h ?? 240))
+        setPrompt(connected && !present && !everPresent.current)
+      }
+    },
+    [sck, mosi, dc, rst, cs, txScreen, connected, present]
+  )
+
   // --- demo fallback (mirror RangeInstrument.runDemo) ------------------------
   // Open the display demo in a new tab and run it: interrupt any running program
   // (back to a REPL prompt), drop the demo in the editor, then paste-run it. The
@@ -206,9 +243,13 @@ export function DisplayInstrument({
   const runDemo = useCallback(async (): Promise<void> => {
     setBusy(true)
     try {
-      const src = displayDemo(sda, scl, addr) // wire the demo to the panel's pins
+      // Wire the demo to the panel's pins — the ST7789 (SPI) demo for a SPI
+      // geometry, else the SSD1306 (I²C) demo.
+      const [name, src] = isSpi
+        ? [DISPLAY_SPI_DEMO_NAME, displaySpiDemo(sck, mosi, dc, rst, cs, geo.w ?? 240, geo.h ?? 240)]
+        : [DISPLAY_DEMO_NAME, displayDemo(sda, scl, addr)]
       await window.api.device.interrupt().catch(() => undefined)
-      openBuffer(DISPLAY_DEMO_NAME, src)
+      openBuffer(name, src)
       await new Promise((resolve) => setTimeout(resolve, 200))
       await window.api.device.sendData(`\x05${src}\x04`)
       setPrompt(false)
@@ -217,12 +258,15 @@ export function DisplayInstrument({
     } finally {
       setBusy(false)
     }
-  }, [openBuffer, sda, scl, addr])
+  }, [openBuffer, isSpi, sda, scl, addr, sck, mosi, dc, rst, cs, geo])
 
   // --- invalid-pin warning (the RP2040 I²C mux) ------------------------------
   // The block the SDA/SCL pair selects (null when invalid → the warning strip).
   const block = i2cBlockForPins(sda, scl)
   const pinsValid = i2cPinsValid(sda, scl)
+  // The RP2040 SPI block the SCK/MOSI pair selects (null → the ST7789 pin warning).
+  const spiBlock = spiBlockForPins(sck, mosi)
+  const spiValid = spiPinsValid(sck, mosi)
 
   // --- pin mismatch: warn when the open code targets different SDA/SCL pins ---
   // The numeric SCREEN_SDA / SCREEN_SCL declared in the active editor buffer, or
@@ -267,15 +311,20 @@ export function DisplayInstrument({
   }, [draft, geo, connected, present])
 
   // The address shown in the readout / source pill: the live wire address wins,
-  // else the panel's configured address.
-  const shownAddr = liveAddr ?? addr
-  const sizeLabel = geo.label.replace(/^(OLED|LCD)\s/, '')
+  // else the panel's configured address (I²C) or the driver name (SPI).
+  const shownAddr = liveAddr ?? (isSpi ? 'ST7789' : addr)
+  const sizeLabel = geo.label.replace(/^(OLED|LCD|TFT)\s/, '')
+  // The title-bar source pill: SPI shows the driver + clock/data pins; I²C the
+  // address + SDA/SCL pins.
+  const sourcePill = isSpi
+    ? `ST7789 · SCK GP${sck}/SDA GP${mosi}`
+    : `${shownAddr} · SDA GP${sda}/SCL GP${scl}`
 
   return (
     <InstrumentWindow
       name={def.name.toUpperCase()}
       helpId={`inst-${def.id}`}
-      source={`${shownAddr} · SDA GP${sda}/SCL GP${scl}`}
+      source={sourcePill}
       docked={docked}
       onClose={onClose}
       onToggleDock={onToggleDock}
@@ -300,7 +349,7 @@ export function DisplayInstrument({
             <select
               className="i2cd__select"
               value={geoId}
-              onChange={(e) => setGeoId(e.target.value)}
+              onChange={(e) => onGeoChange(e.target.value)}
               aria-label="Display size"
             >
               {DISPLAY_GEOMETRIES.map((g) => (
@@ -359,7 +408,7 @@ export function DisplayInstrument({
                     onClick={() => void runDemo()}
                     disabled={busy}
                   >
-                    {busy ? 'STARTING…' : '▶ Run display demo'}
+                    {busy ? 'STARTING…' : isSpi ? '▶ Run ST7789 demo' : '▶ Run display demo'}
                   </button>
                   <button
                     type="button"
@@ -374,7 +423,9 @@ export function DisplayInstrument({
                   The mirror reads any board printing <code>SNK SCR</code>; to retarget the
                   display&apos;s pins, open the demo (or run your own program calling{' '}
                   <code>
-                    inst.start(screen_sda={sda}, screen_scl={scl})
+                    {isSpi
+                      ? `inst.start(screen_sck=${sck}, screen_mosi=${mosi})`
+                      : `inst.start(screen_sda=${sda}, screen_scl=${scl})`}
                   </code>{' '}
                   + <code>inst.control.poll()</code>).
                 </p>
@@ -392,11 +443,12 @@ export function DisplayInstrument({
           </div>
         )}
 
-        {/* Display wiring: SDA / SCL pin selectors + the I²C address + a live pill.
-            The selectors send `SNKCMD screen pins <sda> <scl>` / `… addr <0xNN>`. */}
+        {/* Display wiring: an ST7789 (SPI) SCK/MOSI/DC/RST/CS set or an SSD1306 (I²C)
+            SDA/SCL + address, plus a live pill. The selectors send
+            `SNKCMD screen spi …` (SPI) or `… pins …` / `… addr …` (I²C). */}
         <div className="i2cd__wiring">
           <div className="i2cd__wiring-head">
-            <span className="i2cd__wiring-title">SSD1306 · I²C</span>
+            <span className="i2cd__wiring-title">{isSpi ? 'ST7789 · SPI' : 'SSD1306 · I²C'}</span>
             <span
               className={`i2cd__live ${
                 !connected ? 'i2cd__live--off' : present ? 'i2cd__live--on' : 'i2cd__live--idle'
@@ -406,99 +458,164 @@ export function DisplayInstrument({
                   ? 'No board connected — the mirror shows only telemetry it has received.'
                   : present
                     ? 'A Snakie program is running and servicing the display — the selectors retarget the board.'
-                    : 'No Snakie program detected. Run the display demo (or a program that calls inst.start(screen_sda=…, screen_scl=…) + inst.control.poll()).'
+                    : isSpi
+                      ? 'No Snakie program detected. Run the ST7789 demo (or a program that calls inst.start(screen_sck=…, screen_mosi=…) + inst.control.poll()).'
+                      : 'No Snakie program detected. Run the display demo (or a program that calls inst.start(screen_sda=…, screen_scl=…) + inst.control.poll()).'
               }
             >
               <span className="i2cd__live-dot" aria-hidden="true" />
               {!connected ? 'no board' : present ? 'program live' : 'no program'}
             </span>
           </div>
-          <div className="i2cd__pins">
-            <label className="i2cd__field">
-              <span className="i2cd__field-lbl">SDA</span>
-              <select
-                className="i2cd__select i2cd__select--pin"
-                value={sda}
-                onChange={(e) => onSdaChange(Number(e.target.value))}
-                aria-label="I²C SDA pin"
-              >
-                {GP_PINS.map((p) => (
-                  <option key={p} value={p}>
-                    GP{p}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="i2cd__field">
-              <span className="i2cd__field-lbl">SCL</span>
-              <select
-                className="i2cd__select i2cd__select--pin"
-                value={scl}
-                onChange={(e) => onSclChange(Number(e.target.value))}
-                aria-label="I²C SCL pin"
-              >
-                {GP_PINS.map((p) => (
-                  <option key={p} value={p}>
-                    GP{p}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="i2cd__field">
-              <span className="i2cd__field-lbl">ADDR</span>
-              <select
-                className="i2cd__select i2cd__select--pin"
-                value={addr}
-                onChange={(e) => onAddrChange(e.target.value)}
-                aria-label="I²C address"
-              >
-                {ADDR_PRESETS.map((a) => (
-                  <option key={a} value={a}>
-                    {a}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {pinsValid && (
-              <span className="i2cd__bus" title={`Valid I²C${block} pair`}>
-                I²C{block}
-              </span>
-            )}
-          </div>
 
-          {/* Invalid-pin warning: the SDA/SCL pair isn't a valid RP2040 I²C pair. */}
-          {!pinsValid && (
-            <div className="i2cd__pinwarn i2cd__pinwarn--bad" role="alert">
-              <span className="i2cd__pinwarn-msg">
-                GP{sda}/GP{scl} aren&apos;t a valid I²C pair — try GP0/GP1 (I2C0) or GP2/GP3 (I2C1).
-              </span>
-            </div>
-          )}
+          {isSpi ? (
+            <>
+              <div className="i2cd__pins i2cd__pins--spi">
+                <PinField
+                  label="SCK"
+                  ariaLabel="SPI SCK (clock) pin"
+                  value={sck}
+                  onChange={(n) => {
+                    setSck(n)
+                    retargetSpi({ sck: n })
+                  }}
+                />
+                <PinField
+                  label="SDA"
+                  ariaLabel="SPI MOSI/SDA (data) pin"
+                  value={mosi}
+                  onChange={(n) => {
+                    setMosi(n)
+                    retargetSpi({ mosi: n })
+                  }}
+                />
+                <PinField
+                  label="DC"
+                  ariaLabel="SPI DC (data/command) pin"
+                  value={dc}
+                  onChange={(n) => {
+                    setDc(n)
+                    retargetSpi({ dc: n })
+                  }}
+                />
+                <PinField
+                  label="RST"
+                  ariaLabel="SPI RST (reset) pin"
+                  value={rst}
+                  onChange={(n) => {
+                    setRst(n)
+                    retargetSpi({ rst: n })
+                  }}
+                />
+                <label className="i2cd__field">
+                  <span className="i2cd__field-lbl">CS</span>
+                  <select
+                    className="i2cd__select i2cd__select--pin"
+                    value={cs}
+                    onChange={(e) => {
+                      const n = Number(e.currentTarget.value)
+                      setCs(n)
+                      retargetSpi({ cs: n })
+                    }}
+                    aria-label="SPI CS (chip select) pin"
+                  >
+                    <option value={-1}>— tied</option>
+                    {GP_PINS.map((p) => (
+                      <option key={p} value={p}>
+                        GP{p}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {spiValid && (
+                  <span className="i2cd__bus" title={`Valid SPI${spiBlock} SCK/MOSI pair`}>
+                    SPI{spiBlock}
+                  </span>
+                )}
+              </div>
 
-          {/* Pin-mismatch strip: the panel retargets the board live, but the open
-              code may still declare different SCREEN_SDA / SCREEN_SCL. Offer a sync. */}
-          {pinsMismatch && (
-            <div className="i2cd__pinwarn" role="status">
-              <span className="i2cd__pinwarn-msg">
-                Panel pins (SDA GP{sda} · SCL GP{scl}) differ from your code
-                {sdaMismatch ? ` (SDA GP${codePins.sda})` : ''}
-                {sclMismatch ? ` (SCL GP${codePins.scl})` : ''}
-              </span>
-              <button
-                type="button"
-                className="i2cd__btn i2cd__pinwarn-btn"
-                onClick={onUpdateCodePins}
-                title={`Rewrite SCREEN_SDA / SCREEN_SCL in your code to GP${sda} / GP${scl}`}
-              >
-                Update code
-              </button>
-            </div>
+              {/* Invalid-pin warning: SCK/MOSI aren't a valid RP2040 SPI pair. */}
+              {!spiValid && (
+                <div className="i2cd__pinwarn i2cd__pinwarn--bad" role="alert">
+                  <span className="i2cd__pinwarn-msg">
+                    GP{sck}/GP{mosi} aren&apos;t a valid SPI SCK/MOSI pair — try GP18/GP19 (SPI0) or
+                    GP10/GP11 (SPI1).
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="i2cd__pins">
+                <PinField
+                  label="SDA"
+                  ariaLabel="I²C SDA pin"
+                  value={sda}
+                  onChange={(n) => onSdaChange(n)}
+                />
+                <PinField
+                  label="SCL"
+                  ariaLabel="I²C SCL pin"
+                  value={scl}
+                  onChange={(n) => onSclChange(n)}
+                />
+                <label className="i2cd__field">
+                  <span className="i2cd__field-lbl">ADDR</span>
+                  <select
+                    className="i2cd__select i2cd__select--pin"
+                    value={addr}
+                    onChange={(e) => onAddrChange(e.target.value)}
+                    aria-label="I²C address"
+                  >
+                    {ADDR_PRESETS.map((a) => (
+                      <option key={a} value={a}>
+                        {a}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {pinsValid && (
+                  <span className="i2cd__bus" title={`Valid I²C${block} pair`}>
+                    I²C{block}
+                  </span>
+                )}
+              </div>
+
+              {/* Invalid-pin warning: the SDA/SCL pair isn't a valid RP2040 I²C pair. */}
+              {!pinsValid && (
+                <div className="i2cd__pinwarn i2cd__pinwarn--bad" role="alert">
+                  <span className="i2cd__pinwarn-msg">
+                    GP{sda}/GP{scl} aren&apos;t a valid I²C pair — try GP0/GP1 (I2C0) or GP2/GP3 (I2C1).
+                  </span>
+                </div>
+              )}
+
+              {/* Pin-mismatch strip: the panel retargets the board live, but the open
+                  code may still declare different SCREEN_SDA / SCREEN_SCL. Offer a sync. */}
+              {pinsMismatch && (
+                <div className="i2cd__pinwarn" role="status">
+                  <span className="i2cd__pinwarn-msg">
+                    Panel pins (SDA GP{sda} · SCL GP{scl}) differ from your code
+                    {sdaMismatch ? ` (SDA GP${codePins.sda})` : ''}
+                    {sclMismatch ? ` (SCL GP${codePins.scl})` : ''}
+                  </span>
+                  <button
+                    type="button"
+                    className="i2cd__btn i2cd__pinwarn-btn"
+                    onClick={onUpdateCodePins}
+                    title={`Rewrite SCREEN_SDA / SCREEN_SCL in your code to GP${sda} / GP${scl}`}
+                  >
+                    Update code
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Bottom 3-column readout strip: ADDR / SIZE / FPS. */}
+        {/* Bottom 3-column readout strip: ADDR/BUS · SIZE · FPS. */}
         <div className="i2cd__readout">
-          <Cell label="ADDR" value={shownAddr} />
+          {isSpi ? <Cell label="BUS" value="SPI" /> : <Cell label="ADDR" value={shownAddr} />}
           <span className="i2cd__div" aria-hidden="true" />
           <Cell label="SIZE" value={sizeLabel} />
           <span className="i2cd__div" aria-hidden="true" />
@@ -638,6 +755,37 @@ function CharScreen({
       ))}
       {standby && <span className="i2cd__standby i2cd__standby--char">awaiting text…</span>}
     </div>
+  )
+}
+
+/** A labelled GP-pin selector (GP0–GP28) — shared by the I²C + SPI wiring rows. */
+function PinField({
+  label,
+  ariaLabel,
+  value,
+  onChange
+}: {
+  label: string
+  ariaLabel: string
+  value: number
+  onChange: (n: number) => void
+}): JSX.Element {
+  return (
+    <label className="i2cd__field">
+      <span className="i2cd__field-lbl">{label}</span>
+      <select
+        className="i2cd__select i2cd__select--pin"
+        value={value}
+        onChange={(e) => onChange(Number(e.currentTarget.value))}
+        aria-label={ariaLabel}
+      >
+        {GP_PINS.map((p) => (
+          <option key={p} value={p}>
+            GP{p}
+          </option>
+        ))}
+      </select>
+    </label>
   )
 }
 
