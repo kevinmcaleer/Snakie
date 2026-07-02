@@ -44,7 +44,7 @@ export type InstallState = 'unknown' | 'present' | 'outdated' | 'absent'
  * if EITHER candidate (`/lib/instruments.py` or `/instruments.py`) is found.
  * Any probe error is tolerated upstream by passing `false` for that path, so an
  * all-errors outcome reads as `'absent'` (offer the install) rather than
- * throwing. (Version freshness is a SEPARATE step — see {@link installStateFromVersions}.)
+ * throwing. (Version freshness is a SEPARATE step — see {@link classifyPresentCopy}.)
  */
 export function installStateFromProbe(libFound: boolean, rootFound: boolean): InstallState {
   return libFound || rootFound ? 'present' : 'absent'
@@ -62,20 +62,32 @@ export function parseLibVersion(source: string | null | undefined): string | nul
 }
 
 /**
- * Refine a `'present'` board into `'present'` vs `'outdated'` by comparing the
- * board's installed version against the bundled one. Outdated when we KNOW the
- * bundled version and the board's differs (including a legacy copy with no
- * `__version__` → `null`). When the bundled version is unknown (couldn't read the
- * bundled source), we can't judge — stay `'present'` so we never nag wrongly.
+ * Classify a board that already HAS a library copy into a settled
+ * {@link InstallState}, or `null` when we could NOT determine it and must not
+ * settle (leave the probe `'unknown'` so it retries on the next dock re-open /
+ * reconnect instead of silently claiming the board is current).
+ *
+ * `boardSource` / `bundledSource` are the RAW library file contents, or `null`
+ * (or `''`) when the read failed. Rules:
+ *  - Can't read our OWN bundled library (`bundledSource` unreadable → parses to
+ *    `null`) → `null` (INDETERMINATE). Previously this silently returned
+ *    `'present'`, which HID a genuinely out-of-date board (it also can't offer a
+ *    real install — there's no source to write), so the caller now logs it and
+ *    retries rather than sticking on a wrong result.
+ *  - Board version equals the bundled version → `'present'`.
+ *  - Otherwise → `'outdated'`: a differing version, a legacy copy with no
+ *    `__version__` (parses to `null`), OR an unreadable board copy (board busy)
+ *    all DIFFER from the known bundled version, so we OFFER the update rather
+ *    than miss a stale copy (the install just rewrites the file — a needless
+ *    offer is harmless).
  */
-export function installStateFromVersions(
-  found: boolean,
-  boardVersion: string | null,
-  bundledVersion: string | null
-): InstallState {
-  if (!found) return 'absent'
-  if (bundledVersion !== null && boardVersion !== bundledVersion) return 'outdated'
-  return 'present'
+export function classifyPresentCopy(
+  boardSource: string | null,
+  bundledSource: string | null
+): InstallState | null {
+  const bundledVersion = parseLibVersion(bundledSource)
+  if (bundledVersion === null) return null // can't read our own lib → indeterminate
+  return parseLibVersion(boardSource) === bundledVersion ? 'present' : 'outdated'
 }
 
 /** Inputs that decide whether the manila banner should be on screen. */

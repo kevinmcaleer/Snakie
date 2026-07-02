@@ -43,7 +43,7 @@ import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
   INSTRUMENTS_LIB_DIR,
-  installStateFromVersions,
+  classifyPresentCopy,
   parseLibVersion,
   shouldShowBanner,
   type InstallState
@@ -472,23 +472,27 @@ export function AppShell(): JSX.Element {
         window.api.instruments.librarySource().catch(() => null)
       ])
       if (!active) return
-      if (bundledSrc == null) {
-        // Can't read our OWN bundled library (shouldn't happen) → can't compare.
-        setLibState('present')
+      const state = classifyPresentCopy(boardSrc, bundledSrc)
+      if (state === null) {
+        // Couldn't read our OWN bundled library (empty/unreadable source), so we
+        // can neither compare versions nor install. DON'T silently settle on
+        // 'present' — that hid a genuinely out-of-date board. Warn (so it's
+        // visible in devtools / the dev terminal, alongside the main-process path
+        // log) and leave libState 'unknown' so re-opening the dock or reconnecting
+        // the board RETRIES instead of sticking on a wrong result.
+        console.warn(
+          '[instruments] could not read the bundled library to compare versions — leaving the board unchanged; re-open the dock or reconnect to retry'
+        )
         return
       }
-      if (boardSrc == null) {
-        // A library exists but we couldn't read its version — typically the board
-        // is BUSY (running a program over the same serial link the read uses). Do
-        // NOT assume it's current: OFFER the update. The install just (re)writes
-        // the file, so a needless offer is harmless, but a real out-of-date copy
-        // (e.g. an old `read(64)`-blocking 0.3.x) is no longer silently missed.
-        setLibState('outdated')
-        return
-      }
-      setLibState(
-        installStateFromVersions(true, parseLibVersion(boardSrc), parseLibVersion(bundledSrc))
-      )
+      // Always log the outcome so a mis-detected banner is diagnosable at a glance.
+      console.info('[instruments] library version check', {
+        path,
+        boardVersion: parseLibVersion(boardSrc),
+        bundledVersion: parseLibVersion(bundledSrc),
+        state
+      })
+      setLibState(state)
     })()
     return () => {
       active = false

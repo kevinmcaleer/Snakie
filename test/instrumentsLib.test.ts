@@ -4,7 +4,7 @@ import {
   INSTRUMENTS_ROOT_PATH,
   INSTRUMENTS_LIB_DIR,
   installStateFromProbe,
-  installStateFromVersions,
+  classifyPresentCopy,
   parseLibVersion,
   shouldShowBanner
 } from '../src/renderer/src/lib/instrumentsLib'
@@ -60,25 +60,30 @@ describe('parseLibVersion', () => {
   })
 })
 
-describe('installStateFromVersions', () => {
-  it('is absent when not found', () => {
-    expect(installStateFromVersions(false, null, '0.3.0')).toBe('absent')
-  })
+describe('classifyPresentCopy', () => {
+  const BUNDLED = '# hdr\n__version__ = "0.6.0"\nSENTINEL = "SNK"'
 
-  it('is present when versions match', () => {
-    expect(installStateFromVersions(true, '0.3.0', '0.3.0')).toBe('present')
+  it('is present when the board matches the bundled version', () => {
+    expect(classifyPresentCopy('__version__ = "0.6.0"', BUNDLED)).toBe('present')
   })
 
   it('is outdated when the board version differs from the bundled one', () => {
-    expect(installStateFromVersions(true, '0.2.0', '0.3.0')).toBe('outdated')
+    expect(classifyPresentCopy('__version__ = "0.5.0"', BUNDLED)).toBe('outdated')
   })
 
-  it('is outdated when a legacy board copy has no version (null)', () => {
-    expect(installStateFromVersions(true, null, '0.3.0')).toBe('outdated')
+  it('is outdated for a legacy board copy with no __version__', () => {
+    expect(classifyPresentCopy('# a pre-versioning copy', BUNDLED)).toBe('outdated')
   })
 
-  it('stays present when the bundled version is unknown (no false nag)', () => {
-    expect(installStateFromVersions(true, '0.2.0', null)).toBe('present')
+  it('is outdated when the board copy could not be read (busy → offer, do not miss)', () => {
+    expect(classifyPresentCopy(null, BUNDLED)).toBe('outdated')
+  })
+
+  it('is INDETERMINATE (null) when our OWN bundled library is unreadable — never a silent present', () => {
+    // The old installStateFromVersions returned 'present' here, hiding a stale board.
+    expect(classifyPresentCopy('__version__ = "0.5.0"', null)).toBeNull()
+    expect(classifyPresentCopy('__version__ = "0.5.0"', '')).toBeNull()
+    expect(classifyPresentCopy(null, '')).toBeNull()
   })
 })
 

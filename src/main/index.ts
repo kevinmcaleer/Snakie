@@ -43,14 +43,19 @@ let mainWindow: BrowserWindow | null = null
  * the renderer's "offer to install" flow degrades gracefully (issue #108).
  */
 function readInstrumentsLibrarySource(): string {
+  const packaged = join(process.resourcesPath, 'micropython', 'instruments.py')
+  const path =
+    app.isPackaged && existsSync(packaged)
+      ? packaged
+      : join(__dirname, '..', '..', 'micropython', 'instruments.py')
   try {
-    const packaged = join(process.resourcesPath, 'micropython', 'instruments.py')
-    const path =
-      app.isPackaged && existsSync(packaged)
-        ? packaged
-        : join(__dirname, '..', '..', 'micropython', 'instruments.py')
     return readFileSync(path, 'utf-8')
-  } catch {
+  } catch (err) {
+    // A read failure returns '' (the renderer degrades gracefully), but make it
+    // LOUD: the resolved path here is exactly what the "board library outdated"
+    // probe compares against — a silent '' makes an out-of-date board look
+    // up-to-date (the renderer logs the empty-bundle case too).
+    console.error('[instruments] could not read the bundled library at', path, err)
     return ''
   }
 }
