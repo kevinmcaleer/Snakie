@@ -427,3 +427,12 @@ export function useWorkspace(): WorkspaceStore {
   if (!ctx) throw new Error('useWorkspace must be used within a WorkspaceProvider')
   return ctx
 }
+
+/**
+ * Access the workspace store, or `null` when there is no provider — for components
+ * that also render in a bare renderer (e.g. an instrument's detached OS window,
+ * which has no WorkspaceProvider). Never throws.
+ */
+export function useWorkspaceOptional(): WorkspaceStore | null {
+  return useContext(WorkspaceContext)
+}

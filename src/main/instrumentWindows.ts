@@ -67,13 +67,19 @@ function openInstrumentWindow(
     }
   })
   windows.set(payload.key, window)
-  keyByWc.set(window.webContents.id, payload.key)
+  // Capture the webContents id NOW: after the `closed` event the window's
+  // `webContents` is destroyed, so reading `window.webContents.id` inside the
+  // handler throws ("Object has been destroyed") — which previously killed the
+  // handler before it could send the re-dock notification (the window closed but
+  // never came back). Keep the id in a local instead.
+  const wcId = window.webContents.id
+  keyByWc.set(wcId, payload.key)
 
   window.on('ready-to-show', () => window.show())
 
   window.on('closed', () => {
     if (windows.get(payload.key) === window) windows.delete(payload.key)
-    keyByWc.delete(window.webContents.id)
+    keyByWc.delete(wcId)
     payloads.delete(payload.key)
     // Tell the main renderer so it can re-dock the instrument.
     const mw = getMainWindow()

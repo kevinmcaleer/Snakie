@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
-import { useWorkspace } from '../store/workspace'
+import { useWorkspaceOptional } from '../store/workspace'
 import {
   SERVO_TARGET,
   SERVO_MIN_DEG,
@@ -70,11 +70,12 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
   const phase = useRef(0)
 
   // Follow the active file's servo pin (`inst.start(servo_pin=0)` / `Servo(16)`)
-  // so the panel's PIN matches the code — until the user picks a pin by hand.
-  const { openFiles, activeId } = useWorkspace()
+  // so the panel's PIN matches the code — until the user picks a pin by hand. The
+  // workspace is absent in a detached OS window (no provider), so read it safely.
+  const ws = useWorkspaceOptional()
   const filePin = useMemo(
-    () => parseServoPin(openFiles.find((f) => f.id === activeId)?.content ?? ''),
-    [openFiles, activeId]
+    () => parseServoPin(ws?.openFiles.find((f) => f.id === ws.activeId)?.content ?? ''),
+    [ws]
   )
   const userSetPin = useRef(false)
   useEffect(() => {
