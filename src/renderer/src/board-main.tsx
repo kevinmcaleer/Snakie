@@ -202,9 +202,14 @@ function BoardWindowApp(): JSX.Element {
         ...robot,
         parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
       })
-      // #166: offer to install the part's linked MicroPython library onto the board.
+      // #166: offer to install the part's linked MicroPython library via mip —
+      // but ONLY when the part ships NO bundled driver files. When it declares
+      // `drivers` (the Driver Install banner copies those to the board OFFLINE), a
+      // separate mip offer is redundant and, if the url is stale/private, fails
+      // confusingly (the SG90 part pointed `library.url` at a non-existent github
+      // repo → `OSError(-6)`). Let the banner own the install in that case.
       const lib = part.library
-      if (lib?.url) {
+      if (lib?.url && !(part.drivers && part.drivers.length > 0)) {
         const mod = lib.module || part.name
         if (window.confirm(`Install the "${mod}" MicroPython library for "${part.name}" onto the connected board?`)) {
           void window.api.packages
