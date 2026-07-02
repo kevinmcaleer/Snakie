@@ -51,6 +51,9 @@ export type WiringRenderMode = 'lifelike' | 'schematic'
 
 const VIEW_W = 1180
 const VIEW_H = 720
+// Left inset (viewBox units) reserved for the floating BROWSER (14rem, pinned
+// top-left) so a fit places the leftmost item to the RIGHT of it, not under it.
+const BROWSER_INSET = 300
 const DOT_R = 5
 
 // Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
@@ -324,6 +327,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // The floating project BROWSER's open state — lifted here so the fit math can
+  // inset content to the right of it (so the leftmost item isn't hidden under it).
+  const [browserOpen, setBrowserOpen] = useState(true)
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
@@ -796,6 +802,26 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     })
   }
 
+  /** Frame a bounding box (viewBox coords) centred within the DRAWABLE area,
+   *  padded. When the floating browser is open we inset the area's left edge by
+   *  its footprint so the framed content sits to the RIGHT of the browser (never
+   *  hidden under it). */
+  const frameBounds = (minX: number, minY: number, maxX: number, maxY: number): void => {
+    const pad = 60
+    // Left inset ≈ the 14rem browser's share of the viewBox (it floats top-left).
+    const insetL = browserOpen ? BROWSER_INSET : 0
+    const areaX = insetL
+    const areaW = VIEW_W - insetL
+    const cw = maxX - minX + pad * 2
+    const ch = maxY - minY + pad * 2
+    const scale = Math.min(3, Math.max(0.35, Math.min(areaW / cw, VIEW_H / ch)))
+    setView({
+      tx: areaX + (areaW - (maxX + minX) * scale) / 2,
+      ty: (VIEW_H - (maxY + minY) * scale) / 2,
+      scale
+    })
+  }
+
   /** Frame all subjects within the viewBox (a "fit" reset). */
   const fitView = (): void => {
     if (subjects.length === 0) {
@@ -812,15 +838,15 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       maxX = Math.max(maxX, s.hit.x + s.hit.w)
       maxY = Math.max(maxY, s.hit.y + s.hit.h)
     }
-    const pad = 60
-    const cw = maxX - minX + pad * 2
-    const ch = maxY - minY + pad * 2
-    const scale = Math.min(3, Math.max(0.35, Math.min(VIEW_W / cw, VIEW_H / ch)))
-    setView({
-      tx: (VIEW_W - (maxX + minX) * scale) / 2,
-      ty: (VIEW_H - (maxY + minY) * scale) / 2,
-      scale
-    })
+    frameBounds(minX, minY, maxX, maxY)
+  }
+
+  /** Frame a single subject by key (zoom-to-fit one placed item), or everything
+   *  when the key is null. Driven by the placed-items browser (BoardGraph). */
+  const fitToKey = (key: string | null): void => {
+    if (!key) return fitView()
+    const s = subjects.find((sub) => sub.key === key)
+    if (s) frameBounds(s.hit.x, s.hit.y, s.hit.x + s.hit.w, s.hit.y + s.hit.h)
   }
 
   // Export the canvas as an image (#…): serialise the live SVG framed to its
@@ -869,7 +895,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // Auto fit-to-view when the CONTENT changes (view toggle, board change, a part
   // added/removed) — keyed on a signature that excludes positions/pan, so it
   // never yanks the view during a drag, pan or wire pull.
-  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${subjects.map((s) => s.key).join(',')}`
+  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${browserOpen}|${subjects.map((s) => s.key).join(',')}`
   useEffect(() => {
     fitView()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1261,6 +1287,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
           board={boardDef?.name}
           parts={robot.parts}
           onRemovePart={removePart}
+          open={browserOpen}
+          onOpenChange={setBrowserOpen}
+          onFocus={fitToKey}
         />
 
         {!boardDef && robot.parts.length === 0 && (
@@ -1297,7 +1326,10 @@ function BoardBrowser({
   onCommit,
   board,
   parts,
-  onRemovePart
+  onRemovePart,
+  open,
+  onOpenChange,
+  onFocus
 }: {
   name: string
   description: string
@@ -1305,8 +1337,12 @@ function BoardBrowser({
   board?: string
   parts: RobotPart[]
   onRemovePart: (id: string) => void
+  /** Open state (lifted to WiringCanvas so the fit can inset for the browser). */
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Zoom the canvas to fit a subject: `'board'` or a placed part's instance id. */
+  onFocus: (key: string) => void
 }): JSX.Element {
-  const [open, setOpen] = useState(true)
   const [compOpen, setCompOpen] = useState(true)
   const count = parts.length + (board ? 1 : 0)
 
@@ -1315,7 +1351,7 @@ function BoardBrowser({
       <button
         type="button"
         className="wc__browser-tab"
-        onClick={() => setOpen(true)}
+        onClick={() => onOpenChange(true)}
         title="Show project browser"
         aria-label="Show project browser"
       >
@@ -1331,7 +1367,7 @@ function BoardBrowser({
         <button
           type="button"
           className="wc__browser-collapse"
-          onClick={() => setOpen(false)}
+          onClick={() => onOpenChange(false)}
           title="Collapse browser"
           aria-label="Collapse browser"
         >
@@ -1361,13 +1397,27 @@ function BoardBrowser({
             <ul className="wc__tree-list">
               {board && (
                 <li className="wc__tree-item wc__tree-item--board">
-                  <span className="wc__tree-name">{board}</span>
+                  <button
+                    type="button"
+                    className="wc__tree-name wc__tree-focus"
+                    onClick={() => onFocus('board')}
+                    title={`Zoom to fit ${board}`}
+                  >
+                    {board}
+                  </button>
                   <span className="wc__parts-tag">MCU</span>
                 </li>
               )}
               {parts.map((p) => (
                 <li key={p.id} className="wc__tree-item">
-                  <span className="wc__tree-name">{p.label || p.part}</span>
+                  <button
+                    type="button"
+                    className="wc__tree-name wc__tree-focus"
+                    onClick={() => onFocus(p.id)}
+                    title={`Zoom to fit ${p.label || p.part}`}
+                  >
+                    {p.label || p.part}
+                  </button>
                   <button
                     type="button"
                     className="wc__parts-del"
