@@ -231,6 +231,18 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
 
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
+  // User picked a microcontroller from the header dropdown: adopt it, persist it,
+  // and broadcast (via main) so the full Board Viewer + other consumers follow.
+  const selectBoard = (id: string): void => {
+    setBoardId(id)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, id)
+    } catch {
+      // ignore storage failures
+    }
+    window.api.board.selectBoard?.(id)
+  }
+
   // The installed libraries, so we can resolve the board's SOURCE part and draw it
   // with its REAL authored body (image + shapes + pins) — exactly like the Part
   // Editor / full Board Viewer — instead of the stylised PCB. Reloads on a board
@@ -376,9 +388,21 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
   return (
     <section className="mini-board" aria-label="Board pins in use">
       <div className="mini-board__head">
-        <span className="mini-board__name" title={`${def.name} · ${def.mcu}`}>
-          {def.name}
-        </span>
+        {/* Pick the microcontroller right where its name shows. Broadcasts the
+            choice (via main) so the full Board Viewer follows, and persists it. */}
+        <select
+          className="mini-board__name mini-board__board-select"
+          value={def.id}
+          onChange={(e) => selectBoard(e.target.value)}
+          title={`${def.name} · ${def.mcu} — change the microcontroller`}
+          aria-label="Select microcontroller"
+        >
+          {boards.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
         {simulated && (
           <span
             className="mini-board__sim"

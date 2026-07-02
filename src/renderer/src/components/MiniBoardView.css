@@ -34,6 +34,41 @@
   white-space: nowrap;
 }
 
+/* The board name doubles as a microcontroller PICKER (a styled native select). */
+.mini-board__board-select {
+  flex: 0 1 auto;
+  max-width: 62%;
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0.12rem 0.95rem 0.12rem 0.35rem;
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%237a7f88' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.28rem center;
+  background-size: 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.mini-board__board-select:hover {
+  color: #d6dade;
+  border-color: #3a3d44;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.mini-board__board-select:focus-visible {
+  outline: none;
+  border-color: var(--accent, #4ea1ff);
+}
+
+/* Dark dropdown list (native option list still reads the page colours). */
+.mini-board__board-select option {
+  color: #d6dade;
+  background: #1f2024;
+}
+
 /* Offline-mode badge (#135): connected to the simulated device, not hardware.
    Amber to match the status-bar "Simulated device" indicator. Pushed to the
    right (next to the expand button) so the board name keeps the left. */
