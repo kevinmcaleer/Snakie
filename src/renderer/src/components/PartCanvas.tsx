@@ -1698,7 +1698,9 @@ export function PartCanvas({
     if (d.kind === 'move-obj' && d.sel) {
       const x = d.ox + dx
       const y = d.oy + dy
-      const noSnap = e.ctrlKey || e.metaKey // Ctrl/Cmd disables alignment snapping
+      // Hold Shift for completely free movement — no alignment guides / snapping
+      // (Ctrl/Cmd also disables it, mirroring the resize handler).
+      const noSnap = e.shiftKey || e.ctrlKey || e.metaKey
       if (d.sel.type === 'pin' && d.anchor) {
         // Ghost-array drag keeps its 2.54mm lock; no alignment guides.
         movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
@@ -2942,7 +2944,9 @@ export function PartCanvas({
             <>
               <span>Drag to move ·</span>
               <kbd className="pcv__hint-key">{cmdOrCtrlLabel}</kbd>
-              <span>for the alignment grid</span>
+              <span>grid ·</span>
+              <kbd className="pcv__hint-key">Shift</kbd>
+              <span>free</span>
             </>
           )}
         </div>
