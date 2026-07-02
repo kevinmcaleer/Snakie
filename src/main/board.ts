@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { join } from 'path'
 import { promises as fsp } from 'fs'
 import { is } from '@electron-toolkit/utils'
@@ -158,6 +158,17 @@ let resolveMainWindow: () => BrowserWindow | null = () => null
 export function openBoardView(): void {
   openBoardWindow(resolveMainWindow)
   resolveMainWindow()?.webContents.send('board:opened')
+}
+
+/**
+ * The Board View window's webContents (for the device-stream relay), or `[]`.
+ * The board view is a separate OS window, so it must be added to the device
+ * broadcast — otherwise components there (e.g. the Driver Install banner's
+ * connection gate, `useDeviceStatus`) only see the status snapshot from mount
+ * and miss a board connected/disconnected AFTER the window opened.
+ */
+export function boardWindowWebContents(): WebContents[] {
+  return boardWindow && !boardWindow.isDestroyed() ? [boardWindow.webContents] : []
 }
 
 /**
