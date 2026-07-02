@@ -4,6 +4,7 @@ import {
   formatDuty,
   formatFreq,
   formatPeriod,
+  formatSeconds,
   pwmConfig,
   sampleWavePath,
   squareWavePath,
@@ -36,7 +37,12 @@ import './Oscilloscope.css'
 /** Internal screen geometry (matches the handoff's 358×172 green screen). */
 const SCREEN_W = 358
 const SCREEN_H = 172
-const CYCLES = 4 // whole PWM periods drawn across the screen
+// A couple of whole periods so each cycle is wide enough to read the rise, the
+// duty (high vs low width) and the period (edge to edge) — like a real scope.
+const CYCLES = 3
+const DIV_X = 6 // vertical graticule divisions → a period spans DIV_X/CYCLES = 2
+const DIV_Y = 4 // horizontal graticule divisions
+const EDGE_RISE = 0.05 // finite rise/fall time as a fraction of the period
 const PAD_Y = 28 // top/bottom inset to the high/low rails
 
 export interface OscilloscopeProps {
@@ -113,8 +119,12 @@ export function Oscilloscope({
     if (samples && samples.length > 0) {
       return sampleWavePath({ width: SCREEN_W, height: SCREEN_H, samples, padY: PAD_Y })
     }
-    return squareWavePath({ width: SCREEN_W, height: SCREEN_H, duty, cycles: CYCLES, padY: PAD_Y })
+    return squareWavePath({ width: SCREEN_W, height: SCREEN_H, duty, cycles: CYCLES, padY: PAD_Y, rise: EDGE_RISE })
   }, [samples, duty])
+
+  // Time/div derived from the real PWM period so the period reads point-to-point
+  // against the graticule (a period spans DIV_X / CYCLES divisions).
+  const timePerDiv = cfg.freq && cfg.freq > 0 ? 1 / (cfg.freq * (DIV_X / CYCLES)) : undefined
 
   return (
     <InstrumentWindow
@@ -144,12 +154,13 @@ export function Oscilloscope({
             </filter>
           </defs>
 
-          {/* Graticule — minor grid + brighter centre cross. */}
+          {/* Graticule — EVEN divisions so the period aligns to the grid (a period
+              spans exactly DIV_X/CYCLES divisions), then a brighter centre cross. */}
           <g stroke="rgba(120,220,150,.14)" strokeWidth="1">
-            {[45, 90, 135, 224, 269, 314].map((x) => (
+            {Array.from({ length: DIV_X - 1 }, (_, i) => ((i + 1) * SCREEN_W) / DIV_X).map((x) => (
               <line key={`v${x}`} x1={x} y1="0" x2={x} y2={SCREEN_H} />
             ))}
-            {[34, 68, 104, 138].map((y) => (
+            {Array.from({ length: DIV_Y - 1 }, (_, i) => ((i + 1) * SCREEN_H) / DIV_Y).map((y) => (
               <line key={`h${y}`} x1="0" y1={y} x2={SCREEN_W} y2={y} />
             ))}
           </g>
@@ -198,7 +209,7 @@ export function Oscilloscope({
           <span className="osc__run-dot" />
           {running ? 'RUN' : 'STOP'}
         </span>
-        <span className="osc__lbl osc__lbl--div">200µs/div&nbsp;&nbsp;1.0V/div</span>
+        <span className="osc__lbl osc__lbl--div">{formatSeconds(timePerDiv)}/div&nbsp;&nbsp;1.0V/div</span>
         <span className="osc__lbl osc__lbl--trig">
           {onTelemetry ? 'LIVE ●' : `T ▲ ${formatDuty(duty)}`}
         </span>

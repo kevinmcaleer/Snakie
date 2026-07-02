@@ -9,6 +9,7 @@ import {
   formatDuty,
   formatFreq,
   formatPeriod,
+  formatSeconds,
   pwmConfig,
   sampleWavePath,
   squareWavePath
@@ -135,6 +136,37 @@ describe('squareWavePath', () => {
     expect(d).toContain('L25 20')
     expect(d).toContain('L50 20') // the inter-cycle rising edge
     expect(d).toContain('L75 20')
+  })
+  it('default (no rise) keeps instant vertical edges', () => {
+    const d = squareWavePath({ width: 100, height: 100, duty: 0.5, cycles: 1, padY: 20 })
+    // Fall is a vertical line: same x (50) at the high rail and the low rail.
+    expect(d).toContain('L50 20 L50 80')
+  })
+  it('rise > 0 slopes the edges over a fraction of the period', () => {
+    const d = squareWavePath({ width: 100, height: 100, duty: 0.5, cycles: 1, padY: 20, rise: 0.1 })
+    // period=100, edge = min(10, 45, 45) = 10 → fall goes from x=50 (high) to x=60 (low).
+    expect(d).toContain('L50 20 L60 80')
+    expect(d).not.toContain('L50 80') // no longer a vertical edge
+  })
+  it('caps the rise so an edge never eats its plateau', () => {
+    // duty 0.05 → high plateau tiny; edge capped to 0.9*period*duty, not period*rise.
+    const d = squareWavePath({ width: 100, height: 100, duty: 0.05, cycles: 1, padY: 20, rise: 0.5 })
+    // xFall = 5; edge = min(50, 4.5, 47.5) = 4.5 → fall ends at x=9.5.
+    expect(d).toContain('L5 20 L9.5 80')
+  })
+})
+
+describe('formatSeconds', () => {
+  it('scales ns → s with 3 sig figs', () => {
+    expect(formatSeconds(0.0005)).toBe('500 µs')
+    expect(formatSeconds(0.02)).toBe('20.0 ms')
+    expect(formatSeconds(2)).toBe('2.00 s')
+    expect(formatSeconds(5e-9)).toBe('5.00 ns')
+  })
+  it('is — for missing / non-positive', () => {
+    expect(formatSeconds(undefined)).toBe('—')
+    expect(formatSeconds(0)).toBe('—')
+    expect(formatSeconds(-1)).toBe('—')
   })
 })
 

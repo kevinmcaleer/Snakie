@@ -187,16 +187,24 @@ export interface ScopeGeometry {
   cycles: number
   /** Vertical inset (px) from the top/bottom edges to the high/low rails. */
   padY?: number
+  /**
+   * Rise/fall time as a fraction of the period (0..~0.3), so the edges SLOPE like
+   * a real scope trace instead of being perfectly vertical. Capped internally so
+   * an edge never eats its plateau. 0 (default) ⇒ idealised instant edges.
+   */
+  rise?: number
 }
 
 /**
  * Build the SVG path `d` for a PWM **square wave** across a scope screen.
  *
  * The trace runs left→right over `cycles` whole periods. Each period spends
- * `duty` of its width HIGH (the top rail) then the rest LOW (the bottom rail),
- * with vertical edges between — exactly the idealised PWM output. A duty of 0 or
- * 1 degenerates to a flat line on the low/high rail (no edges), which is the
- * correct picture for a fully-off / fully-on channel.
+ * `duty` of its width HIGH (the top rail) then the rest LOW (the bottom rail).
+ * With `rise` > 0 the edges SLOPE over a small fraction of the period (a finite
+ * rise/fall time, like a real scope) instead of jumping vertically; the duty is
+ * still measured edge-midpoint to edge-midpoint so it stays accurate. A duty of 0
+ * or 1 degenerates to a flat line on the low/high rail (a fully-off / fully-on
+ * channel).
  *
  * Pure geometry (no DOM): returns a path string in the screen's own pixel
  * coordinates so the caller can drop it straight into an `<path d=...>`.
@@ -215,19 +223,37 @@ export function squareWavePath(g: ScopeGeometry): string {
   if (duty <= 0) return `M0 ${yLow} L${w} ${yLow}`
   if (duty >= 1) return `M0 ${yHigh} L${w} ${yHigh}`
 
+  // Finite rise/fall: the edge takes `edge` px horizontally. Capped so it never
+  // exceeds ~90% of the shorter (high / low) plateau, so an edge can't invert it.
+  const riseFrac = clamp01(g.rise ?? 0)
+  const edge =
+    riseFrac > 0 ? Math.min(period * riseFrac, period * duty * 0.9, period * (1 - duty) * 0.9) : 0
+
   // Start on the HIGH rail at x=0, then for each period: hold high for the duty
-  // fraction, drop, hold low for the rest, rise (unless it's the final edge).
+  // fraction, drop (over `edge`), hold low, rise (unless it's the final edge).
   const parts: string[] = [`M0 ${yHigh}`]
   for (let i = 0; i < cycles; i++) {
     const x0 = i * period
     const xFall = x0 + period * duty
     const xEnd = x0 + period
     parts.push(`L${round(xFall)} ${yHigh}`) // hold high
-    parts.push(`L${round(xFall)} ${yLow}`) // falling edge
+    parts.push(`L${round(xFall + edge)} ${yLow}`) // falling edge (sloped when edge>0)
     parts.push(`L${round(xEnd)} ${yLow}`) // hold low
-    if (i < cycles - 1) parts.push(`L${round(xEnd)} ${yHigh}`) // rising edge
+    if (i < cycles - 1) parts.push(`L${round(xEnd + edge)} ${yHigh}`) // rising edge
   }
   return parts.join(' ')
+}
+
+/**
+ * Format a duration in **seconds** for a scope time/div readout (ns → s), 3
+ * significant digits. Undefined / non-finite / non-positive ⇒ `—`.
+ */
+export function formatSeconds(s: number | undefined): string {
+  if (s === undefined || !Number.isFinite(s) || s <= 0) return '—'
+  if (s >= 1) return `${s.toPrecision(3)} s`
+  if (s >= 1e-3) return `${(s * 1e3).toPrecision(3)} ms`
+  if (s >= 1e-6) return `${(s * 1e6).toPrecision(3)} µs`
+  return `${(s * 1e9).toPrecision(3)} ns`
 }
 
 /** Round to 2dp so the path strings stay short + stable for snapshot tests. */
