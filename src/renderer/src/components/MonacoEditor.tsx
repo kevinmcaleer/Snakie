@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 // Import only the editor core API rather than the full `monaco-editor` barrel,
 // then opt in to just the languages we render. This keeps the renderer bundle
 // small instead of pulling in all ~80 bundled languages.
@@ -30,6 +30,15 @@ import {
   registerFormatCodeActions,
   setFormatDiagnostics
 } from './format-code-actions'
+import { validateBusPins, boardPinsFromPart, type BoardPinInfo } from './board-pin-check'
+import {
+  applyBoardPinDiagnostics,
+  clearBoardPinDiagnostics,
+  registerBoardPinCodeActions
+} from './board-pin-diagnostics'
+import { boardPartFor } from './part-editor.util'
+import { DEFAULT_BOARD_ID } from './board-defs'
+import { PARTS_CHANGED_EVENT } from './PartsPanel'
 
 // Register the plugin quick-fix (lightbulb) provider exactly once at module
 // load, mirroring the completion provider. The function is idempotent and
@@ -45,6 +54,10 @@ registerFormatCodeActions(monaco)
 // load (issue #82). Idempotent + HMR-guarded; reads the enable/provider/model
 // config live on each suggestion, so settings changes apply without a remount.
 registerInlineCompletions(monaco)
+
+// Register the board-aware I2C/SPI/UART pin quick-fix provider once at module
+// load. Idempotent + HMR-guarded; offers "change the bus id" on a mismatch.
+registerBoardPinCodeActions(monaco)
 
 /** Monaco marker owner used for plugin-sourced diagnostics. */
 const PLUGIN_MARKER_OWNER = 'snakie-plugins'
@@ -214,6 +227,11 @@ export function MonacoEditor(): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null)
   const models = useRef(new Map<string, monaco.editor.ITextModel>())
+  // The currently-selected board's pins (with i2c/spi/uart signals + bus numbers)
+  // for the board-aware bus check. Held in a ref (read inside the debounced
+  // validate effect) with a version counter to re-run the check when it changes.
+  const boardPinsRef = useRef<BoardPinInfo[]>([])
+  const [boardPinsVersion, setBoardPinsVersion] = useState(0)
   // Latest spacing, read inside the create + theme-change effects without
   // re-creating the editor.
   const lineSpacingRef = useRef(lineSpacing)
@@ -441,6 +459,70 @@ export function MonacoEditor(): JSX.Element {
       clearTimeout(timer)
     }
   }, [activeFile, activeFile?.id, activeFile?.content, lintingEnabled, clearDiagnostics])
+
+  // Load the currently-selected board's pins (with per-pin i2c/spi/uart signals +
+  // bus numbers) for the board-aware bus check, and refresh when the user picks a
+  // different board or the parts libraries change.
+  useEffect(() => {
+    let alive = true
+    const load = (): void => {
+      let boardId = DEFAULT_BOARD_ID
+      try {
+        boardId = window.localStorage.getItem('snakie.board.id') || DEFAULT_BOARD_ID
+      } catch {
+        // fall back to the default board id
+      }
+      window.api?.parts
+        ?.listLibraries?.()
+        .then((libs) => {
+          if (!alive) return
+          boardPinsRef.current = boardPinsFromPart(boardPartFor(libs, boardId))
+          setBoardPinsVersion((v) => v + 1)
+        })
+        .catch(() => {
+          if (!alive) return
+          boardPinsRef.current = []
+          setBoardPinsVersion((v) => v + 1)
+        })
+    }
+    load()
+    const offSelect = window.api?.board?.onSelectBoard?.(() => load())
+    window.addEventListener(PARTS_CHANGED_EVENT, load)
+    return () => {
+      alive = false
+      offSelect?.()
+      window.removeEventListener(PARTS_CHANGED_EVENT, load)
+    }
+  }, [])
+
+  // Board-aware bus check: validate the file's I2C/SPI/UART wiring against the
+  // selected board's pins (squiggles + a "correct the bus id" quick-fix), under
+  // its own marker owner so it coexists with the plugin/format diagnostics.
+  // Re-runs debounced on edits and whenever the selected board changes.
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor || !activeFile) return undefined
+    const model = models.current.get(activeFile.id)
+    if (!model || model.isDisposed()) return undefined
+
+    const isPython = languageForName(activeFile.name) === 'python'
+    if (!lintingEnabled || !isPython) {
+      clearBoardPinDiagnostics(monaco, model)
+      return undefined
+    }
+
+    const file = activeFile
+    const timer = setTimeout(() => {
+      const m = models.current.get(file.id)
+      if (!m || m.isDisposed()) return
+      try {
+        applyBoardPinDiagnostics(monaco, m, validateBusPins(file.content, boardPinsRef.current))
+      } catch {
+        // The check must never disrupt typing; leave prior markers on error.
+      }
+    }, LINT_DEBOUNCE_MS)
+    return () => clearTimeout(timer)
+  }, [activeFile, activeFile?.id, activeFile?.content, activeFile?.name, lintingEnabled, boardPinsVersion])
 
   // Reactive JSON/YAML validation (issue #93): when the active file is a
   // `.json`/`.yml`/`.yaml` file, debounce then run the pure `validateFormat`,
