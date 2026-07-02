@@ -26,18 +26,25 @@ One or more of:
 If a pinout diagram is available, prefer it for pin positions; otherwise use the
 text pin description and lay pins out evenly along the edges.
 
-## Two ways to draw the board — prefer the photo
+## Draw the board from a real image (always)
 
-**A. Background photo (the life-like path — strongly preferred).** If you can get a
-**clean, top-down** product photo (board flat, filling the frame, plain
-background), use it as the board background. The silk text, the MCU, the
-connectors and the buttons are all *in the photo*, so you **don't draw any
-shapes** — you only overlay the **pads** (positioned over the photo's real pads)
-so the board is still wireable. This is what makes a part look real. See
+**Every board part must ship a real board image** — it's what makes the part look
+like the actual hardware, and a board without one is not finished. Manufacturers'
+product photos and the board render inside their **official pinout diagrams** are
+fine to use here (vendors are happy to have their boards represented), so
+**copyright is not a blocker — always include an image**.
+
+**A. Background image (the life-like path — the default).** Get a **clean, top-down**
+image — an official product photo (board flat, filling the frame, plain background)
+**or the board render cropped out of the manufacturer's pinout diagram** (often the
+cleanest source: already top-down, plain/transparent background, with the silk and
+components drawn crisply). The silk text, the MCU, the connectors and the buttons
+are all *in the image*, so you **don't draw any shapes** — you only overlay the
+**pads** (positioned over the image's real pads) so the board is still wireable. See
 **Background photo** below.
 
-**B. Shapes + text (fallback).** Only when no clean top-down photo exists, draw
-the board from `shapes` + `labels`:
+**B. Shapes + text (last resort only).** Only if **no** usable top-down image exists
+anywhere, draw the board from `shapes` + `labels`:
 - ✅ the **outline** at real dimensions, the **defining components** (a grey rect
   for the MCU/IC, the USB/JST/header connectors, a display glass), **mounting
   holes**, and the **pads** with their labels.
@@ -89,10 +96,14 @@ the board from `shapes` + `labels`:
      each edge strip (a castellated hole shows as two arcs; the pad centre is their
      midpoint), or overlay candidate y-lines and eyeball them against the holes.
 
-```{warning}
-The photo must be one you have the right to redistribute. Product photos are
-copyrighted — fine for your own local library, but replace it with your own or a
-licensed/official image before publishing a part to the shared/Standard library.
+```{note}
+Manufacturer product photos and the board render from an official **pinout diagram**
+are fine to use for a part image, in the Standard library included — vendors are
+happy to have their boards represented, so there is **no copyright blocker** and no
+need to swap the image before shipping. Prefer a clean official source and name the
+vendor in the part's `manufacturer` field. (The pinout-diagram crop is usually the
+best: it's already a top-down render on a plain background — see the XIAO RP2350 and
+Tiny 2350 parts, both built this way.)
 ```
 
 ## ⚠️ Pin assignments are SAFETY-CRITICAL — verify, never guess
@@ -159,9 +170,13 @@ not infer. Required:
    `pwm chan = A if g even else B`; `adc = g-26` for GP26/27/28.
    Note the **GP## GPIO** even when the silk label differs (e.g. a pad silk-printed
    `SDA` that is really `GP4`) — set both `name: SDA` and `gpio: 4`.
-3. **Draw the board.** Preferably embed a cropped top-down **photo** + overlay the
-   pads (see *Background photo*). Only if no clean photo exists, lay out
-   `shapes` (grey `rect` for chips/connectors) + `labels` + `mountingHoles`.
+3. **Draw the board — always with a real image.** Embed a cropped top-down board
+   **image** (an official product photo, or the board render cropped from the
+   manufacturer's pinout diagram — copyright is not a concern, see the note) and
+   overlay the pads over it (see *Background photo*). Only as a **last resort**, when
+   no usable image exists anywhere, lay out `shapes` (grey `rect` for chips/
+   connectors) + `labels` + `mountingHoles` instead. A finished board part should
+   not be image-less.
 4. **Pick a category** for `family` so it lands in the right section (#193):
    `Microcontroller`, `Computer`, `Sensor`, `Input`, `Output`, `Motor`,
    `Display`, `Communication`, `Power`, `IC`.
@@ -223,12 +238,19 @@ normalised `x`/`y` position:
 
 ## Connectors (QWIIC / STEMMA QT / JST)
 
-Capture physical connectors under `connectors`. Each has a `kind`, a normalised
-`x`/`y`, and `pins` that are **full pins** (same fields as header pins):
-- **`qwiic`** — a 4-pin JST-SH I2C socket (STEMMA QT is the same), in the standard
-  order **GND · 3V3 · SDA · SCL**. Give SDA/SCL their `gpio`, `capabilities: [i2c]`,
-  `signals: { i2c: SDA|SCL }` and the `buses: { i2c: N }`; 3V3 is `pwr`, GND is `gnd`.
-- **`jst`** — a generic JST header; author its pins as needed.
+**Whenever the board exposes a QWIIC / STEMMA QT / JST socket, add it under
+`connectors`** — a real socket, *not* a drawn `shapes` rectangle. The editor draws
+the housing **to real-world scale from the part's mm `dimensions`** (a QWIIC ≈
+4.5 mm, a 2 mm-pitch JST is wider), so give the part accurate `dimensions` and place
+the connector at its true `x`/`y` for a life-like result. Each connector has a
+`kind`, a normalised `x`/`y`, an optional `label`, and `pins` that are **full pins**
+(same fields as header pins, so they're wireable):
+- **`qwiic`** — a 4-pin JST-SH **1.0 mm-pitch** I2C socket (STEMMA QT is identical),
+  in the standard order **GND · 3V3 · SDA · SCL**. Give SDA/SCL their `gpio`,
+  `capabilities: [i2c]`, `signals: { i2c: SDA|SCL }` and the `buses: { i2c: N }`;
+  3V3 is `pwr`, GND is `gnd`.
+- **`jst`** — a generic **2.0 mm-pitch** JST (PH) header; author its pins as needed
+  (name, type, and `gpio`/`capabilities`/`signals`/`buses` for any signal pins).
 
 ```yaml
 connectors:
