@@ -160,12 +160,16 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
     return () => window.removeEventListener(PARTS_CHANGED_EVENT, handler)
   }, [refresh])
 
-  // DEV: promote a microcontroller board part into the Standard Boards library.
+  // DEV: promote (or re-sync) a part into the Standard Boards library. For a part
+  // already in Standard this re-writes its runtime copy + mirrors the edit into the
+  // bundled repo, so an in-app edit to a shipped part can be committed.
   const promote = useCallback(
     async (libraryId: string, part: PartDefinition): Promise<void> => {
       const res = await window.api.parts.promoteToStandard(libraryId, part.id)
       if (res.ok) {
-        setNote(`Promoted "${part.name}" to the Standard library${res.shipped ? ' + bundled repo copy' : ''}.`)
+        const verb = libraryId === STANDARD_LIBRARY_ID ? 'Synced' : 'Promoted'
+        const where = libraryId === STANDARD_LIBRARY_ID ? '' : ' to the Standard library'
+        setNote(`${verb} "${part.name}"${where}${res.shipped ? ' → bundled repo copy (commit it to ship)' : ''}.`)
         await refresh()
       } else {
         setNote(res.error ?? 'Promote failed.')
@@ -604,9 +608,11 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                   onAddToProject ? () => onAddToProject(selectedPart.libraryId, selectedPart.part) : undefined
                 }
                 onPromote={
-                  // DEV-only: any part not already in the Standard library (#192 —
-                  // the standard library holds any component type, not just boards).
-                  import.meta.env.DEV && selectedPart.libraryId !== STANDARD_LIBRARY_ID
+                  // DEV-only. Any part, INCLUDING one already in the Standard library
+                  // — re-promoting a Standard part re-writes its runtime copy and
+                  // mirrors the edit into the bundled repo (examples/parts/…) so an
+                  // in-app edit to a shipped part can actually be committed + shipped.
+                  import.meta.env.DEV
                     ? () => void promote(selectedPart.libraryId, selectedPart.part)
                     : undefined
                 }
