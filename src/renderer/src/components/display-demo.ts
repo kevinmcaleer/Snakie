@@ -43,7 +43,7 @@ import time
 # library on disk is actually used. MicroPython caches imports in sys.modules;
 # updating the .py does NOT refresh an already-imported module — without this you
 # can hit \`TypeError: unexpected keyword argument 'screen_sda'\` against an old
-# 0.4.x copy even though the file on disk is 0.5.0.
+# 0.5.x copy even though the file on disk is 0.6.0.
 sys.modules.pop("instruments", None)
 import instruments as inst
 

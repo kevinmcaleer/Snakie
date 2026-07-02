@@ -15,7 +15,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `screen spi …` retarget over the control channel, and a bundled on-device
   `ST7789` driver (`inst.start(screen_sck=…, screen_mosi=…, screen_dc=…,
   screen_rst=…, screen_cs=…)`). Mirror + Push work over both buses; a **Run ST7789
-  demo** fallback (`examples/st7789_demo.py`) wires the panel's pins.
+  demo** fallback (`examples/st7789_demo.py`) wires the panel's pins. (Library 0.6.0.)
 - **Manual pin-label placement (Part Editor).** Drag a pin's label annotation
   (number box + label + capability chips) to a hand-placed spot — e.g. clear of the
   board outline — to declutter dense boards. It's persisted per pin as `labelOffset`
