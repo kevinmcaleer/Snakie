@@ -88,6 +88,31 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(yaml).toContain('image: image.png')
   })
 
+  it('never serialises the inlined helpText; keeps the help filename', () => {
+    const withHelp = { ...RICH, help: 'help.md', helpText: '# Rich\n\nUsage notes.' }
+    const yaml = partToYaml(withHelp)
+    expect(yaml).not.toContain('helpText')
+    expect(yaml).not.toContain('Usage notes')
+    // The relative filename IS kept.
+    expect(yaml).toContain('help: help.md')
+  })
+
+  it('round-trips the help filename through normalise + YAML (helpText dropped)', () => {
+    const part = normalisePart({
+      id: 'helped',
+      name: 'Helped Part',
+      help: 'help.md',
+      helpText: '# runtime only',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }]
+    })
+    // normalise strips the runtime-only helpText but keeps the filename.
+    expect(part.help).toBe('help.md')
+    expect(part.helpText).toBeUndefined()
+    const back = partFromYaml(partToYaml(part))
+    expect(back.help).toBe('help.md')
+    expect(normalisePart(back)).toEqual(part)
+  })
+
   it('tolerates a sparse hand-edited file', () => {
     const part = partFromYaml('id: thing\nheaders:\n  - edge: left\n    pins:\n      - name: A0\n        type: io\n')
     expect(part.id).toBe('thing')

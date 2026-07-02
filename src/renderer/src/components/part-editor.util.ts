@@ -897,6 +897,9 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)
   // is preserved for previews but is NOT part of the round-trip-comparable shape.
   set('image', text(part.image))
+  // `help` is the relative filename; keep it. `helpText` (the inlined markdown) is
+  // runtime-only, like `imageData`, so it's NOT part of the round-trip shape.
+  set('help', text(part.help))
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

@@ -436,6 +436,24 @@ export interface PartDefinition {
    */
   imageLayer?: ImageLayer
 
+  // --- Bundled help / docs -------------------------------------------------
+  /**
+   * A bundled mini-help document (plain **markdown**) shipped alongside the part
+   * so it works offline. On disk this is a **relative filename** within the part
+   * folder (e.g. `"help.md"`); the main process inlines its text into
+   * {@link helpText} on read so the renderer needs no filesystem access. When a
+   * part is placed on the breadboard its help stacks in the Board View's help
+   * drawer. The Part Editor authors the markdown and the main process writes it
+   * back out to the file on save.
+   */
+  help?: string
+  /**
+   * Populated by the main process on read: the bundled {@link help} document's
+   * raw markdown text. NOT written to `parts.yml` (the file keeps the relative
+   * `help` filename). Undefined when there is no help document.
+   */
+  helpText?: string
+
   // --- Schematic (Part Editor, #130) ---------------------------------------
   /** Optional schematic symbol (line-drawing) for the schematic view. */
   schematic?: PartSchematic

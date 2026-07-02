@@ -311,6 +311,8 @@ export function partToYaml(part: PartDefinition): string {
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
     imageLayer: part.imageLayer,
+    // NB: `help` (the filename) is kept; `helpText` (the inlined markdown) is NOT.
+    help: part.help,
     schematic: part.schematic,
     library: part.library,
     drivers: part.drivers?.map(driverToObj),
@@ -518,6 +520,7 @@ export function partFromYaml(text: string): PartDefinition {
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
+  assign('help', str(raw.help))
   if (raw.imageLayer && typeof raw.imageLayer === 'object') {
     const il = raw.imageLayer as Record<string, unknown>
     const x = num(il.x)

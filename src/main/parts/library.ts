@@ -178,6 +178,20 @@ async function inlineImage(partDir: string, filename: string): Promise<string | 
   }
 }
 
+/** Read a part's bundled help document (markdown) off disk as raw text. */
+async function inlineHelp(partDir: string, filename: string): Promise<string | undefined> {
+  // Guard against path traversal via a crafted `help:` value (e.g. `../../x.md`).
+  if (!isContainedFile(partDir, filename)) {
+    console.warn(`[parts] ignoring unsafe help path: ${filename}`)
+    return undefined
+  }
+  try {
+    return await fsp.readFile(join(partDir, filename), 'utf-8')
+  } catch {
+    return undefined
+  }
+}
+
 /** Delete every `image.<ext>` asset in a part folder (clean slate before write). */
 async function removeImageAssets(partDir: string): Promise<void> {
   await Promise.all(
@@ -206,6 +220,10 @@ async function readPart(libDir: string, partId: string): Promise<PartDefinition 
   if (part.image) {
     const data = await inlineImage(partDir, part.image)
     if (data) part.imageData = data
+  }
+  if (part.help) {
+    const text = await inlineHelp(partDir, part.help)
+    if (text !== undefined) part.helpText = text
   }
   return part
 }
@@ -326,12 +344,16 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     // Persist the image asset from the runtime data URL, if any.
     const toWrite: PartDefinition = { ...part, id: partId }
     delete toWrite.imageData
-    // Remove the previously-referenced asset too (community/hand-authored parts
-    // may name it e.g. `board.jpg`, which removeImageAssets wouldn't catch).
+    delete toWrite.helpText
+    // Remove the previously-referenced assets too (community/hand-authored parts
+    // may name them e.g. `board.jpg`, which removeImageAssets wouldn't catch).
     try {
       const prev = partFromYaml(await fsp.readFile(join(partDir, 'parts.yml'), 'utf-8'))
       if (prev.image && isContainedFile(partDir, prev.image)) {
         await fsp.unlink(join(partDir, prev.image)).catch(() => undefined)
+      }
+      if (prev.help && isContainedFile(partDir, prev.help)) {
+        await fsp.unlink(join(partDir, prev.help)).catch(() => undefined)
       }
     } catch {
       // No existing part / unreadable → nothing to clean up.
@@ -349,6 +371,16 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     } else {
       // No image supplied → drop the reference.
       delete toWrite.image
+    }
+
+    // Persist the bundled help markdown, if any (empty ⇒ drop the reference).
+    const helpText = typeof part.helpText === 'string' ? part.helpText : undefined
+    if (helpText && helpText.trim()) {
+      await fsp.writeFile(join(partDir, 'help.md'), helpText, 'utf-8')
+      toWrite.help = 'help.md'
+    } else {
+      await fsp.unlink(join(partDir, 'help.md')).catch(() => undefined)
+      delete toWrite.help
     }
 
     await fsp.writeFile(join(partDir, 'parts.yml'), partToYaml(toWrite), 'utf-8')
