@@ -57,6 +57,7 @@ import type {
   TextAlign
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
+import { Markdown } from './Markdown'
 import './PartEditor.css'
 
 /** Per-capability bus/channel + signal controls shown when the capability is
@@ -604,7 +605,9 @@ export function PartEditor({
     // first save keeps its authored version (openedId is null until first save).
     const nextVersion =
       contentChanged && versionUntouched && openedId !== null ? bumpPatch(clean.version) : clean.version
-    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData }
+    // `helpText`/`imageData` are runtime-only (normalisePart strips them); re-add
+    // them so the main process can write help.md / the image asset out on save.
+    const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData, helpText: part.helpText }
     try {
       const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
       if (res?.ok) {
@@ -2238,6 +2241,26 @@ function DetailsFields({
           placeholder="https://…"
         />
       </label>
+
+      <h4 className="pe__subh">Mini-help (markdown)</h4>
+      <p className="pe__hint">
+        Bundled <strong>offline</strong> help — a quick overview, how to use it, and links. Shown in the Board View&rsquo;s
+        help panel when this part is placed. Plain markdown; saved as <code>help.md</code> alongside the part.
+      </p>
+      <textarea
+        className="pe__help-edit"
+        value={part.helpText ?? ''}
+        onChange={(e) => patch({ helpText: e.target.value })}
+        placeholder={'## Overview\n\nWhat this board is and does.\n\n## Using it\n\n- how to wire it\n- example code\n\n## Links\n\n- [Datasheet](https://…)'}
+        rows={8}
+        spellCheck={false}
+      />
+      {(part.helpText ?? '').trim() && (
+        <details className="pe__help-preview">
+          <summary>Preview</summary>
+          <Markdown source={part.helpText ?? ''} />
+        </details>
+      )}
 
       <h4 className="pe__subh">
         Properties

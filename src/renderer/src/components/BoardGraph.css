@@ -365,6 +365,7 @@
 /* --- Body row: the canvas + (optionally) the instrument dock rail side by
    side. Fills the height between the header and the pins table. --- */
 .boardgraph__body {
+  position: relative; /* anchors the floating help drawer + toast overlays */
   display: flex;
   align-items: stretch;
   flex: 1 1 auto;

@@ -1,0 +1,115 @@
+/* Rendered part mini-help (markdown → sanitised HTML). Scoped under `.md`. */
+.md {
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text, #d6dade);
+  word-break: break-word;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  margin: 0.9em 0 0.4em;
+  line-height: 1.25;
+  font-weight: 700;
+}
+.md h1 {
+  font-size: 1.25em;
+}
+.md h2 {
+  font-size: 1.12em;
+}
+.md h3 {
+  font-size: 1em;
+}
+.md h4 {
+  font-size: 0.92em;
+  color: var(--text-muted, #9aa0a8);
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md table {
+  margin: 0 0 0.6em;
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.3em;
+}
+.md li {
+  margin: 0.15em 0;
+}
+
+.md a {
+  color: var(--accent, #4ea1ff);
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+}
+
+.md code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
+}
+
+.md pre {
+  margin: 0 0 0.7em;
+  padding: 0.6em 0.75em;
+  overflow-x: auto;
+  border-radius: 6px;
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
+}
+.md pre code {
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.md blockquote {
+  padding-left: 0.8em;
+  border-left: 3px solid var(--border, #2c2e33);
+  color: var(--text-muted, #9aa0a8);
+}
+
+.md table {
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+.md th,
+.md td {
+  padding: 0.3em 0.55em;
+  border: 1px solid var(--border, #2c2e33);
+  text-align: left;
+}
+.md th {
+  background: var(--bg-sunken, #17181c);
+}
+
+.md img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border, #2c2e33);
+  margin: 0.9em 0;
+}

@@ -1191,3 +1191,39 @@
   color: var(--text-muted);
   flex: 0 0 auto;
 }
+
+/* Mini-help (markdown) editor + preview in the Details panel. */
+.pe__help-edit {
+  width: 100%;
+  min-height: 8rem;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  padding: 0.4rem 0.5rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pe__help-preview {
+  margin-top: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.pe__help-preview > summary {
+  cursor: pointer;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+
+.pe__help-preview[open] > summary {
+  margin-bottom: 0.45rem;
+}

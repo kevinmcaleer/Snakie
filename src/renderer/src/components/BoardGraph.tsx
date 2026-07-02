@@ -49,6 +49,7 @@ import {
 } from './board-values'
 import { WiringCanvas, BOARD_BODY_W, BOARD_BODY_H, type WiringRenderMode } from './WiringCanvas'
 import { PartsPanel } from './PartsPanel'
+import { PartHelpDrawer, type PartHelpItem } from './PartHelpDrawer'
 import type { RobotDefinition } from '../../../shared/robot'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './BoardGraph.css'
@@ -382,6 +383,47 @@ export function BoardGraph({
   const driverNeeds = useMemo(
     () => placedPartsNeedingDrivers(robot, libraries ?? []),
     [robot, libraries]
+  )
+
+  // Bundled mini-help for the placed items (the MCU + each unique placed part that
+  // ships a help.md), stacked in the Board View help drawer (offline). Deduped so
+  // two of the same part show one card; the board's own help leads.
+  const helpItems = useMemo<PartHelpItem[]>(() => {
+    const out: PartHelpItem[] = []
+    const seen = new Set<string>()
+    const boardHelp = (boardPart?.helpText ?? '').trim()
+    if (boardHelp) {
+      out.push({ key: `board:${boardPart!.id}`, name: boardPart!.name || def.name, helpText: boardPart!.helpText! })
+      seen.add(`board:${boardPart!.id}`)
+    }
+    for (const rp of robot?.parts ?? []) {
+      const k = `${rp.lib}:${rp.part}`
+      if (seen.has(k)) continue
+      const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+      const help = (pdef?.helpText ?? '').trim()
+      if (!help) continue
+      seen.add(k)
+      out.push({ key: k, name: pdef?.name || rp.label || rp.part, helpText: pdef!.helpText! })
+    }
+    return out
+  }, [boardPart, robot?.parts, libraries, def.name])
+
+  // The Board View HELP drawer + the "help available" notification. Adding a part
+  // that ships help pops the toast (auto-dismissed); the header Help button + the
+  // toast both open the drawer.
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [helpToast, setHelpToast] = useState<{ name: string } | null>(null)
+  useEffect(() => {
+    if (!helpToast) return
+    const t = window.setTimeout(() => setHelpToast(null), 7000)
+    return () => window.clearTimeout(t)
+  }, [helpToast])
+  const handleAddToProject = useCallback(
+    (libraryId: string, part: PartDefinition): void => {
+      onAddToProject?.(libraryId, part)
+      if ((part.helpText ?? '').trim()) setHelpToast({ name: part.name })
+    },
+    [onAddToProject]
   )
 
   // Custom dropdown open state — a native <select> popup is unreliable inside a
@@ -757,6 +799,18 @@ export function BoardGraph({
               LIVE
             </button>
           )}
+          {wiringEnabled && effectiveView !== 'graph' && (
+            <button
+              type="button"
+              className={`boardgraph__help-btn${helpOpen ? ' is-active' : ''}`}
+              onClick={() => setHelpOpen((o) => !o)}
+              aria-pressed={helpOpen}
+              title="Show bundled help for the placed parts"
+            >
+              Help
+              {helpItems.length > 0 && <span className="boardgraph__help-count">{helpItems.length}</span>}
+            </button>
+          )}
           {onEnterCreator && (
             <button
               type="button"
@@ -824,7 +878,7 @@ export function BoardGraph({
                   </button>
                 </div>
                 <div className="boardgraph__dock-body">
-                  <PartsPanel onAddToProject={onAddToProject} />
+                  <PartsPanel onAddToProject={handleAddToProject} />
                 </div>
               </aside>
             ) : (
@@ -1079,6 +1133,37 @@ export function BoardGraph({
           </>
         )}
       </div>
+      )}
+      {/* Board View HELP: a right-side drawer stacking the placed parts' bundled
+          mini-help, + a "help available" toast when a part with help is added. */}
+      {effectiveView !== 'graph' && helpOpen && (
+        <PartHelpDrawer items={helpItems} onClose={() => setHelpOpen(false)} />
+      )}
+      {effectiveView !== 'graph' && helpToast && (
+        <div className="boardgraph__help-toast" role="status">
+          <span>
+            Help for <strong>{helpToast.name}</strong> is available.
+          </span>
+          <button
+            type="button"
+            className="boardgraph__help-toast-btn"
+            onClick={() => {
+              setHelpOpen(true)
+              setHelpToast(null)
+            }}
+          >
+            View help
+          </button>
+          <button
+            type="button"
+            className="boardgraph__help-toast-x"
+            onClick={() => setHelpToast(null)}
+            title="Dismiss"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
       )}
       </div>
 

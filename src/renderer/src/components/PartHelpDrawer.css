@@ -1,0 +1,185 @@
+/* Board View HELP drawer — a right-side overlay stacking placed parts' mini-help.
+   Floats over the canvas (doesn't reflow the wiring layout). */
+.bg-help {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 14;
+  width: 340px;
+  max-width: 80vw;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-elevated, #1f2024);
+  border-left: 1px solid #2c2e33;
+  box-shadow: -8px 0 22px rgba(0, 0, 0, 0.4);
+  animation: bg-help-in 0.16s ease-out;
+}
+
+@keyframes bg-help-in {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+}
+
+.bg-help__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.7rem;
+  border-bottom: 1px solid #2c2e33;
+}
+
+.bg-help__title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted, #9aa0a8);
+}
+
+.bg-help__close {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  color: var(--text-muted, #9aa0a8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.bg-help__close:hover {
+  color: var(--text, #d6dade);
+  border-color: #3a3d44;
+}
+
+.bg-help__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.bg-help__empty {
+  margin: 0.6rem 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text-muted, #9aa0a8);
+  line-height: 1.5;
+}
+
+.bg-help__card {
+  margin-bottom: 0.45rem;
+  border: 1px solid #2c2e33;
+  border-radius: 8px;
+  background: var(--bg-sunken, #17181c);
+  overflow: hidden;
+}
+
+.bg-help__card-summary {
+  cursor: pointer;
+  padding: 0.5rem 0.6rem;
+  font-weight: 700;
+  font-size: 0.82rem;
+  color: var(--text, #d6dade);
+  user-select: none;
+}
+
+.bg-help__card-summary:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bg-help__md {
+  padding: 0.2rem 0.7rem 0.7rem;
+}
+
+/* --- Header "Help" button + count badge (in the board header actions). --- */
+.boardgraph__help-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 9px;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: #d3d8de;
+  cursor: pointer;
+}
+
+.boardgraph__help-btn:hover {
+  border-color: #565b63;
+}
+
+.boardgraph__help-btn.is-active {
+  background: #2f5f8c;
+  border-color: #2f5f8c;
+  color: #fff;
+}
+
+.boardgraph__help-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  color: #fff;
+  background: #2f6b2a;
+}
+
+/* --- "Help available" notification (toast), bottom-centre over the canvas. --- */
+.boardgraph__help-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 16;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.5rem 0.5rem 0.8rem;
+  background: var(--bg-elevated, #1f2024);
+  border: 1px solid #3a3d44;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  font-size: 0.8rem;
+  color: var(--text, #d6dade);
+  animation: bg-help-in 0.16s ease-out;
+}
+
+.boardgraph__help-toast-btn {
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-weight: 700;
+  color: #fff;
+  background: #2f5f8c;
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.boardgraph__help-toast-btn:hover {
+  filter: brightness(1.1);
+}
+
+.boardgraph__help-toast-x {
+  width: 22px;
+  height: 22px;
+  color: var(--text-muted, #9aa0a8);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.boardgraph__help-toast-x:hover {
+  color: var(--text, #d6dade);
+}
