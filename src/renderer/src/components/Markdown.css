@@ -76,6 +76,54 @@
   background: var(--bg-sunken, #17181c);
   border: 1px solid var(--border, #2c2e33);
 }
+
+/* Code block + hover copy button (top-right). */
+.md-code {
+  position: relative;
+  margin: 0 0 0.7em;
+}
+.md-code > pre {
+  margin: 0;
+}
+.md-copy {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  color: #cfd6dd;
+  background: rgba(20, 22, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+.md-code:hover .md-copy,
+.md-copy:focus-visible {
+  opacity: 1;
+}
+.md-copy:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+.md-copy-ok {
+  display: none;
+}
+.md-copy.is-copied {
+  opacity: 1;
+  color: #46e06a;
+  border-color: rgba(70, 224, 106, 0.5);
+}
+.md-copy.is-copied .md-copy-i {
+  display: none;
+}
+.md-copy.is-copied .md-copy-ok {
+  display: inline;
+}
 .md pre code {
   padding: 0;
   border: none;

@@ -104,13 +104,13 @@
   padding: 0 10px;
 }
 .help-tree__children {
-  margin-left: 21px;
+  margin-left: 14px;
   border-left: 1px dotted #bcae8c;
 }
 .help-tree__row {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   min-height: 26px;
   padding: 1px 3px;
   border-radius: 4px;
@@ -131,7 +131,7 @@
 }
 .help-tree__stub {
   flex: 0 0 auto;
-  width: 12px;
+  width: 7px;
   border-top: 1px dotted #bcae8c;
 }
 .help-tree__toggle {
@@ -153,7 +153,7 @@
 }
 .help-tree__spacer {
   flex: 0 0 auto;
-  width: 15px;
+  width: 9px;
 }
 .help-tree__icon {
   flex: 0 0 auto;
