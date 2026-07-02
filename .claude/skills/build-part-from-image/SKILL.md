@@ -143,11 +143,20 @@ not infer. Required:
    electrical `type` (`io`/`pwr`/`gnd`/`other`), `capabilities`, and which **edge**
    it's on, in physical top→bottom order from a stated origin. Use `x`/`y` (0..1)
    for real positions; else spread evenly along the `edge`. **Cross-check every
-   5V/3V3/GND** against the source. Also record, per capability, from the pinout:
+   5V/3V3/GND** against the source. For **every capability a pad has** (not just
+   I2C — do PWM and SPI too), record BOTH:
    - the **signal** under `signals` — I2C → `SDA`/`SCL`, SPI → `RX`/`CSn`/`SCK`/`TX`,
      UART → `TX`/`RX`, PWM → the `A`/`B` channel;
    - the **bus / channel number** under `buses` — the I2C/SPI/UART instance
      (`I2C0`, `SPI1`, `UART0` → `0`/`1`) and the ADC channel (`ADC2` → `2`).
+
+   On a **microcontroller** these are **fixed by the chip**, not the board: read the
+   MCU's bank0 **GPIO-function table** (its datasheet) and fill them for every GPIO
+   — don't leave them blank. For **RP2040 / RP2350** the mapping is deterministic
+   from the GPIO number `g`:
+   `spi bus = 1 if g in 8..15 or 26..28 else 0`, `spi sig = [RX,CSn,SCK,TX][g%4]`;
+   `i2c bus = 0 if g%4 in {0,1} else 1`, `i2c sig = SDA if g even else SCL`;
+   `pwm chan = A if g even else B`; `adc = g-26` for GP26/27/28.
    Note the **GP## GPIO** even when the silk label differs (e.g. a pad silk-printed
    `SDA` that is really `GP4`) — set both `name: SDA` and `gpio: 4`.
 3. **Draw the board.** Preferably embed a cropped top-down **photo** + overlay the
@@ -165,11 +174,38 @@ not infer. Required:
    library, also copy it into the running install's
    `<userData>/parts/snakie-standard/<id>/` (or restart) so it shows immediately.
 7. **Verify**: it parses as YAML, pin `number`s are unique, coordinates are within
-   0..1, `type`/`capabilities`/`shape` use the allowed values. **Render it** (Board
-   View / Part Editor, or a Playwright capture) to confirm the photo + pads line up.
+   0..1, `type`/`capabilities`/`shape` use the allowed values. Every edge pad has a
+   `shape` **and** a per-edge `rotation` (so labels stay horizontal + castellations
+   face out), and every `io` pad carries `signals` + `buses` for each of its
+   capabilities. **Render it** (Board View / Part Editor, or a Playwright capture)
+   to confirm the photo + pads line up **and no silk label is rotated up/down**.
 8. **Confirm with the user**: present the **full pin table** (number · name · type ·
    gpio), highlighting **power/ground**, and get the user (who has the board) to
    confirm before the part is considered done — see the safety section.
+
+## Pad shape & castellation rotation
+
+Set every pad's `shape` explicitly — `castellated` for the plated half-holes on a
+castellated board, `header` for a through-hole ring, `square`/`round` for SMD.
+**Also set `rotation` on every edge pin** so the pad *and its silk label* face the
+right way. `rotation` is the outward direction — **0 = right, 90 = down,
+180 = left, 270 = up** — so use the pin's **edge**:
+
+| edge | `rotation` |
+|------|-----------|
+| left | `180` |
+| right | `0` |
+| top | `270` |
+| bottom | `90` |
+
+Why it matters (this is a real bug, not cosmetic): when `rotation` is omitted the
+renderer guesses the outward direction from each pad's *nearest board border*. For
+the **top-most and bottom-most pin in a left/right column** the nearest border is
+the top/bottom edge, so those labels get turned 90° (pointing up/down) while the
+rest stay horizontal — the classic "some labels point up and down" report. Setting
+`rotation` per edge pins the whole column to one direction: castellations face
+outward and **every label stays horizontal**. Set it on power/ground pads too, not
+just the GPIOs. (Applies to `left`/`right`/`top`/`bottom` edge headers alike.)
 
 ## Onboard LEDs, RGB & NeoPixels
 
@@ -230,11 +266,12 @@ imageLayer: { x: 0, y: 0, w: 1, h: 1 }
 headers:
   - edge: left             # left | right | top | bottom
     pins:
-      - { number: 1, name: VIN, type: pwr, x: 0.08, y: 0.20 }
-      - { number: 2, name: GND, type: gnd, x: 0.08, y: 0.40 }
-      # capabilities + per-capability signals + bus numbers (I2C0 SDA, ADC2, …):
-      - { number: 3, name: SDA, type: io, gpio: 4, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 }, x: 0.08, y: 0.60, shape: castellated }
-      - { number: 4, name: SCL, type: io, gpio: 5, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 }, x: 0.08, y: 0.80, shape: castellated }
+      # every edge pad: shape + per-edge rotation (left → 180) so labels stay level:
+      - { number: 1, name: VIN, type: pwr, x: 0.08, y: 0.20, shape: castellated, rotation: 180 }
+      - { number: 2, name: GND, type: gnd, x: 0.08, y: 0.40, shape: castellated, rotation: 180 }
+      # a multi-function MCU GPIO: fill signals + buses for EACH capability:
+      - { number: 3, name: GP2, type: io, gpio: 2, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 0 }, x: 0.08, y: 0.60, shape: castellated, rotation: 180 }
+      - { number: 4, name: SCL, type: io, gpio: 5, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 }, x: 0.08, y: 0.80, shape: castellated, rotation: 180 }
 # Onboard indicators tied to GPIO(s): single LED / analog RGB / addressable NeoPixel.
 onboardLeds:
   - { kind: single, gpio: 25, x: 0.5, y: 0.15 }             # e.g. Pico LED
