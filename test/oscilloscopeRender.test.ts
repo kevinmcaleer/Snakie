@@ -41,3 +41,35 @@ describe('Oscilloscope realism', () => {
     expect(html).toContain('500 µs/div')
   })
 })
+
+describe('Oscilloscope live PWM reading (read_pwm)', () => {
+  // A passive `read_pwm` reading drives liveDuty/liveFreq; with NO raw samples the
+  // scope must draw the SQUARE WAVE at that duty (animating), not a value trace.
+  const live = renderToStaticMarkup(
+    createElement(Oscilloscope, {
+      conn,
+      sources: [conn],
+      fileSource: 'led = PWM(Pin(15))',
+      liveDuty: 0.05,
+      liveFreq: 1000,
+      samples: undefined,
+      docked: true
+    })
+  )
+
+  it('draws a square wave (rails at 28/144), not a raw sample slope', () => {
+    const d = ([...live.matchAll(/d="(M0 28[^"]*)"/g)][0]?.[1]) ?? ''
+    expect(d).toMatch(/L\d/) // a real trace path
+    // both rails are visited (square wave), and it starts high (M0 28 = yHigh).
+    expect(d).toContain('144')
+    expect(d.startsWith('M0 28')).toBe(true)
+  })
+
+  it('reflects the live freq in the time/div (500 µs/div at 1 kHz)', () => {
+    expect(live).toContain('500 µs/div')
+  })
+
+  it('shows the live duty in the readout (5.0 %)', () => {
+    expect(live).toContain('5.0 %')
+  })
+})

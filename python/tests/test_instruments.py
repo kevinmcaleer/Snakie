@@ -49,13 +49,17 @@ class _FakeADC:
 
 
 class _FakePWM:
-    """Stand-in for ``machine.PWM`` exposing ``duty_u16()``."""
+    """Stand-in for ``machine.PWM`` exposing ``duty_u16()`` + ``freq()``."""
 
-    def __init__(self, u16):
+    def __init__(self, u16, freq=1000):
         self._u16 = u16
+        self._freq = freq
 
     def duty_u16(self):
         return self._u16
+
+    def freq(self):
+        return self._freq
 
 
 class ScopeOutput(unittest.TestCase):
@@ -106,10 +110,11 @@ class ReadHelpers(unittest.TestCase):
         volts = inst.read_adc(_FakeADC(32768), ch="adc0")
         self.assertAlmostEqual(volts, 32768 / 65535 * 3.3, places=6)
 
-    def test_read_pwm_emits_duty_fraction(self):
-        # 32768 / 65535 -> 0.5 duty; scope-emitted on the given channel.
-        line = _emit(inst.read_pwm, _FakePWM(32768), ch="pwm")
-        self.assertEqual(line, "SNK SCOPE pwm %s" % (32768 / 65535))
+    def test_read_pwm_emits_pwm_reading(self):
+        # 32768 / 65535 -> 0.5 duty; emitted as a live PWM reading (freq + duty)
+        # on the given channel so the scope draws the square wave at that duty.
+        line = _emit(inst.read_pwm, _FakePWM(32768, freq=1000), ch="pwm")
+        self.assertEqual(line, "SNK PWM pwm 1000 %s" % (32768 / 65535))
 
     def test_read_pwm_returns_duty_fraction(self):
         duty = inst.read_pwm(_FakePWM(0), ch="pwm")

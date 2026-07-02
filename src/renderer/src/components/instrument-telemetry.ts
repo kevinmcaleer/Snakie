@@ -55,6 +55,15 @@ export interface ScopeTelemetry {
   ch: string
   value: number
 }
+export interface PwmTelemetry {
+  kind: 'pwm'
+  /** The user channel label (matches an open scope's source). */
+  ch: string
+  /** PWM frequency in Hz (0 when the board couldn't read it). */
+  freq: number
+  /** Duty as a 0..1 fraction. */
+  duty: number
+}
 export interface MeterTelemetry {
   kind: 'meter'
   ch: string
@@ -156,6 +165,7 @@ export interface ReadyTelemetry {
 
 export type Telemetry =
   | ScopeTelemetry
+  | PwmTelemetry
   | MeterTelemetry
   | PlotTelemetry
   | ImuTelemetry
@@ -212,6 +222,16 @@ export function parseTelemetry(line: string): Telemetry | null {
     const value = Number(parts[3])
     if (!ch || !Number.isFinite(value)) return null
     return { kind: 'scope', ch, value }
+  }
+
+  if (kind === 'PWM') {
+    // SNK PWM <ch> <freq> <duty> — a live PWM reading (drives the scope's square
+    // wave at the measured duty), NOT a raw sample. `read_pwm` emits this.
+    const ch = parts[2]
+    const freq = Number(parts[3])
+    const duty = Number(parts[4])
+    if (!ch || !Number.isFinite(freq) || !Number.isFinite(duty)) return null
+    return { kind: 'pwm', ch, freq, duty }
   }
 
   if (kind === 'METER') {

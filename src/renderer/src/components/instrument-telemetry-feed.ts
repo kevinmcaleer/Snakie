@@ -21,7 +21,7 @@
  * Nothing here throws; mirrors {@link ./instrument-data} / {@link ./board-values}.
  */
 
-import type { MeterTelemetry, ScopeTelemetry, Telemetry } from './instrument-telemetry'
+import type { MeterTelemetry, PwmTelemetry, ScopeTelemetry, Telemetry } from './instrument-telemetry'
 
 /** How many recent scope samples to retain per channel for the live waveform. */
 export const SCOPE_BUFFER = 256
@@ -32,34 +32,43 @@ export interface MeterReading {
   unit: string
 }
 
+/** The latest live PWM reading for a channel (drives the scope's square wave). */
+export interface PwmReading {
+  freq: number
+  duty: number
+}
+
 /**
  * The rolling telemetry store. `scope` maps a channel label → its recent sample
- * ring (oldest first); `meter` maps a channel label → its latest reading. Both
- * are plain objects so a snapshot is a cheap shallow copy for React state.
+ * ring (oldest first); `meter` / `pwm` map a channel label → its latest reading.
+ * All are plain objects so a snapshot is a cheap shallow copy for React state.
  */
 export interface TelemetryFeed {
   scope: Record<string, number[]>
   meter: Record<string, MeterReading>
+  pwm: Record<string, PwmReading>
 }
 
 /** A fresh, empty feed. */
 export function emptyFeed(): TelemetryFeed {
-  return { scope: {}, meter: {} }
+  return { scope: {}, meter: {}, pwm: {} }
 }
 
 /** Fold a parsed scope sample into the feed, returning a NEW feed. */
 function foldScope(feed: TelemetryFeed, t: ScopeTelemetry): TelemetryFeed {
   const prev = feed.scope[t.ch] ?? []
   const next = prev.length >= SCOPE_BUFFER ? [...prev.slice(prev.length - SCOPE_BUFFER + 1), t.value] : [...prev, t.value]
-  return { scope: { ...feed.scope, [t.ch]: next }, meter: feed.meter }
+  return { ...feed, scope: { ...feed.scope, [t.ch]: next } }
 }
 
 /** Fold a parsed meter reading into the feed, returning a NEW feed. */
 function foldMeter(feed: TelemetryFeed, t: MeterTelemetry): TelemetryFeed {
-  return {
-    scope: feed.scope,
-    meter: { ...feed.meter, [t.ch]: { value: t.value, unit: t.unit } }
-  }
+  return { ...feed, meter: { ...feed.meter, [t.ch]: { value: t.value, unit: t.unit } } }
+}
+
+/** Fold a parsed live PWM reading into the feed, returning a NEW feed. */
+function foldPwm(feed: TelemetryFeed, t: PwmTelemetry): TelemetryFeed {
+  return { ...feed, pwm: { ...feed.pwm, [t.ch]: { freq: t.freq, duty: t.duty } } }
 }
 
 /**
@@ -72,7 +81,8 @@ export function foldTelemetry(feed: TelemetryFeed, t: Telemetry | null): Telemet
   if (!t) return feed
   if (t.kind === 'scope') return foldScope(feed, t)
   if (t.kind === 'meter') return foldMeter(feed, t)
-  return feed // 'plot' — not a scope/meter sample
+  if (t.kind === 'pwm') return foldPwm(feed, t)
+  return feed // 'plot' etc. — not a scope/meter/pwm sample
 }
 
 /**
@@ -102,4 +112,10 @@ export function scopeSamplesFor(feed: TelemetryFeed, variable: string): number[]
 export function meterReadingFor(feed: TelemetryFeed, variable: string): MeterReading | undefined {
   const ch = matchChannel(variable, Object.keys(feed.meter))
   return ch ? feed.meter[ch] : undefined
+}
+
+/** The latest live PWM reading (freq + duty) feeding `variable` (or undefined). */
+export function pwmReadingFor(feed: TelemetryFeed, variable: string): PwmReading | undefined {
+  const ch = matchChannel(variable, Object.keys(feed.pwm))
+  return ch ? feed.pwm[ch] : undefined
 }

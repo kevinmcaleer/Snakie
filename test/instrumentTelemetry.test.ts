@@ -52,6 +52,20 @@ describe('instrument-telemetry parseTelemetry — SCOPE', () => {
     })
   })
 
+  it('parses a live PWM reading (freq + duty)', () => {
+    expect(parseTelemetry('SNK PWM pwm 1000 0.05')).toEqual({
+      kind: 'pwm',
+      ch: 'pwm',
+      freq: 1000,
+      duty: 0.05
+    })
+  })
+
+  it('rejects a malformed PWM line', () => {
+    expect(parseTelemetry('SNK PWM pwm 1000')).toBeNull() // missing duty
+    expect(parseTelemetry('SNK PWM pwm x 0.5')).toBeNull() // non-numeric freq
+  })
+
   it('parses a negative scope value', () => {
     expect(parseTelemetry('SNK SCOPE sig -1.5')).toEqual({
       kind: 'scope',

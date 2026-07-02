@@ -360,13 +360,20 @@ def read_adc(adc, ch="adc0"):
 
 
 def read_pwm(pwm, ch="pwm"):
-    """Read ``pwm`` (a ``machine.PWM``), emit a scope sample, and return the duty.
+    """Read ``pwm`` (a ``machine.PWM``) and emit a live PWM reading.
 
-    Reads ``duty_u16()`` as a 0..1 fraction (``/ 65535``), ``scope``s it on
-    channel ``ch``, and returns the duty fraction.
+    Reads ``duty_u16()`` as a 0..1 fraction (``/ 65535``) plus ``freq()`` and
+    prints ``SNK PWM <ch> <freq> <duty>``. The Oscilloscope draws the idealised
+    SQUARE WAVE at this duty/freq (animating as the duty changes) — a real PWM
+    picture, not a raw value trace. Passive (friendly REPL), so it never
+    interrupts a running loop. Returns the duty fraction.
     """
     duty = pwm.duty_u16() / 65535
-    scope(duty, ch=ch)
+    try:
+        freq = pwm.freq()
+    except Exception:
+        freq = 0
+    print("%s PWM %s %s %s" % (SENTINEL, ch, freq, duty))
     return duty
 
 

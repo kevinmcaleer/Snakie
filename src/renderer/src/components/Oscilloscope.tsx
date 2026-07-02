@@ -58,6 +58,11 @@ export interface OscilloscopeProps {
    */
   liveDuty?: number
   /**
+   * Live PWM frequency (Hz) from a passive `read_pwm` reading; overrides the freq
+   * parsed from the file so the time/div + period track the real signal.
+   */
+  liveFreq?: number
+  /**
    * Live `SNK SCOPE` telemetry samples for this channel (#107), oldest → newest.
    * When present (non-empty) the scope draws this REAL waveform instead of the
    * idealised square wave; absent/empty → the freq/duty picture as before.
@@ -87,6 +92,7 @@ export function Oscilloscope({
   sources,
   fileSource,
   liveDuty,
+  liveFreq,
   samples,
   live,
   onToggleLive,
@@ -100,11 +106,12 @@ export function Oscilloscope({
   const [running, setRunning] = useState(true)
 
   // Static config from the constructor + the surrounding file, overridden by the
-  // live duty when the board is connected (the freq still comes from the source).
+  // live duty/freq when the board is reporting them (a passive `read_pwm`).
   const cfg = useMemo<PwmConfig>(() => {
     const base = pwmConfig(`${conn.constructor}\n${fileSource}`)
-    return liveDuty !== undefined ? { ...base, duty: liveDuty } : base
-  }, [conn.constructor, fileSource, liveDuty])
+    const withDuty = liveDuty !== undefined ? { ...base, duty: liveDuty } : base
+    return liveFreq !== undefined ? { ...withDuty, freq: liveFreq } : withDuty
+  }, [conn.constructor, fileSource, liveDuty, liveFreq])
 
   const duty = cfg.duty ?? 0.5 // a sane default picture when none is parseable
   const gp = gpLabel(conn)

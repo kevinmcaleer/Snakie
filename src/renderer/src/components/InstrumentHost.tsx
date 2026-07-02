@@ -61,8 +61,10 @@ import {
   emptyFeed,
   foldTelemetry,
   meterReadingFor,
+  pwmReadingFor,
   scopeSamplesFor,
   type MeterReading,
+  type PwmReading,
   type TelemetryFeed
 } from './instrument-telemetry-feed'
 import './InstrumentHost.css'
@@ -261,6 +263,8 @@ interface ResolvedInstrument {
   telemetrySamples?: number[]
   /** Passive telemetry meter reading for this channel (issue #107), if any. */
   telemetryReading?: MeterReading
+  /** Passive live PWM reading (freq + duty) for this channel, if any. */
+  pwmReading?: PwmReading
   isDocked: boolean
   cascade: number
 }
@@ -523,6 +527,9 @@ export function useInstruments({
         it.kind === 'scope' ? scopeSamplesFor(telemetry, conn.variable) : undefined
       const telemetryReading =
         it.kind === 'meter' ? meterReadingFor(telemetry, conn.variable) : undefined
+      // A live PWM reading (from `read_pwm`) drives the scope's SQUARE WAVE at the
+      // measured duty — passively, without interrupting a running loop.
+      const pwmReading = it.kind === 'scope' ? pwmReadingFor(telemetry, conn.variable) : undefined
       return {
         it,
         conn,
@@ -530,6 +537,7 @@ export function useInstruments({
         stats: meterStats.get(conn.variable),
         telemetrySamples: telemetrySamples && telemetrySamples.length > 0 ? telemetrySamples : undefined,
         telemetryReading,
+        pwmReading,
         isDocked: docked[keyOf(it)] ?? true,
         cascade: i
       }
@@ -566,6 +574,8 @@ interface RenderArgs {
   telemetrySamples?: number[]
   /** Passive telemetry meter reading for this channel (#107), if any. */
   telemetryReading?: MeterReading
+  /** Passive live PWM reading (freq + duty) for this channel, if any. */
+  pwmReading?: PwmReading
   /** Global live-poll state + toggler for the instrument's LIVE control. */
   liveOn: boolean
   onToggleLive: () => void
@@ -583,15 +593,20 @@ function renderInstrument(
   args: RenderArgs
 ): JSX.Element {
   if (it.kind === 'scope') {
-    // Live duty fraction from the polled duty_u16 (else parsed/static).
+    // Live duty/freq: prefer the PASSIVE `read_pwm` reading (works during a
+    // running loop → the square wave animates as the duty changes); else the
+    // REPL-polled duty_u16; else the parsed/static config.
     const liveDuty =
-      args.live && args.live.value !== undefined ? args.live.value / 65535 : undefined
+      args.pwmReading?.duty ??
+      (args.live && args.live.value !== undefined ? args.live.value / 65535 : undefined)
+    const liveFreq = args.pwmReading && args.pwmReading.freq > 0 ? args.pwmReading.freq : undefined
     return (
       <Oscilloscope
         conn={conn}
         sources={args.pwmConns}
         fileSource={args.source}
         liveDuty={liveDuty}
+        liveFreq={liveFreq}
         samples={args.telemetrySamples}
         live={args.liveOn}
         onToggleLive={args.onToggleLive}
@@ -639,6 +654,7 @@ function renderResolved(r: ResolvedInstrument, host: UseInstrumentsResult, float
     stats: r.stats,
     telemetrySamples: r.telemetrySamples,
     telemetryReading: r.telemetryReading,
+    pwmReading: r.pwmReading,
     liveOn: host.live,
     onToggleLive: host.onToggleLive,
     docked: !float,

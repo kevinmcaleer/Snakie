@@ -4,17 +4,36 @@ import {
   foldTelemetry,
   matchChannel,
   meterReadingFor,
+  pwmReadingFor,
   scopeSamplesFor,
   SCOPE_BUFFER
 } from '../src/renderer/src/components/instrument-telemetry-feed'
 import type { Telemetry } from '../src/renderer/src/components/instrument-telemetry'
 
 const scope = (ch: string, value: number): Telemetry => ({ kind: 'scope', ch, value })
+const pwm = (ch: string, freq: number, duty: number): Telemetry => ({ kind: 'pwm', ch, freq, duty })
 const meter = (ch: string, value: number, unit = 'V'): Telemetry => ({
   kind: 'meter',
   ch,
   value,
   unit
+})
+
+describe('instrument-telemetry-feed foldTelemetry — pwm reading', () => {
+  it('keeps only the LATEST freq + duty per channel', () => {
+    let f = emptyFeed()
+    f = foldTelemetry(f, pwm('pwm', 1000, 0.1))
+    f = foldTelemetry(f, pwm('pwm', 1000, 0.25))
+    expect(f.pwm.pwm).toEqual({ freq: 1000, duty: 0.25 })
+    expect(pwmReadingFor(f, 'pwm')).toEqual({ freq: 1000, duty: 0.25 })
+    expect(f.scope.pwm).toBeUndefined() // a PWM reading is NOT a scope sample trace
+  })
+
+  it('resolves a single reporting channel even when the label differs', () => {
+    let f = emptyFeed()
+    f = foldTelemetry(f, pwm('pwm', 50, 0.075))
+    expect(pwmReadingFor(f, 'led')).toEqual({ freq: 50, duty: 0.075 })
+  })
 })
 
 describe('instrument-telemetry-feed foldTelemetry — scope', () => {
