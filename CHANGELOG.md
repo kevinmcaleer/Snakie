@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-07-03
+
 ### Fixed
 - **In-app bug reports work in packaged builds (#206).** The shared feedback app
   key is now baked into release builds at build time (from a `SNAKIE_FEEDBACK_KEY`
@@ -1553,7 +1555,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.1...HEAD
+[0.23.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.3...v0.21.0
