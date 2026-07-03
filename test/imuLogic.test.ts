@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import {
   applyCalibration,
+  cardinalFor,
+  formatHeading,
+  headingFromYaw,
   eulerToCssTransform,
   eulerToMatrix,
   formatAngle,
@@ -294,5 +297,33 @@ describe('imu-logic formatAngle', () => {
 describe('imu-logic NEUTRAL_EULER', () => {
   it('is all-zero (the no-data / level pose)', () => {
     expect(NEUTRAL_EULER).toEqual({ roll: 0, pitch: 0, yaw: 0 })
+  })
+})
+
+describe('imu-logic compass (#215)', () => {
+  it('headingFromYaw maps CCW yaw to a CW 0..360 heading', () => {
+    expect(headingFromYaw(0)).toBe(0) // level, facing North
+    expect(headingFromYaw(-90)).toBe(90) // yaw −90 (CW quarter turn) → East
+    expect(headingFromYaw(90)).toBe(270) // yaw +90 (CCW quarter turn) → West
+    expect(headingFromYaw(180)).toBe(180)
+    expect(headingFromYaw(-450)).toBe(90) // wraps
+    expect(headingFromYaw(Number.NaN)).toBe(0)
+  })
+  it('cardinalFor names the nearest 16-wind point (wrapping)', () => {
+    expect(cardinalFor(0)).toBe('N')
+    expect(cardinalFor(90)).toBe('E')
+    expect(cardinalFor(180)).toBe('S')
+    expect(cardinalFor(270)).toBe('W')
+    expect(cardinalFor(45)).toBe('NE')
+    expect(cardinalFor(22.5)).toBe('NNE')
+    expect(cardinalFor(354)).toBe('N') // wraps back to N near 360
+    expect(cardinalFor(-90)).toBe('W') // negative wraps
+  })
+  it('formatHeading zero-pads to 3 digits with a degree sign', () => {
+    expect(formatHeading(0)).toBe('000°')
+    expect(formatHeading(7.4)).toBe('007°')
+    expect(formatHeading(237)).toBe('237°')
+    expect(formatHeading(359.6)).toBe('000°') // rounds + wraps
+    expect(formatHeading(Number.NaN)).toBe('000°')
   })
 })

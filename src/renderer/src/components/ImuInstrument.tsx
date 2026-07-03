@@ -3,8 +3,11 @@ import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentW
 import { type InstrumentDef } from './instruments-registry'
 import {
   applyCalibration,
+  cardinalFor,
   eulerToCssTransform,
   formatAngle,
+  formatHeading,
+  headingFromYaw,
   NEUTRAL_EULER,
   parseImu,
   readingToEuler,
@@ -212,6 +215,17 @@ export function ImuInstrument({
           </div>
         </PhosphorScreen>
 
+        {/* Compass (#215): a rotating 16-wind card under a fixed lubber line,
+            driven by the magnetometer heading (the calibrated yaw). */}
+        <div className="imu__compass" role="img" aria-label={hasData ? `Compass heading ${formatHeading(headingFromYaw(shown.yaw))} ${cardinalFor(headingFromYaw(shown.yaw))}` : 'Compass — no data'}>
+          <CompassRose heading={hasData ? headingFromYaw(shown.yaw) : 0} />
+          <div className="imu__compass-readout">
+            <span className="imu__compass-hdg">{hasData ? formatHeading(headingFromYaw(shown.yaw)) : '———'}</span>
+            <span className="imu__compass-card">{hasData ? cardinalFor(headingFromYaw(shown.yaw)) : '—'}</span>
+            <span className="imu__compass-lbl">HDG · MAG</span>
+          </div>
+        </div>
+
         {/* Numeric ROLL / PITCH / YAW readout — mirrors placeholder__readout. */}
         <div className="imu__readout">
           <Cell label="ROLL" value={hasData ? formatAngle(shown.roll) : '——'} />
@@ -222,6 +236,49 @@ export function ImuInstrument({
         </div>
       </div>
     </InstrumentWindow>
+  )
+}
+
+/**
+ * A ship-style compass: the CARD (rose) rotates by −heading so the current
+ * heading sits under the fixed top lubber line; N/E/S/W + tick marks ride the
+ * card. Pure SVG, no dependency; ~64px.
+ */
+function CompassRose({ heading }: { heading: number }): JSX.Element {
+  const ticks: JSX.Element[] = []
+  for (let d = 0; d < 360; d += 15) {
+    const major = d % 90 === 0
+    const a = (d * Math.PI) / 180
+    const r1 = major ? 20 : 23
+    const r2 = 26
+    ticks.push(
+      <line
+        key={d}
+        className={major ? 'imu__rose-tick imu__rose-tick--major' : 'imu__rose-tick'}
+        x1={32 + r1 * Math.sin(a)}
+        y1={32 - r1 * Math.cos(a)}
+        x2={32 + r2 * Math.sin(a)}
+        y2={32 - r2 * Math.cos(a)}
+      />
+    )
+  }
+  return (
+    <svg className="imu__rose" viewBox="0 0 64 64" aria-hidden="true">
+      {/* Bezel + face. */}
+      <circle className="imu__rose-bezel" cx={32} cy={32} r={30} />
+      <circle className="imu__rose-face" cx={32} cy={32} r={27} />
+      {/* The rotating card: ticks + cardinal letters. */}
+      <g style={{ transform: `rotate(${-heading}deg)`, transformOrigin: '32px 32px' }}>
+        {ticks}
+        <text className="imu__rose-n" x={32} y={13.5} textAnchor="middle">N</text>
+        <text className="imu__rose-pt" x={50.5} y={34.5} textAnchor="middle">E</text>
+        <text className="imu__rose-pt" x={32} y={53.5} textAnchor="middle">S</text>
+        <text className="imu__rose-pt" x={13.5} y={34.5} textAnchor="middle">W</text>
+      </g>
+      {/* Fixed lubber line (reads the heading) + hub. */}
+      <path className="imu__rose-lubber" d="M 32 3 L 29.4 9 L 34.6 9 Z" />
+      <circle className="imu__rose-hub" cx={32} cy={32} r={2} />
+    </svg>
   )
 }
 
