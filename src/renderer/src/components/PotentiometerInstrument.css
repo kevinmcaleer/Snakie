@@ -1,118 +1,87 @@
 /* POTENTIOMETER instrument (#212) — a skeuomorphic vintage moving-coil ammeter.
-   Global CSS: every selector uses the UNIQUE `potmeter__` prefix. The face is a
-   self-contained cast-bronze + cream island (a real B.S. First Grade panel meter);
-   the panel BACKGROUND matches the instrument header's charcoal so there's no grey. */
+   Global CSS: every selector uses the UNIQUE `potmeter__` prefix. Themed via
+   --accent / --accent-border, but the meter FACE is a self-contained cream island
+   (a real B.S. First Grade panel meter), so it reads the same in either theme. */
 .potmeter {
-  /* Cancel the .instr__body padding so the header-charcoal fills edge to edge. */
-  margin: -13px;
-  padding: 13px 13px 14px;
   display: flex;
   flex-direction: column;
-  gap: 0.55rem;
-  background: linear-gradient(180deg, #3a3d42, #25272b);
+  gap: 0.5rem;
+  padding: 0.55rem 0.6rem 0.6rem;
 }
 
-/* The meter — the SVG draws the whole cast bezel, so this is just a centred frame. */
+/* The meter face: a brass-bezelled cream card. */
 .potmeter__face {
-  align-self: center;
-  width: 100%;
-  max-width: 300px;
-  filter: drop-shadow(0 3px 7px rgba(0, 0, 0, 0.5));
+  border-radius: 10px;
+  padding: 6px;
+  background: linear-gradient(160deg, #d9b45e, #a97e2e 60%, #8a6522);
+  box-shadow:
+    inset 0 1px 2px rgba(255, 255, 255, 0.5),
+    inset 0 -2px 5px rgba(0, 0, 0, 0.45),
+    0 2px 6px rgba(0, 0, 0, 0.45);
 }
 .potmeter__svg {
   display: block;
   width: 100%;
-  height: auto;
+  height: 132px;
 }
-
-/* Cast-bronze round bezel + hammered grain + corner screws. */
-.potmeter__bezel {
-  stroke: #1c1509;
-  stroke-width: 1.5;
-}
-.potmeter__screw {
-  fill: #2a2116;
-  stroke: #6b5836;
+/* Cream dial with a faint aged vignette. */
+.potmeter__dial {
+  fill: #f3ead0;
+  stroke: #b9a878;
   stroke-width: 1;
 }
-
-/* Cream scalloped face with an aged edge. */
-.potmeter__face-shape {
-  fill: #f4ecd6;
-  stroke: #b6a678;
-  stroke-width: 1;
-}
-
-/* Maker shield + big legend. */
-.potmeter__shield-body {
-  fill: #201a12;
-}
-.potmeter__shield-h {
-  stroke: #f4ecd6;
-  stroke-width: 1.1;
-  fill: none;
-}
-.potmeter__big {
-  fill: #201a12;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-
-/* Black scale arc, ticks + numerals. */
 .potmeter__arc {
   fill: none;
-  stroke: #211c14;
-  stroke-width: 1.6;
+  stroke: #2b2620;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+/* The 0→value swept band, in the accent (brass) — the "reading so far". */
+.potmeter__sweep {
+  fill: none;
+  stroke: var(--accent, #c8962f);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  opacity: 0.85;
 }
 .potmeter__tick {
-  stroke: #3a3222;
+  stroke: #4a3f2c;
   stroke-width: 1.2;
 }
 .potmeter__tick--major {
-  stroke: #191309;
+  stroke: #211c14;
   stroke-width: 2;
 }
 .potmeter__num {
-  fill: #191309;
+  fill: #211c14;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
-.potmeter__maker {
+.potmeter__unit {
+  fill: #6a1b1b;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+.potmeter__mark {
   fill: #5a4a2a;
   font-family: Georgia, 'Times New Roman', serif;
-  font-size: 7px;
-  letter-spacing: 0.1em;
-}
-.potmeter__grade {
-  fill: #7a5a30;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 7px;
+  font-size: 7.5px;
   font-style: italic;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
-
-/* Thin black needle, pivoting behind the medallion. */
+/* The classic thin red needle + brass hub. */
 .potmeter__needle {
-  stroke: #14100a;
-  stroke-width: 1.8;
+  stroke: #b3241d;
+  stroke-width: 2.4;
   stroke-linecap: round;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
-
-/* Brass monogram medallion. */
-.potmeter__medal-ring {
-  fill: none;
-  stroke: #3a2c12;
-  stroke-width: 1.5;
-}
-.potmeter__medal-mono {
-  fill: #2c210d;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 15px;
-  font-weight: 800;
-  font-style: italic;
+.potmeter__hub {
+  fill: #3a2f1c;
+  stroke: #d9b45e;
+  stroke-width: 2;
 }
 
 /* Bottom row: pot knob · big % readout · source selector. */
@@ -125,10 +94,11 @@
   flex: 0 0 auto;
 }
 .potmeter__knob {
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
 }
 .potmeter__knob-body {
+  fill: radial-gradient(#2c2f34, #16181c);
   fill: #23262b;
   stroke: var(--accent-border, #565b63);
   stroke-width: 2;
@@ -153,7 +123,7 @@
   font-size: 2rem;
   font-weight: 800;
   line-height: 1;
-  color: #f2ead6;
+  color: var(--text, #e7ebef);
   font-variant-numeric: tabular-nums;
 }
 .potmeter__pct-unit {
@@ -167,7 +137,7 @@
   align-self: center;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  color: #9aa0a8;
+  color: var(--text-muted, #9aa0a8);
 }
 
 .potmeter__src {
@@ -180,14 +150,14 @@
   font-family: var(--font-mono);
   font-size: 0.54rem;
   letter-spacing: 0.08em;
-  color: #9aa0a8;
+  color: var(--text-muted, #9aa0a8);
 }
 .potmeter__select {
   padding: 0.22rem 0.3rem;
   font-family: var(--font-mono);
   font-size: 0.72rem;
-  color: #d6dade;
-  background: #17181c;
-  border: 1px solid #34373c;
+  color: var(--text, #d6dade);
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
   border-radius: 5px;
 }
