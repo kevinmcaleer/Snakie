@@ -69,7 +69,12 @@ mag_supported                       # True if the AK09916 was found
   and `read_mag()` raises — accel + gyro keep working (6-DoF).
 - A flat, still board reads roughly **1 g on the Z axis** and ~**0 dps** on the
   gyro — a quick sanity check that everything is wired up.
-- **`OSError: [Errno 5] EIO`** on `ICM20948(i2c)` means nothing answered at
-  0x68 **or** 0x69 — check SDA/SCL/3V3/GND and run `print(i2c.scan())` (the ICM
-  shows as **104**/0x68 or **105**/0x69). Pass `Pin(...)` objects to `I2C(...)`,
-  e.g. `I2C(0, sda=Pin(4), scl=Pin(5))`.
+- **`OSError: [Errno 5] EIO`** — the driver tells the two cases apart:
+  - *"not found at 0x68/0x69"* → nothing on the bus; check SDA/SCL/3V3/GND and
+    `print(i2c.scan())` (the ICM shows as **104**/0x68 or **105**/0x69). Pass
+    `Pin(...)` objects to `I2C(...)`, e.g. `I2C(0, sda=Pin(20), scl=Pin(21))`.
+  - *"ACKs its address but every I2C transfer fails"* → the chip is seen but the
+    **bus is electrically marginal**: add/verify **4.7 kΩ pull-ups** on SDA & SCL
+    to 3V3, ensure a **solid common ground**, shorten wires, and re-seat SDA/SCL.
+    A phantom address such as **0x08** in `i2c.scan()`, or the *other* sensor
+    failing too, confirms a bus (not chip) fault.

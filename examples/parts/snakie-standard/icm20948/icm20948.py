@@ -30,7 +30,10 @@ except ImportError:  # CPython fallback so the file is import-safe off-device
 import time
 
 # --- ICM-20948 identity -----------------------------------------------------
-_CHIP_ID = 0xEA           # WHO_AM_I value
+_CHIP_ID = 0xEA           # WHO_AM_I value (genuine ICM-20948)
+# WHO_AM_I bytes we accept: 0xEA is the ICM-20948; 0xE0/0xE1 are the register-
+# compatible ICM-20648 / ICM-20649.
+_KNOWN_IDS = (0xEA, 0xE1, 0xE0)
 _REG_BANK_SEL = 0x7F      # bank select (reachable from every bank)
 
 # --- Bank 0 -----------------------------------------------------------------
@@ -101,19 +104,75 @@ class ICM20948:
             self._mag_ok = False
 
     # --- address discovery --------------------------------------------------
+    def _read_whoami(self):
+        """Read WHO_AM_I as two STOP-separated transactions (write the register
+        pointer, then read) rather than readfrom_mem's repeated-START — the
+        repeated-START is the phase most likely to glitch on a loaded / weak-
+        pull-up bus."""
+        self.i2c.writeto(self.addr, bytes([_WHO_AM_I]))
+        return self.i2c.readfrom(self.addr, 1)[0]
+
     def _probe_addr(self, preferred):
-        """Return the I2C address (0x68/0x69) whose WHO_AM_I identifies an
-        ICM-20948, trying `preferred` first. Raises OSError if neither answers —
-        an EIO from every candidate means the sensor isn't on the bus."""
+        """Find the ICM-20948 (0x68/0x69), trying `preferred` first, with a robust
+        identity read; on failure raise a SPECIFIC error so a wiring fault, a
+        wrong chip and an absent chip are told apart:
+          * an address that ACKs (is in i2c.scan()) but whose transfers all EIO
+            -> a BUS/wiring fault (bad pull-ups, loose SDA/SCL/GND);
+          * an address that reads but reports a foreign WHO_AM_I -> wrong chip;
+          * nothing on the bus at 0x68/0x69 -> not connected.
+        """
+        try:
+            present = set(self.i2c.scan())
+        except Exception:  # noqa: BLE001 — scan unsupported; probe blindly
+            present = None
+
+        transfer_fault = []   # ACKs its address but reads/writes EIO
+        wrong_chip = []       # reads OK but WHO_AM_I isn't an InvenSense IMU
         for a in [preferred] + [x for x in (0x68, 0x69) if x != preferred]:
+            if present is not None and a not in present:
+                continue
             self.addr = a
-            self._bank = -1  # force a fresh bank-select on the new address
-            try:
-                self._bank_select(0)
-                if self._read(_WHO_AM_I) == _CHIP_ID:
+            got = None
+            for _ in range(4):
+                try:
+                    self._bank = -1  # force a fresh bank-select each attempt
+                    self._bank_select(0)
+                    time.sleep_ms(1)  # let the bank write settle before reading
+                    got = self._read_whoami()
+                except OSError:
+                    got = None
+                    # Best-effort: clear a possible dirty state (aux-I2C master
+                    # left running by a prior soft-reboot) before retrying.
+                    try:
+                        self.i2c.writeto_mem(a, _PWR_MGMT_1, b"\x80")
+                        time.sleep_ms(10)
+                    except OSError:
+                        pass
+                    time.sleep_ms(5)
+                    continue
+                if got in _KNOWN_IDS:
+                    self._bank = 0  # after a settle the chip is in bank 0
                     return a
-            except OSError:
-                continue  # nothing ACKed at `a` — try the next candidate
+                time.sleep_ms(5)
+            (transfer_fault if got is None else wrong_chip).append(
+                a if got is None else (a, got)
+            )
+
+        if transfer_fault:
+            raise OSError(
+                "0x%02X ACKs its address but every I2C transfer fails (EIO). "
+                "This is a BUS/wiring fault, not the driver: check the SDA/SCL "
+                "pull-ups (4.7k to 3V3), a solid common GND, and re-seat SDA/SCL. "
+                "A phantom address like 0x08 in i2c.scan() confirms a noisy bus."
+                % transfer_fault[0]
+            )
+        if wrong_chip:
+            a, got = wrong_chip[0]
+            raise OSError(
+                "0x%02X reports WHO_AM_I=0x%02X, not an ICM-20948 (0xEA). "
+                "0x71/0x70/0x68 (at reg 0x75) = MPU-9250/6500/6050; "
+                "0xFF/0x00 = a bus glitch." % (a, got)
+            )
         raise OSError(
             "ICM20948 not found at 0x68/0x69 — check wiring (SDA/SCL/3V3/GND) "
             "and run i2c.scan() to see what's on the bus"
