@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-07-03
+
 ### Added
 - **Watch an IMU → live 3-D attitude (instruments library 0.8.0).** `inst.watch(
   imu=my_imu)` now recognises a 6-/9-DoF IMU driver (any object with
@@ -1483,7 +1485,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.1...v0.20.2
