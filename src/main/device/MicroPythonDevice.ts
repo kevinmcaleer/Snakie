@@ -487,9 +487,28 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     }
   }
 
-  /** Remove a file. */
+  /** Remove a file OR a directory tree. `os.remove()` can't delete directories
+   *  (and `os.rmdir()` only empty ones), so walk depth-first with an explicit
+   *  stack: children first, then the emptied folder (#219). */
   async remove(path: string): Promise<void> {
-    await this.eval(`import os\nos.remove(${pyStr(path)})`)
+    await this.eval(
+      [
+        'import os',
+        `_s = [${pyStr(path)}]`,
+        'while _s:',
+        '    _p = _s[-1]',
+        '    if (os.stat(_p)[0] & 0x4000) != 0:',
+        '        _c = os.listdir(_p)',
+        '        if _c:',
+        "            _s.extend([_p + '/' + _x for _x in _c])",
+        '        else:',
+        '            os.rmdir(_p)',
+        '            _s.pop()',
+        '    else:',
+        '        os.remove(_p)',
+        '        _s.pop()'
+      ].join('\n')
+    )
   }
 
   /** Create a directory. */

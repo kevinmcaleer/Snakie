@@ -244,7 +244,26 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   }
 
   async remove(path: string): Promise<void> {
-    await this.runtime.runCaptured(`import os\nos.remove(${pyStr(path)})`)
+    // Recursive, mirroring MicroPythonDevice.remove: files delete directly;
+    // directory trees walk depth-first (children, then the emptied dir) (#219).
+    await this.runtime.runCaptured(
+      [
+        'import os',
+        `_s = [${pyStr(path)}]`,
+        'while _s:',
+        '    _p = _s[-1]',
+        '    if (os.stat(_p)[0] & 0x4000) != 0:',
+        '        _c = os.listdir(_p)',
+        '        if _c:',
+        "            _s.extend([_p + '/' + _x for _x in _c])",
+        '        else:',
+        '            os.rmdir(_p)',
+        '            _s.pop()',
+        '    else:',
+        '        os.remove(_p)',
+        '        _s.pop()'
+      ].join('\n')
+    )
   }
 
   async mkdir(path: string): Promise<void> {
