@@ -197,6 +197,71 @@
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* --- Scan-sweep playback (#218) ---------------------------------------------
+   The cursor cell burns bright as it sweeps; cells it hasn't reached stay dim;
+   a detected address ripples like a stone dropped in water when crossed. */
+.i2cdet__cell--unswept {
+  opacity: 0.28;
+}
+
+.i2cdet__cell--cursor {
+  background: color-mix(in srgb, var(--accent) 80%, #fff);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.i2cdet__cell--ping {
+  position: relative;
+  animation: i2cdet-pop 360ms ease-out;
+}
+
+/* Two staggered expanding rings = the water ripple. */
+.i2cdet__cell--ping::before,
+.i2cdet__cell--ping::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 85%, #fff);
+  opacity: 0;
+  animation: i2cdet-ripple 700ms ease-out;
+  pointer-events: none;
+}
+
+.i2cdet__cell--ping::after {
+  animation-delay: 160ms;
+}
+
+@keyframes i2cdet-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  55% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes i2cdet-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .i2cdet__cell--ping,
+  .i2cdet__cell--ping::before,
+  .i2cdet__cell--ping::after {
+    animation: none;
+  }
+}
+
 /* --- Controls --- */
 .i2cdet__controls {
   display: flex;

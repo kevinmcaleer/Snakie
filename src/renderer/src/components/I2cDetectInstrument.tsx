@@ -1,4 +1,4 @@
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -20,6 +20,9 @@ import './I2cDetectInstrument.css'
  * we parse into the grid. Works on demand — no running program needed — and the
  * address → cell maths still lives in the unit-tested {@link ./scanner-logic}.
  */
+
+/** Sweep-playback speed (#218): ms per grid cell (128 cells ≈ 1.2 s total). */
+const SWEEP_MS_PER_CELL = 9
 
 /** GPIO numbers a board exposes (for the I²C pin dropdowns). */
 function boardGpios(boards: BoardDefinition[], boardId: string | null): number[] {
@@ -90,6 +93,21 @@ export function I2cDetectInstrument({
     if (match) setSel(match)
   }
 
+  // Scan-sweep playback (#218): after the (fast, one-shot) device scan returns,
+  // a cursor sweeps the grid cell-by-cell; detected addresses "ping" with a
+  // water-ripple as the cursor crosses them. `sweep` is the cursor's flat cell
+  // index (0..127), or null when idle/complete. `scanSeq` keys the grid per scan
+  // so the ripple animations replay on a re-scan.
+  const [sweep, setSweep] = useState<number | null>(null)
+  const [scanSeq, setScanSeq] = useState(0)
+  useEffect(() => {
+    if (sweep === null) return
+    const id = window.setInterval(() => {
+      setSweep((s) => (s === null || s >= 8 * 16 ? null : s + 1))
+    }, SWEEP_MS_PER_CELL)
+    return () => window.clearInterval(id)
+  }, [sweep === null]) // eslint-disable-line react-hooks/exhaustive-deps -- restart only on idle↔sweeping flips
+
   // One-shot scan on the chosen pins (no running program needed).
   const scan = useCallback(async () => {
     if (!connected) return
@@ -108,6 +126,10 @@ export function I2cDetectInstrument({
           .filter(Boolean)
           .map((h) => parseInt(h, 16))
         setGrid(buildI2cGrid(addrs))
+        setScanSeq((n) => n + 1)
+        // Play the sweep — unless the user prefers reduced motion (show at once).
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        setSweep(reduce ? null : 0)
       } else {
         setError(errLine ? errLine.slice('SNKI2CERR '.length) : 'Scan failed — check the pins/wiring.')
       }
@@ -119,7 +141,13 @@ export function I2cDetectInstrument({
   }, [connected, sel])
 
   const found = grid?.found ?? []
-  const foundText = scanning && !grid ? '··' : String(found.length)
+  // While the cursor sweeps, FOUND counts up as detected cells are crossed.
+  const foundText =
+    scanning && !grid
+      ? '··'
+      : sweep !== null
+        ? String(found.filter((a) => a < sweep).length)
+        : String(found.length)
   const noPins = opts.length === 0
 
   return (
@@ -140,7 +168,7 @@ export function I2cDetectInstrument({
             ) : error ? (
               <p className="i2cdet__hint i2cdet__error">{error}</p>
             ) : grid ? (
-              <I2cGrid grid={grid} />
+              <I2cGrid key={scanSeq} grid={grid} sweep={sweep} />
             ) : (
               <p className="i2cdet__hint">{scanning ? 'scanning…' : 'Pick the bus + pins, then SCAN'}</p>
             )}
@@ -202,8 +230,14 @@ export function I2cDetectInstrument({
   )
 }
 
-/** The 8×16 i2cdetect grid: a column-header row, then 8 labelled rows of cells. */
-function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
+/**
+ * The 8×16 i2cdetect grid: a column-header row, then 8 labelled rows of cells.
+ * During the scan-sweep playback (#218) `sweep` is the cursor's flat address
+ * index: the cell AT it draws as the cursor, cells past it stay unswept (dim),
+ * and a detected cell pings a water-ripple as the cursor crosses it.
+ * Exported for the render tests.
+ */
+export function I2cGrid({ grid, sweep }: { grid: I2cGridModel; sweep: number | null }): JSX.Element {
   return (
     <div className="i2cdet__grid" role="grid" aria-label="I²C address grid">
       <div className="i2cdet__grid-head" role="row">
@@ -219,17 +253,25 @@ function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
           <span className="i2cdet__rowlabel" role="rowheader">
             {(r * 16).toString(16).toUpperCase().padStart(2, '0')}
           </span>
-          {row.map((cell) => (
-            <span
-              key={cell.addr}
-              className={`i2cdet__cell${cell.detected ? ' i2cdet__cell--on' : ''}`}
-              role="gridcell"
-              title={cell.detected ? `Device at ${cell.label}` : cell.label}
-              aria-label={cell.detected ? `${cell.label} detected` : cell.label}
-            >
-              {cell.detected ? formatI2cAddr(cell.addr).slice(2) : '··'}
-            </span>
-          ))}
+          {row.map((cell) => {
+            const swept = sweep === null || cell.addr < sweep
+            const isCursor = sweep !== null && cell.addr === sweep
+            const on = cell.detected && swept
+            const cls =
+              `i2cdet__cell${on ? ' i2cdet__cell--on i2cdet__cell--ping' : ''}` +
+              `${isCursor ? ' i2cdet__cell--cursor' : ''}${!swept && !isCursor ? ' i2cdet__cell--unswept' : ''}`
+            return (
+              <span
+                key={cell.addr}
+                className={cls}
+                role="gridcell"
+                title={cell.detected ? `Device at ${cell.label}` : cell.label}
+                aria-label={cell.detected ? `${cell.label} detected` : cell.label}
+              >
+                {on ? formatI2cAddr(cell.addr).slice(2) : '··'}
+              </span>
+            )
+          })}
         </div>
       ))}
     </div>
