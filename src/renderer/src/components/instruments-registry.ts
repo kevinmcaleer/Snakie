@@ -392,7 +392,8 @@ export const BOUND_KIND_INSTRUMENTS: Record<string, string[]> = {
   servo: ['servo'],
   adc: ['meter', 'scope', 'pot'],
   i2c: ['i2c-detect'],
-  pin: ['led', 'button']
+  pin: ['led', 'button'],
+  imu: ['imu']
 }
 
 /** The instrument ids to mark in-use for the currently-bound objects (`name→kind`). */

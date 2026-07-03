@@ -172,10 +172,11 @@ describe('instrumentsForBinds', () => {
   it('lights the Oscilloscope + Servo for a watched PWM', () => {
     expect(instrumentsForBinds({ pwm: 'pwm' })).toEqual(new Set(['scope', 'servo']))
   })
-  it('maps ADC → meter+scope+pot, I²C → scanner, Pin → led+button', () => {
+  it('maps ADC → meter+scope+pot, I²C → scanner, Pin → led+button, IMU → imu', () => {
     expect(instrumentsForBinds({ pot: 'adc' })).toEqual(new Set(['meter', 'scope', 'pot']))
     expect(instrumentsForBinds({ bus: 'i2c' })).toEqual(new Set(['i2c-detect']))
     expect(instrumentsForBinds({ p: 'pin' })).toEqual(new Set(['led', 'button']))
+    expect(instrumentsForBinds({ motion: 'imu' })).toEqual(new Set(['imu']))
   })
   it('unions across several bound objects and ignores unknown kinds', () => {
     expect(instrumentsForBinds({ a: 'pwm', b: 'adc', c: 'other' })).toEqual(

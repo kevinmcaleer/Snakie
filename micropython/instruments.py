@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -1561,13 +1561,27 @@ def servo_command(payload, servo=None):
 _watched = {}  # name -> object
 
 
+def _is_imu(obj):
+    """True for a 6-/9-DoF IMU driver, across common method names (ours,
+    Pimoroni, generic): ``read_accel_gyro`` / ``read_accelerometer_gyro_data`` /
+    ``read_accel`` + ``read_gyro``."""
+    return (
+        hasattr(obj, "read_accel_gyro")
+        or hasattr(obj, "read_accelerometer_gyro_data")
+        or (hasattr(obj, "read_accel") and hasattr(obj, "read_gyro"))
+    )
+
+
 def _classify(obj):
     """Best-effort object KIND by duck-typing (methods, most-specific first).
 
-    Returns ``servo``/``pwm``/``i2c``/``adc``/``pin`` or ``None``. A Servo-like
-    driver (``angle``) is checked before a bare ``Pin`` (``value``); a ``PWM``
-    (``duty_u16``) before an ``ADC`` (``read_u16``). Never raises.
+    Returns ``imu``/``servo``/``pwm``/``i2c``/``adc``/``pin`` or ``None``. An IMU
+    (accel+gyro reader) is checked first; a Servo-like driver (``angle``) before a
+    bare ``Pin`` (``value``); a ``PWM`` (``duty_u16``) before an ``ADC``
+    (``read_u16``). Never raises.
     """
+    if _is_imu(obj):
+        return "imu"
     if hasattr(obj, "angle"):
         return "servo"
     if hasattr(obj, "duty_u16") or hasattr(obj, "duty"):
@@ -1619,13 +1633,45 @@ def _pwm_freq_duty(obj):
     return freq, duty
 
 
+def _imu_euler(obj):
+    """``(roll, pitch, yaw)`` in degrees from an IMU: roll/pitch are the
+    accelerometer tilt (rotation about the board's X / Y axes), yaw the
+    magnetometer heading (about Z, ``0`` when there's no readable magnetometer).
+
+    Yaw uses only a **non-blocking continuous** ``read_mag`` gated on an explicit
+    ``mag_supported`` flag — single-shot magnetometer drivers (which busy-wait per
+    read) are skipped so a tight ``update()`` loop never stalls. A bad/short mag
+    read degrades to ``yaw = 0`` while still emitting the valid roll/pitch."""
+    from math import atan2, sqrt, degrees
+
+    if hasattr(obj, "read_accel"):
+        a = obj.read_accel()
+    elif hasattr(obj, "read_accel_gyro"):
+        a = obj.read_accel_gyro()
+    else:
+        a = obj.read_accelerometer_gyro_data()
+    ax, ay, az = a[0], a[1], a[2]
+    roll = degrees(atan2(ay, az))
+    pitch = degrees(atan2(-ax, sqrt(ay * ay + az * az)))
+    yaw = 0.0
+    try:
+        if getattr(obj, "mag_supported", False) and hasattr(obj, "read_mag"):
+            m = obj.read_mag()
+            if m is not None and len(m) >= 2:
+                yaw = degrees(atan2(m[1], m[0]))
+    except Exception:
+        pass
+    return roll, pitch, yaw
+
+
 def update():
     """Emit the live state of every :func:`watch`-ed object on the ``SNK`` stream.
 
     Call each loop (after ``control.poll()``). Reuses the existing telemetry so the
-    Oscilloscope/Servo (PWM) and Multimeter (ADC) render watched objects with no
-    extra code: a PWM → ``SNK PWM <name> <freq> <duty>``; an ADC →
-    ``SNK METER <name> <volts>``.
+    dock renders watched objects with no extra code: a PWM → ``SNK PWM <name>
+    <freq> <duty>`` (Oscilloscope/Servo); an ADC → ``SNK METER <name> <volts>``
+    (Multimeter); an IMU → ``SNK IMU <name> <roll> <pitch> <yaw>`` (3-D attitude),
+    with roll/pitch from the accelerometer tilt and yaw from the magnetometer.
     """
     for name, obj in _watched.items():
         kind = _classify(obj)
@@ -1635,6 +1681,12 @@ def update():
         elif kind == "adc":
             try:
                 print("%s METER %s %s V" % (SENTINEL, name, obj.read_u16() / 65535 * 3.3))
+            except Exception:
+                pass
+        elif kind == "imu":
+            try:
+                roll, pitch, yaw = _imu_euler(obj)
+                print("%s IMU %s %s %s %s" % (SENTINEL, name, roll, pitch, yaw))
             except Exception:
                 pass
 

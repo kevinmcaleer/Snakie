@@ -974,6 +974,33 @@ class _FakeServoObj:
         return self.a
 
 
+class _FakeIMU:
+    """A user IMU driver (ICM20948-shaped): accel/gyro + optional magnetometer."""
+
+    def __init__(self, accel=(0.0, 0.0, 1.0), gyro=(0.0, 0.0, 0.0), mag=None):
+        self._a = accel
+        self._g = gyro
+        self._m = mag
+
+    def read_accel(self):
+        return self._a
+
+    def read_gyro(self):
+        return self._g
+
+    def read_accel_gyro(self):
+        return self._a + self._g
+
+    @property
+    def mag_supported(self):
+        return self._m is not None
+
+    def read_mag(self):
+        if self._m is None:
+            raise RuntimeError("no magnetometer")
+        return self._m
+
+
 class WatchBinding(unittest.TestCase):
     """`watch`/`update`/`watch_command` — bind real objects, classify by duck type."""
 
@@ -985,7 +1012,34 @@ class WatchBinding(unittest.TestCase):
         self.assertEqual(inst._classify(_FakeADC(32768)), "adc")
         self.assertEqual(inst._classify(_FakeServoObj()), "servo")
         self.assertEqual(inst._classify(_FakeI2C([0x3C])), "i2c")
+        self.assertEqual(inst._classify(_FakeIMU()), "imu")
         self.assertIsNone(inst._classify(object()))
+
+    def test_watch_imu_emits_bind(self):
+        self.assertEqual(_emit(inst.watch, imu=_FakeIMU()), "SNK BIND imu imu")
+
+    def test_update_imu_flat_board(self):
+        # Flat, still board: accel (0, 0, 1) g → roll 0, pitch 0; no mag → yaw 0.
+        inst.watch(imu=_FakeIMU(accel=(0.0, 0.0, 1.0)))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.update()
+        line = buf.getvalue().strip()
+        self.assertTrue(line.startswith("SNK IMU imu "))
+        _, _, _, roll, pitch, yaw = line.split()
+        self.assertAlmostEqual(float(roll), 0.0, places=3)
+        self.assertAlmostEqual(float(pitch), 0.0, places=3)
+        self.assertAlmostEqual(float(yaw), 0.0, places=3)
+
+    def test_update_imu_tilt_and_heading(self):
+        # Tilted right (accel 0,1,0 → roll 90°) with mag (1,1,0) → yaw atan2(1,1)=45°.
+        inst.watch(imu=_FakeIMU(accel=(0.0, 1.0, 0.0), mag=(1.0, 1.0, 0.0)))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.update()
+        _, _, _, roll, _pitch, yaw = buf.getvalue().strip().split()
+        self.assertAlmostEqual(float(roll), 90.0, places=2)
+        self.assertAlmostEqual(float(yaw), 45.0, places=2)
 
     def test_watch_emits_bind_descriptors(self):
         out = _emit(inst.watch, pwm=_FakeWatchPWM())

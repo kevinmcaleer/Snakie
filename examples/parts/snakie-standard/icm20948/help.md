@@ -46,6 +46,21 @@ while True:
     time.sleep(0.5)
 ```
 
+## Live 3-D attitude (IMU instrument)
+
+Hand the IMU to `inst.watch()` and the **IMU** instrument lights up with a live
+3-D attitude view — roll/pitch from the accelerometer, heading from the mag. No
+trig on your side:
+
+```python
+import instruments as inst
+inst.start()
+inst.watch(imu=imu)          # → the IMU instrument appears in the dock
+while True:
+    inst.update()            # streams orientation each loop
+    time.sleep(0.05)
+```
+
 ## API cheatsheet
 
 ```text

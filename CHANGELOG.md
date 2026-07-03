@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Watch an IMU → live 3-D attitude (instruments library 0.8.0).** `inst.watch(
+  imu=my_imu)` now recognises a 6-/9-DoF IMU driver (any object with
+  `read_accel_gyro` / `read_accel`+`read_gyro`, e.g. the ICM20948 part driver),
+  lights up the **IMU** instrument, and `inst.update()` streams its orientation —
+  roll/pitch from the accelerometer tilt, yaw from the magnetometer — so the
+  attitude view "just works" with no trig in user code, exactly like a watched
+  PWM drives the Oscilloscope.
+
 ### Fixed
 - **Board part edits refresh live in other windows.** Authoring a board in the
   Part Editor (e.g. adding Qwiic I²C pins) now updates the main window's board
