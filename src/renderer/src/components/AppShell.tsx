@@ -36,8 +36,10 @@ import {
   requiredPartModules,
   missingImports as computeMissingImports,
   missingOnBoard as computeMissingOnBoard,
+  parsePyImports,
   type RequiredModule
 } from './part-imports'
+import { installPartDriver } from './driver-install'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import {
   INSTRUMENTS_LIB_PATH,
@@ -635,28 +637,43 @@ export function AppShell(): JSX.Element {
       ),
     [boardIsPython, requiredModules, boardSource, inUse]
   )
-  const missBoard = useMemo(
-    () =>
-      (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
-        (m) => !moduleCoveredByInstrument(m.module, inUse)
-      ),
-    [installedModules, requiredModules, inUse]
-  )
+  const missBoard = useMemo(() => {
+    // Instrument coverage only excuses a module the file DOESN'T import: a
+    // direct `import bme280` will fail on a board without the driver, however
+    // in-use its instrument looks (the instrument hints match the very same
+    // module name the import mentions), so that nag — and its one-click
+    // install — must stand.
+    const imported = boardIsPython ? parsePyImports(boardSource) : new Set<string>()
+    return (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
+      (m) => imported.has(m.module) || !moduleCoveredByInstrument(m.module, inUse)
+    )
+  }, [installedModules, requiredModules, inUse, boardIsPython, boardSource])
   const showPartsBanner =
     requiredModules.length > 0 && !partsDismissed && (missImports.length > 0 || missBoard.length > 0)
 
   const installMissingLibs = useCallback((): void => {
-    const targets = missBoard.filter((m) => m.url)
+    // Installable = the module ships bundled driver file(s) (copied straight to
+    // the board — the SG90/BME280/ICM20948 model) or declares a mip source URL.
+    const targets = missBoard.filter((m) => (m.drivers?.length ?? 0) > 0 || m.url)
     if (partsInstalling || targets.length === 0) return
     setPartsInstalling(true)
     setPartsInstallError(null)
     void (async (): Promise<void> => {
       try {
         for (const t of targets) {
-          const res = await window.api.packages.install(t.url as string)
-          if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
+          if (t.drivers && t.drivers.length > 0 && t.libraryId && t.partId) {
+            for (const d of t.drivers) {
+              const res = await installPartDriver(t.libraryId, t.partId, d)
+              if (!res.ok) throw new Error(res.message || `Failed to install ${t.module}`)
+            }
+          } else {
+            const res = await window.api.packages.install(t.url as string)
+            if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
+          }
         }
         setInstalledModules(null) // re-probe → banner clears if now present
+        // Tell the OTHER windows too (the Board View's driver banner re-probes).
+        window.api.modules.notifyChanged()
       } catch (err) {
         setPartsInstallError(err instanceof Error ? err.message : String(err))
       } finally {

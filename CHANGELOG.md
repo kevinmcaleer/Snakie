@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **One-click install from the missing-library banner.** When the editor
+  reports the connected board is missing a library your parts need, the banner's
+  **Install** button now also covers parts that ship **bundled driver files**
+  (SG90 / BME280 / ICM20948 …) — copying them straight onto the device, exactly
+  like the instruments-library "Download & install". Previously only mip-URL
+  libraries were installable from there. (Also: importing a driver directly no
+  longer hides the missing-on-board nag just because a matching instrument looks
+  in-use, and the simulated device's `exec` now really runs code, so probes work
+  on the sim.)
 - **Interactive I²C scanner (#214).** Found addresses in the I²C-detect grid are
   clickable: an inspector names the known devices for that address and offers an
   **ADD** button for any installed library part declaring it (new `i2cAddresses`

@@ -156,7 +156,14 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
         stderr: ''
       }
     }
-    return { stdout: '', stderr: '' }
+    // Actually RUN the snippet on the real WASM interpreter and return what it
+    // printed (this used to be a `''` stub, which silently broke every exec-based
+    // probe on the sim — e.g. `modules.probeInstalled`, so the missing-library
+    // banner could never clear after an install). Tracebacks arrive in the
+    // captured output, matching how a raw-REPL board surfaces them well enough
+    // for the sentinel-parsing callers (they just see no sentinel line).
+    const out = await this.runtime.runCaptured(code)
+    return { stdout: out, stderr: '' }
   }
 
   async eval(code: string): Promise<string> {

@@ -53,6 +53,33 @@ describe('requiredPartModules', () => {
     expect(req[0].parts).toEqual(['distance', 'distance2']) // both refs, one module
   })
 
+  it('threads the declaring part + bundled drivers for the one-click install', () => {
+    const withDrivers = [
+      {
+        id: 'snakie-standard',
+        parts: [
+          {
+            id: 'bme280',
+            name: 'BME280',
+            headers: [],
+            library: { module: 'bme280' },
+            drivers: [{ source: 'bme280.py', target: 'lib/bme280.py', label: 'BME280 driver' }]
+          } as PartDefinition
+        ]
+      }
+    ]
+    const req = requiredPartModules(
+      { board: 'pico', parts: [{ id: 'b1', lib: 'snakie-standard', part: 'bme280' }], connections: [] } as unknown as RobotDefinition,
+      withDrivers
+    )
+    expect(req).toHaveLength(1)
+    expect(req[0].module).toBe('bme280')
+    expect(req[0].libraryId).toBe('snakie-standard')
+    expect(req[0].partId).toBe('bme280')
+    expect(req[0].drivers).toEqual([{ source: 'bme280.py', target: 'lib/bme280.py', label: 'BME280 driver' }])
+    expect(req[0].url).toBeUndefined() // driver-only: no mip source needed
+  })
+
   it('ignores parts with no linked library', () => {
     const req = requiredPartModules(
       { board: 'b', parts: [{ id: 'p', lib: 'my-parts', part: 'nolib', x: 0, y: 0 }], connections: [] } as unknown as RobotDefinition,
@@ -74,5 +101,29 @@ describe('missingImports / missingOnBoard', () => {
   it('flags required modules not present on the board', () => {
     const m = missingOnBoard(req, new Set(['vl53l0x']))
     expect(m.map((r) => r.module)).toEqual(['bmp280'])
+  })
+})
+
+describe('PartsImportBanner install gating (#166 follow-up)', () => {
+  it('offers Install for a driver-only module (no mip url) and for url modules', async () => {
+    const { createElement } = await import('react')
+    const { renderToStaticMarkup } = await import('react-dom/server')
+    const { PartsImportBanner } = await import('../src/renderer/src/components/PartsImportBanner')
+    const base = { missingImports: [], installing: false, onInstall: () => {}, onDismiss: () => {} }
+    // Driver-only (the SG90/BME280/ICM20948 model) → the Install button shows.
+    const withDrivers = renderToStaticMarkup(
+      createElement(PartsImportBanner, {
+        ...base,
+        missingOnBoard: [
+          { module: 'bme280', parts: ['BME280'], libraryId: 'snakie-standard', partId: 'bme280', drivers: [{ source: 'bme280.py', target: 'lib/bme280.py' }] }
+        ]
+      })
+    )
+    expect(withDrivers).toContain('Install bme280')
+    // No install source at all → nag only, no button.
+    const bare = renderToStaticMarkup(
+      createElement(PartsImportBanner, { ...base, missingOnBoard: [{ module: 'mystery', parts: ['X'] }] })
+    )
+    expect(bare).not.toContain('Install mystery')
   })
 })

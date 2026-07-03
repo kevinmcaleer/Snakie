@@ -24,11 +24,12 @@ export function PartsImportBanner({
   missingOnBoard: RequiredModule[]
   installing: boolean
   error?: string | null
-  /** Install the missing board libraries (those with a source URL). */
+  /** Install the missing board libraries — bundled driver files copy straight
+   *  to the device; modules with a source URL install via mip. */
   onInstall: () => void
   onDismiss: () => void
 }): JSX.Element {
-  const installable = missingOnBoard.filter((m) => m.url)
+  const installable = missingOnBoard.filter((m) => (m.drivers?.length ?? 0) > 0 || m.url)
   const list = (ms: RequiredModule[]): string => ms.map((m) => m.module).join(', ')
   return (
     <div className="inst-lib-banner" role="status" aria-live="polite">
