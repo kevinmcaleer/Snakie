@@ -3,7 +3,8 @@ import {
   useEditorSettings,
   MIN_LINE_SPACING,
   MAX_LINE_SPACING,
-  type EditorPaper
+  type EditorPaper,
+  type BreadboardBg
 } from '../store/settings'
 import { EDITOR_THEME_LIST } from '../store/editorThemes'
 import { useFocusTrap } from '../hooks/useFocusTrap'
@@ -135,7 +136,13 @@ export function SettingsDialog({
   )
 }
 
-/** The Appearance tab: the app-wide skin (Skeuomorph / Dark / Light). */
+/** Board View breadboard background options (#…). */
+const BREADBOARD_BG_OPTIONS: { value: BreadboardBg; label: string; hint: string }[] = [
+  { value: 'dark', label: 'Dark', hint: 'The default dark workbench mat' },
+  { value: 'blueprint', label: 'Blueprint', hint: 'A classic blue blueprint with a light grid' }
+]
+
+/** The Appearance tab: the app-wide skin + the Board View breadboard background. */
 function AppearanceTab({
   theme,
   setTheme
@@ -143,28 +150,53 @@ function AppearanceTab({
   theme: Theme
   setTheme: (t: Theme) => void
 }): JSX.Element {
+  const { breadboardBg, setBreadboardBg } = useEditorSettings()
   return (
-    <section className="settings-section">
-      <h3 className="settings-section__title">Theme</h3>
-      <p className="settings-section__hint">
-        The overall Snakie skin — a bright Light theme or a dark theme.
-      </p>
-      <div className="settings-segment" role="radiogroup" aria-label="Theme">
-        {THEME_OPTIONS.map((opt) => (
-          <button
-            key={opt.value}
-            type="button"
-            role="radio"
-            aria-checked={theme === opt.value}
-            className={`settings-segment__btn${theme === opt.value ? ' is-active' : ''}`}
-            onClick={() => setTheme(opt.value)}
-            title={opt.hint}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-    </section>
+    <>
+      <section className="settings-section">
+        <h3 className="settings-section__title">Theme</h3>
+        <p className="settings-section__hint">
+          The overall Snakie skin — a bright Light theme or a dark theme.
+        </p>
+        <div className="settings-segment" role="radiogroup" aria-label="Theme">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={theme === opt.value}
+              className={`settings-segment__btn${theme === opt.value ? ' is-active' : ''}`}
+              onClick={() => setTheme(opt.value)}
+              title={opt.hint}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Breadboard background</h3>
+        <p className="settings-section__hint">
+          The backdrop behind the Board View wiring canvas.
+        </p>
+        <div className="settings-segment" role="radiogroup" aria-label="Breadboard background">
+          {BREADBOARD_BG_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              role="radio"
+              aria-checked={breadboardBg === opt.value}
+              className={`settings-segment__btn${breadboardBg === opt.value ? ' is-active' : ''}`}
+              onClick={() => setBreadboardBg(opt.value)}
+              title={opt.hint}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    </>
   )
 }
 

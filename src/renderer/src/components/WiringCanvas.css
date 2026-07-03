@@ -34,6 +34,24 @@
   background-color: #191b1f;
 }
 
+/* Blueprint breadboard background (Settings → Appearance): classic blue paper
+   with a fine light grid + bolder major lines. Applied via `data-breadboard-bg`
+   on the Board View window's root. */
+:root[data-breadboard-bg='blueprint'] .wc__stage {
+  background-color: #0d3b66;
+  background-image:
+    linear-gradient(rgba(214, 230, 255, 0.28) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(214, 230, 255, 0.28) 1px, transparent 1px),
+    linear-gradient(rgba(214, 230, 255, 0.11) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(214, 230, 255, 0.11) 1px, transparent 1px);
+  background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
+}
+
+/* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
+:root[data-breadboard-bg='blueprint'] .wc--drop .wc__stage {
+  background-color: #0e4373;
+}
+
 .wc__svg {
   display: block;
   width: 100%;

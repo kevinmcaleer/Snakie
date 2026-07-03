@@ -49,6 +49,7 @@ import {
   type InstallState
 } from '../lib/instrumentsLib'
 import { useWorkspace } from '../store/workspace'
+import { useEditorSettings } from '../store/settings'
 
 /**
  * Wrap a panel that lacks its own region chrome in a scrollable region.
@@ -148,6 +149,9 @@ function LeftView({
  */
 export function AppShell(): JSX.Element {
   const { theme, setTheme } = useTheme()
+  // Breadboard background choice (#…) — streamed to the Board View window alongside
+  // the theme so its wiring canvas repaints live when the setting changes.
+  const { breadboardBg } = useEditorSettings()
 
   // The active file feeds the floating Board View window. Reading it here lets
   // us stream every edit / theme change to that window over IPC so it updates
@@ -181,11 +185,12 @@ export function AppShell(): JSX.Element {
           fileName: boardFileName,
           isPython: boardIsPython,
           theme,
+          breadboardBg,
           folder: boardFolder
         })
       )
       .catch(() => undefined)
-  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, boardFolder])
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, breadboardBg, boardFolder])
 
   // While the window is open, stream the active file / content / theme to it on
   // every change so it stays live.
@@ -196,9 +201,10 @@ export function AppShell(): JSX.Element {
       fileName: boardFileName,
       isPython: boardIsPython,
       theme,
+      breadboardBg,
       folder: boardFolder
     })
-  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, boardFolder])
+  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, breadboardBg, boardFolder])
 
   // Reset the "opened" flag when the user closes the board window.
   useEffect(() => {

@@ -43,9 +43,17 @@ import './index.css'
 
 /** Theme key shared with the editor window's `useTheme`. */
 const THEME_KEY = 'snakie.theme.v2'
+/** Breadboard-background key shared with the main window's settings store. */
+const BREADBOARD_BG_KEY = 'snakie.board.breadboardBg'
 
 function applyTheme(theme: string): void {
   document.documentElement.setAttribute('data-theme', theme)
+}
+
+/** Set the breadboard background variant as a document attribute so WiringCanvas.css
+ *  can repaint the canvas mat (`dark` default / `blueprint`). */
+function applyBreadboardBg(bg: string | undefined): void {
+  document.documentElement.setAttribute('data-breadboard-bg', bg === 'blueprint' ? 'blueprint' : 'dark')
 }
 
 function BoardWindowApp(): JSX.Element {
@@ -82,7 +90,8 @@ function BoardWindowApp(): JSX.Element {
       .catch(() => setUserBoards([]))
   }, [])
 
-  // Apply the persisted theme immediately so the first paint matches the app.
+  // Apply the persisted theme + breadboard background immediately so the first
+  // paint matches the app (before the streamed payload arrives).
   useEffect(() => {
     let initial = 'skeuomorph'
     try {
@@ -93,6 +102,14 @@ function BoardWindowApp(): JSX.Element {
     }
     applyTheme(initial)
     setPayload((p) => ({ ...p, theme: initial }))
+    let bg = 'dark'
+    try {
+      const raw = window.localStorage.getItem(BREADBOARD_BG_KEY)
+      if (raw) bg = JSON.parse(raw) as string
+    } catch {
+      // Ignore — default dark.
+    }
+    applyBreadboardBg(bg)
   }, [])
 
   // Load user-authored boards once (read off disk by the main process).
@@ -105,6 +122,7 @@ function BoardWindowApp(): JSX.Element {
     const off = window.api.board.onSource((p) => {
       setPayload(p)
       if (p.theme) applyTheme(p.theme)
+      applyBreadboardBg(p.breadboardBg)
     })
     return off
   }, [])
@@ -117,6 +135,7 @@ function BoardWindowApp(): JSX.Element {
         if (p) {
           setPayload(p)
           if (p.theme) applyTheme(p.theme)
+          applyBreadboardBg(p.breadboardBg)
         }
       })
       .catch(() => undefined)

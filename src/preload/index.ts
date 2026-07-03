@@ -86,6 +86,8 @@ export interface BoardSourcePayload {
   fileName?: string
   isPython: boolean
   theme: string
+  /** The Board View breadboard background ('dark' | 'blueprint'); default dark. */
+  breadboardBg?: string
   /** The open project folder, so the board window can read/write its robot.yml. */
   folder?: string
 }

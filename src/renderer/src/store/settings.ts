@@ -29,6 +29,10 @@ import { DEFAULT_EDITOR_THEME, editorThemeFor } from './editorThemes'
 /** How the notebook paper is drawn behind the editor. */
 export type EditorPaper = 'lines' | 'dots' | 'off'
 
+/** The Board View breadboard/canvas background: the default dark mat, or a
+ *  classic blueprint (blue paper + light grid). */
+export type BreadboardBg = 'dark' | 'blueprint'
+
 export const MIN_LINE_SPACING = 22
 export const MAX_LINE_SPACING = 48
 export const DEFAULT_LINE_SPACING = 30
@@ -44,6 +48,8 @@ export interface SettingsStore {
   checkFirmwareUpdates: boolean
   /** Whether the editor shows Monaco's mini-map (#210). Default on. */
   minimap: boolean
+  /** The Board View breadboard background. Default `dark`. */
+  breadboardBg: BreadboardBg
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
@@ -53,6 +59,8 @@ export interface SettingsStore {
   setCheckFirmwareUpdates: (on: boolean) => void
   /** Show/hide the editor mini-map (#210). */
   setMinimap: (on: boolean) => void
+  /** Set the Board View breadboard background. */
+  setBreadboardBg: (bg: BreadboardBg) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -79,6 +87,10 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     true
   )
   const [minimap, setMinimap] = useLocalStorage<boolean>('snakie.editor.minimap', true)
+  const [breadboardBg, setBreadboardBg] = useLocalStorage<BreadboardBg>(
+    'snakie.board.breadboardBg',
+    'dark'
+  )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -137,11 +149,13 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       editorTheme,
       checkFirmwareUpdates,
       minimap,
+      breadboardBg,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
       setCheckFirmwareUpdates,
-      setMinimap
+      setMinimap,
+      setBreadboardBg
     }),
     [
       paper,
@@ -149,11 +163,13 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       editorTheme,
       checkFirmwareUpdates,
       minimap,
+      breadboardBg,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
       setCheckFirmwareUpdates,
-      setMinimap
+      setMinimap,
+      setBreadboardBg
     ]
   )
 

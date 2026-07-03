@@ -387,8 +387,10 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-elevated, #1f2024);
-  border-left: 1px solid #2c2e33;
+  /* Warm parchment — the same `--bg` the local Files tree uses, so the library
+     panel reads as a matching sidebar rather than dark chrome. */
+  background: var(--bg, #1f2024);
+  border-left: 1px solid var(--border, #2c2e33);
 }
 
 .boardgraph__dock-head {
@@ -401,7 +403,7 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted, #9aa0a8);
-  border-bottom: 1px solid #2c2e33;
+  border-bottom: 1px solid var(--border, #2c2e33);
 }
 
 .boardgraph__dock-toggle {

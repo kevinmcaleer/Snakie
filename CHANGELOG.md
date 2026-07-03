@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Breadboard background setting + parchment library panel.** The Board View's
+  library dock now uses the same warm **parchment** (`--bg`) as the local Files
+  tree, so it reads as a matching sidebar. A new **Settings → Appearance →
+  Breadboard background** control switches the wiring canvas between the default
+  **Dark** workbench mat and a classic **Blueprint** (blue paper + light grid) —
+  streamed live to the open Board View window.
 - **BME280 + ICM20948 I²C sensor parts (Standard library).** Two new Pimoroni
   breakouts join the Standard parts library, each shipping a part footprint
   (I²C header), a bundled pure-MicroPython driver installed to `lib/` on placement,
