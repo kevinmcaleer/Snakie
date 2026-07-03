@@ -42,9 +42,15 @@ _USER_CTRL = 0x03
 _PWR_MGMT_1 = 0x06
 _PWR_MGMT_2 = 0x07
 _INT_PIN_CFG = 0x0F
+_I2C_MST_STATUS = 0x17    # bit6 (0x40) = SLV4 single-transaction done
 _ACCEL_XOUT_H = 0x2D      # ax,ay,az,gx,gy,gz — 12 bytes, big-endian
 _GYRO_XOUT_H = 0x33
 _EXT_SLV_SENS_DATA_00 = 0x3B
+# USER_CTRL / INT_PIN_CFG / I2C_MST_STATUS bit masks.
+_USER_CTRL_I2C_MST_EN = 0x20
+_USER_CTRL_I2C_MST_RST = 0x02
+_INT_PIN_CFG_BYPASS_EN = 0x02
+_MST_STATUS_SLV4_DONE = 0x40
 
 # --- Bank 2 (accel + gyro configuration) ------------------------------------
 _GYRO_SMPLRT_DIV = 0x00
@@ -53,23 +59,28 @@ _ACCEL_SMPLRT_DIV_1 = 0x10
 _ACCEL_SMPLRT_DIV_2 = 0x11
 _ACCEL_CONFIG = 0x14
 
-# --- Bank 3 (I2C master → AK09916) ------------------------------------------
+# --- Bank 3 (aux-I2C master → AK09916). SLV0 streams the measurement registers
+# continuously into EXT_SLV_SENS_DATA; SLV4 does one-off AK09916 config reads/
+# writes, polled via I2C_MST_STATUS — the robust Adafruit/SparkFun scheme.
 _I2C_MST_CTRL = 0x01
-_I2C_MST_DELAY_CTRL = 0x02
 _I2C_SLV0_ADDR = 0x03
 _I2C_SLV0_REG = 0x04
 _I2C_SLV0_CTRL = 0x05
-_I2C_SLV0_DO = 0x06
+_I2C_SLV4_ADDR = 0x13
+_I2C_SLV4_REG = 0x14
+_I2C_SLV4_CTRL = 0x15
+_I2C_SLV4_DO = 0x16
+_I2C_SLV4_DI = 0x17
 
 # --- AK09916 magnetometer (on the aux bus at 0x0C) --------------------------
 _AK09916_ADDR = 0x0C
 _AK09916_CHIP_ID = 0x09
-_AK09916_WIA = 0x01       # WHO_AM_I
-_AK09916_ST1 = 0x10       # bit0 = data ready
-_AK09916_HXL = 0x11       # measurement start (6 bytes, little-endian)
-_AK09916_CNTL2 = 0x31     # 0x01 = single measurement
-_AK09916_CNTL3 = 0x32     # 0x01 = soft reset
-_AK09916_UT_PER_LSB = 0.15  # µT per least-significant-bit
+_AK09916_WIA = 0x01           # WHO_AM_I (device id)
+_AK09916_HXL = 0x11           # measurement data start (X/Y/Z, 6 bytes LE)
+_AK09916_CNTL2 = 0x31         # measurement-mode register
+_AK09916_MODE_SHUTDOWN = 0x00
+_AK09916_MODE_100HZ = 0x08    # continuous measurement, 100 Hz
+_AK09916_UT_PER_LSB = 0.15    # µT per least-significant-bit
 
 _ACCEL_GS = {2: 16384.0, 4: 8192.0, 8: 4096.0, 16: 2048.0}
 _GYRO_DPS = {250: 131.0, 500: 65.5, 1000: 32.8, 2000: 16.4}
@@ -284,75 +295,84 @@ class ICM20948:
         dps = self._gyro_dps
         return (gx / dps, gy / dps, gz / dps)
 
-    # --- magnetometer (via the ICM-20948 I2C master) ------------------------
-    def _trigger_mag_io(self):
-        """Pulse the I2C-master enable so a queued SLV0 transaction runs."""
+    # --- magnetometer (AK09916 via the ICM-20948's aux-I2C master) ----------
+    # Robust Adafruit/SparkFun scheme: SLV4 does single AK09916 register reads/
+    # writes (config), each polled to completion via I2C_MST_STATUS; SLV0 then
+    # streams the measurement registers continuously into the ICM's own
+    # EXT_SLV_SENS_DATA regs, so read_mag() is just a local register read — no
+    # per-read trigger, and a stuck aux-master is recovered by a reset + retry.
+    def _mst_wait(self):
+        """Wait for the SLV4 single transaction to finish. True if it completed."""
         self._bank_select(0)
-        user = self._read(_USER_CTRL)
-        self._write(_USER_CTRL, user | 0x20)
-        time.sleep_ms(5)
-        self._write(_USER_CTRL, user)
+        for _ in range(100):
+            if self._read(_I2C_MST_STATUS) & _MST_STATUS_SLV4_DONE:
+                return True
+            time.sleep_ms(10)
+        return False
 
-    def _mag_write(self, reg, value):
-        self._bank_select(3)
-        self._write(_I2C_SLV0_ADDR, _AK09916_ADDR)          # write direction
-        self._write(_I2C_SLV0_REG, reg)
-        self._write(_I2C_SLV0_DO, value)
+    def _reset_i2c_master(self):
+        """Pulse USER_CTRL.I2C_MST_RST to unstick a hung aux-I2C master."""
         self._bank_select(0)
-        self._trigger_mag_io()
+        self._write(_USER_CTRL, self._read(_USER_CTRL) | _USER_CTRL_I2C_MST_RST)
+        time.sleep_ms(10)
 
     def _mag_read(self, reg):
+        """Read one AK09916 register via SLV4 (None if it never completes)."""
         self._bank_select(3)
-        self._write(_I2C_SLV0_ADDR, _AK09916_ADDR | 0x80)   # read direction
-        self._write(_I2C_SLV0_REG, reg)
-        self._write(_I2C_SLV0_DO, 0xFF)
-        self._write(_I2C_SLV0_CTRL, 0x80 | 1)               # enable, 1 byte
-        self._bank_select(0)
-        self._trigger_mag_io()
-        return self._read(_EXT_SLV_SENS_DATA_00)
+        self._write(_I2C_SLV4_ADDR, _AK09916_ADDR | 0x80)   # read direction
+        self._write(_I2C_SLV4_REG, reg)
+        self._write(_I2C_SLV4_CTRL, 0x80)                   # enable, 1 byte
+        if not self._mst_wait():
+            return None
+        self._bank_select(3)
+        return self._read(_I2C_SLV4_DI)
 
-    def _mag_read_bytes(self, reg, length):
+    def _mag_write(self, reg, value):
+        """Write one AK09916 register via SLV4."""
         self._bank_select(3)
-        self._write(_I2C_SLV0_CTRL, 0x80 | 0x08 | length)   # enable, byte-swap, N
-        self._write(_I2C_SLV0_ADDR, _AK09916_ADDR | 0x80)
-        self._write(_I2C_SLV0_REG, reg)
-        self._write(_I2C_SLV0_DO, 0xFF)
-        self._bank_select(0)
-        self._trigger_mag_io()
-        return self._read_bytes(_EXT_SLV_SENS_DATA_00, length)
+        self._write(_I2C_SLV4_ADDR, _AK09916_ADDR)          # write direction
+        self._write(_I2C_SLV4_REG, reg)
+        self._write(_I2C_SLV4_DO, value)
+        self._write(_I2C_SLV4_CTRL, 0x80)                   # enable
+        self._mst_wait()
 
     def _mag_init(self):
-        # Route the aux bus to the on-die master and clock it.
+        # Enable the ICM's aux-I2C master (no bypass), ~345 kHz, no repeated start.
         self._bank_select(0)
-        self._write(_INT_PIN_CFG, 0x30)
+        self._write(_INT_PIN_CFG, self._read(_INT_PIN_CFG) & ~_INT_PIN_CFG_BYPASS_EN)
+        time.sleep_ms(5)
         self._bank_select(3)
-        self._write(_I2C_MST_CTRL, 0x4D)
-        self._write(_I2C_MST_DELAY_CTRL, 0x01)
+        self._write(_I2C_MST_CTRL, 0x17)
         self._bank_select(0)
-        if self._mag_read(_AK09916_WIA) != _AK09916_CHIP_ID:
-            raise RuntimeError("AK09916 magnetometer not found on aux bus")
-        # Soft-reset the magnetometer and wait for it to clear.
-        self._mag_write(_AK09916_CNTL3, 0x01)
-        start = time.ticks_ms()
-        while self._mag_read(_AK09916_CNTL3) == 0x01:
-            if time.ticks_diff(time.ticks_ms(), start) > 100:
+        self._write(_USER_CTRL, self._read(_USER_CTRL) | _USER_CTRL_I2C_MST_EN)
+        time.sleep_ms(20)
+        # Confirm the AK09916, retrying with a master reset if the aux bus is stuck.
+        for _ in range(5):
+            if self._mag_read(_AK09916_WIA) == _AK09916_CHIP_ID:
                 break
-            time.sleep_ms(1)
+            self._reset_i2c_master()
+        else:
+            raise RuntimeError("AK09916 magnetometer not found on aux bus")
+        # 100 Hz continuous (power-down first, per the datasheet).
+        self._mag_write(_AK09916_CNTL2, _AK09916_MODE_SHUTDOWN)
+        time.sleep_ms(1)
+        self._mag_write(_AK09916_CNTL2, _AK09916_MODE_100HZ)
+        # Stream 9 bytes (HXL..ST2) from the AK09916 into EXT_SLV_SENS_DATA via
+        # SLV0, so the mag data refreshes in the ICM's registers automatically.
+        self._bank_select(3)
+        self._write(_I2C_SLV0_ADDR, _AK09916_ADDR | 0x80)   # read direction
+        self._write(_I2C_SLV0_REG, _AK09916_HXL)
+        self._write(_I2C_SLV0_CTRL, 0x80 | 0x09)            # enable, 9 bytes
+        self._bank_select(0)
+        time.sleep_ms(50)
 
-    def read_mag(self, timeout_ms=1000):
-        """Return the 3-axis magnetic field as (x, y, z) in microtesla (µT).
-
-        Triggers a single AK09916 measurement and waits for data-ready. Raises
-        RuntimeError if the magnetometer wasn't found or times out.
-        """
+    def read_mag(self):
+        """Return the 3-axis magnetic field as (x, y, z) in microtesla (µT), read
+        from the continuously-streamed AK09916 data. Raises if the magnetometer
+        wasn't found at start-up (`mag_supported` is False)."""
         if not self._mag_ok:
             raise RuntimeError("Magnetometer unavailable (AK09916 not initialised)")
-        self._mag_write(_AK09916_CNTL2, 0x01)  # single measurement
-        start = time.ticks_ms()
-        while not (self._mag_read(_AK09916_ST1) & 0x01):
-            if time.ticks_diff(time.ticks_ms(), start) > timeout_ms:
-                raise RuntimeError("Timeout waiting for magnetometer data")
-            time.sleep_ms(1)
-        mx, my, mz = struct.unpack("<hhh", self._mag_read_bytes(_AK09916_HXL, 6))
+        self._bank_select(0)
+        mx, my, mz = struct.unpack("<hhh", self._read_bytes(_EXT_SLV_SENS_DATA_00, 6))
         s = _AK09916_UT_PER_LSB
         return (mx * s, my * s, mz * s)
