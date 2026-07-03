@@ -733,3 +733,37 @@
   background: #c0392b;
   border-color: #a5281b;
 }
+
+/* --- Schematic bus tags (#217): named I2C/SPI stubs instead of noodles. --- */
+.wc__bus-stub {
+  stroke-width: 2;
+}
+
+.wc__bus-tag {
+  fill: rgba(20, 24, 28, 0.06);
+  stroke-width: 1.5;
+}
+
+.wc__bus-text {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+/* I²C reads amber, SPI teal — legible on both the dark mat and the light sheet. */
+.wc__bus--i2c .wc__bus-stub,
+.wc__bus--i2c .wc__bus-tag {
+  stroke: #d6a531;
+}
+.wc__bus--i2c .wc__bus-text {
+  fill: #d6a531;
+}
+
+.wc__bus--spi .wc__bus-stub,
+.wc__bus--spi .wc__bus-tag {
+  stroke: #2fb3b3;
+}
+.wc__bus--spi .wc__bus-text {
+  fill: #2fb3b3;
+}
