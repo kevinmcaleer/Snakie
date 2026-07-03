@@ -25,13 +25,24 @@ export interface PotentiometerInstrumentProps {
   float?: FloatProps
 }
 
-// Ammeter face geometry (viewBox units). Pivot low-centre; the needle sweeps the top.
-const CX = 100
-const CY = 104
-const R = 82
+// Ammeter face geometry (viewBox 0 0 220 200). The needle pivots low-centre and
+// sweeps a shallow arc across the top; the scale/numbers sit on those radii.
+const CX = 110
+const CY = 122
+const RS = 82 // scale-arc radius
+const RN = 74 // needle length
+const RNUM = 62 // number radius
 
 const MINOR_TICKS = [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
 const LABELS = [0, 25, 50, 75, 100]
+
+// The cream face's scalloped "brow" outline (a vintage panel-meter cue): a broad
+// domed top, straight sides, and a wavy bottom that dips at the corners and rises
+// to a central hump over the medallion.
+const FACE_PATH =
+  'M 26 58 Q 26 16 68 14 L 152 14 Q 194 16 194 58 L 194 102 ' +
+  'Q 194 120 174 126 C 150 135 130 133 110 120 C 90 133 70 135 46 126 ' +
+  'Q 26 120 26 102 Z'
 
 export function PotentiometerInstrument({
   def,
@@ -69,13 +80,10 @@ export function PotentiometerInstrument({
   const onPickChannel = (ch: string): void => setChannel(ch)
 
   // Scale-arc endpoints + needle tip.
-  const p0 = needlePoint(0, CX, CY, R)
-  const p100 = needlePoint(100, CX, CY, R)
-  const tip = needlePoint(pct, CX, CY, R * 0.9)
-  const arc = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${R} ${R} 0 0 1 ${p100.x.toFixed(1)} ${p100.y.toFixed(1)}`
-  // Highlight the swept portion (0 → pct) in brass.
-  const pTip = needlePoint(pct, CX, CY, R)
-  const sweep = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${R} ${R} 0 0 1 ${pTip.x.toFixed(1)} ${pTip.y.toFixed(1)}`
+  const p0 = needlePoint(0, CX, CY, RS)
+  const p100 = needlePoint(100, CX, CY, RS)
+  const tip = needlePoint(pct, CX, CY, RN)
+  const arc = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${RS} ${RS} 0 0 1 ${p100.x.toFixed(1)} ${p100.y.toFixed(1)}`
 
   const source = channels.length > 0 ? channel : POT_CHANNEL
   const knobDeg = useMemo(() => knobRotation(pct), [pct])
@@ -94,18 +102,55 @@ export function PotentiometerInstrument({
         className="potmeter"
         style={{ '--accent': def.accent, '--accent-border': def.border } as CSSProperties}
       >
-        {/* The moving-coil meter face. */}
+        {/* A vintage B.S. First Grade moving-coil panel meter. */}
         <div className="potmeter__face">
-          <svg className="potmeter__svg" viewBox="0 0 200 118" role="img" aria-label={`Potentiometer ${pct} percent`}>
-            {/* Cream dial + inner frame. */}
-            <rect className="potmeter__dial" x="4" y="4" width="192" height="110" rx="6" />
-            {/* Scale arc + swept fill. */}
+          <svg className="potmeter__svg" viewBox="0 0 220 200" role="img" aria-label={`Potentiometer ${pct} percent`}>
+            <defs>
+              <radialGradient id="potmeter-bezel" cx="42%" cy="30%" r="80%">
+                <stop offset="0%" stopColor="#7c6949" />
+                <stop offset="52%" stopColor="#4c3f2c" />
+                <stop offset="100%" stopColor="#261d12" />
+              </radialGradient>
+              <radialGradient id="potmeter-medal" cx="38%" cy="32%" r="74%">
+                <stop offset="0%" stopColor="#dcb75f" />
+                <stop offset="55%" stopColor="#a17e35" />
+                <stop offset="100%" stopColor="#5c451b" />
+              </radialGradient>
+              {/* Hammered cast-metal grain over the bezel. */}
+              <filter id="potmeter-hammered">
+                <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="n" />
+                <feColorMatrix
+                  in="n"
+                  type="matrix"
+                  values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.16 0"
+                />
+              </filter>
+            </defs>
+
+            {/* Cast-metal round bezel + hammered grain + corner screws. */}
+            <rect className="potmeter__bezel" x="4" y="4" width="212" height="192" rx="46" fill="url(#potmeter-bezel)" />
+            <rect x="4" y="4" width="212" height="192" rx="46" filter="url(#potmeter-hammered)" />
+            {[[24, 24], [196, 24], [24, 176], [196, 176]].map(([x, y], i) => (
+              <circle key={i} className="potmeter__screw" cx={x} cy={y} r="4.5" />
+            ))}
+
+            {/* Cream scalloped "brow" face. */}
+            <path className="potmeter__face-shape" d={FACE_PATH} />
+
+            {/* Maker shield + the big PERCENT legend (the AMPERES analogue). */}
+            <g className="potmeter__shield" transform="translate(110 32)">
+              <path className="potmeter__shield-body" d="M -6 -8 h12 v5 q0 7 -6 10 q-6 -3 -6 -10 Z" />
+              <path className="potmeter__shield-h" d="M -2.6 -5 v8 M 2.6 -5 v8 M -2.6 -1.2 h5.2" />
+            </g>
+            <text className="potmeter__big" x={CX} y="50" textAnchor="middle">
+              PERCENT
+            </text>
+
+            {/* Scale arc + ticks + numbers. */}
             <path className="potmeter__arc" d={arc} />
-            <path className="potmeter__sweep" d={sweep} />
-            {/* Minor ticks. */}
             {MINOR_TICKS.map((t) => {
-              const a = needlePoint(t, CX, CY, R)
-              const b = needlePoint(t, CX, CY, R - (LABELS.includes(t) ? 12 : 7))
+              const a = needlePoint(t, CX, CY, RS)
+              const b = needlePoint(t, CX, CY, RS - (LABELS.includes(t) ? 11 : 6))
               return (
                 <line
                   key={t}
@@ -117,25 +162,32 @@ export function PotentiometerInstrument({
                 />
               )
             })}
-            {/* Major labels. */}
             {LABELS.map((t) => {
-              const l = needlePoint(t, CX, CY, R - 22)
+              const l = needlePoint(t, CX, CY, RNUM)
               return (
                 <text key={t} className="potmeter__num" x={l.x} y={l.y} textAnchor="middle" dominantBaseline="middle">
                   {t}
                 </text>
               )
             })}
-            {/* Unit + maker's mark (the vintage cue). */}
-            <text className="potmeter__unit" x={CX} y={CY - 30} textAnchor="middle">
-              %
+
+            {/* Maker's marks, in the lower brow clear of the 0/100 numerals. */}
+            <text className="potmeter__maker" x={CX} y="106" textAnchor="middle">
+              BRITISH MANUFACTURE
             </text>
-            <text className="potmeter__mark" x={CX} y={CY - 12} textAnchor="middle">
+            <text className="potmeter__grade" x={CX} y="114" textAnchor="middle">
               B.S. FIRST GRADE
             </text>
-            {/* Needle + hub. */}
+
+            {/* Thin black needle. */}
             <line className="potmeter__needle" x1={CX} y1={CY} x2={tip.x} y2={tip.y} />
-            <circle className="potmeter__hub" cx={CX} cy={CY} r={7} />
+
+            {/* Brass monogram medallion at the bottom-centre. */}
+            <circle className="potmeter__medal" cx={CX} cy="160" r="17" fill="url(#potmeter-medal)" />
+            <circle className="potmeter__medal-ring" cx={CX} cy="160" r="17" />
+            <text className="potmeter__medal-mono" x={CX} y="160" textAnchor="middle" dominantBaseline="central">
+              S
+            </text>
           </svg>
         </div>
 
