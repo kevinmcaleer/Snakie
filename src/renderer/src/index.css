@@ -265,6 +265,14 @@
   background: linear-gradient(180deg, #fbfbfd, #cdd1d8);
 }
 
+/* A ghost-style danger key (e.g. the Device Files panel's Delete) keeps the
+ * silver ghost body, so the domed red pill's WHITE text is unreadable on it —
+ * read dark exactly like its sibling ghost buttons instead. */
+:root[data-theme='skeuomorph'] .btn--ghost.btn--danger {
+  color: #4a4e56;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
 :root[data-theme='skeuomorph'] .btn--ghost.is-active {
   background: linear-gradient(180deg, #bcc0c8, #d6dae1);
   border-color: #8d9099;
