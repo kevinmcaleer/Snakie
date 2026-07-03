@@ -97,8 +97,8 @@ export function PotentiometerInstrument({
         {/* The moving-coil meter face. */}
         <div className="potmeter__face">
           <svg className="potmeter__svg" viewBox="0 0 200 118" role="img" aria-label={`Potentiometer ${pct} percent`}>
-            {/* Cream dial + inner frame. */}
-            <rect className="potmeter__dial" x="4" y="4" width="192" height="110" rx="6" />
+            {/* Cream dial filling the card (no brass bezel). */}
+            <rect className="potmeter__dial" x="0" y="0" width="200" height="118" rx="10" />
             {/* Scale arc + swept fill. */}
             <path className="potmeter__arc" d={arc} />
             <path className="potmeter__sweep" d={sweep} />
