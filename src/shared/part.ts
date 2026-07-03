@@ -458,6 +458,15 @@ export interface PartDefinition {
   /** Optional schematic symbol (line-drawing) for the schematic view. */
   schematic?: PartSchematic
 
+  // --- I²C identity (#214) --------------------------------------------------
+  /**
+   * The I²C address(es) this part can answer on (7-bit, e.g. `[0x76, 0x77]` for
+   * a BME280 with its ADDR strap). The I²C-detect instrument uses these to match
+   * a found bus address back to library parts and offer to add them to the
+   * project. Absent ⇒ the part isn't matched by address.
+   */
+  i2cAddresses?: number[]
+
   // --- Code library (#166) -------------------------------------------------
   /** A MicroPython driver/library linked to this part. */
   library?: PartLibraryLink

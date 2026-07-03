@@ -6,6 +6,56 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Context help for standard MicroPython code.** Right-click → "Help for
+  symbol" now covers the language itself, not just hardware modules: keywords
+  (`if`/`while`/`def`/`class`/`try`/`import` …), value types (`int`, `str`,
+  `list`, `dict`, `bytes` …) and everyday built-ins (`len`, `range`,
+  `enumerate` …) open seven new mini-help reference articles — Control flow,
+  Functions, Values & types, Built-ins, Classes, Errors & exceptions, and
+  Imports & modules.
+- **Device files refresh after installs.** Installing a part driver (either
+  missing-library banner), the instruments library, or a mip package now
+  re-lists the connected board's file tree automatically — the new files in
+  `/lib` appear without clicking Refresh, in every window.
+- **One-click install from the missing-library banner.** When the editor
+  reports the connected board is missing a library your parts need, the banner's
+  **Install** button now also covers parts that ship **bundled driver files**
+  (SG90 / BME280 / ICM20948 …) — copying them straight onto the device, exactly
+  like the instruments-library "Download & install". Previously only mip-URL
+  libraries were installable from there. (Also: importing a driver directly no
+  longer hides the missing-on-board nag just because a matching instrument looks
+  in-use, and the simulated device's `exec` now really runs code, so probes work
+  on the sim.)
+- **Interactive I²C scanner (#214).** Found addresses in the I²C-detect grid are
+  clickable: an inspector names the known devices for that address and offers an
+  **ADD** button for any installed library part declaring it (new `i2cAddresses`
+  part field; BME280 + ICM20948 declare theirs) — adding the part to the project
+  and popping the breadboard.
+- **Compass in the IMU instrument (#215).** A rotating 16-wind rose card under a
+  fixed lubber line, with a `309° NW`-style readout driven by the magnetometer
+  heading (the calibrated yaw).
+- **Barometer instrument (#216).** Temperature / pressure / humidity as an
+  antique aneroid barometer — brass bezel, 950–1050 hPa scale, RAIN · CHANGE ·
+  FAIR legend — fed by `SNK ENV` telemetry; `inst.watch(weather=bme)` binds a
+  BME280-style sensor automatically (instruments library 0.9.0).
+- **Schematic buses (#217).** I²C/SPI wires in the Schematic view draw as short
+  named bus tags (»I2C0«, »SPI1«) at both ends instead of routed noodles.
+- **Animated I²C scan (#218).** Scan results play back as a cursor sweep across
+  the grid, with a water-ripple "ping" on each found address.
+- **Device-files management (#219).** Ctrl/Cmd + Shift multi-selection, drag
+  files/folders into folders (a device-side move), a hover ✕ delete on every
+  row, and "Delete N items" from the context menu. Deleting a folder now removes
+  its contents recursively (previously directories couldn't be deleted at all).
+- **Right-click context help (#221).** "Help for symbol (Snakie)" in the editor
+  context menu opens the mini help for the word under the cursor — an installed
+  part's bundled help (e.g. `bme280`) or a language-reference topic (Pin, PWM,
+  I2C, sleep, …).
+
+### Fixed
+- **Device-files Refresh refreshes folders (#220).** Refresh re-lists every
+  loaded folder — not just the root — keeping your expansion state.
+
 ## [0.22.0] - 2026-07-03
 
 ### Added

@@ -1,11 +1,13 @@
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
 import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption } from './i2c-pins'
+import { hexAddr, knownDevicesFor, partsForAddress } from './i2c-known-devices'
 import { useBoards } from './use-boards'
 import type { BoardDefinition } from '../../../shared/board'
+import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import './I2cDetectInstrument.css'
 
 /**
@@ -20,6 +22,9 @@ import './I2cDetectInstrument.css'
  * we parse into the grid. Works on demand — no running program needed — and the
  * address → cell maths still lives in the unit-tested {@link ./scanner-logic}.
  */
+
+/** Sweep-playback speed (#218): ms per grid cell (128 cells ≈ 1.2 s total). */
+const SWEEP_MS_PER_CELL = 9
 
 /** GPIO numbers a board exposes (for the I²C pin dropdowns). */
 function boardGpios(boards: BoardDefinition[], boardId: string | null): number[] {
@@ -90,6 +95,21 @@ export function I2cDetectInstrument({
     if (match) setSel(match)
   }
 
+  // Scan-sweep playback (#218): after the (fast, one-shot) device scan returns,
+  // a cursor sweeps the grid cell-by-cell; detected addresses "ping" with a
+  // water-ripple as the cursor crosses them. `sweep` is the cursor's flat cell
+  // index (0..127), or null when idle/complete. `scanSeq` keys the grid per scan
+  // so the ripple animations replay on a re-scan.
+  const [sweep, setSweep] = useState<number | null>(null)
+  const [scanSeq, setScanSeq] = useState(0)
+  useEffect(() => {
+    if (sweep === null) return
+    const id = window.setInterval(() => {
+      setSweep((s) => (s === null || s >= 8 * 16 ? null : s + 1))
+    }, SWEEP_MS_PER_CELL)
+    return () => window.clearInterval(id)
+  }, [sweep === null]) // eslint-disable-line react-hooks/exhaustive-deps -- restart only on idle↔sweeping flips
+
   // One-shot scan on the chosen pins (no running program needed).
   const scan = useCallback(async () => {
     if (!connected) return
@@ -108,6 +128,10 @@ export function I2cDetectInstrument({
           .filter(Boolean)
           .map((h) => parseInt(h, 16))
         setGrid(buildI2cGrid(addrs))
+        setScanSeq((n) => n + 1)
+        // Play the sweep — unless the user prefers reduced motion (show at once).
+        const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+        setSweep(reduce ? null : 0)
       } else {
         setError(errLine ? errLine.slice('SNKI2CERR '.length) : 'Scan failed — check the pins/wiring.')
       }
@@ -119,8 +143,69 @@ export function I2cDetectInstrument({
   }, [connected, sel])
 
   const found = grid?.found ?? []
-  const foundText = scanning && !grid ? '··' : String(found.length)
+  // While the cursor sweeps, FOUND counts up as detected cells are crossed.
+  const foundText =
+    scanning && !grid
+      ? '··'
+      : sweep !== null
+        ? String(found.filter((a) => a < sweep).length)
+        : String(found.length)
   const noPins = opts.length === 0
+
+  // --- interactive addresses (#214) ----------------------------------------
+  // Clicking a found address opens an inspector: which known devices use it,
+  // and any INSTALLED library part declaring that address — with an ADD button
+  // that drops the part into the project (robot.yml) and pops the breadboard.
+  const [inspect, setInspect] = useState<number | null>(null)
+  const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
+  const [adding, setAdding] = useState<string | null>(null)
+  const [addedId, setAddedId] = useState<string | null>(null)
+  useEffect(() => {
+    const load = (): void => {
+      void window.api.parts
+        .listLibraries()
+        .then(setLibraries)
+        .catch(() => setLibraries([]))
+    }
+    load()
+    return window.api.parts.onChanged(load)
+  }, [])
+  // A new scan invalidates the inspector (addresses may have moved).
+  useEffect(() => setInspect(null), [scanSeq])
+
+  const addToProject = useCallback(async (libraryId: string, part: PartDefinition) => {
+    setAdding(part.id)
+    setAddedId(null)
+    try {
+      // Pop the breadboard view first, then resolve the project folder from the
+      // board payload (it streams right after the window opens) so the part
+      // lands in the SAME robot.yml the Board View edits.
+      await window.api.board.open()
+      let folder: string | undefined
+      for (let i = 0; i < 10; i++) {
+        const p = await window.api.board.requestSource().catch(() => null)
+        if (p) {
+          folder = p.folder
+          break
+        }
+        await new Promise((r) => setTimeout(r, 150))
+      }
+      const robot = await window.api.robot.load(folder)
+      const ids = new Set(['board', ...robot.parts.map((x) => x.id)])
+      let id = part.id
+      let n = 2
+      while (ids.has(id)) id = `${part.id}${n++}`
+      await window.api.robot.save(folder, {
+        ...robot,
+        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
+      })
+      setAddedId(part.id)
+    } catch {
+      // Best-effort — the board window not opening shouldn't crash the panel.
+    } finally {
+      setAdding(null)
+    }
+  }, [])
 
   return (
     <InstrumentWindow
@@ -140,13 +225,57 @@ export function I2cDetectInstrument({
             ) : error ? (
               <p className="i2cdet__hint i2cdet__error">{error}</p>
             ) : grid ? (
-              <I2cGrid grid={grid} />
+              <I2cGrid key={scanSeq} grid={grid} sweep={sweep} onInspect={setInspect} />
             ) : (
               <p className="i2cdet__hint">{scanning ? 'scanning…' : 'Pick the bus + pins, then SCAN'}</p>
             )}
             {scanning && grid && <div className="i2cdet__scanning">scanning…</div>}
           </div>
         </PhosphorScreen>
+
+        {/* Address inspector (#214): what's at the clicked address + Add offers. */}
+        {inspect !== null && (
+          <div className="i2cdet__inspect" role="dialog" aria-label={`Devices at ${hexAddr(inspect)}`}>
+            <div className="i2cdet__inspect-head">
+              <span className="i2cdet__inspect-addr">{hexAddr(inspect)}</span>
+              <span className="i2cdet__inspect-title">what&rsquo;s here?</span>
+              <button
+                type="button"
+                className="i2cdet__inspect-close"
+                onClick={() => setInspect(null)}
+                title="Close"
+                aria-label="Close the address inspector"
+              >
+                ✕
+              </button>
+            </div>
+            {partsForAddress(inspect, libraries).map(({ libraryId, part }) => (
+              <div className="i2cdet__inspect-row i2cdet__inspect-row--part" key={`${libraryId}:${part.id}`}>
+                <span className="i2cdet__inspect-name">{part.name}</span>
+                <span className="i2cdet__inspect-lib">{libraryId}</span>
+                <button
+                  type="button"
+                  className="i2cdet__inspect-add"
+                  disabled={adding !== null}
+                  onClick={() => void addToProject(libraryId, part)}
+                  title="Add this part to the project and open the breadboard"
+                >
+                  {adding === part.id ? 'ADDING…' : addedId === part.id ? 'ADDED ✓' : 'ADD'}
+                </button>
+              </div>
+            ))}
+            {knownDevicesFor(inspect).map((name) => (
+              <div className="i2cdet__inspect-row" key={name}>
+                <span className="i2cdet__inspect-name">{name}</span>
+              </div>
+            ))}
+            {partsForAddress(inspect, libraries).length === 0 && knownDevicesFor(inspect).length === 0 && (
+              <div className="i2cdet__inspect-row">
+                <span className="i2cdet__inspect-name">No known device for this address.</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="i2cdet__controls">
           <label className="i2cdet__pick">
@@ -202,8 +331,23 @@ export function I2cDetectInstrument({
   )
 }
 
-/** The 8×16 i2cdetect grid: a column-header row, then 8 labelled rows of cells. */
-function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
+/**
+ * The 8×16 i2cdetect grid: a column-header row, then 8 labelled rows of cells.
+ * During the scan-sweep playback (#218) `sweep` is the cursor's flat address
+ * index: the cell AT it draws as the cursor, cells past it stay unswept (dim),
+ * and a detected cell pings a water-ripple as the cursor crosses it.
+ * Exported for the render tests. Detected cells are clickable when `onInspect`
+ * is provided (#214) — opening the address inspector.
+ */
+export function I2cGrid({
+  grid,
+  sweep,
+  onInspect
+}: {
+  grid: I2cGridModel
+  sweep: number | null
+  onInspect?: (addr: number) => void
+}): JSX.Element {
   return (
     <div className="i2cdet__grid" role="grid" aria-label="I²C address grid">
       <div className="i2cdet__grid-head" role="row">
@@ -219,17 +363,41 @@ function I2cGrid({ grid }: { grid: I2cGridModel }): JSX.Element {
           <span className="i2cdet__rowlabel" role="rowheader">
             {(r * 16).toString(16).toUpperCase().padStart(2, '0')}
           </span>
-          {row.map((cell) => (
-            <span
-              key={cell.addr}
-              className={`i2cdet__cell${cell.detected ? ' i2cdet__cell--on' : ''}`}
-              role="gridcell"
-              title={cell.detected ? `Device at ${cell.label}` : cell.label}
-              aria-label={cell.detected ? `${cell.label} detected` : cell.label}
-            >
-              {cell.detected ? formatI2cAddr(cell.addr).slice(2) : '··'}
-            </span>
-          ))}
+          {row.map((cell) => {
+            const swept = sweep === null || cell.addr < sweep
+            const isCursor = sweep !== null && cell.addr === sweep
+            const on = cell.detected && swept
+            const cls =
+              `i2cdet__cell${on ? ' i2cdet__cell--on i2cdet__cell--ping' : ''}` +
+              `${isCursor ? ' i2cdet__cell--cursor' : ''}${!swept && !isCursor ? ' i2cdet__cell--unswept' : ''}`
+            // A revealed hit is a BUTTON (#214): click → the address inspector.
+            if (on && onInspect) {
+              return (
+                <button
+                  key={cell.addr}
+                  type="button"
+                  className={`${cls} i2cdet__cell--click`}
+                  role="gridcell"
+                  title={`Device at ${cell.label} — click for known devices`}
+                  aria-label={`${cell.label} detected — inspect`}
+                  onClick={() => onInspect(cell.addr)}
+                >
+                  {formatI2cAddr(cell.addr).slice(2)}
+                </button>
+              )
+            }
+            return (
+              <span
+                key={cell.addr}
+                className={cls}
+                role="gridcell"
+                title={cell.detected ? `Device at ${cell.label}` : cell.label}
+                aria-label={cell.detected ? `${cell.label} detected` : cell.label}
+              >
+                {on ? formatI2cAddr(cell.addr).slice(2) : '··'}
+              </span>
+            )
+          })}
         </div>
       ))}
     </div>

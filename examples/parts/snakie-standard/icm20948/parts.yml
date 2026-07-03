@@ -123,6 +123,9 @@ labels:
     fontSize: 9
     color: "#ffffff"
     z: 4
+# 7-bit I²C addresses this part answers on (0x68 default, 0x69 via the address
+# trace) — the I²C-detect instrument matches found addresses to this part (#214).
+i2cAddresses: [104, 105]
 library:
   module: icm20948
 drivers:

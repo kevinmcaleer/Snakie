@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -143,6 +143,19 @@ def imu_quat(w, x, y, z, ch="imu"):
     Prints ``SNK IMUQ <ch> <w> <x> <y> <z>``.
     """
     print("%s IMUQ %s %s %s %s %s" % (SENTINEL, ch, w, x, y, z))
+
+
+def env(temp, pressure, humidity, ch="env"):
+    """Emit one environmental reading — temperature (°C), barometric pressure
+    (hPa) and relative humidity (%RH) — on channel ``ch``.
+
+    Prints ``SNK ENV <ch> <temp> <pressure> <humidity>`` for the Barometer
+    instrument (#216)::
+
+        t, p, h = bme.read()
+        inst.env(t, p, h)
+    """
+    print("%s ENV %s %s %s %s" % (SENTINEL, ch, temp, pressure, humidity))
 
 
 def distance(mm, angle=None, ch="dist"):
@@ -1572,14 +1585,27 @@ def _is_imu(obj):
     )
 
 
+def _is_env(obj):
+    """True for an environmental sensor driver exposing ``temperature`` +
+    ``pressure`` + ``humidity`` (e.g. the bundled BME280 driver)."""
+    return (
+        hasattr(obj, "temperature")
+        and hasattr(obj, "pressure")
+        and hasattr(obj, "humidity")
+    )
+
+
 def _classify(obj):
     """Best-effort object KIND by duck-typing (methods, most-specific first).
 
-    Returns ``imu``/``servo``/``pwm``/``i2c``/``adc``/``pin`` or ``None``. An IMU
-    (accel+gyro reader) is checked first; a Servo-like driver (``angle``) before a
-    bare ``Pin`` (``value``); a ``PWM`` (``duty_u16``) before an ``ADC``
+    Returns ``env``/``imu``/``servo``/``pwm``/``i2c``/``adc``/``pin`` or ``None``.
+    An environmental sensor (temperature+pressure+humidity, e.g. a BME280) and an
+    IMU (accel+gyro reader) are checked first; a Servo-like driver (``angle``)
+    before a bare ``Pin`` (``value``); a ``PWM`` (``duty_u16``) before an ``ADC``
     (``read_u16``). Never raises.
     """
+    if _is_env(obj):
+        return "env"
     if _is_imu(obj):
         return "imu"
     if hasattr(obj, "angle"):
@@ -1687,6 +1713,17 @@ def update():
             try:
                 roll, pitch, yaw = _imu_euler(obj)
                 print("%s IMU %s %s %s %s" % (SENTINEL, name, roll, pitch, yaw))
+            except Exception:
+                pass
+        elif kind == "env":
+            # An environmental sensor (#216): one burst read() when available
+            # (atomic + cheapest), else the three properties.
+            try:
+                if hasattr(obj, "read"):
+                    t, p, h = obj.read()
+                else:
+                    t, p, h = obj.temperature, obj.pressure, obj.humidity
+                print("%s ENV %s %s %s %s" % (SENTINEL, name, t, p, h))
             except Exception:
                 pass
 

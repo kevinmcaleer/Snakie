@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  driverDeviceDirs,
-  driverInstallMethod,
-  type PartDriverNeed
-} from './part-editor.util'
+import { driverInstallMethod, type PartDriverNeed } from './part-editor.util'
+import { installPartDriver } from './driver-install'
 import type { DriverFile } from '../../../preload/index.d'
 import './DriverInstallBanner.css'
 
@@ -141,32 +138,10 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const installOne = async (need: PartDriverNeed, d: DriverFile): Promise<void> => {
     const id = driverKey(need, d)
     setStatus(id, { state: 'installing' })
-    try {
-      if (driverInstallMethod(d.source) === 'mip') {
-        const target = d.target.trim()
-        const res = await window.api.packages.install(d.source, target ? { target } : undefined)
-        setStatus(id, {
-          state: res.ok ? 'ok' : 'error',
-          message: res.ok ? undefined : res.log.split('\n').filter(Boolean).pop() || 'mip failed'
-        })
-        return
-      }
-      // copy: read the file (bundled file or URL, via main) then write to target.
-      const read = await window.api.parts.readDriverSource(need.libraryId, need.partId, d.source)
-      if (!read.ok || read.contents == null) {
-        setStatus(id, { state: 'error', message: read.error || 'Could not read driver file.' })
-        return
-      }
-      // MicroPython has no recursive mkdir — create each ancestor folder in turn
-      // (an "already exists" error is fine, so we swallow it).
-      for (const dir of driverDeviceDirs(d.target)) {
-        await window.api.device.mkdir(dir).catch(() => undefined)
-      }
-      await window.api.device.writeFile(d.target.trim(), read.contents)
-      setStatus(id, { state: 'ok' })
-    } catch (err) {
-      setStatus(id, { state: 'error', message: err instanceof Error ? err.message : String(err) })
-    }
+    // The mip/copy sequence lives in the shared installer (also used by the main
+    // editor's missing-library banner, #166) — this wrapper just maps to status.
+    const res = await installPartDriver(need.libraryId, need.partId, d)
+    setStatus(id, { state: res.ok ? 'ok' : 'error', message: res.message })
   }
 
   const installAll = async (): Promise<void> => {

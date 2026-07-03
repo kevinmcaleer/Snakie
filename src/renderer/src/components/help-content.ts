@@ -79,7 +79,14 @@ export const HELP_SECTIONS: HelpNode[] = [
         children: [
           { id: 'ref-pins', kind: 'article', title: 'Pins & GPIO', accent: A.page },
           { id: 'ref-timing', kind: 'article', title: 'Timing', accent: A.page },
-          { id: 'ref-print', kind: 'article', title: 'print & the REPL', accent: A.page }
+          { id: 'ref-print', kind: 'article', title: 'print & the REPL', accent: A.page },
+          { id: 'ref-flow', kind: 'article', title: 'Control flow', accent: A.page },
+          { id: 'ref-functions', kind: 'article', title: 'Functions', accent: A.page },
+          { id: 'ref-types', kind: 'article', title: 'Values & types', accent: A.page },
+          { id: 'ref-builtins', kind: 'article', title: 'Built-in functions', accent: A.page },
+          { id: 'ref-classes', kind: 'article', title: 'Classes', accent: A.page },
+          { id: 'ref-exceptions', kind: 'article', title: 'Errors & exceptions', accent: A.page },
+          { id: 'ref-imports', kind: 'article', title: 'Imports & modules', accent: A.page }
         ]
       },
       {

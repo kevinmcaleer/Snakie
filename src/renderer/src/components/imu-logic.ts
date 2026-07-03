@@ -240,3 +240,34 @@ export function formatAngle(deg: number): string {
   const sign = v > 0 ? '+' : v < 0 ? '−' : ' '
   return `${sign}${Math.abs(v).toFixed(1)}°`
 }
+
+// --- Compass (#215) ---------------------------------------------------------
+
+/**
+ * Compass HEADING (0..360°, clockwise from North) from the IMU's yaw. Yaw is a
+ * right-hand rotation about Z (counter-clockwise positive, (−180, 180]); a
+ * compass heading runs the other way — so heading = (−yaw) normalised to
+ * [0, 360). Pure; non-finite → 0.
+ */
+export function headingFromYaw(yawDeg: number): number {
+  if (!Number.isFinite(yawDeg)) return 0
+  return ((-yawDeg % 360) + 360) % 360
+}
+
+/** The 16-wind compass rose, clockwise from North (22.5° per point). */
+export const CARDINALS = [
+  'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+  'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'
+] as const
+
+/** The 16-wind cardinal name nearest a heading (0..360, wraps). Pure. */
+export function cardinalFor(heading: number): string {
+  const h = ((heading % 360) + 360) % 360
+  return CARDINALS[Math.round(h / 22.5) % 16]
+}
+
+/** Format a heading for the compass readout: zero-padded whole degrees (`237°`). */
+export function formatHeading(heading: number): string {
+  const h = Number.isFinite(heading) ? ((heading % 360) + 360) % 360 : 0
+  return `${String(Math.round(h) % 360).padStart(3, '0')}°`
+}

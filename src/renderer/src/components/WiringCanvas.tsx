@@ -30,6 +30,7 @@ import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
+import { classifyBusWire } from './bus-wires'
 import './WiringCanvas.css'
 
 /**
@@ -137,6 +138,8 @@ interface PlacedPin {
   /** Per-capability signal designation + bus/channel (for the hover chips). */
   signals?: PartPinSignals
   buses?: PartPinBuses
+  /** The GPIO an MCU pad breaks out (drives the schematic bus-tag id, #217). */
+  gpio?: number
 }
 /** Board pads used by the parsed code, keyed by board pad index (combine view). */
 export type UsedByCode = Map<number, { color: string; label: string }>
@@ -262,7 +265,8 @@ function boardSchematicPins(def: BoardDefinition): { w: number; h: number; place
       anchors: [{ x: t.outer.x, y: t.outer.y, ox, oy }],
       label: { x: t.label.x, y: t.label.y, anchor: t.label.anchor }, // label drawn by McuSymbol
       primary: t.primary,
-      railIndices: t.railIndices
+      railIndices: t.railIndices,
+      gpio: t.pad.gpio // → the schematic bus-tag id (#217)
     }
   })
   return { w: lay.box.w, h: lay.box.h, placed }
@@ -281,7 +285,11 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
       anchors: [{ x: t.outer.x, y: t.outer.y, ox, oy }],
       label: { x: t.label.x, y: t.label.y, anchor: t.label.anchor }, // label drawn by the symbol
       primary: t.primary,
-      railIndices: t.railIndices
+      railIndices: t.railIndices,
+      // Capabilities/bus metadata → the schematic bus classifier (#217).
+      caps: t.pin.capabilities,
+      signals: t.pin.signals,
+      buses: t.pin.buses
     }
   })
   return { w: lay.box.w, h: lay.box.h, placed }
@@ -1137,6 +1145,33 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 isn't hidden under the body (#182). Pins stay grabbable via the
                 coordinate hit-test, not element order. */}
             {robot.connections.map((c) => {
+              // SCHEMATIC buses (#217): an I²C/SPI wire draws as two short named
+              // bus tags (»I2C0«) instead of a routed point-to-point noodle —
+              // the standard notation, and far less chaotic to arrange.
+              if (renderMode === 'schematic') {
+                const f = parseEndpoint(c.from)
+                const t = parseEndpoint(c.to)
+                const fs = subjByKey.get(f.key)
+                const ts = subjByKey.get(t.key)
+                const fp = fs?.pins[f.index]
+                const tp = ts?.pins[t.index]
+                if (fs && ts && fp && tp) {
+                  const bus = classifyBusWire(
+                    { caps: fp.caps, buses: fp.buses, signals: fp.signals, gpio: fp.gpio },
+                    { caps: tp.caps, buses: tp.buses, signals: tp.signals, gpio: tp.gpio }
+                  )
+                  if (bus) {
+                    const a = anchorOf(fs, fp, ts.x, ts.y)
+                    const b = anchorOf(ts, tp, fs.x, fs.y)
+                    return (
+                      <g key={c.id} className={`wc__bus wc__bus--${bus.kind}`}>
+                        <BusTag anchor={a} label={bus.label} />
+                        <BusTag anchor={b} label={bus.label} />
+                      </g>
+                    )
+                  }
+                }
+              }
               const p = wirePath(c)
               if (!p) return null
               return (
@@ -1628,6 +1663,43 @@ function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: n
 /** Render one subject (MCU or part) in its own translated group. The body is the
  *  REAL renderer for its mode (Board / PartBody / McuSymbol / PartSchematicSymbol);
  *  the wiring canvas draws the connectable dots + combine labels on top. */
+/**
+ * A named schematic BUS TAG (#217): a short stub out of the pin plus a rounded
+ * label (»I2C0«). Drawn at BOTH ends of a classified bus wire in place of the
+ * routed noodle. Orientation follows the pin's outward normal.
+ */
+function BusTag({
+  anchor,
+  label
+}: {
+  anchor: { cx: number; cy: number; ox: number; oy: number }
+  label: string
+}): JSX.Element {
+  const STUB = 12
+  const ex = anchor.cx + anchor.ox * STUB
+  const ey = anchor.cy + anchor.oy * STUB
+  const w = 10 + label.length * 7.5
+  const h = 16
+  // The tag sits just past the stub end, pushed outward so it clears the pin.
+  const tx = ex + anchor.ox * (w / 2) - w / 2
+  const ty = ey + anchor.oy * (h / 2) - h / 2
+  return (
+    <g>
+      <line className="wc__bus-stub" x1={anchor.cx} y1={anchor.cy} x2={ex} y2={ey} />
+      <rect className="wc__bus-tag" x={tx} y={ty} width={w} height={h} rx={4} />
+      <text
+        className="wc__bus-text"
+        x={tx + w / 2}
+        y={ty + h / 2}
+        textAnchor="middle"
+        dominantBaseline="central"
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
 function SubjectBody({
   subject: s,
   onHoverPin,

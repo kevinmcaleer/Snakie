@@ -23,7 +23,8 @@ import {
   setModelDiagnostics
 } from './plugin-code-actions'
 import { registerInlineCompletions } from './inline-completions'
-import { setActiveEditor, dispatchOpenFind } from './editorBridge'
+import { setActiveEditor, dispatchOpenFind, dispatchOpenHelp } from './editorBridge'
+import { resolveHelpTarget } from './context-help'
 import { validateFormat, formatKindForName } from './format-validate'
 import {
   clearFormatDiagnostics,
@@ -310,6 +311,26 @@ export function MonacoEditor(): JSX.Element {
     // opens. F = find-only, H = find + replace.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => dispatchOpenFind(false))
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyH, () => dispatchOpenFind(true))
+
+    // Right-click context help (#221): "Help for <symbol>" in the editor's
+    // context menu. Resolves the word under the cursor to an installed library
+    // part's bundled help (bme280, servo, …) or a language-reference topic
+    // (Pin/PWM/I2C/sleep/…), and opens the mini help at that page. Unknown words
+    // open nothing (the resolver is the single source of what's helpable).
+    editor.addAction({
+      id: 'snakie.contextHelp',
+      label: 'Help for symbol (Snakie)',
+      contextMenuGroupId: 'navigation',
+      contextMenuOrder: 1.1,
+      run: async (ed) => {
+        const pos = ed.getPosition()
+        const word = pos ? ed.getModel()?.getWordAtPosition(pos)?.word : undefined
+        if (!word) return
+        const libs = await window.api.parts.listLibraries().catch(() => [])
+        const target = resolveHelpTarget(word, libs)
+        if (target) dispatchOpenHelp(target.articleId)
+      }
+    })
 
     const modelStore = models.current
     return () => {

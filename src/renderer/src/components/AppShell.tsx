@@ -36,8 +36,10 @@ import {
   requiredPartModules,
   missingImports as computeMissingImports,
   missingOnBoard as computeMissingOnBoard,
+  parsePyImports,
   type RequiredModule
 } from './part-imports'
+import { installPartDriver } from './driver-install'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import {
   INSTRUMENTS_LIB_PATH,
@@ -529,6 +531,9 @@ export function AppShell(): JSX.Element {
           await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
         }
         setLibState('present')
+        // The device's files changed — tell every window so e.g. the Device
+        // Files tree re-lists and shows the fresh /lib/instruments.py.
+        window.api.modules.notifyChanged()
       } catch (err) {
         setLibError(err instanceof Error ? err.message : String(err))
       } finally {
@@ -597,10 +602,18 @@ export function AppShell(): JSX.Element {
     }
   }, [boardFolder, boardFileName, connected, robotNonce])
 
+  // Modules WE successfully installed onto this board (ground truth for this
+  // connection): a re-probe that races a running program / busy REPL can read
+  // nothing back — it must never resurrect the "Install servo" button for a
+  // driver we just copied. Merged into every probe result below.
+  const selfInstalledRef = useRef<Set<string>>(new Set())
   // Probe the board (once per connection, and again on a project change) for which
   // required modules import. Including boardFolder avoids a stale probe set when you
   // switch projects while staying connected (modules change but the cache wouldn't).
-  useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path, boardFolder])
+  useEffect(() => {
+    selfInstalledRef.current = new Set()
+    setInstalledModules(null)
+  }, [deviceStatus.state, deviceStatus.path, boardFolder])
   // Re-probe when ANY window installs a driver/library (e.g. the Board View's
   // Driver Install banner copies a file to the board), so the "missing library"
   // banner clears once the module is actually present — not only after the main
@@ -611,7 +624,7 @@ export function AppShell(): JSX.Element {
     let active = true
     void (async (): Promise<void> => {
       const present = await window.api.modules.probeInstalled(requiredModules.map((m) => m.module))
-      if (active) setInstalledModules(new Set(present))
+      if (active) setInstalledModules(new Set([...present, ...selfInstalledRef.current]))
     })()
     return () => {
       active = false
@@ -635,28 +648,52 @@ export function AppShell(): JSX.Element {
       ),
     [boardIsPython, requiredModules, boardSource, inUse]
   )
-  const missBoard = useMemo(
-    () =>
-      (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
-        (m) => !moduleCoveredByInstrument(m.module, inUse)
-      ),
-    [installedModules, requiredModules, inUse]
-  )
+  const missBoard = useMemo(() => {
+    // Instrument coverage only excuses a module the file DOESN'T import: a
+    // direct `import bme280` will fail on a board without the driver, however
+    // in-use its instrument looks (the instrument hints match the very same
+    // module name the import mentions), so that nag — and its one-click
+    // install — must stand.
+    const imported = boardIsPython ? parsePyImports(boardSource) : new Set<string>()
+    return (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
+      (m) => imported.has(m.module) || !moduleCoveredByInstrument(m.module, inUse)
+    )
+  }, [installedModules, requiredModules, inUse, boardIsPython, boardSource])
   const showPartsBanner =
     requiredModules.length > 0 && !partsDismissed && (missImports.length > 0 || missBoard.length > 0)
 
   const installMissingLibs = useCallback((): void => {
-    const targets = missBoard.filter((m) => m.url)
+    // Installable = the module ships bundled driver file(s) (copied straight to
+    // the board — the SG90/BME280/ICM20948 model) or declares a mip source URL.
+    const targets = missBoard.filter((m) => (m.drivers?.length ?? 0) > 0 || m.url)
     if (partsInstalling || targets.length === 0) return
     setPartsInstalling(true)
     setPartsInstallError(null)
     void (async (): Promise<void> => {
       try {
         for (const t of targets) {
-          const res = await window.api.packages.install(t.url as string)
-          if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
+          if (t.drivers && t.drivers.length > 0 && t.libraryId && t.partId) {
+            for (const d of t.drivers) {
+              const res = await installPartDriver(t.libraryId, t.partId, d)
+              if (!res.ok) throw new Error(res.message || `Failed to install ${t.module}`)
+            }
+          } else {
+            const res = await window.api.packages.install(t.url as string)
+            if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
+          }
         }
-        setInstalledModules(null) // re-probe → banner clears if now present
+        // The installs SUCCEEDED — that's ground truth, so mark those modules
+        // present directly and the banner clears at once. (A `null` reset +
+        // re-probe here could race a running program / busy REPL, read garbage,
+        // and leave the "Install servo" button stuck on screen.) The ref keeps
+        // them present across any later re-probe this connection.
+        for (const t of targets) selfInstalledRef.current.add(t.module)
+        setInstalledModules(
+          (prev) => new Set([...(prev ?? []), ...targets.map((t) => t.module)])
+        )
+        // Tell the OTHER windows too (the Board View's driver banner re-probes,
+        // the device file tree re-lists).
+        window.api.modules.notifyChanged()
       } catch (err) {
         setPartsInstallError(err instanceof Error ? err.message : String(err))
       } finally {

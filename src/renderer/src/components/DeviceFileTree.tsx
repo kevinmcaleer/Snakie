@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -7,6 +7,16 @@ import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { Placeholder } from './Placeholder'
 import { usePrompt } from './PromptModal'
+import {
+  DEVICE_ROOT,
+  flattenTree,
+  joinDevicePath,
+  nextSelection,
+  parentDevicePath,
+  planMove,
+  pruneNested,
+  type FlatRow
+} from './device-tree-model'
 import './DeviceFileTree.css'
 
 /**
@@ -15,20 +25,20 @@ import './DeviceFileTree.css'
  * Lists the connected board's filesystem via `window.api.device.listDir`,
  * starting at `/`, with directories expandable on demand (children are
  * lazy-loaded the first time a folder is opened). Clicking a file opens it in
- * the editor through the workspace store.
+ * the editor through the workspace store. The loaded listings live in one flat
+ * `path → entries` map (#219) so a Refresh re-lists EVERY loaded folder (#220)
+ * and range selection can see the whole visible tree.
  *
  * Gated on the live connection state from `useDeviceStatus()`: when no board is
  * connected it falls back to a friendly hint; when a board becomes connected the
- * tree (re)loads automatically. A Refresh action re-reads the root.
+ * tree (re)loads automatically.
  *
- * File operations (new file / new folder / rename / delete / open) are exposed
- * inline AND via a right-click context menu (issue #19), mirroring the
- * `LocalFileTree` UX (window.prompt/confirm). The menu also offers "Download to
- * computer": read the device file via `device.readFile`, pick a destination
- * folder via `fs.openFolderDialog`, and write it with `fs.writeFile`. Device ops
- * run via `window.api.device.*`; after each op the affected directory is
- * re-listed so the tree reflects the change. Per the local-section UX, a
- * board/microcontroller icon marks the device section header.
+ * File MANAGEMENT (#219): Ctrl/Cmd-click toggles a multi-selection, Shift-click
+ * selects a range, rows drag into folders (a device-side move/rename), a hover
+ * ✕ deletes a row (or the whole selection it belongs to), and the context menu
+ * offers "Delete N items" for a multi-selection. Plus the classic ops (new
+ * file / new folder / rename / delete / open / download) inline and via the
+ * right-click menu, mirroring the `LocalFileTree` UX.
  */
 
 /**
@@ -101,128 +111,109 @@ const CheckIcon = (): JSX.Element => (
   </svg>
 )
 
-/** Join a device directory path and a child name into a POSIX device path. */
-function joinDevicePath(dir: string, name: string): string {
-  return dir === '/' ? `/${name}` : `${dir}/${name}`
-}
+// trashcan — the per-row hover delete (#219)
+const TrashIcon = (): JSX.Element => (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+    <path
+      d="M3 4.5h10M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1v1.3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M4.2 4.5 4.8 13a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.6-8.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path d="M6.7 7v4.5M9.3 7v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+)
 
-/** Return the parent directory of a POSIX device path (root maps to root). */
-function parentDevicePath(path: string): string {
-  const idx = path.lastIndexOf('/')
-  if (idx <= 0) return '/'
-  return path.slice(0, idx)
-}
+/** The drag payload type for device-file moves (#219). */
+const DEVICE_DRAG_MIME = 'application/x-snakie-device-paths'
 
-interface DeviceTreeNodeProps {
-  entry: DirEntry
-  /** Full device path of this entry. */
-  path: string
-  depth: number
-  selectedPath: string | null
-  onSelect: (path: string, isDir: boolean) => void
-  onOpenFile: (path: string) => void
-  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void
-  /**
-   * Path of a directory that has changed and whose listing should be
-   * re-fetched, paired with a monotonically increasing token so repeated
-   * changes to the same directory still trigger a reload.
-   */
-  reloadDir: { path: string; token: number } | null
-}
-
-/** Recursively renders a device entry and (when expanded) its children. */
-function DeviceTreeNode({
-  entry,
-  path,
-  depth,
-  selectedPath,
-  onSelect,
+/** One flattened, selectable, draggable tree row (#219). */
+function DeviceRow({
+  row,
+  expanded,
+  selected,
+  dropTarget,
+  onRowClick,
   onOpenFile,
   onContextMenu,
-  reloadDir
-}: DeviceTreeNodeProps): JSX.Element {
-  const [expanded, setExpanded] = useState(false)
-  const [children, setChildren] = useState<DirEntry[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const loadChildren = useCallback(async (): Promise<void> => {
-    try {
-      setChildren(await window.api.device.listDir(path))
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }, [path])
-
-  // When an operation reports that this directory changed, re-list it (only if
-  // it has already been opened once — otherwise the children load lazily).
-  useEffect(() => {
-    if (reloadDir && reloadDir.path === path && children !== null) {
-      void loadChildren()
-    }
-    // `reloadDir.token` changes on every signal, so identical-path reloads fire.
-  }, [reloadDir, path, children, loadChildren])
-
-  const toggle = useCallback(async (): Promise<void> => {
-    if (!expanded && children === null) await loadChildren()
-    setExpanded((v) => !v)
-  }, [expanded, children, loadChildren])
-
-  const handleClick = useCallback((): void => {
-    onSelect(path, entry.isDir)
-    if (entry.isDir) void toggle()
-    else onOpenFile(path)
-  }, [entry.isDir, path, onOpenFile, onSelect, toggle])
-
-  const isSelected = selectedPath === path
-
+  onDeleteRow,
+  onDragStartRow,
+  onDropInto,
+  onDragOverRow,
+  onDragLeaveRow
+}: {
+  row: FlatRow
+  expanded: boolean
+  selected: boolean
+  /** This folder row is the current drag-over target (highlight it). */
+  dropTarget: boolean
+  onRowClick: (e: React.MouseEvent, row: FlatRow) => void
+  onOpenFile: (path: string) => void
+  onContextMenu: (e: React.MouseEvent, path: string, isDir: boolean) => void
+  onDeleteRow: (row: FlatRow) => void
+  onDragStartRow: (e: React.DragEvent, row: FlatRow) => void
+  onDropInto: (e: React.DragEvent, dir: string) => void
+  onDragOverRow: (e: React.DragEvent, row: FlatRow) => void
+  onDragLeaveRow: () => void
+}): JSX.Element {
+  const { path, entry, depth } = row
   return (
-    <div className="tree-node">
-      <div
-        className={`tree-row${isSelected ? ' is-selected' : ''}`}
-        style={{ paddingLeft: `${depth * 14 + 8}px` }}
-        onClick={handleClick}
-        onContextMenu={(e) => onContextMenu(e, path, entry.isDir)}
-        role="treeitem"
-        aria-expanded={entry.isDir ? expanded : undefined}
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            handleClick()
-          }
+    <div
+      className={`tree-row${selected ? ' is-selected' : ''}${dropTarget ? ' is-drop-target' : ''}`}
+      style={{ paddingLeft: `${depth * 14 + 8}px` }}
+      onClick={(e) => onRowClick(e, row)}
+      onDoubleClick={() => {
+        if (!entry.isDir) onOpenFile(path)
+      }}
+      onContextMenu={(e) => onContextMenu(e, path, entry.isDir)}
+      role="treeitem"
+      aria-expanded={entry.isDir ? expanded : undefined}
+      aria-selected={selected}
+      tabIndex={0}
+      draggable
+      onDragStart={(e) => onDragStartRow(e, row)}
+      onDragOver={entry.isDir ? (e) => onDragOverRow(e, row) : undefined}
+      onDragLeave={entry.isDir ? onDragLeaveRow : undefined}
+      onDrop={entry.isDir ? (e) => onDropInto(e, path) : undefined}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onRowClick(e as unknown as React.MouseEvent, row)
+        }
+      }}
+    >
+      <span className="tree-row__glyph" aria-hidden>
+        {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
+      </span>
+      <span className="tree-row__name">{entry.name}</span>
+      {/* Hover delete (#219): removes this row — or the whole selection when the
+          row is part of a multi-selection. */}
+      <button
+        type="button"
+        className="tree-row__delete"
+        title="Delete from the device"
+        aria-label={`Delete ${entry.name}`}
+        onClick={(e) => {
+          e.stopPropagation()
+          onDeleteRow(row)
         }}
       >
-        <span className="tree-row__glyph" aria-hidden>
-          {entry.isDir ? (expanded ? '▼' : '▶') : '▤'}
-        </span>
-        <span className="tree-row__name">{entry.name}</span>
-      </div>
-      {error && (
-        <div className="tree-error" style={{ paddingLeft: `${depth * 14 + 22}px` }}>
-          {error}
-        </div>
-      )}
-      {entry.isDir &&
-        expanded &&
-        children?.map((child) => (
-          <DeviceTreeNode
-            key={joinDevicePath(path, child.name)}
-            entry={child}
-            path={joinDevicePath(path, child.name)}
-            depth={depth + 1}
-            selectedPath={selectedPath}
-            onSelect={onSelect}
-            onOpenFile={onOpenFile}
-            onContextMenu={onContextMenu}
-            reloadDir={reloadDir}
-          />
-        ))}
+        <TrashIcon />
+      </button>
     </div>
   )
 }
 
-const ROOT = '/'
+const ROOT = DEVICE_ROOT
 
 /** State backing an open context menu: where it is and what it targets. */
 interface MenuState {
@@ -247,36 +238,75 @@ export function DeviceFileTree(): JSX.Element {
     syncNow
   } = useSync()
 
-  const [entries, setEntries] = useState<DirEntry[]>([])
-  const [selectedPath, setSelectedPath] = useState<string | null>(null)
-  const [selectedIsDir, setSelectedIsDir] = useState(false)
+  // The loaded listings, flat (#219): path → entries, always including ROOT.
+  const [dirs, setDirs] = useState<Map<string, DirEntry[]>>(new Map())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  // Multi-selection (#219): the selected paths + the shift-range anchor. The
+  // PRIMARY (last-clicked) entry backs the single-target actions (rename, the
+  // actions bar, new-file placement).
+  const [selection, setSelection] = useState<Set<string>>(new Set())
+  const [anchor, setAnchor] = useState<string | null>(null)
+  const [primary, setPrimary] = useState<{ path: string; isDir: boolean } | null>(null)
+  // The folder row a drag is currently over (drop-target highlight).
+  const [dropDir, setDropDir] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [menu, setMenu] = useState<MenuState | null>(null)
-  // Signal used to tell already-expanded nodes to re-list a changed directory.
-  const [reloadDir, setReloadDir] = useState<{ path: string; token: number } | null>(null)
   // Flash usage for the bottom gauge (#211); null ⇒ unavailable, so it hides.
   const [disk, setDisk] = useState<DiskUsage | null>(null)
+
+  const selectedPath = primary?.path ?? null
+  const selectedIsDir = primary?.isDir ?? false
+  const rows = useMemo(() => flattenTree(dirs, expanded), [dirs, expanded])
+
+  /** Re-list one directory into the flat map (drop it if listing fails). */
+  const listInto = useCallback(async (dir: string): Promise<void> => {
+    try {
+      const list = await window.api.device.listDir(dir)
+      setDirs((m) => new Map(m).set(dir, list))
+    } catch {
+      setDirs((m) => {
+        const next = new Map(m)
+        next.delete(dir)
+        return next
+      })
+    }
+  }, [])
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      // Read the listing + the flash gauge together (the gauge is best-effort, so
-      // a board that can't `statvfs` still shows its files).
+      // Read the root + the flash gauge together (the gauge is best-effort, so a
+      // board that can't `statvfs` still shows its files).
       const [list, df] = await Promise.all([
         window.api.device.listDir(ROOT),
         window.api.device.df().catch(() => null)
       ])
-      setEntries(list)
       setDisk(df)
       setError(null)
+      // Refresh updates the WHOLE loaded tree (#220): re-list every previously
+      // loaded folder too, keeping the user's expansion state.
+      const loaded = [...dirs.keys()].filter((d) => d !== ROOT)
+      const results = await Promise.all(
+        loaded.map(async (d) => {
+          try {
+            return [d, await window.api.device.listDir(d)] as const
+          } catch {
+            return null // the folder is gone — drop it
+          }
+        })
+      )
+      const next = new Map<string, DirEntry[]>()
+      next.set(ROOT, list)
+      for (const r of results) if (r) next.set(r[0], r[1])
+      setDirs(next)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dirs])
 
   // Load (or reset) the tree as the connection comes up / goes away. Loading
   // when `connected` flips true also covers reconnects to a different board.
@@ -284,18 +314,39 @@ export function DeviceFileTree(): JSX.Element {
     if (connected) {
       void refresh()
     } else {
-      setEntries([])
-      setSelectedPath(null)
-      setSelectedIsDir(false)
+      setDirs(new Map())
+      setExpanded(new Set())
+      setSelection(new Set())
+      setAnchor(null)
+      setPrimary(null)
       setError(null)
       setDisk(null)
     }
-  }, [connected, refresh])
+    // `refresh` depends on `dirs`; re-running on every dirs change would loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected])
 
   // When a sync finishes, re-list the root so the just-pushed files appear.
   useEffect(() => {
     if (syncStatus === 'done' && connected) void refresh()
   }, [syncStatus, connected, refresh])
+
+  // When ANY window installs something onto the board — a part driver (either
+  // missing-library banner), the instruments library, or a mip package — the
+  // modules broadcast fires; re-list so the new files show up without a manual
+  // Refresh. Subscribed once via refs (refresh's identity tracks the loaded
+  // dirs, and re-subscribing per keystroke of state would churn the bridge).
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  const connectedRef = useRef(connected)
+  connectedRef.current = connected
+  useEffect(
+    () =>
+      window.api.modules.onChanged(() => {
+        if (connectedRef.current) void refreshRef.current()
+      }),
+    []
+  )
 
   // The single sync toggle: ON pushes the tagged files now AND auto-syncs on
   // every save; OFF stops auto-syncing.
@@ -308,11 +359,6 @@ export function DeviceFileTree(): JSX.Element {
     }
   }, [syncOnSave, setSyncOnSave, syncNow])
 
-  const handleSelect = useCallback((path: string, isDir: boolean): void => {
-    setSelectedPath(path)
-    setSelectedIsDir(isDir)
-  }, [])
-
   const handleOpenFile = useCallback(
     (path: string): void => {
       void openFile('device', path).catch((err) =>
@@ -322,20 +368,47 @@ export function DeviceFileTree(): JSX.Element {
     [openFile]
   )
 
+  /** Toggle a folder open/closed, lazy-loading its listing on first open. */
+  const toggleDir = useCallback(
+    (path: string): void => {
+      setExpanded((s) => {
+        const next = new Set(s)
+        if (next.has(path)) next.delete(path)
+        else next.add(path)
+        return next
+      })
+      if (!dirs.has(path)) void listInto(path)
+    },
+    [dirs, listInto]
+  )
+
   /**
-   * Re-list a changed directory so the tree reflects an operation. The root is
-   * re-fetched directly; deeper directories are signalled to any expanded node
-   * via `reloadDir`.
+   * Row click (#219): plain click keeps the classic behaviour (select; open a
+   * file / toggle a folder) and resets the selection to that row; Ctrl/Cmd-click
+   * toggles the row in the multi-selection; Shift-click selects the visible
+   * range from the anchor.
    */
-  const refreshDir = useCallback(
-    async (dir: string): Promise<void> => {
-      if (dir === ROOT) {
-        await refresh()
-      } else {
-        setReloadDir({ path: dir, token: Date.now() })
+  const handleRowClick = useCallback(
+    (e: React.MouseEvent, row: FlatRow): void => {
+      const mode = e.metaKey || e.ctrlKey ? 'toggle' : e.shiftKey ? 'range' : 'single'
+      const next = nextSelection(selection, anchor, rows, row.path, mode)
+      setSelection(next.selection)
+      setAnchor(next.anchor)
+      setPrimary({ path: row.path, isDir: row.entry.isDir })
+      if (mode === 'single') {
+        if (row.entry.isDir) toggleDir(row.path)
+        else handleOpenFile(row.path)
       }
     },
-    [refresh]
+    [selection, anchor, rows, toggleDir, handleOpenFile]
+  )
+
+  /** Re-list a changed directory so the tree reflects an operation. */
+  const refreshDir = useCallback(
+    async (dir: string): Promise<void> => {
+      await listInto(dir)
+    },
+    [listInto]
   )
 
   /** Run a device op, surface errors, and re-list the affected directory. */
@@ -406,7 +479,8 @@ export function DeviceFileTree(): JSX.Element {
         const dest = joinDevicePath(parent, name)
         await run(async () => {
           await window.api.device.rename(path, dest)
-          setSelectedPath(dest)
+          setPrimary((p) => (p?.path === path ? { ...p, path: dest } : p))
+          setSelection(new Set([dest]))
         }, parent)
       })()
     },
@@ -434,18 +508,98 @@ export function DeviceFileTree(): JSX.Element {
     })()
   }, [])
 
-  const deletePath = useCallback(
-    (path: string): void => {
-      const name = path.split('/').pop()
-      if (!window.confirm(`Delete "${name}" from the device? This cannot be undone.`)) return
-      const parent = parentDevicePath(path)
-      void run(async () => {
-        await window.api.device.remove(path)
-        setSelectedPath(null)
-        setSelectedIsDir(false)
-      }, parent)
+  /** Delete a set of paths (#219): confirm once, prune nested-redundant paths
+   *  (removing a folder already removes its contents), remove each, re-list the
+   *  affected parents, and clear the selection. */
+  const deleteMany = useCallback(
+    (paths: string[]): void => {
+      const roots = pruneNested(paths)
+      if (roots.length === 0) return
+      const label =
+        roots.length === 1
+          ? `"${roots[0].split('/').pop()}"`
+          : `${roots.length} items`
+      if (!window.confirm(`Delete ${label} from the device? This cannot be undone.`)) return
+      void (async (): Promise<void> => {
+        setBusy(true)
+        try {
+          for (const p of roots) await window.api.device.remove(p)
+          setError(null)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        } finally {
+          setBusy(false)
+          setSelection(new Set())
+          setPrimary(null)
+          setAnchor(null)
+          const parents = [...new Set(roots.map(parentDevicePath))]
+          await Promise.all(parents.map((d) => refreshDir(d)))
+        }
+      })()
     },
-    [run]
+    [refreshDir]
+  )
+
+  const deletePath = useCallback((path: string): void => deleteMany([path]), [deleteMany])
+
+  /** The hover ✕ (#219): a selected row deletes the whole selection. */
+  const deleteRow = useCallback(
+    (row: FlatRow): void => {
+      deleteMany(selection.has(row.path) && selection.size > 1 ? [...selection] : [row.path])
+    },
+    [deleteMany, selection]
+  )
+
+  // --- drag a row (or the selection) into a folder (#219) -------------------
+  const onDragStartRow = useCallback(
+    (e: React.DragEvent, row: FlatRow): void => {
+      const paths = selection.has(row.path) && selection.size > 1 ? [...selection] : [row.path]
+      e.dataTransfer.setData(DEVICE_DRAG_MIME, JSON.stringify(paths))
+      e.dataTransfer.effectAllowed = 'move'
+    },
+    [selection]
+  )
+
+  const onDragOverRow = useCallback((e: React.DragEvent, row: FlatRow): void => {
+    if (!e.dataTransfer.types.includes(DEVICE_DRAG_MIME)) return
+    e.preventDefault()
+    e.stopPropagation()
+    e.dataTransfer.dropEffect = 'move'
+    setDropDir(row.path)
+  }, [])
+
+  const onDropInto = useCallback(
+    (e: React.DragEvent, destDir: string): void => {
+      setDropDir(null)
+      const raw = e.dataTransfer.getData(DEVICE_DRAG_MIME)
+      if (!raw) return
+      e.preventDefault()
+      e.stopPropagation()
+      let sources: string[] = []
+      try {
+        sources = JSON.parse(raw) as string[]
+      } catch {
+        return
+      }
+      const plan = planMove(sources, destDir)
+      if (plan.length === 0) return
+      void (async (): Promise<void> => {
+        setBusy(true)
+        try {
+          for (const m of plan) await window.api.device.rename(m.from, m.to)
+          setError(null)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : String(err))
+        } finally {
+          setBusy(false)
+          setSelection(new Set())
+          setPrimary(null)
+          const affected = [...new Set([destDir, ...plan.map((m) => parentDevicePath(m.from))])]
+          await Promise.all(affected.map((d) => refreshDir(d)))
+        }
+      })()
+    },
+    [refreshDir]
   )
 
   const closeMenu = useCallback((): void => setMenu(null), [])
@@ -454,10 +608,16 @@ export function DeviceFileTree(): JSX.Element {
     (e: React.MouseEvent, path: string | null, isDir: boolean): void => {
       e.preventDefault()
       e.stopPropagation()
-      if (path) handleSelect(path, isDir)
+      if (path) {
+        setPrimary({ path, isDir })
+        // Right-clicking OUTSIDE the multi-selection collapses it to that row;
+        // inside it, the selection is kept so "Delete N items" can target it.
+        setSelection((s) => (s.has(path) ? s : new Set([path])))
+        setAnchor(path)
+      }
       setMenu({ position: { x: e.clientX, y: e.clientY }, path, isDir })
     },
-    [handleSelect]
+    []
   )
 
   const menuItems = useCallback(
@@ -485,16 +645,26 @@ export function DeviceFileTree(): JSX.Element {
           })
         }
         items.push({ key: 'rename', label: 'Rename', onSelect: () => renamePath(path) })
-        items.push({
-          key: 'delete',
-          label: 'Delete',
-          danger: true,
-          onSelect: () => deletePath(path)
-        })
+        // Right-clicked inside a multi-selection (#219) → delete the whole set.
+        if (selection.has(path) && selection.size > 1) {
+          items.push({
+            key: 'delete-many',
+            label: `Delete ${selection.size} items`,
+            danger: true,
+            onSelect: () => deleteMany([...selection])
+          })
+        } else {
+          items.push({
+            key: 'delete',
+            label: 'Delete',
+            danger: true,
+            onSelect: () => deletePath(path)
+          })
+        }
       }
       return items
     },
-    [deletePath, downloadToComputer, handleOpenFile, newFileIn, newFolderIn, renamePath]
+    [deleteMany, deletePath, downloadToComputer, handleOpenFile, newFileIn, newFolderIn, renamePath, selection]
   )
 
   if (!connected) {
@@ -510,7 +680,6 @@ export function DeviceFileTree(): JSX.Element {
     )
   }
 
-  const hasSelection = !!selectedPath
   const selectedTarget: { path: string; isDir: boolean } | null = selectedPath
     ? { path: selectedPath, isDir: selectedIsDir }
     : null
@@ -577,50 +746,47 @@ export function DeviceFileTree(): JSX.Element {
         </div>
       </div>
 
-      {/* Entry-specific actions revealed only when an entry is selected. */}
-      {hasSelection && selectedPath && (
-        <div className="devicetree__actions">
-          <button
-            className="btn btn--ghost"
-            onClick={() => renamePath(selectedPath)}
-            disabled={busy}
-            title="Rename the selected item on the device"
-          >
-            Rename
-          </button>
-          <button
-            className="btn btn--ghost btn--danger"
-            onClick={() => deletePath(selectedPath)}
-            disabled={busy}
-            title="Delete the selected item from the device"
-          >
-            Delete
-          </button>
-        </div>
-      )}
+      {/* No inline Rename/Delete bar: rename + delete live on the right-click
+          context menu, and every row has a hover trashcan. */}
 
       {error && <div className="devicetree__error">{error}</div>}
 
       <div
-        className="devicetree__tree"
+        className={`devicetree__tree${dropDir === ROOT ? ' is-drop-target' : ''}`}
         role="tree"
         aria-label="Device file tree"
+        aria-multiselectable="true"
         onContextMenu={(e) => handleContextMenu(e, null, true)}
+        // Dropping on the background moves into the ROOT (#219).
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes(DEVICE_DRAG_MIME)) return
+          e.preventDefault()
+          e.dataTransfer.dropEffect = 'move'
+          setDropDir(ROOT)
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setDropDir(null)
+        }}
+        onDrop={(e) => onDropInto(e, ROOT)}
       >
-        {entries.map((entry) => (
-          <DeviceTreeNode
-            key={joinDevicePath(ROOT, entry.name)}
-            entry={entry}
-            path={joinDevicePath(ROOT, entry.name)}
-            depth={0}
-            selectedPath={selectedPath}
-            onSelect={handleSelect}
+        {rows.map((row) => (
+          <DeviceRow
+            key={row.path}
+            row={row}
+            expanded={expanded.has(row.path)}
+            selected={selection.has(row.path) || selectedPath === row.path}
+            dropTarget={dropDir === row.path}
+            onRowClick={handleRowClick}
             onOpenFile={handleOpenFile}
             onContextMenu={handleContextMenu}
-            reloadDir={reloadDir}
+            onDeleteRow={deleteRow}
+            onDragStartRow={onDragStartRow}
+            onDropInto={onDropInto}
+            onDragOverRow={onDragOverRow}
+            onDragLeaveRow={() => setDropDir(null)}
           />
         ))}
-        {!loading && !error && entries.length === 0 && (
+        {!loading && !error && rows.length === 0 && (
           <div className="devicetree__empty-hint">Filesystem is empty.</div>
         )}
       </div>

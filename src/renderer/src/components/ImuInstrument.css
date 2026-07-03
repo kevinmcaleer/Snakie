@@ -310,8 +310,108 @@
   background: #1c1f22;
 }
 
+/* --- Compass (#215): rotating rose card + heading readout ----------------- */
+.imu__compass {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+.imu__rose {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 auto;
+}
+
+.imu__rose-bezel {
+  fill: #14181c;
+  stroke: color-mix(in srgb, var(--accent) 45%, #2a2e33);
+  stroke-width: 1.5;
+}
+
+.imu__rose-face {
+  fill: #0a0e11;
+}
+
+/* The rotating card eases between headings (disabled under reduced motion). */
+.imu__rose g {
+  transition: transform 120ms linear;
+}
+
+.imu__rose-tick {
+  stroke: #3b4148;
+  stroke-width: 1;
+}
+
+.imu__rose-tick--major {
+  stroke: color-mix(in srgb, var(--accent) 60%, #8a9096);
+  stroke-width: 1.5;
+}
+
+.imu__rose-n {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 800;
+  fill: #ff6b5e; /* north reads red, like a needle tip */
+}
+
+.imu__rose-pt {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 700;
+  fill: #9aa0a8;
+}
+
+.imu__rose-lubber {
+  fill: color-mix(in srgb, var(--accent) 85%, #fff);
+}
+
+.imu__rose-hub {
+  fill: color-mix(in srgb, var(--accent) 70%, #cdd2d8);
+}
+
+.imu__compass-readout {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.imu__compass-hdg {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--accent) 72%, #cdd2d8);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.imu__compass-card {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #cdd2d8;
+}
+
+.imu__compass-lbl {
+  margin-left: auto;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .imu__model {
+    transition: none;
+  }
+
+  .imu__rose g {
     transition: none;
   }
 }

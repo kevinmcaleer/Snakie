@@ -314,6 +314,7 @@ export function partToYaml(part: PartDefinition): string {
     // NB: `help` (the filename) is kept; `helpText` (the inlined markdown) is NOT.
     help: part.help,
     schematic: part.schematic,
+    i2cAddresses: part.i2cAddresses,
     library: part.library,
     drivers: part.drivers?.map(driverToObj),
     layerVisibility: part.layerVisibility
@@ -554,6 +555,14 @@ export function partFromYaml(text: string): PartDefinition {
         if (aspect !== undefined) part.schematic.aspect = aspect
       }
     }
+  }
+
+  // I²C address list (#214): accepts numbers or hex strings ("0x76"), 7-bit range.
+  if (Array.isArray(raw.i2cAddresses)) {
+    const addrs = raw.i2cAddresses
+      .map((a) => (typeof a === 'string' ? Number(a) : (a as number)))
+      .filter((a): a is number => Number.isInteger(a) && a >= 0 && a <= 0x7f)
+    if (addrs.length) part.i2cAddresses = addrs
   }
 
   if (raw.library && typeof raw.library === 'object' && !Array.isArray(raw.library)) {

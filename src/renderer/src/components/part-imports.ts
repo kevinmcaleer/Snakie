@@ -8,7 +8,7 @@
  * what's installed on the board, and surface a banner. All DOM-free + unit-tested.
  */
 import type { RobotDefinition } from '../../../shared/robot'
-import type { PartDefinition } from '../../../shared/part'
+import type { DriverFile, PartDefinition } from '../../../shared/part'
 
 /** A library module the project's parts need, with where to get it + which parts. */
 export interface RequiredModule {
@@ -17,6 +17,12 @@ export interface RequiredModule {
   docs?: string
   /** Part labels that need this module (for the banner copy). */
   parts: string[]
+  /** The part that declares this module (drives the bundled-driver install). */
+  libraryId?: string
+  partId?: string
+  /** Bundled driver file(s) the part ships — the banner's Install copies these
+   *  to the board when there's no mip `url` (the SG90/BME280/ICM20948 model). */
+  drivers?: DriverFile[]
 }
 
 /** Top-level module names a Python source file imports (best-effort, line-based). */
@@ -62,7 +68,16 @@ export function requiredPartModules(
     if (existing) {
       if (!existing.parts.includes(label)) existing.parts.push(label)
     } else {
-      byModule.set(mod, { module: mod, url: part?.library?.url, docs: part?.library?.docs, parts: [label] })
+      byModule.set(mod, {
+        module: mod,
+        url: part?.library?.url,
+        docs: part?.library?.docs,
+        parts: [label],
+        // Where the module's bundled drivers live (for the one-click install).
+        libraryId: lib?.id,
+        partId: part?.id,
+        drivers: part?.drivers
+      })
     }
   }
   return [...byModule.values()]

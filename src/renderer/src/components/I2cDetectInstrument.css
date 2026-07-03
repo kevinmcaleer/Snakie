@@ -197,6 +197,181 @@
     inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent);
 }
 
+/* --- Scan-sweep playback (#218) ---------------------------------------------
+   The cursor cell burns bright as it sweeps; cells it hasn't reached stay dim;
+   a detected address ripples like a stone dropped in water when crossed. */
+.i2cdet__cell--unswept {
+  opacity: 0.28;
+}
+
+.i2cdet__cell--cursor {
+  background: color-mix(in srgb, var(--accent) 80%, #fff);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.i2cdet__cell--ping {
+  position: relative;
+  animation: i2cdet-pop 360ms ease-out;
+}
+
+/* Two staggered expanding rings = the water ripple. */
+.i2cdet__cell--ping::before,
+.i2cdet__cell--ping::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  border: 1.5px solid color-mix(in srgb, var(--accent) 85%, #fff);
+  opacity: 0;
+  animation: i2cdet-ripple 700ms ease-out;
+  pointer-events: none;
+}
+
+.i2cdet__cell--ping::after {
+  animation-delay: 160ms;
+}
+
+@keyframes i2cdet-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  55% {
+    transform: scale(1.25);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes i2cdet-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .i2cdet__cell--ping,
+  .i2cdet__cell--ping::before,
+  .i2cdet__cell--ping::after {
+    animation: none;
+  }
+}
+
+/* Detected cells are clickable (#214). */
+.i2cdet__cell--click {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.i2cdet__cell--click:hover {
+  outline: 1.5px solid color-mix(in srgb, var(--accent) 90%, #fff);
+}
+
+/* --- Address inspector (#214): known devices + Add-to-project offers. --- */
+.i2cdet__inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+.i2cdet__inspect-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.i2cdet__inspect-addr {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.i2cdet__inspect-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+
+.i2cdet__inspect-close {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  line-height: 1;
+  color: #8a8f96;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.i2cdet__inspect-close:hover {
+  color: #cdd2d8;
+  border-color: #3a3d44;
+}
+
+.i2cdet__inspect-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #aeb4bd;
+}
+
+.i2cdet__inspect-row--part {
+  color: #e6eaee;
+}
+
+.i2cdet__inspect-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.i2cdet__inspect-lib {
+  font-size: 9px;
+  color: #5a5f67;
+}
+
+.i2cdet__inspect-add {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #04120a;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.i2cdet__inspect-add:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.i2cdet__inspect-add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* --- Controls --- */
 .i2cdet__controls {
   display: flex;

@@ -46,12 +46,46 @@ class BME280:
 
     def __init__(self, i2c, addr=0x76):
         self.i2c = i2c
-        self.addr = addr
         self.t_fine = 0
-        chip = self._read8(_REG_ID)
-        if chip != _CHIP_ID:
+        # Probe 0x76 then 0x77 (the ADDR strap picks one) with a chip-id read,
+        # and raise a SPECIFIC error: an address that ACKs (shows in i2c.scan())
+        # but whose reads fail is a BUS/wiring fault; a readable chip with a
+        # foreign id is the wrong part; silence at both means not connected.
+        self.addr = addr
+        seen = None  # (addr, chip_id) at a readable-but-foreign address
+        fault = None  # an address that ACKed but couldn't be read
+        for a in [addr] + [x for x in (0x76, 0x77) if x != addr]:
+            self.addr = a
+            try:
+                chip = self._read8(_REG_ID)
+            except OSError:
+                try:
+                    present = a in i2c.scan()
+                except Exception:
+                    present = False
+                if present and fault is None:
+                    fault = a
+                continue
+            if chip == _CHIP_ID:
+                break
+            if seen is None:
+                seen = (a, chip)
+        else:
+            if fault is not None:
+                raise OSError(
+                    "0x%02x ACKs its address but reads fail (EIO) — a BUS/"
+                    "wiring fault: add strong SDA/SCL pull-ups (2.2k-4.7k to "
+                    "3V3), check a solid common GND, and re-seat SDA/SCL."
+                    % fault
+                )
+            if seen is not None:
+                raise OSError(
+                    "0x%02x reports chip id 0x%02x, not a BME280 (0x60). "
+                    "0x58=BMP280 (no humidity), 0x61=BME680." % seen
+                )
             raise OSError(
-                "BME280 not found at 0x%02x (id=0x%02x)" % (addr, chip)
+                "BME280 not found at 0x76/0x77 — check wiring (SDA/SCL/3V3/"
+                "GND) and run i2c.scan() to see what's on the bus"
             )
         self._load_calibration()
         # Humidity oversampling ×1 (must be written before ctrl_meas takes it).

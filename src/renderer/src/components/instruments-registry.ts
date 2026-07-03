@@ -170,6 +170,18 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['imu', 'mpu6050', 'mpu9250', 'lsm', 'icm20948', 'bno055', 'accel', 'gyro']
   },
   {
+    id: 'env',
+    name: 'Barometer',
+    accent: '#b58a3a',
+    border: 'rgba(181,138,58,.5)',
+    // an aneroid dial: circle + needle
+    icon: 'M12 4 a8 8 0 1 1 0 16 a8 8 0 1 1 0 -16 M12 12 L16 8 M12 12 v0.01',
+    group: 'input',
+    kind: 'singleton',
+    description: 'Temperature, pressure and humidity on an antique barometer.',
+    hints: ['bme280', 'bmp280', 'bme680', 'dht22', 'dht11', 'sht31', 'aht20', 'barometer', 'weather']
+  },
+  {
     id: 'led',
     name: 'LED',
     accent: '#ff6b5e',
@@ -393,7 +405,8 @@ export const BOUND_KIND_INSTRUMENTS: Record<string, string[]> = {
   adc: ['meter', 'scope', 'pot'],
   i2c: ['i2c-detect'],
   pin: ['led', 'button'],
-  imu: ['imu']
+  imu: ['imu'],
+  env: ['env']
 }
 
 /** The instrument ids to mark in-use for the currently-bound objects (`name→kind`). */

@@ -23,6 +23,7 @@ import { PlaceholderInstrument } from './PlaceholderInstrument'
 import { GamepadInstrument } from './GamepadInstrument'
 import { RangeInstrument } from './RangeInstrument'
 import { ImuInstrument } from './ImuInstrument'
+import { EnvInstrument } from './EnvInstrument'
 import { LedInstrument } from './LedInstrument'
 import { ServoInstrument } from './ServoInstrument'
 import { PotentiometerInstrument } from './PotentiometerInstrument'
@@ -933,6 +934,8 @@ export function renderSingleton(
       return <RangeInstrument {...p} />
     case 'imu':
       return <ImuInstrument {...p} />
+    case 'env':
+      return <EnvInstrument {...p} />
     case 'led':
       return <LedInstrument {...p} />
     case 'servo':

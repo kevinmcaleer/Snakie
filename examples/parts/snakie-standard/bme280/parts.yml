@@ -118,6 +118,9 @@ labels:
     fontSize: 9
     color: "#e6e6e6"
     z: 3
+# 7-bit I²C addresses this part answers on (0x76 default, 0x77 via ADDR) — the
+# I²C-detect instrument matches found addresses back to this part (#214).
+i2cAddresses: [118, 119]
 library:
   module: bme280
 drivers:
