@@ -12,7 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   tree, so it reads as a matching sidebar. A new **Settings → Appearance →
   Breadboard background** control switches the wiring canvas between the default
   **Dark** workbench mat and a classic **Blueprint** (blue paper + light grid) —
-  streamed live to the open Board View window.
+  streamed live to the open Board View window. The Dark/Blueprint mat applies to
+  the **Breadboard** view only; the **Schematic** view keeps a plain sheet that
+  follows the skin — a white sheet with dark-on-white symbols in the light theme,
+  the dark mat in the dark theme — since a blueprint doesn't suit a schematic.
 - **BME280 + ICM20948 I²C sensor parts (Standard library).** Two new Pimoroni
   breakouts join the Standard parts library, each shipping a part footprint
   (I²C header), a bundled pure-MicroPython driver installed to `lib/` on placement,

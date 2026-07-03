@@ -36,8 +36,9 @@
 
 /* Blueprint breadboard background (Settings → Appearance): classic blue paper
    with a fine light grid + bolder major lines. Applied via `data-breadboard-bg`
-   on the Board View window's root. */
-:root[data-breadboard-bg='blueprint'] .wc__stage {
+   on the Board View window's root. Scoped to the LIFELIKE breadboard — the
+   schematic view keeps a plain white/dark sheet (blueprint doesn't suit it). */
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
   background-color: #0d3b66;
   background-image:
     linear-gradient(rgba(214, 230, 255, 0.28) 1px, transparent 1px),
@@ -48,8 +49,47 @@
 }
 
 /* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
-:root[data-breadboard-bg='blueprint'] .wc--drop .wc__stage {
+:root[data-breadboard-bg='blueprint'] .wc--lifelike.wc--drop .wc__stage {
   background-color: #0e4373;
+}
+
+/* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard
+   mat. Dark theme keeps the existing dark mat (light-on-dark symbols); the light
+   (skeuomorph) theme uses a white sheet with a faint grid, and the symbol
+   overrides below flip the symbols to dark-on-white so they stay legible. */
+:root[data-theme='skeuomorph'] .wc--schematic .wc__stage {
+  background-color: #fbfbfa;
+  background-image:
+    linear-gradient(rgba(20, 30, 50, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 30, 50, 0.06) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* Dark-on-white schematic symbols for the light theme: a light symbol body with
+   dark outline/stubs/labels (the default light-on-dark values suit the dark mat).
+   `--sc-*` cascade into the SVG symbols; the .sc__* text fills are overridden from
+   their fixed light values in PartEditor.css. */
+:root[data-theme='skeuomorph'] .wc--schematic {
+  --sc-fill: #ffffff;
+  --sc-line: #2c333c;
+  --sc-hi: #1663c7;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .sc__title {
+  fill: #1c2128;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .sc__sub {
+  fill: #5c616a;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .sc__pin-label {
+  fill: #2c333c;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .wc__body-title {
+  fill: #1c2128;
+}
+/* Ground dot/wire read dark on the white sheet (isDark=false handles wires in JS;
+   the GND pin dot fill is CSS). */
+:root[data-theme='skeuomorph'] .wc--schematic .wc__dot--gnd {
+  fill: #2c333c;
 }
 
 .wc__svg {

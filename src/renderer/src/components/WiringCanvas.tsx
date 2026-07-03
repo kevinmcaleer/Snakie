@@ -1048,7 +1048,15 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   }
 
   const drag = dragRef.current
-  const isDark = true // the wiring mat is dark, so ground wires render light
+  // The lifelike breadboard mat is always dark, so its wires/dots render light.
+  // The SCHEMATIC view, though, follows the skin: a white sheet in the light
+  // (skeuomorph) theme — where ground wires must render DARK — and the dark mat in
+  // the dark theme. (Theme changes reach the board window via a re-render, so a
+  // read at render time is current.)
+  const isDark =
+    renderMode === 'schematic'
+      ? document.documentElement.getAttribute('data-theme') === 'dark'
+      : true
 
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.
@@ -1077,7 +1085,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
 
   return (
     <div
-      className={`wc${dropActive ? ' wc--drop' : ''}`}
+      className={`wc wc--${renderMode}${dropActive ? ' wc--drop' : ''}`}
       onDragOver={onDropPart ? onCanvasDragOver : undefined}
       onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
       onDrop={onDropPart ? onCanvasDrop : undefined}

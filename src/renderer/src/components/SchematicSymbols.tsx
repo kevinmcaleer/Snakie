@@ -62,7 +62,7 @@ function SymbolBody({
             y1={t.inner.y}
             x2={t.outer.x}
             y2={t.outer.y}
-            stroke={t.highlighted ? '#fff' : 'var(--sc-line, #cfd6dd)'}
+            stroke={t.highlighted ? 'var(--sc-hi, #fff)' : 'var(--sc-line, #cfd6dd)'}
             strokeWidth={t.highlighted ? 2.5 : 1.6}
           />
           <text x={t.labelPos.x} y={t.labelPos.y} className="sc__pin-label" textAnchor={t.labelPos.anchor}>
