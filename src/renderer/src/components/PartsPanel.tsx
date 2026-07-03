@@ -3,6 +3,7 @@ import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
+import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
   LibraryUpdate,
@@ -548,7 +549,17 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                           {items.map((part) => (
                             <li
                               key={part.id}
-                              className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}`}
+                              className={`pl__part${selected?.libraryId === lib.id && selected?.partId === part.id ? ' is-active' : ''}${onAddToProject ? ' pl__part--draggable' : ''}`}
+                              // Drag a part straight onto the Board View's wiring
+                              // canvas (#159). Only meaningful when the panel can add
+                              // to a project (the board dock), so gate on that.
+                              draggable={!!onAddToProject}
+                              onDragStart={
+                                onAddToProject
+                                  ? (e) => encodePartDrag(e.dataTransfer, { libraryId: lib.id, partId: part.id })
+                                  : undefined
+                              }
+                              title={onAddToProject ? 'Drag onto the breadboard, or click to preview' : undefined}
                             >
                               <button
                                 type="button"

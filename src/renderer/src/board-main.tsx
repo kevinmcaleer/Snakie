@@ -191,16 +191,19 @@ function BoardWindowApp(): JSX.Element {
 
   // Append a library part to the project (robot.yml), with a unique instance id.
   const addToProject = useCallback(
-    (libraryId: string, part: PartDefinition): void => {
+    (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
       // Reserve 'board' (the MCU's subject key on the wiring canvas) so a part can
       // never collide with it and shadow the microcontroller's endpoints.
       const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
       let id = part.id
       let n = 2
       while (ids.has(id)) id = `${part.id}${n++}`
+      // A drag-drop carries a canvas position (#159); a click-add leaves x/y unset
+      // so the canvas auto-lays the part out.
+      const placed = pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : {}
       saveRobot({
         ...robot,
-        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name }]
+        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name, ...placed }]
       })
       // #166: offer to install the part's linked MicroPython library via mip —
       // but ONLY when the part ships NO bundled driver files. When it declares

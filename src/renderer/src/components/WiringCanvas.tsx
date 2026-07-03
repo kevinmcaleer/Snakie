@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type JSX,
+  type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
@@ -28,6 +29,7 @@ import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './p
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
+import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import './WiringCanvas.css'
 
 /**
@@ -299,6 +301,9 @@ export interface WiringCanvasProps {
   renderMode: WiringRenderMode
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
+  /** Drop a library part onto the canvas at a world position (#159). When set, the
+   *  canvas accepts drags from the Parts panel; `pos` is the body's top-left. */
+  onDropPart?: (libraryId: string, part: PartDefinition, pos: { x: number; y: number }) => void
 }
 
 interface Drag {
@@ -323,7 +328,7 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -577,6 +582,38 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     pt.y = e.clientY
     const local = pt.matrixTransform(ctm.inverse())
     return { x: (local.x - view.tx) / view.scale, y: (local.y - view.ty) / view.scale }
+  }
+
+  // --- drag a library part in from the Parts panel (#159) -------------------
+  // While a part is dragged over the canvas we mark it (a dashed frame cues the
+  // drop). On drop, resolve the part and hand it to `onDropPart` positioned so its
+  // body centres under the cursor (x/y is the body's top-left).
+  const [dropActive, setDropActive] = useState(false)
+  const isPartDrag = (dt: DataTransfer): boolean => Array.from(dt.types).includes(PART_DRAG_MIME)
+
+  const onCanvasDragOver = (e: ReactDragEvent<HTMLDivElement>): void => {
+    if (!onDropPart || !isPartDrag(e.dataTransfer)) return
+    e.preventDefault() // required for the drop to fire
+    e.dataTransfer.dropEffect = 'copy'
+    if (!dropActive) setDropActive(true)
+  }
+
+  const onCanvasDragLeave = (e: ReactDragEvent<HTMLDivElement>): void => {
+    // Only clear when the pointer actually leaves the canvas, not when it crosses
+    // between the canvas's own children.
+    if (e.currentTarget === e.target) setDropActive(false)
+  }
+
+  const onCanvasDrop = (e: ReactDragEvent<HTMLDivElement>): void => {
+    if (!onDropPart) return
+    setDropActive(false)
+    const payload = decodePartDrag(e.dataTransfer)
+    if (!payload) return
+    e.preventDefault()
+    const def = resolvePart(payload.libraryId, payload.partId)
+    if (!def) return
+    const w = toWorld({ clientX: e.clientX, clientY: e.clientY })
+    onDropPart(payload.libraryId, def, { x: w.x - PART_BODY_W / 2, y: w.y - PART_BODY_W / 2 })
   }
 
   /** Find the pin dot NEAREST a world point (within a screen-constant tolerance).
@@ -1036,7 +1073,12 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   })()
 
   return (
-    <div className="wc">
+    <div
+      className={`wc${dropActive ? ' wc--drop' : ''}`}
+      onDragOver={onDropPart ? onCanvasDragOver : undefined}
+      onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
+      onDrop={onDropPart ? onCanvasDrop : undefined}
+    >
       <div className="wc__stage">
         <svg
           ref={svgRef}

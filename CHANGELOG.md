@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Drag parts onto the breadboard (#159).** Parts in the Board View's library
+  dock are now draggable straight onto the wiring canvas — the canvas frames the
+  drop zone while you drag, and the part lands centred under the cursor (with a
+  saved canvas position) instead of the default auto-layout slot. Clicking a part
+  still previews it; the existing "Add to project" button is unchanged. Dropping a
+  part reuses the same placement path, so the driver-install offer + help toast
+  still fire.
 - **Per-part help: kevsrobots.com guide + open-example (#207).** A part's bundled
   `help.md` can now carry YAML front matter (`kevsrobots:` guide URL, `example:`
   tab name). When its article opens in the Help panel (from the "In This Project"

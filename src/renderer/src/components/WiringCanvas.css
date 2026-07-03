@@ -25,6 +25,13 @@
     linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
   background-size: 28px 28px;
+  transition: box-shadow 0.12s ease;
+}
+
+/* A part is being dragged in from the Parts panel (#159) — frame the drop zone. */
+.wc--drop .wc__stage {
+  box-shadow: inset 0 0 0 2px var(--accent, #4ea1ff);
+  background-color: #191b1f;
 }
 
 .wc__svg {

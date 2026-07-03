@@ -116,8 +116,10 @@ export interface BoardGraphProps {
   onChangeRobot?: (next: RobotDefinition) => void
   /** Installed part libraries (to resolve placed parts' pins). */
   libraries?: PartLibraryWithParts[]
-  /** Append a library part to the project. When set, the library dock shows. */
-  onAddToProject?: (libraryId: string, part: PartDefinition) => void
+  /** Append a library part to the project. When set, the library dock shows. `pos`
+   *  (a wiring-canvas world position for the body's top-left) is set when the part
+   *  is dragged onto the canvas (#159); omitted for a click-add (auto-layout). */
+  onAddToProject?: (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }) => void
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -419,8 +421,8 @@ export function BoardGraph({
     return () => window.clearTimeout(t)
   }, [helpToast])
   const handleAddToProject = useCallback(
-    (libraryId: string, part: PartDefinition): void => {
-      onAddToProject?.(libraryId, part)
+    (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
+      onAddToProject?.(libraryId, part, pos)
       if ((part.helpText ?? '').trim()) setHelpToast({ name: part.name })
     },
     [onAddToProject]
@@ -860,6 +862,7 @@ export function BoardGraph({
               onChange={onChangeRobot as (next: RobotDefinition) => void}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
+              onDropPart={onAddToProject ? handleAddToProject : undefined}
             />
           </div>
           {onAddToProject &&

@@ -359,6 +359,15 @@
   gap: 0.15rem;
 }
 
+/* Draggable onto the Board View wiring canvas (#159) — a grab cursor cues it. */
+.pl__part--draggable {
+  cursor: grab;
+}
+
+.pl__part--draggable:active {
+  cursor: grabbing;
+}
+
 .pl__part-btn {
   display: flex;
   align-items: baseline;
