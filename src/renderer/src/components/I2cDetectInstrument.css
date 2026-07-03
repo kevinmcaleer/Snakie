@@ -262,6 +262,116 @@
   }
 }
 
+/* Detected cells are clickable (#214). */
+.i2cdet__cell--click {
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.i2cdet__cell--click:hover {
+  outline: 1.5px solid color-mix(in srgb, var(--accent) 90%, #fff);
+}
+
+/* --- Address inspector (#214): known devices + Add-to-project offers. --- */
+.i2cdet__inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+.i2cdet__inspect-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.i2cdet__inspect-addr {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.i2cdet__inspect-title {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #5a5f67;
+}
+
+.i2cdet__inspect-close {
+  margin-left: auto;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  line-height: 1;
+  color: #8a8f96;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.i2cdet__inspect-close:hover {
+  color: #cdd2d8;
+  border-color: #3a3d44;
+}
+
+.i2cdet__inspect-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #aeb4bd;
+}
+
+.i2cdet__inspect-row--part {
+  color: #e6eaee;
+}
+
+.i2cdet__inspect-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.i2cdet__inspect-lib {
+  font-size: 9px;
+  color: #5a5f67;
+}
+
+.i2cdet__inspect-add {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #04120a;
+  background: var(--accent);
+  border: none;
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.i2cdet__inspect-add:hover:not(:disabled) {
+  filter: brightness(1.15);
+}
+
+.i2cdet__inspect-add:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 /* --- Controls --- */
 .i2cdet__controls {
   display: flex;

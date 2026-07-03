@@ -181,7 +181,11 @@ function BoardWindowApp(): JSX.Element {
   // since it started, so a slow disk read can't clobber newer edits.
   const saveSeqRef = useRef(0)
 
-  // Load the project's robot.yml when the folder becomes known / changes.
+  // Load the project's robot.yml when the folder becomes known / changes — and
+  // re-load when ANOTHER window saves it (robot:didChange), e.g. the I²C-detect
+  // scanner adding a matched part to the project (#214).
+  const [robotNonce, setRobotNonce] = useState(0)
+  useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
   useEffect(() => {
     let live = true
     const startSeq = saveSeqRef.current
@@ -197,7 +201,7 @@ function BoardWindowApp(): JSX.Element {
     return () => {
       live = false
     }
-  }, [folder])
+  }, [folder, robotNonce])
 
   const saveRobot = useCallback(
     (next: RobotDefinition): void => {
