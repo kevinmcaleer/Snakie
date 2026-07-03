@@ -40,33 +40,24 @@ export function PotentiometerInstrument({
   onToggleDock,
   float
 }: PotentiometerInstrumentProps): JSX.Element {
-  const [pct, setPct] = useState(0)
-  const [volts, setVolts] = useState(0)
-  // The ADC channels seen on the wire + the one this meter reads.
-  const [channels, setChannels] = useState<string[]>([])
-  const [channel, setChannel] = useState<string>(POT_CHANNEL)
+  // Latest volts per reporting ADC channel — the SAME passive `SNK METER` feed the
+  // Multimeter reads — plus the channel the user picked from the SRC dropdown.
+  const [readings, setReadings] = useState<Record<string, number>>({})
+  const [picked, setPicked] = useState<string>(POT_CHANNEL)
 
   useTelemetryStream(
-    useCallback(
-      (r) => {
-        if (r.kind !== 'meter') return
-        setChannels((cs) => (cs.includes(r.ch) ? cs : [...cs, r.ch]))
-        // Read the selected channel, or fall back to the sole reporting one so a
-        // single pot "just works" without matching the label.
-        setChannel((cur) => {
-          const match = r.ch === cur || (channels.length === 0 && cur === POT_CHANNEL)
-          if (match || r.ch === cur) {
-            setVolts(r.value)
-            setPct(pctFromVolts(r.value))
-          }
-          return cur
-        })
-      },
-      [channels.length]
-    )
+    useCallback((r) => {
+      if (r.kind !== 'meter') return
+      setReadings((m) => (m[r.ch] === r.value ? m : { ...m, [r.ch]: r.value }))
+    }, [])
   )
 
-  const onPickChannel = (ch: string): void => setChannel(ch)
+  // Read the picked channel if it's reporting, else fall back to the sole/first
+  // reporting one so a single pot "just works" without matching the label.
+  const channels = Object.keys(readings)
+  const channel = readings[picked] !== undefined ? picked : (channels[0] ?? picked)
+  const volts = readings[channel] ?? 0
+  const pct = pctFromVolts(volts)
 
   // Scale-arc endpoints + needle tip.
   const p0 = needlePoint(0, CX, CY, R)
@@ -77,7 +68,7 @@ export function PotentiometerInstrument({
   const pTip = needlePoint(pct, CX, CY, R)
   const sweep = `M ${p0.x.toFixed(1)} ${p0.y.toFixed(1)} A ${R} ${R} 0 0 1 ${pTip.x.toFixed(1)} ${pTip.y.toFixed(1)}`
 
-  const source = channels.length > 0 ? channel : POT_CHANNEL
+  const source = channel
   const knobDeg = useMemo(() => knobRotation(pct), [pct])
 
   return (
@@ -162,7 +153,7 @@ export function PotentiometerInstrument({
             <select
               className="potmeter__select"
               value={channel}
-              onChange={(e) => onPickChannel(e.currentTarget.value)}
+              onChange={(e) => setPicked(e.currentTarget.value)}
               aria-label="Potentiometer ADC channel"
             >
               {(channels.length > 0 ? channels : [POT_CHANNEL]).map((c) => (
