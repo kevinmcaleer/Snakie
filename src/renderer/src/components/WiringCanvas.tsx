@@ -1218,15 +1218,17 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                     onClick={() => onShowHelp(selPart.key)}
                   >
                     <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                      <circle cx={8} cy={8} r={6.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
-                      <path
-                        d="M6.2 6.1a1.8 1.8 0 1 1 2.5 1.7c-.5.25-.9.65-.9 1.25v.35"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth={1.3}
-                        strokeLinecap="round"
-                      />
-                      <circle cx={8} cy={11.6} r={0.75} fill="currentColor" />
+                      <text
+                        x={8}
+                        y={8.5}
+                        textAnchor="middle"
+                        dominantBaseline="central"
+                        fontSize={14}
+                        fontWeight={700}
+                        fill="currentColor"
+                      >
+                        ?
+                      </text>
                     </svg>
                   </button>
                 )}
