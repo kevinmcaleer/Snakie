@@ -74,15 +74,14 @@ class ICM20948:
 
     def __init__(self, i2c, addr=0x68):
         self.i2c = i2c
-        self.addr = addr
-        self._bank = -1
         self._accel_gs = _ACCEL_GS[16]
         self._gyro_dps = _GYRO_DPS[250]
         self._mag_ok = False
 
-        self._bank_select(0)
-        if self._read(_WHO_AM_I) != _CHIP_ID:
-            raise RuntimeError("ICM20948 not found (bad WHO_AM_I) at 0x%02x" % addr)
+        # The ICM-20948's AD0 pin / the breakout's address trace selects 0x68 or
+        # 0x69. Probe `addr` first, then the alternate, so the driver works however
+        # the board is strapped — instead of an opaque EIO on the wrong address.
+        self.addr = self._probe_addr(addr)
 
         # Reset, wait, then wake with the best available clock; enable all axes.
         self._write(_PWR_MGMT_1, 0x80)
@@ -100,6 +99,25 @@ class ICM20948:
             self._mag_ok = True
         except Exception:  # noqa: BLE001 — degrade gracefully to 6-DoF
             self._mag_ok = False
+
+    # --- address discovery --------------------------------------------------
+    def _probe_addr(self, preferred):
+        """Return the I2C address (0x68/0x69) whose WHO_AM_I identifies an
+        ICM-20948, trying `preferred` first. Raises OSError if neither answers —
+        an EIO from every candidate means the sensor isn't on the bus."""
+        for a in [preferred] + [x for x in (0x68, 0x69) if x != preferred]:
+            self.addr = a
+            self._bank = -1  # force a fresh bank-select on the new address
+            try:
+                self._bank_select(0)
+                if self._read(_WHO_AM_I) == _CHIP_ID:
+                    return a
+            except OSError:
+                continue  # nothing ACKed at `a` — try the next candidate
+        raise OSError(
+            "ICM20948 not found at 0x68/0x69 — check wiring (SDA/SCL/3V3/GND) "
+            "and run i2c.scan() to see what's on the bus"
+        )
 
     # --- low-level I2C ------------------------------------------------------
     def _write(self, reg, value):

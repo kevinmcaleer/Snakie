@@ -20,9 +20,10 @@ on a Pico, an ESP32, or a Raspberry Pi.
 | **SCL** | your I²C **SCL** GPIO |
 | **INT** | *optional* — a GPIO, for the data-ready interrupt |
 
-Default I²C address is **0x68** (**0x69** if you cut the address trace). The
-magnetometer lives on the ICM-20948's internal aux bus at 0x0C — the driver
-reaches it for you, so there's nothing extra to wire.
+Default I²C address is **0x68** (**0x69** if you cut the address trace) — the
+driver **auto-detects** either, so you don't have to pass one. The magnetometer
+lives on the ICM-20948's internal aux bus at 0x0C — the driver reaches it for
+you, so there's nothing extra to wire.
 
 ## Quick start
 
@@ -68,3 +69,7 @@ mag_supported                       # True if the AK09916 was found
   and `read_mag()` raises — accel + gyro keep working (6-DoF).
 - A flat, still board reads roughly **1 g on the Z axis** and ~**0 dps** on the
   gyro — a quick sanity check that everything is wired up.
+- **`OSError: [Errno 5] EIO`** on `ICM20948(i2c)` means nothing answered at
+  0x68 **or** 0x69 — check SDA/SCL/3V3/GND and run `print(i2c.scan())` (the ICM
+  shows as **104**/0x68 or **105**/0x69). Pass `Pin(...)` objects to `I2C(...)`,
+  e.g. `I2C(0, sda=Pin(4), scl=Pin(5))`.
