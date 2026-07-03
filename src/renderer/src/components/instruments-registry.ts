@@ -146,6 +146,18 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['hcsr04', 'hc-sr04', 'ultrasonic', 'vl53', 'tof', 'distance', 'range']
   },
   {
+    id: 'pot',
+    name: 'Potentiometer',
+    accent: '#e0a44a',
+    border: 'rgba(224,164,74,.5)',
+    // a rotary knob with an indicator + base
+    icon: 'M12 12 m-8 0 a8 8 0 1 0 16 0 a8 8 0 1 0 -16 0 M12 12 L12 5 M12 20 v1',
+    group: 'input',
+    kind: 'singleton',
+    description: 'Read a potentiometer as 0–100% on a vintage ammeter dial.',
+    hints: ['potentiometer', 'pot', 'poti']
+  },
+  {
     id: 'imu',
     name: 'IMU',
     accent: '#ff9b7a',
@@ -378,7 +390,7 @@ export function moduleCoveredByInstrument(module: string, inUse: Set<string>): b
 export const BOUND_KIND_INSTRUMENTS: Record<string, string[]> = {
   pwm: ['scope', 'servo'],
   servo: ['servo'],
-  adc: ['meter', 'scope'],
+  adc: ['meter', 'scope', 'pot'],
   i2c: ['i2c-detect'],
   pin: ['led', 'button']
 }

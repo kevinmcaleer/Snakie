@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Potentiometer instrument + part (#212).** A new **Potentiometer** instrument
+  reads a pot's wiper (an ADC voltage on the telemetry stream) as **0–100 %** on a
+  skeuomorphic **B.S. First Grade** moving-coil ammeter, with a rotary knob
+  mirroring the turned position and a % / volts readout. A new **Potentiometer**
+  part (VCC · OUT · GND) joins the standard library with mini-help, and a watched
+  ADC (`inst.watch(pot=adc)`) lights the meter up automatically.
 - **Bind real objects to instruments — `inst.watch()` (prototype).** Register a
   live MicroPython object and the IDE offers the right instrument BY TYPE, via
   duck-typed introspection — no matter whose code created it. `inst.watch(pwm=pwm,

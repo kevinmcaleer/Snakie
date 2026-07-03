@@ -1,0 +1,60 @@
+id: potentiometer
+name: Potentiometer
+manufacturer: Generic
+family: Input
+tags:
+  - potentiometer
+  - analog
+  - adc
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#1c4e78"
+dimensions:
+  width: 16
+  height: 14
+shape:
+  kind: rect
+  cornerRadius: 3
+headers:
+  - edge: bottom
+    pins:
+      - name: VCC
+        type: pwr
+        shape: round
+        x: 0.25
+        y: 0.86
+      - name: OUT
+        type: io
+        capabilities:
+          - adc
+        shape: round
+        x: 0.5
+        y: 0.86
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.75
+        y: 0.86
+shapes:
+  - kind: circle
+    x: 0.5
+    y: 0.4
+    r: 0.34
+    fill: "#0d3556"
+    stroke: "#7fb0d8"
+    strokeWidth: 1.5
+  - kind: circle
+    x: 0.5
+    y: 0.4
+    r: 0.12
+    fill: "#c9ccd1"
+    z: 2
+labels:
+  - text: "10kΩ"
+    x: 0.5
+    y: 0.66
+    fontSize: 9
+    color: "#dfeaf5"
+help: help.md
