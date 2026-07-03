@@ -369,6 +369,30 @@ export function moduleCoveredByInstrument(module: string, inUse: Set<string>): b
 }
 
 /**
+ * Which instruments can visualise/control each WATCHED-object kind (from a
+ * `SNK BIND <name> <kind>` descriptor, emitted by `inst.watch(obj)`). A PWM →
+ * Oscilloscope + Servo; an ADC → Multimeter + scope; an I²C bus → the scanner; a
+ * bare Pin → LED/Button. So when the user binds a REAL object, the dock lights up
+ * the instrument(s) that know how to show it — the type drives the UI.
+ */
+export const BOUND_KIND_INSTRUMENTS: Record<string, string[]> = {
+  pwm: ['scope', 'servo'],
+  servo: ['servo'],
+  adc: ['meter', 'scope'],
+  i2c: ['i2c-detect'],
+  pin: ['led', 'button']
+}
+
+/** The instrument ids to mark in-use for the currently-bound objects (`name→kind`). */
+export function instrumentsForBinds(binds: Record<string, string>): Set<string> {
+  const out = new Set<string>()
+  for (const kind of Object.values(binds)) {
+    for (const id of BOUND_KIND_INSTRUMENTS[kind] ?? []) out.add(id)
+  }
+  return out
+}
+
+/**
  * The default per-singleton visibility map: in-use singletons start VISIBLE
  * (prominent), the rest start hidden (discoverable via the palette). The Plotter
  * is always-available, so when nothing marks it in-use we still default it ON so

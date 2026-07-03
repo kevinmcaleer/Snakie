@@ -613,7 +613,7 @@ class BackgroundService(unittest.TestCase):
     def test_ready_announces_default_caps(self):
         self.assertEqual(
             _emit(inst.ready),
-            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo",
+            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo watch",
         )
 
     def test_ready_includes_extra_caps(self):
@@ -943,6 +943,89 @@ class DisplayDevice(unittest.TestCase):
         self.assertIn("screen", inst.control._handlers)
         # The wired handler dispatches a `screen pins …` line to the singleton.
         self.assertEqual(inst.screen_command("pins 4 5"), "pins")
+
+
+class _FakeWatchPWM:
+    """Stand-in for ``machine.PWM``: freq() + duty_u16() getters/setters."""
+
+    def __init__(self, freq=50, duty=0.075):
+        self._f = freq
+        self._d = int(duty * 65535)
+
+    def freq(self, v=None):
+        if v is None:
+            return self._f
+        self._f = v
+
+    def duty_u16(self, v=None):
+        if v is None:
+            return self._d
+        self._d = v
+
+
+class _FakeServoObj:
+    """A user Servo-like driver: exposes ``angle()``."""
+
+    def __init__(self):
+        self.a = 90
+
+    def angle(self, v):
+        self.a = int(v)
+        return self.a
+
+
+class WatchBinding(unittest.TestCase):
+    """`watch`/`update`/`watch_command` — bind real objects, classify by duck type."""
+
+    def setUp(self):
+        inst._watched.clear()
+
+    def test_classify_by_duck_type(self):
+        self.assertEqual(inst._classify(_FakeWatchPWM()), "pwm")
+        self.assertEqual(inst._classify(_FakeADC(32768)), "adc")
+        self.assertEqual(inst._classify(_FakeServoObj()), "servo")
+        self.assertEqual(inst._classify(_FakeI2C([0x3C])), "i2c")
+        self.assertIsNone(inst._classify(object()))
+
+    def test_watch_emits_bind_descriptors(self):
+        out = _emit(inst.watch, pwm=_FakeWatchPWM())
+        self.assertEqual(out, "SNK BIND pwm pwm")
+        # Positional form works too.
+        self.assertEqual(_emit(inst.watch, "pot", _FakeADC(32768)), "SNK BIND pot adc")
+        self.assertIn("pwm", inst._watched)
+        self.assertIn("pot", inst._watched)
+
+    def test_update_reuses_existing_telemetry(self):
+        inst.watch(pwm=_FakeWatchPWM(freq=50, duty=0.075), pot=_FakeADC(32768))
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.update()
+        lines = buf.getvalue().strip().split("\n")
+        # PWM → the existing scope/servo telemetry (freq + duty ~0.075 after the
+        # duty_u16 round-trip); ADC → the existing meter telemetry.
+        self.assertTrue(any(l.startswith("SNK PWM pwm 50 0.07") for l in lines))
+        self.assertTrue(any(l.startswith("SNK METER pot ") and l.endswith(" V") for l in lines))
+
+    def test_watch_command_drives_the_bound_object(self):
+        pwm = _FakeWatchPWM()
+        srv = _FakeServoObj()
+        inst.watch(pwm=pwm, servo=srv)
+        self.assertEqual(inst.watch_command("pwm duty 0.25"), "duty")
+        self.assertEqual(pwm.duty_u16(), int(0.25 * 65535))
+        self.assertEqual(inst.watch_command("servo angle 120"), "angle")
+        self.assertEqual(srv.a, 120)
+
+    def test_watch_command_ignores_unknown_or_malformed(self):
+        inst.watch(pwm=_FakeWatchPWM())
+        self.assertIsNone(inst.watch_command("nope angle 5"))  # unknown name
+        self.assertIsNone(inst.watch_command("pwm"))            # no verb
+        self.assertIsNone(inst.watch_command(""))               # empty
+        self.assertIsNone(inst.watch_command("pwm bogus 1"))    # unknown verb
+
+    def test_start_registers_the_watch_receiver(self):
+        with redirect_stdout(io.StringIO()):
+            inst.start(background=False)
+        self.assertIn("watch", inst.control._handlers)
 
 
 if __name__ == "__main__":

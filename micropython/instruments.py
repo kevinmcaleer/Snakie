@@ -81,7 +81,7 @@ import sys
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.6.1"
+__version__ = "0.7.0"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -585,7 +585,7 @@ control = Control()
 
 # What the board can do, announced to the IDE as ``SNK READY <caps...>`` so a
 # panel knows a Snakie program is live (and which triggers it services).
-READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen", "servo")
+READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen", "servo", "watch")
 
 _service_running = False
 
@@ -674,6 +674,8 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
     if servo_pin is not None:
         servo.set_pin(servo_pin)
     control.on("servo", lambda payload: servo_command(payload, servo))
+    # `watch` drives whatever objects the user registered with inst.watch(...).
+    control.on("watch", lambda payload: watch_command(payload, _watched))
     control.on("ping", lambda payload: ready(extra))
     ready(extra)
     if background:
@@ -1538,6 +1540,132 @@ def servo_command(payload, servo=None):
             srv.set_pin(int(args.split()[0]))
         elif verb == "detach":
             srv.detach()
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
+
+
+# ---------------------------------------------------------------------------
+# Object binding (`watch`) — register REAL Python objects (a ``machine.PWM`` /
+# ``I2C`` / ``ADC`` / ``Pin``, or YOUR OWN driver) so the IDE can offer the right
+# instrument BY TYPE. The library only CLASSIFIES (duck-typing, so it is portable
+# across ports and works on code we didn't write) and RELAYS state/commands — it
+# never owns the object. ``watch`` announces each object with ``SNK BIND``; the
+# IDE maps the kind to an instrument (PWM → Oscilloscope/Servo, ADC → Multimeter,
+# …); ``update()`` then streams state on the EXISTING ``SNK`` telemetry so those
+# panels render it live with no new wiring.
+# ---------------------------------------------------------------------------
+
+_watched = {}  # name -> object
+
+
+def _classify(obj):
+    """Best-effort object KIND by duck-typing (methods, most-specific first).
+
+    Returns ``servo``/``pwm``/``i2c``/``adc``/``pin`` or ``None``. A Servo-like
+    driver (``angle``) is checked before a bare ``Pin`` (``value``); a ``PWM``
+    (``duty_u16``) before an ``ADC`` (``read_u16``). Never raises.
+    """
+    if hasattr(obj, "angle"):
+        return "servo"
+    if hasattr(obj, "duty_u16") or hasattr(obj, "duty"):
+        return "pwm"
+    if hasattr(obj, "scan"):  # a machine.I2C / SoftI2C bus
+        return "i2c"
+    if hasattr(obj, "read_u16"):
+        return "adc"
+    if hasattr(obj, "value"):
+        return "pin"
+    return None
+
+
+def watch(*args, **kwargs):
+    """Register real object(s) to visualise, by name — ``SNK BIND <name> <kind>``.
+
+    ``watch(pwm=pwm, pot=adc)`` or ``watch("pwm", pwm)``. The IDE reads the BIND
+    descriptor to offer the matching instrument; call :func:`update` each loop to
+    stream the objects' live state. Works with your OWN objects (only the methods
+    matter — see :func:`_classify`).
+    """
+    pairs = dict(kwargs)
+    if len(args) == 2 and isinstance(args[0], str):
+        pairs[args[0]] = args[1]
+    for name, obj in pairs.items():
+        _watched[name] = obj
+        print("%s BIND %s %s" % (SENTINEL, name, _classify(obj) or "other"))
+
+
+def unwatch(name):
+    """Stop watching ``name`` (emits ``SNK BIND <name> none``)."""
+    _watched.pop(name, None)
+    print("%s BIND %s none" % (SENTINEL, name))
+
+
+def _pwm_freq_duty(obj):
+    """``(freq_hz, duty 0..1)`` for a PWM-like object, best-effort (never raises)."""
+    try:
+        freq = obj.freq()
+    except Exception:
+        freq = 0
+    try:
+        duty = obj.duty_u16() / 65535
+    except Exception:
+        try:
+            duty = obj.duty() / 1023  # legacy 10-bit duty (ESP8266 etc.)
+        except Exception:
+            duty = 0.0
+    return freq, duty
+
+
+def update():
+    """Emit the live state of every :func:`watch`-ed object on the ``SNK`` stream.
+
+    Call each loop (after ``control.poll()``). Reuses the existing telemetry so the
+    Oscilloscope/Servo (PWM) and Multimeter (ADC) render watched objects with no
+    extra code: a PWM → ``SNK PWM <name> <freq> <duty>``; an ADC →
+    ``SNK METER <name> <volts>``.
+    """
+    for name, obj in _watched.items():
+        kind = _classify(obj)
+        if kind == "pwm" or kind == "servo":
+            freq, duty = _pwm_freq_duty(obj)
+            print("%s PWM %s %s %s" % (SENTINEL, name, freq, duty))
+        elif kind == "adc":
+            try:
+                print("%s METER %s %s V" % (SENTINEL, name, obj.read_u16() / 65535 * 3.3))
+            except Exception:
+                pass
+
+
+def watch_command(payload, watched=None):
+    """Apply one ``watch`` control command to a bound object.
+
+    ``<name> <verb> <args>``: a PWM takes ``duty <0..1>`` / ``freq <hz>``; a
+    servo-like object ``angle <deg>``; a Pin ``value <0|1>``. Defaults to the
+    shared :data:`_watched` registry. Never raises; returns the verb (or ``None``).
+    """
+    watched = watched if watched is not None else _watched
+    if not payload:
+        return None
+    parts = payload.split()
+    if len(parts) < 2:
+        return None
+    name, verb = parts[0], parts[1]
+    args = parts[2:]
+    obj = watched.get(name)
+    if obj is None:
+        return None
+    try:
+        if verb == "angle" and hasattr(obj, "angle"):
+            obj.angle(int(float(args[0])))
+        elif verb == "duty" and hasattr(obj, "duty_u16"):
+            obj.duty_u16(int(float(args[0]) * 65535))
+        elif verb == "freq" and hasattr(obj, "freq"):
+            obj.freq(int(float(args[0])))
+        elif verb == "value" and hasattr(obj, "value"):
+            obj.value(int(float(args[0])))
         else:
             return None
     except (ValueError, IndexError, TypeError):

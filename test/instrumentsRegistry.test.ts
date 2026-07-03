@@ -8,6 +8,7 @@ import {
   filterPalette,
   groupInstruments,
   instrumentById,
+  instrumentsForBinds,
   isVisible,
   moduleCoveredByInstrument,
   normaliseVisibility,
@@ -164,6 +165,23 @@ describe('moduleCoveredByInstrument', () => {
   it('does not fuzzy-match an unrelated module', () => {
     expect(moduleCoveredByInstrument('vl53l0x', new Set(['servo']))).toBe(false)
     expect(moduleCoveredByInstrument('', new Set(['servo']))).toBe(false)
+  })
+})
+
+describe('instrumentsForBinds', () => {
+  it('lights the Oscilloscope + Servo for a watched PWM', () => {
+    expect(instrumentsForBinds({ pwm: 'pwm' })).toEqual(new Set(['scope', 'servo']))
+  })
+  it('maps ADC → meter+scope, I²C → scanner, Pin → led+button', () => {
+    expect(instrumentsForBinds({ pot: 'adc' })).toEqual(new Set(['meter', 'scope']))
+    expect(instrumentsForBinds({ bus: 'i2c' })).toEqual(new Set(['i2c-detect']))
+    expect(instrumentsForBinds({ p: 'pin' })).toEqual(new Set(['led', 'button']))
+  })
+  it('unions across several bound objects and ignores unknown kinds', () => {
+    expect(instrumentsForBinds({ a: 'pwm', b: 'adc', c: 'other' })).toEqual(
+      new Set(['scope', 'servo', 'meter'])
+    )
+    expect(instrumentsForBinds({})).toEqual(new Set())
   })
 })
 

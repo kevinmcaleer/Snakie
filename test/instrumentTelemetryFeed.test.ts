@@ -12,11 +12,30 @@ import type { Telemetry } from '../src/renderer/src/components/instrument-teleme
 
 const scope = (ch: string, value: number): Telemetry => ({ kind: 'scope', ch, value })
 const pwm = (ch: string, freq: number, duty: number): Telemetry => ({ kind: 'pwm', ch, freq, duty })
+const bind = (name: string, objKind: string): Telemetry => ({ kind: 'bind', name, objKind })
 const meter = (ch: string, value: number, unit = 'V'): Telemetry => ({
   kind: 'meter',
   ch,
   value,
   unit
+})
+
+describe('instrument-telemetry-feed foldTelemetry — object binds', () => {
+  it('tracks watched objects by name→kind, and drops one on `none`', () => {
+    let f = emptyFeed()
+    f = foldTelemetry(f, bind('pwm', 'pwm'))
+    f = foldTelemetry(f, bind('pot', 'adc'))
+    expect(f.binds).toEqual({ pwm: 'pwm', pot: 'adc' })
+    f = foldTelemetry(f, bind('pwm', 'none')) // un-watch
+    expect(f.binds).toEqual({ pot: 'adc' })
+  })
+  it('does not disturb binds when other telemetry folds in (stable reference)', () => {
+    let f = emptyFeed()
+    f = foldTelemetry(f, bind('pwm', 'pwm'))
+    const before = f.binds
+    f = foldTelemetry(f, pwm('pwm', 50, 0.075))
+    expect(f.binds).toBe(before) // same ref → cheap to memoise the dock's in-use set
+  })
 })
 
 describe('instrument-telemetry-feed foldTelemetry — pwm reading', () => {

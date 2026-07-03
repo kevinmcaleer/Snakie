@@ -66,6 +66,21 @@ describe('instrument-telemetry parseTelemetry — SCOPE', () => {
     expect(parseTelemetry('SNK PWM pwm x 0.5')).toBeNull() // non-numeric freq
   })
 
+  it('parses a BIND object descriptor (inst.watch)', () => {
+    expect(parseTelemetry('SNK BIND pwm pwm')).toEqual({ kind: 'bind', name: 'pwm', objKind: 'pwm' })
+    expect(parseTelemetry('SNK BIND pot adc')).toEqual({ kind: 'bind', name: 'pot', objKind: 'adc' })
+    expect(parseTelemetry('SNK BIND servo none')).toEqual({
+      kind: 'bind',
+      name: 'servo',
+      objKind: 'none'
+    })
+  })
+
+  it('rejects a malformed BIND line', () => {
+    expect(parseTelemetry('SNK BIND pwm')).toBeNull() // missing kind
+    expect(parseTelemetry('SNK BIND')).toBeNull() // missing name + kind
+  })
+
   it('parses a negative scope value', () => {
     expect(parseTelemetry('SNK SCOPE sig -1.5')).toEqual({
       kind: 'scope',

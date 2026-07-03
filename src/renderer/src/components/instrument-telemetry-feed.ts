@@ -21,7 +21,13 @@
  * Nothing here throws; mirrors {@link ./instrument-data} / {@link ./board-values}.
  */
 
-import type { MeterTelemetry, PwmTelemetry, ScopeTelemetry, Telemetry } from './instrument-telemetry'
+import type {
+  BindTelemetry,
+  MeterTelemetry,
+  PwmTelemetry,
+  ScopeTelemetry,
+  Telemetry
+} from './instrument-telemetry'
 
 /** How many recent scope samples to retain per channel for the live waveform. */
 export const SCOPE_BUFFER = 256
@@ -47,11 +53,13 @@ export interface TelemetryFeed {
   scope: Record<string, number[]>
   meter: Record<string, MeterReading>
   pwm: Record<string, PwmReading>
+  /** Objects the board is `watch`-ing: name → kind (`pwm`/`adc`/`i2c`/…). */
+  binds: Record<string, string>
 }
 
 /** A fresh, empty feed. */
 export function emptyFeed(): TelemetryFeed {
-  return { scope: {}, meter: {}, pwm: {} }
+  return { scope: {}, meter: {}, pwm: {}, binds: {} }
 }
 
 /** Fold a parsed scope sample into the feed, returning a NEW feed. */
@@ -71,6 +79,14 @@ function foldPwm(feed: TelemetryFeed, t: PwmTelemetry): TelemetryFeed {
   return { ...feed, pwm: { ...feed.pwm, [t.ch]: { freq: t.freq, duty: t.duty } } }
 }
 
+/** Fold an object-binding descriptor: set the name's kind, or drop it on `none`. */
+function foldBind(feed: TelemetryFeed, t: BindTelemetry): TelemetryFeed {
+  const binds = { ...feed.binds }
+  if (t.objKind === 'none') delete binds[t.name]
+  else binds[t.name] = t.objKind
+  return { ...feed, binds }
+}
+
 /**
  * Fold one parsed {@link Telemetry} into the feed. PLOT telemetry is ignored
  * here (the Plotter consumes it directly); SCOPE/METER update their channel.
@@ -82,7 +98,8 @@ export function foldTelemetry(feed: TelemetryFeed, t: Telemetry | null): Telemet
   if (t.kind === 'scope') return foldScope(feed, t)
   if (t.kind === 'meter') return foldMeter(feed, t)
   if (t.kind === 'pwm') return foldPwm(feed, t)
-  return feed // 'plot' etc. — not a scope/meter/pwm sample
+  if (t.kind === 'bind') return foldBind(feed, t)
+  return feed // 'plot' etc. — not a scope/meter/pwm/bind sample
 }
 
 /**

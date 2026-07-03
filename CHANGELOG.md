@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Bind real objects to instruments — `inst.watch()` (prototype).** Register a
+  live MicroPython object and the IDE offers the right instrument BY TYPE, via
+  duck-typed introspection — no matter whose code created it. `inst.watch(pwm=pwm,
+  pot=adc)` emits a `SNK BIND <name> <kind>` descriptor (PWM → Oscilloscope +
+  Servo, ADC → Multimeter, I²C → scanner, Pin → LED/Button) and `inst.update()`
+  streams each object's state on the existing telemetry, so a watched PWM lights
+  up the scope/servo in the dock and drives them live. Control flows back
+  (`SNKCMD watch <name> duty|freq|angle|value …`). (Library 0.7.0.)
 - **ST7789 SPI TFTs in the Display instrument.** The Display panel now drives
   **SPI ST7789 colour TFTs** alongside the existing I²C SSD1306/LCD. The **SIZE**
   picker gains four ST7789 variants (**240×240**, 240×320, 135×240, 170×320);
@@ -91,6 +99,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their capability chips line up.
 
 ### Fixed
+- **A part driven through its instrument no longer nags for its driver.** A placed
+  part used via its INSTRUMENT (e.g. `servo_showcase.py` → `inst.start(servo_pin=0)`)
+  no longer shows "this file doesn't import servo" / "the board is missing servo" —
+  the driver import + file are only needed when you use the driver library.
 - **Popped-out console is no longer blank.** When you pop the console into its own
   window it now redraws the existing scrollback instead of starting empty — the
   docked console's output is handed to the detached window and replayed through

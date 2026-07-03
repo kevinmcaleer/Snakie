@@ -64,6 +64,20 @@ export interface PwmTelemetry {
   /** Duty as a 0..1 fraction. */
   duty: number
 }
+/**
+ * An object-BINDING descriptor from `inst.watch(name=obj)` — the board announces
+ * a real Python object it's tracking, classified by duck-typing, so the IDE can
+ * offer the right instrument BY TYPE. `objKind` is the object's kind (`pwm`,
+ * `adc`, `i2c`, `servo`, `pin`, `other`); `none` un-binds it. The object's live
+ * STATE arrives on the usual channels (`SNK PWM <name> …`, `SNK METER <name> …`).
+ */
+export interface BindTelemetry {
+  kind: 'bind'
+  /** The bound object's name (matches its state telemetry channel). */
+  name: string
+  /** The classified object kind, or `none` when the object was un-watched. */
+  objKind: string
+}
 export interface MeterTelemetry {
   kind: 'meter'
   ch: string
@@ -166,6 +180,7 @@ export interface ReadyTelemetry {
 export type Telemetry =
   | ScopeTelemetry
   | PwmTelemetry
+  | BindTelemetry
   | MeterTelemetry
   | PlotTelemetry
   | ImuTelemetry
@@ -232,6 +247,15 @@ export function parseTelemetry(line: string): Telemetry | null {
     const duty = Number(parts[4])
     if (!ch || !Number.isFinite(freq) || !Number.isFinite(duty)) return null
     return { kind: 'pwm', ch, freq, duty }
+  }
+
+  if (kind === 'BIND') {
+    // SNK BIND <name> <objKind> — a watched object descriptor (objKind e.g. `pwm`;
+    // `none` un-binds). Its live state arrives separately on the usual channels.
+    const name = parts[2]
+    const objKind = parts[3]
+    if (!name || !objKind) return null
+    return { kind: 'bind', name, objKind }
   }
 
   if (kind === 'METER') {

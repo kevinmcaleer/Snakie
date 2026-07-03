@@ -39,6 +39,7 @@ import {
   filterPalette,
   groupInstruments,
   instrumentById,
+  instrumentsForBinds,
   isVisible,
   normaliseVisibility,
   type InstrumentDef,
@@ -820,6 +821,15 @@ export function InstrumentDockRegion({
   onToggleVisible: (id: string) => void
 }): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
+  // Merge the LIVE object bindings (from `inst.watch(pwm=…)` → `SNK BIND`) into the
+  // in-use set, so watching a real PWM lights up the Oscilloscope + Servo (an ADC
+  // the Multimeter, an I²C bus the scanner, …) — the object's TYPE drives which
+  // instruments the dock highlights, no matter whose code created it.
+  const feed = useTelemetryFeed()
+  const inUseWithBinds = useMemo(() => {
+    const bound = instrumentsForBinds(feed.binds)
+    return bound.size === 0 ? inUse : new Set<string>([...inUse, ...bound])
+  }, [inUse, feed.binds])
   const scopeDocked = host.dockedItems.filter((r) => r.it.kind === 'scope')
   const meterDocked = host.dockedItems.filter((r) => r.it.kind === 'meter')
   // Singleton placeholders to render: every VISIBLE singleton id that isn't the
@@ -840,7 +850,7 @@ export function InstrumentDockRegion({
       header={
         <DockHeader
           vis={vis}
-          inUse={inUse}
+          inUse={inUseWithBinds}
           onToggleVisible={onToggleVisible}
           paletteOpen={paletteOpen}
           onTogglePalette={() => setPaletteOpen((o) => !o)}
@@ -850,7 +860,7 @@ export function InstrumentDockRegion({
       {paletteOpen && (
         <AddInstrumentPalette
           vis={vis}
-          inUse={inUse}
+          inUse={inUseWithBinds}
           onToggleVisible={onToggleVisible}
           onClose={() => setPaletteOpen(false)}
         />
