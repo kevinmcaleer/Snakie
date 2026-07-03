@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **In-app bug reports work in packaged builds (#206).** The shared feedback app
+  key is now baked into release builds at build time (from a `SNAKIE_FEEDBACK_KEY`
+  CI secret) and used as the `X-Snakie-Key` fallback, so installed apps can post
+  bug reports without a logged-in session — previously the key was only read from
+  a runtime env var, which packaged apps never had, so every report came back
+  "not authorised". A runtime `SNAKIE_FEEDBACK_KEY` still overrides the baked key
+  for development and self-hosting.
+
 ## [0.23.0] - 2026-07-03
 
 ### Added

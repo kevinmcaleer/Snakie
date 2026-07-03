@@ -90,10 +90,16 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Baked into the main bundle so packaged apps can post bug reports (#206).
+          # Empty when the secret is unset → feedback stays authorised-only.
+          SNAKIE_FEEDBACK_KEY: ${{ secrets.SNAKIE_FEEDBACK_KEY }}
 
       - name: Build installers — Windows / Linux (unsigned)
         if: matrix.os != 'macos-latest'
         run: npm run dist -- ${{ matrix.platform_flag }} --publish never
+        env:
+          # See the macOS step — baked into the build for in-app bug reports (#206).
+          SNAKIE_FEEDBACK_KEY: ${{ secrets.SNAKIE_FEEDBACK_KEY }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

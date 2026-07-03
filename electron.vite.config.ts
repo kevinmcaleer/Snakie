@@ -5,6 +5,16 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    define: {
+      // The shared first-party feedback app key (issue #206), baked in at BUILD
+      // time from the CI/build env so packaged apps can post anonymous bug
+      // reports without a user session. The RUNTIME `process.env.SNAKIE_FEEDBACK_KEY`
+      // still takes precedence in src/main/feedback/ipc.ts, so
+      // `SNAKIE_FEEDBACK_KEY=… npm run dev` keeps overriding this in development.
+      // Empty when unset (e.g. contributor builds) — the feedback path just stays
+      // authorised-only, exactly as before.
+      __SNAKIE_FEEDBACK_KEY__: JSON.stringify(process.env.SNAKIE_FEEDBACK_KEY || '')
+    },
     build: {
       rollupOptions: {
         input: {

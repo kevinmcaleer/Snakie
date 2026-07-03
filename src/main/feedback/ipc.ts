@@ -18,7 +18,17 @@ import { app, ipcMain } from 'electron'
  * is sent as `Authorization: Bearer …` if a service token is used instead.
  * `SNAKIE_FEEDBACK_URL` overrides the endpoint. With neither configured the
  * endpoint returns 401/403 and we surface a clear message.
+ *
+ * The key is normally BAKED IN at build time (`__SNAKIE_FEEDBACK_KEY__`, from the
+ * `SNAKIE_FEEDBACK_KEY` CI secret) so packaged apps carry it; the runtime env var
+ * still overrides that for dev / self-hosting.
  */
+
+// Build-time-baked shared app key (electron.vite.config.ts `define`). Lets a
+// PACKAGED app carry the key without a user having to set an env var; the
+// runtime env var below still wins, so dev can override it. Declared here so
+// tsc is happy — Vite replaces the identifier with a string literal at build.
+declare const __SNAKIE_FEEDBACK_KEY__: string
 
 const DEFAULT_FEEDBACK_URL = 'https://projects.kevsrobots.com/api/feedback'
 const TIMEOUT_MS = 20_000
@@ -71,7 +81,9 @@ export function registerFeedbackIpc(): void {
 
       const url = process.env.SNAKIE_FEEDBACK_URL || DEFAULT_FEEDBACK_URL
       const token = process.env.SNAKIE_FEEDBACK_TOKEN
-      const appKey = process.env.SNAKIE_FEEDBACK_KEY
+      // Runtime env wins (dev/self-host override); otherwise fall back to the
+      // key baked into the build so packaged apps can report bugs (#206).
+      const appKey = process.env.SNAKIE_FEEDBACK_KEY || __SNAKIE_FEEDBACK_KEY__
 
       // `_SNAKIE_` prefix so Snakie bugs are filterable in the shared feedback DB.
       const message = `_SNAKIE_ ${title}\n\n${description}`.slice(0, MAX_MESSAGE)
