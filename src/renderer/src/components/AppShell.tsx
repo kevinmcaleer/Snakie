@@ -602,10 +602,18 @@ export function AppShell(): JSX.Element {
     }
   }, [boardFolder, boardFileName, connected, robotNonce])
 
+  // Modules WE successfully installed onto this board (ground truth for this
+  // connection): a re-probe that races a running program / busy REPL can read
+  // nothing back — it must never resurrect the "Install servo" button for a
+  // driver we just copied. Merged into every probe result below.
+  const selfInstalledRef = useRef<Set<string>>(new Set())
   // Probe the board (once per connection, and again on a project change) for which
   // required modules import. Including boardFolder avoids a stale probe set when you
   // switch projects while staying connected (modules change but the cache wouldn't).
-  useEffect(() => setInstalledModules(null), [deviceStatus.state, deviceStatus.path, boardFolder])
+  useEffect(() => {
+    selfInstalledRef.current = new Set()
+    setInstalledModules(null)
+  }, [deviceStatus.state, deviceStatus.path, boardFolder])
   // Re-probe when ANY window installs a driver/library (e.g. the Board View's
   // Driver Install banner copies a file to the board), so the "missing library"
   // banner clears once the module is actually present — not only after the main
@@ -616,7 +624,7 @@ export function AppShell(): JSX.Element {
     let active = true
     void (async (): Promise<void> => {
       const present = await window.api.modules.probeInstalled(requiredModules.map((m) => m.module))
-      if (active) setInstalledModules(new Set(present))
+      if (active) setInstalledModules(new Set([...present, ...selfInstalledRef.current]))
     })()
     return () => {
       active = false
@@ -674,8 +682,17 @@ export function AppShell(): JSX.Element {
             if (!res.ok) throw new Error(res.log || `Failed to install ${t.module}`)
           }
         }
-        setInstalledModules(null) // re-probe → banner clears if now present
-        // Tell the OTHER windows too (the Board View's driver banner re-probes).
+        // The installs SUCCEEDED — that's ground truth, so mark those modules
+        // present directly and the banner clears at once. (A `null` reset +
+        // re-probe here could race a running program / busy REPL, read garbage,
+        // and leave the "Install servo" button stuck on screen.) The ref keeps
+        // them present across any later re-probe this connection.
+        for (const t of targets) selfInstalledRef.current.add(t.module)
+        setInstalledModules(
+          (prev) => new Set([...(prev ?? []), ...targets.map((t) => t.module)])
+        )
+        // Tell the OTHER windows too (the Board View's driver banner re-probes,
+        // the device file tree re-lists).
         window.api.modules.notifyChanged()
       } catch (err) {
         setPartsInstallError(err instanceof Error ? err.message : String(err))

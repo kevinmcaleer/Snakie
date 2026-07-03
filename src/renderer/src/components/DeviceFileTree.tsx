@@ -111,6 +111,28 @@ const CheckIcon = (): JSX.Element => (
   </svg>
 )
 
+// trashcan — the per-row hover delete (#219)
+const TrashIcon = (): JSX.Element => (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+    <path
+      d="M3 4.5h10M6.5 4.5V3.2A1 1 0 0 1 7.5 2.2h1a1 1 0 0 1 1 1v1.3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+    />
+    <path
+      d="M4.2 4.5 4.8 13a1 1 0 0 0 1 .9h4.4a1 1 0 0 0 1-.9l.6-8.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <path d="M6.7 7v4.5M9.3 7v4.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+  </svg>
+)
+
 /** The drag payload type for device-file moves (#219). */
 const DEVICE_DRAG_MIME = 'application/x-snakie-device-paths'
 
@@ -185,7 +207,7 @@ function DeviceRow({
           onDeleteRow(row)
         }}
       >
-        ✕
+        <TrashIcon />
       </button>
     </div>
   )
@@ -658,7 +680,6 @@ export function DeviceFileTree(): JSX.Element {
     )
   }
 
-  const hasSelection = !!selectedPath
   const selectedTarget: { path: string; isDir: boolean } | null = selectedPath
     ? { path: selectedPath, isDir: selectedIsDir }
     : null
@@ -725,27 +746,8 @@ export function DeviceFileTree(): JSX.Element {
         </div>
       </div>
 
-      {/* Entry-specific actions revealed only when an entry is selected. */}
-      {hasSelection && selectedPath && (
-        <div className="devicetree__actions">
-          <button
-            className="btn btn--ghost"
-            onClick={() => renamePath(selectedPath)}
-            disabled={busy}
-            title="Rename the selected item on the device"
-          >
-            Rename
-          </button>
-          <button
-            className="btn btn--ghost btn--danger"
-            onClick={() => deletePath(selectedPath)}
-            disabled={busy}
-            title="Delete the selected item from the device"
-          >
-            Delete
-          </button>
-        </div>
-      )}
+      {/* No inline Rename/Delete bar: rename + delete live on the right-click
+          context menu, and every row has a hover trashcan. */}
 
       {error && <div className="devicetree__error">{error}</div>}
 
