@@ -1,0 +1,245 @@
+id: esp32-12f
+name: ESP32-12F
+description: esp32
+manufacturer: Espressif
+family: Microcontroller
+tags:
+  - esp32
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.1
+pcbColor: "#151b1f"
+aspect: 0.5
+dimensions:
+  width: 28
+  height: 52
+shape:
+  kind: rect
+  cornerRadius: 0.06
+headers:
+  - edge: left
+    pins:
+      - name: VCC
+        type: pwr
+        x: 0.9399349510437309
+        y: 0.14752879684943548
+      - name: GND
+        type: gnd
+        x: 0.9399349510437309
+        y: 0.19752879684943547
+      - name: d0
+        type: io
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+        x: 0.06587713737053925
+        y: 0.8475287968494356
+      - name: D1
+        type: io
+        gpio: 1
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.7975287968494356
+      - name: D2
+        type: io
+        gpio: 4
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.7475287968494355
+      - name: D3
+        type: io
+        gpio: 5
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.6975287968494357
+      - name: D4
+        type: io
+        gpio: 6
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.6475287968494357
+      - name: 3v3
+        type: pwr
+        x: 0.06587713737053925
+        y: 0.5975287968494356
+      - name: GND
+        type: gnd
+        x: 0.06587713737053925
+        y: 0.5475287968494356
+      - name: 3v3
+        type: pwr
+        x: 0.9399349510437309
+        y: 0.3475287968494355
+      - name: GND
+        type: gnd
+        x: 0.9399349510437309
+        y: 0.3975287968494355
+      - name: D5
+        type: io
+        gpio: 11
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.4975287968494356
+      - name: D6
+        type: io
+        gpio: 12
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.44752879684943553
+      - name: D7
+        type: io
+        gpio: 13
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.39752879684943554
+      - name: D8
+        type: io
+        gpio: 14
+        capabilities:
+          - digital
+        x: 0.06587713737053925
+        y: 0.3475287968494355
+      - name: RX
+        type: io
+        gpio: 15
+        capabilities:
+          - digital
+          - uart
+        x: 0.06587713737053925
+        y: 0.2975287968494355
+      - name: TX
+        type: io
+        gpio: 16
+        capabilities:
+          - digital
+          - uart
+        x: 0.06587713737053925
+        y: 0.24752879684943552
+      - name: GND
+        type: gnd
+        x: 0.06587713737053925
+        y: 0.1975287968494355
+      - name: 3v3
+        type: pwr
+        x: 0.06587713737053925
+        y: 0.14752879684943548
+      - name: RST
+        type: other
+        x: 0.9399349510437309
+        y: 0.2475287968494355
+      - name: EN
+        type: other
+        x: 0.9399349510437309
+        y: 0.2975287968494355
+      - name: CLK
+        type: io
+        gpio: 21
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.44752879684943553
+      - name: SD0
+        type: io
+        gpio: 22
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.5475287968494356
+      - name: CMD
+        type: io
+        gpio: 23
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.4975287968494355
+      - name: SD1
+        type: io
+        gpio: 24
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.5975287968494356
+      - name: SD2
+        type: io
+        gpio: 25
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.6475287968494355
+      - name: SD3
+        type: io
+        gpio: 26
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.6975287968494356
+      - name: RSV
+        type: other
+        x: 0.9399349510437309
+        y: 0.7475287968494355
+      - name: RSV
+        type: other
+        x: 0.9399349510437309
+        y: 0.7975287968494356
+      - name: A0
+        type: io
+        gpio: 29
+        capabilities:
+          - digital
+        x: 0.9399349510437309
+        y: 0.8475287968494356
+mountingHoles:
+  - x: 0.08477151694418007
+    y: 0.06443741742302389
+    diameter: 1.4
+  - x: 0.9084908493426669
+    y: 0.06443741742302389
+    diameter: 1.4
+  - x: 0.9084908493426669
+    y: 0.9426236320944393
+    diameter: 1.4
+  - x: 0.08477151694418007
+    y: 0.9426236320944393
+    diameter: 1.4
+shapes:
+  - kind: rect
+    x: 0.277788114147026
+    y: 0.5437869442210477
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.45
+    h: 0.3
+  - kind: rect
+    x: 0.3626108377921481
+    y: 0.1707257977653952
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.18
+    h: 0.09
+  - kind: rect
+    x: 0.3474006332269236
+    y: 0
+    fill: "#e8ede3"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.29
+    h: 0.11
+    z: 2
+image: image.jpg
+layerVisibility:
+  pcb: true
+  image: false
+  holes: true
+  pins: true
+  components: true

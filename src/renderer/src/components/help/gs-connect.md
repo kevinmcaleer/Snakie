@@ -10,7 +10,7 @@ Once connected, the toolbar shows the port and the terminal wakes up.
 
 ## The REPL
 
-The terminal at the bottom is a live MicroPython **REPL** — type Python and press <kbd>Enter</kbd> to run it on the board right away.
+The terminal at the bottom is a live MicroPython **REPL** - Read-Eval-Print Loop. 
 
 - <kbd>Ctrl</kbd>+<kbd>C</kbd> — interrupt a running program
 - <kbd>Ctrl</kbd>+<kbd>D</kbd> — soft reboot (re-runs `main.py`)

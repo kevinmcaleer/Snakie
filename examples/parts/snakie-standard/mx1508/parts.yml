@@ -1,0 +1,142 @@
+id: mx1508
+name: MX1508
+family: Breakout
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.2
+pcbColor: "#b33e42"
+aspect: 0.5
+dimensions:
+  width: 24.5
+  height: 21
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: VCC
+        type: pwr
+        shape: round
+        x: 0.0969480895996094
+        y: 0.10008971320258248
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.09532127380371093
+        y: 0.2604330698649089
+      - name: IN1
+        type: io
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+        shape: round
+        x: 0.23064493815104167
+        y: 0.5150479973687067
+      - name: IN2
+        type: io
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+        shape: round
+        x: 0.23064493815104167
+        y: 0.6400479973687067
+      - name: IN3
+        type: io
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+        shape: round
+        rotation: 180
+        x: 0.23064493815104167
+        y: 0.7807955339219836
+      - name: IN4
+        type: io
+        gpio: 5
+        capabilities:
+          - digital
+        shape: round
+        rotation: 180
+        x: 0.23064493815104167
+        y: 0.9057955339219836
+      - name: OUT1
+        type: io
+        gpio: 6
+        capabilities:
+          - digital
+        shape: round
+        x: 0.8296396891276043
+        y: 0.5150479973687067
+      - name: OUT2
+        type: io
+        gpio: 7
+        capabilities:
+          - digital
+        shape: round
+        x: 0.8296396891276043
+        y: 0.6400479973687067
+      - name: OUT3
+        type: io
+        gpio: 8
+        capabilities:
+          - digital
+        shape: round
+        x: 0.8296396891276043
+        y: 0.7807955339219836
+      - name: OUT4
+        type: io
+        gpio: 9
+        capabilities:
+          - digital
+        shape: round
+        rotation: 0
+        x: 0.8296396891276043
+        y: 0.9057955339219836
+mountingHoles:
+  - x: 0.10914685567220052
+    y: 0.3961333889431423
+    diameter: 1.2
+shapes:
+  - kind: rect
+    x: 0.46435175577799487
+    y: 0.4775364091661241
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.16
+    h: 0.47
+  - kind: circle
+    x: 0.37448577880859374
+    y: 0.22480242411295565
+    label: 100 16V VT
+    fill: "#b6b6be"
+    stroke: "#ffffff"
+    strokeWidth: 1
+    r: 0.13
+    labelFontSize: 15
+    labelAlign: left
+    labelWrap: true
+    labelColor: "#000000"
+  - kind: circle
+    x: 0.6737740071614585
+    y: 0.22480242411295565
+    fill: "#b6b6be"
+    stroke: "#ffffff"
+    strokeWidth: 1
+    r: 0.13
+image: image.jpg
+imageLayer:
+  x: -0.03228909810384106
+  y: -0.03272606743706563
+  w: 1.0659733835856118
+  h: 1.0659733835856118
+layerVisibility:
+  pcb: true
+  image: true
+  holes: true
+  pins: true
+  components: true

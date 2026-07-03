@@ -1,0 +1,105 @@
+id: hr-sr04
+name: HR SR04
+manufacturer: Generic
+family: Sensor
+tags:
+  - ultrasonic
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 45.5
+  height: 25.5
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: VCC
+        type: pwr
+        shape: round
+        x: 0.4149715423583984
+        y: 0.7503878574745328
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.581638209025065
+        y: 0.7503878574745328
+      - name: Echo
+        type: io
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+        shape: round
+        x: 0.5260826534695094
+        y: 0.7503878574745328
+      - name: Trigger
+        type: io
+        gpio: 1
+        capabilities:
+          - digital
+        shape: round
+        x: 0.4736985524495443
+        y: 0.7503878574745328
+mountingHoles:
+  - x: 0.02587921142578125
+    y: 0.044937560636233706
+    diameter: 1
+  - x: 0.02587921142578125
+    y: 0.7474125302383324
+    diameter: 1
+  - x: 0.9749016316731771
+    y: 0.044937560636233706
+    diameter: 1
+  - x: 0.9749016316731771
+    y: 0.7474125302383324
+    diameter: 1
+shapes:
+  - kind: circle
+    x: 0.20885139465332034
+    y: 0.4025821591046901
+    fill: "#1c2227"
+    stroke: "#cbd6e5"
+    strokeWidth: 6
+    r: 0.17
+    z: 1
+  - kind: circle
+    x: 0.7976315307617187
+    y: 0.3995573894027012
+    fill: "#1c2227"
+    stroke: "#cbd6e5"
+    strokeWidth: 6
+    r: 0.17
+    z: 2
+  - kind: rect
+    x: 0
+    y: 0
+    fill: "#0a3b70"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 1
+    h: 0.79
+    z: 0
+labels:
+  - text: HC-SR04
+    x: 0.5054370625813797
+    y: 0.2813324473262613
+    fontSize: 13
+    z: 3
+image: image.jpg
+imageLayer:
+  x: -0.18143107732137054
+  y: -0.6675152900795533
+  w: 1.3283409690856933
+  h: 2.3701770232705512
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

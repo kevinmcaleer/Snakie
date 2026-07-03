@@ -1,0 +1,66 @@
+id: adafruit-feather-esp32s3
+name: Adafruit Feather ESP32-S3
+description: ESP32-S3 Feather (8MB Flash) with USB-C, LiPo charging, STEMMA QT + NeoPixel.
+manufacturer: Adafruit
+family: Microcontroller
+mcu: ESP32-S3
+partNumber: "5323"
+tags:
+  - esp32s3
+  - feather
+  - adafruit
+  - wifi
+  - lipo
+  - stemma-qt
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#181818"
+aspect: 0.4453
+dimensions:
+  width: 22.9
+  height: 50.8
+# Portrait (rotated 90 CW from Adafruit's landscape render): USB-C at top, headers
+# on the left (RST/3V/GND/A0-A5/SPI/UART) & right (BAT/EN/USB/D5-D13/I2C) rails.
+# ESP32-S3 routes peripherals through a flexible GPIO matrix, so pins carry their
+# board-designated signals (SDA/SCL, SCK/MOSI/MISO, TX/RX) but NOT a fixed SPI/UART
+# bus instance. LED on GP13; NeoPixel on GP33 (power-enable GP21).
+ledLabel: "13"
+onboardLeds:
+  - { kind: neopixel, gpio: 33, power: 21, x: 0.7, y: 0.62 }
+image: image.png
+imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+headers:
+  - edge: left
+    pins:
+      - { name: RST, type: other, number: 1, shape: header, rotation: 180, x: 0.1, y: 0.137 }
+      - { name: 3V, type: pwr, number: 2, shape: header, rotation: 180, x: 0.1, y: 0.188 }
+      - { name: 3V, type: pwr, number: 3, shape: header, rotation: 180, x: 0.1, y: 0.239 }
+      - { name: GND, type: gnd, number: 4, shape: header, rotation: 180, x: 0.1, y: 0.29 }
+      - { name: A0, type: io, number: 5, gpio: 18, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.341 }
+      - { name: A1, type: io, number: 6, gpio: 17, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.392 }
+      - { name: A2, type: io, number: 7, gpio: 16, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.443 }
+      - { name: A3, type: io, number: 8, gpio: 15, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.494 }
+      - { name: A4, type: io, number: 9, gpio: 14, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.545 }
+      - { name: A5, type: io, number: 10, gpio: 8, capabilities: [digital, pwm, adc], shape: header, rotation: 180, x: 0.1, y: 0.596 }
+      - { name: SCK, type: io, number: 11, gpio: 36, capabilities: [digital, pwm, spi], signals: { spi: SCK }, shape: header, rotation: 180, x: 0.1, y: 0.647 }
+      - { name: MO, type: io, number: 12, gpio: 35, capabilities: [digital, pwm, spi], signals: { spi: TX }, shape: header, rotation: 180, x: 0.1, y: 0.698 }
+      - { name: MI, type: io, number: 13, gpio: 37, capabilities: [digital, pwm, spi], signals: { spi: RX }, shape: header, rotation: 180, x: 0.1, y: 0.749 }
+      - { name: RX, type: io, number: 14, gpio: 38, capabilities: [digital, pwm, uart], signals: { uart: RX }, shape: header, rotation: 180, x: 0.1, y: 0.8 }
+      - { name: TX, type: io, number: 15, gpio: 39, capabilities: [digital, pwm, uart], signals: { uart: TX }, shape: header, rotation: 180, x: 0.1, y: 0.851 }
+      - { name: DB, type: other, number: 16, shape: header, rotation: 180, x: 0.1, y: 0.902 }
+  - edge: right
+    pins:
+      - { name: BAT, type: pwr, number: 17, shape: header, rotation: 0, x: 0.892, y: 0.367 }
+      - { name: EN, type: other, number: 18, shape: header, rotation: 0, x: 0.892, y: 0.4205 }
+      - { name: USB, type: pwr, number: 19, shape: header, rotation: 0, x: 0.892, y: 0.474 }
+      - { name: D13, type: io, number: 20, gpio: 13, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.5275 }
+      - { name: D12, type: io, number: 21, gpio: 12, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.581 }
+      - { name: D11, type: io, number: 22, gpio: 11, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.6345 }
+      - { name: D10, type: io, number: 23, gpio: 10, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.688 }
+      - { name: D9, type: io, number: 24, gpio: 9, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.7415 }
+      - { name: D6, type: io, number: 25, gpio: 6, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.795 }
+      - { name: D5, type: io, number: 26, gpio: 5, capabilities: [digital, pwm], shape: header, rotation: 0, x: 0.892, y: 0.8485 }
+      - { name: SCL, type: io, number: 27, gpio: 4, capabilities: [digital, pwm, i2c], signals: { i2c: SCL }, buses: { i2c: 0 }, shape: header, rotation: 0, x: 0.892, y: 0.902 }
+      - { name: SDA, type: io, number: 28, gpio: 3, capabilities: [digital, pwm, i2c], signals: { i2c: SDA }, buses: { i2c: 0 }, shape: header, rotation: 0, x: 0.892, y: 0.9555 }

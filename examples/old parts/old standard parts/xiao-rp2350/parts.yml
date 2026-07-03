@@ -1,0 +1,194 @@
+id: xiao-rp2350
+name: Seeed Studio XIAO RP2350
+description: RP2350A in a thumb-sized castellated board with USB-C, an RGB LED + a user LED
+manufacturer: Seeed Studio
+family: Microcontroller
+mcu: RP2350
+partNumber: "102010550"
+tags: [rp2350, xiao, usb-c, castellated]
+package: SMD
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#15171a"
+aspect: 0.789
+dimensions:
+  width: 17.8
+  height: 21
+shape:
+  kind: rect
+  cornerRadius: 0.08
+ledLabel: "25"
+# Life-like background: a clean top-down board render (from Seeed's official front
+# pinout diagram) with the background removed → the board sits on transparency, so
+# the rounded corners + castellated edge show cleanly. It fills the outline; the
+# pins below are positioned over the render's real pads (silk + components live in
+# the image, so no shapes are needed). Replace image.png with your own/licensed
+# photo before redistributing.
+image: image.png
+imageLayer:
+  x: 0
+  y: 0
+  w: 1
+  h: 1
+# Pinout verified against Seeed's official XIAO RP2350 front pinout diagram: 14
+# castellated pads, 7 per edge, USB-C at the top. Left (USB at top): D0-D6. Right:
+# 5V, GND, 3V3, D10, D9, D8, D7. Both edges share the same 7 y-positions so pads
+# line up row-for-row. A3/GPIO29 is used internally for battery sense (not broken
+# out); D3 maps to GPIO5, so only A0-A2 are analog.
+headers:
+  - edge: left
+    pins:
+      - name: D0
+        type: io
+        number: 1
+        gpio: 26
+        label: A0
+        capabilities: [digital, pwm, adc, i2c, spi, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.262
+      - name: D1
+        type: io
+        number: 2
+        gpio: 27
+        label: A1
+        capabilities: [digital, pwm, adc, i2c, spi, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.370
+      - name: D2
+        type: io
+        number: 3
+        gpio: 28
+        label: A2
+        capabilities: [digital, pwm, adc, i2c, spi, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.478
+      - name: D3
+        type: io
+        number: 4
+        gpio: 5
+        capabilities: [digital, pwm, spi, i2c, uart]
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.586
+      - name: D4
+        type: io
+        number: 5
+        gpio: 6
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          i2c: SDA
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.695
+      - name: D5
+        type: io
+        number: 6
+        gpio: 7
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          i2c: SCL
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.803
+      - name: D6
+        type: io
+        number: 7
+        gpio: 0
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          uart: TX
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.093
+        y: 0.911
+  - edge: right
+    pins:
+      - name: 5V
+        type: pwr
+        number: 8
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.262
+      - name: GND
+        type: gnd
+        number: 9
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.370
+      - name: 3V3
+        type: pwr
+        number: 10
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.478
+      - name: D10
+        type: io
+        number: 11
+        gpio: 3
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          spi: TX
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.586
+      - name: D9
+        type: io
+        number: 12
+        gpio: 4
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          spi: RX
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.695
+      - name: D8
+        type: io
+        number: 13
+        gpio: 2
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          spi: SCK
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.803
+      - name: D7
+        type: io
+        number: 14
+        gpio: 1
+        capabilities: [digital, pwm, spi, i2c, uart]
+        signals:
+          uart: RX
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.908
+        y: 0.911

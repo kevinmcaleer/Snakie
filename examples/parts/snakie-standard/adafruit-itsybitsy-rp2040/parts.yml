@@ -1,0 +1,65 @@
+id: adafruit-itsybitsy-rp2040
+name: Adafruit ItsyBitsy RP2040
+description: Small RP2040 board (ItsyBitsy form factor) with micro-USB + NeoPixel.
+manufacturer: Adafruit
+family: Microcontroller
+mcu: RP2040
+partNumber: "4888"
+tags:
+  - rp2040
+  - itsybitsy
+  - adafruit
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#181818"
+aspect: 0.5
+dimensions:
+  width: 17.8
+  height: 35.6
+# Portrait (rotated 90 CW from Adafruit's landscape render): micro-USB at top.
+# Left rail RST/3.3V/VHi/A0-A3/24/25/SCK/MO/MI; right rail BAT/G/USB/D13-D5/SCL/
+# SDA/TX/RX; D2/D3/D4 on the bottom short edge. LED on GP11 (D13); NeoPixel GP17
+# (power GP16). Pins carry RP2040 fixed-function signals + bus numbers.
+ledLabel: "13"
+onboardLeds:
+  - { kind: neopixel, gpio: 17, power: 16, x: 0.5, y: 0.5 }
+image: image.png
+imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+headers:
+  - edge: left
+    pins:
+      - { name: RST, type: other, number: 1, shape: header, rotation: 180, x: 0.048, y: 0.048 }
+      - { name: 3.3V, type: pwr, number: 2, shape: header, rotation: 180, x: 0.048, y: 0.1164 }
+      - { name: VHi, type: pwr, number: 3, shape: header, rotation: 180, x: 0.048, y: 0.1847 }
+      - { name: A0, type: io, number: 4, gpio: 26, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 1, adc: 0 }, shape: header, rotation: 180, x: 0.048, y: 0.2531 }
+      - { name: A1, type: io, number: 5, gpio: 27, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 1, adc: 1 }, shape: header, rotation: 180, x: 0.048, y: 0.3215 }
+      - { name: A2, type: io, number: 6, gpio: 28, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1, adc: 2 }, shape: header, rotation: 180, x: 0.048, y: 0.3898 }
+      - { name: A3, type: io, number: 7, gpio: 29, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 1, adc: 3 }, shape: header, rotation: 180, x: 0.048, y: 0.4582 }
+      - { name: D24, type: io, number: 8, gpio: 24, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1 }, shape: header, rotation: 180, x: 0.048, y: 0.5265 }
+      - { name: D25, type: io, number: 9, gpio: 25, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 1 }, shape: header, rotation: 180, x: 0.048, y: 0.5949 }
+      - { name: SCK, type: io, number: 10, gpio: 18, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 180, x: 0.048, y: 0.6633 }
+      - { name: MO, type: io, number: 11, gpio: 19, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 180, x: 0.048, y: 0.7316 }
+      - { name: MI, type: io, number: 12, gpio: 20, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 0 }, shape: header, rotation: 180, x: 0.048, y: 0.8 }
+  - edge: right
+    pins:
+      - { name: BAT, type: pwr, number: 13, shape: header, rotation: 0, x: 0.952, y: 0.048 }
+      - { name: G, type: gnd, number: 14, shape: header, rotation: 0, x: 0.952, y: 0.1175 }
+      - { name: USB, type: pwr, number: 15, shape: header, rotation: 0, x: 0.952, y: 0.1871 }
+      - { name: D13, type: io, number: 16, gpio: 11, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 1 }, shape: header, rotation: 0, x: 0.952, y: 0.2566 }
+      - { name: D12, type: io, number: 17, gpio: 10, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 1 }, shape: header, rotation: 0, x: 0.952, y: 0.3262 }
+      - { name: D11, type: io, number: 18, gpio: 9, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 1 }, shape: header, rotation: 0, x: 0.952, y: 0.3957 }
+      - { name: D10, type: io, number: 19, gpio: 8, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1 }, shape: header, rotation: 0, x: 0.952, y: 0.4652 }
+      - { name: D9, type: io, number: 20, gpio: 7, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.5348 }
+      - { name: D7, type: io, number: 21, gpio: 6, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.6043 }
+      - { name: D5, type: io, number: 22, gpio: 14, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 1 }, shape: header, rotation: 0, x: 0.952, y: 0.6738 }
+      - { name: SCL, type: io, number: 23, gpio: 3, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.7434 }
+      - { name: SDA, type: io, number: 24, gpio: 2, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.8129 }
+      - { name: TX, type: io, number: 25, gpio: 0, capabilities: [digital, pwm, i2c, spi, uart], signals: { pwm: A, i2c: SDA, spi: RX, uart: TX }, buses: { i2c: 0, spi: 0, uart: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.8825 }
+      - { name: RX, type: io, number: 26, gpio: 1, capabilities: [digital, pwm, i2c, spi, uart], signals: { pwm: B, i2c: SCL, spi: CSn, uart: RX }, buses: { i2c: 0, spi: 0, uart: 0 }, shape: header, rotation: 0, x: 0.952, y: 0.952 }
+  - edge: bottom
+    pins:
+      - { name: D2, type: io, number: 27, gpio: 12, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1 }, shape: header, rotation: 90, x: 0.318, y: 0.952 }
+      - { name: D3, type: io, number: 28, gpio: 5, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 0 }, shape: header, rotation: 90, x: 0.5, y: 0.952 }
+      - { name: D4, type: io, number: 29, gpio: 4, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 0 }, shape: header, rotation: 90, x: 0.682, y: 0.952 }

@@ -1,0 +1,103 @@
+id: n20-motor
+name: N20 Motor
+manufacturer: Generic
+family: Motor
+package: THT
+pinSpacing: 2.54
+voltage: 6V
+version: 0.1.7
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 12
+  height: 35
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: VCC
+        type: pwr
+        x: 0.7482312886855182
+        y: 0.9504546221564798
+      - name: GND
+        type: gnd
+        x: 0.2615317468082204
+        y: 0.9488681568818934
+shapes:
+  - kind: rect
+    x: 0.11703055363075404
+    y: 0.5353271753647749
+    fill: "#667279"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.7776204000734817
+    h: 0.3725875585219438
+    z: 0
+    cornerRadius: 0
+  - kind: rect
+    x: 0.11703055363075404
+    y: 0.2740695100672105
+    fill: "#897131"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.7688154848884132
+    h: 0.021959434958065294
+    z: 1
+    cornerRadius: 0
+  - kind: rect
+    x: 0.39403553981407013
+    y: 0.013959000336001282
+    fill: "#84837f"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.2
+    h: 0.26
+    z: 2
+    cornerRadius: 0
+  - kind: rect
+    x: 0.10584603851916734
+    y: 0.9075299072265623
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.78
+    h: 0.028429188447840148
+    z: 3
+  - kind: rect
+    x: 0.3240355398140701
+    y: 0.9359590956744025
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.34
+    h: 0.03
+    z: 4
+  - kind: rect
+    x: 0.1281247105317958
+    y: 0.29544462316176473
+    fill: "#897131"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.2668140725528492
+    h: 0.2398825522030102
+    z: 5
+    cornerRadius: 0
+  - kind: rect
+    x: 0.11465095370423561
+    y: 0.515095376407399
+    fill: "#897131"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.78
+    h: 0.020231798957375924
+    z: 6
+    cornerRadius: 0
+image: image.jpg
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

@@ -1,0 +1,59 @@
+id: adafruit-qt-py-rp2040
+name: Adafruit QT Py RP2040
+description: Thumb-sized castellated RP2040 board with USB-C, STEMMA QT + NeoPixel.
+manufacturer: Adafruit
+family: Microcontroller
+mcu: RP2040
+partNumber: "4900"
+tags:
+  - rp2040
+  - qtpy
+  - adafruit
+  - castellated
+  - stemma-qt
+package: SMD
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#181818"
+aspect: 0.8145
+dimensions:
+  width: 17.8
+  height: 21.8
+# Portrait (rotated 90 CW from Adafruit's landscape photo): USB-C at top, 14
+# castellated pads — left A0-TX, right 5V/GND/3V + SPI/RX. NeoPixel on GP12
+# (power-enable GP11); no separate user LED. Pins carry RP2040 fixed-function
+# signals + bus numbers. STEMMA QT is I2C1 (SDA1=GP22, SCL1=GP23).
+onboardLeds:
+  - { kind: neopixel, gpio: 12, power: 11, x: 0.5, y: 0.62 }
+connectors:
+  - kind: qwiic
+    label: STEMMA QT
+    x: 0.42
+    y: 0.9
+    pins:
+      - { name: GND, type: gnd }
+      - { name: "3V3", type: pwr }
+      - { name: SDA1, type: io, gpio: 22, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 1 } }
+      - { name: SCL1, type: io, gpio: 23, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 1 } }
+image: image.png
+imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+headers:
+  - edge: left
+    pins:
+      - { name: A0, type: io, number: 1, gpio: 29, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 1, adc: 3 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.175 }
+      - { name: A1, type: io, number: 2, gpio: 28, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1, adc: 2 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.2917 }
+      - { name: A2, type: io, number: 3, gpio: 27, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 1, adc: 1 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.4083 }
+      - { name: A3, type: io, number: 4, gpio: 26, capabilities: [digital, pwm, i2c, spi, adc], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 1, adc: 0 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.525 }
+      - { name: SDA, type: io, number: 5, gpio: 24, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 1 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.6417 }
+      - { name: SCL, type: io, number: 6, gpio: 25, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: CSn }, buses: { i2c: 0, spi: 1 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.7583 }
+      - { name: TX, type: io, number: 7, gpio: 20, capabilities: [digital, pwm, i2c, spi, uart], signals: { pwm: A, i2c: SDA, spi: RX, uart: TX }, buses: { i2c: 0, spi: 0, uart: 1 }, castellated: true, shape: castellated, rotation: 180, x: 0.065, y: 0.875 }
+  - edge: right
+    pins:
+      - { name: 5V, type: pwr, number: 8, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.175 }
+      - { name: GND, type: gnd, number: 9, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.2917 }
+      - { name: 3V, type: pwr, number: 10, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.4083 }
+      - { name: MOSI, type: io, number: 11, gpio: 3, capabilities: [digital, pwm, i2c, spi], signals: { pwm: B, i2c: SCL, spi: TX }, buses: { i2c: 1, spi: 0 }, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.525 }
+      - { name: MISO, type: io, number: 12, gpio: 4, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: RX }, buses: { i2c: 0, spi: 0 }, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.6417 }
+      - { name: SCK, type: io, number: 13, gpio: 6, capabilities: [digital, pwm, i2c, spi], signals: { pwm: A, i2c: SDA, spi: SCK }, buses: { i2c: 1, spi: 0 }, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.7583 }
+      - { name: RX, type: io, number: 14, gpio: 5, capabilities: [digital, pwm, i2c, spi, uart], signals: { pwm: B, i2c: SCL, spi: CSn, uart: RX }, buses: { i2c: 0, spi: 0, uart: 1 }, castellated: true, shape: castellated, rotation: 0, x: 0.935, y: 0.875 }

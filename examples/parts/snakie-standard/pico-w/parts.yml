@@ -1,23 +1,24 @@
-id: pico
-name: Raspberry Pi Pico
-description: RP2040 microcontroller board (40-pin, same header layout as the Pico W / 2 W).
+id: pico-w
+name: Raspberry Pi Pico W
+description: RP2040 microcontroller board with CYW43439 2.4GHz wireless (Wi-Fi / BLE).
 manufacturer: Raspberry Pi
 family: Microcontroller
 tags:
   - rp2040
+  - wifi
   - pico
 package: THT
 pinSpacing: 2.54
 voltage: 1.8–5.5V
-partNumber: SC0915
+partNumber: SC0918
 version: 1.0.2
 mcu: RP2040
 pcbColor: "#0f5a2e"
-aspect: 0.4098
+aspect: 0.406
 dimensions:
   width: 21
   height: 51
-ledLabel: "25"
+ledLabel: LED
 image: image.png
 imageLayer: { x: 0, y: 0, w: 1, h: 1 }
 headers:

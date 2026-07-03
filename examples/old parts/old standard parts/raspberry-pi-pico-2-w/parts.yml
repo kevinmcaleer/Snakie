@@ -1,0 +1,498 @@
+id: raspberry-pi-pico-2-w
+name: Raspberry Pi Pico 2 W
+description: RP2350
+manufacturer: Raspberry Pi
+family: Microcontroller
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.14
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 21
+  height: 51
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: VBUS
+        type: pwr
+        number: 40
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9169902214054155
+        y: 0.038551478699758945
+      - name: GND
+        type: gnd
+        number: 38
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.13855147869975892
+      - name: GP0
+        type: io
+        number: 1
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.07595219768795339
+        y: 0.03855147869975889
+      - name: GP1
+        type: io
+        number: 2
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.08855147869975889
+      - name: GND
+        type: gnd
+        number: 3
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.1385514786997589
+      - name: GP2
+        type: io
+        number: 4
+        gpio: 2
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.1885514786997589
+      - name: GP3
+        type: io
+        number: 5
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.2385514786997589
+      - name: GP4
+        type: io
+        number: 6
+        gpio: 4
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.28855147869975895
+      - name: GP5
+        type: io
+        number: 7
+        gpio: 5
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.3385514786997589
+      - name: VSYS
+        type: pwr
+        number: 39
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9169902214054155
+        y: 0.08855147869975899
+      - name: 3V3_EN
+        type: other
+        number: 37
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.18855147869975897
+      - name: 3v3
+        type: pwr
+        number: 36
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.238551478699759
+      - name: ADC_VREF
+        type: io
+        number: 35
+        gpio: 12
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.28855147869975895
+      - name: GP28
+        type: io
+        number: 34
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.338551478699759
+      - name: GND
+        type: gnd
+        number: 8
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.3885514786997589
+      - name: GP6
+        type: io
+        number: 9
+        gpio: 6
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.43855147869975897
+      - name: GP7
+        type: io
+        number: 10
+        gpio: 7
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.4885514786997589
+      - name: GP8
+        type: io
+        number: 11
+        gpio: 8
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.538551478699759
+      - name: GND
+        type: gnd
+        number: 33
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.3885514786997589
+      - name: GP27
+        type: io
+        number: 32
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.43855147869975897
+      - name: GP26
+        type: io
+        number: 31
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.488551478699759
+      - name: RUN
+        type: other
+        number: 30
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.538551478699759
+      - name: GP9
+        type: io
+        number: 12
+        gpio: 9
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.5885514786997589
+      - name: GND
+        type: gnd
+        number: 13
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.6385514786997589
+      - name: GP22
+        type: io
+        number: 29
+        gpio: 22
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.588551478699759
+      - name: GND
+        type: gnd
+        number: 28
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.638551478699759
+      - name: GP21
+        type: io
+        number: 27
+        gpio: 21
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.688551478699759
+      - name: GP20
+        type: io
+        number: 26
+        gpio: 20
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.738551478699759
+      - name: GP19
+        type: io
+        number: 25
+        gpio: 19
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.788551478699759
+      - name: GP18
+        type: io
+        number: 24
+        gpio: 18
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.838551478699759
+      - name: GND
+        type: gnd
+        number: 23
+        castellated: true
+        shape: castellated
+        x: 0.9169902214054155
+        y: 0.888551478699759
+      - name: GP10
+        type: io
+        number: 14
+        gpio: 10
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.688551478699759
+      - name: GP11
+        type: io
+        number: 15
+        gpio: 11
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.738551478699759
+      - name: GP12
+        type: io
+        number: 16
+        gpio: 12
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.788551478699759
+      - name: GP13
+        type: io
+        number: 17
+        gpio: 13
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.838551478699759
+      - name: GP17
+        type: io
+        number: 22
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9169902214054155
+        y: 0.938551478699759
+      - name: GP16
+        type: io
+        number: 21
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+          - uart
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.9169902214054155
+        y: 0.988551478699759
+      - name: GND
+        type: gnd
+        number: 18
+        castellated: true
+        shape: castellated
+        x: 0.07595219768795339
+        y: 0.8885514786997589
+      - name: GP14
+        type: io
+        number: 19
+        gpio: 14
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.07595219768795339
+        y: 0.938551478699759
+      - name: GP15
+        type: io
+        number: 20
+        gpio: 15
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.07595219768795339
+        y: 0.988551478699759
+      - name: SWCLK
+        type: io
+        number: 41
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        rotation: 90
+        x: 0.3859614275419265
+        y: 0.9707235092529019
+      - name: GND
+        type: gnd
+        number: 42
+        castellated: true
+        shape: castellated
+        rotation: 90
+        x: 0.5109614275419265
+        y: 0.9707235092529019
+      - name: SWDIO
+        type: io
+        number: 43
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        rotation: 90
+        x: 0.6359614275419265
+        y: 0.9707235092529019
+mountingHoles:
+  - x: 0.2255141308935366
+    y: 0.06302867216222427
+    diameter: 1.3
+  - x: 0.7627171107700892
+    y: 0.06302867216222427
+    diameter: 1.3
+  - x: 0.2255141308935366
+    y: 0.9605232687557445
+    diameter: 1.3
+  - x: 0.7627171107700892
+    y: 0.9605232687557445
+    diameter: 1.3
+shapes:
+  - kind: rect
+    x: 0.3294230617062311
+    y: 0.008752932812344794
+    label: USB
+    fill: "#f3f2f4"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    w: 0.36307673167139093
+    h: 0.10855147869975895
+    z: 0
+    cornerRadius: 0
+    labelColor: "#000000"
+  - kind: rect
+    x: 0.36096142754192656
+    y: 0.4569227117900708
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 0
+    w: 0.3
+    h: 0.11602664500388915
+    z: 1
+image: image.png
+imageLayer:
+  x: -0.07552926815725292
+  y: -0.02819861916329499
+  w: 5.387156167551249
+  h: 1.0549641185191985
+layerVisibility:
+  pcb: true
+  image: false
+  holes: true
+  pins: true
+  components: true

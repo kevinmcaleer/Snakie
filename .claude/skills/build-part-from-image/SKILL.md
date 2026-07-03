@@ -51,6 +51,28 @@ anywhere, draw the board from `shapes` + `labels`:
 - ❌ **No copper traces or ground pours** (they make the board unreadable).
 - ❌ Skip minutiae — not every SMD resistor/cap needs a shape.
 
+## Orientation — prefer portrait (pin rows on the left & right)
+
+Author boards **portrait**, with the two main header rows running **vertically down
+the left and right edges** and the USB / primary connector at the **top** (like the
+Pico). Vertical side-rails with horizontal silk labels are far easier to read on
+screen than a wide board with stacked top/bottom rows.
+
+Many boards are photographed / documented **landscape** (USB on a short end, header
+rows along the long top & bottom edges — e.g. an Adafruit Feather). When the source
+image is landscape, **rotate the board image 90°** so the pin rows end up on the
+left/right, then place the pads over the rotated image:
+- Rotate **90° clockwise** so the connector edge (usually the left short edge) ends
+  up at the **top**. Swap the part's `aspect` (→ `oldHeight/oldWidth`) and
+  `dimensions` (swap width/height) to match the rotated image.
+- The original **top** row becomes the **right** edge (`rotation: 0`); the original
+  **bottom** row becomes the **left** edge (`rotation: 180`). A pad at normalised
+  `(x, y)` in the landscape image moves to `(1 - y, x)` in the rotated one.
+- Keep the top→bottom pin order within each rail as it reads on the rotated board.
+
+Genuinely square or already-portrait boards need no rotation. Round / irregular
+boards (e.g. Circuit Playground) keep their natural orientation.
+
 ## Background photo
 
 1. **Source** a clean top-down image — a product-gallery photo on a plain
@@ -165,9 +187,14 @@ not infer. Required:
    MCU's bank0 **GPIO-function table** (its datasheet) and fill them for every GPIO
    — don't leave them blank. For **RP2040 / RP2350** the mapping is deterministic
    from the GPIO number `g`:
-   `spi bus = 1 if g in 8..15 or 26..28 else 0`, `spi sig = [RX,CSn,SCK,TX][g%4]`;
+   `spi bus = (g // 8) % 2` (0 = SPI0, 1 = SPI1), `spi sig = [RX,CSn,SCK,TX][g%4]`;
    `i2c bus = 0 if g%4 in {0,1} else 1`, `i2c sig = SDA if g even else SCL`;
-   `pwm chan = A if g even else B`; `adc = g-26` for GP26/27/28.
+   `pwm chan = A if g even else B`; `adc = g-26` for GP26–29 (A0–A3).
+   (UART instance isn't a clean formula — read it from the datasheet table; most
+   non-TX/RX pins are CTS/RTS, so only mark `uart` where the pad is actually TX/RX.)
+   ⚠️ Do NOT use `1 if g in 8..15 or 26..28` for the SPI bus — that only *looks*
+   right on the Pico (which lacks GP24/25/29); it mis-assigns GP24/25/29 (e.g. on
+   the Feather RP2040's D24/D25/A3). Use the `//8 % 2` form.
    Note the **GP## GPIO** even when the silk label differs (e.g. a pad silk-printed
    `SDA` that is really `GP4`) — set both `name: SDA` and `gpio: 4`.
 3. **Draw the board — always with a real image.** Embed a cropped top-down board
@@ -321,10 +348,77 @@ Allowed values:
 - For an **MCU board** (so it appears in the Board View's board picker) set
   `family: Microcontroller` and give each GPIO pin its `gpio` number.
 
+## Non-board parts: also ship a mini-help + driver
+
+A **board** is finished at the confirmed pin table. A **non-board part** (sensor,
+display, driver IC, motor driver, comms module) ships **three** things — see the
+[Parts Library epic](../../../docs/parts-library-epic.md):
+
+1. **The part** (`parts.yml` + image), as above. Pick the right `family`
+   (`Sensor` · `Display` · `Motor` · `IC` · `Power` · `Communication` · `Input` ·
+   `Output`) and add a **sub-category tag** (`env`, `imu`, `light`, `distance`,
+   `tft`, `oled`, `epaper`, `segment`, `rtc`, `gpio-expander`, `adc`, `dac`,
+   `pwm-driver`, `mux`, `addressable-led`, `audio`, `wifi`, `lora`, `nfc`, …). A
+   breakout's header pins ARE its interface: give each its `capabilities` +
+   `signals` (an I²C sensor's SDA/SCL get `[i2c]` + `signals.i2c`; an SPI display's
+   SCK/MOSI/MISO/CS get `[spi]` + `signals.spi` SCK/TX/RX/CSn). Cross-check
+   VIN/3V3/5V/GND — still safety-critical.
+
+2. **A mini-help article** — `help.md` in the part folder (template below): one-line
+   *what it is*, a *wiring* table (part pin → typical board pin), a *minimal
+   MicroPython snippet*, the *driver install* line, and *links* (datasheet, the
+   CircuitPython driver, the MicroPython driver).
+
+3. **A driver** — populate `library` (`module` import name, install `url` — a
+   `mip`/`github:` spec — and `docs`) and/or `drivers` (files to copy onto the
+   board). **Prefer an existing MicroPython driver**; note the built-ins that ship
+   with MicroPython (`ssd1306`, `neopixel`, `dht`, `ds18x20`, `onewire`). If only a
+   **CircuitPython** driver exists, link it and mark **“port needed”** — do NOT
+   invent an untested driver; flag it for the user. (CircuitPython `displayio`/
+   `busio` drivers usually port to MicroPython's `framebuf` + `machine.SPI`/`I2C`
+   with the same init/register sequence.)
+
+To identify the part + interface, use the **CircuitPython driver bundle**
+([drivers list](https://docs.circuitpython.org/projects/bundle/en/latest/drivers.html)) —
+it names the chip, category and bus for ~380 parts. Then find/port the MP driver.
+
+### `help.md` template
+
+```markdown
+# <Part name> (<chip>)
+<One line: what it does · interface · voltage.>
+
+## Wiring
+| <Part> pin | Board pin |
+|-----------|-----------|
+| VIN | 3V3 |
+| GND | GND |
+| SDA | SDA (I²C) |
+| SCL | SCL (I²C) |
+
+## MicroPython
+​```python
+from machine import I2C, Pin
+import <module>
+i2c = I2C(0, sda=Pin(4), scl=Pin(5))
+dev = <module>.<Class>(i2c)
+print(dev.<reading>)
+​```
+Install the driver: `mip.install("<spec>")` (or copy `lib/<module>.py`).
+
+## Links
+- Datasheet · CircuitPython driver · MicroPython driver
+```
+
+A full worked example (the **HX8357** SPI TFT) is in the
+[epic](../../../docs/parts-library-epic.md#worked-example--hx8357-the-one-you-asked-for).
+
 ## References
 
 - The schema + behaviour: `docs/parts-library.md`, `docs/part-editor.md`,
   `src/shared/part.ts`, and the snakie.org docs `reference/parts-yml`.
-- The target part wishlist to work through: [`docs/common-parts.md`](../../../docs/common-parts.md) (#199).
+- The target part wishlist: [`docs/parts-library-epic.md`](../../../docs/parts-library-epic.md)
+  (categorised, with the per-part definition of done) — supersedes the
+  [`common-parts.md`](../../../docs/common-parts.md) seed (#199).
 - After authoring, a maintainer promotes the part into the **Standard library**
   and **Publishes** it (developer mode) so users get it via the update check.
