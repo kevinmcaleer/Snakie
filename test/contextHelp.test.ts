@@ -30,6 +30,31 @@ describe('context help resolver (#221)', () => {
     expect(resolveHelpTarget('sleep_ms', [])?.articleId).toBe('ref-timing')
     expect(resolveHelpTarget('print', [])?.articleId).toBe('ref-print')
   })
+  it('resolves standard Python keywords, types and built-ins', () => {
+    // keywords → control flow / functions / classes / exceptions / imports
+    expect(resolveHelpTarget('while', [])?.articleId).toBe('ref-flow')
+    expect(resolveHelpTarget('elif', [])?.articleId).toBe('ref-flow')
+    expect(resolveHelpTarget('def', [])?.articleId).toBe('ref-functions')
+    expect(resolveHelpTarget('return', [])?.articleId).toBe('ref-functions')
+    expect(resolveHelpTarget('class', [])?.articleId).toBe('ref-classes')
+    expect(resolveHelpTarget('self', [])?.articleId).toBe('ref-classes')
+    expect(resolveHelpTarget('try', [])?.articleId).toBe('ref-exceptions')
+    expect(resolveHelpTarget('OSError', [])?.articleId).toBe('ref-exceptions')
+    expect(resolveHelpTarget('import', [])?.articleId).toBe('ref-imports')
+    // types + built-ins
+    expect(resolveHelpTarget('dict', [])?.articleId).toBe('ref-types')
+    expect(resolveHelpTarget('bytearray', [])?.articleId).toBe('ref-types')
+    expect(resolveHelpTarget('None', [])?.articleId).toBe('ref-types')
+    expect(resolveHelpTarget('len', [])?.articleId).toBe('ref-builtins')
+    expect(resolveHelpTarget('range', [])?.articleId).toBe('ref-builtins')
+    expect(resolveHelpTarget('enumerate', [])?.articleId).toBe('ref-builtins')
+  })
+  it('every language topic maps to a registered help article with content', async () => {
+    const { HELP_ARTICLES } = await import('../src/renderer/src/components/help-articles')
+    for (const id of new Set(Object.values(LANGUAGE_HELP))) {
+      expect((HELP_ARTICLES[id] ?? '').length, id).toBeGreaterThan(100)
+    }
+  })
   it('parts win over the language table', () => {
     // A hypothetical part whose module collides with a language symbol.
     const pwmPart: PartDefinition = { id: 'pca9685', name: 'PCA9685', headers: [], library: { module: 'pwm' } }

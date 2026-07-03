@@ -8,25 +8,59 @@
  */
 import type { PartDefinition } from '../../../shared/part'
 
-/** Language-reference topics by (lower-cased) symbol → help article id. */
-export const LANGUAGE_HELP: Record<string, string> = {
-  machine: 'ref-pins',
-  pin: 'ref-pins',
-  adc: 'ref-pins',
-  pwm: 'ref-pwm',
-  i2c: 'ref-i2c',
-  softi2c: 'ref-i2c',
-  spi: 'ref-spi',
-  softspi: 'ref-spi',
-  uart: 'ref-uart',
-  time: 'ref-timing',
-  sleep: 'ref-timing',
-  sleep_ms: 'ref-timing',
-  sleep_us: 'ref-timing',
-  ticks_ms: 'ref-timing',
-  ticks_diff: 'ref-timing',
-  print: 'ref-print'
+/** Fold a word list into `map` → one target article id (builder for the table). */
+function topic(map: Record<string, string>, words: string[], article: string): void {
+  for (const w of words) map[w] = article
 }
+
+/**
+ * Language-reference topics by (lower-cased) symbol → help article id. Covers
+ * the hardware modules PLUS standard Python: keywords, the common value types,
+ * and the everyday built-ins — so right-clicking `while`, `dict` or `len`
+ * lands on the matching reference page.
+ */
+export const LANGUAGE_HELP: Record<string, string> = (() => {
+  const m: Record<string, string> = {}
+  // Hardware / MicroPython modules.
+  topic(m, ['machine', 'pin', 'adc'], 'ref-pins')
+  topic(m, ['pwm'], 'ref-pwm')
+  topic(m, ['i2c', 'softi2c'], 'ref-i2c')
+  topic(m, ['spi', 'softspi'], 'ref-spi')
+  topic(m, ['uart'], 'ref-uart')
+  topic(m, ['time', 'sleep', 'sleep_ms', 'sleep_us', 'ticks_ms', 'ticks_us', 'ticks_diff'], 'ref-timing')
+  topic(m, ['print'], 'ref-print')
+  // Control flow (keywords + boolean/membership operators).
+  topic(
+    m,
+    ['if', 'elif', 'else', 'for', 'while', 'break', 'continue', 'pass', 'and', 'or', 'not', 'in', 'is'],
+    'ref-flow'
+  )
+  // Functions & scope.
+  topic(m, ['def', 'return', 'lambda', 'global', 'nonlocal', 'yield'], 'ref-functions')
+  // Classes.
+  topic(m, ['class', 'self', 'super', 'property', '__init__'], 'ref-classes')
+  // Errors & exceptions.
+  topic(
+    m,
+    ['try', 'except', 'finally', 'raise', 'assert', 'oserror', 'valueerror', 'typeerror', 'keyerror', 'exception'],
+    'ref-exceptions'
+  )
+  // Imports & modules.
+  topic(m, ['import', 'from', 'as', 'sys', 'os'], 'ref-imports')
+  // Values & types.
+  topic(
+    m,
+    ['int', 'float', 'str', 'bool', 'list', 'dict', 'tuple', 'set', 'bytes', 'bytearray', 'none', 'true', 'false', 'complex', 'frozenset'],
+    'ref-types'
+  )
+  // Everyday built-ins.
+  topic(
+    m,
+    ['len', 'range', 'enumerate', 'zip', 'min', 'max', 'sum', 'abs', 'round', 'sorted', 'reversed', 'input', 'type', 'isinstance', 'hex', 'bin', 'chr', 'ord', 'dir', 'help', 'map', 'filter', 'open'],
+    'ref-builtins'
+  )
+  return m
+})()
 
 export interface HelpTarget {
   articleId: string

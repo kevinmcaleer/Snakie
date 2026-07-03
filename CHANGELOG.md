@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Context help for standard MicroPython code.** Right-click → "Help for
+  symbol" now covers the language itself, not just hardware modules: keywords
+  (`if`/`while`/`def`/`class`/`try`/`import` …), value types (`int`, `str`,
+  `list`, `dict`, `bytes` …) and everyday built-ins (`len`, `range`,
+  `enumerate` …) open seven new mini-help reference articles — Control flow,
+  Functions, Values & types, Built-ins, Classes, Errors & exceptions, and
+  Imports & modules.
 - **Device files refresh after installs.** Installing a part driver (either
   missing-library banner), the instruments library, or a mip package now
   re-lists the connected board's file tree automatically — the new files in
