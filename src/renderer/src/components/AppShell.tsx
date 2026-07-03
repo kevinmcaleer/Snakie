@@ -548,6 +548,23 @@ export function AppShell(): JSX.Element {
   // the required-modules load below re-runs and the parts banner reflects it.
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  // Belt-and-braces reconcile: parts are usually added/removed in the SEPARATE
+  // Board View window, so the user's next move is to click back to THIS window. Re-
+  // read robot.yml whenever the main window regains focus/visibility, so the parts
+  // banner always reflects the current build even if the live robot:didChange push
+  // was missed while this window was backgrounded.
+  useEffect(() => {
+    const bump = (): void => setRobotNonce((n) => n + 1)
+    const onVisible = (): void => {
+      if (document.visibilityState === 'visible') bump()
+    }
+    window.addEventListener('focus', bump)
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      window.removeEventListener('focus', bump)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
+  }, [])
   const [installedModules, setInstalledModules] = useState<Set<string> | null>(null)
   const [partsDismissed, setPartsDismissed] = useState(false)
   const [partsInstalling, setPartsInstalling] = useState(false)
