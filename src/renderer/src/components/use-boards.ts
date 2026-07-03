@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { resolveBoards } from './part-editor.util'
+import { PARTS_CHANGED_EVENT } from './PartsPanel'
 import type { BoardDefinition } from '../../../shared/board'
 
 /**
@@ -26,10 +27,19 @@ export function useBoards(): BoardDefinition[] {
       if (alive) setBoards(resolveBoards(libs, userBoards))
     }
     void load()
-    const off = window.api.board.onSelectBoard(() => void load())
+    const reload = (): void => void load()
+    const off = window.api.board.onSelectBoard(reload)
+    // Refresh when a part/library is authored — from ANOTHER window (the Part
+    // Editor, via the main-process `parts:didChange` broadcast) or THIS one (the
+    // same-window PARTS_CHANGED_EVENT) — so e.g. adding I²C pins to a board part
+    // shows up in the I²C-detect pin dropdowns without an app reload.
+    const offParts = window.api.parts.onChanged(reload)
+    window.addEventListener(PARTS_CHANGED_EVENT, reload)
     return () => {
       alive = false
       off()
+      offParts()
+      window.removeEventListener(PARTS_CHANGED_EVENT, reload)
     }
   }, [])
   return boards

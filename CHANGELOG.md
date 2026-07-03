@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Board part edits refresh live in other windows.** Authoring a board in the
+  Part Editor (e.g. adding Qwiic I²C pins) now updates the main window's board
+  list + the I²C-detect pin dropdowns immediately, instead of needing an app
+  reload. `parts:savePart`/`deletePart`/`createLibrary`/`deleteLibrary`/
+  `installLibrary` broadcast a `parts:didChange` to the other windows, and
+  `useBoards` re-reads on it (and on the same-window parts-changed event).
+
 ### Added
 - **Breadboard background setting + parchment library panel.** The Board View's
   library dock now uses the same warm **parchment** (`--bg`) as the local Files

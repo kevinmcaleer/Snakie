@@ -943,7 +943,15 @@ const parts = {
     ipcRenderer.invoke('parts:checkUpdates', url),
   /** The result of the on-startup update check (cached in main), for an instant
    *  indicator without re-hitting the network (#194). */
-  cachedUpdates: (): Promise<LibraryUpdate[]> => ipcRenderer.invoke('parts:cachedUpdates')
+  cachedUpdates: (): Promise<LibraryUpdate[]> => ipcRenderer.invoke('parts:cachedUpdates'),
+  /** Subscribe to parts/libraries changing in ANOTHER window (e.g. the Part
+   *  Editor saving a board's pins). Lets the main window's board list + the
+   *  I²C-detect pin dropdowns refresh without an app reload. Returns unsubscribe. */
+  onChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('parts:didChange', listener)
+    return () => ipcRenderer.removeListener('parts:didChange', listener)
+  }
 }
 
 /**

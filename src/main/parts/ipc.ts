@@ -17,7 +17,7 @@
  *   parts:checkUpdates    → which installed libraries have a newer registry version
  */
 
-import { ipcMain, shell } from 'electron'
+import { BrowserWindow, ipcMain, shell } from 'electron'
 import { promises as fsp } from 'fs'
 import {
   LOCAL_LIBRARY_ID,
@@ -39,6 +39,17 @@ import type { LibraryUpdate, PartDefinition, PartLibrary, RegistryEntry } from '
 /** Result of the most recent update check — primed once on startup (#194) so the
  *  parts UI can show an "update available" indicator instantly. */
 let cachedUpdates: LibraryUpdate[] = []
+
+/** Tell every OTHER window that the parts/libraries on disk changed, so their
+ *  cached board list + pin dropdowns (I²C-detect) refresh without an app reload.
+ *  The originating window updates itself via its own PARTS_CHANGED_EVENT. */
+function broadcastPartsChanged(exceptSenderId?: number): void {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (!w.isDestroyed() && w.webContents.id !== exceptSenderId) {
+      w.webContents.send('parts:didChange')
+    }
+  }
+}
 
 /** Payload for `parts:savePart`. */
 interface SavePartArgs {
@@ -71,7 +82,7 @@ export function registerPartsIpc(): void {
     await shell.openPath(dir)
   })
 
-  ipcMain.handle('parts:savePart', async (_e, args: SavePartArgs) => {
+  ipcMain.handle('parts:savePart', async (e, args: SavePartArgs) => {
     const libraryId = args?.libraryId?.trim() || LOCAL_LIBRARY_ID
     // Auto-provision the local "my-parts" library so a first save just works.
     if (libraryId === LOCAL_LIBRARY_ID) {
@@ -85,24 +96,38 @@ export function registerPartsIpc(): void {
     } else {
       await ensureLibrary({ id: libraryId, name: libraryId })
     }
-    return writePart(libraryId, args.part)
+    const res = await writePart(libraryId, args.part)
+    broadcastPartsChanged(e.sender.id)
+    return res
   })
 
-  ipcMain.handle('parts:deletePart', (_e, args: DeletePartArgs) =>
-    deletePart(args?.libraryId ?? '', args?.partId ?? '')
-  )
+  ipcMain.handle('parts:deletePart', async (e, args: DeletePartArgs) => {
+    const res = await deletePart(args?.libraryId ?? '', args?.partId ?? '')
+    broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
-  ipcMain.handle('parts:promoteToStandard', (_e, args: { libraryId: string; partId: string }) =>
-    promoteToStandard(args?.libraryId ?? '', args?.partId ?? '')
-  )
+  ipcMain.handle('parts:promoteToStandard', async (e, args: { libraryId: string; partId: string }) => {
+    const res = await promoteToStandard(args?.libraryId ?? '', args?.partId ?? '')
+    broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
   ipcMain.handle('parts:publishStandard', (_e, message?: string) =>
     publishStandardLibrary(message || undefined)
   )
 
-  ipcMain.handle('parts:createLibrary', (_e, meta: PartLibrary) => createLibrary(meta))
+  ipcMain.handle('parts:createLibrary', async (e, meta: PartLibrary) => {
+    const res = await createLibrary(meta)
+    broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
-  ipcMain.handle('parts:deleteLibrary', (_e, libraryId: string) => deleteLibrary(libraryId))
+  ipcMain.handle('parts:deleteLibrary', async (e, libraryId: string) => {
+    const res = await deleteLibrary(libraryId)
+    broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
   ipcMain.handle(
     'parts:readDriverSource',
@@ -112,7 +137,11 @@ export function registerPartsIpc(): void {
 
   ipcMain.handle('parts:fetchRegistry', (_e, url?: string) => fetchRegistry(url || undefined))
 
-  ipcMain.handle('parts:installLibrary', (_e, entry: RegistryEntry) => installLibrary(entry))
+  ipcMain.handle('parts:installLibrary', async (e, entry: RegistryEntry) => {
+    const res = await installLibrary(entry)
+    broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
   ipcMain.handle('parts:checkUpdates', async (_e, url?: string) => {
     cachedUpdates = await checkUpdates(url || undefined)
