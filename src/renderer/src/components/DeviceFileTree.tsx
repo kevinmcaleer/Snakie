@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -128,6 +128,12 @@ interface DeviceTreeNodeProps {
    * changes to the same directory still trigger a reload.
    */
   reloadDir: { path: string; token: number } | null
+  /**
+   * Bumped by the header Refresh action (#220): EVERY node that has already
+   * loaded its children re-lists them, so refreshing updates all folders — not
+   * just the root — while keeping the user's expansion state.
+   */
+  refreshToken: number
 }
 
 /** Recursively renders a device entry and (when expanded) its children. */
@@ -139,7 +145,8 @@ function DeviceTreeNode({
   onSelect,
   onOpenFile,
   onContextMenu,
-  reloadDir
+  reloadDir,
+  refreshToken
 }: DeviceTreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<DirEntry[] | null>(null)
@@ -162,6 +169,17 @@ function DeviceTreeNode({
     }
     // `reloadDir.token` changes on every signal, so identical-path reloads fire.
   }, [reloadDir, path, children, loadChildren])
+
+  // A full Refresh (#220): re-list this folder too if it was ever loaded, so the
+  // whole visible tree updates — not only the root. Skip the mount render (token
+  // 0 → nothing to do; children were just lazily loaded or are still null).
+  const lastRefresh = useRef(refreshToken)
+  useEffect(() => {
+    if (refreshToken !== lastRefresh.current) {
+      lastRefresh.current = refreshToken
+      if (children !== null) void loadChildren()
+    }
+  }, [refreshToken, children, loadChildren])
 
   const toggle = useCallback(async (): Promise<void> => {
     if (!expanded && children === null) await loadChildren()
@@ -216,6 +234,7 @@ function DeviceTreeNode({
             onOpenFile={onOpenFile}
             onContextMenu={onContextMenu}
             reloadDir={reloadDir}
+            refreshToken={refreshToken}
           />
         ))}
     </div>
@@ -256,6 +275,8 @@ export function DeviceFileTree(): JSX.Element {
   const [menu, setMenu] = useState<MenuState | null>(null)
   // Signal used to tell already-expanded nodes to re-list a changed directory.
   const [reloadDir, setReloadDir] = useState<{ path: string; token: number } | null>(null)
+  // Bumped on every full refresh so already-loaded FOLDERS re-list too (#220).
+  const [refreshToken, setRefreshToken] = useState(0)
   // Flash usage for the bottom gauge (#211); null ⇒ unavailable, so it hides.
   const [disk, setDisk] = useState<DiskUsage | null>(null)
 
@@ -271,6 +292,9 @@ export function DeviceFileTree(): JSX.Element {
       setEntries(list)
       setDisk(df)
       setError(null)
+      // Tell every loaded folder node to re-list as well (#220) — a refresh
+      // updates the WHOLE tree, not just the root, keeping expansion state.
+      setRefreshToken((t) => t + 1)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -618,6 +642,7 @@ export function DeviceFileTree(): JSX.Element {
             onOpenFile={handleOpenFile}
             onContextMenu={handleContextMenu}
             reloadDir={reloadDir}
+            refreshToken={refreshToken}
           />
         ))}
         {!loading && !error && entries.length === 0 && (
