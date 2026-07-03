@@ -55,6 +55,13 @@ export function simulatedTelemetryFrame(tick: number): string[] {
   const light = Math.round(50 + 40 * Math.sin(phase * 0.5 + 1))
   lines.push(`${SNK} PLOT temp=${fixed(temp, 1)} light=${light}`)
 
+  // Barometer/BME280: temperature (°C), pressure (hPa) drifting CHANGE→FAIR and
+  // relative humidity (%RH) — so the Barometer's dial, thermometer and hygrometer
+  // all animate on the simulated device (#216).
+  const pressure = 1009 + 8 * Math.sin(phase * 0.15)
+  const humidity = Math.round(52 + 12 * Math.sin(phase * 0.22 + 0.5))
+  lines.push(`${SNK} ENV env ${fixed(temp, 1)} ${fixed(pressure, 1)} ${humidity}`)
+
   // IMU: a gentle tumble in roll / pitch / yaw (degrees).
   lines.push(
     `${SNK} IMU imu ${fixed(20 * Math.sin(phase))} ${fixed(15 * Math.sin(phase * 0.8 + 1))} ${fixed(
@@ -73,7 +80,7 @@ export function simulatedTelemetryFrame(tick: number): string[] {
 
   // Heartbeat every ~2 s advertising the simulated capabilities.
   if (tick % 16 === 0) {
-    lines.push(`${SNK} READY scope meter plot imu dist enc btn`)
+    lines.push(`${SNK} READY scope meter plot env imu dist enc btn`)
   }
 
   return lines

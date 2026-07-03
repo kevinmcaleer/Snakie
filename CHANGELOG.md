@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Barometer gains a thermometer + humidity dial (#216).** The Barometer
+  instrument now stands the aneroid dial beside a skeuomorphic mercury-in-glass
+  **thermometer** (−10…50 °C, mounted on a dark backing strip that reads in any
+  theme) and tucks a **much smaller hygrometer dial** into the footer — a 270°
+  humidity gauge with a blue "DRY" arc and a red "DAMP" arc marking the extremes.
+  The simulated device now also streams `SNK ENV` telemetry, so the dial,
+  thermometer and hygrometer all animate on the virtual board.
 - **Context help for standard MicroPython code.** Right-click → "Help for
   symbol" now covers the language itself, not just hardware modules: keywords
   (`if`/`while`/`def`/`class`/`try`/`import` …), value types (`int`, `str`,

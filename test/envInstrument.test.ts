@@ -7,8 +7,16 @@ import {
   dialPoint,
   pressureAngle,
   weatherWord,
+  clampTemp,
+  tempFraction,
+  clampHumidity,
+  humidityAngle,
+  humidityWord,
+  describeArc,
   PRESS_MIN,
-  PRESS_MAX
+  PRESS_MAX,
+  TEMP_MIN,
+  TEMP_MAX
 } from '../src/renderer/src/components/env-logic'
 import { EnvInstrument } from '../src/renderer/src/components/EnvInstrument'
 import { INSTRUMENTS, instrumentById } from '../src/renderer/src/components/instruments-registry'
@@ -57,6 +65,44 @@ describe('barometer dial geometry (#216)', () => {
   })
 })
 
+describe('thermometer geometry (#216)', () => {
+  it('fills 0 at the bulb (min) and 1 at the top (max), clamped', () => {
+    expect(tempFraction(TEMP_MIN)).toBe(0)
+    expect(tempFraction(TEMP_MAX)).toBe(1)
+    expect(tempFraction((TEMP_MIN + TEMP_MAX) / 2)).toBeCloseTo(0.5)
+    expect(tempFraction(999)).toBe(1) // clamped
+    expect(tempFraction(Number.NaN)).toBe(0)
+  })
+  it('clampTemp holds the printed range', () => {
+    expect(clampTemp(-100)).toBe(TEMP_MIN)
+    expect(clampTemp(100)).toBe(TEMP_MAX)
+    expect(clampTemp(21.5)).toBe(21.5)
+  })
+})
+
+describe('hygrometer geometry (#216)', () => {
+  it('sweeps 0..100 % across the same 270° as the barometer', () => {
+    expect(humidityAngle(0)).toBe(-135)
+    expect(humidityAngle(50)).toBe(0)
+    expect(humidityAngle(100)).toBe(135)
+    expect(humidityAngle(200)).toBe(135) // clamped
+  })
+  it('names the blue/red extremes', () => {
+    expect(humidityWord(10)).toBe('DRY')
+    expect(humidityWord(50)).toBe('NORMAL')
+    expect(humidityWord(90)).toBe('DAMP')
+  })
+  it('clampHumidity holds 0..100', () => {
+    expect(clampHumidity(-5)).toBe(0)
+    expect(clampHumidity(150)).toBe(100)
+    expect(clampHumidity(Number.NaN)).toBe(0)
+  })
+  it('describeArc emits a single-radius SVG arc between two angles', () => {
+    const d = describeArc(46, 44, 30, humidityAngle(0), humidityAngle(30))
+    expect(d).toMatch(/^M [\d.-]+ [\d.-]+ A 30 30 0 [01] [01] [\d.-]+ [\d.-]+$/)
+  })
+})
+
 describe('EnvInstrument render (#216)', () => {
   const def = instrumentById('env')!
   it('registers the env singleton with BME-ish hints', () => {
@@ -80,5 +126,19 @@ describe('EnvInstrument render (#216)', () => {
     expect(html).toContain('TEMP')
     expect(html).toContain('HUMIDITY')
     expect(html).toContain('——')
+  })
+  it('draws the thermometer (glass tube, mercury, °C scale)', () => {
+    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true }))
+    expect(html).toContain('envtherm__glass')
+    expect(html).toContain('envtherm__hg')
+    expect(html).toContain('°C')
+  })
+  it('draws the hygrometer with blue-dry / red-damp extremes', () => {
+    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true }))
+    expect(html).toContain('envhygro__dial')
+    expect(html).toContain('envhygro__arc--dry')
+    expect(html).toContain('envhygro__arc--damp')
+    expect(html).toContain('DRY')
+    expect(html).toContain('DAMP')
   })
 })

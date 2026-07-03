@@ -40,7 +40,7 @@ describe('simulatedTelemetryFrame', () => {
       .map((l) => parseTelemetry(l))
       .filter((r): r is NonNullable<typeof r> => r !== null)
     const kinds = new Set(readings.map((r) => r.kind))
-    for (const kind of ['scope', 'meter', 'plot', 'imu', 'dist', 'enc', 'btn']) {
+    for (const kind of ['scope', 'meter', 'plot', 'env', 'imu', 'dist', 'enc', 'btn']) {
       expect(kinds.has(kind as never)).toBe(true)
     }
   })

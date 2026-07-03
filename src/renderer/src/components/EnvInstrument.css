@@ -7,9 +7,23 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 10px;
+  border-radius: 6px;
+  /* One uniform dark instrument face behind the whole barometer. */
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+/* The barometer dial + the thermometer, standing side by side. */
+.envbaro__gauges {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .envbaro__face {
+  flex: 1 1 auto;
+  min-width: 0;
   filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
 }
 
@@ -17,6 +31,55 @@
   display: block;
   width: 100%;
   height: auto;
+}
+
+/* The thermometer, standing on the shared dark instrument face. */
+.envbaro__therm {
+  flex: 0 0 52px;
+  display: flex;
+  align-items: center;
+  padding: 6px 3px;
+}
+
+.envtherm__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Glass tube + bulb (cool tint, faint like real thermometer glass). */
+.envtherm__glass {
+  fill: rgba(228, 236, 240, 0.14);
+  stroke: #cdd6db;
+  stroke-width: 1.2;
+}
+
+/* The mercury/alcohol column — warm red, eases between readings. */
+.envtherm__hg {
+  fill: #d0342c;
+  transition: y 300ms ease, height 300ms ease, cy 300ms ease;
+}
+
+.envtherm__gloss {
+  fill: rgba(255, 255, 255, 0.5);
+}
+
+.envtherm__tick {
+  stroke: #cbd2d8;
+  stroke-width: 1;
+}
+
+.envtherm__num {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 8px;
+  fill: #b7bec6;
+}
+
+.envtherm__unit {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  fill: #cdd6db;
 }
 
 /* Polished brass bezel ring around the dial. */
@@ -87,15 +150,90 @@
   stroke-width: 1;
 }
 
-/* Bottom row: temp / humidity / outlook cells + the source picker. */
+/* Footer: the small humidity dial + temp/humidity/outlook cells + picker.
+   Sits on the shared dark face; a hairline rule separates it from the gauges. */
 .envbaro__row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  background: rgba(6, 9, 11, 0.7);
-  border: 1px solid var(--accent-border);
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--accent-border);
+}
+
+/* The much-smaller hygrometer dial tucked into the footer. */
+.envbaro__hygro {
+  flex: 0 0 62px;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+.envhygro__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.envhygro__bezel {
+  fill: none;
+  stroke-width: 6;
+  stroke: var(--accent, #b58a3a);
+}
+
+.envhygro__dial {
+  fill: #f4ecd9;
+  stroke: #d8c9a5;
+  stroke-width: 1;
+}
+
+/* The extremes: blue = dry, red = damp. */
+.envhygro__arc {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.envhygro__arc--dry {
+  stroke: #2f6fb0;
+}
+
+.envhygro__arc--damp {
+  stroke: #c0392b;
+}
+
+.envhygro__end {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.envhygro__end--dry {
+  fill: #2f6fb0;
+}
+
+.envhygro__end--damp {
+  fill: #c0392b;
+}
+
+.envhygro__pct {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  fill: #2e2618;
+}
+
+.envhygro__needle {
+  stroke: #1d1a14;
+  stroke-width: 2;
+  stroke-linecap: round;
+  transition: x1 300ms ease, y1 300ms ease, x2 300ms ease, y2 300ms ease;
+}
+
+.envhygro__hub {
+  fill: var(--accent, #b58a3a);
+  stroke: #7a5c22;
+  stroke-width: 1;
 }
 
 .envbaro__cell {
@@ -138,7 +276,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .envbaro__needle {
+  .envbaro__needle,
+  .envhygro__needle,
+  .envtherm__hg {
     transition: none;
   }
 }
