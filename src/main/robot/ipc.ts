@@ -8,7 +8,7 @@
  * handlers return serialisable values and never throw across the bridge.
  */
 
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
@@ -54,10 +54,17 @@ export function registerRobotIpc(): void {
 
   ipcMain.handle(
     'robot:save',
-    async (_e, args: { folder?: string; def: RobotDefinition }): Promise<{ ok: boolean; error?: string }> => {
+    async (e, args: { folder?: string; def: RobotDefinition }): Promise<{ ok: boolean; error?: string }> => {
       try {
         const path = await robotPath(args?.folder)
         await queuedWrite(path, robotToYaml(args.def))
+        // Edits happen in the Board View window; tell the OTHER windows so e.g. the
+        // main window's parts-import banner re-reads (a removed part clears its nag).
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed() && w.webContents.id !== e.sender.id) {
+            w.webContents.send('robot:didChange')
+          }
+        }
         return { ok: true }
       } catch (err) {
         return { ok: false, error: (err as Error).message }

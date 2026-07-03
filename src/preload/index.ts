@@ -955,7 +955,14 @@ const robot = {
   load: (folder?: string): Promise<RobotDefinition> => ipcRenderer.invoke('robot:load', folder),
   /** Save the robot definition. Resolves to {ok,error} — never rejects. */
   save: (folder: string | undefined, def: RobotDefinition): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke('robot:save', { folder, def })
+    ipcRenderer.invoke('robot:save', { folder, def }),
+  /** Subscribe to robot.yml changes from ANOTHER window (e.g. the Board View
+   *  adding/removing a part). Returns an unsubscribe. */
+  onChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('robot:didChange', listener)
+    return () => ipcRenderer.removeListener('robot:didChange', listener)
+  }
 }
 
 // Minimal, typed API exposed to the renderer. This establishes the IPC

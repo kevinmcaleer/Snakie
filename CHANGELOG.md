@@ -117,6 +117,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their capability chips line up.
 
 ### Fixed
+- **Removing a part clears its "your code doesn't import …" nag.** The main
+  window's parts-import banner only re-read `robot.yml` on connect / file-open /
+  folder change — not when the Board View window added/removed a part. It now
+  refreshes on a cross-window robot-changed signal, so removing e.g. the SG90
+  drops its import prompt immediately.
 - **The board-library UPDATE prompt now actually fires (version was misparsed).**
   `parseLibVersion` matched the first `__version__ = "…"` in the source — which was
   the `"X.Y.Z"` example inside the doc comment above the real assignment. So every

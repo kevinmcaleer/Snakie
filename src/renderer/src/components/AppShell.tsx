@@ -544,14 +544,18 @@ export function AppShell(): JSX.Element {
   // connects or a .py file opens, flag any required module the file doesn't import
   // and/or the board doesn't have installed, and offer to install the missing ones.
   const [requiredModules, setRequiredModules] = useState<RequiredModule[]>([])
+  // Bumped when the Board View window saves robot.yml (adds/removes a part), so
+  // the required-modules load below re-runs and the parts banner reflects it.
+  const [robotNonce, setRobotNonce] = useState(0)
+  useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
   const [installedModules, setInstalledModules] = useState<Set<string> | null>(null)
   const [partsDismissed, setPartsDismissed] = useState(false)
   const [partsInstalling, setPartsInstalling] = useState(false)
   const [partsInstallError, setPartsInstallError] = useState<string | null>(null)
 
   // Load the required modules from the project's robot.yml + installed libraries.
-  // Refreshed on connect / file-open / folder change (the issue's triggers) — no
-  // cross-window event needed.
+  // Refreshed on connect / file-open / folder change AND when the Board View saves
+  // the robot (robotNonce) — so removing a part clears its import nag.
   useEffect(() => {
     let active = true
     void (async (): Promise<void> => {
@@ -568,7 +572,7 @@ export function AppShell(): JSX.Element {
     return () => {
       active = false
     }
-  }, [boardFolder, boardFileName, connected])
+  }, [boardFolder, boardFileName, connected, robotNonce])
 
   // Probe the board (once per connection, and again on a project change) for which
   // required modules import. Including boardFolder avoids a stale probe set when you
