@@ -349,6 +349,26 @@ export function deriveInUse(source: string, isPython: boolean): Set<string> {
 }
 
 /**
+ * Whether a placed part's driver `module` is already covered by an IN-USE
+ * instrument — so the "your file doesn't import <module>" / "the board is missing
+ * <module>" nag can be suppressed for a part the user drives through its
+ * INSTRUMENT (the control/telemetry channel) instead of its driver library.
+ *
+ * A module matches an in-use instrument when that instrument's `id` equals the
+ * module OR its `hints` list the module verbatim (e.g. the `servo` instrument's
+ * id `servo` / hint `servo` covers the SG90 part's `library.module: servo`). Exact
+ * matching only — a fuzzy match could wrongly hide a genuine missing-import.
+ * Pure + unit-testable.
+ */
+export function moduleCoveredByInstrument(module: string, inUse: Set<string>): boolean {
+  const m = module.trim().toLowerCase()
+  if (!m) return false
+  return INSTRUMENTS.some(
+    (d) => inUse.has(d.id) && (d.id === m || (d.hints ?? []).includes(m))
+  )
+}
+
+/**
  * The default per-singleton visibility map: in-use singletons start VISIBLE
  * (prominent), the rest start hidden (discoverable via the palette). The Plotter
  * is always-available, so when nothing marks it in-use we still default it ON so

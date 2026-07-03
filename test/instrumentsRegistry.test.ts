@@ -9,6 +9,7 @@ import {
   groupInstruments,
   instrumentById,
   isVisible,
+  moduleCoveredByInstrument,
   normaliseVisibility,
   type InstrumentDef
 } from '../src/renderer/src/components/instruments-registry'
@@ -142,6 +143,27 @@ describe('deriveInUse', () => {
     const inUse = deriveInUse(src, true)
     expect(inUse.has('imu')).toBe(false)
     expect(inUse.has('scope')).toBe(false)
+  })
+})
+
+describe('moduleCoveredByInstrument', () => {
+  it('is covered when a matching instrument is in use (servo part via the Servo instrument)', () => {
+    // servo_showcase.py drives the SG90 through the Servo instrument, not `import servo`.
+    expect(moduleCoveredByInstrument('servo', new Set(['servo']))).toBe(true)
+  })
+  it('is NOT covered when no instrument is in use (a genuine missing import stands)', () => {
+    expect(moduleCoveredByInstrument('servo', new Set())).toBe(false)
+    expect(moduleCoveredByInstrument('servo', new Set(['scope', 'meter']))).toBe(false)
+  })
+  it('matches an instrument by a verbatim hint, not just its id', () => {
+    // The Servo instrument hints include mg90/sg90; a part whose module is a hint counts.
+    const covered = INSTRUMENTS.find((d) => d.hints?.includes('sg90'))
+    expect(covered).toBeTruthy()
+    expect(moduleCoveredByInstrument('sg90', new Set([covered!.id]))).toBe(true)
+  })
+  it('does not fuzzy-match an unrelated module', () => {
+    expect(moduleCoveredByInstrument('vl53l0x', new Set(['servo']))).toBe(false)
+    expect(moduleCoveredByInstrument('', new Set(['servo']))).toBe(false)
   })
 })
 

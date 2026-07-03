@@ -21,7 +21,7 @@ import {
   type InstrumentVisibility,
   type OpenInstrument
 } from './InstrumentHost'
-import { defaultVisibility, deriveInUse } from './instruments-registry'
+import { defaultVisibility, deriveInUse, moduleCoveredByInstrument } from './instruments-registry'
 import { parsePins, type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
@@ -600,13 +600,23 @@ export function AppShell(): JSX.Element {
     setPartsInstallError(null)
   }, [boardFileName, deviceStatus.state, deviceStatus.path])
 
+  // A part driven through its INSTRUMENT (e.g. servo_showcase.py uses the Servo
+  // instrument via `inst.start(servo_pin=…)`) needs neither its driver imported
+  // NOR the driver file on the board — so drop such modules from both nags when a
+  // matching instrument is in use.
   const missImports = useMemo(
-    () => (boardIsPython ? computeMissingImports(requiredModules, boardSource) : []),
-    [boardIsPython, requiredModules, boardSource]
+    () =>
+      (boardIsPython ? computeMissingImports(requiredModules, boardSource) : []).filter(
+        (m) => !moduleCoveredByInstrument(m.module, inUse)
+      ),
+    [boardIsPython, requiredModules, boardSource, inUse]
   )
   const missBoard = useMemo(
-    () => (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []),
-    [installedModules, requiredModules]
+    () =>
+      (installedModules ? computeMissingOnBoard(requiredModules, installedModules) : []).filter(
+        (m) => !moduleCoveredByInstrument(m.module, inUse)
+      ),
+    [installedModules, requiredModules, inUse]
   )
   const showPartsBanner =
     requiredModules.length > 0 && !partsDismissed && (missImports.length > 0 || missBoard.length > 0)
