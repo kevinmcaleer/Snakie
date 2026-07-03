@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-07-03
+
 ### Added
 - **Barometer gains a thermometer + humidity dial (#216).** The Barometer
   instrument now stands the aneroid dial beside a skeuomorphic mercury-in-glass
@@ -1542,7 +1544,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.21.0...v0.22.0
 [0.21.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/kevinmcaleer/Snakie/compare/v0.20.2...v0.20.3
