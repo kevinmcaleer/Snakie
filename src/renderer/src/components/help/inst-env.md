@@ -23,7 +23,7 @@ bme = BME280(i2c)
 inst.start()
 inst.watch(weather=bme)     # → SNK BIND weather env (lights up this barometer)
 while True:
-    inst.update()           # → SNK ENV weather <t> <p> <h>
+    inst.update()           # streams: SNK ENV weather t p h
     time.sleep(1)
 ```
 
@@ -31,7 +31,7 @@ Or emit one reading directly:
 
 ```python
 t, p, h = bme.read()
-inst.env(t, p, h)           # SNK ENV env <t> <p> <h>
+inst.env(t, p, h)           # prints: SNK ENV env t p h
 ```
 
 ## Tips
