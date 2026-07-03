@@ -89,22 +89,17 @@ describe('classifyPresentCopy', () => {
 
 describe('shouldShowBanner', () => {
   const base = {
-    dockOpen: true,
     connected: true,
     installState: 'absent' as const,
     dismissed: false
   }
 
-  it('shows when dock open + connected + absent + not dismissed', () => {
+  it('shows when connected + absent + not dismissed (NOT tied to the dock)', () => {
     expect(shouldShowBanner(base)).toBe(true)
   })
 
   it('shows when the library is outdated (offer update)', () => {
     expect(shouldShowBanner({ ...base, installState: 'outdated' })).toBe(true)
-  })
-
-  it('hides when the dock is closed', () => {
-    expect(shouldShowBanner({ ...base, dockOpen: false })).toBe(false)
   })
 
   it('hides when no device is connected', () => {

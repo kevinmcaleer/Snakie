@@ -427,21 +427,19 @@ export function AppShell(): JSX.Element {
     setLibState('unknown')
   }, [deviceStatus.state, deviceStatus.path])
 
-  // Reset the per-open-session dismissal when the dock CLOSES, so closing then
-  // reopening the instrument panel surfaces the banner again (per the issue).
+  // Reset the dismissal when the board (re)connects, so a fresh connection
+  // re-offers the update even after a previous dismissal.
   useEffect(() => {
-    if (!dockOpen) {
-      setLibDismissed(false)
-      setLibError(null)
-    }
-  }, [dockOpen])
+    setLibDismissed(false)
+    setLibError(null)
+  }, [deviceStatus.state, deviceStatus.path])
 
-  // One-off probe: when the dock is open + connected + not yet probed, stat the
-  // two candidate paths on the board. A resolved stat ⇒ found; a rejected stat
-  // (OSError on a missing path) ⇒ treat as not-found for that path. Tolerant of
-  // any error → 'absent' (offer the install) rather than throwing.
+  // One-off probe: as soon as a board is connected (NOT gated on the dock — the
+  // library backs any `import instruments` program), stat the two candidate paths.
+  // A resolved stat ⇒ found; a rejected stat (OSError on a missing path) ⇒ treat
+  // as not-found for that path. Tolerant of any error → 'absent' (offer install).
   useEffect(() => {
-    if (!dockOpen || !connected || libState !== 'unknown') return
+    if (!connected || libState !== 'unknown') return
     let active = true
     const probe = (path: string): Promise<boolean> =>
       window.api.device
@@ -497,7 +495,7 @@ export function AppShell(): JSX.Element {
     return () => {
       active = false
     }
-  }, [dockOpen, connected, libState])
+  }, [connected, libState])
 
   // Install action: read the bundled source, ensure /lib exists (tolerate
   // "already exists"), write /lib/instruments.py, then mark present (hiding the
@@ -536,7 +534,6 @@ export function AppShell(): JSX.Element {
   const dismissLibBanner = useCallback((): void => setLibDismissed(true), [])
 
   const showLibBanner = shouldShowBanner({
-    dockOpen,
     connected,
     installState: libState,
     dismissed: libDismissed
@@ -740,8 +737,8 @@ export function AppShell(): JSX.Element {
       {/* Top-of-screen manila notification offering a one-click install of the
           instrument library onto the connected board (#108). Topmost element of
           `.shell` (a column flex) so it reads as a full-width banner above the
-          toolbar; shown only when the dock is open, a board is connected, the
-          library isn't installed, and it hasn't been dismissed this session. */}
+          toolbar; shown whenever a board is connected and its library is missing
+          or out of date (not tied to the dock), unless dismissed this connection. */}
       {/* Persistent live region so a banner is ANNOUNCED when it appears: the
           container stays mounted (empty when no banner is shown), so screen
           readers pick up the injected banner text (a11y, #188). */}

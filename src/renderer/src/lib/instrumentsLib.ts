@@ -92,28 +92,28 @@ export function classifyPresentCopy(
 
 /** Inputs that decide whether the manila banner should be on screen. */
 export interface BannerVisibilityInput {
-  /** Is the instrument dock open? (The banner only rides along with the dock.) */
-  dockOpen: boolean
   /** Is a device connected? (Nothing to install onto otherwise.) */
   connected: boolean
   /** The cached per-connection install state. */
   installState: InstallState
-  /** Has the user dismissed it this open-session (reset when the dock closes)? */
+  /** Has the user dismissed it this connection (reset on reconnect)? */
   dismissed: boolean
 }
 
 /**
- * The banner shows ONLY when: the dock is open, a device is connected, the
- * library is known to be ABSENT, and the user hasn't dismissed it this session.
+ * The banner shows when a device is connected, its instrument library is ABSENT
+ * or OUTDATED, and the user hasn't dismissed it this connection. It is NOT tied
+ * to the instrument dock being open — the library backs ANY program that
+ * `import`s `instruments`, so a stale board must be flagged whether or not the
+ * dock is on screen (issue: boards not prompted to update off the dock).
  *
  * `'unknown'` (not yet probed) does NOT show — we wait for the probe so we never
  * flash the banner at a board that already has the library. `'present'` never
- * shows. Dismissing hides it until the dock is closed + reopened (which resets
- * `dismissed`), and a successful install flips the state to `'present'`.
+ * shows. Dismissing hides it until the board reconnects; a successful install
+ * flips the state to `'present'`.
  */
 export function shouldShowBanner(input: BannerVisibilityInput): boolean {
   return (
-    input.dockOpen &&
     input.connected &&
     (input.installState === 'absent' || input.installState === 'outdated') &&
     !input.dismissed

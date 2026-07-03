@@ -117,6 +117,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their capability chips line up.
 
 ### Fixed
+- **Out-of-date board library is now detected without the Instrument Dock open.**
+  The "Update library" check + banner were gated on the Instrument Dock being on
+  screen, so a stale `instruments.py` went unflagged while you edited/ran code with
+  the dock closed. The probe now runs as soon as a board connects (it backs any
+  `import instruments` program) and the banner shows whenever the board's library
+  is missing/outdated, re-offering on each reconnect.
 - **A part driven through its instrument no longer nags for its driver.** A placed
   part used via its INSTRUMENT (e.g. `servo_showcase.py` → `inst.start(servo_pin=0)`)
   no longer shows "this file doesn't import servo" / "the board is missing servo" —
