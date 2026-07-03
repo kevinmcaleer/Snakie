@@ -107,6 +107,17 @@ export interface ImuQuatTelemetry {
   y: number
   z: number
 }
+/** An environmental reading (#216): temperature / pressure / humidity in one. */
+export interface EnvTelemetry {
+  kind: 'env'
+  ch: string
+  /** Temperature in °C. */
+  temp: number
+  /** Barometric pressure in hPa. */
+  pressure: number
+  /** Relative humidity in %RH. */
+  humidity: number
+}
 /** A range/distance reading in mm, with an optional servo/lidar bearing (deg). */
 export interface DistanceTelemetry {
   kind: 'dist'
@@ -185,6 +196,7 @@ export type Telemetry =
   | PlotTelemetry
   | ImuTelemetry
   | ImuQuatTelemetry
+  | EnvTelemetry
   | DistanceTelemetry
   | ButtonTelemetry
   | EncoderTelemetry
@@ -216,6 +228,7 @@ export function isTelemetry(line: string): boolean {
  *   - `SNK PLOT <tok> ...`                → `{ kind:'plot', series:[…] }`
  *   - `SNK IMU <ch> <r> <p> <y>`          → `{ kind:'imu', ch, roll, pitch, yaw }`
  *   - `SNK IMUQ <ch> <w> <x> <y> <z>`     → `{ kind:'imuq', ch, w, x, y, z }`
+ *   - `SNK ENV <ch> <t> <p> <h>`          → `{ kind:'env', ch, temp, pressure, humidity }`
  *   - `SNK DIST <ch> <mm> [<angle>]`      → `{ kind:'dist', ch, mm, angle? }`
  *   - `SNK BTN <name> <0|1>`              → `{ kind:'btn', name, pressed }`
  *   - `SNK ENC <ch> <count> [<0|1>]`      → `{ kind:'enc', ch, count, pressed? }`
@@ -302,6 +315,16 @@ export function parseTelemetry(line: string): Telemetry | null {
     const z = Number(parts[6])
     if (!ch || ![w, x, y, z].every(Number.isFinite)) return null
     return { kind: 'imuq', ch, w, x, y, z }
+  }
+
+  if (kind === 'ENV') {
+    // SNK ENV <ch> <temp °C> <pressure hPa> <humidity %RH> (#216)
+    const ch = parts[2]
+    const temp = Number(parts[3])
+    const pressure = Number(parts[4])
+    const humidity = Number(parts[5])
+    if (!ch || ![temp, pressure, humidity].every(Number.isFinite)) return null
+    return { kind: 'env', ch, temp, pressure, humidity }
   }
 
   if (kind === 'DIST') {

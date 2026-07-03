@@ -974,6 +974,28 @@ class _FakeServoObj:
         return self.a
 
 
+class _FakeBme:
+    """A user env-sensor driver (BME280-shaped): t/p/h properties + read()."""
+
+    def __init__(self, t=21.5, p=1013.2, h=45.0):
+        self._t, self._p, self._h = t, p, h
+
+    @property
+    def temperature(self):
+        return self._t
+
+    @property
+    def pressure(self):
+        return self._p
+
+    @property
+    def humidity(self):
+        return self._h
+
+    def read(self):
+        return (self._t, self._p, self._h)
+
+
 class _FakeIMU:
     """A user IMU driver (ICM20948-shaped): accel/gyro + optional magnetometer."""
 
@@ -1013,10 +1035,25 @@ class WatchBinding(unittest.TestCase):
         self.assertEqual(inst._classify(_FakeServoObj()), "servo")
         self.assertEqual(inst._classify(_FakeI2C([0x3C])), "i2c")
         self.assertEqual(inst._classify(_FakeIMU()), "imu")
+        self.assertEqual(inst._classify(_FakeBme()), "env")
         self.assertIsNone(inst._classify(object()))
 
     def test_watch_imu_emits_bind(self):
         self.assertEqual(_emit(inst.watch, imu=_FakeIMU()), "SNK BIND imu imu")
+
+    def test_watch_env_emits_bind_and_update_streams(self):
+        self.assertEqual(_emit(inst.watch, weather=_FakeBme()), "SNK BIND weather env")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.update()
+        line = buf.getvalue().strip()
+        self.assertEqual(line, "SNK ENV weather 21.5 1013.2 45.0")
+
+    def test_env_emit_function(self):
+        self.assertEqual(_emit(inst.env, 21.5, 1013.2, 45.0), "SNK ENV env 21.5 1013.2 45.0")
+        self.assertEqual(
+            _emit(inst.env, 20, 990, 60, ch="attic"), "SNK ENV attic 20 990 60"
+        )
 
     def test_update_imu_flat_board(self):
         # Flat, still board: accel (0, 0, 1) g → roll 0, pitch 0; no mag → yaw 0.

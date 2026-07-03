@@ -1,0 +1,144 @@
+/*
+ * BAROMETER (#216) — an antique aneroid barometer: brass bezel, warm cream
+ * face, engraved serif scale + weather legend, blued-black needle. Prefix
+ * `envbaro__` (instrument CSS is global — keep the BEM prefix unique).
+ */
+.envbaro {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.envbaro__face {
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.45));
+}
+
+.envbaro__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Polished brass bezel ring around the dial. */
+.envbaro__bezel {
+  fill: none;
+  stroke-width: 9;
+  stroke: var(--accent, #b58a3a);
+}
+
+/* Warm parchment face, faintly aged at the rim. */
+.envbaro__dial {
+  fill: #f4ecd9;
+  stroke: #d8c9a5;
+  stroke-width: 1;
+}
+
+.envbaro__tick {
+  stroke: #6b5d43;
+  stroke-width: 1;
+}
+
+.envbaro__tick--major {
+  stroke: #3c3222;
+  stroke-width: 1.6;
+}
+
+.envbaro__num {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 8.5px;
+  fill: #3c3222;
+}
+
+/* The engraved weather legend — small-cap serif, like the original. */
+.envbaro__word {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  fill: #6b5d43;
+}
+
+.envbaro__maker {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 6.5px;
+  letter-spacing: 0.18em;
+  fill: #8a7a58;
+}
+
+.envbaro__press {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  fill: #2e2618;
+}
+
+/* Blued-steel needle with a counterweight tail; eases between readings. */
+.envbaro__needle {
+  stroke: #1d1a14;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transition: x1 300ms ease, y1 300ms ease, x2 300ms ease, y2 300ms ease;
+}
+
+.envbaro__hub {
+  fill: var(--accent, #b58a3a);
+  stroke: #7a5c22;
+  stroke-width: 1;
+}
+
+/* Bottom row: temp / humidity / outlook cells + the source picker. */
+.envbaro__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: rgba(6, 9, 11, 0.7);
+  border: 1px solid var(--accent-border);
+}
+
+.envbaro__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.envbaro__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+
+.envbaro__cell-val {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--accent) 72%, #cdd2d8);
+}
+
+.envbaro__src {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.envbaro__select {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  color: #cdd2d8;
+  background: #14181c;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .envbaro__needle {
+    transition: none;
+  }
+}
