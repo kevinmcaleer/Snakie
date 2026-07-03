@@ -117,6 +117,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   their capability chips line up.
 
 ### Fixed
+- **The board-library UPDATE prompt now actually fires (version was misparsed).**
+  `parseLibVersion` matched the first `__version__ = "…"` in the source — which was
+  the `"X.Y.Z"` example inside the doc comment above the real assignment. So every
+  copy (board + bundled) read as `X.Y.Z`, always "equal" → the "Update library"
+  banner never appeared for an out-of-date board. Anchor the match to the start of
+  a line so the real `__version__ = "0.7.0"` wins.
 - **Out-of-date board library is now detected without the Instrument Dock open.**
   The "Update library" check + banner were gated on the Instrument Dock being on
   screen, so a stale `instruments.py` went unflagged while you edited/ran code with

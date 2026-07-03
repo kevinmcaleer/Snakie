@@ -57,7 +57,12 @@ export function installStateFromProbe(libFound: boolean, rootFound: boolean): In
  */
 export function parseLibVersion(source: string | null | undefined): string | null {
   if (!source) return null
-  const m = source.match(/__version__\s*=\s*['"]([^'"]+)['"]/)
+  // Anchor to the start of a LINE (allowing indentation) so the real assignment
+  // is matched — NOT the `__version__ = "X.Y.Z"` example inside the doc comment
+  // above it, which would otherwise be the first match and make every copy read as
+  // "X.Y.Z" (equal → never outdated). The comment line starts with `#`, so `^\s*`
+  // never reaches its `__version__`.
+  const m = source.match(/^\s*__version__\s*=\s*['"]([^'"]+)['"]/m)
   return m ? m[1] : null
 }
 

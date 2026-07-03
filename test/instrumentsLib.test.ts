@@ -53,6 +53,15 @@ describe('parseLibVersion', () => {
     expect(parseLibVersion('SENTINEL = "SNK"\ndef scope(v):\n  pass')).toBeNull()
   })
 
+  it('reads the ASSIGNMENT, not a `__version__ = "X.Y.Z"` example in a comment', () => {
+    // The real instruments.py has a doc comment above the assignment. The example
+    // must NOT win (that made every copy read as "X.Y.Z" → never outdated).
+    const src =
+      '# Bump this. Keep the `__version__ = "X.Y.Z"` literal form so the IDE parses it.\n' +
+      '__version__ = "0.7.0"\n'
+    expect(parseLibVersion(src)).toBe('0.7.0')
+  })
+
   it('is null for empty/missing source', () => {
     expect(parseLibVersion('')).toBeNull()
     expect(parseLibVersion(null)).toBeNull()
