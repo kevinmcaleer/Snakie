@@ -1,3 +1,7 @@
+---
+kevsrobots: https://www.kevsrobots.com/learn/parts/potentiometer/
+example: potentiometer_read.py
+---
 # Potentiometer
 
 A **potentiometer** ("pot") is a rotary variable resistor. Wire the two outer

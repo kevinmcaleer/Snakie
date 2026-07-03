@@ -1,3 +1,7 @@
+---
+kevsrobots: https://www.kevsrobots.com/learn/parts/sg90/
+example: sg90_sweep.py
+---
 # SG90 Micro Servo
 
 A 9 g hobby servo with ~180° of travel, controlled by a 50 Hz PWM signal. Cheap,

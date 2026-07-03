@@ -8,6 +8,7 @@ import {
   type ProjectPart
 } from './help-content'
 import { HELP_ARTICLES } from './help-articles'
+import { parsePartHelp, defaultExampleName } from './part-help-meta'
 import { ShelfIcon, TomeIcon, OpenBookIcon, ClosedBookIcon, PageIcon, CursorIcon } from './help-icons'
 import { subscribeActiveEditor } from './editorBridge'
 import { PARTS_CHANGED_EVENT } from './PartsPanel'
@@ -30,7 +31,7 @@ import './HelpPanel.css'
  * an instrument's `?`, via AppShell) opens a specific article.
  */
 export function HelpPanel({ target }: { target?: { id: string; nonce: number } }): JSX.Element {
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, openBuffer } = useWorkspace()
   const source = openFiles.find((f) => f.id === activeId)?.content ?? ''
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(DEFAULT_EXPANDED))
@@ -205,7 +206,13 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
   // --- Article view -------------------------------------------------------
   if (selected) {
     const title = articleTitle(tree, selected) ?? 'Help'
-    const body = HELP_ARTICLES[selected] ?? partHelp.get(selected) ?? ''
+    // A PART article carries optional front matter (#207): a kevsrobots.com guide
+    // link + an example we can open in a new editor tab. Built-in articles render
+    // verbatim.
+    const isPart = partHelp.has(selected)
+    const meta = isPart ? parsePartHelp(partHelp.get(selected) ?? '') : null
+    const body = meta ? meta.body : (HELP_ARTICLES[selected] ?? '')
+    const showActions = meta && (meta.guideUrl || meta.exampleCode)
     return (
       <div className="help">
         <div className="help__plate">
@@ -216,6 +223,32 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
           <span className="help__plate-caption">Article</span>
         </div>
         <div className="help__article">
+          {showActions && (
+            <div className="help__part-actions">
+              {meta?.guideUrl && (
+                <button
+                  type="button"
+                  className="help__guide"
+                  onClick={() => void window.api?.openExternal?.(meta.guideUrl as string).catch(() => undefined)}
+                  title={meta.guideUrl}
+                >
+                  📖 Full guide on kevsrobots.com →
+                </button>
+              )}
+              {meta?.exampleCode && (
+                <button
+                  type="button"
+                  className="help__example"
+                  onClick={() =>
+                    openBuffer(meta.exampleName || defaultExampleName(selected), meta.exampleCode as string)
+                  }
+                  title="Open this part's example in a new editor tab"
+                >
+                  ⧉ Open example in editor
+                </button>
+              )}
+            </div>
+          )}
           {body ? <Markdown source={body} /> : <p className="help__empty">No help written for this page yet.</p>}
         </div>
       </div>

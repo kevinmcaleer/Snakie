@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Per-part help: kevsrobots.com guide + open-example (#207).** A part's bundled
+  `help.md` can now carry YAML front matter (`kevsrobots:` guide URL, `example:`
+  tab name). When its article opens in the Help panel (from the "In This Project"
+  section), a **📖 Full guide on kevsrobots.com →** link and an **⧉ Open example in
+  editor** button appear above the article — the latter drops the article's first
+  Python block into a new editor tab. Authored for the SG90 servo + Potentiometer.
 - **Mini-map toggle in Settings (#210).** Settings → Editor now has a **Show the
   editor mini-map** switch (on by default) that shows/hides Monaco's mini-map live.
 - **Flash-usage gauge in the device files panel (#211).** A slim used/total bar

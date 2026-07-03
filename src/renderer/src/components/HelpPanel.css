@@ -282,3 +282,39 @@
   color: #9a8f75;
   font-size: 12px;
 }
+
+/* Per-part help actions (#207): a kevsrobots.com guide link + "open example". */
+.help__part-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0 0 0.9rem;
+}
+.help__guide,
+.help__example {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.34rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 7px;
+  cursor: pointer;
+  border: 1px solid #b9945a;
+}
+.help__guide {
+  color: #4a2f12;
+  background: linear-gradient(180deg, #f0d9a8, #e2bd76);
+}
+.help__guide:hover {
+  background: linear-gradient(180deg, #f6e2b6, #e8c684);
+}
+.help__example {
+  color: #3a2c14;
+  background: #efe4c8;
+  border-color: #cdb079;
+}
+.help__example:hover {
+  background: #f6efdb;
+}
