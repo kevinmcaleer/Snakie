@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Flash-usage gauge in the device files panel (#211).** A slim used/total bar
+  pinned at the bottom of the Device Files panel shows how full the board's flash
+  is (`os.statvfs`), turning amber past 75% and red past 90%. Hidden when the board
+  can't report it.
 - **Potentiometer instrument + part (#212).** A new **Potentiometer** instrument
   reads a pot's wiper (an ADC voltage on the telemetry stream) as **0–100 %** on a
   skeuomorphic **B.S. First Grade** moving-coil ammeter, with a rotary knob

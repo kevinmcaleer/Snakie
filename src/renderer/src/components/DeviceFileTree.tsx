@@ -3,6 +3,7 @@ import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useSync } from '../store/sync'
+import { usageLabel, usedPct, type DiskUsage } from './disk-usage'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { Placeholder } from './Placeholder'
 import { usePrompt } from './PromptModal'
@@ -255,11 +256,20 @@ export function DeviceFileTree(): JSX.Element {
   const [menu, setMenu] = useState<MenuState | null>(null)
   // Signal used to tell already-expanded nodes to re-list a changed directory.
   const [reloadDir, setReloadDir] = useState<{ path: string; token: number } | null>(null)
+  // Flash usage for the bottom gauge (#211); null ⇒ unavailable, so it hides.
+  const [disk, setDisk] = useState<DiskUsage | null>(null)
 
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
-      setEntries(await window.api.device.listDir(ROOT))
+      // Read the listing + the flash gauge together (the gauge is best-effort, so
+      // a board that can't `statvfs` still shows its files).
+      const [list, df] = await Promise.all([
+        window.api.device.listDir(ROOT),
+        window.api.device.df().catch(() => null)
+      ])
+      setEntries(list)
+      setDisk(df)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -278,6 +288,7 @@ export function DeviceFileTree(): JSX.Element {
       setSelectedPath(null)
       setSelectedIsDir(false)
       setError(null)
+      setDisk(null)
     }
   }, [connected, refresh])
 
@@ -616,6 +627,22 @@ export function DeviceFileTree(): JSX.Element {
 
       {menu && (
         <ContextMenu position={menu.position} items={menuItems(menu)} onClose={closeMenu} />
+      )}
+
+      {/* Flash-usage gauge (#211): a slim used/total bar pinned at the bottom.
+          Only shown when the board reported `statvfs` (else `disk` is null). */}
+      {disk && disk.total > 0 && (
+        <div className="devicetree__disk" title={`${usageLabel(disk)} used of flash`}>
+          <div className="devicetree__disk-bar" role="progressbar" aria-label="Device flash used" aria-valuenow={usedPct(disk)} aria-valuemin={0} aria-valuemax={100}>
+            <div
+              className={`devicetree__disk-fill${usedPct(disk) >= 90 ? ' is-full' : usedPct(disk) >= 75 ? ' is-high' : ''}`}
+              style={{ width: `${usedPct(disk)}%` }}
+            />
+          </div>
+          <span className="devicetree__disk-label">
+            {usedPct(disk)}% · {usageLabel(disk)}
+          </span>
+        </div>
       )}
     </div>
   )

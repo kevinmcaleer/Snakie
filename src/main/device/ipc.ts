@@ -141,6 +141,30 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   // Filesystem helpers.
   ipcMain.handle('device:listDir', (_e, path?: string) => wrap(() => getActive().listDir(path ?? '/')))
 
+  // Flash usage (#211): `os.statvfs('/')` → total/free/used BYTES for the device
+  // files panel's disk gauge. Runs a tiny snippet over the raw REPL; a board that
+  // can't stat (or a non-numeric reply) yields `null` so the gauge just hides.
+  ipcMain.handle('device:df', () =>
+    wrap<{ total: number; free: number; used: number } | null>(async () => {
+      const code = [
+        'import os',
+        'try:',
+        '    _s = os.statvfs("/")',
+        '    print("SNKDF", _s[0] * _s[2], _s[0] * _s[3])',
+        'except Exception:',
+        '    print("SNKDF -1 -1")'
+      ].join('\n')
+      const { stdout } = await getActive().exec(code)
+      const m = /SNKDF\s+(-?\d+)\s+(-?\d+)/.exec(stdout ?? '')
+      if (!m) return null
+      const total = Number(m[1])
+      const free = Number(m[2])
+      if (!Number.isFinite(total) || total <= 0) return null
+      const clampedFree = Math.max(0, Math.min(free, total))
+      return { total, free: clampedFree, used: total - clampedFree }
+    })
+  )
+
   ipcMain.handle('device:readFile', (_e, path: string) => wrap(() => getActive().readFile(path)))
 
   ipcMain.handle('device:writeFile', (_e, path: string, contents: string) =>

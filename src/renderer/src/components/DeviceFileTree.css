@@ -86,3 +86,40 @@
 .devicetree__sync.devicetree__sync--error {
   color: var(--danger);
 }
+
+/* Flash-usage gauge (#211) — a slim used/total bar pinned at the panel bottom. */
+.devicetree__disk {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem 0.4rem;
+  border-top: 1px solid var(--border);
+}
+.devicetree__disk-bar {
+  flex: 1 1 auto;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-sunken, #17181c);
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.45);
+}
+.devicetree__disk-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent, #6aa9ff);
+  transition: width 0.3s ease;
+}
+.devicetree__disk-fill.is-high {
+  background: #e0a44a;
+}
+.devicetree__disk-fill.is-full {
+  background: var(--danger, #e0574a);
+}
+.devicetree__disk-label {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  color: var(--text-muted, #9aa0a8);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}

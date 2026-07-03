@@ -199,6 +199,9 @@ const device = {
   /** List a directory on the device filesystem. */
   listDir: (path?: string): Promise<DirEntry[]> =>
     unwrap(ipcRenderer.invoke('device:listDir', path)),
+  /** Flash usage (`os.statvfs`) in bytes, or `null` when unavailable (#211). */
+  df: (): Promise<{ total: number; free: number; used: number } | null> =>
+    unwrap(ipcRenderer.invoke('device:df')),
   /** Read a file's contents (UTF-8). */
   readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('device:readFile', path)),
   /** Write contents to a file (created/overwritten), chunked. */
