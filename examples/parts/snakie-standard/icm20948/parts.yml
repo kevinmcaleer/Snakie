@@ -1,0 +1,138 @@
+id: icm20948
+name: ICM20948 Breakout
+description: 9-DoF IMU — 3-axis accel + gyro + magnetometer, I²C.
+manufacturer: Pimoroni
+family: Sensor
+tags:
+  - sensor
+  - i2c
+  - imu
+  - accelerometer
+  - gyroscope
+  - magnetometer
+package: THT
+pinSpacing: 2.54
+voltage: "3-5V"
+partNumber: ICM-20948
+properties:
+  accelerometer: "±2/4/8/16 g"
+  gyroscope: "±250/500/1000/2000 dps"
+  magnetometer: "±4900 µT (AK09916)"
+  interface: I²C 0x68 / 0x69
+version: 0.1.0
+pcbColor: "#1b1b1b"
+aspect: 1.0
+dimensions:
+  width: 19
+  height: 19
+shape:
+  kind: rect
+  cornerRadius: 2
+# Pimoroni Breakout-Garden 5-pin header on the bottom edge — it drops onto a
+# Raspberry Pi's pins 1/3/5/7/9, so the silk order is 3-5V, SDA, SCL, INT, GND.
+# Only SDA/SCL carry an i2c capability; INT is a plain digital interrupt output.
+headers:
+  - edge: bottom
+    pins:
+      - number: 1
+        name: "3-5V"
+        label: "3-5V"
+        type: pwr
+        shape: header
+        x: 0.1
+        y: 0.9
+      - number: 2
+        name: SDA
+        label: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.3
+        y: 0.9
+      - number: 3
+        name: SCL
+        label: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.5
+        y: 0.9
+      - number: 4
+        name: INT
+        label: INT
+        type: io
+        shape: header
+        x: 0.7
+        y: 0.9
+      - number: 5
+        name: GND
+        label: GND
+        type: gnd
+        shape: header
+        x: 0.9
+        y: 0.9
+# A recognisable footprint: the QFN IMU in the middle + the two Qw/ST sockets on
+# the side edges. The PCB body itself is drawn by the pcb layer (see below).
+shapes:
+  - kind: rect
+    x: 0.0
+    y: 0.36
+    w: 0.06
+    h: 0.28
+    fill: "#e6e6e6"
+    stroke: "#9a9a9a"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 0
+  - kind: rect
+    x: 0.94
+    y: 0.36
+    w: 0.06
+    h: 0.28
+    fill: "#e6e6e6"
+    stroke: "#9a9a9a"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  - kind: rect
+    x: 0.39
+    y: 0.4
+    w: 0.22
+    h: 0.22
+    fill: "#3a3a3a"
+    stroke: "#111111"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 2
+  - kind: circle
+    x: 0.42
+    y: 0.43
+    r: 0.02
+    fill: "#c9c9c9"
+    z: 3
+labels:
+  - text: ICM20948
+    x: 0.5
+    y: 0.22
+    fontSize: 9
+    color: "#ffffff"
+    z: 4
+library:
+  module: icm20948
+drivers:
+  - source: icm20948.py
+    target: lib/icm20948.py
+    label: ICM20948 driver
+help: help.md
+layerVisibility:
+  pcb: true
+  image: false
+  holes: true
+  pins: true
+  components: true

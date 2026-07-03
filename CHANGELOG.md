@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **BME280 + ICM20948 I²C sensor parts (Standard library).** Two new Pimoroni
+  breakouts join the Standard parts library, each shipping a part footprint
+  (I²C header), a bundled pure-MicroPython driver installed to `lib/` on placement,
+  and mini-help with a runnable example: **BME280** (temperature / pressure /
+  humidity, `from bme280 import BME280`) and **ICM20948** (9-DoF IMU — accel +
+  gyro + magnetometer, `from icm20948 import ICM20948`).
 - **Help button on a part's breadboard toolbar (#207).** Selecting a placed part
   in the Board View wiring canvas now shows a **?** Help button on its mini-toolbar
   when that part ships bundled mini-help — clicking it opens the Board View help
