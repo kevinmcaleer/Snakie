@@ -214,6 +214,9 @@ function PackagesTab(): JSX.Element {
             notes: result.notes.length ? result.notes : collectedNotes
           }
         }))
+        // A successful install wrote files to the board — tell every window so
+        // the Device Files tree (and the library banners) refresh.
+        if (result.ok) window.api.modules.notifyChanged()
       } catch (err) {
         setInstalls((prev) => ({
           ...prev,

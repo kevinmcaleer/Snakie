@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { DirEntry } from '../../../preload/index.d'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -308,6 +308,23 @@ export function DeviceFileTree(): JSX.Element {
   useEffect(() => {
     if (syncStatus === 'done' && connected) void refresh()
   }, [syncStatus, connected, refresh])
+
+  // When ANY window installs something onto the board — a part driver (either
+  // missing-library banner), the instruments library, or a mip package — the
+  // modules broadcast fires; re-list so the new files show up without a manual
+  // Refresh. Subscribed once via refs (refresh's identity tracks the loaded
+  // dirs, and re-subscribing per keystroke of state would churn the bridge).
+  const refreshRef = useRef(refresh)
+  refreshRef.current = refresh
+  const connectedRef = useRef(connected)
+  connectedRef.current = connected
+  useEffect(
+    () =>
+      window.api.modules.onChanged(() => {
+        if (connectedRef.current) void refreshRef.current()
+      }),
+    []
+  )
 
   // The single sync toggle: ON pushes the tagged files now AND auto-syncs on
   // every save; OFF stops auto-syncing.

@@ -531,6 +531,9 @@ export function AppShell(): JSX.Element {
           await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
         }
         setLibState('present')
+        // The device's files changed — tell every window so e.g. the Device
+        // Files tree re-lists and shows the fresh /lib/instruments.py.
+        window.api.modules.notifyChanged()
       } catch (err) {
         setLibError(err instanceof Error ? err.message : String(err))
       } finally {

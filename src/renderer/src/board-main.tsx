@@ -242,6 +242,9 @@ function BoardWindowApp(): JSX.Element {
             .install(lib.url)
             .then((r) => {
               if (!r.ok) window.alert(`Couldn't install ${mod}.\n${r.log || 'Open the Packages panel for details.'}`)
+              // Files landed on the board — the main window's Device Files tree
+              // + library banners refresh off this broadcast.
+              else window.api.modules.notifyChanged()
             })
             .catch(() => window.alert(`Couldn't install ${mod} — is a board connected?`))
         }

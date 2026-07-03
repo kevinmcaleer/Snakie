@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Device files refresh after installs.** Installing a part driver (either
+  missing-library banner), the instruments library, or a mip package now
+  re-lists the connected board's file tree automatically — the new files in
+  `/lib` appear without clicking Refresh, in every window.
 - **One-click install from the missing-library banner.** When the editor
   reports the connected board is missing a library your parts need, the banner's
   **Install** button now also covers parts that ship **bundled driver files**
