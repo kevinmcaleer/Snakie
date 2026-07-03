@@ -181,9 +181,11 @@ class ICM20948:
         if transfer_fault:
             raise OSError(
                 "0x%02X ACKs its address but every I2C transfer fails (EIO). "
-                "This is a BUS/wiring fault, not the driver: check the SDA/SCL "
-                "pull-ups (4.7k to 3V3), a solid common GND, and re-seat SDA/SCL. "
-                "A phantom address like 0x08 in i2c.scan() confirms a noisy bus."
+                "This is a BUS/wiring fault, not the driver: add STRONG SDA/SCL "
+                "pull-ups to 3V3 (2.2k-4.7k), a solid common GND, and re-seat "
+                "SDA/SCL. On RP2350 boards (e.g. Tiny 2350) use ~2.2k — erratum "
+                "RP2350-E9 adds a leaky ~8.2k internal pull-down that a 4.7k "
+                "can't overcome, so the bus ACKs but can't clock data."
                 % transfer_fault[0]
             )
         if wrong_chip:

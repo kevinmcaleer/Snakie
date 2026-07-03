@@ -64,7 +64,8 @@ mag_supported                       # True if the AK09916 was found
 
 - The ICM-20948 pages its registers into four **user banks**; the driver
   switches banks automatically, so you just call the read methods.
-- `read_mag()` triggers a **single-shot** measurement and waits for data-ready.
+- `read_mag()` reads the **continuously-streamed** AK09916 data (the driver sets
+  it to 100 Hz and streams it into the ICM's registers via the aux-I²C master).
   If the magnetometer wasn't detected at start-up, `mag_supported` is `False`
   and `read_mag()` raises — accel + gyro keep working (6-DoF).
 - A flat, still board reads roughly **1 g on the Z axis** and ~**0 dps** on the
@@ -73,8 +74,11 @@ mag_supported                       # True if the AK09916 was found
   - *"not found at 0x68/0x69"* → nothing on the bus; check SDA/SCL/3V3/GND and
     `print(i2c.scan())` (the ICM shows as **104**/0x68 or **105**/0x69). Pass
     `Pin(...)` objects to `I2C(...)`, e.g. `I2C(0, sda=Pin(20), scl=Pin(21))`.
-  - *"ACKs its address but every I2C transfer fails"* → the chip is seen but the
-    **bus is electrically marginal**: add/verify **4.7 kΩ pull-ups** on SDA & SCL
-    to 3V3, ensure a **solid common ground**, shorten wires, and re-seat SDA/SCL.
-    A phantom address such as **0x08** in `i2c.scan()`, or the *other* sensor
-    failing too, confirms a bus (not chip) fault.
+  - *"ACKs its address but every I2C transfer fails"* → the chip is seen (it
+    ACKs, so `i2c.scan()` lists it) but the **bus can't clock data**: add
+    **strong pull-ups** on SDA & SCL to 3V3, ensure a **solid common ground**,
+    shorten wires, and re-seat SDA/SCL. On **RP2350** boards (e.g. the **Tiny
+    2350**) use **~2.2 kΩ** pull-ups — erratum **RP2350-E9** adds a leaky ~8.2 kΩ
+    internal pull-down that a 4.7 kΩ can't pull above a valid logic HIGH, so the
+    bus ACKs but every read/write EIOs. A phantom **0x08** in `i2c.scan()`, or
+    the *other* sensor failing too, confirms a bus (not chip) fault.
