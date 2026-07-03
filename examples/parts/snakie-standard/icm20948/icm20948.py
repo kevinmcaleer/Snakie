@@ -47,7 +47,10 @@ _GYRO_XOUT_H = 0x33
 _EXT_SLV_SENS_DATA_00 = 0x3B
 
 # --- Bank 2 (accel + gyro configuration) ------------------------------------
+_GYRO_SMPLRT_DIV = 0x00
 _GYRO_CONFIG_1 = 0x01
+_ACCEL_SMPLRT_DIV_1 = 0x10
+_ACCEL_SMPLRT_DIV_2 = 0x11
 _ACCEL_CONFIG = 0x14
 
 # --- Bank 3 (I2C master → AK09916) ------------------------------------------
@@ -93,7 +96,13 @@ class ICM20948:
         self._write(_PWR_MGMT_2, 0x00)
         time.sleep_ms(10)
 
+        # Configure gyro + accel exactly as the Pimoroni driver does: sample rate,
+        # then low-pass filter (mode 5), then full-scale range.
+        self.set_gyro_sample_rate(100)
+        self.set_gyro_low_pass(enabled=True, mode=5)
         self.set_gyro_full_scale(250)
+        self.set_accel_sample_rate(125)
+        self.set_accel_low_pass(enabled=True, mode=5)
         self.set_accel_full_scale(16)
 
         # Best-effort magnetometer bring-up; accel + gyro still work if it fails.
@@ -181,6 +190,7 @@ class ICM20948:
     # --- low-level I2C ------------------------------------------------------
     def _write(self, reg, value):
         self.i2c.writeto_mem(self.addr, reg, bytes([value & 0xFF]))
+        time.sleep_us(100)  # match Pimoroni: let the register write settle
 
     def _read(self, reg):
         return self.i2c.readfrom_mem(self.addr, reg, 1)[0]
@@ -219,6 +229,38 @@ class ICM20948:
         value = (self._read(_GYRO_CONFIG_1) & 0b11111001) | ({250: 0, 500: 1, 1000: 2, 2000: 3}[dps] << 1)
         self._write(_GYRO_CONFIG_1, value)
         self._gyro_dps = _GYRO_DPS[dps]
+
+    # Sample-rate + low-pass filter config, mirroring the Pimoroni driver's init so
+    # the accel/gyro are filtered/paced identically (not left at raw defaults).
+    def set_gyro_sample_rate(self, rate=100):
+        """Set the gyro output data rate in Hz (1.125 kHz / (1 + div))."""
+        self._bank_select(2)
+        self._write(_GYRO_SMPLRT_DIV, int((1125.0 / rate) - 1) & 0xFF)
+
+    def set_gyro_low_pass(self, enabled=True, mode=5):
+        """Configure the gyro digital low-pass filter (mode 0..7)."""
+        self._bank_select(2)
+        value = self._read(_GYRO_CONFIG_1) & 0b10001110
+        if enabled:
+            value |= 0b1
+        value |= (mode & 0x07) << 4
+        self._write(_GYRO_CONFIG_1, value)
+
+    def set_accel_sample_rate(self, rate=125):
+        """Set the accelerometer output data rate in Hz (1.125 kHz / (1 + div))."""
+        self._bank_select(2)
+        div = int((1125.0 / rate) - 1)
+        self._write(_ACCEL_SMPLRT_DIV_1, (div >> 8) & 0xFF)
+        self._write(_ACCEL_SMPLRT_DIV_2, div & 0xFF)
+
+    def set_accel_low_pass(self, enabled=True, mode=5):
+        """Configure the accelerometer digital low-pass filter (mode 0..7)."""
+        self._bank_select(2)
+        value = self._read(_ACCEL_CONFIG) & 0b10001110
+        if enabled:
+            value |= 0b1
+        value |= (mode & 0x07) << 4
+        self._write(_ACCEL_CONFIG, value)
 
     # --- accel + gyro -------------------------------------------------------
     def read_accel_gyro(self):
