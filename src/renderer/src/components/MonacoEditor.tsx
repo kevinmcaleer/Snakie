@@ -219,7 +219,7 @@ export function MonacoEditor(): JSX.Element {
   const { setDiagnostics, setLinterTool, clear: clearDiagnostics } = useDiagnostics()
   // Notebook line spacing (issues #80/#81) — drives Monaco's line height to match
   // the ruled-paper CSS period.
-  const { lineSpacing, editorTheme } = useEditorSettings()
+  const { lineSpacing, editorTheme, minimap } = useEditorSettings()
   // Linting on/off (issue #65), persisted. When off the lint effect no-ops and
   // clears markers + the shared diagnostics store.
   const [lintingEnabled] = useLocalStorage<boolean>('snakie.lintingEnabled', true)
@@ -236,6 +236,9 @@ export function MonacoEditor(): JSX.Element {
   // re-creating the editor.
   const lineSpacingRef = useRef(lineSpacing)
   lineSpacingRef.current = lineSpacing
+  // Latest mini-map preference, read inside the create effect without re-creating.
+  const minimapRef = useRef(minimap)
+  minimapRef.current = minimap
 
   // Latest store callbacks, read inside Monaco event handlers without
   // re-creating the editor on every render.
@@ -263,7 +266,7 @@ export function MonacoEditor(): JSX.Element {
       theme: monacoTheme(readDocTheme(), readEditorTheme()),
       automaticLayout: true,
       lineNumbers: 'on',
-      minimap: { enabled: true },
+      minimap: { enabled: minimapRef.current },
       wordWrap: 'off',
       tabSize: 4,
       insertSpaces: true,
@@ -356,6 +359,11 @@ export function MonacoEditor(): JSX.Element {
   useEffect(() => {
     editorRef.current?.updateOptions(editorMetricsFor(readDocTheme(), lineSpacing))
   }, [lineSpacing])
+
+  // Toggle the mini-map live from Settings (#210).
+  useEffect(() => {
+    editorRef.current?.updateOptions({ minimap: { enabled: minimap } })
+  }, [minimap])
 
   // Bind the active file to a per-id model and attach it to the editor.
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null

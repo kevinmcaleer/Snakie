@@ -175,10 +175,12 @@ function EditorTab(): JSX.Element {
     lineSpacing,
     editorTheme,
     checkFirmwareUpdates,
+    minimap,
     setPaper,
     setLineSpacing,
     setEditorTheme,
-    setCheckFirmwareUpdates
+    setCheckFirmwareUpdates,
+    setMinimap
   } = useEditorSettings()
 
   return (
@@ -250,6 +252,17 @@ function EditorTab(): JSX.Element {
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Mini-map</h3>
+        <p className="settings-section__hint">
+          Show the code overview mini-map down the right edge of the editor.
+        </p>
+        <label className="settings-check">
+          <input type="checkbox" checked={minimap} onChange={(e) => setMinimap(e.target.checked)} />
+          <span>Show the editor mini-map</span>
+        </label>
       </section>
 
       <section className="settings-section">

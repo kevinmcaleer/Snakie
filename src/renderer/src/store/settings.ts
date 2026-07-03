@@ -42,6 +42,8 @@ export interface SettingsStore {
   editorTheme: string
   /** Whether to check for a newer MicroPython firmware for the device (#173). */
   checkFirmwareUpdates: boolean
+  /** Whether the editor shows Monaco's mini-map (#210). Default on. */
+  minimap: boolean
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
@@ -49,6 +51,8 @@ export interface SettingsStore {
   setEditorTheme: (id: string) => void
   /** Enable/disable the newer-firmware check (#173). */
   setCheckFirmwareUpdates: (on: boolean) => void
+  /** Show/hide the editor mini-map (#210). */
+  setMinimap: (on: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -74,6 +78,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     'snakie.firmware.checkUpdates',
     true
   )
+  const [minimap, setMinimap] = useLocalStorage<boolean>('snakie.editor.minimap', true)
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -131,20 +136,24 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       lineSpacing,
       editorTheme,
       checkFirmwareUpdates,
+      minimap,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
-      setCheckFirmwareUpdates
+      setCheckFirmwareUpdates,
+      setMinimap
     }),
     [
       paper,
       lineSpacing,
       editorTheme,
       checkFirmwareUpdates,
+      minimap,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
-      setCheckFirmwareUpdates
+      setCheckFirmwareUpdates,
+      setMinimap
     ]
   )
 

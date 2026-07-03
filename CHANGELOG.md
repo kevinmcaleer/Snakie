@@ -7,6 +7,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Mini-map toggle in Settings (#210).** Settings → Editor now has a **Show the
+  editor mini-map** switch (on by default) that shows/hides Monaco's mini-map live.
 - **Flash-usage gauge in the device files panel (#211).** A slim used/total bar
   pinned at the bottom of the Device Files panel shows how full the board's flash
   is (`os.statvfs`), turning amber past 75% and red past 90%. Hidden when the board
