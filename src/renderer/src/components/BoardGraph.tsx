@@ -414,6 +414,9 @@ export function BoardGraph({
   // that ships help pops the toast (auto-dismissed); the header Help button + the
   // toast both open the drawer.
   const [helpOpen, setHelpOpen] = useState(false)
+  // When help is opened for ONE part (its mini-toolbar help button, #207), focus
+  // that part's card in the drawer; null = the header button opened the whole list.
+  const [helpFocusKey, setHelpFocusKey] = useState<string | null>(null)
   const [helpToast, setHelpToast] = useState<{ name: string } | null>(null)
   useEffect(() => {
     if (!helpToast) return
@@ -805,7 +808,10 @@ export function BoardGraph({
             <button
               type="button"
               className={`boardgraph__help-btn${helpOpen ? ' is-active' : ''}`}
-              onClick={() => setHelpOpen((o) => !o)}
+              onClick={() => {
+                setHelpFocusKey(null) // header opens the whole list, not one card
+                setHelpOpen((o) => !o)
+              }}
               aria-pressed={helpOpen}
               title="Show bundled help for the placed parts"
             >
@@ -863,6 +869,11 @@ export function BoardGraph({
               libraries={libraries ?? []}
               usedByCode={usedByCode}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
+              onShowHelp={(id) => {
+                const rp = (robot?.parts ?? []).find((p) => p.id === id)
+                setHelpFocusKey(rp ? `${rp.lib}:${rp.part}` : null)
+                setHelpOpen(true)
+              }}
             />
           </div>
           {onAddToProject &&
@@ -1140,7 +1151,7 @@ export function BoardGraph({
       {/* Board View HELP: a right-side drawer stacking the placed parts' bundled
           mini-help, + a "help available" toast when a part with help is added. */}
       {effectiveView !== 'graph' && helpOpen && (
-        <PartHelpDrawer items={helpItems} onClose={() => setHelpOpen(false)} />
+        <PartHelpDrawer items={helpItems} focusKey={helpFocusKey} onClose={() => setHelpOpen(false)} />
       )}
       {effectiveView !== 'graph' && helpToast && (
         <div className="boardgraph__help-toast" role="status">

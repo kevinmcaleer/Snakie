@@ -304,6 +304,9 @@ export interface WiringCanvasProps {
   /** Drop a library part onto the canvas at a world position (#159). When set, the
    *  canvas accepts drags from the Parts panel; `pos` is the body's top-left. */
   onDropPart?: (libraryId: string, part: PartDefinition, pos: { x: number; y: number }) => void
+  /** Open the Board View help drawer for a placed part (its instance id). When set,
+   *  the selected part's mini-toolbar shows a help button if that part ships help. */
+  onShowHelp?: (partInstanceId: string) => void
 }
 
 interface Drag {
@@ -328,7 +331,7 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -1204,6 +1207,29 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               />
             ) : (
               <>
+                {/* Help — only when this part ships bundled mini-help (#207). Opens
+                    the Board View help drawer focused on this part's article. */}
+                {onShowHelp && (selPart.partDef?.helpText ?? '').trim() && (
+                  <button
+                    type="button"
+                    className="wc__parttb-btn"
+                    title="Help for this part"
+                    aria-label="Part help"
+                    onClick={() => onShowHelp(selPart.key)}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                      <circle cx={8} cy={8} r={6.2} fill="none" stroke="currentColor" strokeWidth={1.3} />
+                      <path
+                        d="M6.2 6.1a1.8 1.8 0 1 1 2.5 1.7c-.5.25-.9.65-.9 1.25v.35"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={1.3}
+                        strokeLinecap="round"
+                      />
+                      <circle cx={8} cy={11.6} r={0.75} fill="currentColor" />
+                    </svg>
+                  </button>
+                )}
                 <button type="button" className="wc__parttb-btn" title="Rotate 90°" aria-label="Rotate 90 degrees" onClick={() => rotatePart(selPart.key)}>
                   <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" fill="currentColor" />

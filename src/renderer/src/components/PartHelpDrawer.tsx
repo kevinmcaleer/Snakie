@@ -1,4 +1,4 @@
-import type { JSX } from 'react'
+import { useEffect, useRef, type JSX } from 'react'
 import { Markdown } from './Markdown'
 import './PartHelpDrawer.css'
 
@@ -13,10 +13,25 @@ export interface PartHelpItem {
 /**
  * The Board View's HELP panel: a right-side drawer stacking the bundled mini-help
  * of every unique placed part as collapsed markdown cards (offline — the help ships
- * inside each part). Opened from the header Help button or the "help available"
- * notification shown when a part with help is placed.
+ * inside each part). Opened from the header Help button (whole list) or a part's
+ * mini-toolbar help button, which focuses that part's card via `focusKey` (#207).
  */
-export function PartHelpDrawer({ items, onClose }: { items: PartHelpItem[]; onClose: () => void }): JSX.Element {
+export function PartHelpDrawer({
+  items,
+  focusKey,
+  onClose
+}: {
+  items: PartHelpItem[]
+  /** A `lib:part` key to open + scroll to; null opens the first card. */
+  focusKey?: string | null
+  onClose: () => void
+}): JSX.Element {
+  const focusedRef = useRef<HTMLDetailsElement | null>(null)
+  // Bring the focused card into view whenever the focus target changes.
+  useEffect(() => {
+    if (focusKey && focusedRef.current) focusedRef.current.scrollIntoView({ block: 'nearest' })
+  }, [focusKey])
+
   return (
     <aside className="bg-help" aria-label="Part help">
       <div className="bg-help__head">
@@ -31,12 +46,22 @@ export function PartHelpDrawer({ items, onClose }: { items: PartHelpItem[]; onCl
             No help yet. Place a part that ships a mini-help (or add one in the Part Editor) to see it here.
           </p>
         ) : (
-          items.map((it, i) => (
-            <details key={it.key} className="bg-help__card" open={i === 0}>
-              <summary className="bg-help__card-summary">{it.name}</summary>
-              <Markdown source={it.helpText} className="bg-help__md" />
-            </details>
-          ))
+          items.map((it, i) => {
+            // Open the focused card (or the first when nothing's focused).
+            const isFocused = focusKey ? it.key === focusKey : false
+            const open = focusKey ? isFocused : i === 0
+            return (
+              <details
+                key={it.key}
+                ref={isFocused ? focusedRef : undefined}
+                className="bg-help__card"
+                open={open}
+              >
+                <summary className="bg-help__card-summary">{it.name}</summary>
+                <Markdown source={it.helpText} className="bg-help__md" />
+              </details>
+            )
+          })
         )}
       </div>
     </aside>

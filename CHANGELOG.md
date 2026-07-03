@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Help button on a part's breadboard toolbar (#207).** Selecting a placed part
+  in the Board View wiring canvas now shows a **?** Help button on its mini-toolbar
+  when that part ships bundled mini-help — clicking it opens the Board View help
+  drawer scrolled to and expanded on that part's article. Parts with no help don't
+  show the button.
 - **Drag parts onto the breadboard (#159).** Parts in the Board View's library
   dock are now draggable straight onto the wiring canvas — the canvas frames the
   drop zone while you drag, and the part lands centred under the cursor (with a
