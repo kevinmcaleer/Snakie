@@ -2039,6 +2039,11 @@ function SelectionInspector({
             {num('x', lbl.x, (v) => upd({ x: v }))}
             {num('y', lbl.y, (v) => upd({ y: v }))}
             {num('size', lbl.fontSize ?? 12, (v) => upd({ fontSize: v }), 1)}
+          </div>
+          {/* Colour + swatches in their own full-width row (like the Board's
+              Background), so the well + used-colour swatches aren't squeezed
+              into a narrow fourth column beside x / y / size. */}
+          <div className="pe__row">
             <label className="pe__field">
               <span>Colour</span>
               <SwatchPicker

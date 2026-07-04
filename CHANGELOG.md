@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Part Editor: the label colour picker is no longer squished.** In a text
+  label's inspector the colour well + used-colour swatches were crammed into a
+  narrow fourth column beside x / y / size, collapsing into a tiny bunched
+  strip. The colour picker now sits on its own full-width row (like the board's
+  Background colour), so the well and favourite-colour swatches lay out properly.
+
 ## [0.23.1] - 2026-07-03
 
 ### Fixed
