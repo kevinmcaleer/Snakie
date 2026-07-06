@@ -5,6 +5,7 @@ import { SimulatedDevice } from './SimulatedDevice'
 import { instrumentWindowWebContents } from '../instrumentWindows'
 import { consoleWindowWebContents } from '../consoleWindow'
 import { boardWindowWebContents } from '../board'
+import { broadcastToTargets } from './broadcast'
 import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
@@ -76,14 +77,21 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   // Detached instrument windows (#205) also receive the stream so a floated
   // scope/plotter/robotics panel stays live in its own OS window.
   const broadcast = (channel: string, payload: unknown): void => {
-    const main = getWebContents()
-    if (main && !main.isDestroyed()) main.send(channel, payload)
-    for (const wc of instrumentWindowWebContents()) wc.send(channel, payload)
-    // The popped-out console window also needs the live stream.
-    for (const wc of consoleWindowWebContents()) wc.send(channel, payload)
-    // The Board View window too — so its Driver Install banner / useDeviceStatus
-    // track a board (dis)connected AFTER the window opened (#: greyed-out Install).
-    for (const wc of boardWindowWebContents()) wc.send(channel, payload)
+    // Every window that mirrors the live device stream: the main editor, any
+    // detached instrument windows (#205), the popped-out console, and the Board
+    // View (so its Driver Install banner / useDeviceStatus track a board that
+    // (dis)connects AFTER the window opened). broadcastToTargets guards each
+    // send against a window closing mid-broadcast (#226).
+    broadcastToTargets(
+      [
+        getWebContents(),
+        ...instrumentWindowWebContents(),
+        ...consoleWindowWebContents(),
+        ...boardWindowWebContents()
+      ],
+      channel,
+      payload
+    )
   }
   const forward = (dev: SnakieDevice): void => {
     // Send as a Uint8Array; it survives structured clone across IPC.

@@ -16,6 +16,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **Version control (Git)**, **AI chat & autocomplete** (provider setup, keys,
   inline suggestions), and **Keeping Snakie up to date**.
 
+### Fixed
+- **Device-event broadcast survives a window closing mid-stream (#226).** The
+  broadcaster that mirrors the live device stream to the main, instrument,
+  console and Board View windows only guarded the main window against being
+  destroyed; a secondary window closing mid-broadcast could throw "Object has
+  been destroyed" and kill the loop. Every send is now guarded (and wrapped) so
+  one closing window can't stop the stream reaching the others.
+
 ## [0.23.2] - 2026-07-04
 
 ### Fixed
