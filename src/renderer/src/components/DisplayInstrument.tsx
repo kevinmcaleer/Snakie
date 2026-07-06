@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
@@ -77,7 +78,7 @@ const ADDR_PRESETS = ['0x3C', '0x3D']
 /** Fire-and-forget a `screen` control line; swallow errors so the UI never throws. */
 function sendScreen(payload: string): void {
   try {
-    void window.api?.device?.sendControl?.('screen', payload)
+    void window.api?.device?.sendControl?.('screen', payload)?.catch(reporter('screen send'))
   } catch {
     /* offline / no device — the panel still renders any telemetry it has. */
   }

@@ -17,6 +17,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   inline suggestions), and **Keeping Snakie up to date**.
 
 ### Fixed
+- **Failures are no longer silently swallowed (#225).** A shared `reportError`
+  helper replaces the `.catch(() => {})` sites that made failures invisible: it
+  always logs with a `[context]` tag, and for user-visible actions surfaces a
+  message in the status bar via the existing `snakie:status` seam, so the board
+  never merely *appears* unresponsive. Wired into Run / Stop / Reset / open /
+  save (Toolbar → status bar), the servo / LED / buzzer / gamepad / range /
+  display instrument sends (which previously had no rejection handler at all),
+  and the simulated-runtime queue + parts/firmware cleanup in the main process.
 - **Device-event broadcast survives a window closing mid-stream (#226).** The
   broadcaster that mirrors the live device stream to the main, instrument,
   console and Board View windows only guarded the main window against being

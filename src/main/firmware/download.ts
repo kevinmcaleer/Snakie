@@ -24,6 +24,7 @@ import { Readable } from 'stream'
 import { app } from 'electron'
 import type { Emit } from './flasher'
 import { flash } from './flasher'
+import { reporter } from '../report-error'
 import type { DownloadAndFlashOptions, FlashResult } from './types'
 
 /**
@@ -101,7 +102,7 @@ export async function downloadFirmware(url: string, emit: Emit): Promise<string>
     })
   } catch (err) {
     // Best-effort cleanup of the partial temp file.
-    await unlink(dest).catch(() => {})
+    await unlink(dest).catch(reporter('firmware: cleanup partial download'))
     throw err instanceof Error ? err : new Error(String(err))
   }
 
@@ -146,6 +147,6 @@ export async function downloadAndFlash(
       emit
     )
   } finally {
-    await unlink(tempPath).catch(() => {})
+    await unlink(tempPath).catch(reporter('firmware: cleanup temp file'))
   }
 }

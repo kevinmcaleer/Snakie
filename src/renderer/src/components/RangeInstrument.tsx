@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import type { InstrumentDef } from './range-instrument-def'
 import { useTelemetryStream, type DistanceTelemetry } from './range-telemetry'
@@ -92,7 +93,7 @@ const GP_PINS = Array.from({ length: 29 }, (_, i) => i)
 /** Fire-and-forget a `range` control line; swallow errors so the UI never throws. */
 function sendRange(payload: string): void {
   try {
-    void window.api?.device?.sendControl?.('range', payload)
+    void window.api?.device?.sendControl?.('range', payload)?.catch(reporter('range send'))
   } catch {
     /* offline / no device — the radar still renders any telemetry it has. */
   }

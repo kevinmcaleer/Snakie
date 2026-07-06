@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useSnakiePresence } from './snakie-presence'
@@ -91,7 +92,7 @@ const RTTTL_PLACEHOLDER = 'Nokia:d=4,o=5,b=125:8e6,8d6,4f#,4g#,8c#6,8b,4d,4e,8b,
 /** Fire-and-forget a control line; swallow errors so the UI never throws. */
 function sendBuzzer(payload: string): void {
   try {
-    void window.api?.device?.sendControl?.('buzzer', payload)
+    void window.api?.device?.sendControl?.('buzzer', payload)?.catch(reporter('buzzer send'))
   } catch {
     /* offline / no device — the local WebAudio preview still plays. */
   }

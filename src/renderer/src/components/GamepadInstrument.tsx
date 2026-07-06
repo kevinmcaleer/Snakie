@@ -6,6 +6,7 @@ import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent
 } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { buildTeleopPayload } from './snakie-control'
@@ -177,7 +178,7 @@ export function GamepadInstrument({
     lastFrameSentRef.current = key
     sentTimesRef.current.push(now)
     if (sentTimesRef.current.length > 30) sentTimesRef.current.shift()
-    void window.api?.device?.sendControl?.('teleop', key)
+    void window.api?.device?.sendControl?.('teleop', key)?.catch(reporter('teleop send'))
   }, [])
 
   // The polling + streaming loop (requestAnimationFrame).
@@ -235,13 +236,13 @@ export function GamepadInstrument({
         Object.fromEntries(axisMappings.map((m) => [m.name, 0])),
         Object.fromEntries(buttonMappings.map((m) => [m.name, false]))
       )
-    )
+    )?.catch(reporter('teleop stop'))
   }, [estop, axisMappings, buttonMappings])
 
   useEffect(() => {
     return () => {
       // Best-effort stop on close: zero everything.
-      void window.api?.device?.sendControl?.('teleop', 'axes=')
+      void window.api?.device?.sendControl?.('teleop', 'axes=')?.catch(reporter('teleop stop'))
     }
   }, [])
 

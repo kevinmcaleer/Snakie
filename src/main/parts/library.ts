@@ -32,6 +32,7 @@ import {
   partToYaml
 } from '../../shared/part-yaml'
 import { bumpPatch } from '../../shared/part-registry'
+import { reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
 
 /** Absolute path to the user's parts folder (`<userData>/parts`). */
@@ -103,7 +104,7 @@ async function doSeedStandardLibrary(): Promise<void> {
     await fsp.rename(tmp, dest)
   } catch {
     // best-effort — the built-in board fallback covers a failed seed
-    await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {})
+    await fsp.rm(tmp, { recursive: true, force: true }).catch(reporter('parts: seed temp cleanup'))
   }
 }
 
@@ -350,10 +351,10 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     try {
       const prev = partFromYaml(await fsp.readFile(join(partDir, 'parts.yml'), 'utf-8'))
       if (prev.image && isContainedFile(partDir, prev.image)) {
-        await fsp.unlink(join(partDir, prev.image)).catch(() => undefined)
+        await fsp.unlink(join(partDir, prev.image)).catch(reporter('parts: remove old image'))
       }
       if (prev.help && isContainedFile(partDir, prev.help)) {
-        await fsp.unlink(join(partDir, prev.help)).catch(() => undefined)
+        await fsp.unlink(join(partDir, prev.help)).catch(reporter('parts: remove old help'))
       }
     } catch {
       // No existing part / unreadable → nothing to clean up.
@@ -379,7 +380,7 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
       await fsp.writeFile(join(partDir, 'help.md'), helpText, 'utf-8')
       toWrite.help = 'help.md'
     } else {
-      await fsp.unlink(join(partDir, 'help.md')).catch(() => undefined)
+      await fsp.unlink(join(partDir, 'help.md')).catch(reporter('parts: remove help'))
       delete toWrite.help
     }
 

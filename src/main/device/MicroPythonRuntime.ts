@@ -1,4 +1,5 @@
 import { createRequire } from 'module'
+import { reportError } from '../report-error'
 import type {
   LoadMicroPythonOptions,
   MicroPythonInstance
@@ -89,8 +90,9 @@ export class MicroPythonRuntime implements ReplRuntime {
       }
       this.flush()
     })
-    // Keep the queue alive even if one feed rejects.
-    this.queue = op.catch(() => undefined)
+    // Keep the queue alive even if one feed rejects — but log it (#225) so a
+    // silently-failing REPL feed isn't invisible.
+    this.queue = op.catch((err) => reportError('sim runtime feed', err))
     return op
   }
 
@@ -115,7 +117,7 @@ export class MicroPythonRuntime implements ReplRuntime {
         this.capturing = null
       }
     })
-    this.queue = op.catch(() => undefined)
+    this.queue = op.catch((err) => reportError('sim runtime exec', err))
     return op
   }
 

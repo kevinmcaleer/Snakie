@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { reporter } from '../lib/report-error'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
@@ -185,26 +186,26 @@ export function Toolbar({
     markRun()
     setRunning(true)
     const payload = `\x05${activeFile.content}\x04`
-    window.api.device.sendData(payload).catch(() => undefined)
+    window.api.device.sendData(payload).catch(reporter('run', { notify: "Couldn't send your program to the board." }))
   }, [connected, activeFile, markRun])
 
   // Stop is dual-purpose: interrupt a running program (Ctrl-C); or, when nothing
   // is running, soft-reset the board (Ctrl-D) — a quick way to clear device state.
   const handleStop = useCallback(() => {
     if (running) {
-      window.api.device.interrupt().catch(() => undefined)
+      window.api.device.interrupt().catch(reporter('stop', { notify: "Couldn't stop the board." }))
       setRunning(false)
     } else {
-      window.api.device.softReset().catch(() => undefined)
+      window.api.device.softReset().catch(reporter('reset', { notify: "Couldn't reset the board." }))
     }
   }, [running])
 
   const handleOpenFolder = useCallback(() => {
-    void openFolder().catch(() => undefined)
+    void openFolder().catch(reporter('open folder', { notify: "Couldn't open the folder." }))
   }, [openFolder])
 
   const handleSave = useCallback(() => {
-    if (activeId) void saveFile(activeId).catch(() => undefined)
+    if (activeId) void saveFile(activeId).catch(reporter('save file', { notify: "Couldn't save the file." }))
   }, [activeId, saveFile])
 
   return (

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
@@ -89,7 +90,7 @@ export function ServoInstrument({ def, onClose, docked = true, onToggleDock, flo
       if (now - lastSent.current < 40) return
       lastSent.current = now
     }
-    void window.api.device.sendControl(SERVO_TARGET, payload).catch(() => {})
+    void window.api.device.sendControl(SERVO_TARGET, payload).catch(reporter('servo send'))
   }, [])
 
   /** Set + command an angle, clamped to the current limits. */

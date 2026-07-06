@@ -1,4 +1,5 @@
 import { useCallback, useState, type CSSProperties } from 'react'
+import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import {
@@ -79,7 +80,7 @@ export function LedInstrument({
 
   /** Send a `led` payload; swallow a rejection (board may be disconnected). */
   const send = useCallback((payload: string): void => {
-    void window.api.device.sendControl(LED_TARGET, payload).catch(() => {})
+    void window.api.device.sendControl(LED_TARGET, payload).catch(reporter('led send'))
   }, [])
 
   // --- Mode actions (each updates optimistic state AND writes the payload) ---
