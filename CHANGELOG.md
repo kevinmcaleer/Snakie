@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Seven new Getting Started help articles (#231).** The Help Library now
+  covers every advertised feature: **Files & sync** (the two file trees, the
+  transfer bridge, and keeping tagged files in sync on save), **Flash MicroPython
+  firmware** (auto-detect, the MicroPython.org catalog, BOOTSEL, the micro:bit
+  maintenance-mode warning), **Install packages (mip)**, **Problems & validation**
+  (squiggles, the Problems tab, YAML/JSON autofix, board-aware bus checks),
+  **Version control (Git)**, **AI chat & autocomplete** (provider setup, keys,
+  inline suggestions), and **Keeping Snakie up to date**.
+
 ## [0.23.2] - 2026-07-04
 
 ### Fixed

@@ -32,6 +32,26 @@ describe('help tree', () => {
       expect((HELP_ARTICLES[id] ?? '').length, id).toBeGreaterThan(20)
     }
   })
+
+  it('every Getting Started article in the tree has authored content (#231)', () => {
+    const gs = find(HELP_SECTIONS, 'getting-started')!
+    // The feature articles added in #231 are registered…
+    for (const id of [
+      'gs-files',
+      'gs-firmware',
+      'gs-packages',
+      'gs-validation',
+      'gs-git',
+      'gs-chat',
+      'gs-updater'
+    ]) {
+      expect(gs.children!.some((n) => n.id === id), `${id} in tree`).toBe(true)
+    }
+    // …and every tree entry has a real body (no "not written yet" stubs).
+    for (const n of gs.children!) {
+      expect((HELP_ARTICLES[n.id] ?? '').length, `content for ${n.id}`).toBeGreaterThan(200)
+    }
+  })
 })
 
 const libs = (parts: object[]): PartLibraryWithParts[] =>
