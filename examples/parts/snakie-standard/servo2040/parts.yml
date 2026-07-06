@@ -1,0 +1,82 @@
+id: servo2040
+name: Pimoroni Servo 2040
+description: RP2040 18-channel servo controller with current sensing, 6 sensor inputs and a Qw/ST connector
+manufacturer: Pimoroni
+family: Microcontroller
+mcu: RP2040
+partNumber: PIM613
+package: Board
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#12181f"
+# Board is 62 x 42 mm (landscape). Authored portrait-friendly: the 18 servo
+# signal outputs run down the two side rails (1-9 left, 10-18 right); the Qw/ST
+# I2C connector + utility pins sit along the bottom.
+aspect: 1.476
+dimensions:
+  width: 62
+  height: 42
+shape:
+  kind: rect
+  cornerRadius: 0.05
+# GPIO map verified against Pimoroni's firmware header
+# (pimoroni-pico/libraries/servo2040/servo2040.hpp): SERVO_1..18 = GP0..GP17,
+# LED_DATA(WS2812 x6)=GP18, I2C_INT=GP19, I2C_SDA=GP20, I2C_SCL=GP21,
+# ADC_ADDR_0/1/2=GP22/24/25 (internal analog mux), USER_SW=GP23,
+# ADC0/1/2=GP26/27/28, SHARED_ADC=GP29 (current/voltage/sensor sensing via mux).
+# Servo outputs are dedicated PWM; the pwm channel is A for even GPIO, B for odd.
+headers:
+  - edge: left
+    pins:
+      - { number: 1, name: S1, type: io, gpio: 0, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
+      - { number: 2, name: S2, type: io, gpio: 1, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
+      - { number: 3, name: S3, type: io, gpio: 2, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
+      - { number: 4, name: S4, type: io, gpio: 3, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
+      - { number: 5, name: S5, type: io, gpio: 4, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
+      - { number: 6, name: S6, type: io, gpio: 5, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
+      - { number: 7, name: S7, type: io, gpio: 6, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
+      - { number: 8, name: S8, type: io, gpio: 7, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
+      - { number: 9, name: S9, type: io, gpio: 8, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
+  - edge: right
+    pins:
+      - { number: 10, name: S10, type: io, gpio: 9, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 11, name: S11, type: io, gpio: 10, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 12, name: S12, type: io, gpio: 11, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 13, name: S13, type: io, gpio: 12, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 14, name: S14, type: io, gpio: 13, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 15, name: S15, type: io, gpio: 14, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 16, name: S16, type: io, gpio: 15, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 17, name: S17, type: io, gpio: 16, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 18, name: S18, type: io, gpio: 17, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+  - edge: bottom
+    pins:
+      - { number: 19, name: INT, type: io, gpio: 19, capabilities: [digital], shape: header, rotation: 90 }
+      - { number: 20, name: USER, type: io, gpio: 23, capabilities: [digital], shape: header, rotation: 90 }
+      - { number: 21, name: A0, type: io, gpio: 26, capabilities: [digital, pwm, adc], signals: { pwm: A }, buses: { adc: 0 }, shape: header, rotation: 90 }
+      - { number: 22, name: A1, type: io, gpio: 27, capabilities: [digital, pwm, adc], signals: { pwm: B }, buses: { adc: 1 }, shape: header, rotation: 90 }
+      - { number: 23, name: A2, type: io, gpio: 28, capabilities: [digital, pwm, adc], signals: { pwm: A }, buses: { adc: 2 }, shape: header, rotation: 90 }
+# Qw/ST (Qwiic / STEMMA QT) I2C0 socket: SDA=GP20, SCL=GP21.
+connectors:
+  - kind: qwiic
+    label: QW/ST
+    x: 0.5
+    y: 0.92
+    pins:
+      - { name: GND, type: gnd }
+      - { name: "3V3", type: pwr }
+      - { name: SDA, type: io, gpio: 20, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 } }
+      - { name: SCL, type: io, gpio: 21, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 } }
+# 6 addressable RGB LEDs (WS2812) on GP18; onboard user button on GP23.
+onboardLeds:
+  - { kind: neopixel, gpio: 18, x: 0.5, y: 0.12 }
+tags:
+  - rp2040
+  - servo
+  - motor
+  - robotics
+  - pimoroni
+library:
+  module: servo
+  docs: https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/servo2040
+help: help.md

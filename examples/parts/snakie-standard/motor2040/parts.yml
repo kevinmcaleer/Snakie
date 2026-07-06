@@ -1,0 +1,81 @@
+id: motor2040
+name: Pimoroni Motor 2040
+description: RP2040 quad DC-motor controller with encoder inputs, current sensing and a Qw/ST connector
+manufacturer: Pimoroni
+family: Microcontroller
+mcu: RP2040
+partNumber: PIM618
+package: Board
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.0
+pcbColor: "#12181f"
+# Board is 52 x 38 mm. Authored with the 4 encoder inputs down the left rail and
+# the 4 motor outputs down the right rail; the spare / I2C pins along the bottom.
+aspect: 1.368
+dimensions:
+  width: 52
+  height: 38
+shape:
+  kind: rect
+  cornerRadius: 0.06
+# GPIO map verified against Pimoroni's firmware header
+# (pimoroni-pico/libraries/motor2040/motor2040.hpp):
+#   Motors  A/B/C/D (P,N) = GP4/5, GP6/7, GP8/9, GP10/11
+#   Encoders A/B/C/D (A,B) = GP0/1, GP2/3, GP12/13, GP14/15
+#   TX_TRIG=GP16, RX_ECHO=GP17, LED_DATA(WS2812 x1)=GP18,
+#   I2C_INT=GP19, I2C_SDA=GP20, I2C_SCL=GP21, USER_SW=GP23,
+#   ADC_ADDR_0/1/2=GP22/24/25 (internal mux), ADC0/1/2=GP26/27/28,
+#   SHARED_ADC=GP29 (per-motor current, voltage, fault + 2 sensors via mux).
+# Motor P/N pins are PWM (channel A for even GPIO, B for odd).
+headers:
+  - edge: left
+    pins:
+      - { number: 1, name: EA A, type: io, gpio: 0, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 2, name: EA B, type: io, gpio: 1, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 3, name: EB A, type: io, gpio: 2, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 4, name: EB B, type: io, gpio: 3, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 5, name: EC A, type: io, gpio: 12, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 6, name: EC B, type: io, gpio: 13, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 7, name: ED A, type: io, gpio: 14, capabilities: [digital], shape: header, rotation: 180 }
+      - { number: 8, name: ED B, type: io, gpio: 15, capabilities: [digital], shape: header, rotation: 180 }
+  - edge: right
+    pins:
+      - { number: 9, name: MA+, type: io, gpio: 4, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 10, name: MA-, type: io, gpio: 5, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 11, name: MB+, type: io, gpio: 6, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 12, name: MB-, type: io, gpio: 7, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 13, name: MC+, type: io, gpio: 8, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 14, name: MC-, type: io, gpio: 9, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+      - { number: 15, name: MD+, type: io, gpio: 10, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
+      - { number: 16, name: MD-, type: io, gpio: 11, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
+  - edge: bottom
+    pins:
+      - { number: 17, name: TX, type: io, gpio: 16, capabilities: [digital, uart], signals: { uart: TX }, buses: { uart: 0 }, shape: header, rotation: 90 }
+      - { number: 18, name: RX, type: io, gpio: 17, capabilities: [digital, uart], signals: { uart: RX }, buses: { uart: 0 }, shape: header, rotation: 90 }
+      - { number: 19, name: INT, type: io, gpio: 19, capabilities: [digital], shape: header, rotation: 90 }
+      - { number: 20, name: USER, type: io, gpio: 23, capabilities: [digital], shape: header, rotation: 90 }
+# Qw/ST (Qwiic / STEMMA QT) I2C0 socket: SDA=GP20, SCL=GP21.
+connectors:
+  - kind: qwiic
+    label: QW/ST
+    x: 0.5
+    y: 0.92
+    pins:
+      - { name: GND, type: gnd }
+      - { name: "3V3", type: pwr }
+      - { name: SDA, type: io, gpio: 20, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 } }
+      - { name: SCL, type: io, gpio: 21, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 } }
+# One addressable RGB LED (WS2812) on GP18; onboard user button on GP23.
+onboardLeds:
+  - { kind: neopixel, gpio: 18, x: 0.5, y: 0.12 }
+tags:
+  - rp2040
+  - motor
+  - encoder
+  - robotics
+  - pimoroni
+library:
+  module: motor
+  docs: https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/motor2040
+help: help.md
