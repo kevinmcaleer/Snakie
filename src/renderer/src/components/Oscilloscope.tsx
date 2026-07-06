@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { InstrumentWindow, PhosphorScreen, SourceSlot, type FloatProps } from './InstrumentWindow'
+import { InstrumentRequirement } from './InstrumentRequirement'
 import {
   formatDuty,
   formatFreq,
@@ -132,6 +133,41 @@ export function Oscilloscope({
   // Time/div derived from the real PWM period so the period reads point-to-point
   // against the graticule (a period spans DIV_X / CYCLES divisions).
   const timePerDiv = cfg.freq && cfg.freq > 0 ? 1 / (cfg.freq * (DIV_X / CYCLES)) : undefined
+
+  // A "placeholder" connection = the scope was opened from the dock with no PWM
+  // pin in the file. Auto-adopt the first real PWM source the moment one appears
+  // (in the code, or via `inst.watch`); until then show the requirement panel so
+  // the instrument is never a blank screen with no explanation.
+  const isPlaceholder = conn.pins.length === 0 && conn.variable === ''
+  useEffect(() => {
+    if (isPlaceholder && sources.length > 0) onSelectSource?.(sources[0])
+  }, [isPlaceholder, sources, onSelectSource])
+
+  if (isPlaceholder && sources.length === 0 && !onTelemetry && liveDuty === undefined) {
+    return (
+      <InstrumentWindow
+        name="OSCILLOSCOPE"
+        helpId="inst-scope"
+        source="no source"
+        live={live}
+        onToggleLive={onToggleLive}
+        onToggleDock={onToggleDock}
+        docked={docked}
+        onClose={onClose}
+        {...float}
+      >
+        <InstrumentRequirement
+          title="No PWM signal yet"
+          lines={[
+            'The oscilloscope traces a PWM pin. Define one in your program (or watch it) and the live waveform appears here.'
+          ]}
+          code={'import instruments as inst\nfrom machine import Pin, PWM\n\npwm = PWM(Pin(0)); pwm.freq(1000)\ninst.watch(scope=pwm)   # then inst.update() in your loop'}
+          helpId="inst-scope"
+          accent="#5ce08a"
+        />
+      </InstrumentWindow>
+    )
+  }
 
   return (
     <InstrumentWindow

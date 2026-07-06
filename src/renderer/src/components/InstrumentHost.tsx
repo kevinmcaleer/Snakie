@@ -834,6 +834,29 @@ export function InstrumentDockRegion({
   }, [inUse, feed.binds])
   const scopeDocked = host.dockedItems.filter((r) => r.it.kind === 'scope')
   const meterDocked = host.dockedItems.filter((r) => r.it.kind === 'meter')
+
+  // A scope/meter can be toggled on with NO board-view open. Render it from the
+  // file's first PWM/ADC conn when present, else a PLACEHOLDER (empty pins) so the
+  // instrument shows its requirement-help panel instead of a blank screen. Live
+  // telemetry is resolved from `feed` for the chosen channel, so it starts drawing
+  // the moment the program prints for it (or `inst.watch(scope=…)`).
+  const mkFallback = (kind: 'scope' | 'meter'): ResolvedInstrument => {
+    const conn: UsedPins =
+      (kind === 'scope' ? host.pwmConns[0] : host.adcConns[0]) ??
+      { type: kind === 'scope' ? 'pwm' : 'adc', pins: [], variable: '', constructor: '' }
+    const samples = kind === 'scope' ? scopeSamplesFor(feed, conn.variable) : undefined
+    return {
+      it: { kind, conn },
+      conn,
+      live: undefined,
+      stats: undefined,
+      telemetrySamples: samples && samples.length > 0 ? samples : undefined,
+      telemetryReading: kind === 'meter' ? meterReadingFor(feed, conn.variable) : undefined,
+      pwmReading: kind === 'scope' ? pwmReadingFor(feed, conn.variable) : undefined,
+      isDocked: true,
+      cascade: 0
+    }
+  }
   // Singleton placeholders to render: every VISIBLE singleton id that isn't the
   // real Plotter (and exists in the registry). Order follows registry order so
   // the dock stack is stable.
@@ -868,13 +891,21 @@ export function InstrumentDockRegion({
         />
       )}
       {isVisible(vis, 'scope') &&
-        scopeDocked.map((r) => (
-          <DockItem key={`scope:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
-        ))}
+        (scopeDocked.length > 0
+          ? scopeDocked.map((r) => (
+              <DockItem key={`scope:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
+            ))
+          : (
+              <DockItem key="scope:__fallback__">{renderResolved(mkFallback('scope'), host)}</DockItem>
+            ))}
       {isVisible(vis, 'meter') &&
-        meterDocked.map((r) => (
-          <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
-        ))}
+        (meterDocked.length > 0
+          ? meterDocked.map((r) => (
+              <DockItem key={`meter:${r.it.conn.variable}`}>{renderResolved(r, host)}</DockItem>
+            ))
+          : (
+              <DockItem key="meter:__fallback__">{renderResolved(mkFallback('meter'), host)}</DockItem>
+            ))}
       {isVisible(vis, 'plotter') && host.singletonDocked['plotter'] !== false && (
         <DockItem>
           <InstrumentWindow

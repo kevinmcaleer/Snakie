@@ -18,6 +18,7 @@ Computer, Sensor, Input, Output, Motor, Display, Communication, Power, IC**.
 | Arduino Nano / Nano RP2040 Connect | — | classic 5 V / 3.3 V footprints |
 | Seeed XIAO (RP2040 / ESP32-C3 / SAMD21) | — | thumb-sized castellated |
 | BBC micro:bit v2 | edge connector | nRF52833 |
+| Pimoroni Servo2040 | — | RP2040 servo controller: 18 servo channels + per-channel current sensing, RGB LED, user button |
 
 ## Computers
 
@@ -38,6 +39,7 @@ Computer, Sensor, Input, Output, Motor, Display, Communication, Power, IC**.
 | TCS34725 colour sensor | I²C | RGB + clear |
 | Line-follower (IR reflectance, TCRT5000) | analog / digital | array or single |
 | Hall-effect / reed switch | digital | wheel-encoder / endstop |
+| INMP441 I²S MEMS microphone | I²S | omnidirectional digital mic; common ESP32 audio input |
 
 ## Inputs
 
@@ -86,6 +88,7 @@ Computer, Sensor, Input, Output, Motor, Display, Communication, Power, IC**.
 | HC-05 / HC-06 Bluetooth | UART | classic BT serial |
 | RFID-RC522 | SPI | 13.56 MHz RFID |
 | NEO-6M GPS | UART | GNSS |
+| IR receiver + remote (VS1838B / TSOP38238) | digital (demodulated) | NEC / RC5 remote-control decoding |
 
 ## Power
 
