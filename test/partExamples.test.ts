@@ -76,7 +76,9 @@ describe('standard parts library (snakie-standard)', () => {
     { id: 'pico', pads: 40, mcu: 'RP2040' },
     { id: 'pico2w', pads: 40, mcu: 'RP2350' }, // canonical id, matches the built-in
     { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' },
-    { id: 'tiny2350', pads: 16, mcu: 'RP2350' } // authored via the build-part-from-image skill (#198)
+    { id: 'tiny2350', pads: 16, mcu: 'RP2350' }, // authored via the build-part-from-image skill (#198)
+    { id: 'motor2040', pads: 20, mcu: 'RP2040' }, // Pimoroni quad motor controller
+    { id: 'servo2040', pads: 23, mcu: 'RP2040' } // Pimoroni 18-ch servo controller
   ]
 
   it('the Tiny 2350 ships a life-like background photo', () => {
