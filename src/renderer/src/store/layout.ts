@@ -45,7 +45,7 @@ export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 /** Display labels + a one-line description for the switcher tooltips. */
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
-  board: { label: 'Board', hint: 'Board-first: mini board + instruments beside the code' },
+  board: { label: 'Board', hint: 'Tri-split: code · Board View · instruments, side by side' },
   lab: { label: 'Lab', hint: 'Instrument bench: big dock, editor and console' },
   data: { label: 'Data', hint: 'Data-first: large console/plotter under the editor' }
 }
@@ -59,8 +59,12 @@ export interface WorkspaceLayout {
   rightCollapsed: boolean
   /** The fixed-width instrument dock (not a Panel — a plain show/hide region). */
   dockOpen: boolean
-  /** react-resizable-panels layouts: horizontal = [files, centre, chat]. */
-  horizontal: [number, number, number]
+  /** The embedded Board View pane (epic #259 / the Board workspace): rendered
+   *  as a fourth Panel between the centre and the chat when true. */
+  boardPaneOpen: boolean
+  /** react-resizable-panels layouts: horizontal = [files, centre, board, chat]
+   *  (the board slot is 0 whenever the pane is closed). */
+  horizontal: [number, number, number, number]
   /** vertical = [editor, shell]. */
   vertical: [number, number]
 }
@@ -84,19 +88,22 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     shellCollapsed: false,
     rightCollapsed: true,
     dockOpen: false,
-    horizontal: [18, 82, 0],
+    boardPaneOpen: false,
+    horizontal: [18, 82, 0, 0],
     vertical: [70, 30]
   },
-  // Board-first: the dock (mini board view + instruments) open, sidebar tucked
-  // away, console under the code. (The FULL Board View embed is its own work
-  // item — see epic #259; the in-bundle mini board leads the dock meanwhile.)
+  // Board-first (the education tri-split): CODE on the left, the EMBEDDED
+  // Board View (breadboard/schematic/node graph) on the right, and the
+  // instrument dock at the far right — code, wiring and live instruments all
+  // visible at once. Console stays under the code.
   board: {
     activityView: 'files',
     filesCollapsed: true,
     shellCollapsed: false,
     rightCollapsed: true,
     dockOpen: true,
-    horizontal: [0, 100, 0],
+    boardPaneOpen: true,
+    horizontal: [0, 42, 58, 0],
     vertical: [65, 35]
   },
   // Instrument bench: maximum dock, slim console for the REPL.
@@ -106,7 +113,8 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     shellCollapsed: false,
     rightCollapsed: true,
     dockOpen: true,
-    horizontal: [0, 100, 0],
+    boardPaneOpen: false,
+    horizontal: [0, 100, 0, 0],
     vertical: [75, 25]
   },
   // Data-first: a tall shell region (Console | Plotter | Problems) + the dock
@@ -117,7 +125,8 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     shellCollapsed: false,
     rightCollapsed: true,
     dockOpen: true,
-    horizontal: [0, 100, 0],
+    boardPaneOpen: false,
+    horizontal: [0, 100, 0, 0],
     vertical: [45, 55]
   }
 }
@@ -147,7 +156,7 @@ const VIEWS: ActivityView[] = [
 /** Validate one workspace's shape, falling back to `preset` field-by-field. */
 function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayout {
   const r = (raw ?? {}) as Record<string, unknown>
-  return {
+  const ws: WorkspaceLayout = {
     activityView: VIEWS.includes(r.activityView as ActivityView)
       ? (r.activityView as ActivityView)
       : preset.activityView,
@@ -155,11 +164,20 @@ function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayo
     shellCollapsed: typeof r.shellCollapsed === 'boolean' ? r.shellCollapsed : preset.shellCollapsed,
     rightCollapsed: typeof r.rightCollapsed === 'boolean' ? r.rightCollapsed : preset.rightCollapsed,
     dockOpen: typeof r.dockOpen === 'boolean' ? r.dockOpen : preset.dockOpen,
-    horizontal: validSizes(r.horizontal, 3)
-      ? (r.horizontal as [number, number, number])
+    boardPaneOpen:
+      typeof r.boardPaneOpen === 'boolean' ? r.boardPaneOpen : preset.boardPaneOpen,
+    horizontal: validSizes(r.horizontal, 4)
+      ? (r.horizontal as [number, number, number, number])
       : [...preset.horizontal],
     vertical: validSizes(r.vertical, 2) ? (r.vertical as [number, number]) : [...preset.vertical]
   }
+  // A closed board pane always sits at 0 width — fold any stray share back into
+  // the centre so the sizes stay consistent with what's rendered.
+  if (!ws.boardPaneOpen && ws.horizontal[2] !== 0) {
+    ws.horizontal[1] += ws.horizontal[2]
+    ws.horizontal[2] = 0
+  }
+  return ws
 }
 
 /** A fresh factory-default state (every workspace at its preset). */
@@ -251,9 +269,11 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
       const view = JSON.parse(viewRaw) as ActivityView
       if (VIEWS.includes(view)) code.activityView = view
     }
+    // Pre-#259 the horizontal group had THREE panels [files, centre, chat];
+    // the board slot (index 2) didn't exist yet, so it maps in as 0.
     const h = legacyPanelSizes(storage, 'snakie.layout.horizontal', 3)
     const v = legacyPanelSizes(storage, 'snakie.layout.vertical', 2)
-    if (h) code.horizontal = h as [number, number, number]
+    if (h) code.horizontal = [h[0], h[1], 0, h[2]]
     if (v) code.vertical = v as [number, number]
   } catch {
     // any migration hiccup → plain defaults
@@ -334,8 +354,12 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     (group: 'horizontal' | 'vertical', sizes: number[]): void => {
       const s = stateRef.current as LayoutState
       const ws = s.workspaces[s.active]
-      if (group === 'horizontal' && validSizes(sizes, 3)) {
-        ws.horizontal = sizes as [number, number, number]
+      if (group === 'horizontal' && ws.boardPaneOpen && validSizes(sizes, 4)) {
+        ws.horizontal = sizes as [number, number, number, number]
+      } else if (group === 'horizontal' && !ws.boardPaneOpen && validSizes(sizes, 3)) {
+        // The board Panel isn't rendered — the group reports [files, centre,
+        // chat]; slot the closed pane's 0 back into index 2.
+        ws.horizontal = [sizes[0], sizes[1], 0, sizes[2]]
       } else if (group === 'vertical' && validSizes(sizes, 2)) {
         ws.vertical = sizes as [number, number]
       } else {

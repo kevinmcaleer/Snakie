@@ -10,9 +10,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Workspace layouts (epic #259, phases 0+1).** A new **Code · Board · Lab ·
   Data** switcher in the toolbar restyles the whole shell in one click: each
   workspace remembers its own sidebar view, panel sizes, collapse states and
-  instrument-dock visibility — *Code* is today's editor-first default, *Board*
-  opens the dock (mini board + instruments) beside the code, *Lab* maximises the
-  instrument bench, *Data* gives the console/plotter the tall half. Switching
+  instrument-dock visibility — *Code* is today's editor-first default, *Lab*
+  maximises the instrument bench, *Data* gives the console/plotter the tall
+  half, and ***Board* is a true tri-split for the classroom: your code on the
+  left, the full Board View (breadboard · schematic · node graph, with the
+  parts library and wiring) embedded on the right, and the instrument dock at
+  the far right — code, wiring and live instruments all visible at once.** The
+  embedded Board View loads lazily (code-split) and stays in sync with the
+  floating Board View window via robot.yml. Switching
   never remounts anything, so the editor, console scrollback and running
   instruments all survive. A **↺ reset** button restores the active workspace to
   its factory preset. Under the hood, all layout state moved out of AppShell

@@ -2260,3 +2260,14 @@ body {
   position: absolute;
   inset: 0;
 }
+
+/* Board pane (the Board workspace's embedded Board View, #259) — the lazy
+   chunk's brief loading state. */
+.board-pane__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}

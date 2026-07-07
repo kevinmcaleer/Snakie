@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ImperativePanelGroupHandle,
   ImperativePanelHandle,
@@ -8,6 +8,11 @@ import {
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { useWorkspaceLayout } from '../store/layout'
+
+// The embedded Board View pane (the Board workspace's tri-split, #259) is
+// code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
+// loads only when a workspace with the pane open is activated.
+const BoardPane = lazy(() => import('./BoardPane'))
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView } from './ActivityBar'
@@ -237,7 +242,8 @@ export function AppShell(): JSX.Element {
   // workspace's geometry when it becomes active (nothing remounts — the editor,
   // xterm scrollback and instruments survive every switch).
   const layout = useWorkspaceLayout()
-  const { filesCollapsed, shellCollapsed, rightCollapsed, activityView } = layout.workspace
+  const { filesCollapsed, shellCollapsed, rightCollapsed, activityView, boardPaneOpen } =
+    layout.workspace
   const dockOpen = layout.workspace.dockOpen
 
   const filesRef = useRef<ImperativePanelHandle>(null)
@@ -271,7 +277,13 @@ export function AppShell(): JSX.Element {
   useEffect(() => {
     if (layout.applyNonce === 0) return // initial mount already used defaultSize
     const ws = layout.workspace
-    hGroupRef.current?.setLayout([...ws.horizontal])
+    // The horizontal group's setLayout array must match the RENDERED panels:
+    // 4 with the board pane open, 3 (board slot elided) when it's closed.
+    hGroupRef.current?.setLayout(
+      ws.boardPaneOpen
+        ? [...ws.horizontal]
+        : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
+    )
     vGroupRef.current?.setLayout([...ws.vertical])
     if (ws.filesCollapsed) filesRef.current?.collapse()
     if (ws.shellCollapsed) shellRef.current?.collapse()
@@ -922,14 +934,34 @@ export function AppShell(): JSX.Element {
             </PanelGroup>
           </Panel>
 
+          {/* The embedded Board View (the Board workspace's tri-split, #259):
+              code on the left, the board here, the instrument dock at the far
+              right — code, wiring and instruments visible together. */}
+          {boardPaneOpen && (
+            <>
+              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+              <Panel order={3} minSize={25} defaultSize={initialSizes.current.h[2]}>
+                <Suspense
+                  fallback={
+                    <div className="board-pane__loading" role="status">
+                      Loading Board View…
+                    </div>
+                  }
+                >
+                  <BoardPane />
+                </Suspense>
+              </Panel>
+            </>
+          )}
+
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
           <Panel
             ref={rightRef}
-            order={3}
+            order={4}
             collapsible
             collapsedSize={0}
-            defaultSize={initialSizes.current.h[2]}
+            defaultSize={initialSizes.current.h[3]}
             minSize={14}
             onCollapse={() => layout.setCollapsed('right', true)}
             onExpand={() => layout.setCollapsed('right', false)}

@@ -18,7 +18,7 @@ describe('workspace presets (epic #259 Phase 1)', () => {
     expect(WORKSPACE_IDS).toEqual(['code', 'board', 'lab', 'data'])
     for (const id of WORKSPACE_IDS) {
       const p = WORKSPACE_PRESETS[id]
-      expect(p.horizontal).toHaveLength(3)
+      expect(p.horizontal).toHaveLength(4)
       expect(p.vertical).toHaveLength(2)
       expect(p.horizontal.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0)
       expect(p.vertical.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0)
@@ -33,6 +33,14 @@ describe('workspace presets (epic #259 Phase 1)', () => {
     expect(code.dockOpen).toBe(false)
     for (const id of ['board', 'lab', 'data'] as const) {
       expect(WORKSPACE_PRESETS[id].dockOpen, id).toBe(true)
+    }
+    // Board is the education tri-split: the embedded Board View pane opens with
+    // a real share beside the code; the other workspaces keep it closed at 0.
+    expect(WORKSPACE_PRESETS.board.boardPaneOpen).toBe(true)
+    expect(WORKSPACE_PRESETS.board.horizontal[2]).toBeGreaterThan(0)
+    for (const id of ['code', 'lab', 'data'] as const) {
+      expect(WORKSPACE_PRESETS[id].boardPaneOpen, id).toBe(false)
+      expect(WORKSPACE_PRESETS[id].horizontal[2], id).toBe(0)
     }
     // Data is console-first: the shell gets the larger vertical share.
     expect(WORKSPACE_PRESETS.data.vertical[1]).toBeGreaterThan(
@@ -122,7 +130,8 @@ describe('legacy migration (pre-#259 loose keys → the code workspace)', () => 
         })
       })
     )
-    expect(s.workspaces.code.horizontal).toEqual([25, 60, 15])
+    // Pre-#259 the group had three panels — the board slot maps in as 0.
+    expect(s.workspaces.code.horizontal).toEqual([25, 60, 0, 15])
     expect(s.workspaces.code.vertical).toEqual([55, 45])
   })
 
@@ -135,6 +144,14 @@ describe('legacy migration (pre-#259 loose keys → the code workspace)', () => 
     )
     expect(s.workspaces.code.activityView).toBe('files')
     expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
+  })
+
+  it('folds a stray board share back to 0 when the pane is closed', () => {
+    const saved = defaultLayoutState()
+    saved.workspaces.code.horizontal = [10, 60, 20, 10] // pane closed but sized
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
+    expect(s.workspaces.code.boardPaneOpen).toBe(false)
+    expect(s.workspaces.code.horizontal).toEqual([10, 80, 0, 10])
   })
 
   it('the new envelope takes precedence over legacy keys', () => {
