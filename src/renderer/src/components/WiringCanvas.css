@@ -20,12 +20,30 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* The graph-paper grid is now drawn IN the SVG (see .wc__grid) so it pans and
+     scales with the parts; the stage is just the flat "desk" behind it. */
   background-color: #161719;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
   transition: box-shadow 0.12s ease;
+}
+
+/* --- Graph-paper grid (drawn inside the pan/zoom content group) ------------- */
+.wc__grid {
+  fill: none;
+  /* Constant on-screen line weight regardless of zoom — crisp at any scale. */
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.wc__grid--fine {
+  stroke: #7f8794;
+}
+.wc__grid--minor {
+  stroke: #8b93a1;
+}
+.wc__grid--major {
+  /* The 1-inch anchor lines — a touch brighter, like ruled paper. */
+  stroke: #9aa2b0;
+  stroke-width: 1.2;
 }
 
 /* A part is being dragged in from the Parts panel (#159) — frame the drop zone. */

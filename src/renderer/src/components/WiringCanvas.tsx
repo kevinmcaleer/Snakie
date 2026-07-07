@@ -55,6 +55,79 @@ export type WiringRenderMode = 'lifelike' | 'schematic'
 
 const VIEW_W = 1180
 const VIEW_H = 720
+
+/** The breadboard "paper" grid pitch: the 2.54 mm (0.1") standard pin pitch. */
+const GRID_PITCH_MM = 2.54
+
+/**
+ * The graph-paper background grid (#…): drawn INSIDE the pan/zoom content group
+ * (in world coordinates) so it moves + scales with the parts like paper they're
+ * placed on, with `non-scaling-stroke` keeping the lines crisp at any zoom. The
+ * smallest square is the real 2.54 mm pin pitch; a finer half-pitch grid fades
+ * IN as you zoom in, and the minor grid fades OUT as you zoom out, leaving the
+ * 1-inch major lines as the anchor. Rendered as one `<path>` per level (cheap).
+ */
+function WiringGrid({
+  view,
+  pxPerMm
+}: {
+  view: { tx: number; ty: number; scale: number }
+  pxPerMm: number
+}): JSX.Element | null {
+  const { tx, ty, scale } = view
+  if (!(scale > 0) || !(pxPerMm > 0)) return null
+
+  // World-coordinate rectangle currently visible in the viewBox.
+  const wMinX = -tx / scale
+  const wMaxX = (VIEW_W - tx) / scale
+  const wMinY = -ty / scale
+  const wMaxY = (VIEW_H - ty) / scale
+
+  // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
+  // A fadeFull of 0 means "always on" (the major anchor lines).
+  const levels: Array<{
+    mm: number
+    cls: string
+    base: number
+    fadeStart: number
+    fadeFull: number
+  }> = [
+    { mm: GRID_PITCH_MM / 2, cls: 'wc__grid--fine', base: 0.14, fadeStart: 12, fadeFull: 26 },
+    { mm: GRID_PITCH_MM, cls: 'wc__grid--minor', base: 0.3, fadeStart: 5, fadeFull: 14 },
+    { mm: GRID_PITCH_MM * 10, cls: 'wc__grid--major', base: 0.42, fadeStart: 0, fadeFull: 0 }
+  ]
+
+  const paths: JSX.Element[] = []
+  for (const lvl of levels) {
+    const worldStep = lvl.mm * pxPerMm
+    const viewStep = worldStep * scale // spacing in viewBox units
+    const opacity =
+      lvl.fadeFull > 0
+        ? Math.max(0, Math.min(1, (viewStep - lvl.fadeStart) / (lvl.fadeFull - lvl.fadeStart))) *
+          lvl.base
+        : lvl.base
+    if (opacity < 0.012) continue
+    // Safety cap: never emit an absurd number of lines (a level this dense has
+    // already faded to ~0 above, but guard the fully-opaque major just in case).
+    if ((wMaxX - wMinX) / worldStep > 700 || (wMaxY - wMinY) / worldStep > 700) continue
+
+    let d = ''
+    const kx0 = Math.ceil(wMinX / worldStep)
+    const kx1 = Math.floor(wMaxX / worldStep)
+    for (let k = kx0; k <= kx1; k++) {
+      const x = k * worldStep
+      d += `M${x.toFixed(1)} ${wMinY.toFixed(1)}L${x.toFixed(1)} ${wMaxY.toFixed(1)}`
+    }
+    const ky0 = Math.ceil(wMinY / worldStep)
+    const ky1 = Math.floor(wMaxY / worldStep)
+    for (let k = ky0; k <= ky1; k++) {
+      const y = k * worldStep
+      d += `M${wMinX.toFixed(1)} ${y.toFixed(1)}L${wMaxX.toFixed(1)} ${y.toFixed(1)}`
+    }
+    if (d) paths.push(<path key={lvl.cls} className={`wc__grid ${lvl.cls}`} d={d} strokeOpacity={opacity} />)
+  }
+  return <g className="wc__grid-layer" aria-hidden="true">{paths}</g>
+}
 // Left inset (viewBox units) reserved for the floating BROWSER (14rem, pinned
 // top-left) so a fit places the leftmost item to the RIGHT of it, not under it.
 const BROWSER_INSET = 300
@@ -1136,6 +1209,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+            {/* Graph-paper grid at true 2.54 mm pitch — behind everything, moves
+                + scales with the parts (drawn in world coords). */}
+            <WiringGrid view={view} pxPerMm={pxPerMm} />
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
             {subjects.map((s) => {
               const capsOn = renderMode === 'lifelike' && !dragRef.current && hover?.key === s.key

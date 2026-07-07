@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Breadboard grid is now graph paper (#…).** The Board View's wiring
+  background scales and pans WITH the parts instead of sitting fixed behind
+  them — like paper the parts are placed on. The smallest square is the real
+  **2.54 mm** (0.1") pin pitch, so pads land on grid lines; 1-inch major lines
+  anchor the view, and a finer half-pitch grid fades in as you zoom in (the
+  minor grid fades out as you zoom out). Lines stay crisp at any zoom.
 - **Three focused modes: Code · Board · Data Lab (modes review).** The
   four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
   Lab** (instrument bench + a tall console/plotter); existing layouts migrate
