@@ -21,6 +21,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the Board pane opening at the wrong size (a panel-mount race) and the board
   column not filling its pane (a collapsed connections table used to strand
   dead space below itself).
+- **Board View chrome slimmed further.** The "New board" and "open boards
+  folder" header buttons are gone from both the Board mode and the floating
+  window — the Library panel owns part/board authoring and library management
+  now. And in Board MODE, part mini-help opens in the main **Help Library**
+  (which now also lists board-placed parts under "In This Project") instead of
+  the pane's own drawer — one help surface, not two. The floating window keeps
+  its built-in help drawer.
 - **The Board toolbar knob now pops the board out — like undocking an
   instrument.** Opening the Board window while Board mode is active hands the
   board to its own OS window and returns the main split to Code; closing that

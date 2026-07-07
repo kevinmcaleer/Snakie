@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
+import { dispatchOpenHelp } from './editorBridge'
 import {
   parsePins,
   PIN_TYPE_COLOR,
@@ -104,10 +105,6 @@ export interface BoardGraphProps {
   userBoards?: BoardDefinition[]
   /** When true, render the window title-bar chrome (drag region + selector). */
   asWindow?: boolean
-  /** Enter the Board Creator. When set, the gold edit knob is shown. */
-  onEnterCreator?: () => void
-  /** Open the user's boards folder (wired in the floating window). */
-  onOpenBoardsFolder?: () => void
   // --- Wiring + Parts (merged into this view, #139/#140). When `robot` +
   // `onChangeRobot` are provided, the Life-like / Schematic view tabs and the
   // right-side library dock appear; otherwise this is a graph-only board view.
@@ -317,8 +314,6 @@ export function BoardGraph({
   isPython,
   userBoards,
   asWindow = false,
-  onEnterCreator,
-  onOpenBoardsFolder,
   robot,
   onChangeRobot,
   libraries,
@@ -430,16 +425,34 @@ export function BoardGraph({
   // When help is opened for ONE part (its mini-toolbar help button, #207), focus
   // that part's card in the drawer; null = the header button opened the whole list.
   const [helpFocusKey, setHelpFocusKey] = useState<string | null>(null)
-  const [helpToast, setHelpToast] = useState<{ name: string } | null>(null)
+  const [helpToast, setHelpToast] = useState<{ name: string; partId?: string } | null>(null)
   useEffect(() => {
     if (!helpToast) return
     const t = window.setTimeout(() => setHelpToast(null), 7000)
     return () => window.clearTimeout(t)
   }, [helpToast])
+
+  // ONE help surface (modes review): the OS window keeps its own PartHelpDrawer;
+  // the EMBEDDED Board mode routes part help to the main Help Library instead
+  // (`part-<id>` articles — placed parts resolve there), so help never shows in
+  // two places at once. `focusKey` is `${lib}:${part}` / `board:<id>` / null.
+  const openPartHelp = useCallback(
+    (focusKey: string | null): void => {
+      if (asWindow) {
+        setHelpFocusKey(focusKey)
+        setHelpOpen(true)
+        return
+      }
+      const partId = focusKey ? focusKey.split(':').pop() : null
+      dispatchOpenHelp(partId ? `part-${partId}` : 'gs-board-view')
+    },
+    [asWindow]
+  )
+
   const handleAddToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
       onAddToProject?.(libraryId, part, pos)
-      if ((part.helpText ?? '').trim()) setHelpToast({ name: part.name })
+      if ((part.helpText ?? '').trim()) setHelpToast({ name: part.name, partId: part.id })
     },
     [onAddToProject]
   )
@@ -827,6 +840,10 @@ export function BoardGraph({
               type="button"
               className={`boardgraph__help-btn${helpOpen ? ' is-active' : ''}`}
               onClick={() => {
+                if (!asWindow) {
+                  openPartHelp(null) // embedded: the main Help Library is THE surface
+                  return
+                }
                 setHelpFocusKey(null) // header opens the whole list, not one card
                 setHelpOpen((o) => !o)
               }}
@@ -837,36 +854,8 @@ export function BoardGraph({
               {helpItems.length > 0 && <span className="boardgraph__help-count">{helpItems.length}</span>}
             </button>
           )}
-          {onEnterCreator && (
-            <button
-              type="button"
-              className="boardgraph__knob"
-              onClick={onEnterCreator}
-              title="New board (opens the Part Editor)"
-              aria-label="Create a new board in the Part Editor"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path
-                  d="M4 20l4-1 11-11-3-3L5 16l-1 4z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-          )}
-          {onOpenBoardsFolder && (
-            <button
-              type="button"
-              className="boardgraph__key"
-              onClick={onOpenBoardsFolder}
-              title="Open the boards folder (add your own board JSON here)"
-              aria-label="Open boards folder"
-            >
-              📁
-            </button>
-          )}
+          {/* The "New board" + "boards folder" knobs are gone (modes review):
+              the LIBRARY panel owns part/board authoring + library management. */}
           {/* Close is handled by the native window chrome now (#185); Esc also
               closes via board-main's key handler. */}
         </div>
@@ -890,8 +879,7 @@ export function BoardGraph({
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)
-                setHelpFocusKey(rp ? `${rp.lib}:${rp.part}` : null)
-                setHelpOpen(true)
+                openPartHelp(rp ? `${rp.lib}:${rp.part}` : null)
               }}
             />
           </div>
@@ -1202,7 +1190,7 @@ export function BoardGraph({
       )}
       {/* Board View HELP: a right-side drawer stacking the placed parts' bundled
           mini-help, + a "help available" toast when a part with help is added. */}
-      {effectiveView !== 'graph' && helpOpen && (
+      {effectiveView !== 'graph' && helpOpen && asWindow && (
         <PartHelpDrawer items={helpItems} focusKey={helpFocusKey} onClose={() => setHelpOpen(false)} />
       )}
       {effectiveView !== 'graph' && helpToast && (
@@ -1214,7 +1202,7 @@ export function BoardGraph({
             type="button"
             className="boardgraph__help-toast-btn"
             onClick={() => {
-              setHelpOpen(true)
+              openPartHelp(helpToast.partId ? `toast:${helpToast.partId}` : null)
               setHelpToast(null)
             }}
           >

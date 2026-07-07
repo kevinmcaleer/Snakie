@@ -31,8 +31,30 @@ import './HelpPanel.css'
  * an instrument's `?`, via AppShell) opens a specific article.
  */
 export function HelpPanel({ target }: { target?: { id: string; nonce: number } }): JSX.Element {
-  const { openFiles, activeId, openBuffer } = useWorkspace()
+  const { openFiles, activeId, openBuffer, currentFolder } = useWorkspace()
   const source = openFiles.find((f) => f.id === activeId)?.content ?? ''
+
+  // Parts PLACED on the board (robot.yml) — so the "In This Project" section
+  // (and the embedded Board mode's routed part help, modes review) covers parts
+  // that are wired but not imported yet. Refreshes on cross-window edits.
+  const [placedParts, setPlacedParts] = useState<{ lib: string; part: string }[]>([])
+  useEffect(() => {
+    let live = true
+    const load = (): void => {
+      window.api.robot
+        .load(currentFolder ?? undefined)
+        .then((r) => {
+          if (live) setPlacedParts((r.parts ?? []).map((p) => ({ lib: p.lib, part: p.part })))
+        })
+        .catch(() => undefined)
+    }
+    load()
+    const off = window.api.robot.onChanged(load)
+    return () => {
+      live = false
+      off()
+    }
+  }, [currentFolder])
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set(DEFAULT_EXPANDED))
   const [selected, setSelected] = useState<string | null>(null)
@@ -80,8 +102,8 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
 
   // The project-aware "In This Project" parts + a lookup for their bundled help.
   const projectParts = useMemo<ProjectPart[]>(
-    () => detectProjectParts(source, libraries, cursorLine),
-    [source, libraries, cursorLine]
+    () => detectProjectParts(source, libraries, cursorLine, placedParts),
+    [source, libraries, cursorLine, placedParts]
   )
   const partHelp = useMemo(() => {
     const m = new Map<string, string>()

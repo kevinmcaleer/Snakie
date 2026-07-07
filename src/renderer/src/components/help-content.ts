@@ -156,31 +156,52 @@ function partTokens(p: PartDefinition): string[] {
 export function detectProjectParts(
   source: string,
   libraries: PartLibraryWithParts[],
-  cursorLine?: string
+  cursorLine?: string,
+  /** Parts PLACED on the board (robot.yml `{lib, part}` pairs) — included even
+   *  with no matching import, so the embedded Board mode's part help resolves
+   *  here (modes review: one help surface). Rendered as non-live entries. */
+  placed?: { lib: string; part: string }[]
 ): ProjectPart[] {
-  if (!source) return []
-  const lower = source.toLowerCase()
+  const lower = (source ?? '').toLowerCase()
   const curLower = (cursorLine ?? '').toLowerCase()
   const out: ProjectPart[] = []
   const seen = new Set<string>()
-  for (const lib of libraries) {
-    for (const part of lib.parts) {
-      const toks = partTokens(part)
-      if (toks.length === 0) continue
-      // Match an `import <tok>` / `from <tok> import` usage anywhere in the file.
-      const used = toks.some((t) => new RegExp(`\\b(?:import|from)\\s+${t}\\b`).test(lower))
-      if (!used || seen.has(part.id)) continue
-      seen.add(part.id)
-      out.push({
-        part,
-        articleId: `part-${part.id}`,
-        name: part.name,
-        meta: part.library?.module ?? part.id,
-        accent: part.pcbColor || A.project,
-        live: true,
-        atCursor: toks.some((t) => curLower.includes(t))
-      })
+  if (source) {
+    for (const lib of libraries) {
+      for (const part of lib.parts) {
+        const toks = partTokens(part)
+        if (toks.length === 0) continue
+        // Match an `import <tok>` / `from <tok> import` usage anywhere in the file.
+        const used = toks.some((t) => new RegExp(`\\b(?:import|from)\\s+${t}\\b`).test(lower))
+        if (!used || seen.has(part.id)) continue
+        seen.add(part.id)
+        out.push({
+          part,
+          articleId: `part-${part.id}`,
+          name: part.name,
+          meta: part.library?.module ?? part.id,
+          accent: part.pcbColor || A.project,
+          live: true,
+          atCursor: toks.some((t) => curLower.includes(t))
+        })
+      }
     }
+  }
+  // Board-placed parts join the section too (deduped against import matches).
+  for (const rp of placed ?? []) {
+    if (seen.has(rp.part)) continue
+    const part = libraries.find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+    if (!part) continue
+    seen.add(part.id)
+    out.push({
+      part,
+      articleId: `part-${part.id}`,
+      name: part.name,
+      meta: 'on the board',
+      accent: part.pcbColor || A.project,
+      live: false,
+      atCursor: false
+    })
   }
   return out
 }
