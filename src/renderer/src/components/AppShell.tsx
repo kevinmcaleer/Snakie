@@ -1,6 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ImperativePanelHandle, Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ImperativePanelGroupHandle,
+  ImperativePanelHandle,
+  Panel,
+  PanelGroup,
+  PanelResizeHandle
+} from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useWorkspaceLayout } from '../store/layout'
+
+// The embedded Board View pane (the Board workspace's tri-split, #259) is
+// code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
+// loads only when a workspace with the pane open is activated.
+const BoardPane = lazy(() => import('./BoardPane'))
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView } from './ActivityBar'
@@ -223,27 +235,61 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
-  // Panel handles + the shared collapse toggle (Files / Shell / Chat / dock).
-  // Defined here (above the instrument wiring) so the toolbar Instruments button
-  // can reuse the same `toggle` helper to expand/collapse the dock region.
+  // --- Workspace layout (epic #259, Phases 0+1) ------------------------------
+  // ALL layout geometry (collapse flags, dock visibility, activity view, panel
+  // sizes) lives in the layout store, grouped into named workspaces. This
+  // component owns the IMPERATIVE side only: panel handles + applying a
+  // workspace's geometry when it becomes active (nothing remounts — the editor,
+  // xterm scrollback and instruments survive every switch).
+  const layout = useWorkspaceLayout()
+  const { filesCollapsed, shellCollapsed, rightCollapsed, activityView, boardPaneOpen } =
+    layout.workspace
+  const dockOpen = layout.workspace.dockOpen
+
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
   const rightRef = useRef<ImperativePanelHandle>(null)
+  const hGroupRef = useRef<ImperativePanelGroupHandle>(null)
+  const vGroupRef = useRef<ImperativePanelGroupHandle>(null)
 
+  // Mount-time size snapshot for the panels' defaultSize (imperative setLayout
+  // drives every later change, so this is only the first paint).
+  const initialSizes = useRef<{ h: number[]; v: number[] } | null>(null)
+  if (initialSizes.current === null) {
+    initialSizes.current = { h: layout.getSizes('horizontal'), v: layout.getSizes('vertical') }
+  }
+
+  // Collapse/expand a panel; the Panel's own onCollapse/onExpand callbacks sync
+  // the store flag, so this stays the single imperative entry point.
   const toggle = useCallback(
-    (
-      ref: React.RefObject<ImperativePanelHandle>,
-      collapsed: boolean,
-      setCollapsed: (v: boolean) => void
-    ): void => {
+    (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
       const panel = ref.current
       if (!panel) return
       if (collapsed) panel.expand()
       else panel.collapse()
-      setCollapsed(!collapsed)
     },
     []
   )
+
+  // Apply the active workspace's geometry whenever it changes (switch / reset).
+  // setLayout drives the sizes; the explicit collapse() calls are belt-and-braces
+  // so a collapsible panel lands collapsed even if the group clamps a 0 size.
+  useEffect(() => {
+    if (layout.applyNonce === 0) return // initial mount already used defaultSize
+    const ws = layout.workspace
+    // The horizontal group's setLayout array must match the RENDERED panels:
+    // 4 with the board pane open, 3 (board slot elided) when it's closed.
+    hGroupRef.current?.setLayout(
+      ws.boardPaneOpen
+        ? [...ws.horizontal]
+        : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
+    )
+    vGroupRef.current?.setLayout([...ws.vertical])
+    if (ws.filesCollapsed) filesRef.current?.collapse()
+    if (ws.shellCollapsed) shellRef.current?.collapse()
+    if (ws.rightCollapsed) rightRef.current?.collapse()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyNonce IS the signal
+  }, [layout.applyNonce])
 
   // --- Instruments hosted in the MAIN window (#101 / #102 / #103) ------------
   // The Oscilloscope + Multimeter + Plotter now live in a dedicated DOCK REGION
@@ -373,17 +419,12 @@ export function AppShell(): JSX.Element {
     [visibility, setVisibility, redockKind, redockByKey]
   )
 
-  // Persisted collapsed state. Shell is open by default (core REPL tool); the
-  // right pane + the instrument dock are collapsed by default to keep things
-  // uncluttered (the dock reveals on toggle or when an instrument opens).
-  const [filesCollapsed, setFilesCollapsed] = useLocalStorage('snakie.collapsed.files', false)
-  const [shellCollapsed, setShellCollapsed] = useLocalStorage('snakie.collapsed.shell', false)
-  const [rightCollapsed, setRightCollapsed] = useLocalStorage('snakie.collapsed.right', true)
   // The instrument dock is its OWN fixed-width region to the right of the panel
   // group — NOT a `Panel` in the group — so its show/hide is fully independent of
   // the chat panel (two collapsible panels in one PanelGroup redistribute each
-  // other's freed space, which made toggling one reveal the other). Plain boolean.
-  const [dockOpen, setDockOpen] = useLocalStorage('snakie.instruments.dockOpen', false)
+  // other's freed space, which made toggling one reveal the other). Its flag is
+  // part of the workspace layout (the Board/Lab/Data workspaces open it).
+  const setDockOpen = layout.setDockOpen
   const instrumentsVisible = dockOpen
   const toggleInstruments = useCallback((): void => {
     setDockOpen(!dockOpen)
@@ -735,11 +776,9 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
-  // Which view the left sidebar shows, driven by the ActivityBar.
-  const [activityView, setActivityView] = useLocalStorage<ActivityView>(
-    'snakie.activityView',
-    'files'
-  )
+  // Which view the left sidebar shows, driven by the ActivityBar — remembered
+  // per workspace (part of the layout store).
+  const setActivityView = layout.setActivityView
 
   // Settings dialog (issues #80/#81, tabbed in #83/#84) — opened from the
   // toolbar gear (Editor tab) or the chat's ⚙ (Chat tab, via settingsBus).
@@ -814,11 +853,11 @@ export function AppShell(): JSX.Element {
       </div>
       <Toolbar
         filesCollapsed={filesCollapsed}
-        onToggleFiles={() => toggle(filesRef, filesCollapsed, setFilesCollapsed)}
+        onToggleFiles={() => toggle(filesRef, filesCollapsed)}
         shellCollapsed={shellCollapsed}
-        onToggleShell={() => toggle(shellRef, shellCollapsed, setShellCollapsed)}
+        onToggleShell={() => toggle(shellRef, shellCollapsed)}
         rightCollapsed={rightCollapsed}
-        onToggleRight={() => toggle(rightRef, rightCollapsed, setRightCollapsed)}
+        onToggleRight={() => toggle(rightRef, rightCollapsed)}
         onOpenBoard={toggleBoard}
         onToggleInstruments={toggleInstruments}
         instrumentsVisible={instrumentsVisible}
@@ -833,18 +872,22 @@ export function AppShell(): JSX.Element {
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
             if (view === activityView) {
-              toggle(filesRef, filesCollapsed, setFilesCollapsed)
+              toggle(filesRef, filesCollapsed)
               return
             }
             // Switching to a different view selects it and reveals the sidebar
             // if it was collapsed.
             setActivityView(view)
-            if (filesCollapsed) toggle(filesRef, true, setFilesCollapsed)
+            if (filesCollapsed) toggle(filesRef, true)
           }}
         />
+        {/* Sizes are recorded into the ACTIVE workspace via onLayout and applied
+            imperatively on workspace switch (setLayout) — the library's own
+            autoSaveId persistence is replaced by the layout store (#259). */}
         <PanelGroup
           direction="horizontal"
-          autoSaveId="snakie.layout.horizontal"
+          ref={hGroupRef}
+          onLayout={(sizes) => layout.recordSizes('horizontal', sizes)}
           className="shell__panels"
         >
           <Panel
@@ -852,10 +895,10 @@ export function AppShell(): JSX.Element {
             order={1}
             collapsible
             collapsedSize={0}
-            defaultSize={filesCollapsed ? 0 : 18}
+            defaultSize={initialSizes.current.h[0]}
             minSize={12}
-            onCollapse={() => setFilesCollapsed(true)}
-            onExpand={() => setFilesCollapsed(false)}
+            onCollapse={() => layout.setCollapsed('files', true)}
+            onExpand={() => layout.setCollapsed('files', false)}
           >
             <LeftView view={activityView} helpTarget={helpTarget} />
           </Panel>
@@ -863,7 +906,11 @@ export function AppShell(): JSX.Element {
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
           <Panel order={2} minSize={30}>
-            <PanelGroup direction="vertical" autoSaveId="snakie.layout.vertical">
+            <PanelGroup
+              direction="vertical"
+              ref={vGroupRef}
+              onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
+            >
               <Panel order={1} minSize={20}>
                 <div className="shell__editor-region">
                   <EditorArea />
@@ -877,27 +924,47 @@ export function AppShell(): JSX.Element {
                 order={2}
                 collapsible
                 collapsedSize={0}
-                defaultSize={shellCollapsed ? 0 : 30}
+                defaultSize={initialSizes.current.v[1]}
                 minSize={12}
-                onCollapse={() => setShellCollapsed(true)}
-                onExpand={() => setShellCollapsed(false)}
+                onCollapse={() => layout.setCollapsed('shell', true)}
+                onExpand={() => layout.setCollapsed('shell', false)}
               >
                 <ShellPanel chatOpen={!rightCollapsed} />
               </Panel>
             </PanelGroup>
           </Panel>
 
+          {/* The embedded Board View (the Board workspace's tri-split, #259):
+              code on the left, the board here, the instrument dock at the far
+              right — code, wiring and instruments visible together. */}
+          {boardPaneOpen && (
+            <>
+              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+              <Panel order={3} minSize={25} defaultSize={initialSizes.current.h[2]}>
+                <Suspense
+                  fallback={
+                    <div className="board-pane__loading" role="status">
+                      Loading Board View…
+                    </div>
+                  }
+                >
+                  <BoardPane />
+                </Suspense>
+              </Panel>
+            </>
+          )}
+
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
           <Panel
             ref={rightRef}
-            order={3}
+            order={4}
             collapsible
             collapsedSize={0}
-            defaultSize={rightCollapsed ? 0 : 20}
+            defaultSize={initialSizes.current.h[3]}
             minSize={14}
-            onCollapse={() => setRightCollapsed(true)}
-            onExpand={() => setRightCollapsed(false)}
+            onCollapse={() => layout.setCollapsed('right', true)}
+            onExpand={() => layout.setCollapsed('right', false)}
           >
             <RightPanel />
           </Panel>

@@ -6,21 +6,24 @@ import { DiagnosticsProvider } from './store/diagnostics'
 import { SettingsProvider } from './store/settings'
 import { ConsoleProvider } from './store/console'
 import { SyncProvider } from './store/sync'
+import { LayoutProvider } from './store/layout'
 
 function App(): JSX.Element {
   return (
     <PromptProvider>
       <SettingsProvider>
-        <WorkspaceProvider>
-          <SyncProvider>
-            <DiagnosticsProvider>
-              <ConsoleProvider>
-                <AppShell />
-                <UpdateNotifier />
-              </ConsoleProvider>
-            </DiagnosticsProvider>
-          </SyncProvider>
-        </WorkspaceProvider>
+        <LayoutProvider>
+          <WorkspaceProvider>
+            <SyncProvider>
+              <DiagnosticsProvider>
+                <ConsoleProvider>
+                  <AppShell />
+                  <UpdateNotifier />
+                </ConsoleProvider>
+              </DiagnosticsProvider>
+            </SyncProvider>
+          </WorkspaceProvider>
+        </LayoutProvider>
       </SettingsProvider>
     </PromptProvider>
   )
