@@ -868,6 +868,11 @@ export function AppShell(): JSX.Element {
       const detail = (e as CustomEvent<HelpEventDetail>).detail
       if (!detail?.articleId) return
       setActivityView('help')
+      // Reveal the left sidebar if it's collapsed — otherwise switching to the
+      // help view has no visible effect (e.g. Board mode collapses the sidebar,
+      // so the Board's Help button appeared to do nothing). expand() is
+      // idempotent, so this is a no-op when the sidebar is already open.
+      filesRef.current?.expand()
       setHelpTarget((prev) => ({ id: detail.articleId, nonce: (prev?.nonce ?? 0) + 1 }))
     }
     window.addEventListener(HELP_EVENT, handler)
@@ -955,7 +960,7 @@ export function AppShell(): JSX.Element {
             collapsible
             collapsedSize={0}
             defaultSize={initialSizes.current.h[0]}
-            minSize={12}
+            minSize={24}
             onCollapse={() => layout.setCollapsed('files', true)}
             onExpand={() => layout.setCollapsed('files', false)}
           >
