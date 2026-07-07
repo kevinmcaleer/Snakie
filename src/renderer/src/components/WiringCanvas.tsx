@@ -69,19 +69,36 @@ const GRID_PITCH_MM = 2.54
  */
 function WiringGrid({
   view,
-  pxPerMm
+  pxPerMm,
+  stageW,
+  stageH
 }: {
   view: { tx: number; ty: number; scale: number }
   pxPerMm: number
+  /** The SVG element's pixel size, to fill the letterbox margins too. */
+  stageW: number
+  stageH: number
 }): JSX.Element | null {
   const { tx, ty, scale } = view
   if (!(scale > 0) || !(pxPerMm > 0)) return null
 
-  // World-coordinate rectangle currently visible in the viewBox.
-  const wMinX = -tx / scale
-  const wMaxX = (VIEW_W - tx) / scale
-  const wMinY = -ty / scale
-  const wMaxY = (VIEW_H - ty) / scale
+  // The SVG uses viewBox 1180×720 with `preserveAspectRatio=meet`, so the
+  // viewBox is fitted + centred, leaving letterbox margins where user-space
+  // coords fall OUTSIDE [0,VIEW_W]×[0,VIEW_H]. Compute the REAL visible user-
+  // space rectangle so the grid fills the WHOLE stage, not just the viewBox.
+  const fit = stageW > 0 && stageH > 0 ? Math.min(stageW / VIEW_W, stageH / VIEW_H) : 1
+  const uW = fit > 0 ? stageW / fit : VIEW_W // user-space width visible
+  const uH = fit > 0 ? stageH / fit : VIEW_H
+  const uMinX = (VIEW_W - uW) / 2
+  const uMaxX = (VIEW_W + uW) / 2
+  const uMinY = (VIEW_H - uH) / 2
+  const uMaxY = (VIEW_H + uH) / 2
+
+  // World-coordinate rectangle currently visible across the whole stage.
+  const wMinX = (uMinX - tx) / scale
+  const wMaxX = (uMaxX - tx) / scale
+  const wMinY = (uMinY - ty) / scale
+  const wMaxY = (uMaxY - ty) / scale
 
   // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
   // A fadeFull of 0 means "always on" (the major anchor lines).
@@ -109,7 +126,7 @@ function WiringGrid({
     if (opacity < 0.012) continue
     // Safety cap: never emit an absurd number of lines (a level this dense has
     // already faded to ~0 above, but guard the fully-opaque major just in case).
-    if ((wMaxX - wMinX) / worldStep > 700 || (wMaxY - wMinY) / worldStep > 700) continue
+    if ((wMaxX - wMinX) / worldStep > 1200 || (wMaxY - wMinY) / worldStep > 1200) continue
 
     let d = ''
     const kx0 = Math.ceil(wMinX / worldStep)
@@ -425,6 +442,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // The SVG's pixel size, so the graph-paper grid fills the letterbox margins
+  // (the viewBox is fitted + centred; the visible region is wider/taller).
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const measure = (): void => setStageSize({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
   // Focused chrome (Board mode) starts it collapsed so the canvas gets the room.
@@ -1211,7 +1240,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
             {/* Graph-paper grid at true 2.54 mm pitch — behind everything, moves
                 + scales with the parts (drawn in world coords). */}
-            <WiringGrid view={view} pxPerMm={pxPerMm} />
+            <WiringGrid view={view} pxPerMm={pxPerMm} stageW={stageSize.w} stageH={stageSize.h} />
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
             {subjects.map((s) => {
               const capsOn = renderMode === 'lifelike' && !dragRef.current && hover?.key === s.key
