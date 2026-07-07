@@ -7,6 +7,14 @@ import { useWorkspace } from '../store/workspace'
 // open, keeping it out of the initial renderer bundle. Until then EditorArea
 // renders the lightweight empty state below.
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
+// Data View (#274) is code-split too — only pulled in when a data file is open.
+const DataView = lazy(() => import('./DataView').then((m) => ({ default: m.DataView })))
+
+/** Files opened as a table (Data View) rather than in the code editor (#274). */
+const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
+function isDataFile(name: string | undefined): boolean {
+  return !!name && DATA_FILE_RE.test(name)
+}
 
 /**
  * CENTER — editor region.
@@ -21,8 +29,10 @@ const MonacoEditor = lazy(() => import('./MonacoEditor'))
  * dynamic import, with a matching fallback shown while it streams in.
  */
 export function EditorArea(): JSX.Element {
-  const { openFiles } = useWorkspace()
+  const { openFiles, activeId } = useWorkspace()
   const hasFiles = openFiles.length > 0
+  const activeFile = openFiles.find((f) => f.id === activeId) ?? null
+  const showData = isDataFile(activeFile?.name)
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.
@@ -64,7 +74,7 @@ export function EditorArea(): JSX.Element {
     >
       <div className="editor-header">
         <EditorTabs />
-        {hasFiles && (
+        {hasFiles && !showData && (
           <div className="editor-header__actions">
             <button
               type="button"
@@ -78,12 +88,16 @@ export function EditorArea(): JSX.Element {
         )}
       </div>
       <div className="region__body region__body--editor">
-        {hasFiles ? (
+        {!hasFiles ? (
+          <EditorPlaceholder text="Open a file to start editing" />
+        ) : showData ? (
+          <Suspense fallback={<EditorPlaceholder text="Loading data view…" />}>
+            <DataView />
+          </Suspense>
+        ) : (
           <Suspense fallback={<EditorPlaceholder text="Loading editor…" />}>
             <MonacoEditor />
           </Suspense>
-        ) : (
-          <EditorPlaceholder text="Open a file to start editing" />
         )}
       </div>
     </section>
