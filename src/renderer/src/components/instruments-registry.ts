@@ -119,6 +119,17 @@ export const INSTRUMENTS: InstrumentDef[] = [
     kind: 'singleton',
     description: 'Plot printed serial values over time as a scrolling chart.'
   },
+  {
+    id: 'logger',
+    name: 'Data Logger',
+    accent: '#c8a24a',
+    border: 'rgba(200,162,74,.45)',
+    // a printer with a sheet of paper feeding out
+    icon: 'M6 4 h12 v5 H6 Z M4 9 h16 v6 H4 Z M7 15 h10 v5 H7 Z M9 18 h6',
+    group: 'input',
+    kind: 'singleton',
+    description: 'Record telemetry onto dot-matrix paper; tear off the page as CSV.'
+  },
 
   // --- New placeholder bodies (#110–#121) ----------------------------------
   {

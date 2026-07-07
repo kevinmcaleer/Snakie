@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Data Logger instrument — a vintage dot-matrix printer (#242).** Hit
+  **RECORD** and every numeric `SNK` reading (meter, plot, distance, IMU,
+  environment…) is captured with a timestamp and "printed" onto tractor-feed
+  paper: a strip-chart per series plus periodic printed value rows in a dotty
+  printhead style. **TEAR OFF** downloads the session as a spreadsheet-ready
+  wide CSV (`time_s` + one column per series) and starts a fresh sheet. Works
+  fully offline against the Simulated device, so a hardware-free classroom gets
+  real data logging — a £4 Pico doing a £100 classroom logger's job. The
+  session/CSV/paper geometry is pure and unit-tested; RECORD is always
+  reachable (arm before any telemetry arrives).
+
 ### Changed
 - **Three focused modes: Code · Board · Data Lab (modes review).** The
   four-workspace switcher slims to three — *Lab* and *Data* merged into **Data

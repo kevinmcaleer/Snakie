@@ -24,6 +24,7 @@ import { GamepadInstrument } from './GamepadInstrument'
 import { RangeInstrument } from './RangeInstrument'
 import { ImuInstrument } from './ImuInstrument'
 import { EnvInstrument } from './EnvInstrument'
+import { DataLoggerInstrument } from './DataLoggerInstrument'
 import { LedInstrument } from './LedInstrument'
 import { ServoInstrument } from './ServoInstrument'
 import { PotentiometerInstrument } from './PotentiometerInstrument'
@@ -972,6 +973,8 @@ export function renderSingleton(
       return <ImuInstrument {...p} />
     case 'env':
       return <EnvInstrument {...p} />
+    case 'logger':
+      return <DataLoggerInstrument {...p} />
     case 'led':
       return <LedInstrument {...p} />
     case 'servo':

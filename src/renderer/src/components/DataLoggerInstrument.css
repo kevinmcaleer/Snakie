@@ -1,0 +1,213 @@
+/* DATA LOGGER (#242) — a beige dot-matrix printer writing to tractor-feed paper.
+   Unique BEM prefix `dlog__` (instrument CSS is global — see the parts-archive
+   note about prefix collisions). */
+
+.dlog {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+  background: linear-gradient(#d8d2c4, #c8c1b0);
+  border-radius: 6px;
+  overflow: hidden;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* --- Printer head ---------------------------------------------------------- */
+.dlog__head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  background: linear-gradient(#e7e2d6, #cfc8b7);
+  border-bottom: 2px solid #9a9282;
+}
+
+.dlog__lamp {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #7a8a6a;
+  box-shadow: inset 0 0 2px rgba(0, 0, 0, 0.5);
+  flex: 0 0 auto;
+}
+
+.dlog__lamp.is-rec {
+  background: #d84a3a;
+  box-shadow: 0 0 6px #ff5a44, inset 0 0 2px rgba(0, 0, 0, 0.3);
+  animation: dlog-blink 1s steps(2, start) infinite;
+}
+
+@keyframes dlog-blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.dlog__model {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #6b6454;
+}
+
+.dlog__controls {
+  margin-left: auto;
+  display: flex;
+  gap: 0.35rem;
+}
+
+.dlog__btn {
+  font-family: inherit;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 0.28rem 0.55rem;
+  border-radius: 4px;
+  border: 1px solid #8f8879;
+  background: linear-gradient(#f2eee3, #d7d0be);
+  color: #4a4536;
+  cursor: pointer;
+  box-shadow: 0 1px 0 #fffaf0 inset, 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.dlog__btn:hover:not(:disabled) {
+  background: linear-gradient(#fff9ec, #e0d9c6);
+}
+
+.dlog__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dlog__btn--rec.is-active {
+  background: linear-gradient(#e86a5a, #c8402f);
+  border-color: #a5281b;
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3) inset;
+}
+
+/* --- Tractor-feed paper ----------------------------------------------------- */
+.dlog__paper-frame {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  background: #7f7869;
+  padding: 0;
+}
+
+.dlog__sprockets {
+  flex: 0 0 14px;
+  background-color: #efeadd;
+  /* Punched sprocket holes down the margin. */
+  background-image: radial-gradient(circle, #6f6858 0 2.2px, transparent 2.6px);
+  background-size: 14px 16px;
+  background-position: center 6px;
+  border-left: 1px solid #cfc7b4;
+  border-right: 1px solid #cfc7b4;
+}
+
+.dlog__paper {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background:
+    repeating-linear-gradient(
+      transparent 0 22px,
+      rgba(120, 130, 110, 0.06) 22px 23px
+    ),
+    #f7f4ea;
+  padding: 0.4rem 0.55rem 0.8rem;
+}
+
+.dlog__chart {
+  width: 100%;
+  height: 60px;
+  flex: 0 0 auto;
+  margin-bottom: 0.3rem;
+}
+
+.dlog__gridline {
+  stroke: rgba(90, 100, 80, 0.18);
+  stroke-width: 0.5;
+  stroke-dasharray: 2 2;
+}
+
+.dlog__trace {
+  fill: none;
+  stroke-width: 1.2;
+  /* Dotty printhead look: a dashed line reads as struck dots. */
+  stroke-dasharray: 1.4 1.1;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dlog__print {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dlog__row {
+  margin: 0;
+  font-size: 0.66rem;
+  line-height: 1.35;
+  color: #33301f;
+  white-space: pre;
+  /* Faint ink-ribbon inconsistency + the dotty impression. */
+  text-shadow: 0.4px 0 rgba(0, 0, 0, 0.18);
+  letter-spacing: 0.02em;
+}
+
+.dlog__row--muted {
+  color: #9a9482;
+  font-style: italic;
+}
+
+.dlog__caret {
+  color: #6a6450;
+  animation: dlog-blink 0.7s steps(2, start) infinite;
+}
+
+/* Empty-state hint on the paper (RECORD stays available in the head). */
+.dlog__paper--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.dlog__hint {
+  max-width: 280px;
+  padding: 0.5rem 0.2rem;
+  color: #4a4636;
+}
+
+.dlog__hint-title {
+  margin: 0 0 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #33301f;
+}
+
+.dlog__hint-line {
+  margin: 0 0 0.4rem;
+  font-size: 0.66rem;
+  line-height: 1.4;
+}
+
+.dlog__hint-code {
+  margin: 0.3rem 0 0;
+  padding: 0.4rem 0.5rem;
+  background: rgba(60, 60, 40, 0.08);
+  border: 1px dashed #b3ab97;
+  border-radius: 3px;
+  font-size: 0.62rem;
+  line-height: 1.4;
+  color: #33301f;
+  white-space: pre;
+  overflow-x: auto;
+}
