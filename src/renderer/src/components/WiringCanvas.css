@@ -163,12 +163,33 @@
   border-color: #565b63;
 }
 
+/* Active toggle state (snap-to-grid magnet). */
+.wc__zoom-btn.is-on {
+  color: #7fc4f0;
+  border-color: #3f6f8f;
+  background: #1d2b36;
+}
+
 .wc__zoom-pct {
   min-width: 2.6rem;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 0.66rem;
   color: #aeb4bd;
+}
+
+/* The zoom readout doubles as a 100% / fit toggle button. */
+.wc__zoom-pct--btn {
+  padding: 0.2rem 0.15rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.wc__zoom-pct--btn:hover {
+  color: #d6dade;
+  border-color: #3a3d44;
+  background: #26282d;
 }
 
 .wc__zoom-sep {
