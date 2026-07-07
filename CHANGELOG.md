@@ -6,6 +6,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Raw-REPL protocol extracted to a transport-agnostic module (#281, epic
+  #267 Phase W0).** The MicroPython raw-REPL handshake, `exec`/`eval`, and the
+  filesystem helpers built on them (`listDir`, `readFile`, `writeFile`,
+  `remove`, `mkdir`, `rename`, `stat`) moved out of `MicroPythonDevice` into
+  `src/shared/raw-repl.ts` as a standalone `RawReplEngine`, driven through a
+  minimal `write()`-only transport interface using `Uint8Array` instead of
+  Node's `Buffer`. `MicroPythonDevice` is now a thin `serialport` adapter over
+  the engine — pure refactor, no behaviour change, now covered by dedicated
+  unit tests that exercise the protocol against a fake board (no real serial
+  port needed). This is the first step of Snakie for Web (#267): the same
+  engine will later be driven by a Web Serial transport in the browser build.
+
 ### Added
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
