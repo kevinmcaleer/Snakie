@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Data View — sort, filter and a live column summary (#275, epic #272).**
+  Click a column header to sort it (type-aware — numbers order 2 < 10 < 100, not
+  lexically; timestamps chronologically; asc → desc → off), with nulls always
+  last. A toggleable filter row gives numeric/timestamp columns a min–max range
+  and text columns contains/equals; filters compose across columns and show a
+  "27,501 of 50,001 rows" count with one-click **Clear**. A summary strip under
+  the header profiles each column (min–max, mean, distinct/top value, empty
+  count) and **recomputes against the filtered set** — all over the same
+  virtualised table, smooth at 86k rows.
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
   it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
