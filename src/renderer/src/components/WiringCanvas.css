@@ -64,6 +64,18 @@
   stroke: #d6e6ff;
 }
 
+/* Procedural paper mottle — only on the blueprint sheet. `soft-light` turns the
+   grey fractal noise into a faint light/dark undulation over the blue paper;
+   keep it a whisper (low opacity) so it reads as texture, not noise. */
+.wc__paper {
+  display: none;
+}
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__paper {
+  display: block;
+  opacity: 0.55;
+  mix-blend-mode: soft-light;
+}
+
 /* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
 :root[data-breadboard-bg='blueprint'] .wc--lifelike.wc--drop .wc__stage {
   background-color: #0e4373;
