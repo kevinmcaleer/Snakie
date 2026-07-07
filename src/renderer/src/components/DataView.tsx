@@ -10,6 +10,7 @@ import {
   type SortState,
   type ColumnSummary
 } from './data-view-ops'
+import { DataColumnPanel } from './DataColumnPanel'
 import './DataView.css'
 
 /**
@@ -49,6 +50,7 @@ export function DataView(): JSX.Element {
   const [sort, setSort] = useState<SortState | null>(null)
   const [filters, setFilters] = useState<Map<number, Filter>>(new Map())
   const [showFilters, setShowFilters] = useState(false)
+  const [showPanel, setShowPanel] = useState(false)
   useEffect(() => {
     setHeaderOverride(null)
     setSort(null)
@@ -171,6 +173,14 @@ export function DataView(): JSX.Element {
               Clear
             </button>
           )}
+          <button
+            type="button"
+            className={`dv__btn${showPanel ? ' is-on' : ''}`}
+            onClick={() => setShowPanel((s) => !s)}
+            title="Column summary — profiles, histograms and gap %"
+          >
+            Columns
+          </button>
           <label className="dv__toggle">
             <input
               type="checkbox"
@@ -182,6 +192,7 @@ export function DataView(): JSX.Element {
         </div>
       </div>
 
+      <div className="dv__main">
       <div className="dv__grid" ref={scrollRef} onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}>
         <div className="dv__inner" style={{ width: innerW + 48 }}>
           <div className="dv__top">
@@ -235,6 +246,8 @@ export function DataView(): JSX.Element {
             {visible}
           </div>
         </div>
+      </div>
+      {showPanel && <DataColumnPanel columns={columns} rows={rows} view={view} />}
       </div>
     </div>
   )

@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Data View — column summary side panel (#276, epic #272).** A "Columns"
+  panel (DuckDB Column Explorer style) profiles every column of the current
+  filtered view: numbers/timestamps get a histogram with min/max/mean/median;
+  text gets its top values as frequency bars; each card shows the null/gap %
+  (the dropped-reading count that teaches data quality). Compact sparklines by
+  default — click a card to expand to the full chart + stats. Recomputes as you
+  sort/filter, and only computes while the panel is open.
 - **Data View — sort, filter and a live column summary (#275, epic #272).**
   Click a column header to sort it (type-aware — numbers order 2 < 10 < 100, not
   lexically; timestamps chronologically; asc → desc → off), with nulls always
