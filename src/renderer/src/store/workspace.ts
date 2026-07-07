@@ -44,8 +44,18 @@ import {
   useEffect,
   useMemo,
   useReducer,
+  useRef,
+  useState,
   type ReactNode
 } from 'react'
+import {
+  saveSession,
+  readSession,
+  restoreMode,
+  markRestoreStart,
+  markRestoreDone,
+  RESTORE_STABLE_MS
+} from './session-restore'
 
 export type FileSource = 'local' | 'device'
 
@@ -352,6 +362,103 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Read the persisted session + crash-guard decision at FIRST RENDER, before
+  // any effect runs (#266). This must happen before the persist effect below,
+  // which would otherwise wipe the saved session (open files start empty) on
+  // mount, before the restore effect could read it. No writes here — pure read.
+  const [boot] = useState(() => {
+    // Guard `window` — this initializer runs during render, and some unit tests
+    // render components in a DOM-less node env where `window` is undefined.
+    const storage = typeof window !== 'undefined' ? window.localStorage : null
+    if (!storage) return { mode: 'safe' as const, session: null }
+    const mode = restoreMode(storage)
+    return { mode, session: mode === 'safe' ? readSession(storage) : null }
+  })
+  // Gate the persist effect until the initial restore has settled, so it never
+  // overwrites the saved session before (or while) we reopen it.
+  const hydrated = useRef(false)
+
+  // Persist the open LOCAL files whenever they change (#266), so the next launch
+  // can reopen them. Device files aren't persisted (they need a live board).
+  useEffect(() => {
+    if (!hydrated.current) return
+    saveSession(window.localStorage, state.openFiles, state.activeId)
+  }, [state.openFiles, state.activeId])
+
+  // Reopen the previously-open files on launch — guarded against a crash loop
+  // (#266). If a file broke startup last time, the guard is still set: we skip
+  // restore AND drop the offending session so we don't retry it (self-healing;
+  // no keystroke needed, which matters in a locked-down classroom). Runs once.
+  const didRestore = useRef(false)
+  useEffect(() => {
+    if (didRestore.current) return
+    didRestore.current = true
+    const storage = window.localStorage
+
+    if (boot.mode === 'recover') {
+      // The previous restore never confirmed stable → a file likely crashed the
+      // app. Clear the guard AND the crashing session (so the next launch is
+      // clean, not a crash loop), and tell the user why.
+      markRestoreDone(storage)
+      saveSession(storage, [], null)
+      hydrated.current = true
+      try {
+        window.dispatchEvent(
+          new CustomEvent('snakie:status', {
+            detail: {
+              text: 'Opened without restoring files',
+              tooltip:
+                'A file may have caused a problem last time, so Snakie started clean. Reopen your files from the Files panel.',
+              priority: 6
+            }
+          })
+        )
+      } catch {
+        // status bar not listening yet — non-fatal
+      }
+      return
+    }
+
+    const session = boot.session
+    if (!session || session.paths.length === 0) {
+      hydrated.current = true
+      return
+    }
+
+    markRestoreStart(storage)
+    let cancelled = false
+    void (async () => {
+      for (const path of session.paths) {
+        if (cancelled) return
+        try {
+          await openFile('local', path)
+        } catch {
+          // Missing / unreadable — skip this file, keep going.
+        }
+      }
+      // Re-activate the tab that was focused last session.
+      if (!cancelled && session.activePath) {
+        try {
+          await openFile('local', session.activePath)
+        } catch {
+          // ignore
+        }
+      }
+      // Now that the restore has applied, allow future edits to persist.
+      if (!cancelled) hydrated.current = true
+    })()
+
+    // Trust the restore once the app has stayed up a moment, then disarm the
+    // guard. If a restored file crashes the renderer first, this timer never
+    // fires, the guard survives, and the NEXT launch recovers.
+    const stable = window.setTimeout(() => markRestoreDone(storage), RESTORE_STABLE_MS)
+    return () => {
+      cancelled = true
+      window.clearTimeout(stable)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
   const revealLine = useCallback((line: number): void => {

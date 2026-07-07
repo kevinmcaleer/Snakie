@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
+  remembers the open local files (and which tab was active) and reopens them
+  next time — alongside the working folder it already restored (#177). A
+  **crash-guard** protects startup: if a file broke the app last launch, Snakie
+  opens clean, drops that session so it can't loop, and shows a "Opened without
+  restoring files" note — no keystroke or admin needed, which matters on a
+  locked-down school machine. Session state lives in the per-user `userData`
+  store (writable without elevation).
+
 ### Changed
 - **Three focused modes: Code · Board · Data Lab (modes review).** The
   four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
