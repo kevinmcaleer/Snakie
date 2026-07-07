@@ -1,12 +1,15 @@
-import { EventEmitter } from 'events'
-import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
-import { INSTALL_START, INSTALL_ERR } from '../packages/install'
-import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
-import {
-  isProbeCode,
-  simulateProbeResponse,
-  simulatedTelemetryFrame
-} from '../../shared/device/simulation'
+/**
+ * Browser port of {@link SimulatedDevice} (epic #267 Phase W1) — the same
+ * zero-hardware simulated device (issue #135) driven from a Web Worker instead
+ * of Electron's main process. Behaviourally identical: REPL, Run (paste mode),
+ * synthetic `SNK …` telemetry so instruments animate, `<<SNKV>>` live-pin
+ * probe responses, and a REAL in-memory MicroPython VFS for file operations.
+ *
+ * Differences from the Electron version are purely environmental — no Node
+ * `EventEmitter` (a tiny hand-rolled emitter instead) and `Uint8Array`
+ * (instead of `Buffer`) for the `data` stream — the actual telemetry/exec/FS
+ * logic is shared via `simulation.ts` and `fsSnippets.ts`.
+ */
 import {
   listDirSnippet,
   mkdirSnippet,
@@ -15,57 +18,100 @@ import {
   renameSnippet,
   statSnippet,
   writeFileSnippet
-} from '../../shared/device/fsSnippets'
+} from './fsSnippets'
+import {
+  isProbeCode,
+  simulateProbeResponse,
+  simulatedTelemetryFrame
+} from './simulation'
+import type { WebReplRuntime } from './webMicroPythonRuntime'
 import type {
   ConnectionState,
   DeviceStatus,
   DirEntry,
   ExecResult,
-  SnakieDevice,
   StatResult
-} from './types'
+} from '../../main/device/types'
 
 /** How often the simulated board "prints" a telemetry frame (ms). */
 const TELEMETRY_INTERVAL_MS = 120
 
+/** Virtual port path reported for the browser sim (mirrors the Electron
+ *  simulated device's `VIRTUAL_PORT_PATH`, kept local so this stays Node-free). */
+const VIRTUAL_PORT_PATH = 'sim://web'
+
+/** Sentinel markers emitted by the device install snippet (kept in sync with
+ *  `src/main/packages/install.ts` — duplicated here rather than imported so
+ *  this module has no Electron/Node dependency). */
+const INSTALL_START = '<<SNAKIE_MIP_START>>'
+const INSTALL_ERR = '<<SNAKIE_MIP_ERR>>'
+
+const textEncoder = new TextEncoder()
+
+type Listener<T> = (arg: T) => void
+
+/** Minimal typed pub/sub — the browser stand-in for Node's `EventEmitter`,
+ *  supporting only the two events {@link WebSimulatedDevice} needs. */
+class MiniEmitter {
+  private readonly dataListeners = new Set<Listener<Uint8Array>>()
+  private readonly statusListeners = new Set<Listener<DeviceStatus>>()
+
+  on(event: 'data', listener: Listener<Uint8Array>): this
+  on(event: 'status', listener: Listener<DeviceStatus>): this
+  on(event: 'data' | 'status', listener: Listener<never>): this {
+    if (event === 'data') this.dataListeners.add(listener as Listener<Uint8Array>)
+    else this.statusListeners.add(listener as Listener<DeviceStatus>)
+    return this
+  }
+
+  off(event: 'data' | 'status', listener: Listener<never>): void {
+    if (event === 'data') this.dataListeners.delete(listener as Listener<Uint8Array>)
+    else this.statusListeners.delete(listener as Listener<DeviceStatus>)
+  }
+
+  emitData(chunk: Uint8Array): void {
+    for (const l of this.dataListeners) l(chunk)
+  }
+
+  emitStatus(status: DeviceStatus): void {
+    for (const l of this.statusListeners) l(status)
+  }
+
+  removeAll(): void {
+    this.dataListeners.clear()
+    this.statusListeners.clear()
+  }
+}
+
 /**
- * SIMULATED MicroPython device (issue #135).
- *
- * A drop-in {@link SnakieDevice} that needs no hardware. It runs a REAL
- * MicroPython interpreter (compiled to WebAssembly, via {@link MicroPythonRuntime})
- * so the REPL, the Run button (paste mode) and `print()` all work — and, on top
- * of that, continuously emits realistic `SNK …` telemetry so the instruments
- * animate and answers the Board Viewer's `<<SNKV>>` live-pin probe with plausible
- * values. The result: you can write and run Python, watch instruments and use the
- * Board Viewer Live View completely offline.
- *
- * Hardware modules (`machine`, etc.) don't exist in the WASM port, so the
- * synthetic telemetry/probe stand in for a board's sensors — the instruments and
- * Live View stay useful without real pins. The REPL output and the telemetry
- * share the `data` channel safely: the Terminal's telemetry filter drops whole
- * `SNK …` lines wherever they fall, and the two are emitted as separate complete
- * chunks, so they never splice into one another.
- *
- * The interpreter is injected as a {@link ReplRuntime} so the device can be
- * unit-tested against a lightweight fake without loading WebAssembly.
+ * SIMULATED MicroPython device, browser edition. A drop-in analogue of
+ * `SnakieDevice` (see `src/main/device/types.ts`) minus the Node-specific
+ * bits: `data` chunks are `Uint8Array`, `writeFile` accepts `string |
+ * Uint8Array`, and there is no `connect(path)` — the sim always "is" the
+ * device, so `connect()` takes no arguments.
  */
-export class SimulatedDevice extends EventEmitter implements SnakieDevice {
+export class WebSimulatedDevice {
   private state: ConnectionState = 'disconnected'
   private timer: ReturnType<typeof setInterval> | null = null
   private tick = 0
-  private readonly runtime: ReplRuntime
+  private readonly runtime: WebReplRuntime
+  private readonly emitter = new MiniEmitter()
   /** Latest control payload per target (for inspection / future feedback). */
   private readonly control = new Map<string, string>()
 
-  constructor(runtime: ReplRuntime = new MicroPythonRuntime()) {
-    super()
+  constructor(runtime: WebReplRuntime) {
     this.runtime = runtime
   }
 
-  on(event: 'data', listener: (chunk: Buffer) => void): this
-  on(event: 'status', listener: (status: DeviceStatus) => void): this
-  on(event: string, listener: (...args: never[]) => void): this {
-    return super.on(event, listener as (...args: unknown[]) => void)
+  on(event: 'data', listener: Listener<Uint8Array>): this
+  on(event: 'status', listener: Listener<DeviceStatus>): this
+  on(event: 'data' | 'status', listener: Listener<never>): this {
+    this.emitter.on(event as 'data', listener as Listener<Uint8Array>)
+    return this
+  }
+
+  off(event: 'data' | 'status', listener: Listener<never>): void {
+    this.emitter.off(event, listener)
   }
 
   // ---------------------------------------------------------------------------
@@ -82,21 +128,15 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   async connect(): Promise<void> {
     if (this.state === 'connected') return
-    // Mimic the real flow: a brief "connecting" then "connected".
     this.setState('connecting')
     try {
-      // Boot the interpreter; its banner + prompt stream out via `data`.
-      await this.runtime.init((chunk) => this.emit('data', chunk))
+      await this.runtime.init((chunk) => this.emitter.emitData(chunk))
     } catch (err) {
-      // The REPL couldn't start — still connect so the instruments + Board
-      // Viewer work; just print a notice instead of a live Python prompt.
       const reason = err instanceof Error ? err.message : String(err)
-      this.emit(
-        'data',
-        Buffer.from(
+      this.emitter.emitData(
+        textEncoder.encode(
           `\r\nSimulated device — Python REPL unavailable (${reason}).\r\n` +
-            'Instruments and the Board Viewer still work.\r\n>>> ',
-          'utf8'
+            'Instruments and the Board Viewer still work.\r\n>>> '
         )
       )
     }
@@ -113,7 +153,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   private setState(state: ConnectionState): void {
     this.state = state
-    this.emit('status', { state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
+    this.emitter.emitStatus({ state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
   }
 
   // ---------------------------------------------------------------------------
@@ -123,8 +163,6 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   private startTelemetry(): void {
     if (this.timer) return
     this.timer = setInterval(() => this.emitTelemetryFrame(), TELEMETRY_INTERVAL_MS)
-    // Guard against the interval keeping the app alive on quit (Node only).
-    this.timer.unref?.()
   }
 
   private stopTelemetry(): void {
@@ -139,7 +177,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     if (this.state !== 'connected') return
     const frame = simulatedTelemetryFrame(this.tick++)
     if (frame.length === 0) return
-    this.emit('data', Buffer.from(frame.join('\r\n') + '\r\n', 'utf8'))
+    this.emitter.emitData(textEncoder.encode(frame.join('\r\n') + '\r\n'))
   }
 
   // ---------------------------------------------------------------------------
@@ -148,9 +186,10 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
 
   /**
    * Run code in the "raw REPL". The only snippet we meaningfully answer is the
-   * Board Viewer's `<<SNKV>>` live-pin probe (with synthetic values, since there
-   * is no hardware to read); anything else returns empty output (no traceback).
-   * Interactive code execution flows through {@link sendData} → the real REPL.
+   * Board Viewer's `<<SNKV>>` live-pin probe (with synthetic values, since
+   * there is no hardware to read); anything else runs on the real
+   * interpreter. Interactive code execution flows through `sendData` → the
+   * real REPL.
    */
   async exec(code: string): Promise<ExecResult> {
     if (this.state !== 'connected') throw new Error('Not connected')
@@ -158,9 +197,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
       return { stdout: simulateProbeResponse(code, this.tick), stderr: '' }
     }
     // `mip` package installs can't run on the WASM device (no network, and no
-    // `mip` module in the port). Detect the install snippet and answer with a
-    // clear, sentinel'd result so the Packages / SAM / driver UIs explain it —
-    // instead of the cryptic "mip failed" an empty response parses to (#135).
+    // `mip` module in the port) — answer with a clear, sentinel'd result.
     if (code.includes(INSTALL_START)) {
       return {
         stdout:
@@ -169,12 +206,6 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
         stderr: ''
       }
     }
-    // Actually RUN the snippet on the real WASM interpreter and return what it
-    // printed (this used to be a `''` stub, which silently broke every exec-based
-    // probe on the sim — e.g. `modules.probeInstalled`, so the missing-library
-    // banner could never clear after an install). Tracebacks arrive in the
-    // captured output, matching how a raw-REPL board surfaces them well enough
-    // for the sentinel-parsing callers (they just see no sentinel line).
     const out = await this.runtime.runCaptured(code)
     return { stdout: out, stderr: '' }
   }
@@ -207,9 +238,7 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   }
 
   // ---------------------------------------------------------------------------
-  // Filesystem — backed by the interpreter's REAL in-memory VFS (#135), so
-  // uploaded files persist and are importable (e.g. `import instruments`, since
-  // `/lib` is on sys.path). It's RAM-backed, so it resets on disconnect.
+  // Filesystem — backed by the interpreter's REAL in-memory VFS (#135).
   // ---------------------------------------------------------------------------
 
   /** Emscripten MEMFS mounts that aren't part of a "board" — hidden at root. */
@@ -220,27 +249,20 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     const parsed = JSON.parse(raw) as [string, boolean, number][]
     const isRoot = path === '' || path === '/'
     return parsed
-      .filter(([name, isDir]) => !(isRoot && isDir && SimulatedDevice.SYSTEM_DIRS.has(name)))
+      .filter(([name, isDir]) => !(isRoot && isDir && WebSimulatedDevice.SYSTEM_DIRS.has(name)))
       .map(([name, isDir, size]) => ({ name, isDir, size }))
   }
 
   async readFile(path: string): Promise<string> {
-    // Text read (the simulator's files are source); exact bytes via stdout.write.
     return this.runtime.runCaptured(readFileSnippet(path))
   }
 
-  async writeFile(path: string, contents: string | Buffer): Promise<void> {
-    const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
-    // The VFS starts EMPTY (no `/lib` by default), so create any missing parent
-    // directories first — otherwise writing e.g. `/lib/instruments.py` fails with
-    // OSError. Then hex-encode the body so arbitrary (incl. binary) content
-    // survives without escaping.
-    await this.runtime.runCaptured(writeFileSnippet(path, data.toString('hex')))
+  async writeFile(path: string, contents: string | Uint8Array): Promise<void> {
+    const bytes = typeof contents === 'string' ? textEncoder.encode(contents) : contents
+    await this.runtime.runCaptured(writeFileSnippet(path, bytesToHex(bytes)))
   }
 
   async remove(path: string): Promise<void> {
-    // Recursive, mirroring MicroPythonDevice.remove: files delete directly;
-    // directory trees walk depth-first (children, then the emptied dir) (#219).
     await this.runtime.runCaptured(removeSnippet(path))
   }
 
@@ -261,8 +283,13 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
   async dispose(): Promise<void> {
     this.stopTelemetry()
     this.runtime.dispose()
-    this.removeAllListeners()
+    this.emitter.removeAll()
     this.state = 'disconnected'
   }
 }
 
+function bytesToHex(bytes: Uint8Array): string {
+  let out = ''
+  for (const b of bytes) out += b.toString(16).padStart(2, '0')
+  return out
+}

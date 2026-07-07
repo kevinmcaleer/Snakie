@@ -45,6 +45,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   engine will later be driven by a Web Serial transport in the browser build.
 
 ### Added
+- **Snakie for Web — zero-hardware classroom MVP (#282, epic #267 Phase W1).**
+  A browser-only build (`npm run dev:web` / `build:web`) for classrooms where a
+  native app install isn't possible (Chromebooks): the same editor/Board
+  View/instruments UI as the desktop app, running entirely client-side.
+  - **MicroPython in a Web Worker.** The same MicroPython-WASM interpreter the
+    desktop simulator uses now runs in a dedicated Web Worker
+    (`micropython.worker.ts`), driving a browser port of the simulated device
+    (`WebSimulatedDevice`/`WebMicroPythonRuntime`) over a small postMessage
+    RPC protocol. REPL, Run/Stop, the device file tree, and live synthetic
+    telemetry (Board View instruments) all work exactly like the desktop
+    simulator (#135) — just client-side, no Electron process involved.
+  - **Projects in OPFS + File System Access, `robot.yml` included.** Replaces
+    native file dialogs on web: projects default to an Origin Private File
+    System directory (zero permission prompts, works on locked-down
+    Chromebooks) or, when supported, a real picked folder via
+    `showDirectoryPicker()`/`showSaveFilePicker()` persisted across reloads.
+  - **Installable, offline-capable PWA.** A hand-rolled manifest + service
+    worker (app-shell cache-first, stale-while-revalidate elsewhere — no new
+    dependency) lets the web build be added to the ChromeOS shelf and keeps
+    working offline after the first visit.
+  - Git, the Python plugin system, LLM chat, firmware flashing, and detached
+    OS windows are explicit "not available on web" stubs for this phase (real
+    hardware over Web Serial is Phase W2). See `docs/web-build.md` for the
+    full architecture and current limitations.
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
   it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the

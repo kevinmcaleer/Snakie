@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dev:web": "vite --config vite.web.config.ts",
+    "build:web": "vite build --config vite.web.config.ts",
+    "preview:web": "vite preview --config vite.web.config.ts",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
     "dev:web": "vite --config vite.web.config.ts",

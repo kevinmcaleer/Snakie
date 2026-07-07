@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Content-Security-Policy for the web/PWA build: 'wasm-unsafe-eval' lets the
+         MicroPython interpreter's WASM module compile/instantiate; everything else
+         mirrors the Electron renderer's CSP (src/renderer/index.html). -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; worker-src 'self'; connect-src 'self'"
+    />
+    <meta name="theme-color" content="#1a1d23" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>Snakie</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/web-main.tsx"></script>
+  </body>
+</html>

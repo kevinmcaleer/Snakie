@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { MicroPythonRuntime } from '../src/main/device/MicroPythonRuntime'
-import { simulatedTelemetryFrame } from '../src/main/device/simulation'
+import { simulatedTelemetryFrame } from '../src/shared/device/simulation'
 import { makeTelemetryFilter } from '../src/renderer/src/components/terminal-telemetry'
 
 /**

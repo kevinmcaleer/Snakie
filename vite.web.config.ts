@@ -1,48 +1,65 @@
 import { resolve } from 'path'
+import { readFileSync } from 'fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 /**
- * Web build target (Snakie for Web, #281/#267 Phase W0 — "the seam").
+ * Web build target (epic #267). Started in #281/"Web W0" as a structural
+ * smoke test of the existing renderer against the (fixed) `preloadFallback`
+ * no-op stub; this Phase W1 version (#282) wires up a REAL backend on top of
+ * that same seam — MicroPython-in-a-Worker, OPFS/File System Access projects
+ * — for classroom Chromebooks where a native app install isn't possible.
  *
- * This is a SEPARATE, plain Vite config (not `electron-vite`) that bundles the
- * EXISTING renderer (`src/renderer/**`) as an ordinary browser SPA, with no
- * Electron main/preload processes at all. `src/renderer/src/lib/preloadFallback`
- * (imported for its side effect from `main.tsx`) installs a fully-typed no-op
- * `window.api`/`window.electron` stub when the Electron preload bridge is
- * absent, so the renderer boots against that stub here instead of a real
- * device/backend.
+ * `web.html` / `web-main.tsx` are a dedicated entry (installs `createWebApi()`
+ * then renders the SAME `<App/>` the Electron build uses — no UI fork). Kept
+ * as its own HTML/script pair (rather than reusing `index.html`/`main.tsx`,
+ * which still boot the inert `preloadFallback` stub) so that Rollup's module
+ * graph for `electron.vite.config.ts` never has a static edge into this
+ * build's device/worker/OPFS modules — the Electron output stays byte-for-
+ * byte unaffected by this whole subsystem.
  *
- * Purpose: prove the renderer has no Electron/Node leakage and can build +
- * load standalone — nothing more. It is NOT production-ready, not deployed
- * anywhere (that's #286), and does NOT wire up a real simulated-device backend
- * (the WASM-in-worker sim is #282); it is a structural smoke test only, run via
- * `npm run build:web` / `npm run dev:web`.
- *
- * Only the main `index.html` entry is built. `board.html` / `find.html` /
- * `instrument.html` / `console.html` are Electron-only detached OS windows
- * that relay to the main window over `ipcRenderer` — they have no meaning
- * outside Electron and are intentionally left out of this target.
+ * The MicroPython Web Worker (`src/renderer/src/web/device/micropython.worker.ts`)
+ * is picked up automatically by Vite's `new URL(..., import.meta.url)` +
+ * `new Worker(..., { type: 'module' })` convention (see `WorkerDeviceClient.ts`)
+ * — no extra config needed beyond `worker.format: 'es'`, since the worker
+ * itself uses static `import`s.
  *
  * Output goes to `out-web/` (kept separate from `electron-vite`'s `out/`, so
  * `npm run build` and `npm run build:web` never clobber each other).
  */
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8')) as { version: string }
+
 export default defineConfig({
   root: 'src/renderer',
+  // PWA manifest/service worker/icons are web-only — kept out of the shared
+  // `src/renderer/public/` dir so they never end up in the Electron build.
+  publicDir: resolve(__dirname, 'src/renderer/public-web'),
+  define: {
+    __SNAKIE_VERSION__: JSON.stringify(pkg.version)
+  },
   resolve: {
     alias: {
       '@renderer': resolve(__dirname, 'src/renderer/src')
     }
   },
+  worker: {
+    format: 'es'
+  },
   build: {
+    // Emscripten's glue code uses top-level `await` (gated behind a
+    // Node-only branch, but esbuild still needs the syntax target to allow
+    // it). Classroom Chromebooks are Chromium-only, so `esnext` is safe.
+    target: 'esnext',
     outDir: resolve(__dirname, 'out-web'),
     emptyOutDir: true,
-    // Same rationale as electron.vite.config.ts: Monaco is split into its own
-    // lazily-loaded chunk, so raise the warning limit past its size.
+    // Monaco is split into its own lazily-loaded, long-lived cacheable chunk
+    // (mirrors electron.vite.config.ts's renderer build), so the initial
+    // chunk stays small; the WASM interpreter is fetched by the worker, not
+    // bundled into any JS chunk.
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
       input: {
-        index: resolve(__dirname, 'src/renderer/index.html')
+        web: resolve(__dirname, 'src/renderer/web.html')
       },
       output: {
         manualChunks(id: string) {

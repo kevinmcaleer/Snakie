@@ -1,0 +1,33 @@
+{
+  "name": "Snakie",
+  "short_name": "Snakie",
+  "description": "A zero-hardware MicroPython learning environment — write, run and inspect MicroPython code entirely in the browser, no board or install required.",
+  "id": "/web.html",
+  "start_url": "/web.html",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1a1d23",
+  "theme_color": "#1a1d23",
+  "categories": ["education", "developer"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
