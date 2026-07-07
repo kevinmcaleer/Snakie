@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Workspace layouts (epic #259, phases 0+1).** A new **Code · Board · Lab ·
+  Data** switcher in the toolbar restyles the whole shell in one click: each
+  workspace remembers its own sidebar view, panel sizes, collapse states and
+  instrument-dock visibility — *Code* is today's editor-first default, *Board*
+  opens the dock (mini board + instruments) beside the code, *Lab* maximises the
+  instrument bench, *Data* gives the console/plotter the tall half. Switching
+  never remounts anything, so the editor, console scrollback and running
+  instruments all survive. A **↺ reset** button restores the active workspace to
+  its factory preset. Under the hood, all layout state moved out of AppShell
+  into one versioned, corruption-safe store (phase 0 of #259) that migrates your
+  existing layout on first run.
 - **Open the Oscilloscope / Multimeter any time — with in-instrument help.**
   The scope and meter no longer stay locked out until your program declares a
   PWM/ADC pin: toggle them on from the dock and, when there's no source yet, they

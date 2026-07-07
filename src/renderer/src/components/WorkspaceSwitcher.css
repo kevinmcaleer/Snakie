@@ -1,0 +1,62 @@
+/* Workspace switcher (epic #259 Phase 1) — a compact segmented control in the
+   toolbar. Follows the toolbar's segmented-control language (.toolbar__seg);
+   the skeuomorph/dark skins restyle .btn-like chrome via the tokens below. */
+.ws-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.ws-switcher__seg {
+  display: inline-flex;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+
+.ws-switcher__btn {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 0.32rem 0.55rem;
+  cursor: pointer;
+}
+
+.ws-switcher__btn + .ws-switcher__btn {
+  border-left: var(--border-w) solid var(--border);
+}
+
+.ws-switcher__btn:hover {
+  color: var(--text);
+}
+
+.ws-switcher__btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Reset-to-preset: a small ghost icon button beside the segments. */
+.ws-switcher__reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w) solid transparent;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.ws-switcher__reset:hover {
+  color: var(--text);
+  border-color: var(--border);
+}

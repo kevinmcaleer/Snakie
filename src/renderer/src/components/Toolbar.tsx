@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { reporter } from '../lib/report-error'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
@@ -320,6 +321,9 @@ export function Toolbar({
       </div>
 
       <div className="toolbar__spacer" />
+
+      {/* Workspace layouts (epic #259): Code / Board / Lab / Data + reset. */}
+      <WorkspaceSwitcher />
 
       <div className="toolbar__group">
         <button
