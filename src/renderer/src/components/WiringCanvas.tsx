@@ -59,6 +59,9 @@ const VIEW_H = 720
 /** The breadboard "paper" grid pitch: the 2.54 mm (0.1") standard pin pitch. */
 const GRID_PITCH_MM = 2.54
 
+/** localStorage key for the snap-to-grid toggle. */
+const SNAP_GRID_KEY = 'snakie.board.snapGrid'
+
 /**
  * The graph-paper background grid (#…): drawn INSIDE the pan/zoom content group
  * (in world coordinates) so it moves + scales with the parts like paper they're
@@ -454,6 +457,26 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
+
+  // Snap-to-grid: when on, a dragged part's TOP-LEFT PIN lands on the nearest
+  // 2.54 mm grid intersection. Persisted across sessions.
+  const [snapEnabled, setSnapEnabledState] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(SNAP_GRID_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleSnap = (): void =>
+    setSnapEnabledState((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SNAP_GRID_KEY, next ? '1' : '0')
+      } catch {
+        // storage off — the toggle just won't persist
+      }
+      return next
+    })
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
   // Focused chrome (Board mode) starts it collapsed so the canvas gets the room.
@@ -785,7 +808,42 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     }
   }
 
+  /** When snap is on, nudge a proposed body origin so the subject's TOP-LEFT
+   *  pin lands on the nearest 2.54 mm grid intersection (world 0 is a grid line,
+   *  matching the drawn paper grid). No-op when snap is off / no pins. */
+  const snapOrigin = (key: string, x: number, y: number): { x: number; y: number } => {
+    if (!snapEnabled) return { x, y }
+    const s = subjByKey.get(key)
+    const step = GRID_PITCH_MM * pxPerMm
+    if (!s || !(step > 0)) return { x, y }
+    // The top-left pin anchor (smallest x + y, tie-broken by x), in subject-local
+    // coords — pins live on `PlacedPin.anchors`.
+    let tlx = Infinity
+    let tly = Infinity
+    let best = Infinity
+    for (const p of s.pins) {
+      for (const a of p.anchors) {
+        const sum = a.x + a.y
+        if (sum < best - 1e-6 || (Math.abs(sum - best) < 1e-6 && a.x < tlx)) {
+          best = sum
+          tlx = a.x
+          tly = a.y
+        }
+      }
+    }
+    if (!Number.isFinite(best)) return { x, y }
+    const pinX = x + tlx
+    const pinY = y + tly
+    return {
+      x: x + (Math.round(pinX / step) * step - pinX),
+      y: y + (Math.round(pinY / step) * step - pinY)
+    }
+  }
+
   const moveBox = (key: string, x: number, y: number): void => {
+    const snapped = snapOrigin(key, x, y)
+    x = snapped.x
+    y = snapped.y
     if (key === 'board') persist({ ...robot, boardX: x, boardY: y })
     else persist({ ...robot, parts: robot.parts.map((p) => (p.id === key ? { ...p, x, y } : p)) })
   }
@@ -972,6 +1030,23 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     })
   }
 
+  /** Jump to exactly 100%, keeping the viewport centre fixed. */
+  const setZoom100 = (): void => {
+    setView((v) => {
+      const cx = VIEW_W / 2
+      const cy = VIEW_H / 2
+      const wx = (cx - v.tx) / v.scale
+      const wy = (cy - v.ty) / v.scale
+      return { scale: 1, tx: cx - wx, ty: cy - wy }
+    })
+  }
+
+  /** The clickable zoom readout toggles between 100% and fit-all. */
+  const toggleZoom = (): void => {
+    if (Math.abs(view.scale - 1) < 0.005) fitView()
+    else setZoom100()
+  }
+
   /** Frame a bounding box (viewBox coords) centred within the DRAWABLE area,
    *  padded. When the floating browser is open we inset the area's left edge by
    *  its footprint so the framed content sits to the RIGHT of the browser (never
@@ -1065,7 +1140,11 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // Auto fit-to-view when the CONTENT changes (view toggle, board change, a part
   // added/removed) — keyed on a signature that excludes positions/pan, so it
   // never yanks the view during a drag, pan or wire pull.
-  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${browserOpen}|${subjects.map((s) => s.key).join(',')}`
+  // NOTE: `browserOpen` is deliberately NOT in this signature. Opening/closing
+  // the floating browser must not re-fit (that made clicking the browser jump
+  // the zoom); only a mode/board/part-set change auto-fits. Individual browser
+  // rows still zoom-to-fit their component via `fitToKey`.
+  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${subjects.map((s) => s.key).join(',')}`
   useEffect(() => {
     fitView()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1458,9 +1537,15 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
             >
               −
             </button>
-            <span className="wc__zoom-pct" aria-label={`Zoom ${Math.round(view.scale * 100)} percent`}>
+            <button
+              type="button"
+              className="wc__zoom-pct wc__zoom-pct--btn"
+              onClick={toggleZoom}
+              title={Math.abs(view.scale - 1) < 0.005 ? 'Zoom to fit all items' : 'Zoom to 100%'}
+              aria-label={`Zoom ${Math.round(view.scale * 100)} percent — click to toggle 100% / fit`}
+            >
               {Math.round(view.scale * 100)}%
-            </span>
+            </button>
             <button
               type="button"
               className="wc__zoom-btn"
@@ -1513,6 +1598,28 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 </div>
               )}
             </div>
+            {/* Snap-to-grid (magnet): align a dragged part's top-left pin to the
+                nearest 2.54 mm grid intersection. Right of the export button. */}
+            <button
+              type="button"
+              className={`wc__zoom-btn${snapEnabled ? ' is-on' : ''}`}
+              onClick={toggleSnap}
+              title="Snap to grid — align the top-left pin to the nearest grid intersection"
+              aria-label="Snap to grid"
+              aria-pressed={snapEnabled}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                {/* Horseshoe magnet: a U-body with two poles at the top. */}
+                <path
+                  d="M6 3v9a6 6 0 0 0 12 0V3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="butt"
+                />
+                <path d="M4.8 3h4.2v3.2H4.8zM15 3h4.2v3.2H15z" fill="currentColor" />
+              </svg>
+            </button>
           </div>
         </div>
 

@@ -44,6 +44,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Board View toolbar: snap-to-grid, a clickable zoom readout, and no more
+  stray zoom jumps.** A new **magnet** toggle (right of the export button) snaps
+  a dragged part's top-left pin to the nearest 2.54 mm grid intersection, so
+  parts line up on the paper grid; it's remembered across sessions. The **zoom
+  percentage is now a button** — click it to toggle between 100% and fit-all.
+  And opening/closing the floating components browser no longer re-fits the view
+  (that made clicking the browser jump the zoom); only picking an individual
+  component still zooms to fit it.
 - **Breadboard grid is now graph paper (#…).** The Board View's wiring
   background scales and pans WITH the parts instead of sitting fixed behind
   them — like paper the parts are placed on. The smallest square is the real
