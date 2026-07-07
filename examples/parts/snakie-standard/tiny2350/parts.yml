@@ -1,4 +1,5 @@
 id: tiny2350
+help: help.md
 name: Pimoroni Tiny 2350
 description: RP2350A in a tiny castellated board with an RGB LED + USB-C
 manufacturer: Pimoroni

@@ -1,4 +1,5 @@
 id: adafruit-feather-esp32s3
+help: help.md
 name: Adafruit Feather ESP32-S3
 description: ESP32-S3 Feather (8MB Flash) with USB-C, LiPo charging, STEMMA QT + NeoPixel.
 manufacturer: Adafruit

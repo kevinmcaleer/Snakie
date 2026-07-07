@@ -1,4 +1,5 @@
 id: adafruit-feather-rp2040
+help: help.md
 name: Adafruit Feather RP2040
 description: RP2040 Feather with USB-C, LiPo charging, STEMMA QT (I2C) + NeoPixel.
 manufacturer: Adafruit

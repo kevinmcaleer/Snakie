@@ -1,4 +1,5 @@
 id: n20-motor
+help: help.md
 name: N20 Motor
 manufacturer: Generic
 family: Motor

@@ -1,4 +1,5 @@
 id: esp32-devkit
+help: help.md
 name: ESP32 DevKit
 description: ESP32-WROOM-32 development board with 2.4GHz Wi-Fi + Bluetooth.
 manufacturer: Espressif

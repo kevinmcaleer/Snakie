@@ -1,4 +1,5 @@
 id: adafruit-feather-nrf52840
+help: help.md
 name: Adafruit Feather nRF52840 Express
 description: nRF52840 Feather — BLE + USB, LiPo charging, NeoPixel. Portrait, USB at top.
 manufacturer: Adafruit
