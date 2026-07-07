@@ -12,6 +12,8 @@
  * effect from `main.tsx` BEFORE React renders. In real Electron the bridge is
  * already present, so this is a safety net only (and logs a warning if used).
  */
+import { isElectron } from './platform'
+
 const noop = (): void => {}
 const unsub = (): (() => void) => noop
 const P =
@@ -31,7 +33,7 @@ if (!w.api) {
   // bug) — log loudly so it isn't silently masked. In a plain browser it's
   // expected (no preload), so a warning suffices. Either way we install the
   // no-op stub to keep the UI from blank-screening.
-  const inElectron = typeof navigator !== 'undefined' && /electron/i.test(navigator.userAgent)
+  const inElectron = isElectron()
   const log = inElectron ? console.error : console.warn
   log(
     `[Snakie] window.api is missing — installing a no-op fallback. Device, file, ` +

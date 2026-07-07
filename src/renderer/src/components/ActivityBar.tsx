@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from 'react'
+import { isElectron } from '../lib/platform'
 
 /**
  * ACTIVITY BAR — narrow vertical icon strip on the far left.
@@ -124,6 +125,15 @@ const TOP_ITEMS: ActivityItem[] = [
   { id: 'inspect', label: 'Inspect' }
 ]
 
+/**
+ * Views that need a real filesystem + spawned processes (`simple-git`, the
+ * Python plugin host) that a browser tab can't provide — hidden outside
+ * Electron (Web W3, issue #284). Exported so `AppShell`'s `LeftView` can guard
+ * the panel body too (in case a persisted `activityView` from a previous
+ * Electron session points at one of these in a browser).
+ */
+export const DESKTOP_ONLY_VIEWS: ReadonlySet<ActivityView> = new Set(['source-control', 'plugins'])
+
 // Report Bug sits ABOVE Help (issue #206). It's a normal VIEW now — a non-modal
 // left panel — so the editor + console stay usable while a report is open.
 const BOTTOM_ITEMS: ActivityItem[] = [
@@ -160,10 +170,14 @@ function renderItem(
 }
 
 export function ActivityBar({ active, onSelect, onOpenSettings }: ActivityBarProps): JSX.Element {
+  // Hide desktop-only views (Source Control, Plugins) outside Electron — a
+  // browser tab has no filesystem/process access for git or the plugin host
+  // (Web W3, issue #284).
+  const topItems = isElectron() ? TOP_ITEMS : TOP_ITEMS.filter((item) => !DESKTOP_ONLY_VIEWS.has(item.id))
   return (
     <nav className="activitybar" aria-label="Activity bar">
       <div className="activitybar__group">
-        {TOP_ITEMS.map((item) => renderItem(item, active, onSelect))}
+        {topItems.map((item) => renderItem(item, active, onSelect))}
       </div>
       <div className="activitybar__group activitybar__group--bottom">
         {BOTTOM_ITEMS.map((item) => renderItem(item, active, onSelect))}

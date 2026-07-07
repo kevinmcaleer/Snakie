@@ -1766,6 +1766,15 @@ body {
   overflow: auto;
 }
 
+/* Placeholder copy for a view unavailable in the current build (e.g.
+ * desktop-only chrome hidden on web — Web W3, issue #284). */
+.region__empty {
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 /* The terminal owns its own scrolling; don't double up. */
 .region__body--terminal {
   overflow: hidden;
