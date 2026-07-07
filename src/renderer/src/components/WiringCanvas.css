@@ -72,7 +72,7 @@
 }
 :root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__paper {
   display: block;
-  opacity: 0.55;
+  opacity: 0.85;
   mix-blend-mode: soft-light;
 }
 
