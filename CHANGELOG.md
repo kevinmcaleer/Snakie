@@ -15,6 +15,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   They adopt the file's PWM/ADC pin — or live `SNK` telemetry — the moment one
   appears. Backed by a reusable `InstrumentRequirement` panel for conditional
   instruments.
+- **The Barometer, IMU and Range instruments now explain themselves too.**
+  Opened with no telemetry, they show the same "how to use me" panel (with a
+  runnable snippet + Learn-more) instead of a dead dial, a frozen neutral pose or
+  an empty gauge — and swap to the live view the moment `SNK ENV` / `IMU` /
+  `DIST` data arrives. The Range instrument keeps its HC-SR04 pin pickers and
+  "Run range demo" prompt visible below the panel.
 - **Seven new Getting Started help articles (#231).** The Help Library now
   covers every advertised feature: **Files & sync** (the two file trees, the
   transfer bridge, and keeping tagged files in sync on save), **Flash MicroPython

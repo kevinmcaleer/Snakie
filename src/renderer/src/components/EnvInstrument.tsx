@@ -1,5 +1,6 @@
 import { useCallback, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, type FloatProps } from './InstrumentWindow'
+import { InstrumentRequirement } from './InstrumentRequirement'
 import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import {
@@ -39,10 +40,16 @@ export interface EnvInstrumentProps {
   docked?: boolean
   onToggleDock?: () => void
   float?: FloatProps
+  /**
+   * Seed readings (per channel), mirroring the scope's `samples` seam (#256):
+   * lets render tests exercise the live dials without a telemetry stream
+   * (effects don't run under static render). Live `SNK ENV` merges on top.
+   */
+  initialReadings?: Record<string, EnvReading>
 }
 
 /** One environmental reading per reporting channel. */
-interface EnvReading {
+export interface EnvReading {
   temp: number
   pressure: number
   humidity: number
@@ -148,11 +155,12 @@ export function EnvInstrument({
   onClose,
   docked = true,
   onToggleDock,
-  float
+  float,
+  initialReadings
 }: EnvInstrumentProps): JSX.Element {
   // Latest reading per channel + the user's picked channel (same pattern as the
   // Potentiometer: the sole/first reporting channel "just works").
-  const [readings, setReadings] = useState<Record<string, EnvReading>>({})
+  const [readings, setReadings] = useState<Record<string, EnvReading>>(initialReadings ?? {})
   const [picked, setPicked] = useState<string>('env')
 
   useTelemetryStream(
@@ -166,6 +174,35 @@ export function EnvInstrument({
   const channel = readings[picked] !== undefined ? picked : (channels[0] ?? picked)
   const reading = readings[channel]
   const hasData = reading !== undefined
+
+  // No `SNK ENV` telemetry yet → the shared how-to panel instead of a dead dial
+  // (#257 increment 2, matching the scope/meter pattern from #256).
+  if (!hasData) {
+    return (
+      <InstrumentWindow
+        name={def.name.toUpperCase()}
+        helpId={`inst-${def.id}`}
+        source="waiting for ENV"
+        docked={docked}
+        onClose={onClose}
+        onToggleDock={onToggleDock}
+        {...float}
+      >
+        <InstrumentRequirement
+          title="No sensor readings yet"
+          lines={[
+            'The barometer shows temperature, pressure and humidity from an environment sensor (like a BME280). Watch one in your program and the dials come alive.'
+          ]}
+          code={
+            'import instruments as inst\nfrom machine import I2C, Pin\nfrom bme280 import BME280\n\nbme = BME280(I2C(0, sda=Pin(0), scl=Pin(1)))\ninst.watch(env=bme)   # then inst.update() in your loop'
+          }
+          helpId={`inst-${def.id}`}
+          accent={def.accent}
+        />
+      </InstrumentWindow>
+    )
+  }
+
   const pressure = reading?.pressure ?? PRESS_MIN
   const angle = pressureAngle(pressure)
   const tip = dialPoint(angle, CX, CY, R * 0.78)

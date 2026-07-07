@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { reporter } from '../lib/report-error'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
+import { InstrumentRequirement } from './InstrumentRequirement'
 import type { InstrumentDef } from './range-instrument-def'
 import { useTelemetryStream, type DistanceTelemetry } from './range-telemetry'
 import { useSnakiePresence } from './snakie-presence'
@@ -328,6 +329,22 @@ export function RangeInstrument({
           } as React.CSSProperties
         }
       >
+        {/* No `SNK DIST` telemetry yet → the shared how-to panel in place of an
+            empty gauge (#257 increment 2). The wiring footer + demo prompt below
+            stay mounted, so the pin pickers and "Run range demo" remain reachable. */}
+        {latest === null ? (
+          <InstrumentRequirement
+            title="No distance readings yet"
+            lines={[
+              'The radar draws anything your program measures with a rangefinder (HC-SR04, ToF). Feed it distance telemetry and the sweep begins — or use the HC-SR04 pin pickers below to retarget a running program.'
+            ]}
+            code={
+              'import instruments as inst\nimport time\n\nwhile True:\n    mm = read_my_sensor()   # HC-SR04 / VL53L0X…\n    inst.distance(mm)       # feeds this radar\n    time.sleep(0.1)'
+            }
+            helpId={`inst-${def.id}`}
+            accent={def.accent}
+          />
+        ) : (
         <PhosphorScreen className="range__screen">
           <svg
             className="range__svg"
@@ -465,6 +482,7 @@ export function RangeInstrument({
             {rangeUnit && <span className="range__big-unit">{rangeUnit}</span>}
           </div>
         </PhosphorScreen>
+        )}
 
         {/* Demo prompt — shown when a TRIG/ECHO retarget can't reach a live program. */}
         {prompt && (

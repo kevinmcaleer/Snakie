@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentWindow'
+import { InstrumentRequirement } from './InstrumentRequirement'
 import { type InstrumentDef } from './instruments-registry'
 import {
   applyCalibration,
@@ -138,6 +139,34 @@ export function ImuInstrument({
   const calibrated = offset.roll !== 0 || offset.pitch !== 0 || offset.yaw !== 0
 
   const source = `IMU · 9-DOF${channel ? ` · ${channel}` : ''}`
+
+  // No `SNK IMU`/`IMUQ` telemetry yet → the shared how-to panel instead of a
+  // frozen neutral pose (#257 increment 2, matching the scope/meter pattern).
+  if (!hasData) {
+    return (
+      <InstrumentWindow
+        name={def.name.toUpperCase()}
+        helpId={`inst-${def.id}`}
+        source="waiting for IMU"
+        docked={docked}
+        onClose={onClose}
+        onToggleDock={onToggleDock}
+        {...float}
+      >
+        <InstrumentRequirement
+          title="No orientation data yet"
+          lines={[
+            'The IMU viewer tilts a 3-D board from roll/pitch/yaw telemetry. Watch an IMU in your program and it comes alive.'
+          ]}
+          code={
+            'import instruments as inst\nfrom icm20948 import ICM20948\n\nimu = ICM20948()\ninst.watch(imu=imu)   # then inst.update() in your loop'
+          }
+          helpId={`inst-${def.id}`}
+          accent={def.accent}
+        />
+      </InstrumentWindow>
+    )
+  }
 
   return (
     <InstrumentWindow
