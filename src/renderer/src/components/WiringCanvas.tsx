@@ -63,6 +63,88 @@ const GRID_PITCH_MM = 2.54
 const SNAP_GRID_KEY = 'snakie.board.snapGrid'
 
 /**
+ * The WORLD-coordinate rectangle currently visible across the whole stage. The
+ * SVG uses viewBox 1180×720 with `preserveAspectRatio=meet`, so the viewBox is
+ * fitted + centred and leaves letterbox margins where user-space coords fall
+ * outside [0,VIEW_W]×[0,VIEW_H] — this accounts for them so world-space layers
+ * (grid, paper) fill the entire stage, not just the viewBox.
+ */
+function visibleWorldBounds(
+  view: { tx: number; ty: number; scale: number },
+  stageW: number,
+  stageH: number
+): { minX: number; maxX: number; minY: number; maxY: number } {
+  const { tx, ty, scale } = view
+  const fit = stageW > 0 && stageH > 0 ? Math.min(stageW / VIEW_W, stageH / VIEW_H) : 1
+  const uW = fit > 0 ? stageW / fit : VIEW_W
+  const uH = fit > 0 ? stageH / fit : VIEW_H
+  const uMinX = (VIEW_W - uW) / 2
+  const uMaxX = (VIEW_W + uW) / 2
+  const uMinY = (VIEW_H - uH) / 2
+  const uMaxY = (VIEW_H + uH) / 2
+  return {
+    minX: (uMinX - tx) / scale,
+    maxX: (uMaxX - tx) / scale,
+    minY: (uMinY - ty) / scale,
+    maxY: (uMaxY - ty) / scale
+  }
+}
+
+/**
+ * PROCEDURAL PAPER (blueprint mode): a whisper-subtle fractal-noise mottle drawn
+ * INSIDE the pan/zoom content group so it pans + scales with the grid + parts,
+ * like real paper. Generated with `feTurbulence` (no image asset) and tiled via
+ * a `stitchTiles` pattern so the filter runs once on a small tile — cheap. The
+ * grain is greyscale + alpha-solid; CSS (soft-light blend, low opacity, scoped
+ * to blueprint) turns it into the faint light/dark undulation of drawing paper.
+ */
+function WiringPaper({
+  view,
+  stageW,
+  stageH
+}: {
+  view: { tx: number; ty: number; scale: number }
+  stageW: number
+  stageH: number
+}): JSX.Element | null {
+  if (!(view.scale > 0)) return null
+  const { minX, maxX, minY, maxY } = visibleWorldBounds(view, stageW, stageH)
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
+  return (
+    <>
+      <defs>
+        <filter id="wc-paper-fx" x="0%" y="0%" width="100%" height="100%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.55"
+            numOctaves={2}
+            seed={11}
+            stitchTiles="stitch"
+            result="n"
+          />
+          <feColorMatrix in="n" type="saturate" values="0" result="g" />
+          <feComponentTransfer in="g">
+            <feFuncA type="linear" slope="0" intercept="1" />
+          </feComponentTransfer>
+        </filter>
+        {/* Tiled in world units so the grain pans/scales with the content. */}
+        <pattern id="wc-paper" patternUnits="userSpaceOnUse" width="90" height="90">
+          <rect width="90" height="90" filter="url(#wc-paper-fx)" />
+        </pattern>
+      </defs>
+      <rect
+        className="wc__paper"
+        x={minX}
+        y={minY}
+        width={maxX - minX}
+        height={maxY - minY}
+        fill="url(#wc-paper)"
+      />
+    </>
+  )
+}
+
+/**
  * The graph-paper background grid (#…): drawn INSIDE the pan/zoom content group
  * (in world coordinates) so it moves + scales with the parts like paper they're
  * placed on, with `non-scaling-stroke` keeping the lines crisp at any zoom. The
@@ -82,26 +164,14 @@ function WiringGrid({
   stageW: number
   stageH: number
 }): JSX.Element | null {
-  const { tx, ty, scale } = view
+  const { scale } = view
   if (!(scale > 0) || !(pxPerMm > 0)) return null
 
-  // The SVG uses viewBox 1180×720 with `preserveAspectRatio=meet`, so the
-  // viewBox is fitted + centred, leaving letterbox margins where user-space
-  // coords fall OUTSIDE [0,VIEW_W]×[0,VIEW_H]. Compute the REAL visible user-
-  // space rectangle so the grid fills the WHOLE stage, not just the viewBox.
-  const fit = stageW > 0 && stageH > 0 ? Math.min(stageW / VIEW_W, stageH / VIEW_H) : 1
-  const uW = fit > 0 ? stageW / fit : VIEW_W // user-space width visible
-  const uH = fit > 0 ? stageH / fit : VIEW_H
-  const uMinX = (VIEW_W - uW) / 2
-  const uMaxX = (VIEW_W + uW) / 2
-  const uMinY = (VIEW_H - uH) / 2
-  const uMaxY = (VIEW_H + uH) / 2
-
-  // World-coordinate rectangle currently visible across the whole stage.
-  const wMinX = (uMinX - tx) / scale
-  const wMaxX = (uMaxX - tx) / scale
-  const wMinY = (uMinY - ty) / scale
-  const wMaxY = (uMaxY - ty) / scale
+  const { minX: wMinX, maxX: wMaxX, minY: wMinY, maxY: wMaxY } = visibleWorldBounds(
+    view,
+    stageW,
+    stageH
+  )
 
   // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
   // A fadeFull of 0 means "always on" (the major anchor lines).
@@ -1317,6 +1387,9 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+            {/* Procedural paper mottle (blueprint mode only, via CSS) — the very
+                bottom layer, pans + scales with the content. */}
+            <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} />
             {/* Graph-paper grid at true 2.54 mm pitch — behind everything, moves
                 + scales with the parts (drawn in world coords). */}
             <WiringGrid view={view} pxPerMm={pxPerMm} stageW={stageSize.w} stageH={stageSize.h} />

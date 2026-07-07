@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Blueprint background gets subtle procedural paper texture.** A whisper-faint
+  fractal-noise mottle (generated with SVG `feTurbulence`, no image) now gives
+  the blueprint sheet the light/dark undulation of real drawing paper. It's
+  drawn in world coordinates like the grid, so it **pans and scales with the
+  parts**, and it's tiled via a stitched pattern so it stays cheap. Blueprint
+  mode only.
 - **Board View toolbar: snap-to-grid, a clickable zoom readout, and no more
   stray zoom jumps.** A new **magnet** toggle (right of the export button) snaps
   a dragged part's top-left pin to the nearest 2.54 mm grid intersection, so
