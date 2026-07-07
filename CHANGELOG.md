@@ -17,10 +17,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the same live log + progress bar the desktop flasher shows. This lands
   first (of a 3-part split for #284) since it needs no other web-track work;
   the desktop Electron flashing path (esptool shell-out, UF2/DAPLink drive
-  copy) is unchanged. Known limitations for this round, to close in
-  follow-ups: RP2040/micro:bit browser flashing and a browser-native firmware
-  catalog download aren't available yet (the board picker and catalog tab
-  are hidden outside Electron accordingly).
+  copy) is unchanged. A browser-native firmware catalog download isn't
+  available yet, so the catalog tab is hidden outside Electron (Local file
+  only) — RP2040/micro:bit browser flashing follows below.
+- **micro:bit and Pico (RP2040) firmware flashing in the browser (Web W3,
+  #284, epic #267).** The second part of the browser flashing work: a
+  micro:bit now flashes over **WebUSB/DAPLink** via ARM's
+  [`dapjs`](https://github.com/ARMmbed/dapjs) — the same approach the
+  MakeCode editor uses — with a one-click **"Copy to drive instead"**
+  fallback (and automatic fallback when the browser has no WebUSB) for
+  boards/browsers where WebUSB DAPLink doesn't respond. A Pico's BOOTSEL
+  bootloader has no WebUSB interface at all, so it always uses that same
+  guided drive-copy flow: Snakie tells you to hold BOOTSEL (or just plug in a
+  micro:bit), then uses the **File System Access API**'s save-file picker to
+  write the firmware straight onto whichever mounted drive you pick — no
+  auto-detected mass-storage path required. Chrome/Edge only for both the
+  WebUSB and File System Access paths; the desktop Electron flashing path is
+  unchanged.
 - **Desktop-only chrome hidden outside Electron (Web W3, #284, epic #267).**
   The Source Control and Plugins views — both need a real filesystem and a
   spawned local process, neither available in a browser tab — are now hidden
@@ -28,7 +41,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   app only" notice instead of a broken panel if somehow selected. Backed by a
   new shared `isElectron()`/`hasWebSerial()`/`hasWebUSB()`/
   `hasFileSystemAccess()` capability-detection module, reused by the ESP
-  browser-flashing work above and by upcoming micro:bit/Pico web flashing.
+  browser-flashing work and by the micro:bit/Pico web flashing above.
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
   it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
