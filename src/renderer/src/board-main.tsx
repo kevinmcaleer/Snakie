@@ -29,7 +29,6 @@ import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
-import { blankPart } from './components/part-editor.util'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import type {
   BoardDefinition,
@@ -269,17 +268,6 @@ function BoardWindowApp(): JSX.Element {
 
   // Author a NEW board: open the Part Editor on a starter Microcontroller part in
   // the user's library (boards are just Microcontroller-family parts now).
-  const newBoard = (): void => {
-    const starter: PartDefinition = { ...blankPart(), id: 'my-board', name: 'My Board', family: 'Microcontroller' }
-    window.api.parts
-      .listLibraries()
-      .then((libs) => {
-        const lib = libs.find((l) => l.id === 'my-parts')
-        setEditing({ libraryId: 'my-parts', part: starter, libraries: libs, existingParts: lib?.parts ?? [], isNew: true })
-      })
-      .catch(() => setEditing({ libraryId: 'my-parts', part: starter, libraries: [], existingParts: [], isNew: true }))
-  }
-
   return (
     <>
       <BoardGraph
@@ -288,8 +276,6 @@ function BoardWindowApp(): JSX.Element {
         isPython={payload.isPython}
         userBoards={userBoards}
         asWindow
-        onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
-        onEnterCreator={newBoard}
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}

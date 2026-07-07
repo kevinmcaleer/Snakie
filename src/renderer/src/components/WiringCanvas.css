@@ -767,3 +767,40 @@
 .wc__bus--spi .wc__bus-text {
   fill: #2fb3b3;
 }
+
+/* --- Pinnable connections table (modes review) ----------------------------
+   Focused Board mode: the table starts collapsed; the pin (left of the header)
+   keeps it expanded, unpinned it re-collapses when focus leaves it. */
+.wc__table-headrow {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.wc__table-headrow .wc__table-head--toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.wc__pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, #8b919b);
+  cursor: pointer;
+}
+
+.wc__pin:hover {
+  background: rgba(128, 128, 128, 0.18);
+  color: var(--text, #d6dae0);
+}
+
+.wc__pin.is-pinned {
+  color: var(--accent, #34ad4f);
+}

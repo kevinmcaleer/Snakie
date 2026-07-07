@@ -14,6 +14,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Fill the host (the embedded Board-mode pane). Without this the column
+     sizes to CONTENT — a collapsed connections table "collapsed in place"
+     with dead space below, instead of the canvas taking the freed height. */
+  height: 100%;
+  min-height: 0;
   background: #1a1b1e;
   color: #e6e8ec;
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
@@ -883,4 +888,43 @@
   border-radius: 3px;
   padding: 1px 4px;
   text-transform: uppercase;
+}
+
+/* --- Pinnable library overlay (modes review) ------------------------------
+   In the embedded Board mode the library is Obsidian-style: UNPINNED it floats
+   OVER the canvas (right edge) and auto-hides on focus loss; PINNED it sits
+   in-flow exactly as before. The pin lives at the top-left of the header. */
+.boardgraph__dock--overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  outline: none;
+  border-left: 1px solid var(--border, #2c2e33);
+  box-shadow: -14px 0 28px -16px rgba(0, 0, 0, 0.55);
+}
+
+.boardgraph__pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin-right: 0.35rem;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted, #8b919b);
+  cursor: pointer;
+}
+
+.boardgraph__pin:hover {
+  background: rgba(128, 128, 128, 0.18);
+  color: var(--text, #d6dae0);
+}
+
+.boardgraph__pin.is-pinned {
+  color: var(--accent, #34ad4f);
 }

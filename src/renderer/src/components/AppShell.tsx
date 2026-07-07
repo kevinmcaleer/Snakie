@@ -182,13 +182,28 @@ export function AppShell(): JSX.Element {
   // read/write robot.yml next to the user's code.
   const boardFolder = currentFolder ?? undefined
 
+  // Board pop-out plumbing (modes review) — declared BEFORE the open handlers so
+  // they can consult/flip these synchronously. The `.current` values are kept
+  // fresh in the workspace-layout block further down (after `layout` exists).
+  const poppedFromBoardRef = useRef(false)
+  const switchWorkspaceRef = useRef<(id: 'code' | 'board' | 'datalab') => void>(() => undefined)
+  const activeWsRef = useRef<'code' | 'board' | 'datalab'>('code')
+
   // Toggle the floating Board View window from the toolbar button: open (and
   // push the current file immediately so it isn't blank) if closed, or close it
   // if it's already open. `onClosed` resets `boardOpened` either way.
+  // Pop-out: opening while Board MODE is active hands the board to the window —
+  // the workspace switch happens HERE, in the same handler as the open, so both
+  // state updates land in one commit (no half-switched state for the re-dock
+  // effect to misread).
   const toggleBoard = useCallback((): void => {
     if (boardOpened) {
       window.api.board.close()
       return
+    }
+    if (activeWsRef.current === 'board') {
+      poppedFromBoardRef.current = true
+      switchWorkspaceRef.current('code')
     }
     setBoardOpened(true)
     window.api.board
@@ -230,8 +245,19 @@ export function AppShell(): JSX.Element {
   // mini board panel's open button, which calls board.open() directly. Flipping
   // `boardOpened` true triggers the streaming effect above to relay the active
   // file, so the full viewer isn't left blank ("Open a Python file…").
+  // Pop-out (modes review): if the window opens while Board MODE is active, the
+  // board moved homes — hand it to the window and return the main split to Code
+  // IN THE SAME HANDLER (the two state updates batch into one commit, so the
+  // "close the window when Board mode is picked while it's open" effect below
+  // never sees a half-switched state and can't mistake a pop-out for a re-dock).
   useEffect(() => {
-    const off = window.api.board.onOpened(() => setBoardOpened(true))
+    const off = window.api.board.onOpened(() => {
+      setBoardOpened(true)
+      if (activeWsRef.current === 'board') {
+        poppedFromBoardRef.current = true
+        switchWorkspaceRef.current('code')
+      }
+    })
     return off
   }, [])
 
@@ -277,17 +303,24 @@ export function AppShell(): JSX.Element {
   useEffect(() => {
     if (layout.applyNonce === 0) return // initial mount already used defaultSize
     const ws = layout.workspace
-    // The horizontal group's setLayout array must match the RENDERED panels:
-    // 4 with the board pane open, 3 (board slot elided) when it's closed.
-    hGroupRef.current?.setLayout(
-      ws.boardPaneOpen
-        ? [...ws.horizontal]
-        : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
-    )
-    vGroupRef.current?.setLayout([...ws.vertical])
-    if (ws.filesCollapsed) filesRef.current?.collapse()
-    if (ws.shellCollapsed) shellRef.current?.collapse()
-    if (ws.rightCollapsed) rightRef.current?.collapse()
+    // Deferred one frame: switching INTO the Board workspace mounts the board
+    // Panel in this same commit, and a setLayout issued before the group has
+    // registered the new panel is ignored (the pane then lands on defaultSize —
+    // the "board pane opens tiny" bug). After rAF the group knows all panels.
+    const raf = requestAnimationFrame(() => {
+      // The horizontal group's setLayout array must match the RENDERED panels:
+      // 4 with the board pane open, 3 (board slot elided) when it's closed.
+      hGroupRef.current?.setLayout(
+        ws.boardPaneOpen
+          ? [...ws.horizontal]
+          : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
+      )
+      vGroupRef.current?.setLayout([...ws.vertical])
+      if (ws.filesCollapsed) filesRef.current?.collapse()
+      if (ws.shellCollapsed) shellRef.current?.collapse()
+      if (ws.rightCollapsed) rightRef.current?.collapse()
+    })
+    return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyNonce IS the signal
   }, [layout.applyNonce])
 
@@ -423,12 +456,38 @@ export function AppShell(): JSX.Element {
   // group — NOT a `Panel` in the group — so its show/hide is fully independent of
   // the chat panel (two collapsible panels in one PanelGroup redistribute each
   // other's freed space, which made toggling one reveal the other). Its flag is
-  // part of the workspace layout (the Board/Lab/Data workspaces open it).
+  // part of the workspace layout (the Board/Data Lab workspaces open it).
   const setDockOpen = layout.setDockOpen
   const instrumentsVisible = dockOpen
   const toggleInstruments = useCallback((): void => {
     setDockOpen(!dockOpen)
   }, [dockOpen, setDockOpen])
+
+  // --- Board pop-out (modes review): the floating window and the Board MODE are
+  // the same board in two homes, never both. Mirrors instrument undocking:
+  //  - opening the window while Board mode is active (the toolbar knob, or the
+  //    mini board's open button) POPS the board out → main window returns to Code
+  //    (the switch happens inside the open handlers themselves — see toggleBoard
+  //    and the board.onOpened subscription — so it batches with the open);
+  //  - closing the window returns the board to being a mode (switch back);
+  //  - picking the Board mode while the window is open re-docks (closes) it.
+  switchWorkspaceRef.current = layout.switchWorkspace
+  activeWsRef.current = layout.active
+  useEffect(() => {
+    const off = window.api.board.onClosed(() => {
+      if (poppedFromBoardRef.current) {
+        poppedFromBoardRef.current = false
+        switchWorkspaceRef.current('board')
+      }
+    })
+    return off
+  }, [])
+  useEffect(() => {
+    if (layout.active === 'board' && boardOpened) {
+      poppedFromBoardRef.current = false
+      window.api.board.close()
+    }
+  }, [layout.active, boardOpened])
 
   // --- Offer to install the instrument library (#108) ------------------------
   // When the dock opens AND a board is connected, we check (once per connection)
@@ -940,7 +999,10 @@ export function AppShell(): JSX.Element {
           {boardPaneOpen && (
             <>
               <PanelResizeHandle className="resize-handle resize-handle--vertical" />
-              <Panel order={3} minSize={25} defaultSize={initialSizes.current.h[2]}>
+              {/* defaultSize = the ACTIVE workspace's board share (not the mount-time
+                  snapshot): the pane mounts when switching into Board, and the deferred
+                  setLayout can lose a race — this keeps the fallback correct too. */}
+              <Panel order={3} minSize={25} defaultSize={layout.workspace.horizontal[2] || 40}>
                 <Suspense
                   fallback={
                     <div className="board-pane__loading" role="status">
@@ -982,6 +1044,7 @@ export function AppShell(): JSX.Element {
               vis={visibility}
               inUse={inUse}
               onToggleVisible={toggleVisible}
+              hideMiniBoard={layout.workspace.boardPaneOpen}
             />
           </aside>
         )}

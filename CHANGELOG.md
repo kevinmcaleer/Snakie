@@ -6,6 +6,34 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Three focused modes: Code · Board · Data Lab (modes review).** The
+  four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
+  Lab** (instrument bench + a tall console/plotter); existing layouts migrate
+  automatically, including a stale active workspace. **Board mode now gives the
+  board every pixel**: the parts **library** became an Obsidian-style pinnable
+  overlay (open it from its edge tab; it slides away when it loses focus unless
+  you pin it — the pin sits top-left of its header), the **connections table**
+  starts collapsed to a bottom bar with the same pin behaviour, the floating
+  **components browser** starts collapsed, the driver banner is height-capped,
+  and the redundant chrome (the drag grip, the BOARD VIEW title, the dock's
+  mini board) is hidden while the board lives in the main window. Also fixes
+  the Board pane opening at the wrong size (a panel-mount race) and the board
+  column not filling its pane (a collapsed connections table used to strand
+  dead space below itself).
+- **Board View chrome slimmed further.** The "New board" and "open boards
+  folder" header buttons are gone from both the Board mode and the floating
+  window — the Library panel owns part/board authoring and library management
+  now. And in Board MODE, part mini-help opens in the main **Help Library**
+  (which now also lists board-placed parts under "In This Project") instead of
+  the pane's own drawer — one help surface, not two. The floating window keeps
+  its built-in help drawer.
+- **The Board toolbar knob now pops the board out — like undocking an
+  instrument.** Opening the Board window while Board mode is active hands the
+  board to its own OS window and returns the main split to Code; closing that
+  window brings Board back as a mode; picking Board mode while the window is
+  open re-docks it. One board, two homes, never both.
+
 ### Added
 - **Workspace layouts (epic #259, phases 0+1).** A new **Code · Board · Lab ·
   Data** switcher in the toolbar restyles the whole shell in one click: each

@@ -38,16 +38,17 @@ import {
 } from 'react'
 import type { ActivityView } from '../components/ActivityBar'
 
-/** The named workspaces (Phase 1). Order = the switcher's display order. */
-export const WORKSPACE_IDS = ['code', 'board', 'lab', 'data'] as const
+/** The named workspaces (Phase 1; slimmed 4 → 3 by the modes review). Order =
+ *  the switcher's display order. Old `lab`/`data` envelopes migrate to
+ *  `datalab` in {@link loadLayoutState}. */
+export const WORKSPACE_IDS = ['code', 'board', 'datalab'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
-  board: { label: 'Board', hint: 'Tri-split: code · Board View · instruments, side by side' },
-  lab: { label: 'Lab', hint: 'Instrument bench: big dock, editor and console' },
-  data: { label: 'Data', hint: 'Data-first: large console/plotter under the editor' }
+  board: { label: 'Board', hint: 'Focused Board View beside your code' },
+  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' }
 }
 
 /** One workspace's remembered geometry. */
@@ -106,8 +107,9 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     horizontal: [0, 42, 58, 0],
     vertical: [65, 35]
   },
-  // Instrument bench: maximum dock, slim console for the REPL.
-  lab: {
+  // Data Lab (the old Lab + Data merged): the instrument bench — dock open —
+  // with a tall shell region (Console | Plotter | Problems) for data work.
+  datalab: {
     activityView: 'files',
     filesCollapsed: true,
     shellCollapsed: false,
@@ -115,19 +117,7 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     dockOpen: true,
     boardPaneOpen: false,
     horizontal: [0, 100, 0, 0],
-    vertical: [75, 25]
-  },
-  // Data-first: a tall shell region (Console | Plotter | Problems) + the dock
-  // for the Plotter/logger instruments.
-  data: {
-    activityView: 'files',
-    filesCollapsed: true,
-    shellCollapsed: false,
-    rightCollapsed: true,
-    dockOpen: true,
-    boardPaneOpen: false,
-    horizontal: [0, 100, 0, 0],
-    vertical: [45, 55]
+    vertical: [50, 50]
   }
 }
 
@@ -239,11 +229,18 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       if (parsed && parsed.version === 1 && parsed.workspaces) {
         const state = defaultLayoutState()
-        state.active = WORKSPACE_IDS.includes(parsed.active as WorkspaceId)
-          ? (parsed.active as WorkspaceId)
-          : 'code'
+        // Modes review: the old `lab` and `data` workspaces merged into
+        // `datalab`. Map a stale active id, and seed datalab's geometry from
+        // the old data (preferred — it's the closer layout) else lab entry, so
+        // an existing user's sizes carry over.
+        const saved = parsed.workspaces as Record<string, unknown>
+        const activeRaw = ['lab', 'data'].includes(parsed.active as string)
+          ? 'datalab'
+          : (parsed.active as WorkspaceId)
+        state.active = WORKSPACE_IDS.includes(activeRaw) ? activeRaw : 'code'
         for (const id of WORKSPACE_IDS) {
-          state.workspaces[id] = sanitiseWorkspace(parsed.workspaces[id], WORKSPACE_PRESETS[id])
+          const legacy = id === 'datalab' ? (saved.datalab ?? saved.data ?? saved.lab) : saved[id]
+          state.workspaces[id] = sanitiseWorkspace(legacy, WORKSPACE_PRESETS[id])
         }
         return state
       }

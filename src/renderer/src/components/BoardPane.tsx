@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { BoardGraph } from './BoardGraph'
 import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
-import { blankPart } from './part-editor.util'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { useWorkspace } from '../store/workspace'
 import { useEditorSettings } from '../store/settings'
@@ -187,30 +186,6 @@ export function BoardPane(): JSX.Element {
   }, [])
 
   // Author a NEW board (a starter Microcontroller-family part in `my-parts`).
-  const newBoard = useCallback((): void => {
-    const starter: PartDefinition = {
-      ...blankPart(),
-      id: 'my-board',
-      name: 'My Board',
-      family: 'Microcontroller'
-    }
-    window.api.parts
-      .listLibraries()
-      .then((libs) => {
-        const lib = libs.find((l) => l.id === 'my-parts')
-        setEditing({
-          libraryId: 'my-parts',
-          part: starter,
-          libraries: libs,
-          existingParts: lib?.parts ?? [],
-          isNew: true
-        })
-      })
-      .catch(() =>
-        setEditing({ libraryId: 'my-parts', part: starter, libraries: [], existingParts: [], isNew: true })
-      )
-  }, [])
-
   return (
     <section className="board-pane" aria-label="Board View" style={{ height: '100%', minWidth: 0 }}>
       <BoardGraph
@@ -218,8 +193,6 @@ export function BoardPane(): JSX.Element {
         fileName={fileName}
         isPython={isPython}
         userBoards={userBoards}
-        onOpenBoardsFolder={() => void window.api.board.openBoardsFolder().catch(() => undefined)}
-        onEnterCreator={newBoard}
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}

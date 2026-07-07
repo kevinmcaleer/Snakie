@@ -13,9 +13,9 @@ const storage = (entries: Record<string, string> = {}): StorageLike => ({
   getItem: (k: string) => (k in entries ? entries[k] : null)
 })
 
-describe('workspace presets (epic #259 Phase 1)', () => {
-  it('defines the four workspaces with valid geometry', () => {
-    expect(WORKSPACE_IDS).toEqual(['code', 'board', 'lab', 'data'])
+describe('workspace presets (epic #259 Phase 1; slimmed to 3 by the modes review)', () => {
+  it('defines the three workspaces with valid geometry', () => {
+    expect(WORKSPACE_IDS).toEqual(['code', 'board', 'datalab'])
     for (const id of WORKSPACE_IDS) {
       const p = WORKSPACE_PRESETS[id]
       expect(p.horizontal).toHaveLength(4)
@@ -31,19 +31,19 @@ describe('workspace presets (epic #259 Phase 1)', () => {
     expect(code.shellCollapsed).toBe(false)
     expect(code.rightCollapsed).toBe(true)
     expect(code.dockOpen).toBe(false)
-    for (const id of ['board', 'lab', 'data'] as const) {
+    for (const id of ['board', 'datalab'] as const) {
       expect(WORKSPACE_PRESETS[id].dockOpen, id).toBe(true)
     }
-    // Board is the education tri-split: the embedded Board View pane opens with
-    // a real share beside the code; the other workspaces keep it closed at 0.
+    // Board: the embedded Board View pane opens with a real share beside the
+    // code; the other workspaces keep it closed at 0.
     expect(WORKSPACE_PRESETS.board.boardPaneOpen).toBe(true)
     expect(WORKSPACE_PRESETS.board.horizontal[2]).toBeGreaterThan(0)
-    for (const id of ['code', 'lab', 'data'] as const) {
+    for (const id of ['code', 'datalab'] as const) {
       expect(WORKSPACE_PRESETS[id].boardPaneOpen, id).toBe(false)
       expect(WORKSPACE_PRESETS[id].horizontal[2], id).toBe(0)
     }
-    // Data is console-first: the shell gets the larger vertical share.
-    expect(WORKSPACE_PRESETS.data.vertical[1]).toBeGreaterThan(
+    // Data Lab gives the shell a bigger share than Code (data work under the editor).
+    expect(WORKSPACE_PRESETS.datalab.vertical[1]).toBeGreaterThan(
       WORKSPACE_PRESETS.code.vertical[1]
     )
   })
@@ -61,7 +61,7 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
     const s = loadLayoutState(storage())
     expect(s.version).toBe(1)
     expect(s.active).toBe('code')
-    expect(s.workspaces.lab).toEqual(WORKSPACE_PRESETS.lab)
+    expect(s.workspaces.datalab).toEqual(WORKSPACE_PRESETS.datalab)
   })
 
   it('survives corrupt JSON and wrong shapes', () => {
@@ -74,11 +74,44 @@ describe('loadLayoutState (corruption-safe, versioned)', () => {
 
   it('round-trips a valid envelope and keeps the active workspace', () => {
     const saved = defaultLayoutState()
-    saved.active = 'lab'
-    saved.workspaces.lab.vertical = [60, 40]
+    saved.active = 'datalab'
+    saved.workspaces.datalab.vertical = [60, 40]
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
-    expect(s.active).toBe('lab')
-    expect(s.workspaces.lab.vertical).toEqual([60, 40])
+    expect(s.active).toBe('datalab')
+    expect(s.workspaces.datalab.vertical).toEqual([60, 40])
+  })
+
+  it('migrates an old 4-workspace envelope: lab/data merge into datalab', () => {
+    // A pre-modes-review envelope with the old ids, `data` sized distinctively.
+    const old = {
+      version: 1,
+      active: 'lab',
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code },
+        board: { ...WORKSPACE_PRESETS.board },
+        lab: { ...WORKSPACE_PRESETS.datalab, vertical: [75, 25] },
+        data: { ...WORKSPACE_PRESETS.datalab, vertical: [41, 59] }
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(old) }))
+    // Stale active id maps to the merged workspace…
+    expect(s.active).toBe('datalab')
+    // …which seeds its geometry from the old `data` entry (preferred over lab).
+    expect(s.workspaces.datalab.vertical).toEqual([41, 59])
+  })
+
+  it('migrates active "data" too, and falls back to the lab entry when data is absent', () => {
+    const old = {
+      version: 1,
+      active: 'data',
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code },
+        lab: { ...WORKSPACE_PRESETS.datalab, vertical: [76, 24] }
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(old) }))
+    expect(s.active).toBe('datalab')
+    expect(s.workspaces.datalab.vertical).toEqual([76, 24])
   })
 
   it('sanitises bad fields per-workspace back to the preset (not all-or-nothing)', () => {
