@@ -1,0 +1,48 @@
+name: Deploy Web (app.snakie.org)
+
+on:
+  push:
+    branches:
+      - master
+  # Lets a human re-trigger a deploy without needing a new commit (e.g. after
+  # rotating the Cloudflare API token, or re-running a flaky deploy step).
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # PLACEHOLDER BUILD (issue #286): the dedicated Vite web target (#281 /
+      # "Web W0") hasn't landed yet, so there is no `build:web` script or
+      # web-only bundle. This runs the existing Electron renderer build and
+      # deploys its `out/renderer` output as a stand-in, so the pipeline is
+      # wired end-to-end and app.snakie.org is live. Once #281 lands with a
+      # real web build script/output directory, swap the two lines below
+      # (script name + `directory:` in the deploy step) to point at it —
+      # nothing else in this workflow should need to change.
+      - name: Build web app
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/pages-action@v1
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          projectName: snakie-web
+          directory: out/renderer
+          gitHubToken: ${{ secrets.GITHUB_TOKEN }}

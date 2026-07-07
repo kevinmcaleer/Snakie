@@ -1,0 +1,11 @@
+# Cloudflare Pages custom response headers (also understood by Netlify).
+# See issue #286 (host app.snakie.org) and epic #267 (Snakie for Web).
+#
+# COOP/COEP are required for the WASM sim worker (issue #282) to use
+# SharedArrayBuffer/threads if/when it needs them — both headers must be
+# present together, on every response, for the browser to grant the isolated
+# "cross-origin isolated" context. This is why GitHub Pages (no custom
+# headers support) was disqualified as a host for app.snakie.org.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp

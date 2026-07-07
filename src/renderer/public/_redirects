@@ -1,0 +1,4 @@
+# SPA fallback for Cloudflare Pages (also understood by Netlify): every path
+# serves index.html so client-side routing works on a hard refresh/deep link.
+# See issue #286 (host app.snakie.org).
+/*  /index.html  200
