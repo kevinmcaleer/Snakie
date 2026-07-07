@@ -21,38 +21,23 @@ import { promises as fs } from 'fs'
 import { homedir, platform } from 'os'
 import { join } from 'path'
 import { MicroPythonDevice } from '../device/MicroPythonDevice'
+import { matchUsbBridge } from '../../shared/usb-bridges'
 import type { BoardCandidate, BoardType } from './types'
 
 /**
- * Known USB-serial bridge VID/PIDs found on common ESP dev boards. Values are
- * lowercase hex without the `0x` prefix, matching {@link PortInfo}. The mapped
- * board is the *most likely* family; the user can change it before flashing.
+ * Match a serial port's VID/PID against the shared USB bridge table (#283),
+ * restricted to the ESP families this flashing-detection path cares about —
+ * `rp2040` (BOOTSEL-mode Picos) is detected separately via the UF2 boot
+ * drive below, never via its native-USB serial VID/PID here, so a Pico
+ * running MicroPython isn't mis-surfaced as a flashing candidate.
  */
-const ESP_USB_BRIDGES: Array<{ vid: string; pid?: string; board: BoardType; chip: string }> = [
-  // Silicon Labs CP210x — extremely common on ESP32 dev boards.
-  { vid: '10c4', pid: 'ea60', board: 'esp32', chip: 'CP210x' },
-  // WCH CH340 / CH341 — common on cheaper ESP8266 (NodeMCU) and some ESP32.
-  { vid: '1a86', pid: '7523', board: 'esp8266', chip: 'CH340' },
-  { vid: '1a86', pid: '5523', board: 'esp8266', chip: 'CH341' },
-  // FTDI FT232 — older ESP dev boards.
-  { vid: '0403', pid: '6001', board: 'esp32', chip: 'FT232R' },
-  // Espressif native USB CDC (ESP32-S2/S3/C3 built-in USB JTAG/serial).
-  { vid: '303a', board: 'esp32', chip: 'Espressif native USB' }
-]
-
-/** Match a serial port's VID/PID against the known ESP bridge table. */
 function matchEspBridge(
   vendorId?: string,
   productId?: string
 ): { board: BoardType; chip: string } | undefined {
-  if (!vendorId) return undefined
-  const vid = vendorId.toLowerCase()
-  const pid = productId?.toLowerCase()
-  // Prefer an exact vid+pid match, then fall back to a vid-only entry.
-  return (
-    ESP_USB_BRIDGES.find((e) => e.vid === vid && e.pid && e.pid === pid) ??
-    ESP_USB_BRIDGES.find((e) => e.vid === vid && !e.pid)
-  )
+  const match = matchUsbBridge(vendorId, productId)
+  if (!match || (match.board !== 'esp32' && match.board !== 'esp8266')) return undefined
+  return match
 }
 
 /** Detect ESP candidates from the enumerated serial ports. */

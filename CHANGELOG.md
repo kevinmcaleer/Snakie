@@ -20,6 +20,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   engine will later be driven by a Web Serial transport in the browser build.
 
 ### Added
+- **Web Serial transport, port picker + classroom Chrome policy docs (#283,
+  epic #267 Phase W2).** The groundwork for real Pico/ESP32 hardware in the
+  browser build: `WebSerialTransport` (`src/web/webSerialTransport.ts`) drives
+  the shared `RawReplEngine` (#281) over `navigator.serial` — open/baud, a
+  read pump into the engine, DTR/RTS reset via `setSignals`, and unplug/read-
+  error handling — and `WebSerialDevice` (`src/web/webSerialDevice.ts`) wraps
+  it with the same connect/exec/eval/file-tree/events surface as
+  `MicroPythonDevice`, so the file tree, module installs and instrument
+  telemetry streaming all come for free (they're built on `exec`). A port
+  picker (`src/web/portPicker.ts`) filters `requestPort()` to known
+  MicroPython board VID/PIDs and tries the zero-prompt `getPorts()` fast path
+  first, for pre-provisioned Chromebooks. The VID/PID table itself moved to
+  `src/shared/usb-bridges.ts` (shared with firmware-flashing detection,
+  extended with the Pico's native-USB id). New
+  `docs/web-serial-classroom-policy.md` gives school IT admins the exact
+  `SerialAllowUsbDevicesForUrls` JSON recipe to pre-grant students silent USB
+  access. Not yet wired into the renderer UI — that lands once the
+  `window.api` seam split (#281) and the WASM sim worker (#282) are in place.
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
   it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
