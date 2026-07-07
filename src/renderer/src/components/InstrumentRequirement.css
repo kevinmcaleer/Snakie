@@ -1,0 +1,74 @@
+/*
+ * Shared in-instrument "requirement / how to use me" panel (open-anytime
+ * instruments). Fills the instrument body with centred, readable guidance.
+ */
+.instr-req {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 180px;
+  padding: 22px 20px;
+  text-align: center;
+  color: #b7bec6;
+}
+
+.instr-req__icon {
+  width: 30px;
+  height: 30px;
+  color: var(--req-accent, #7f8790);
+  opacity: 0.9;
+}
+
+.instr-req__title {
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #e7ebf0;
+}
+
+.instr-req__line {
+  margin: 0;
+  max-width: 32ch;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #9aa1aa;
+}
+
+.instr-req__code {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  text-align: left;
+  border-radius: 7px;
+  background: rgba(6, 9, 11, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.instr-req__code code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #cdd6df;
+  white-space: pre;
+}
+
+.instr-req__more {
+  margin-top: 4px;
+  padding: 5px 12px;
+  border: 1px solid var(--req-accent, #4a4e56);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--req-accent, #cdd2d8);
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.instr-req__more:hover {
+  background: color-mix(in srgb, var(--req-accent, #6b7280) 18%, transparent);
+}

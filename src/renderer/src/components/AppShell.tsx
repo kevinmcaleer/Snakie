@@ -22,7 +22,7 @@ import {
   type OpenInstrument
 } from './InstrumentHost'
 import { defaultVisibility, deriveInUse, moduleCoveredByInstrument } from './instruments-registry'
-import { parsePins, type UsedPins } from './parse-pins'
+import { type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
@@ -340,12 +340,6 @@ export function AppShell(): JSX.Element {
 
   // The PWM/ADC pins declared in the active file — so the dock's SCOPE/METER
   // buttons can summon an instrument directly (without going through the
-  // board-view window's node launchers).
-  const fileConns = useMemo(
-    () => (boardIsPython ? parsePins(boardSource) : []),
-    [boardSource, boardIsPython]
-  )
-
   // Toggle one instrument's dock-header visibility (keyed by registry id, #119).
   //  - SCOPE/METER (per-pin): if NOTHING of this kind is open yet, the click
   //    SUMMONS one (the first matching PWM/ADC pin in the active file) and shows
@@ -362,21 +356,10 @@ export function AppShell(): JSX.Element {
     (id: string): void => {
       if (id === 'scope' || id === 'meter') {
         const kind = id
-        const hasOpen = openInstruments.some((it) => it.kind === kind)
-        if (!hasOpen) {
-          const wantType = kind === 'scope' ? 'pwm' : 'adc'
-          const conn = fileConns.find((c) => c.type === wantType)
-          if (conn) {
-            setOpenInstruments((cur) =>
-              cur.some((it) => it.kind === kind && it.conn.variable === conn.variable)
-                ? cur
-                : [...cur, { kind, conn }]
-            )
-            setKindVisible(kind, true)
-            redockKind(kind)
-          }
-          return
-        }
+        // Toggle the scope/meter like a singleton. It can be opened with NO
+        // PWM/ADC pin at all — the dock renders it from the file's PWM/ADC conns
+        // when present, else a placeholder that shows the requirement help (see
+        // InstrumentDockRegion). No `openInstruments` injection needed.
         const next = !visibility[id]
         setVisibility({ ...visibility, [id]: next })
         if (next) redockKind(kind)
@@ -387,7 +370,7 @@ export function AppShell(): JSX.Element {
       setVisibility({ ...visibility, [id]: next })
       if (next) redockByKey(`singleton:${id}`)
     },
-    [visibility, setVisibility, setKindVisible, redockKind, redockByKey, openInstruments, fileConns]
+    [visibility, setVisibility, redockKind, redockByKey]
   )
 
   // Persisted collapsed state. Shell is open by default (core REPL tool); the

@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Open the Oscilloscope / Multimeter any time — with in-instrument help.**
+  The scope and meter no longer stay locked out until your program declares a
+  PWM/ADC pin: toggle them on from the dock and, when there's no source yet, they
+  show a built-in "how to use me" panel (what's needed + a runnable
+  `inst.watch(scope=pwm)` snippet + a Learn-more link) instead of a blank screen.
+  They adopt the file's PWM/ADC pin — or live `SNK` telemetry — the moment one
+  appears. Backed by a reusable `InstrumentRequirement` panel for conditional
+  instruments.
 - **Seven new Getting Started help articles (#231).** The Help Library now
   covers every advertised feature: **Files & sync** (the two file trees, the
   transfer bridge, and keeping tagged files in sync on save), **Flash MicroPython

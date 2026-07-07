@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { InstrumentWindow, SourceSlot, type FloatProps } from './InstrumentWindow'
+import { InstrumentRequirement } from './InstrumentRequirement'
 import { adcChannel, ADC_MAX_RAW, type AdcSample, type Stats } from './instrument-data'
 import type { MeterReading } from './instrument-telemetry-feed'
 import type { UsedPins } from './parse-pins'
@@ -96,6 +97,40 @@ export function Multimeter({
   const raw = liveValue ? undefined : sample?.raw
   // Bargraph fill is the fraction of the 3.3 V range (0 when idle).
   const pct = volts === undefined ? 0 : Math.max(0, Math.min(1, volts / 3.3)) * 100
+
+  // Opened from the dock with no ADC pin in the file → a placeholder connection.
+  // Auto-adopt the first real ADC source when one appears; until then show the
+  // requirement panel instead of an idle meter with dashes and no explanation.
+  const isPlaceholder = conn.pins.length === 0 && conn.variable === ''
+  useEffect(() => {
+    if (isPlaceholder && sources.length > 0) onSelectSource?.(sources[0])
+  }, [isPlaceholder, sources, onSelectSource])
+
+  if (isPlaceholder && sources.length === 0 && volts === undefined) {
+    return (
+      <InstrumentWindow
+        name="MULTIMETER"
+        helpId="inst-meter"
+        source="no source"
+        live={live}
+        onToggleLive={onToggleLive}
+        onToggleDock={onToggleDock}
+        docked={docked}
+        onClose={onClose}
+        {...float}
+      >
+        <InstrumentRequirement
+          title="No ADC input yet"
+          lines={[
+            'The multimeter reads an analog pin (ADC). Add one in your program (or watch it) and the live voltage shows here.'
+          ]}
+          code={'import instruments as inst\nfrom machine import Pin, ADC\n\nadc = ADC(Pin(26))\ninst.watch(meter=adc)   # then inst.update() in your loop'}
+          helpId="inst-meter"
+          accent="#5ce08a"
+        />
+      </InstrumentWindow>
+    )
+  }
 
   return (
     <InstrumentWindow
