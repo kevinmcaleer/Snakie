@@ -23,6 +23,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the header profiles each column (min–max, mean, distinct/top value, empty
   count) and **recomputes against the filtered set** — all over the same
   virtualised table, smooth at 86k rows.
+- **Community parts install fallback when `git` isn't available (Web W3,
+  #284, epic #267).** Installing/updating a library from the Community Parts
+  registry normally does a shallow `git clone`; Snakie now probes once
+  whether `git` is on `PATH` and, if not, transparently falls back to
+  downloading the repo as a GitHub tarball
+  (`codeload.github.com/.../tar.gz/HEAD`, always the current default branch)
+  and extracting it straight into the library folder instead of failing.
+  Same manifest reconciliation either way, so update checks behave
+  identically regardless of which path installed a library. Desktop installs
+  are unaffected wherever `git` is present (the common case).
 - **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
   `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
   it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
