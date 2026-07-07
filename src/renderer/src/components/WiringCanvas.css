@@ -52,18 +52,16 @@
   background-color: #191b1f;
 }
 
-/* Blueprint breadboard background (Settings → Appearance): classic blue paper
-   with a fine light grid + bolder major lines. Applied via `data-breadboard-bg`
-   on the Board View window's root. Scoped to the LIFELIKE breadboard — the
-   schematic view keeps a plain white/dark sheet (blueprint doesn't suit it). */
+/* Blueprint breadboard background (Settings → Appearance): classic blue paper.
+   Applied via `data-breadboard-bg` on the Board View window's root, scoped to
+   the LIFELIKE breadboard. The grid LINES come from the SVG graph-paper grid
+   now (which pans/scales with the parts); here we only set the blue paper +
+   recolour those lines to a light blue (see `.wc__grid` overrides below). */
 :root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
   background-color: #0d3b66;
-  background-image:
-    linear-gradient(rgba(214, 230, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(214, 230, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(rgba(214, 230, 255, 0.11) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(214, 230, 255, 0.11) 1px, transparent 1px);
-  background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
+}
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
+  stroke: #d6e6ff;
 }
 
 /* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
@@ -73,14 +71,14 @@
 
 /* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard
    mat. Dark theme keeps the existing dark mat (light-on-dark symbols); the light
-   (skeuomorph) theme uses a white sheet with a faint grid, and the symbol
-   overrides below flip the symbols to dark-on-white so they stay legible. */
+   (skeuomorph) theme uses a white sheet, and the symbol overrides below flip the
+   symbols to dark-on-white so they stay legible. The grid LINES come from the
+   SVG graph-paper grid — on the white sheet we darken them (see below). */
 :root[data-theme='skeuomorph'] .wc--schematic .wc__stage {
   background-color: #fbfbfa;
-  background-image:
-    linear-gradient(rgba(20, 30, 50, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 30, 50, 0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .wc__grid {
+  stroke: #2c3648;
 }
 
 /* Dark-on-white schematic symbols for the light theme: a light symbol body with
