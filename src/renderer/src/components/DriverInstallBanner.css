@@ -164,3 +164,12 @@
   width: 100%;
   padding-left: 16px;
 }
+
+/* Modes review: the banner must never eat the board pane — cap it and scroll
+   its own content instead (the narrow embedded pane made it swallow the
+   canvas's full height). */
+.drvbanner {
+  max-height: 200px;
+  overflow-y: auto;
+  flex: 0 0 auto;
+}

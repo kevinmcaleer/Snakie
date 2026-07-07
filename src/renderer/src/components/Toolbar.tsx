@@ -299,7 +299,7 @@ export function Toolbar({
           type="button"
           className="btn btn--ghost btn--icon btn--knob"
           onClick={onOpenBoard}
-          title="Board View — visualise pin wiring (toggle)"
+          title="Board View — pop out into its own window (toggle)"
           aria-label="Toggle Board View"
         >
           {/* dev board: outlined PCB with two rows of header pads + a chip */}

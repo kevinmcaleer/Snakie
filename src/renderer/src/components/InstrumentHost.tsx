@@ -814,13 +814,17 @@ export function InstrumentDockRegion({
   host,
   vis,
   inUse,
-  onToggleVisible
+  onToggleVisible,
+  hideMiniBoard = false
 }: {
   host: UseInstrumentsResult
   vis: InstrumentVisibility
   /** Instrument ids the active file declares in-use (prominent in the header). */
   inUse: Set<string>
   onToggleVisible: (id: string) => void
+  /** Hide the mini board pinned above the toggles — Board MODE shows the real
+   *  embedded Board View beside the dock, so the mini twin is redundant. */
+  hideMiniBoard?: boolean
 }): JSX.Element {
   const [paletteOpen, setPaletteOpen] = useState(false)
   // Merge the LIVE object bindings (from `inst.watch(pwm=…)` → `SNK BIND`) into the
@@ -869,8 +873,9 @@ export function InstrumentDockRegion({
     <InstrumentDock
       top={
         // #168: a compact node-graph board (MCU + code-used pins) pinned above the
-        // instrument toggle icons.
-        <MiniBoardView source={host.source} isPython={host.isPython} />
+        // instrument toggle icons — hidden in Board mode (the embedded Board View
+        // is right there; two boards would be redundant).
+        hideMiniBoard ? undefined : <MiniBoardView source={host.source} isPython={host.isPython} />
       }
       header={
         <DockHeader

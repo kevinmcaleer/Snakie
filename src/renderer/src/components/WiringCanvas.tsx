@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
+import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
 import {
   connectionColor,
   connectionId,
@@ -315,6 +316,14 @@ export interface WiringCanvasProps {
   /** Open the Board View help drawer for a placed part (its instance id). When set,
    *  the selected part's mini-toolbar shows a help button if that part ships help. */
   onShowHelp?: (partInstanceId: string) => void
+  /**
+   * Focused chrome (modes review): true in the EMBEDDED Board mode, where the
+   * canvas is the star — the project browser starts collapsed and the
+   * connections table starts collapsed + unpinned (Obsidian-style: it auto-
+   * collapses on focus loss unless pinned). The floating Board window leaves
+   * this unset and keeps the roomier always-open defaults.
+   */
+  focusedChrome?: boolean
 }
 
 interface Drag {
@@ -339,13 +348,14 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
-  const [browserOpen, setBrowserOpen] = useState(true)
+  // Focused chrome (Board mode) starts it collapsed so the canvas gets the room.
+  const [browserOpen, setBrowserOpen] = useState(!focusedChrome)
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
@@ -357,8 +367,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
   // since closing the input fires a blur we must not treat as a save).
   const renameCommitRef = useRef(true)
-  // Whether the bottom connections table is expanded (collapse it to a header bar).
-  const [connOpen, setConnOpen] = useState(true)
+  // Whether the bottom connections table is expanded (collapse it to a header
+  // bar). Focused chrome (Board mode): starts collapsed and — unless PINNED —
+  // auto-collapses again when focus leaves it (Obsidian-style).
+  const [connOpen, setConnOpen] = useState(!focusedChrome)
+  const [connPinned, setConnPinnedState] = useState<boolean>(() =>
+    focusedChrome ? loadPin(window.localStorage, PIN_KEYS.connections, false) : true
+  )
+  const connRef = useRef<HTMLDivElement | null>(null)
+  const setConnPinned = (v: boolean): void => {
+    setConnPinnedState(v)
+    savePin(window.localStorage, PIN_KEYS.connections, v)
+  }
   // The image-export format menu (PNG / SVG / PDF) on the zoom toolbar.
   const [exportOpen, setExportOpen] = useState(false)
 
@@ -1413,14 +1433,31 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
         )}
       </div>
 
-      <div className="wc__bottom">
+      <div
+        className="wc__bottom"
+        ref={connRef}
+        tabIndex={focusedChrome ? -1 : undefined}
+        onBlur={(e) => {
+          // Focused chrome: an UNPINNED expanded table collapses on focus loss.
+          if (focusedChrome && connOpen && shouldAutoHide(connPinned, connRef.current, e.relatedTarget)) {
+            setConnOpen(false)
+          }
+        }}
+      >
         <ConnectionsTable
           connections={robot.connections}
           isDark={isDark}
           onRemove={removeConnection}
           onColor={setConnectionColor}
           open={connOpen}
-          onToggle={() => setConnOpen((o) => !o)}
+          onToggle={() => {
+            const next = !connOpen
+            setConnOpen(next)
+            // Focus the region so an unpinned table can auto-collapse on blur.
+            if (next && focusedChrome) requestAnimationFrame(() => connRef.current?.focus())
+          }}
+          pinned={focusedChrome ? connPinned : undefined}
+          onPin={focusedChrome ? setConnPinned : undefined}
         />
       </div>
     </div>
@@ -1851,7 +1888,9 @@ function ConnectionsTable({
   onRemove,
   onColor,
   open,
-  onToggle
+  onToggle,
+  pinned,
+  onPin
 }: {
   connections: RobotConnection[]
   isDark: boolean
@@ -1860,16 +1899,42 @@ function ConnectionsTable({
   /** Whether the table body is shown (collapsible — hides to just this header). */
   open: boolean
   onToggle: () => void
+  /** Obsidian-style pin (focused Board mode): pinned = stays expanded; unpinned
+   *  = auto-collapses when focus leaves the table. Omit to hide the pin. */
+  pinned?: boolean
+  onPin?: (v: boolean) => void
 }): JSX.Element {
   return (
     <div className="wc__table">
-      <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
-        <span className="wc__tree-caret" aria-hidden="true">
-          {open ? '▾' : '▸'}
-        </span>
-        <span>Connections</span>
-        <span className="wc__table-count">{connections.length}</span>
-      </button>
+      <div className="wc__table-headrow">
+        {onPin && open && (
+          <button
+            type="button"
+            className={`wc__pin${pinned ? ' is-pinned' : ''}`}
+            onClick={() => onPin(!pinned)}
+            aria-pressed={pinned}
+            title={pinned ? 'Unpin — collapse the table when it loses focus' : 'Pin the connections table open'}
+            aria-label={pinned ? 'Unpin the connections table' : 'Pin the connections table open'}
+          >
+            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+              <path
+                d="M9.5 1.5l5 5-2.2.6-2.5 2.5.4 3.1-1.8-.3-2.6-2.6L2 13.6 1.4 13l3.8-3.8L2.6 6.6l-.3-1.8 3.1.4L7.9 2.7z"
+                fill={pinned ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
+        <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
+          <span className="wc__tree-caret" aria-hidden="true">
+            {open ? '▾' : '▸'}
+          </span>
+          <span>Connections</span>
+          <span className="wc__table-count">{connections.length}</span>
+        </button>
+      </div>
       {!open ? null : connections.length === 0 ? (
         <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
       ) : (

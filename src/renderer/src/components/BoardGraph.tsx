@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
 import {
   parsePins,
   PIN_TYPE_COLOR,
@@ -351,7 +352,19 @@ export function BoardGraph({
       // Ignore storage write failures (disabled / quota).
     }
   }, [])
-  const [dockOpen, setDockOpen] = useState(true)
+  // Library dock (modes review): in the EMBEDDED Board mode (`!asWindow`) the
+  // library is a pinnable Obsidian-style overlay — closed by default, opened
+  // from its edge tab, auto-hiding on focus loss unless PINNED. The floating
+  // Board window defaults to open+pinned (the pre-review behaviour).
+  const [dockPinned, setDockPinnedState] = useState<boolean>(() =>
+    asWindow ? true : loadPin(window.localStorage, PIN_KEYS.library, false)
+  )
+  const [dockOpen, setDockOpen] = useState<boolean>(() => asWindow || dockPinned)
+  const dockRef = useRef<HTMLElement | null>(null)
+  const setDockPinned = useCallback((v: boolean): void => {
+    setDockPinnedState(v)
+    savePin(window.localStorage, PIN_KEYS.library, v)
+  }, [])
   // If wiring gets disabled (e.g. props change), never strand a wiring view.
   const effectiveView = wiringEnabled ? viewType : 'graph'
 
@@ -706,13 +719,18 @@ export function BoardGraph({
   return (
     <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
       <header className={`boardgraph__bar ${asWindow ? 'boardgraph__bar--drag' : ''}`}>
-        <span className="boardgraph__grip" aria-hidden="true">
-          {/* 6-dot drag grip (2×3). */}
-          {Array.from({ length: 6 }).map((_, i) => (
-            <span key={i} className="boardgraph__grip-dot" />
-          ))}
-        </span>
-        <span className="boardgraph__title">BOARD&nbsp;VIEW</span>
+        {/* The 6-dot drag grip only means something in the frameless OS window
+            (the bar is its drag region) — hide it in the embedded Board mode. */}
+        {asWindow && (
+          <span className="boardgraph__grip" aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <span key={i} className="boardgraph__grip-dot" />
+            ))}
+          </span>
+        )}
+        {/* The title only earns its width in the OS window; in Board MODE the
+            pane is self-evident (and every pixel goes to the board). */}
+        {asWindow && <span className="boardgraph__title">BOARD&nbsp;VIEW</span>}
 
         {wiringEnabled && (
           <div className="boardgraph__viewtabs" role="tablist" aria-label="Board view type">
@@ -863,6 +881,7 @@ export function BoardGraph({
             <WiringCanvas
               boardDef={def}
               boardPart={boardPart}
+              focusedChrome={!asWindow}
               renderMode={effectiveView}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
@@ -878,8 +897,37 @@ export function BoardGraph({
           </div>
           {onAddToProject &&
             (dockOpen ? (
-              <aside className="boardgraph__dock" aria-label="Parts library">
+              <aside
+                className={`boardgraph__dock${dockPinned ? '' : ' boardgraph__dock--overlay'}`}
+                aria-label="Parts library"
+                ref={dockRef}
+                tabIndex={-1}
+                onBlur={(e) => {
+                  // Obsidian-style: an UNPINNED library hides when focus leaves it.
+                  if (shouldAutoHide(dockPinned, dockRef.current, e.relatedTarget)) {
+                    setDockOpen(false)
+                  }
+                }}
+              >
                 <div className="boardgraph__dock-head">
+                  <button
+                    type="button"
+                    className={`boardgraph__pin${dockPinned ? ' is-pinned' : ''}`}
+                    onClick={() => setDockPinned(!dockPinned)}
+                    aria-pressed={dockPinned}
+                    title={dockPinned ? 'Unpin — hide the library when it loses focus' : 'Pin the library open'}
+                    aria-label={dockPinned ? 'Unpin the library panel' : 'Pin the library panel open'}
+                  >
+                    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+                      <path
+                        d="M9.5 1.5l5 5-2.2.6-2.5 2.5.4 3.1-1.8-.3-2.6-2.6L2 13.6 1.4 13l3.8-3.8L2.6 6.6l-.3-1.8 3.1.4L7.9 2.7z"
+                        fill={dockPinned ? 'currentColor' : 'none'}
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  </button>
                   <span>Library</span>
                   <button
                     type="button"
@@ -899,7 +947,11 @@ export function BoardGraph({
               <button
                 type="button"
                 className="boardgraph__dock-tab"
-                onClick={() => setDockOpen(true)}
+                onClick={() => {
+                  setDockOpen(true)
+                  // Focus the overlay so an unpinned library can auto-hide on blur.
+                  requestAnimationFrame(() => dockRef.current?.focus())
+                }}
                 title="Show the library panel"
                 aria-label="Show the library panel"
               >
