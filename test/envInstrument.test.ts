@@ -111,8 +111,12 @@ describe('EnvInstrument render (#216)', () => {
     expect(def.hints).toContain('bme280')
     expect(INSTRUMENTS.filter((d) => d.id === 'env')).toHaveLength(1)
   })
-  it('draws the aneroid face: bezel, dial, legend, needle + no-data readouts', () => {
-    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true }))
+  // Seed a reading (mirrors the scope's `samples` seam, #256) so the live dials
+  // render under static markup; with NO data the instrument now shows the shared
+  // requirement panel instead (#257 increment 2 — instrumentRequirement.test.ts).
+  const seeded = { initialReadings: { env: { temp: 21.5, pressure: 1001.2, humidity: 55 } } }
+  it('draws the aneroid face: bezel, dial, legend, needle + readouts', () => {
+    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true, ...seeded }))
     expect(html).toContain('envbaro__bezel')
     expect(html).toContain('envbaro__dial')
     expect(html).toContain('envbaro__needle')
@@ -122,19 +126,20 @@ describe('EnvInstrument render (#216)', () => {
     // Major scale numbers 950..1050.
     expect(html).toContain('>950<')
     expect(html).toContain('>1050<')
-    // No data yet → dashes in the cells.
+    // The seeded reading fills the cells.
     expect(html).toContain('TEMP')
     expect(html).toContain('HUMIDITY')
-    expect(html).toContain('——')
+    expect(html).toContain('21.5°C')
+    expect(html).toContain('55%')
   })
   it('draws the thermometer (glass tube, mercury, °C scale)', () => {
-    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true }))
+    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true, ...seeded }))
     expect(html).toContain('envtherm__glass')
     expect(html).toContain('envtherm__hg')
     expect(html).toContain('°C')
   })
   it('draws the hygrometer with blue-dry / red-damp extremes', () => {
-    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true }))
+    const html = renderToStaticMarkup(createElement(EnvInstrument, { def, docked: true, ...seeded }))
     expect(html).toContain('envhygro__dial')
     expect(html).toContain('envhygro__arc--dry')
     expect(html).toContain('envhygro__arc--damp')
