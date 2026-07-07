@@ -983,6 +983,24 @@ const feedback = {
     ipcRenderer.invoke('feedback:submitBugReport', payload)
 }
 
+/**
+ * The full `window.api` surface exposed to the renderer over `contextBridge`
+ * (see the bottom of this file). This object's inferred type (`export type Api
+ * = typeof api` below) *is* the backend contract for the renderer — Snakie for
+ * Web (#267/#281) plans a second implementation, `web-api.ts`, that runs in a
+ * browser tab / Web Worker instead of Electron's main process (Web Serial
+ * instead of `serialport`, OPFS instead of the local `fs:*` IPC, a WASM
+ * MicroPython sim instead of a real board, etc.).
+ *
+ * Because this is plain TypeScript structural typing, `web-api.ts` does NOT
+ * need to implement every namespace on day one: it can export a smaller object
+ * that satisfies `Partial<Api>` (or per-namespace slices of it) and let
+ * `src/renderer/src/lib/preloadFallback.ts`'s no-op stub fill the rest, the
+ * same way it already does for a plain browser preview with no preload at all.
+ * Each namespace below (`device`, `fs`, `packages`, …) carries its own JSDoc
+ * describing exactly what it does and which IPC channels it wraps — read those
+ * before reimplementing a namespace for a new backend.
+ */
 const api = {
   /** Example round-trip channel used to prove the bridge works. */
   ping: (): Promise<string> => ipcRenderer.invoke('ping'),

@@ -1,6 +1,13 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 import type { Api } from './index'
 
+// `Api` (from `./index`, `export type Api = typeof api`) is the renderer-facing
+// backend contract — see the doc comment on `const api = {` in `./index.ts` for
+// what it means for a future non-Electron backend (Snakie for Web, #267/#281)
+// to implement this same shape. This declaration file just re-exports the
+// supporting types so the renderer can import them without reaching into
+// `src/main/**`.
+
 // Re-export the Board View payload + shared board-definition types so the
 // renderer can import them from this single UI-facing module.
 export type { BoardSourcePayload, InstrumentOpenPayload, InstrumentConn } from './index'

@@ -7,6 +7,31 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **`window.api` seam audited + a standalone web build target (#281, epic
+  #267 Phase W0).** The last two W0 tasks: (1) audited the `window.api`
+  surface in `src/preload/index.ts`/`index.d.ts` — every namespace already
+  carried full JSDoc, so this adds a short top-of-file note making explicit
+  that `Api = typeof api` **is** the backend contract a future `web-api.ts`
+  (Web Serial, OPFS, WASM sim) must structurally match, and audited
+  `src/renderer/src/**` for Electron/Node-only assumptions (none found: no
+  `require`, `process.*`, node builtins, or non-portable `import.meta.env`
+  use). (2) Along the way, found and fixed a real gap: `preloadFallback.ts`'s
+  no-op `window.api` stub — installed when there's no Electron preload, so the
+  renderer degrades instead of blank-screening — was missing several
+  namespaces (`plugins`, `find`, `robot`, `feedback`, `appVersion`,
+  `diagnostics`, `captureScreenshot`, `ping`, `openExternal`) that always-
+  mounted components call on mount, so it actually crashed today outside
+  Electron. The stub now covers the full `Api` surface and is type-checked
+  directly against it (no more `as unknown as` cast), so a future addition to
+  `Api` that isn't stubbed here fails `npm run typecheck` instead of silently
+  crashing at runtime. (3) Added a `build:web` / `dev:web` / `preview:web`
+  target (`vite.web.config.ts`, a plain Vite config alongside the existing
+  `electron-vite` one) that bundles the existing renderer as an ordinary
+  browser SPA against the completed fallback stub — a structural smoke test
+  (verified to build **and boot cleanly in a real browser**, full UI mounted,
+  no console errors) proving the renderer has no Electron/Node leakage. Not
+  production-ready or deployed (hosting is #286; a real WASM-in-worker sim
+  backend is #282) — just the last piece of "the seam" that unblocks them.
 - **Raw-REPL protocol extracted to a transport-agnostic module (#281, epic
   #267 Phase W0).** The MicroPython raw-REPL handshake, `exec`/`eval`, and the
   filesystem helpers built on them (`listDir`, `readFile`, `writeFile`,
