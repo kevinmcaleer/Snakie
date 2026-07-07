@@ -1,4 +1,5 @@
 id: mx1508
+help: help.md
 name: MX1508
 family: Breakout
 package: THT

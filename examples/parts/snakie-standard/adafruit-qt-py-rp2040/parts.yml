@@ -1,4 +1,5 @@
 id: adafruit-qt-py-rp2040
+help: help.md
 name: Adafruit QT Py RP2040
 description: Thumb-sized castellated RP2040 board with USB-C, STEMMA QT + NeoPixel.
 manufacturer: Adafruit

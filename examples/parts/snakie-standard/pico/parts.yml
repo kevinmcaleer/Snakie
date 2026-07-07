@@ -1,4 +1,5 @@
 id: pico
+help: help.md
 name: Raspberry Pi Pico
 description: RP2040 microcontroller board (40-pin, same header layout as the Pico W / 2 W).
 manufacturer: Raspberry Pi

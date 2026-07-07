@@ -1,4 +1,5 @@
 id: esp32-12f
+help: help.md
 name: ESP32-12F
 description: esp32
 manufacturer: Espressif

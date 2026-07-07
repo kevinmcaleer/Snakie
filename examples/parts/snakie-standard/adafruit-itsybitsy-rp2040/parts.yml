@@ -1,4 +1,5 @@
 id: adafruit-itsybitsy-rp2040
+help: help.md
 name: Adafruit ItsyBitsy RP2040
 description: Small RP2040 board (ItsyBitsy form factor) with micro-USB + NeoPixel.
 manufacturer: Adafruit
