@@ -78,9 +78,17 @@
   user-select: none;
 }
 
+/* --- Main row: the scrolling table + the (optional) column panel ----------- */
+.dv__main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
 /* --- Scroll viewport (both axes) ------------------------------------------- */
 .dv__grid {
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
 }
