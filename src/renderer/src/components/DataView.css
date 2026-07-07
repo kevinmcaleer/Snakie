@@ -1,0 +1,173 @@
+/* DATA VIEW (#274) — spreadsheet-like log viewer. Unique BEM prefix `dv__`
+   (instrument/panel CSS is global). */
+
+.dv {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: var(--bg, #1b1c1f);
+  color: var(--text, #d6dae0);
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+.dv--empty {
+  align-items: center;
+  justify-content: center;
+}
+
+.dv__empty-text {
+  color: var(--text-muted, #8b919b);
+  font-size: 0.8rem;
+}
+
+/* --- Toolbar --------------------------------------------------------------- */
+.dv__toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid var(--border, #2c2e33);
+  background: var(--bg-elevated, #212226);
+  font-size: 0.68rem;
+}
+
+.dv__stat {
+  color: var(--text, #d6dae0);
+}
+.dv__stat--muted {
+  color: var(--text-muted, #8b919b);
+}
+.dv__stat--warn {
+  color: #e0a44a;
+}
+
+.dv__toggle {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-muted, #8b919b);
+  cursor: pointer;
+  user-select: none;
+}
+
+/* --- Scroll viewport (both axes) ------------------------------------------- */
+.dv__grid {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.dv__inner {
+  position: relative;
+  min-width: 100%;
+}
+
+/* Sticky header — stays on top while scrolling vertically, moves with content
+   horizontally. */
+.dv__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  height: 30px;
+  background: var(--bg-elevated, #26282d);
+  border-bottom: 1px solid var(--border, #34363c);
+}
+
+.dv__th {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 0.5rem;
+  overflow: hidden;
+  border-right: 1px solid var(--border, #2c2e33);
+}
+
+.dv__th-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text, #d6dae0);
+}
+
+.dv__th-type {
+  font-size: 0.56rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted, #8b919b);
+}
+.dv__th-type--number {
+  color: #7fc4f0;
+}
+.dv__th-type--timestamp {
+  color: #b58aef;
+}
+.dv__th-type--string {
+  color: #8b919b;
+}
+
+/* --- Virtualised body ------------------------------------------------------ */
+.dv__body {
+  position: relative;
+}
+
+.dv__row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: grid;
+  height: 26px;
+  align-items: center;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.08);
+}
+
+.dv__row:hover {
+  background: rgba(128, 148, 200, 0.08);
+}
+
+.dv__cell {
+  padding: 0 0.5rem;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid rgba(128, 128, 128, 0.06);
+}
+
+.dv__null {
+  color: rgba(128, 128, 128, 0.5);
+}
+
+/* Row-number gutter (left of every row + the header). */
+.dv__gutter {
+  position: absolute;
+  left: 0;
+  width: 48px;
+  padding-right: 0.4rem;
+  text-align: right;
+  font-size: 0.62rem;
+  color: var(--text-muted, #6b7078);
+  background: var(--bg, #1b1c1f);
+  border-right: 1px solid var(--border, #2c2e33);
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.dv__gutter--head {
+  background: var(--bg-elevated, #26282d);
+  z-index: 1;
+}
+
+/* Shift the header + rows right of the gutter so cells aren't hidden under it. */
+.dv__head,
+.dv__row {
+  padding-left: 48px;
+}

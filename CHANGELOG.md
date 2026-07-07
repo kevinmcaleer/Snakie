@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
+  `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
+  it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
+  header row, infers each column's type (number / timestamp / text), and
+  tolerates the mess real device logs carry — ragged rows, blank lines and a
+  torn final row (board unplugged mid-write) are handled, never fatal, with a
+  data-quality "ragged" count and null markers for dropped readings. Rendering
+  is **virtualised**, so a 24-hour log (~86k rows) scrolls smoothly with only
+  the visible rows in the DOM. This is the foundation of the Data View epic
+  (#272); sort/filter, the column-summary panel, pull-from-board, graphing and
+  export build on the same parsed model.
 - **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
   remembers the open local files (and which tab was active) and reopens them
   next time — alongside the working folder it already restored (#177). A

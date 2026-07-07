@@ -1,0 +1,6 @@
+time,temp,humidity,label
+0,21.5,40,ok
+1,21.6,41,ok
+2,21.9,43,ok
+3,22.1,44,warm
+4,22.4,45,warm
