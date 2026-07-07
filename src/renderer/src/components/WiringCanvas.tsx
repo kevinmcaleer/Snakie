@@ -1170,7 +1170,12 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     setExportOpen(false)
     const svg = svgRef.current
     if (!svg) return
-    const res = serializeLiveSvg(svg, '.wc__content', { background: '#161719', margin: 24, exclude: ['.wc__sel-ring'] })
+    // The sheet colour lives in CSS on the stage (blueprint blue / schematic
+    // white / dark mat) — read the LIVE computed value so the export matches
+    // exactly what's on screen, whatever the mode/theme.
+    const stageBg = svg.parentElement ? getComputedStyle(svg.parentElement).backgroundColor : ''
+    const background = stageBg && !/rgba?\([^)]*,\s*0\s*\)/.test(stageBg) ? stageBg : '#161719'
+    const res = serializeLiveSvg(svg, '.wc__content', { background, margin: 24, exclude: ['.wc__sel-ring'] })
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
@@ -1387,12 +1392,16 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
-            {/* Procedural paper mottle (blueprint mode only, via CSS) — the very
-                bottom layer, pans + scales with the content. */}
-            <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} />
-            {/* Graph-paper grid at true 2.54 mm pitch — behind everything, moves
-                + scales with the parts (drawn in world coords). */}
-            <WiringGrid view={view} pxPerMm={pxPerMm} stageW={stageSize.w} stageH={stageSize.h} />
+            {/* Paper + grid are the BREADBOARD's graph paper only — the schematic
+                is a clean sheet with no grid. Both are world-space (pan/scale). */}
+            {renderMode === 'lifelike' && (
+              <>
+                {/* Procedural paper mottle (blueprint mode only, via CSS). */}
+                <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} />
+                {/* Graph-paper grid at true 2.54 mm pitch, behind the parts. */}
+                <WiringGrid view={view} pxPerMm={pxPerMm} stageW={stageSize.w} stageH={stageSize.h} />
+              </>
+            )}
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
             {subjects.map((s) => {
               const capsOn = renderMode === 'lifelike' && !dragRef.current && hover?.key === s.key

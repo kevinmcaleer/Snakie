@@ -150,6 +150,8 @@ const INLINE_PROPS = [
   'stroke-linejoin',
   'stroke-opacity',
   'opacity',
+  // Preserve the blueprint paper's soft-light mottle in exports.
+  'mix-blend-mode',
   'color',
   'font-family',
   'font-size',

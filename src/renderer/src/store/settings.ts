@@ -89,7 +89,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
   const [minimap, setMinimap] = useLocalStorage<boolean>('snakie.editor.minimap', true)
   const [breadboardBg, setBreadboardBg] = useLocalStorage<BreadboardBg>(
     'snakie.board.breadboardBg',
-    'dark'
+    'blueprint'
   )
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
