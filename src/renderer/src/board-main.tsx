@@ -101,12 +101,12 @@ function BoardWindowApp(): JSX.Element {
     }
     applyTheme(initial)
     setPayload((p) => ({ ...p, theme: initial }))
-    let bg = 'dark'
+    let bg = 'blueprint'
     try {
       const raw = window.localStorage.getItem(BREADBOARD_BG_KEY)
       if (raw) bg = JSON.parse(raw) as string
     } catch {
-      // Ignore — default dark.
+      // Ignore — default blueprint.
     }
     applyBreadboardBg(bg)
   }, [])

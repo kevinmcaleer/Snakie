@@ -44,6 +44,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Blueprint is now the default breadboard background**, and the wiring grid is
+  hidden on the **schematic** view (the schematic is a clean sheet). Image/PDF
+  exports now bake in the on-screen sheet colour — the blueprint blue for the
+  breadboard, the sheet colour for the schematic — so a saved diagram looks
+  exactly as drawn (the paper mottle's soft-light blend is preserved too).
 - **Blueprint background gets subtle procedural paper texture.** A whisper-faint
   fractal-noise mottle (generated with SVG `feTurbulence`, no image) now gives
   the blueprint sheet the light/dark undulation of real drawing paper. It's
