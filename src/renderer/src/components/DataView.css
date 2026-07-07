@@ -43,8 +43,33 @@
   color: #e0a44a;
 }
 
-.dv__toggle {
+.dv__toolbar-actions {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dv__btn {
+  font: inherit;
+  font-size: 0.66rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  background: var(--bg, #1b1c1f);
+  color: var(--text-muted, #a2a8b2);
+  cursor: pointer;
+}
+.dv__btn:hover {
+  color: var(--text, #d6dae0);
+  border-color: var(--text-muted, #6b7078);
+}
+.dv__btn.is-on {
+  color: #7fc4f0;
+  border-color: #3f6f8f;
+}
+
+.dv__toggle {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -65,18 +90,22 @@
   min-width: 100%;
 }
 
-/* Sticky header — stays on top while scrolling vertically, moves with content
-   horizontally. */
-.dv__head {
+/* Sticky top matter (header + summary + filters) — stays pinned while the body
+   scrolls vertically, moves with content horizontally. */
+.dv__top {
   position: sticky;
   top: 0;
   z-index: 2;
+}
+
+.dv__head {
   display: grid;
   height: 30px;
   background: var(--bg-elevated, #26282d);
   border-bottom: 1px solid var(--border, #34363c);
 }
 
+/* Header cells are sort buttons. */
 .dv__th {
   display: flex;
   flex-direction: column;
@@ -85,6 +114,98 @@
   padding: 0 0.5rem;
   overflow: hidden;
   border-right: 1px solid var(--border, #2c2e33);
+  font: inherit;
+  text-align: left;
+  background: transparent;
+  color: inherit;
+  border-top: none;
+  border-left: none;
+  border-bottom: none;
+  cursor: pointer;
+}
+.dv__th:hover {
+  background: rgba(128, 148, 200, 0.1);
+}
+.dv__th.is-sorted {
+  background: rgba(127, 196, 240, 0.12);
+}
+
+.dv__sort {
+  margin-left: 0.35rem;
+  font-size: 0.6rem;
+  color: #7fc4f0;
+}
+
+/* Summary strip — per-column quick stats over the visible set. */
+.dv__summary {
+  display: grid;
+  min-height: 24px;
+  background: var(--bg, #1b1c1f);
+  border-bottom: 1px solid var(--border, #2c2e33);
+}
+.dv__sum {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.5rem;
+  overflow: hidden;
+  border-right: 1px solid rgba(128, 128, 128, 0.08);
+  font-size: 0.6rem;
+  white-space: nowrap;
+}
+.dv__sum-main {
+  color: var(--text, #cdd2d9);
+}
+.dv__sum-sub {
+  color: var(--text-muted, #7d838d);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dv__sum-gap {
+  margin-left: auto;
+  color: #e0a44a;
+}
+
+/* Filter row. */
+.dv__filters {
+  display: grid;
+  min-height: 28px;
+  background: var(--bg-elevated, #212226);
+  border-bottom: 1px solid var(--border, #34363c);
+}
+.dv__filter {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 0.35rem;
+  border-right: 1px solid rgba(128, 128, 128, 0.08);
+  min-width: 0;
+}
+.dv__filter-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  font: inherit;
+  font-size: 0.64rem;
+  padding: 2px 4px;
+  background: var(--bg, #17181b);
+  color: var(--text, #d6dae0);
+  border: 1px solid var(--border, #34363c);
+  border-radius: 3px;
+}
+.dv__filter-input--range {
+  width: 50%;
+}
+.dv__filter-mode {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  font-size: 0.62rem;
+  padding: 0;
+  border: 1px solid var(--border, #34363c);
+  border-radius: 3px;
+  background: var(--bg, #17181b);
+  color: #7fc4f0;
+  cursor: pointer;
 }
 
 .dv__th-name {
@@ -166,8 +287,10 @@
   z-index: 1;
 }
 
-/* Shift the header + rows right of the gutter so cells aren't hidden under it. */
+/* Shift every gridded row right of the gutter so cells aren't hidden under it. */
 .dv__head,
+.dv__summary,
+.dv__filters,
 .dv__row {
   padding-left: 48px;
 }
