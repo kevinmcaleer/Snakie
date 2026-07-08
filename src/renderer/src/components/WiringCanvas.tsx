@@ -171,6 +171,27 @@ function WiringPaper({
         <pattern id="wc-paper" patternUnits="userSpaceOnUse" width="90" height="90">
           <rect width="90" height="90" filter="url(#wc-paper-fx)" />
         </pattern>
+        {/* Roughen filter (applied to the grid via CSS in blueprint mode): the
+            same paper fibre displaces the lines a hair, so they wobble like ink
+            on textured paper instead of being machine-perfect. Low frequency +
+            small scale keeps it a subtle undulation. */}
+        <filter id="wc-grid-rough" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.028"
+            numOctaves={2}
+            seed={11}
+            stitchTiles="stitch"
+            result="warp"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="warp"
+            scale={3}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
       </defs>
       <rect
         className="wc__paper"
