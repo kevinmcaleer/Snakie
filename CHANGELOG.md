@@ -203,6 +203,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — hierarchy dialog follow-ups (#353).** Renaming a pose onto an
+  existing pose's name no longer silently destroys that pose (the rename is refused
+  with an inline warning). The servo dialog's number fields hold raw text while you
+  type, so you can clear a field or type a leading `-` (a negative joint range)
+  without it snapping to 0. Switching hierarchy nodes mid-edit keeps the previous
+  block's live edits (Fusion-style, still ⌘Z-undoable) and each node's **Cancel**
+  now only reverts that node's own edits.
 - **Robot View — a batch of navigation / layout fixes.** The **Home** button now
   responds to clicks (it sat under the cube canvas — it's raised above it and only
   captures clicks while the nav zone is hovered, so the cube corner stays pickable)

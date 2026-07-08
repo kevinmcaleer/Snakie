@@ -70,6 +70,13 @@
   color: var(--text-muted, #8b919b);
   font-style: italic;
 }
+.robotprops__note--warn {
+  color: var(--danger);
+  font-style: normal;
+}
+.robotprops__text.is-invalid {
+  border-color: var(--danger);
+}
 /* Servo / pose form controls. */
 .robotprops__row {
   display: flex;

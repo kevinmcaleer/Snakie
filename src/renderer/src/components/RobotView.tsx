@@ -273,13 +273,18 @@ export function RobotView({
     })
   }
 
-  // Rename a pose (#353 pose dialog): keep its captured values, drop the old + any
-  // clashing name. (Committed on the dialog's OK, which then closes it.)
+  // Rename a pose (#353 pose dialog): keep its captured values. REFUSE a name that
+  // already belongs to a DIFFERENT pose — overwriting would silently destroy that
+  // pose's captured values (persisted to robot.yml, outside the URDF undo history).
   const handleRenamePose = (oldName: string, newName: string): void => {
     const target = newName.trim()
     const pose = poses.find((p) => p.name === oldName)
     if (!pose || !target || target === oldName) return
-    const next = [...poses.filter((p) => p.name !== oldName && p.name !== target), { name: target, values: pose.values }]
+    if (poses.some((p) => p.name === target)) {
+      setSavingLabel(`A pose named “${target}” already exists`)
+      return
+    }
+    const next = [...poses.filter((p) => p.name !== oldName), { name: target, values: pose.values }]
     setPoses(next)
     void persist((m) => {
       m.poses = next
@@ -497,27 +502,31 @@ export function RobotView({
   // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
   // keeps them. Servo/pose contexts hold their own drafts (committed on OK).
   const editSnapshotRef = useRef<string | null>(null)
+  // Opening a DIFFERENT node while a link/joint edit is live keeps that edit
+  // (Fusion-style — it's already a step in the undo history, so ⌘Z still discards
+  // it). We just re-base the snapshot to the current content so the NEW node's
+  // Cancel only ever reverts the NEW node's edits, never the previous node's.
+  const openContext = (ctx: PropsContext | null, snapshot: string | null): void => {
+    editSnapshotRef.current = snapshot
+    setDialogCtx(ctx)
+  }
   const handleOpenProps = (link: string | null): void => {
     if (link) {
-      editSnapshotRef.current = contentRef.current
       setSelectedLink(link)
-      setDialogCtx({ kind: 'link', link })
+      openContext({ kind: 'link', link }, contentRef.current)
     } else {
-      setDialogCtx(null)
+      openContext(null, null)
     }
   }
   const handleOpenJoint = (child: string, joint: string): void => {
-    editSnapshotRef.current = contentRef.current
     setSelectedLink(child) // highlight the joint's child block in 3-D
-    setDialogCtx({ kind: 'joint', child, joint })
+    openContext({ kind: 'joint', child, joint }, contentRef.current)
   }
   const handleOpenServo = (pin: string): void => {
-    editSnapshotRef.current = null // servo edits are drafted in the dialog, not URDF
-    setDialogCtx({ kind: 'servo', pin })
+    openContext({ kind: 'servo', pin }, null) // servo edits are drafted, not URDF
   }
   const handleOpenPose = (name: string): void => {
-    editSnapshotRef.current = null
-    setDialogCtx({ kind: 'pose', name })
+    openContext({ kind: 'pose', name }, null)
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
@@ -2165,6 +2174,7 @@ export function RobotView({
             onSetServo={handleUpdateBinding}
             onDeleteServo={handleDeleteBinding}
             pose={dialogCtx.kind === 'pose' ? poses.find((p) => p.name === dialogCtx.name) ?? null : null}
+            poseNames={poses.map((p) => p.name)}
             onRecallPose={handleRecallPose}
             onRenamePose={handleRenamePose}
             onDeletePose={handleDeletePose}

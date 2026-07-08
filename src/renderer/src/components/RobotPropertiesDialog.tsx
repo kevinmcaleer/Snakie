@@ -47,6 +47,8 @@ export interface RobotPropertiesDialogProps {
   onDeleteServo: (pin: string) => void
   // pose
   pose: NamedPoseLike | null
+  /** All pose names (to reject renaming onto an existing pose). */
+  poseNames: string[]
   onRecallPose: (pose: NamedPoseLike) => void
   onRenamePose: (oldName: string, newName: string) => void
   onDeletePose: (name: string) => void
@@ -214,32 +216,42 @@ function ServoBody({
   pin: string
   commitRef: React.MutableRefObject<(() => void) | null>
 }): JSX.Element {
-  const [draft, setDraft] = useState<ServoJointBinding>(() => ({
-    pin,
-    joint: servo?.joint ?? movableJoints[0] ?? '',
-    servoMin: servo?.servoMin ?? 0,
-    servoMax: servo?.servoMax ?? 180,
-    jointMin: servo?.jointMin ?? 0,
-    jointMax: servo?.jointMax ?? 0,
-    invert: servo?.invert ?? false
-  }))
-  // OK commits the whole draft as a patch.
-  commitRef.current = () => onSetServo(pin, draft)
-  const set = (patch: Partial<ServoJointBinding>): void => setDraft((d) => ({ ...d, ...patch }))
+  const [joint, setJoint] = useState(servo?.joint ?? movableJoints[0] ?? '')
+  const [invert, setInvert] = useState(!!servo?.invert)
+  // Numeric ranges are held as RAW STRINGS so a user can clear a field or type a
+  // leading "-" (a negative joint range) without it snapping to 0 mid-keystroke;
+  // they're coerced back to numbers on commit.
+  const [fields, setFields] = useState<Record<'servoMin' | 'servoMax' | 'jointMin' | 'jointMax', string>>({
+    servoMin: String(servo?.servoMin ?? 0),
+    servoMax: String(servo?.servoMax ?? 180),
+    jointMin: String(servo?.jointMin ?? 0),
+    jointMax: String(servo?.jointMax ?? 0)
+  })
+  // OK commits the whole draft as a patch (empty / partial fields fall back to 0).
+  commitRef.current = () => {
+    const n = (s: string): number => {
+      const v = Number(s)
+      return Number.isFinite(v) ? v : 0
+    }
+    onSetServo(pin, {
+      joint,
+      servoMin: n(fields.servoMin),
+      servoMax: n(fields.servoMax),
+      jointMin: n(fields.jointMin),
+      jointMax: n(fields.jointMax),
+      invert
+    })
+  }
   // Include the current joint even if it's no longer movable, so it's not dropped.
-  const options =
-    !draft.joint || movableJoints.includes(draft.joint) ? movableJoints : [draft.joint, ...movableJoints]
+  const options = !joint || movableJoints.includes(joint) ? movableJoints : [joint, ...movableJoints]
 
-  const num = (
-    label: string,
-    key: 'servoMin' | 'servoMax' | 'jointMin' | 'jointMax'
-  ): JSX.Element => (
+  const num = (label: string, key: keyof typeof fields): JSX.Element => (
     <label className="robotprops__mm">
       <span>{label}</span>
       <input
         type="number"
-        value={Number.isFinite(draft[key] as number) ? (draft[key] as number) : 0}
-        onChange={(e) => set({ [key]: Number(e.target.value) })}
+        value={fields[key]}
+        onChange={(e) => setFields((f) => ({ ...f, [key]: e.target.value }))}
       />
     </label>
   )
@@ -248,11 +260,7 @@ function ServoBody({
     <>
       <section className="robotprops__section">
         <div className="robotprops__label">Drives joint</div>
-        <select
-          className="robotprops__sel"
-          value={draft.joint}
-          onChange={(e) => set({ joint: e.target.value })}
-        >
+        <select className="robotprops__sel" value={joint} onChange={(e) => setJoint(e.target.value)}>
           {options.length === 0 && <option value="">— no movable joints —</option>}
           {options.map((j) => (
             <option key={j} value={j}>
@@ -276,11 +284,7 @@ function ServoBody({
         </div>
       </section>
       <label className="robotprops__check">
-        <input
-          type="checkbox"
-          checked={!!draft.invert}
-          onChange={(e) => set({ invert: e.target.checked })}
-        />
+        <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} />
         <span>Invert (servo min → joint max)</span>
       </label>
     </>
@@ -292,6 +296,7 @@ function ServoBody({
 function PoseBody({
   name,
   pose,
+  poseNames,
   onRenamePose,
   commitRef
 }: RobotPropertiesDialogProps & {
@@ -299,10 +304,12 @@ function PoseBody({
   commitRef: React.MutableRefObject<(() => void) | null>
 }): JSX.Element {
   const [draftName, setDraftName] = useState(name)
-  // OK renames the pose if the name changed to something non-empty.
+  const trimmed = draftName.trim()
+  // A name that already belongs to a DIFFERENT pose would overwrite it.
+  const clash = trimmed !== name && poseNames.includes(trimmed)
+  // OK renames the pose if the name changed to something non-empty + non-clashing.
   commitRef.current = () => {
-    const next = draftName.trim()
-    if (next && next !== name) onRenamePose(name, next)
+    if (trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
   }
   const jointCount = pose ? Object.keys(pose.values).length : 0
   return (
@@ -310,7 +317,7 @@ function PoseBody({
       <section className="robotprops__section">
         <div className="robotprops__label">Name</div>
         <input
-          className="robotprops__text"
+          className={`robotprops__text${clash ? ' is-invalid' : ''}`}
           value={draftName}
           onChange={(e) => setDraftName(e.target.value)}
           onKeyDown={(e) => {
@@ -318,10 +325,16 @@ function PoseBody({
           }}
         />
       </section>
-      <p className="robotprops__note">
-        Captures {jointCount} joint{jointCount === 1 ? '' : 's'}. <strong>Recall</strong> applies it
-        to the model.
-      </p>
+      {clash ? (
+        <p className="robotprops__note robotprops__note--warn">
+          A pose named “{trimmed}” already exists — pick another name.
+        </p>
+      ) : (
+        <p className="robotprops__note">
+          Captures {jointCount} joint{jointCount === 1 ? '' : 's'}. <strong>Recall</strong> applies
+          it to the model.
+        </p>
+      )}
     </>
   )
 }
