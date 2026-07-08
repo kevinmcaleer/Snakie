@@ -44,6 +44,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Blueprint grid lines pick up the paper's imperfections.** The grid is warped
+  a hair by the same fractal-noise paper fibre (an SVG displacement filter), so
+  the lines wobble subtly like ink on textured paper instead of being machine-
+  perfect. Blueprint mode only; scales with the grid; no measurable pan cost.
 - **Instrument dock defaults per mode + exports always fit the whole board.**
   The instrument dock now starts **closed in Board mode** (the board gets the
   room) and **Code**, and **open in Data Lab** (the instrument bench). And

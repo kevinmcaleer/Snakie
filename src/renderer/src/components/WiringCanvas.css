@@ -63,6 +63,11 @@
 :root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
   stroke: #d6e6ff;
 }
+/* Blueprint only: warp the grid with the paper fibre so the lines aren't
+   machine-perfect — a subtle ink-on-paper wobble that scales with the grid. */
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid-layer {
+  filter: url(#wc-grid-rough);
+}
 
 /* Procedural paper mottle — only on the blueprint sheet. `soft-light` turns the
    grey fractal noise into a faint light/dark undulation over the blue paper;
