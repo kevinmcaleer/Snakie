@@ -43,6 +43,54 @@ export interface RobotConnection {
   color?: string
 }
 
+/**
+ * The robot-MODEL section of a KRF `robot.yml` (epic #309 / #310). All fields
+ * are optional so a legacy wiring-only robot.yml still loads. Pure helpers to
+ * read/validate this live in {@link ./krf}.
+ */
+export interface RobotModel {
+  /** KRF schema version (bumped on breaking changes). */
+  version?: number
+  /** Path to the `.urdf` file, relative to the project root (e.g. `urdf/arm.urdf`). */
+  urdf?: string
+  /** Servo pin ↔ URDF joint bindings with angle calibration (Phase 3). */
+  servoJointMap?: ServoJointBinding[]
+  /** Per-joint limit / calibration overrides edited in-app (Phase 2). */
+  joints?: Record<string, JointConfig>
+  /** The default pose applied on load: joint name → value (deg / mm). */
+  defaultPose?: Record<string, number>
+  /** Saved named poses (Phase 2). */
+  poses?: NamedPose[]
+}
+
+/** A servo(pin) ↔ URDF joint binding with angle-range calibration (Phase 3). */
+export interface ServoJointBinding {
+  /** The board pin the servo signal is on (e.g. `GP0`, or a bare pin number). */
+  pin: string
+  /** The URDF joint this servo drives. */
+  joint: string
+  /** Servo input range in degrees (default 0…180). */
+  servoMin?: number
+  servoMax?: number
+  /** Joint output range the servo maps onto (revolute = degrees, prismatic = mm). */
+  jointMin: number
+  jointMax: number
+  /** Reverse the mapping (servo min → joint max). */
+  invert?: boolean
+}
+
+/** Per-joint limit overrides (edited in the pose tool, written back here). */
+export interface JointConfig {
+  min?: number
+  max?: number
+}
+
+/** A saved pose: joint name → value (degrees for revolute, mm for prismatic). */
+export interface NamedPose {
+  name: string
+  values: Record<string, number>
+}
+
 /** A full robot/project definition. */
 export interface RobotDefinition {
   /** Project name. */
@@ -58,6 +106,9 @@ export interface RobotDefinition {
   parts: RobotPart[]
   /** The pin-to-pin wires. */
   connections: RobotConnection[]
+  /** The KRF robot-model section (URDF, servo↔joint map, poses) — optional so a
+   *  legacy wiring-only robot.yml is unaffected (epic #309). */
+  robot?: RobotModel
 }
 
 /** A fresh, empty robot definition. */
