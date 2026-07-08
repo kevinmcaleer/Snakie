@@ -187,6 +187,39 @@
   border-color: #b4544e;
 }
 
+.robotpanel__assembly {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.robotpanel__part {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.64rem;
+}
+.robotpanel__part-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.robotpanel__part-geo {
+  flex: 0 0 auto;
+  max-width: 55%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted, #7d838d);
+  font-size: 0.58rem;
+}
+.robotpanel__part-geo.is-mesh {
+  color: #c8a24a;
+}
+
 .robotpanel__measure.is-on {
   border-color: #c8a24a;
   color: #c8a24a;

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -16,6 +16,7 @@ import {
   toDisplay,
   toNative
 } from './robot-pose'
+import { addMeshLink, parseAssembly } from './robot-assembly'
 import type { RobotDefinition, RobotModel } from '../../../shared/robot'
 import './RobotView.css'
 
@@ -63,7 +64,7 @@ export function RobotView({
   basePath,
   compact = false
 }: RobotViewProps = {}): JSX.Element {
-  const { openFiles, activeId, currentFolder } = useWorkspace()
+  const { openFiles, activeId, currentFolder, updateContent, saveFile } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const content = urdfContent ?? activeFile?.content ?? ''
   // Where to resolve mesh files from: an explicit base (docked panel) else the
@@ -190,6 +191,48 @@ export function RobotView({
     }
     applyToRobot(nv)
     setValues(nv)
+  }
+
+  // The model's links + meshes, for the assembly panel.
+  const assembly = useMemo(() => parseAssembly(content), [content])
+  // Import is only possible for a saved local `.urdf` (a file we can edit).
+  const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  const [importing, setImporting] = useState(false)
+  const pendingSaveRef = useRef<string | null>(null)
+
+  // Persist a just-imported URDF once the buffer state has updated (so saveFile
+  // writes the new content + clears the dirty flag). Keyed on `content`.
+  useEffect(() => {
+    const id = pendingSaveRef.current
+    if (id) {
+      pendingSaveRef.current = null
+      void saveFile(id)
+    }
+  }, [content, saveFile])
+
+  const handleImportStl = async (): Promise<void> => {
+    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    setImporting(true)
+    try {
+      const res = await window.api.robot.importMesh(activeFile.path)
+      if (res.cancelled || !res.rel) {
+        if (res.error) setSavingLabel(`import failed: ${res.error}`)
+        return
+      }
+      // Add the mesh to the URDF (a new link + fixed joint) so it renders now.
+      const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
+      const next = addMeshLink(content, { meshRel: res.rel, linkBase })
+      // Update the buffer (RobotView re-renders + the tab reflects it), then let
+      // an effect persist it once the store state is fresh (saveFile() called
+      // here would write the stale pre-edit content).
+      updateContent(activeFile.id, next.urdf)
+      pendingSaveRef.current = activeFile.id
+      setSavingLabel(`added ${next.link}`)
+    } catch (e) {
+      setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
+    } finally {
+      setImporting(false)
+    }
   }
 
   // Toggling measure off clears the markers + readout.
@@ -582,6 +625,10 @@ export function RobotView({
           onToggleMeasure={() => setMeasureActive((a) => !a)}
           measureDistance={measureDist}
           savingLabel={savingLabel}
+          assembly={assembly}
+          onImportStl={() => void handleImportStl()}
+          canImport={!!canImport}
+          importing={importing}
         />
       )}
     </div>

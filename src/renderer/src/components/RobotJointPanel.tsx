@@ -7,6 +7,8 @@ import {
   toNative,
   unitLabel
 } from './robot-pose'
+import type { AssemblyItem } from './robot-assembly'
+import { baseName } from './robot-mesh'
 import './RobotJointPanel.css'
 
 /** A saved pose (name + joint→display-value map). Mirrors KRF `NamedPose`. */
@@ -34,6 +36,12 @@ export interface RobotJointPanelProps {
   measureDistance: number | null
   /** Whether the current pose has been persisted (for a subtle saved hint). */
   savingLabel: string | null
+  /** The model's links + the meshes they use (assembly list). */
+  assembly: AssemblyItem[]
+  onImportStl: () => void
+  /** Import is only possible for a saved project robot (a file to edit). */
+  canImport: boolean
+  importing: boolean
 }
 
 /** Round a display value for compact display. */
@@ -55,7 +63,11 @@ export function RobotJointPanel({
   measureActive,
   onToggleMeasure,
   measureDistance,
-  savingLabel
+  savingLabel,
+  assembly,
+  onImportStl,
+  canImport,
+  importing
 }: RobotJointPanelProps): JSX.Element {
   const [poseName, setPoseName] = useState('')
   const movable = joints.filter((j) => !j.isMimic)
@@ -154,6 +166,44 @@ export function RobotJointPanel({
           )
         })}
       </div>
+
+      <section className="robotpanel__section">
+        <div className="robotpanel__section-head">
+          <span>Assembly</span>
+          <button
+            type="button"
+            className="robotpanel__btn"
+            disabled={!canImport || importing}
+            onClick={onImportStl}
+            title={
+              canImport
+                ? 'Import an STL / DAE mesh into this robot'
+                : 'Open a saved project robot to import meshes'
+            }
+          >
+            {importing ? 'Importing…' : '+ STL'}
+          </button>
+        </div>
+        {assembly.length === 0 ? (
+          <p className="robotpanel__empty">No links.</p>
+        ) : (
+          <ul className="robotpanel__assembly">
+            {assembly.map((it) => (
+              <li className="robotpanel__part" key={it.link}>
+                <span className="robotpanel__part-name" title={it.link}>
+                  {it.link}
+                </span>
+                <span
+                  className={`robotpanel__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}
+                  title={it.kind === 'mesh' ? it.mesh : it.kind}
+                >
+                  {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <section className="robotpanel__section">
         <div className="robotpanel__section-head">

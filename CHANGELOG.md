@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — pop-out, assembly panel & one-click STL import (#324, epic
+  #309).** The docked mini 3-D viewer gains a **⤢ Pop out** button that opens the
+  robot full-screen (Code mode) with the pose tool. The full-screen view now
+  shows an **Assembly** panel — every link + the STL/mesh file it uses — and a
+  **+ STL** button: pick a mesh and it's copied into the robot's KRF
+  `urdf/meshes/` folder (collision-safe) and wired into the `.urdf` as a new link
+  + fixed joint, so it appears in the model and the assembly immediately.
 - **Robot View — Pose tool (#312, epic #309 Phase 2).** Opening a `.urdf`
   full-screen now gives a **pose tool**: a joint sidebar with a slider per joint
   (degrees for revolute, mm for prismatic) that moves the robot live, respecting
