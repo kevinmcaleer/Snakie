@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { RobotView } from './RobotView'
 import { dirname } from './robot-mesh'
+import { blankUrdf } from './robot-assembly'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
@@ -63,17 +64,60 @@ export function RobotDockPanel(): JSX.Element {
     switchWorkspace('code')
   }
 
+  // Create a new blank robot (.urdf) and open it full-screen in the pose tool.
+  // With a project folder we write a real file (so STL import + persistence work
+  // straight away, next-numbered if `robot.urdf` exists); otherwise an untitled
+  // buffer the user can Save.
+  const newRobot = async (): Promise<void> => {
+    const content = blankUrdf('my_robot')
+    if (currentFolder) {
+      const folder = currentFolder.replace(/[/\\]$/, '')
+      let name = 'robot.urdf'
+      for (let n = 2; n < 1000; n++) {
+        try {
+          await window.api.fs.readFile(`${folder}/${name}`)
+          name = `robot-${n}.urdf` // taken → try the next
+        } catch {
+          break // free
+        }
+      }
+      const path = `${folder}/${name}`
+      try {
+        await window.api.fs.writeFile(path, content)
+        await openFile('local', path)
+      } catch {
+        openBuffer('robot.urdf', content) // write failed → fall back to a buffer
+      }
+    } else {
+      openBuffer('robot.urdf', content)
+    }
+    switchWorkspace('code')
+  }
+
+  // No project robot yet (the demo arm is a stand-in) → nudge toward "New robot".
+  const hasProjectRobot = urdfPath !== null
+
   return (
     <div className="robotdock">
       <RobotView urdfContent={urdf} basePath={base} compact />
-      <button
-        type="button"
-        className="robotdock__expand"
-        title="Pop out full-screen (Pose tool + assembly)"
-        onClick={popOut}
-      >
-        ⤢ Pop out
-      </button>
+      <div className="robotdock__actions">
+        <button
+          type="button"
+          className={`robotdock__btn${hasProjectRobot ? '' : ' robotdock__btn--cta'}`}
+          title="Create a new blank robot (.urdf) and open it in the pose tool"
+          onClick={() => void newRobot()}
+        >
+          ＋ New robot
+        </button>
+        <button
+          type="button"
+          className="robotdock__btn"
+          title="Pop out full-screen (pose tool + assembly)"
+          onClick={popOut}
+        >
+          ⤢ Pop out
+        </button>
+      </div>
     </div>
   )
 }

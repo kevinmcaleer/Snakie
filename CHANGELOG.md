@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **New blank robot (.urdf) from Robot mode.** The docked mini-viewer gains a
+  **＋ New robot** button (highlighted when there's no robot yet) that creates a
+  minimal starter `.urdf` (one `base_link`) and opens it in the pose tool — a
+  real file in the project folder (so STL import + persistence work immediately),
+  or an untitled buffer when no folder is open. Import meshes from the Assembly
+  panel to build it up.
 - **Robot View — servo↔joint binding & code-driven simulation (#313, epic #309
   Phase 3).** The keystone: a running MicroPython program's servo writes now
   animate the 3-D robot, **headless** (no board — it runs in the simulator).
