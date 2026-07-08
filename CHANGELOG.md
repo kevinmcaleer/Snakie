@@ -18,12 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   if it lands past the end, never overwriting an existing key), and a per-pair
   **mirror-invert** checkbox so a reversed-axis left↔right joint mirrors correctly
   in one click (persists to `robot.yml`).
-- **Robot View — navigation cube.** A CAD-style **ViewCube** floats at the
-  top-right of the 3-D viewer, mirroring the camera's orientation as you orbit and
-  lit from the lower-front so it reads as a solid block. **Click a face, edge or
-  corner** (26 orientations) to snap the view, **drag the cube** to orbit the
-  camera, and the region under the pointer highlights in brass. Runs in its own
-  small canvas so it never fights the viewer's orbit/zoom.
+- **Robot View — navigation cube.** A large CAD-style **ViewCube** at the
+  top-right of the 3-D viewer, mirroring the camera as you orbit and lit from the
+  lower-front so it reads as a solid block. **Click a face, edge or corner** (26
+  orientations) to snap the view, **drag the cube** to orbit, and the region under
+  the pointer highlights with a brass overlay (a plate on a face, a bar on an edge,
+  a cube on a corner). A **Home** button (revealed on hover) resets to the default
+  isometric view. Runs in its own canvas so it never fights the viewer's orbit/zoom.
 - **Robot View — new blocks & meshes arrive at the origin, not stuck to the
   selection.** Adding a block or importing an STL/DAE now drops it at the
   **workspace origin** (attached to the base), **selects it**, and **reframes** so

@@ -24,7 +24,6 @@ export interface ViewCube {
 
 // BoxGeometry material order: +X, -X, +Y, -Y, +Z, -Z.
 const FACE_LABELS = ['RIGHT', 'LEFT', 'TOP', 'BOT', 'FRONT', 'BACK']
-const faceIndex = (axis: 0 | 1 | 2, positive: boolean): number => axis * 2 + (positive ? 0 : 1)
 
 /** A face label painted onto a canvas texture (parchment, dark-brass border). */
 function faceTexture(text: string): THREE.CanvasTexture {
@@ -46,22 +45,16 @@ function faceTexture(text: string): THREE.CanvasTexture {
   return tex
 }
 
-/** Classify a local hit point on the unit cube into its view direction (world
- *  axis) + the face material indices it touches (1 face / 2 edge / 3 corner). */
-function classify(p: THREE.Vector3): { dir: THREE.Vector3; faces: number[] } {
+/** Classify a local hit point on the unit cube into `raw` (±1/0 per axis — which
+ *  face/edge/corner) and `dir` (the normalised view direction to snap to). */
+function classify(p: THREE.Vector3): { dir: THREE.Vector3; raw: THREE.Vector3 } {
   const thr = 0.32 // within 0.18 of an edge counts as that edge/corner
-  const comp = [p.x, p.y, p.z]
-  const dir = new THREE.Vector3()
-  const faces: number[] = []
-  comp.forEach((v, ax) => {
-    if (Math.abs(v) >= thr) {
-      const positive = v >= 0
-      dir.setComponent(ax, positive ? 1 : -1)
-      faces.push(faceIndex(ax as 0 | 1 | 2, positive))
-    }
+  const raw = new THREE.Vector3()
+  ;[p.x, p.y, p.z].forEach((v, ax) => {
+    if (Math.abs(v) >= thr) raw.setComponent(ax, v >= 0 ? 1 : -1)
   })
-  if (dir.lengthSq() === 0) dir.set(0, 0, 1) // safety (shouldn't happen on a surface hit)
-  return { dir: dir.normalize(), faces }
+  if (raw.lengthSq() === 0) raw.set(0, 0, 1) // safety (shouldn't happen on a surface hit)
+  return { dir: raw.clone().normalize(), raw }
 }
 
 export function createViewCube(opts: {
@@ -85,12 +78,7 @@ export function createViewCube(opts: {
   keyLight.position.set(-0.4, -0.9, 1.4) // lower-front
   scene.add(keyLight)
 
-  const HILITE = new THREE.Color(0xc8a24a)
-  const DARK = new THREE.Color(0x000000)
-  const materials = FACE_LABELS.map(
-    (label) =>
-      new THREE.MeshLambertMaterial({ map: faceTexture(label), emissive: DARK.clone() })
-  )
+  const materials = FACE_LABELS.map((label) => new THREE.MeshLambertMaterial({ map: faceTexture(label) }))
   const geometry = new THREE.BoxGeometry(1, 1, 1)
   const cube = new THREE.Mesh(geometry, materials)
   scene.add(cube)
@@ -99,19 +87,35 @@ export function createViewCube(opts: {
   const edges = new THREE.LineSegments(edgeGeo, edgeMat)
   cube.add(edges)
 
+  // A brass overlay that snaps to the hovered face / edge / corner — a thin plate
+  // on a face, a bar along an edge, a small cube on a corner (from `raw`).
+  const hlGeo = new THREE.BoxGeometry(1, 1, 1)
+  const hlMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, transparent: true, opacity: 0.55, depthTest: false })
+  const highlight = new THREE.Mesh(hlGeo, hlMat)
+  highlight.visible = false
+  highlight.renderOrder = 3
+  cube.add(highlight)
+  const setHighlight = (raw: THREE.Vector3 | null): void => {
+    if (!raw) {
+      highlight.visible = false
+      return
+    }
+    highlight.visible = true
+    highlight.position.set(raw.x * 0.5, raw.y * 0.5, raw.z * 0.5)
+    const t = 0.12 // thin on the "extreme" axes, spanning on the free ones
+    highlight.scale.set(raw.x !== 0 ? t : 0.98, raw.y !== 0 ? t : 0.98, raw.z !== 0 ? t : 0.98)
+  }
+
   const raycaster = new THREE.Raycaster()
   const ndc = new THREE.Vector2()
-  const pick = (e: PointerEvent): { dir: THREE.Vector3; faces: number[] } | null => {
+  const pick = (e: PointerEvent): { dir: THREE.Vector3; raw: THREE.Vector3 } | null => {
     const rect = canvas.getBoundingClientRect()
     ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
     raycaster.setFromCamera(ndc, camera)
-    const hit = raycaster.intersectObject(cube, false)[0]
+    // Don't let the highlight overlay intercept the pick.
+    const hit = raycaster.intersectObject(cube, false).find((h) => h.object === cube)
     return hit ? classify(cube.worldToLocal(hit.point.clone())) : null
-  }
-
-  const setHighlight = (faces: number[]): void => {
-    materials.forEach((m, i) => m.emissive.copy(faces.includes(i) ? HILITE : DARK))
   }
 
   // Drag-to-orbit vs click-to-snap: a near-stationary press is a click.
@@ -127,12 +131,12 @@ export function createViewCube(opts: {
       if (down.moved || Math.hypot(dx, dy) > 3) {
         down.moved = true
         onOrbit(e.movementX || dx, e.movementY || dy)
-        setHighlight([])
+        setHighlight(null)
       }
       return
     }
     const r = pick(e)
-    setHighlight(r ? r.faces : [])
+    setHighlight(r ? r.raw : null)
   }
   const onPointerUp = (e: PointerEvent): void => {
     canvas.releasePointerCapture?.(e.pointerId)
@@ -144,7 +148,7 @@ export function createViewCube(opts: {
     }
   }
   const onLeave = (): void => {
-    if (!down) setHighlight([])
+    if (!down) setHighlight(null)
   }
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
@@ -168,6 +172,8 @@ export function createViewCube(opts: {
       geometry.dispose()
       edgeGeo.dispose()
       edgeMat.dispose()
+      hlGeo.dispose()
+      hlMat.dispose()
       materials.forEach((m) => {
         m.map?.dispose()
         m.dispose()
