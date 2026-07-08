@@ -176,6 +176,9 @@ export function RobotView({
     home: () => void
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
+  // Camera projection (orthographic default; the ViewCube dropdown toggles it).
+  // Changing it rebuilds the 3-D effect with the matching camera type + re-frames.
+  const [projection, setProjection] = useState<'ortho' | 'persp'>('ortho')
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -805,7 +808,10 @@ export function RobotView({
     // Isometric ORTHOGRAPHIC camera (#320) — the three axes foreshorten equally
     // and there's no perspective distortion, which reads cleaner for poses. Its
     // frustum is sized from the model bounds below.
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100)
+    const camera: THREE.OrthographicCamera | THREE.PerspectiveCamera =
+      projection === 'persp'
+        ? new THREE.PerspectiveCamera(45, 1, 0.01, 100)
+        : new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100)
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -861,13 +867,16 @@ export function RobotView({
       // updateStyle defaults true → the canvas CSS size fits the container while
       // the drawing buffer scales by the pixel ratio.
       renderer.setSize(w, h)
-      // Orthographic: keep `halfView` world units visible vertically, widen the
-      // frustum by the aspect ratio so nothing is squashed.
       const aspect = w / h
-      camera.left = -halfView * aspect
-      camera.right = halfView * aspect
-      camera.top = halfView
-      camera.bottom = -halfView
+      if (camera instanceof THREE.OrthographicCamera) {
+        // Keep `halfView` world units visible vertically, widen by the aspect.
+        camera.left = -halfView * aspect
+        camera.right = halfView * aspect
+        camera.top = halfView
+        camera.bottom = -halfView
+      } else {
+        camera.aspect = aspect
+      }
       camera.updateProjectionMatrix()
     }
 
@@ -888,7 +897,14 @@ export function RobotView({
       if (box.isEmpty() || !Number.isFinite(box.min.x)) return
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
-      halfView = Math.max(size.x, size.y, size.z, 0.1) * 0.5 * 1.35
+      const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
+      halfView = radius * 1.35
+      if (camera instanceof THREE.PerspectiveCamera) {
+        // Re-seat the camera at a fitting distance along its current direction.
+        const dir = camera.position.clone().sub(controls.target).normalize()
+        const dist = (radius * 1.4) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
+        camera.position.copy(centre).addScaledVector(dir, dist)
+      }
       controls.target.copy(centre)
       camera.zoom = 1
       camera.updateProjectionMatrix()
@@ -923,9 +939,15 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-      halfView = radius * 1.35 // a little padding around the model
+      halfView = radius * 1.35 // a little padding around the model (ortho)
       const isoDir = new THREE.Vector3(1, 0.9, 1).normalize()
-      camera.position.copy(centre).addScaledVector(isoDir, radius * 6)
+      // Ortho apparent size is set by halfView, so distance is arbitrary; perspective
+      // must sit back far enough that the model fits the vertical fov.
+      const dist =
+        camera instanceof THREE.PerspectiveCamera
+          ? (radius * 1.4) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
+          : radius * 6
+      camera.position.copy(centre).addScaledVector(isoDir, dist)
       controls.target.copy(centre)
       controls.update()
       if (grid) {
@@ -1710,7 +1732,7 @@ export function RobotView({
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [content, effectiveBase, isEmpty, poseUI, currentFolder, activeFile?.id])
+  }, [content, effectiveBase, isEmpty, poseUI, currentFolder, activeFile?.id, projection])
 
   const showPanel = poseUI && !error && !isEmpty
   const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0
@@ -1761,6 +1783,19 @@ export function RobotView({
               ref={cubeMountRef}
               title="Click a face / edge / corner to snap · drag to orbit"
             />
+            <select
+              className="robotview__proj"
+              value={projection}
+              onChange={(e) => {
+                refitNextRef.current = true // re-frame with the new camera type
+                setProjection(e.target.value as 'ortho' | 'persp')
+              }}
+              title="Camera projection"
+              aria-label="Camera projection"
+            >
+              <option value="ortho">Orthographic</option>
+              <option value="persp">Perspective</option>
+            </select>
           </div>
         )}
         {!isEmpty && !error && !compact && (

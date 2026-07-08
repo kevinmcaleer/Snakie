@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — orthographic / perspective toggle.** A dropdown beneath the
+  navigation cube switches the camera between **Orthographic** (default, no
+  distortion — best for building) and **Perspective** (a natural, lens-like view).
+  Switching re-frames the model; zoom / orbit / snap all work in both.
 - **Robot View — undo / redo for builder actions (#338).** Every builder edit
   (add / push-pull / move / delete / joint change / mesh import / re-root) is now
   an undo step: **⌘Z / Ctrl+Z** to undo, **⇧⌘Z / Ctrl+Y** to redo, plus undo/redo
