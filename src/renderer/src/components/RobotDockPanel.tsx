@@ -16,7 +16,7 @@ import demoArm from '../assets/demo-arm.urdf?raw'
  * as the Pose tool (#312).
  */
 export function RobotDockPanel(): JSX.Element {
-  const { currentFolder, openFile, openBuffer } = useWorkspace()
+  const { currentFolder, openFile, openBuffer, openFolderPath } = useWorkspace()
   const { setFocus } = useWorkspaceLayout()
   const [urdf, setUrdf] = useState<string>(demoArm)
   // The URDF's folder, so RobotView resolves the robot's meshes (#319). Empty
@@ -24,6 +24,8 @@ export function RobotDockPanel(): JSX.Element {
   const [base, setBase] = useState<string>('')
   // The project URDF's path, so the expand button can open it full-screen.
   const [urdfPath, setUrdfPath] = useState<string | null>(null)
+  // Bumped after we create/link a robot, to re-resolve the project URDF.
+  const [reloadNonce, setReloadNonce] = useState(0)
 
   useEffect(() => {
     let live = true
@@ -53,7 +55,7 @@ export function RobotDockPanel(): JSX.Element {
     return () => {
       live = false
     }
-  }, [currentFolder])
+  }, [currentFolder, reloadNonce])
 
   // Pop the robot out full-screen (the Pose tool + assembly): a saved project
   // URDF opens as its file; the bundled demo arm opens as a buffer. Stay in Robot
@@ -65,34 +67,44 @@ export function RobotDockPanel(): JSX.Element {
     setFocus(true)
   }
 
-  // Create a new blank robot (.urdf) and open it full-screen in the pose tool.
-  // With a project folder we write a real file (so STL import + persistence work
-  // straight away, next-numbered if `robot.urdf` exists); otherwise an untitled
-  // buffer the user can Save.
+  // Create a new blank robot as a REAL FILE in the selected project folder, and
+  // LINK it in robot.yml (`robot.urdf`) so it's the one project robot — reopening
+  // always uses this file, and STL import + poses persist alongside it. With no
+  // folder open we ask for one first (a robot needs a home on disk).
   const newRobot = async (): Promise<void> => {
-    const content = blankUrdf('my_robot')
-    if (currentFolder) {
-      const folder = currentFolder.replace(/[/\\]$/, '')
-      let name = 'robot.urdf'
-      for (let n = 2; n < 1000; n++) {
-        try {
-          await window.api.fs.readFile(`${folder}/${name}`)
-          name = `robot-${n}.urdf` // taken → try the next
-        } catch {
-          break // free
-        }
-      }
-      const path = `${folder}/${name}`
-      try {
-        await window.api.fs.writeFile(path, content)
-        await openFile('local', path)
-      } catch {
-        openBuffer('robot.urdf', content) // write failed → fall back to a buffer
-      }
-    } else {
-      openBuffer('robot.urdf', content)
+    let folder = currentFolder
+    if (!folder) {
+      folder = await window.api.fs.openFolderDialog()
+      if (!folder) return // cancelled — nowhere to store the robot
+      openFolderPath(folder)
     }
-    setFocus(true) // show the new robot full-screen (stay in Robot mode)
+    const dir = folder.replace(/[/\\]$/, '')
+    let name = 'robot.urdf'
+    for (let n = 2; n < 1000; n++) {
+      try {
+        await window.api.fs.readFile(`${dir}/${name}`)
+        name = `robot-${n}.urdf` // taken → try the next
+      } catch {
+        break // free
+      }
+    }
+    const path = `${dir}/${name}`
+    try {
+      await window.api.fs.writeFile(path, blankUrdf('my_robot'))
+      // Link the URDF in robot.yml (preserving any wiring) so this IS the robot.
+      try {
+        const def = await window.api.robot.load(dir)
+        def.robot = { ...(def.robot ?? {}), version: 1, urdf: name }
+        await window.api.robot.save(dir, def)
+      } catch {
+        // best-effort link — the file still opens
+      }
+      await openFile('local', path)
+      setReloadNonce((n) => n + 1) // re-resolve so the dock tracks the new robot
+      setFocus(true)
+    } catch {
+      // write failed — nothing opened
+    }
   }
 
   // No project robot yet (the demo arm is a stand-in) → nudge toward "New robot".
