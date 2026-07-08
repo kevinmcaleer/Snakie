@@ -83,7 +83,7 @@
   pointer-events: none;
 }
 .robotview__hud strong {
-  color: #c8a24a;
+  color: var(--accent);
 }
 .robotview__hud-hint {
   color: var(--text-muted, #7d838d);

@@ -131,6 +131,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View accent text is readable on the parchment theme.** The Robot-View
+  panels hard-coded a light gold (`#c8a24a`) for highlight/active text, which
+  didn't darken for the skeuomorph (parchment) theme — gold-on-cream was hard to
+  read. They now use the theme-aware `var(--accent)` brass token (dark-brass on
+  parchment, gold on dark), like the rest of the app. (3-D selection outlines /
+  snap handles stay gold — the canvas is always dark.)
 - **Files panel now always reopens from the toolbar button / activity icon.** A
   workspace switch (or the Robot pop-out) could leave the panel visually
   collapsed while the store thought it was open, so the next toggle click called

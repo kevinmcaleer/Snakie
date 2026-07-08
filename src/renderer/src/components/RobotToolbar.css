@@ -30,11 +30,11 @@
 }
 .robottool__btn:hover:not(:disabled) {
   border-color: var(--border, #3a3d44);
-  color: #c8a24a;
+  color: var(--accent);
 }
 .robottool__btn.is-active {
-  color: #c8a24a;
-  border-color: #c8a24a;
+  color: var(--accent);
+  border-color: var(--accent);
   background: rgba(200, 162, 74, 0.18);
 }
 .robottool__btn:disabled {
