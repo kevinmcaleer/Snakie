@@ -1,0 +1,202 @@
+/* Pose-tool sidebar (#312). Retro NES-ish, JetBrains Mono, matches Robot View. */
+.robotpanel {
+  flex: 0 0 260px;
+  min-width: 220px;
+  max-width: 320px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 0.55rem 0.6rem 1rem;
+  background: var(--panel, #202227);
+  border-left: var(--border-w, 2px) solid var(--border, #2c2e33);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--text, #cdd2d9);
+  font-size: 0.68rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.robotpanel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.robotpanel__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #c8a24a;
+  letter-spacing: 0.04em;
+}
+.robotpanel__empty {
+  color: var(--text-muted, #7d838d);
+  font-size: 0.66rem;
+}
+
+.robotpanel__btn {
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--panel-2, #2a2d33);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.22rem 0.5rem;
+  cursor: pointer;
+}
+.robotpanel__btn:hover {
+  border-color: #c8a24a;
+}
+.robotpanel__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.robotpanel__joints {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.robotpanel__joint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.robotpanel__joint-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+.robotpanel__joint-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.robotpanel__joint-val {
+  color: #c8a24a;
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+.robotpanel__slider-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.robotpanel__slider {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: #c8a24a;
+  cursor: pointer;
+}
+.robotpanel__limit {
+  flex: 0 0 3rem;
+  width: 3rem;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text-muted, #9aa0a6);
+  background: var(--panel-2, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 4px;
+  padding: 0.12rem 0.2rem;
+  text-align: center;
+}
+.robotpanel__joint--mimic .robotpanel__joint-name {
+  color: var(--text-muted, #9aa0a6);
+}
+.robotpanel__mimic-hint {
+  font-size: 0.58rem;
+  color: var(--text-muted, #7d838d);
+  font-style: italic;
+}
+
+.robotpanel__section {
+  border-top: 1px solid var(--border, #2c2e33);
+  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.robotpanel__section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text, #cdd2d9);
+}
+.robotpanel__saved {
+  font-size: 0.56rem;
+  font-weight: 400;
+  color: #6fae6f;
+}
+.robotpanel__pose-add {
+  display: flex;
+  gap: 0.3rem;
+}
+.robotpanel__pose-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--panel-2, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 5px;
+  padding: 0.2rem 0.4rem;
+}
+.robotpanel__poses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.robotpanel__pose {
+  display: flex;
+  align-items: stretch;
+  gap: 0.25rem;
+}
+.robotpanel__pose-recall {
+  flex: 1 1 auto;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--panel-2, #2a2d33);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+.robotpanel__pose-recall:hover {
+  border-color: #c8a24a;
+}
+.robotpanel__pose-del {
+  flex: 0 0 auto;
+  font-family: inherit;
+  color: var(--text-muted, #9aa0a6);
+  background: transparent;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0 0.4rem;
+  cursor: pointer;
+}
+.robotpanel__pose-del:hover {
+  color: #b4544e;
+  border-color: #b4544e;
+}
+
+.robotpanel__measure.is-on {
+  border-color: #c8a24a;
+  color: #c8a24a;
+}
+.robotpanel__measure-out {
+  font-size: 0.72rem;
+  color: #c8a24a;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  padding: 0.2rem;
+  border: 1px dashed var(--border, #3a3d44);
+  border-radius: 5px;
+}

@@ -2,10 +2,21 @@
 
 .robotview {
   position: relative;
+  display: flex;
+  flex-direction: row;
   height: 100%;
   min-height: 0;
   background: #191a1d;
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* The 3D area (canvas + overlays); the pose sidebar sits beside it. */
+.robotview__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .robotview__canvas {

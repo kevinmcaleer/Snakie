@@ -8,6 +8,7 @@
 
 import { parse, stringify } from 'yaml'
 import type { RobotConnection, RobotDefinition, RobotNet, RobotPart } from './robot'
+import { sanitiseRobotModel } from './krf'
 
 const NETS: RobotNet[] = ['vcc', 'gnd', 'signal']
 
@@ -78,6 +79,11 @@ export function robotToYaml(def: RobotDefinition): string {
     if (c.color) o.color = c.color
     return o
   })
+  // The KRF robot MODEL section (URDF + servo↔joint map + limits + poses, epic
+  // #309). Round-trip it through the sanitiser so only clean, non-empty fields
+  // are written and a legacy wiring-only robot.yml stays untouched.
+  const model = sanitiseRobotModel(def.robot)
+  if (model) obj.robot = model
   return stringify(obj, { lineWidth: 0 })
 }
 
@@ -100,5 +106,7 @@ export function robotFromYaml(text: string): RobotDefinition {
   const by = num(raw.boardY)
   if (bx !== undefined) def.boardX = bx
   if (by !== undefined) def.boardY = by
+  const model = sanitiseRobotModel(raw.robot)
+  if (model) def.robot = model
   return def
 }

@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Pose tool (#312, epic #309 Phase 2).** Opening a `.urdf`
+  full-screen now gives a **pose tool**: a joint sidebar with a slider per joint
+  (degrees for revolute, mm for prismatic) that moves the robot live, respecting
+  the URDF limits. `<mimic>` joints follow their master (multiplier + offset),
+  shown read-only. Edit a joint's min/max inline; save & recall **named poses**;
+  and a **measure tool** reports the point-to-point distance between two clicks.
+  Limit overrides + poses persist to `robot.yml` (KRF), and the docked Robot-mode
+  panel gains an **⤢ Pose** button to open the robot full-screen. Also fixes the
+  `robot.yml` (de)serialiser to round-trip the KRF `robot:` section.
 - **Robot View — STL & DAE meshes (#319, epic #309).** Robot View now renders
   real robots: a URDF's `.stl` / `.dae` (Collada) meshes load straight from the
   project folder — no web server. Relative (`meshes/link.stl`) and `package://`

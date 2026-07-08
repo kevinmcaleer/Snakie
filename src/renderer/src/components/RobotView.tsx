@@ -7,6 +7,16 @@ import URDFLoader from 'urdf-loader'
 import type { URDFRobot } from 'urdf-loader'
 import { useWorkspace } from '../store/workspace'
 import { baseName, dirname, meshKind } from './robot-mesh'
+import { RobotJointPanel, type NamedPoseLike } from './RobotJointPanel'
+import {
+  type JointMeta,
+  clamp,
+  effectiveLimit,
+  extractJoints,
+  toDisplay,
+  toNative
+} from './robot-pose'
+import type { RobotDefinition, RobotModel } from '../../../shared/robot'
 import './RobotView.css'
 
 /**
@@ -53,7 +63,7 @@ export function RobotView({
   basePath,
   compact = false
 }: RobotViewProps = {}): JSX.Element {
-  const { openFiles, activeId } = useWorkspace()
+  const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const content = urdfContent ?? activeFile?.content ?? ''
   // Where to resolve mesh files from: an explicit base (docked panel) else the
@@ -67,6 +77,129 @@ export function RobotView({
   const [meshNote, setMeshNote] = useState<string | null>(null)
 
   const isEmpty = !content.trim()
+  // The full-screen (non-compact) view is the Pose tool (#312): a joint sidebar,
+  // named poses and a measure tool. The docked mini-panel stays view-only.
+  const poseUI = !compact
+
+  const [jointMeta, setJointMeta] = useState<JointMeta[]>([])
+  const [values, setValues] = useState<Record<string, number>>({}) // native (rad/m)
+  const [overrides, setOverrides] = useState<Record<string, { min?: number; max?: number }>>({})
+  const [poses, setPoses] = useState<NamedPoseLike[]>([])
+  const [measureActive, setMeasureActive] = useState(false)
+  const [measureDist, setMeasureDist] = useState<number | null>(null)
+  const [savingLabel, setSavingLabel] = useState<string | null>(null)
+
+  // Refs kept fresh for imperative handlers + the three.js pointer callbacks.
+  const robotRef = useRef<URDFRobot | null>(null)
+  const defRef = useRef<RobotDefinition | null>(null)
+  const metaRef = useRef<JointMeta[]>([])
+  const valuesRef = useRef<Record<string, number>>({})
+  const overridesRef = useRef<Record<string, { min?: number; max?: number }>>({})
+  const defaultPoseRef = useRef<Record<string, number>>({}) // native, non-mimic
+  const measureActiveRef = useRef(false)
+  const measureApiRef = useRef<{ clear: () => void } | null>(null)
+  metaRef.current = jointMeta
+  valuesRef.current = values
+  overridesRef.current = overrides
+
+  // Set a joint on the live robot (mimic followers update automatically).
+  const applyToRobot = (native: Record<string, number>): void => {
+    const r = robotRef.current
+    if (!r) return
+    for (const m of metaRef.current) {
+      if (!m.isMimic && typeof native[m.name] === 'number') r.setJointValue(m.name, native[m.name])
+    }
+  }
+
+  // Merge a patch into robot.yml's `robot:` section and persist (preserving the
+  // wiring). Writes to the project folder's robot.yml, else userData.
+  const persist = async (mutate: (m: RobotModel) => void): Promise<void> => {
+    const def: RobotDefinition = defRef.current ?? { parts: [], connections: [] }
+    def.robot = { ...(def.robot ?? {}) }
+    mutate(def.robot)
+    defRef.current = def
+    setSavingLabel('saving…')
+    try {
+      const res = await window.api.robot.save(currentFolder || undefined, def)
+      setSavingLabel(res.ok ? 'saved ✓' : 'save failed')
+    } catch {
+      setSavingLabel('save failed')
+    }
+  }
+
+  const handleJointChange = (name: string, native: number): void => {
+    robotRef.current?.setJointValue(name, native)
+    setValues((v) => ({ ...v, [name]: native }))
+  }
+
+  const handleLimitChange = (name: string, raw: { min: number; max: number }): void => {
+    const round2 = (n: number): number => Math.round(n * 100) / 100
+    const next = { min: round2(raw.min), max: round2(raw.max) }
+    setOverrides((o) => ({ ...o, [name]: next }))
+    const meta = metaRef.current.find((m) => m.name === name)
+    if (meta) {
+      const lim = effectiveLimit(meta, next)
+      const cur = valuesRef.current[name] ?? 0
+      const cl = clamp(cur, lim.lower, lim.upper)
+      if (cl !== cur) handleJointChange(name, cl)
+    }
+    void persist((m) => {
+      m.joints = { ...(m.joints ?? {}), [name]: next }
+    })
+  }
+
+  const handleSavePose = (name: string): void => {
+    const vals: Record<string, number> = {}
+    for (const m of metaRef.current) {
+      if (!m.isMimic) vals[m.name] = Number(toDisplay(m.type, valuesRef.current[m.name] ?? 0).toFixed(2))
+    }
+    const next = [...poses.filter((p) => p.name !== name), { name, values: vals }]
+    setPoses(next)
+    void persist((m) => {
+      m.poses = next
+    })
+  }
+
+  const handleRecallPose = (pose: NamedPoseLike): void => {
+    const nv = { ...valuesRef.current }
+    for (const m of metaRef.current) {
+      if (!m.isMimic && typeof pose.values[m.name] === 'number') {
+        const lim = effectiveLimit(m, overridesRef.current[m.name])
+        nv[m.name] = clamp(toNative(m.type, pose.values[m.name]), lim.lower, lim.upper)
+      }
+    }
+    applyToRobot(nv)
+    setValues(nv)
+  }
+
+  const handleDeletePose = (name: string): void => {
+    const next = poses.filter((p) => p.name !== name)
+    setPoses(next)
+    void persist((m) => {
+      m.poses = next
+    })
+  }
+
+  const handleResetPose = (): void => {
+    const dp = defaultPoseRef.current
+    const nv = { ...valuesRef.current }
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const lim = effectiveLimit(m, overridesRef.current[m.name])
+      nv[m.name] = clamp(dp[m.name] ?? 0, lim.lower, lim.upper)
+    }
+    applyToRobot(nv)
+    setValues(nv)
+  }
+
+  // Toggling measure off clears the markers + readout.
+  useEffect(() => {
+    measureActiveRef.current = measureActive
+    if (!measureActive) {
+      measureApiRef.current?.clear()
+      setMeasureDist(null)
+    }
+  }, [measureActive])
 
   useEffect(() => {
     const mount = mountRef.current
@@ -155,6 +288,8 @@ export function RobotView({
     let pending = 0 // async meshes still loading
     let ready = false // parse finished (guards mid-parse settles)
     const failed: string[] = []
+    let teardownPose = (): void => {} // set when the pose tool wires up (below)
+    robotRef.current = null
 
     // Once the URDF is parsed and all async meshes have settled: reframe (meshes
     // may have grown the model) and surface any that couldn't load.
@@ -245,10 +380,127 @@ export function RobotView({
           links: Object.keys(robot.links).length
         })
         frameModel(robot) // frame primitives immediately; reframe when meshes land
+
+        if (poseUI) {
+          // POSE TOOL (#312): expose the movable joints, seed a neutral pose, then
+          // overlay the saved KRF overrides / defaultPose / poses from robot.yml.
+          const meta = extractJoints(robot)
+          robotRef.current = robot
+          const initial: Record<string, number> = {}
+          for (const m of meta) {
+            if (m.isMimic) continue
+            const v = clamp(0, m.lower, m.upper)
+            initial[m.name] = v
+            robot.setJointValue(m.name, v)
+          }
+          defaultPoseRef.current = { ...initial }
+          setJointMeta(meta)
+          setValues(initial)
+          setOverrides({})
+          setPoses([])
+          setMeasureDist(null)
+
+          void (async () => {
+            try {
+              const def = await window.api.robot.load(currentFolder || undefined)
+              if (disposed || !robotRef.current) return
+              defRef.current = def
+              const model = def.robot ?? {}
+              const ov = (model.joints ?? {}) as Record<string, { min?: number; max?: number }>
+              const dp = model.defaultPose ?? {}
+              const nv = { ...initial }
+              for (const m of meta) {
+                if (m.isMimic) continue
+                const lim = effectiveLimit(m, ov[m.name])
+                nv[m.name] =
+                  typeof dp[m.name] === 'number'
+                    ? clamp(toNative(m.type, dp[m.name]), lim.lower, lim.upper)
+                    : clamp(nv[m.name], lim.lower, lim.upper)
+                robot.setJointValue(m.name, nv[m.name])
+              }
+              defaultPoseRef.current = { ...nv } // "Reset" returns to the saved default
+              setOverrides(ov)
+              setPoses(Array.isArray(model.poses) ? model.poses : [])
+              setValues(nv)
+            } catch {
+              // No robot.yml (or unreadable) — keep the neutral pose.
+            }
+          })()
+
+          // MEASURE TOOL (#312): click two points on the model → distance readout.
+          const raycaster = new THREE.Raycaster()
+          const ndc = new THREE.Vector2()
+          const pts: THREE.Vector3[] = []
+          const markerMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, depthTest: false })
+          const lineMat = new THREE.LineBasicMaterial({ color: 0xc8a24a, depthTest: false })
+          const markers: THREE.Mesh[] = []
+          let line: THREE.Line | null = null
+          const clearMeasure = (): void => {
+            pts.length = 0
+            markers.forEach((m) => {
+              scene.remove(m)
+              m.geometry.dispose()
+            })
+            markers.length = 0
+            if (line) {
+              scene.remove(line)
+              line.geometry.dispose()
+              line = null
+            }
+          }
+          measureApiRef.current = { clear: clearMeasure }
+          let downX = 0
+          let downY = 0
+          const onDown = (e: PointerEvent): void => {
+            downX = e.clientX
+            downY = e.clientY
+          }
+          const onUp = (e: PointerEvent): void => {
+            if (!measureActiveRef.current || !robotRef.current) return
+            // Ignore orbit drags — only a near-stationary click places a point.
+            if (Math.hypot(e.clientX - downX, e.clientY - downY) > 4) return
+            const rect = renderer.domElement.getBoundingClientRect()
+            ndc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+            ndc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+            raycaster.setFromCamera(ndc, camera)
+            const hit = raycaster.intersectObject(robotRef.current, true)[0]
+            if (!hit) return
+            if (pts.length >= 2) clearMeasure()
+            const p = hit.point.clone()
+            pts.push(p)
+            const dot = new THREE.Mesh(new THREE.SphereGeometry(halfView * 0.03 + 0.002, 12, 12), markerMat)
+            dot.position.copy(p)
+            dot.renderOrder = 999
+            scene.add(dot)
+            markers.push(dot)
+            if (pts.length === 2) {
+              line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat)
+              line.renderOrder = 998
+              scene.add(line)
+              setMeasureDist(pts[0].distanceTo(pts[1]) * 1000)
+            } else {
+              setMeasureDist(null)
+            }
+          }
+          renderer.domElement.addEventListener('pointerdown', onDown)
+          renderer.domElement.addEventListener('pointerup', onUp)
+          teardownPose = () => {
+            renderer.domElement.removeEventListener('pointerdown', onDown)
+            renderer.domElement.removeEventListener('pointerup', onUp)
+            clearMeasure()
+            markerMat.dispose()
+            lineMat.dispose()
+            measureApiRef.current = null
+          }
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not parse this URDF.')
       setInfo(null)
+      if (poseUI) {
+        setJointMeta([])
+        setValues({})
+      }
     }
     ready = true
     finalize() // no meshes (or all failed synchronously) → settle the note now
@@ -267,6 +519,8 @@ export function RobotView({
 
     return () => {
       disposed = true
+      robotRef.current = null
+      teardownPose()
       cancelAnimationFrame(raf)
       ro.disconnect()
       controls.dispose()
@@ -280,33 +534,55 @@ export function RobotView({
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [content, effectiveBase, isEmpty])
+  }, [content, effectiveBase, isEmpty, poseUI, currentFolder])
+
+  const showPanel = poseUI && !error && !isEmpty
 
   return (
-    <div className={`robotview${compact ? ' robotview--compact' : ''}`}>
-      <div className="robotview__canvas" ref={mountRef} />
-      {error ? (
-        <div className="robotview__overlay robotview__overlay--error" role="alert">
-          <p className="robotview__overlay-title">Couldn&apos;t show this robot</p>
-          <p className="robotview__overlay-msg">{error}</p>
-        </div>
-      ) : isEmpty ? (
-        <div className="robotview__overlay">
-          <p className="robotview__overlay-title">Robot View</p>
-          <p className="robotview__overlay-msg">Open a .urdf file to see the 3D model.</p>
-        </div>
-      ) : (
-        info && (
-          <div className="robotview__hud" aria-hidden="true">
-            <strong>{info.name}</strong> · {info.joints} joints · {info.links} links
-            {!compact && <span className="robotview__hud-hint">drag to orbit · scroll to zoom</span>}
+    <div className={`robotview${compact ? ' robotview--compact' : ''}${poseUI ? ' robotview--pose' : ''}`}>
+      <div className="robotview__stage">
+        <div className="robotview__canvas" ref={mountRef} />
+        {error ? (
+          <div className="robotview__overlay robotview__overlay--error" role="alert">
+            <p className="robotview__overlay-title">Couldn&apos;t show this robot</p>
+            <p className="robotview__overlay-msg">{error}</p>
           </div>
-        )
-      )}
-      {!error && meshNote && (
-        <div className="robotview__note" role="status">
-          {meshNote}
-        </div>
+        ) : isEmpty ? (
+          <div className="robotview__overlay">
+            <p className="robotview__overlay-title">Robot View</p>
+            <p className="robotview__overlay-msg">Open a .urdf file to see the 3D model.</p>
+          </div>
+        ) : (
+          info && (
+            <div className="robotview__hud" aria-hidden="true">
+              <strong>{info.name}</strong> · {info.joints} joints · {info.links} links
+              {!compact && <span className="robotview__hud-hint">drag to orbit · scroll to zoom</span>}
+            </div>
+          )
+        )}
+        {!error && meshNote && (
+          <div className="robotview__note" role="status">
+            {meshNote}
+          </div>
+        )}
+      </div>
+      {showPanel && (
+        <RobotJointPanel
+          joints={jointMeta}
+          values={values}
+          overrides={overrides}
+          onJointChange={handleJointChange}
+          onLimitChange={handleLimitChange}
+          poses={poses}
+          onSavePose={handleSavePose}
+          onRecallPose={handleRecallPose}
+          onDeletePose={handleDeletePose}
+          onResetPose={handleResetPose}
+          measureActive={measureActive}
+          onToggleMeasure={() => setMeasureActive((a) => !a)}
+          measureDistance={measureDist}
+          savingLabel={savingLabel}
+        />
       )}
     </div>
   )

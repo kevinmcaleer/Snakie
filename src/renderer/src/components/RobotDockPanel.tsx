@@ -10,14 +10,17 @@ import demoArm from '../assets/demo-arm.urdf?raw'
  * instrument dock in the **Robot** workspace. It finds the project's URDF via
  * the KRF `robot.yml` (`robot.urdf`, resolved against the workspace folder) and
  * falls back to the bundled demo arm so the panel is never empty. Isometric,
- * compact chrome (the full viewer opens by opening the `.urdf` itself).
+ * compact chrome. An **expand** button opens the project's `.urdf` full-screen
+ * as the Pose tool (#312).
  */
 export function RobotDockPanel(): JSX.Element {
-  const { currentFolder } = useWorkspace()
+  const { currentFolder, openFile } = useWorkspace()
   const [urdf, setUrdf] = useState<string>(demoArm)
   // The URDF's folder, so RobotView resolves the robot's meshes (#319). Empty
   // for the bundled demo arm (all primitives — no meshes to resolve).
   const [base, setBase] = useState<string>('')
+  // The project URDF's path, so the expand button can open it full-screen.
+  const [urdfPath, setUrdfPath] = useState<string | null>(null)
 
   useEffect(() => {
     let live = true
@@ -31,6 +34,7 @@ export function RobotDockPanel(): JSX.Element {
           if (live && content.trim()) {
             setUrdf(content)
             setBase(dirname(path))
+            setUrdfPath(path)
             return
           }
         }
@@ -40,6 +44,7 @@ export function RobotDockPanel(): JSX.Element {
       if (live) {
         setUrdf(demoArm)
         setBase('')
+        setUrdfPath(null)
       }
     })()
     return () => {
@@ -47,7 +52,21 @@ export function RobotDockPanel(): JSX.Element {
     }
   }, [currentFolder])
 
-  return <RobotView urdfContent={urdf} basePath={base} compact />
+  return (
+    <div className="robotdock">
+      <RobotView urdfContent={urdf} basePath={base} compact />
+      {urdfPath && (
+        <button
+          type="button"
+          className="robotdock__expand"
+          title="Open the robot full-screen (Pose tool)"
+          onClick={() => void openFile('local', urdfPath)}
+        >
+          ⤢ Pose
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default RobotDockPanel
