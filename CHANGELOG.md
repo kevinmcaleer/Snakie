@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — kid-friendly block builder (#315a, epic #309 Phase 5).** Build a
+  robot from blocks: a floating, transparent, pinnable **Build** panel on the left
+  (like the breadboard's library dock) lists your components with a per-item edit
+  pencil (view by default). **＋ Box / Tube / Ball** adds a primitive that sticks
+  to the selected part (a fixed joint — no jargon). Grab a **face and pull** to
+  resize it — Fusion-style, with the **live measurement** shown and the opposite
+  face held put — or type exact mm. Edits save straight into the linked project
+  URDF, and the camera never jumps. (Revolute/prismatic joints + a mimic editor
+  are the follow-up #315b.)
 - **Robot View — motion timeline → MicroPython (#314, epic #309 Phase 4).** A
   keyframe timeline docks under the pose tool: a track per joint, **play / loop /
   scrub** with **linear or ease-in-out** easing, snapshot the pose as a keyframe
