@@ -803,7 +803,18 @@ export function RobotView({
     }
 
     const scene = new THREE.Scene()
-    scene.background = new THREE.Color(0x191a1d)
+    // Background follows the theme: white in light mode, black in dark. Decide from
+    // the --text luminance (light themes use dark text) so it's robust to any skin.
+    const applyBg = (): void => {
+      const text = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()
+      const m = /#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(text)
+      const lum = m ? 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16) : 200
+      const lightMode = lum < 128 // dark text ⇒ light theme ⇒ white background
+      scene.background = new THREE.Color(lightMode ? 0xffffff : 0x000000)
+    }
+    applyBg()
+    const themeObserver = new MutationObserver(applyBg)
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
     // Isometric ORTHOGRAPHIC camera (#320) — the three axes foreshorten equally
     // and there's no perspective distortion, which reads cleaner for poses. Its
@@ -1715,6 +1726,7 @@ export function RobotView({
       teardownPose()
       cancelAnimationFrame(raf)
       ro.disconnect()
+      themeObserver.disconnect()
       controls.removeEventListener('change', onControlsChange)
       zoomApiRef.current = null
       if (viewCube) {
