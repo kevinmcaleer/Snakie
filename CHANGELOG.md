@@ -7,11 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — new blocks & meshes arrive at the origin, not stuck to the
+  selection.** Adding a block or importing an STL/DAE now drops it at the
+  **workspace origin** (attached to the base), **selects it**, and **reframes** so
+  it's actually in view — instead of auto-joining it to the selected part with an
+  offset (a placement that can't be guessed). Selecting a block in the Build list
+  highlights it in 3-D, meshes included (re-applied once an async mesh loads).
 - **Robot View — zoom controls + a consistent pin.** The 3-D viewer gains the
   usual floating **zoom cluster** bottom-right (−, a live **%** readout, +, and a
-  **zoom-to-fit** button); **double-click the %** toggles 100% ↔ fit. The Build
-  panel's pin button now uses the app's standard **pushpin** icon (outline when
-  loose, filled when pinned) and accent colour, instead of a one-off gold star.
+  **zoom-to-fit** button), styled identically to the node-graph control;
+  **double-click the %** toggles 100% ↔ fit. The Build panel's pin button now uses
+  the app's standard **pushpin** icon (outline when loose, filled when pinned) and
+  accent colour, instead of a one-off gold star.
 - **Robot View — "Make base" + base protection (#309 builder).** A URDF hangs off
   its **base** link, so deleting the base used to leave an empty, unusable file.
   Now the base **can't be deleted** (its ✕ is disabled with a hint, and it shows a

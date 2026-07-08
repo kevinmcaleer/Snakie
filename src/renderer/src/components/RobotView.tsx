@@ -312,6 +312,9 @@ export function RobotView({
     halfView: number
   } | null>(null)
   const framedKeyRef = useRef<string | null>(null)
+  // Set before an ADD (primitive / STL) so the next re-parse RE-FRAMES to reveal
+  // the new object at the origin, instead of preserving the camera like an edit.
+  const refitNextRef = useRef(false)
 
   const editGeom: PrimitiveGeom | null = useMemo(
     () => (editLink ? readPrimitive(content, editLink) : null),
@@ -342,7 +345,11 @@ export function RobotView({
 
   const handleAddPrimitive = (kind: PrimitiveKind): void => {
     if (!canEdit) return // needs a saved project file — don't set a phantom selection
-    const { urdf, link } = addPrimitive(content, { kind, parent: selectedLink ?? undefined })
+    // Bring a new block in at the WORKSPACE ORIGIN, attached to the base (never
+    // auto-stuck onto the selected part — that placement can't be guessed). The
+    // user then moves/joins it. Reframe so it's actually in view.
+    refitNextRef.current = true
+    const { urdf, link } = addPrimitive(content, { kind, jointXyz: [0, 0, 0] })
     commitUrdf(urdf)
     setSelectedLink(link)
     setEditLink(link)
@@ -640,14 +647,19 @@ export function RobotView({
         if (res.error) setSavingLabel(`import failed: ${res.error}`)
         return
       }
-      // Add the mesh to the URDF (a new link + fixed joint) so it renders now.
+      // Add the mesh to the URDF (a new link + fixed joint at the origin) so it
+      // renders now. Select it + reframe so the user can see + place it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
       const next = addMeshLink(content, { meshRel: res.rel, linkBase })
+      refitNextRef.current = true
       // Update the buffer (RobotView re-renders + the tab reflects it), then let
       // an effect persist it once the store state is fresh (saveFile() called
       // here would write the stale pre-edit content).
       updateContent(activeFile.id, next.urdf)
       pendingSaveRef.current = activeFile.id
+      setSelectedLink(next.link)
+      setEditLink(next.link)
+      if (!buildOpen) setBuildOpen(true)
       setSavingLabel(`added ${next.link}`)
     } catch (e) {
       setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
@@ -802,6 +814,14 @@ export function RobotView({
     }
     const framePreservingCamera = (robot: URDFRobot): void => {
       const saved = cameraStateRef.current
+      if (refitNextRef.current) {
+        // A just-added object: reframe so it's actually in view (once).
+        refitNextRef.current = false
+        frameModel(robot)
+        framedKeyRef.current = frameKey
+        cameraStateRef.current = null
+        return
+      }
       if (saved && framedKeyRef.current === frameKey) {
         halfView = saved.halfView
         camera.position.copy(saved.pos)
@@ -833,6 +853,9 @@ export function RobotView({
     const finalize = (): void => {
       if (disposed || !ready || pending > 0 || !robot) return
       framePreservingCamera(robot)
+      // A mesh that finished loading async isn't outlined yet — re-apply the
+      // selection highlight now that its geometry exists.
+      highlightApiRef.current?.apply(selectedLinkRef.current)
       if (failed.length) {
         const shown = failed.slice(0, 3).join(', ')
         const more = failed.length > 3 ? ` +${failed.length - 3} more` : ''
