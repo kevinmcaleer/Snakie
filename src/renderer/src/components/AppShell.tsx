@@ -274,6 +274,10 @@ export function AppShell(): JSX.Element {
   const { filesCollapsed, shellCollapsed, rightCollapsed, activityView, boardPaneOpen } =
     layout.workspace
   const dockOpen = layout.workspace.dockOpen
+  // Transient editor focus (Robot pop-out): hide the board, instruments + console
+  // around the URDF without touching the workspace (#320 follow-up).
+  const focus = layout.focus
+  const boardPaneVisible = boardPaneOpen && !focus
 
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
@@ -306,6 +310,16 @@ export function AppShell(): JSX.Element {
     if (panel && panel.isCollapsed()) panel.expand()
   }, [])
 
+  // A panel toggle (or activity click) while in focus mode simply LEAVES focus,
+  // restoring the full Robot layout, rather than fighting the focus overrides.
+  const exitFocus = useCallback((): boolean => {
+    if (layout.focus) {
+      layout.setFocus(false)
+      return true
+    }
+    return false
+  }, [layout])
+
   // Apply the active workspace's geometry whenever it changes (switch / reset).
   // setLayout drives the sizes; the explicit collapse() calls are belt-and-braces
   // so a collapsible panel lands collapsed even if the group clamps a 0 size.
@@ -319,15 +333,18 @@ export function AppShell(): JSX.Element {
     const raf = requestAnimationFrame(() => {
       // The horizontal group's setLayout array must match the RENDERED panels:
       // 4 with the board pane open, 3 (board slot elided) when it's closed.
+      // In focus mode the board pane elides, so the editor takes its share.
+      const boardOn = ws.boardPaneOpen && !focus
       hGroupRef.current?.setLayout(
-        ws.boardPaneOpen
+        boardOn
           ? [...ws.horizontal]
           : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
       )
       vGroupRef.current?.setLayout([...ws.vertical])
       // Sync each collapsible panel BOTH ways to the target workspace, so the RRP
       // panel state can't drift from the store flag (which would strand the
-      // toggle button / activity icon on the next click).
+      // toggle button / activity icon on the next click). Focus also collapses
+      // the console so only the URDF shows.
       const sync = (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
         const panel = ref.current
         if (!panel) return
@@ -335,7 +352,7 @@ export function AppShell(): JSX.Element {
         else panel.expand()
       }
       sync(filesRef, ws.filesCollapsed)
-      sync(shellRef, ws.shellCollapsed)
+      sync(shellRef, focus || ws.shellCollapsed)
       sync(rightRef, ws.rightCollapsed)
     })
     return () => cancelAnimationFrame(raf)
@@ -476,7 +493,7 @@ export function AppShell(): JSX.Element {
   // other's freed space, which made toggling one reveal the other). Its flag is
   // part of the workspace layout (the Board/Data Lab workspaces open it).
   const setDockOpen = layout.setDockOpen
-  const instrumentsVisible = dockOpen
+  const instrumentsVisible = dockOpen && !focus
   const toggleInstruments = useCallback((): void => {
     setDockOpen(!dockOpen)
   }, [dockOpen, setDockOpen])
@@ -935,13 +952,23 @@ export function AppShell(): JSX.Element {
       </div>
       <Toolbar
         filesCollapsed={filesCollapsed}
-        onToggleFiles={() => toggle(filesRef)}
+        onToggleFiles={() => {
+          if (!exitFocus()) toggle(filesRef)
+        }}
         shellCollapsed={shellCollapsed}
-        onToggleShell={() => toggle(shellRef)}
+        onToggleShell={() => {
+          if (!exitFocus()) toggle(shellRef)
+        }}
         rightCollapsed={rightCollapsed}
-        onToggleRight={() => toggle(rightRef)}
-        onOpenBoard={toggleBoard}
-        onToggleInstruments={toggleInstruments}
+        onToggleRight={() => {
+          if (!exitFocus()) toggle(rightRef)
+        }}
+        onOpenBoard={() => {
+          if (!exitFocus()) toggleBoard()
+        }}
+        onToggleInstruments={() => {
+          if (!exitFocus()) toggleInstruments()
+        }}
         instrumentsVisible={instrumentsVisible}
         instrumentCount={openInstruments.length}
       />
@@ -951,6 +978,11 @@ export function AppShell(): JSX.Element {
           active={activityView}
           onOpenSettings={() => openSettings('appearance')}
           onSelect={(view) => {
+            // In focus mode, any activity click just restores the Robot layout.
+            if (exitFocus()) {
+              setActivityView(view)
+              return
+            }
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
             if (view === activityView) {
@@ -1019,7 +1051,7 @@ export function AppShell(): JSX.Element {
           {/* The embedded Board View (the Board workspace's tri-split, #259):
               code on the left, the board here, the instrument dock at the far
               right — code, wiring and instruments visible together. */}
-          {boardPaneOpen && (
+          {boardPaneVisible && (
             <>
               <PanelResizeHandle className="resize-handle resize-handle--vertical" />
               {/* defaultSize = the ACTIVE workspace's board share (not the mount-time

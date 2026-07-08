@@ -17,7 +17,7 @@ import demoArm from '../assets/demo-arm.urdf?raw'
  */
 export function RobotDockPanel(): JSX.Element {
   const { currentFolder, openFile, openBuffer } = useWorkspace()
-  const { switchWorkspace } = useWorkspaceLayout()
+  const { setFocus } = useWorkspaceLayout()
   const [urdf, setUrdf] = useState<string>(demoArm)
   // The URDF's folder, so RobotView resolves the robot's meshes (#319). Empty
   // for the bundled demo arm (all primitives — no meshes to resolve).
@@ -56,12 +56,13 @@ export function RobotDockPanel(): JSX.Element {
   }, [currentFolder])
 
   // Pop the robot out full-screen (the Pose tool + assembly): a saved project
-  // URDF opens as its file; the bundled demo arm opens as a buffer. Switch to
-  // Code mode so the routed viewer fills the editor pane.
+  // URDF opens as its file; the bundled demo arm opens as a buffer. Stay in Robot
+  // mode and enter transient FOCUS — hides the board, instruments + console so
+  // the URDF fills the editor, restored when you switch modes or reopen a panel.
   const popOut = (): void => {
     if (urdfPath) void openFile('local', urdfPath)
     else openBuffer('demo-arm.urdf', urdf)
-    switchWorkspace('code')
+    setFocus(true)
   }
 
   // Create a new blank robot (.urdf) and open it full-screen in the pose tool.
@@ -91,7 +92,7 @@ export function RobotDockPanel(): JSX.Element {
     } else {
       openBuffer('robot.urdf', content)
     }
-    switchWorkspace('code')
+    setFocus(true) // show the new robot full-screen (stay in Robot mode)
   }
 
   // No project robot yet (the demo arm is a stand-in) → nudge toward "New robot".
