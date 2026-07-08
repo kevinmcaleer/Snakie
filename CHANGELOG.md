@@ -59,6 +59,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Fixed
+- **Files panel now always reopens from the toolbar button / activity icon.** A
+  workspace switch (or the Robot pop-out) could leave the panel visually
+  collapsed while the store thought it was open, so the next toggle click called
+  collapse() and it stayed shut. The toggle now reads the panel's actual state
+  and the switch syncs both ways, so it's self-healing.
 - **Robot pose/servo panel is now legible in the light skin.** The panel used an
   undefined colour token, so it rendered dark-on-dark in the parchment theme; it
   now uses the theme surface tokens (parchment ⇄ charcoal) like the file panel.
