@@ -823,14 +823,65 @@ export function RobotView({
     }
 
     const scene = new THREE.Scene()
-    // Background follows the theme: white in light mode, black in dark. Decide from
-    // the --text luminance (light themes use dark text) so it's robust to any skin.
-    const applyBg = (): void => {
+    // Light theme? Decided from the --text luminance (light themes use dark text)
+    // so it's robust to any skin. Drives the bg + grid colours.
+    const themeIsLight = (): boolean => {
       const text = getComputedStyle(document.documentElement).getPropertyValue('--text').trim()
       const m = /#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(text)
       const lum = m ? 0.299 * parseInt(m[1], 16) + 0.587 * parseInt(m[2], 16) + 0.114 * parseInt(m[3], 16) : 200
-      const lightMode = lum < 128 // dark text ⇒ light theme ⇒ white background
-      scene.background = new THREE.Color(lightMode ? 0xffffff : 0x000000)
+      return lum < 128
+    }
+
+    // Ground grid: a faint MINOR grid + a slightly stronger MAJOR grid (blueprint
+    // style) + red-X / blue-Z origin lines. Colours follow the theme (light + a lot
+    // subtler than before). Rebuilt on frame/edit and on theme change.
+    let gridGroup: THREE.Group | null = null
+    let gridParams: { size: number; minY: number } | null = null
+    const disposeGrid = (): void => {
+      if (!gridGroup) return
+      scene.remove(gridGroup)
+      gridGroup.traverse((o) => {
+        const mesh = o as THREE.Mesh
+        if (mesh.geometry) mesh.geometry.dispose()
+        const mat = mesh.material as THREE.Material | THREE.Material[] | undefined
+        if (Array.isArray(mat)) mat.forEach((m) => m.dispose())
+        else mat?.dispose()
+      })
+      gridGroup = null
+    }
+    const layGrid = (size: number, minY: number): void => {
+      disposeGrid()
+      gridParams = { size, minY }
+      const light = themeIsLight()
+      const minorC = light ? 0xd7d3c6 : 0x2b2d32
+      const majorC = light ? 0xbcb6a4 : 0x40434a
+      const group = new THREE.Group()
+      const minor = new THREE.GridHelper(size, 48, minorC, minorC)
+      ;(minor.material as THREE.LineBasicMaterial).transparent = true
+      ;(minor.material as THREE.LineBasicMaterial).opacity = light ? 0.6 : 0.5
+      const major = new THREE.GridHelper(size, 8, majorC, majorC)
+      group.add(minor, major)
+      const half = size / 2
+      const originLine = (a: THREE.Vector3, b: THREE.Vector3, color: number): THREE.Line => {
+        const ln = new THREE.Line(
+          new THREE.BufferGeometry().setFromPoints([a, b]),
+          new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.85 })
+        )
+        ln.renderOrder = 1
+        return ln
+      }
+      group.add(originLine(new THREE.Vector3(-half, 0, 0), new THREE.Vector3(half, 0, 0), 0xd0483a)) // X
+      group.add(originLine(new THREE.Vector3(0, 0, -half), new THREE.Vector3(0, 0, half), 0x3f78d8)) // Z
+      group.position.y = minY
+      gridGroup = group
+      scene.add(group)
+    }
+
+    // Background follows the theme: white in light, black in dark. Also re-lay the
+    // grid (its colours are theme-dependent) once one exists.
+    const applyBg = (): void => {
+      scene.background = new THREE.Color(themeIsLight() ? 0xffffff : 0x000000)
+      if (gridParams) layGrid(gridParams.size, gridParams.minY)
     }
     applyBg()
     const themeObserver = new MutationObserver(applyBg)
@@ -1069,7 +1120,6 @@ export function RobotView({
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
-    let grid: THREE.GridHelper | null = null
     const frameModel = (robot: URDFRobot, animate = false): void => {
       // Flush world matrices BEFORE measuring — a dirty transform frames stale.
       robot.updateMatrixWorld(true)
@@ -1087,15 +1137,7 @@ export function RobotView({
           : radius * 6
       zoomBase = dist
       const destPos = centre.clone().addScaledVector(isoDir, dist)
-      if (grid) {
-        scene.remove(grid)
-        grid.geometry.dispose()
-        ;(grid.material as THREE.Material).dispose()
-      }
-      const gridSize = Math.max(size.x, size.z) * 3 + 0.4
-      grid = new THREE.GridHelper(gridSize, 20, 0x3a3d44, 0x27292e)
-      grid.position.y = box.min.y
-      scene.add(grid)
+      layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
       if (animate) {
         flyTo(destPos, centre, 1, radius * 1.35, radius)
         return
@@ -1118,14 +1160,7 @@ export function RobotView({
       const box = new THREE.Box3().setFromObject(robot)
       if (box.isEmpty()) return
       const size = box.getSize(new THREE.Vector3())
-      if (grid) {
-        scene.remove(grid)
-        grid.geometry.dispose()
-        ;(grid.material as THREE.Material).dispose()
-      }
-      grid = new THREE.GridHelper(Math.max(size.x, size.z) * 3 + 0.4, 20, 0x3a3d44, 0x27292e)
-      grid.position.y = box.min.y
-      scene.add(grid)
+      layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
     }
     const framePreservingCamera = (robot: URDFRobot): void => {
       const saved = cameraStateRef.current
