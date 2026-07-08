@@ -6,107 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Added
-- **Data View — column summary side panel (#276, epic #272).** A "Columns"
-  panel (DuckDB Column Explorer style) profiles every column of the current
-  filtered view: numbers/timestamps get a histogram with min/max/mean/median;
-  text gets its top values as frequency bars; each card shows the null/gap %
-  (the dropped-reading count that teaches data quality). Compact sparklines by
-  default — click a card to expand to the full chart + stats. Recomputes as you
-  sort/filter, and only computes while the panel is open.
-- **Data View — sort, filter and a live column summary (#275, epic #272).**
-  Click a column header to sort it (type-aware — numbers order 2 < 10 < 100, not
-  lexically; timestamps chronologically; asc → desc → off), with nulls always
-  last. A toggleable filter row gives numeric/timestamp columns a min–max range
-  and text columns contains/equals; filters compose across columns and show a
-  "27,501 of 50,001 rows" count with one-click **Clear**. A summary strip under
-  the header profiles each column (min–max, mean, distinct/top value, empty
-  count) and **recomputes against the filtered set** — all over the same
-  virtualised table, smooth at 86k rows.
-- **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
-  `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
-  it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
-  header row, infers each column's type (number / timestamp / text), and
-  tolerates the mess real device logs carry — ragged rows, blank lines and a
-  torn final row (board unplugged mid-write) are handled, never fatal, with a
-  data-quality "ragged" count and null markers for dropped readings. Rendering
-  is **virtualised**, so a 24-hour log (~86k rows) scrolls smoothly with only
-  the visible rows in the DOM. This is the foundation of the Data View epic
-  (#272); sort/filter, the column-summary panel, pull-from-board, graphing and
-  export build on the same parsed model.
-- **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
-  remembers the open local files (and which tab was active) and reopens them
-  next time — alongside the working folder it already restored (#177). A
-  **crash-guard** protects startup: if a file broke the app last launch, Snakie
-  opens clean, drops that session so it can't loop, and shows a "Opened without
-  restoring files" note — no keystroke or admin needed, which matters on a
-  locked-down school machine. Session state lives in the per-user `userData`
-  store (writable without elevation).
-
-### Changed
-- **Blueprint grid lines pick up the paper's imperfections.** The grid is warped
-  a hair by the same fractal-noise paper fibre (an SVG displacement filter), so
-  the lines wobble subtly like ink on textured paper instead of being machine-
-  perfect. Blueprint mode only; scales with the grid; no measurable pan cost.
-- **Instrument dock defaults per mode + exports always fit the whole board.**
-  The instrument dock now starts **closed in Board mode** (the board gets the
-  room) and **Code**, and **open in Data Lab** (the instrument bench). And
-  image/PDF exports of the breadboard now always save the **zoom-to-fit** view —
-  every placed item is included and fully backed by the grid/paper, whatever the
-  on-screen zoom.
-- **Blueprint is now the default breadboard background**, and the wiring grid is
-  hidden on the **schematic** view (the schematic is a clean sheet). Image/PDF
-  exports now bake in the on-screen sheet colour — the blueprint blue for the
-  breadboard, the sheet colour for the schematic — so a saved diagram looks
-  exactly as drawn (the paper mottle's soft-light blend is preserved too).
-- **Blueprint background gets subtle procedural paper texture.** A whisper-faint
-  fractal-noise mottle (generated with SVG `feTurbulence`, no image) now gives
-  the blueprint sheet the light/dark undulation of real drawing paper. It's
-  drawn in world coordinates like the grid, so it **pans and scales with the
-  parts**, and it's tiled via a stitched pattern so it stays cheap. Blueprint
-  mode only.
-- **Board View toolbar: snap-to-grid, a clickable zoom readout, and no more
-  stray zoom jumps.** A new **magnet** toggle (right of the export button) snaps
-  a dragged part's top-left pin to the nearest 2.54 mm grid intersection, so
-  parts line up on the paper grid; it's remembered across sessions. The **zoom
-  percentage is now a button** — click it to toggle between 100% and fit-all.
-  And opening/closing the floating components browser no longer re-fits the view
-  (that made clicking the browser jump the zoom); only picking an individual
-  component still zooms to fit it.
-- **Breadboard grid is now graph paper (#…).** The Board View's wiring
-  background scales and pans WITH the parts instead of sitting fixed behind
-  them — like paper the parts are placed on. The smallest square is the real
-  **2.54 mm** (0.1") pin pitch, so pads land on grid lines; 1-inch major lines
-  anchor the view, and a finer half-pitch grid fades in as you zoom in (the
-  minor grid fades out as you zoom out). Lines stay crisp at any zoom.
-- **Three focused modes: Code · Board · Data Lab (modes review).** The
-  four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
-  Lab** (instrument bench + a tall console/plotter); existing layouts migrate
-  automatically, including a stale active workspace. **Board mode now gives the
-  board every pixel**: the parts **library** became an Obsidian-style pinnable
-  overlay (open it from its edge tab; it slides away when it loses focus unless
-  you pin it — the pin sits top-left of its header), the **connections table**
-  starts collapsed to a bottom bar with the same pin behaviour, the floating
-  **components browser** starts collapsed, the driver banner is height-capped,
-  and the redundant chrome (the drag grip, the BOARD VIEW title, the dock's
-  mini board) is hidden while the board lives in the main window. Also fixes
-  the Board pane opening at the wrong size (a panel-mount race) and the board
-  column not filling its pane (a collapsed connections table used to strand
-  dead space below itself).
-- **Board View chrome slimmed further.** The "New board" and "open boards
-  folder" header buttons are gone from both the Board mode and the floating
-  window — the Library panel owns part/board authoring and library management
-  now. And in Board MODE, part mini-help opens in the main **Help Library**
-  (which now also lists board-placed parts under "In This Project") instead of
-  the pane's own drawer — one help surface, not two. The floating window keeps
-  its built-in help drawer.
-- **The Board toolbar knob now pops the board out — like undocking an
-  instrument.** Opening the Board window while Board mode is active hands the
-  board to its own OS window and returns the main split to Code; closing that
-  window brings Board back as a mode; picking Board mode while the window is
-  open re-docks it. One board, two homes, never both.
+## [0.24.0] - 2026-07-08
 
 ### Added
+- **Data View — inspect logged CSV/TXT data as a table (epic #272).** Opening a
+  `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text.
+  It auto-detects the delimiter (comma / tab / semicolon / whitespace) and header
+  row, infers each column's type (number / timestamp / text), and tolerates the
+  mess real device logs carry — ragged rows, blank lines and a torn final row
+  (board unplugged mid-write) are handled, never fatal — with a "ragged" count
+  and null markers for dropped readings. Rendering is **virtualised**, so a
+  24-hour log (~86k rows) scrolls smoothly (#274). Click a header to **sort**
+  (type-aware; nulls last), open a **filter** row (min–max ranges / text
+  contains-equals, composable, with an "N of M rows" count + Clear), and a
+  **summary strip** profiles each column and recomputes against the filtered
+  set (#275). A **Columns** side panel (DuckDB Column Explorer style) profiles
+  every column — histograms + min/max/mean/median for numbers, top values for
+  text, and the null/gap % — glance-then-expand, recomputing live (#276).
 - **Data Logger instrument — a vintage dot-matrix printer (#242).** Hit
   **RECORD** and every numeric `SNK` reading (meter, plot, distance, IMU,
   environment…) is captured with a timestamp and "printed" onto tractor-feed
@@ -114,93 +30,82 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   printhead style. **TEAR OFF** downloads the session as a spreadsheet-ready
   wide CSV (`time_s` + one column per series) and starts a fresh sheet. Works
   fully offline against the Simulated device, so a hardware-free classroom gets
-  real data logging — a £4 Pico doing a £100 classroom logger's job. The
-  session/CSV/paper geometry is pure and unit-tested; RECORD is always
-  reachable (arm before any telemetry arrives).
+  real data logging — a £4 Pico doing a £100 classroom logger's job.
+- **Workspace layouts (epic #259).** A toolbar switcher restyles the whole shell
+  in one click; each workspace remembers its own sidebar view, panel sizes,
+  collapse states and instrument-dock visibility. Switching never remounts, so
+  the editor, console scrollback and running instruments all survive. A **↺
+  reset** restores the active workspace to its preset. All layout state moved
+  into one versioned, corruption-safe store that migrates your existing layout
+  on first run.
+- **Open the Oscilloscope / Multimeter any time — with in-instrument help
+  (#256).** The scope and meter no longer stay locked out until your program
+  declares a PWM/ADC pin: toggle them on and, with no source yet, they show a
+  built-in "how to use me" panel (a runnable `inst.watch(scope=pwm)` snippet +
+  a Learn-more link), adopting the file's pin or live `SNK` telemetry the moment
+  one appears. The **Barometer, IMU and Range** instruments explain themselves
+  the same way (#258).
+- **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
+  remembers the open local files (and the active tab) and reopens them next
+  time, alongside the working folder (#177). A crash-guard protects startup: if
+  a file broke the app last launch it opens clean and drops that session so it
+  can't loop — no keystroke or admin needed, which matters on a locked-down
+  school machine.
+- **Seven new Getting Started help articles (#231)** covering Files & sync,
+  Flash MicroPython firmware, Install packages (mip), Problems & validation,
+  Version control (Git), AI chat & autocomplete, and Keeping Snakie up to date;
+  plus **mini-help for every standard-library part** (#213) — all 16 parts now
+  ship a `help.md` (pinout + wiring + a runnable MicroPython snippet).
+- **Pimoroni Motor 2040 + Servo 2040 in the Standard parts library (#224).**
 
 ### Changed
-- **Three focused modes: Code · Board · Data Lab (modes review).** The
-  four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
-  Lab** (instrument bench + a tall console/plotter); existing layouts migrate
-  automatically, including a stale active workspace. **Board mode now gives the
-  board every pixel**: the parts **library** became an Obsidian-style pinnable
-  overlay (open it from its edge tab; it slides away when it loses focus unless
-  you pin it — the pin sits top-left of its header), the **connections table**
-  starts collapsed to a bottom bar with the same pin behaviour, the floating
-  **components browser** starts collapsed, the driver banner is height-capped,
-  and the redundant chrome (the drag grip, the BOARD VIEW title, the dock's
-  mini board) is hidden while the board lives in the main window. Also fixes
-  the Board pane opening at the wrong size (a panel-mount race) and the board
-  column not filling its pane (a collapsed connections table used to strand
-  dead space below itself).
-- **Board View chrome slimmed further.** The "New board" and "open boards
-  folder" header buttons are gone from both the Board mode and the floating
-  window — the Library panel owns part/board authoring and library management
-  now. And in Board MODE, part mini-help opens in the main **Help Library**
-  (which now also lists board-placed parts under "In This Project") instead of
-  the pane's own drawer — one help surface, not two. The floating window keeps
-  its built-in help drawer.
-- **The Board toolbar knob now pops the board out — like undocking an
-  instrument.** Opening the Board window while Board mode is active hands the
-  board to its own OS window and returns the main split to Code; closing that
-  window brings Board back as a mode; picking Board mode while the window is
-  open re-docks it. One board, two homes, never both.
-
-### Added
-- **Workspace layouts (epic #259, phases 0+1).** A new **Code · Board · Lab ·
-  Data** switcher in the toolbar restyles the whole shell in one click: each
-  workspace remembers its own sidebar view, panel sizes, collapse states and
-  instrument-dock visibility — *Code* is today's editor-first default, *Lab*
-  maximises the instrument bench, *Data* gives the console/plotter the tall
-  half, and ***Board* is a true tri-split for the classroom: your code on the
-  left, the full Board View (breadboard · schematic · node graph, with the
-  parts library and wiring) embedded on the right, and the instrument dock at
-  the far right — code, wiring and live instruments all visible at once.** The
-  embedded Board View loads lazily (code-split) and stays in sync with the
-  floating Board View window via robot.yml. Switching
-  never remounts anything, so the editor, console scrollback and running
-  instruments all survive. A **↺ reset** button restores the active workspace to
-  its factory preset. Under the hood, all layout state moved out of AppShell
-  into one versioned, corruption-safe store (phase 0 of #259) that migrates your
-  existing layout on first run.
-- **Open the Oscilloscope / Multimeter any time — with in-instrument help.**
-  The scope and meter no longer stay locked out until your program declares a
-  PWM/ADC pin: toggle them on from the dock and, when there's no source yet, they
-  show a built-in "how to use me" panel (what's needed + a runnable
-  `inst.watch(scope=pwm)` snippet + a Learn-more link) instead of a blank screen.
-  They adopt the file's PWM/ADC pin — or live `SNK` telemetry — the moment one
-  appears. Backed by a reusable `InstrumentRequirement` panel for conditional
-  instruments.
-- **The Barometer, IMU and Range instruments now explain themselves too.**
-  Opened with no telemetry, they show the same "how to use me" panel (with a
-  runnable snippet + Learn-more) instead of a dead dial, a frozen neutral pose or
-  an empty gauge — and swap to the live view the moment `SNK ENV` / `IMU` /
-  `DIST` data arrives. The Range instrument keeps its HC-SR04 pin pickers and
-  "Run range demo" prompt visible below the panel.
-- **Seven new Getting Started help articles (#231).** The Help Library now
-  covers every advertised feature: **Files & sync** (the two file trees, the
-  transfer bridge, and keeping tagged files in sync on save), **Flash MicroPython
-  firmware** (auto-detect, the MicroPython.org catalog, BOOTSEL, the micro:bit
-  maintenance-mode warning), **Install packages (mip)**, **Problems & validation**
-  (squiggles, the Problems tab, YAML/JSON autofix, board-aware bus checks),
-  **Version control (Git)**, **AI chat & autocomplete** (provider setup, keys,
-  inline suggestions), and **Keeping Snakie up to date**.
+- **Three focused modes: Code · Board · Data Lab (#268).** The four-workspace
+  switcher slims to three — *Lab* and *Data* merged into **Data Lab**; existing
+  layouts migrate automatically. **Board mode now gives the board every pixel**:
+  the parts **library** is an Obsidian-style pinnable overlay, the **connections
+  table** collapses to a pinnable bottom bar, the floating **components browser**
+  starts collapsed, and redundant chrome (the drag grip, the BOARD VIEW title,
+  the New-board / boards-folder buttons, the dock's mini board) is hidden while
+  the board is embedded. Part mini-help routes to the main **Help Library** (one
+  help surface). The **Board toolbar knob pops the board out** into its own
+  window (and closing it returns Board as a mode). Instrument dock defaults per
+  mode: **closed** in Board + Code, **open** in Data Lab.
+- **The breadboard is now graph paper.** The wiring background scales and pans
+  WITH the parts like paper they're placed on: the smallest square is the real
+  **2.54 mm** pin pitch (pads land on grid lines), 1-inch major lines anchor the
+  view, and a finer grid fades in as you zoom (#297); it fills the whole stage
+  and replaces the old static blueprint/schematic grids (#298). **Blueprint is
+  the default background** and carries a subtle **procedural paper texture** —
+  a fractal-noise mottle (SVG `feTurbulence`, no image) that pans/scales with the
+  grid (#300, #301) — and the grid lines pick up that paper fibre so they wobble
+  a hair like ink on paper instead of being machine-perfect (#307). The
+  schematic view is a clean, grid-free sheet (#302).
+- **Board View toolbar: snap-to-grid, a clickable zoom readout, cleaner
+  framing (#299).** A **magnet** toggle snaps a dragged part's top-left pin to
+  the nearest 2.54 mm intersection (remembered across sessions). The zoom
+  percentage is a button toggling 100% / fit-all. Opening the components browser
+  no longer jumps the zoom (only picking a component zooms to fit it).
+- **Image/PDF/SVG exports match what's on screen and include everything.** They
+  bake in the on-screen sheet colour (blueprint blue / schematic sheet), draw
+  the grid + paper (and its wobble) to the edges, and always save the
+  **zoom-to-fit** view so every placed item is included, uncropped (#302, #303,
+  #304, #308).
 
 ### Fixed
 - **Failures are no longer silently swallowed (#225).** A shared `reportError`
-  helper replaces the `.catch(() => {})` sites that made failures invisible: it
-  always logs with a `[context]` tag, and for user-visible actions surfaces a
-  message in the status bar via the existing `snakie:status` seam, so the board
-  never merely *appears* unresponsive. Wired into Run / Stop / Reset / open /
-  save (Toolbar → status bar), the servo / LED / buzzer / gamepad / range /
-  display instrument sends (which previously had no rejection handler at all),
-  and the simulated-runtime queue + parts/firmware cleanup in the main process.
-- **Device-event broadcast survives a window closing mid-stream (#226).** The
-  broadcaster that mirrors the live device stream to the main, instrument,
-  console and Board View windows only guarded the main window against being
-  destroyed; a secondary window closing mid-broadcast could throw "Object has
-  been destroyed" and kill the loop. Every send is now guarded (and wrapped) so
-  one closing window can't stop the stream reaching the others.
+  helper replaces the `.catch(() => {})` sites that made failures invisible — it
+  logs with a `[context]` tag and surfaces user-visible actions in the status
+  bar, so the board never merely *appears* unresponsive.
+- **Device-event broadcast survives a window closing mid-stream (#226).** Every
+  send to the main / instrument / console / Board View windows is now guarded, so
+  one window closing mid-broadcast can't stop the stream reaching the others.
+- **Board-mode Help button opens the Help panel (#271)** — it expands the
+  collapsed sidebar first — and the panel's minimum width was doubled.
+- **Export no longer crops parts (#305)** — the frame now accounts for each
+  translated part group's transform.
+- **Session restore survives fast relaunches / dev HMR reloads (#266, #306)** —
+  the crash-guard disarms on the next painted frame instead of after 4 s, so a
+  quick reload can't strand its marker and wipe the session.
 
 ## [0.23.2] - 2026-07-04
 
@@ -1760,7 +1665,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...HEAD
+[0.24.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...v0.23.0
