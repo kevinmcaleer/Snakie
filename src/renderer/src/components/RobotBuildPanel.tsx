@@ -44,13 +44,6 @@ export interface RobotBuildPanelProps {
   onSelect: (link: string | null) => void
   editLink: string | null
   onEdit: (link: string | null) => void
-  /** Geometry of the link being edited (for the size form), or null. */
-  editGeom: PrimitiveGeom | null
-  onSetSize: (link: string, dims: number[]) => void
-  /** The parent joint of the link being edited (null for the root), + a setter. */
-  editJoint: JointDef | null
-  jointNames: string[]
-  onSetJoint: (link: string, spec: JointSpec) => void
   /** The current root link, and an action to re-root the model at a link. */
   rootLink: string | null
   onMakeBase: (link: string) => void
@@ -66,7 +59,7 @@ export interface RobotBuildPanelProps {
 const mm = (m: number): number => Math.round(m * 1000)
 const toM = (millis: number): number => millis / 1000
 
-function SizeForm({
+export function SizeForm({
   geom,
   onChange
 }: {
@@ -136,7 +129,7 @@ const AXES: Array<{ id: 'x' | 'y' | 'z'; vec: Vec3 }> = [
 ]
 
 /** The joint editor (#315b): type, axis, limits and a mimic coupling. */
-function JointForm({
+export function JointForm({
   joint,
   names,
   onChange
@@ -325,11 +318,6 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onSelect,
     editLink,
     onEdit,
-    editGeom,
-    onSetSize,
-    editJoint,
-    jointNames,
-    onSetJoint,
     rootLink,
     onMakeBase,
     onDelete,
@@ -434,49 +422,28 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                 )}
                 <button
                   type="button"
+                  className="robotbuild__del"
+                  disabled={it.link === rootLink}
+                  onClick={() => onDelete(it.link)}
+                  title={
+                    it.link === rootLink
+                      ? 'The base can’t be deleted — make another block the base first'
+                      : `Delete ${it.link}`
+                  }
+                  aria-label={`Delete ${it.link}`}
+                >
+                  ✕
+                </button>
+                <button
+                  type="button"
                   className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
                   onClick={() => onEdit(isEdit ? null : it.link)}
-                  title={isEdit ? 'Done editing' : 'Edit this block'}
+                  title={isEdit ? 'Close properties' : 'Edit properties'}
                   aria-label={`Edit ${it.link}`}
                 >
                   {PENCIL}
                 </button>
               </div>
-              {isEdit &&
-                (() => {
-                  const isRoot = it.link === rootLink
-                  return (
-                    <div className="robotbuild__editrow">
-                      <div className="robotbuild__editmain">
-                        {editGeom ? (
-                          <SizeForm geom={editGeom} onChange={(d) => onSetSize(it.link, d)} />
-                        ) : (
-                          <span className="robotbuild__editnote">Grab a face in 3D to resize, or…</span>
-                        )}
-                        {editJoint && (
-                          <JointForm
-                            joint={editJoint}
-                            names={jointNames}
-                            onChange={(spec) => onSetJoint(it.link, spec)}
-                          />
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        className="robotbuild__del"
-                        disabled={isRoot}
-                        onClick={() => onDelete(it.link)}
-                        title={
-                          isRoot
-                            ? 'The base can’t be deleted — make another block the base first'
-                            : `Delete ${it.link}`
-                        }
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  )
-                })()}
             </li>
           )
         })}
