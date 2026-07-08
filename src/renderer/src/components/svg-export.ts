@@ -185,16 +185,53 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
  * styles are inlined so it renders without the app's CSS. Returns null when the
  * content has no measurable box.
  */
+/** Union bbox of a group's direct children, skipping `<defs>` + `exclude`
+ *  selectors. Falls back to the full getBBox if nothing qualifies. */
+function bboxExcluding(
+  content: SVGGraphicsElement,
+  exclude: string[]
+): { x: number; y: number; width: number; height: number } {
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  content.querySelectorAll(':scope > *').forEach((k) => {
+    if (k.tagName.toLowerCase() === 'defs') return
+    if (exclude.some((sel) => (k as Element).matches?.(sel))) return
+    let bb: DOMRect
+    try {
+      bb = (k as SVGGraphicsElement).getBBox()
+    } catch {
+      return
+    }
+    if (!bb.width && !bb.height) return
+    x0 = Math.min(x0, bb.x)
+    y0 = Math.min(y0, bb.y)
+    x1 = Math.max(x1, bb.x + bb.width)
+    y1 = Math.max(y1, bb.y + bb.height)
+  })
+  if (!Number.isFinite(x0)) return content.getBBox()
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
 export function serializeLiveSvg(
   svg: SVGSVGElement,
   contentSelector: string,
-  opts: { background?: string; margin?: number; exclude?: string[] } = {}
+  opts: {
+    background?: string
+    margin?: number
+    exclude?: string[]
+    /** Frame to everything EXCEPT children matching these selectors (e.g. the
+     *  full-canvas grid/paper) so the export is tight to the drawing, and those
+     *  large backdrop layers just fill the framed area to the edges. */
+    bboxExclude?: string[]
+  } = {}
 ): { svg: string; width: number; height: number } | null {
   const content = svg.querySelector(contentSelector) as SVGGraphicsElement | null
   if (!content) return null
-  let bbox: DOMRect
+  let bbox: { x: number; y: number; width: number; height: number }
   try {
-    bbox = content.getBBox()
+    bbox = opts.bboxExclude?.length ? bboxExcluding(content, opts.bboxExclude) : content.getBBox()
   } catch {
     return null
   }
