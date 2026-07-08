@@ -158,6 +158,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View — blueprint-style ground grid.** The grid is now much **lighter**
+  and theme-aware (subtle on both white and black backgrounds), with **major +
+  minor** subdivision lines, plus **red-X / blue-Z origin lines** through the
+  centre. It re-colours live when the theme changes.
 - **Robot View polish.** The **build menu defaults to pinned-open**; the
   navigation cube is **brighter brass** with its X/Y/Z labels **occluded** by the
   cube (no longer showing through); and the ortho/perspective dropdown collapses to
