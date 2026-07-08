@@ -72,7 +72,10 @@ const SNAP_GRID_KEY = 'snakie.board.snapGrid'
 function visibleWorldBounds(
   view: { tx: number; ty: number; scale: number },
   stageW: number,
-  stageH: number
+  stageH: number,
+  /** Extra world-unit overscan on every side — so the grid/paper fill past the
+   *  viewport edges (and past an export's frame margin) with no bare band. */
+  padWorld = 0
 ): { minX: number; maxX: number; minY: number; maxY: number } {
   const { tx, ty, scale } = view
   const fit = stageW > 0 && stageH > 0 ? Math.min(stageW / VIEW_W, stageH / VIEW_H) : 1
@@ -83,12 +86,16 @@ function visibleWorldBounds(
   const uMinY = (VIEW_H - uH) / 2
   const uMaxY = (VIEW_H + uH) / 2
   return {
-    minX: (uMinX - tx) / scale,
-    maxX: (uMaxX - tx) / scale,
-    minY: (uMinY - ty) / scale,
-    maxY: (uMaxY - ty) / scale
+    minX: (uMinX - tx) / scale - padWorld,
+    maxX: (uMaxX - tx) / scale + padWorld,
+    minY: (uMinY - ty) / scale - padWorld,
+    maxY: (uMaxY - ty) / scale + padWorld
   }
 }
+
+/** Overscan (world units) for the grid/paper so they fill past the viewport +
+ *  any export frame margin — comfortably beyond the 24-unit export margin. */
+const GRID_OVERSCAN = 90
 
 /**
  * PROCEDURAL PAPER (blueprint mode): a whisper-subtle fractal-noise mottle drawn
@@ -108,7 +115,7 @@ function WiringPaper({
   stageH: number
 }): JSX.Element | null {
   if (!(view.scale > 0)) return null
-  const { minX, maxX, minY, maxY } = visibleWorldBounds(view, stageW, stageH)
+  const { minX, maxX, minY, maxY } = visibleWorldBounds(view, stageW, stageH, GRID_OVERSCAN)
   if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
   return (
     <>
@@ -170,7 +177,8 @@ function WiringGrid({
   const { minX: wMinX, maxX: wMaxX, minY: wMinY, maxY: wMaxY } = visibleWorldBounds(
     view,
     stageW,
-    stageH
+    stageH,
+    GRID_OVERSCAN
   )
 
   // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
@@ -1175,7 +1183,13 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     // exactly what's on screen, whatever the mode/theme.
     const stageBg = svg.parentElement ? getComputedStyle(svg.parentElement).backgroundColor : ''
     const background = stageBg && !/rgba?\([^)]*,\s*0\s*\)/.test(stageBg) ? stageBg : '#161719'
-    const res = serializeLiveSvg(svg, '.wc__content', { background, margin: 24, exclude: ['.wc__sel-ring'] })
+    const res = serializeLiveSvg(svg, '.wc__content', {
+      background,
+      margin: 24,
+      exclude: ['.wc__sel-ring'],
+      // Frame to the parts, not the full-canvas grid/paper — they just fill it.
+      bboxExclude: ['.wc__grid-layer', '.wc__paper']
+    })
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
