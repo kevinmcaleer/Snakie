@@ -55,6 +55,23 @@ angle is clamped to `servoMin..servoMax`, optionally inverted, and lerped onto
 `jointMin..jointMax`. Pure implementation + tests: `src/shared/krf.ts`
 (`servoToJoint`), `test/krf.test.ts`.
 
+## Meshes (#319)
+
+A URDF's `<visual>`/`<geometry>` can reference **STL** or **DAE (Collada)** mesh
+files instead of primitives. Robot View loads them straight from the project
+folder — no web server:
+
+- **Relative** paths (`meshes/base.stl`) resolve against the URDF's own folder.
+- **`package://<pkg>/rest`** paths resolve `<pkg>` to that same folder, so
+  `package://my-robot/meshes/link.stl` → `<urdf-folder>/meshes/link.stl`.
+
+Meshes are read through the app's filesystem (binary-safe for STL), the URDF
+`<material>` colour is applied to meshes that carry none, and the camera reframes
+once they load. A mesh that can't be read degrades to a small placeholder plus a
+note in the panel — the rest of the robot still renders. `.obj`/`.glb` and other
+formats aren't loaded yet (they show a placeholder). See
+`examples/mesh-demo/mesh-demo.urdf` for a zero-setup example.
+
 ## Versioning
 
 `robot.version` is bumped on breaking changes; `sanitiseRobotModel` migrates /
