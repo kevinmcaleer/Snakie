@@ -2026,6 +2026,26 @@ export function RobotView({
             {meshNote}
           </div>
         )}
+        {!isEmpty && !error && compact && (
+          <button
+            type="button"
+            className="robotview__minihome"
+            onClick={() => zoomApiRef.current?.home()}
+            title="Home — reset to the fitted default view"
+            aria-label="Home view"
+          >
+            <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+              <path
+                d="M2 7.5L8 2.5l6 5M3.5 6.6V13h9V6.6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        )}
         {!isEmpty && !error && !compact && (
           <div className="robotview__navzone">
             <button

@@ -103,7 +103,10 @@
   top: 10px;
   z-index: 30;
   width: 144px;
-  height: 144px;
+  /* Taller than the 144px cube so the projection dropdown below it lives INSIDE
+     the hover box — otherwise moving the pointer down to click it exits the zone,
+     :hover drops, and the dropdown vanishes before the click lands. */
+  height: 178px;
 }
 .robotview__home {
   position: absolute;
@@ -138,6 +141,31 @@
 :root[data-theme='skeuomorph'] .robotview__home {
   background: rgba(231, 226, 211, 0.92);
 }
+/* Compact (mini dock) home button — top-right, clear of the New/Pop-out actions
+   on the left. Always visible (the mini view has no hover nav zone). */
+.robotview__minihome {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotview__minihome {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__minihome:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
 /* The ViewCube's own canvas is appended here (2× — was 96px). */
 .robotview__viewcube {
   width: 144px;
@@ -153,16 +181,18 @@
    hover like the Home button; clicking opens the full native option list. */
 .robotview__proj {
   position: absolute;
-  top: calc(100% + 2px);
+  /* Just below the 144px cube, but WITHIN the (178px) nav-zone box so the hover
+     region is continuous from cube → dropdown. */
+  top: 148px;
   right: 0;
-  width: 26px;
+  width: 30px;
   font-family: inherit;
   font-size: 0.6rem;
   color: var(--text, #cdd2d9);
   background: rgba(31, 32, 36, 0.92);
   border: 1px solid var(--border, #3a3d44);
   border-radius: 6px;
-  padding: 0.12rem 0.1rem;
+  padding: 0.22rem 0.15rem;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   opacity: 0;

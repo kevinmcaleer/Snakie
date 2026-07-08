@@ -203,6 +203,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — nav + mini-viewer polish.** The projection dropdown under the
+  navigation cube no longer vanishes when you reach for it (it sat just outside the
+  nav zone's hover box, so moving the pointer down dropped the hover; the zone now
+  extends to contain it, and the target is a touch larger). The docked mini-viewer's
+  **New robot** / **Pop out** buttons are readable in the light skin (they hard-coded
+  a dark fill, so the dark label was dark-on-dark) and now use theme tokens. The mini
+  viewer also gains a **Home** button (top-right) that flies back to the fitted
+  default view.
 - **Robot View — hierarchy dialog follow-ups (#353).** Renaming a pose onto an
   existing pose's name no longer silently destroys that pose (the rename is refused
   with an inline warning). The servo dialog's number fields hold raw text while you
