@@ -2142,6 +2142,29 @@ body {
 .shell__dock--robot .instr-dock {
   min-height: 0;
 }
+/* The docked mini-viewer fills its slot; an expand button opens it full-screen. */
+.robotdock {
+  position: absolute;
+  inset: 0;
+}
+.robotdock__expand {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  z-index: 2;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+.robotdock__expand:hover {
+  border-color: #c8a24a;
+  color: #c8a24a;
+}
 
 .activitybar {
   display: flex;

@@ -48,6 +48,16 @@ robot:                # ← the KRF robot MODEL (optional)
       values: { shoulder: 0 }
 ```
 
+### Pose tool (#312)
+
+Opening a robot's `.urdf` full-screen shows the **pose tool** — a slider per
+movable joint (degrees for revolute, mm for prismatic) that drives the model
+within its URDF limits. `<mimic>` joints follow their master (`multiplier *
+master + offset`). Editing a joint's min/max writes an override into
+`robot.joints`; saving a named pose appends to `robot.poses`; both persist here
+(display units — deg/mm). A measure tool reports the distance between two clicked
+points. The `robot.yml` (de)serialiser round-trips this whole `robot:` section.
+
 ### Servo → joint mapping
 
 A running program's servo write drives the mapped joint (Phase 3): the servo
