@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Robot View — 3D URDF viewer (#311, epic #309 Phase 1).** Opening a `.urdf`
+  file now shows the robot model in a three.js scene with orbit / pan / zoom.
+  URDF primitives render with no external meshes (the bundled
+  `examples/demo-arm.urdf` is zero-setup), the camera auto-frames the model on a
+  ground grid, and a malformed URDF shows a graceful error instead of a blank
+  panel. The 3D engine is code-split, so it only loads when you open a robot.
+  Built on the KRF format (#310); the pose tool, servo↔joint binding and motion
+  timeline follow.
+
 ## [0.24.0] - 2026-07-08
 
 ### Added
