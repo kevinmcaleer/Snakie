@@ -246,6 +246,11 @@ const fs = {
   /** Show the native "open folder" dialog. Resolves to the path or null. */
   openFolderDialog: (): Promise<string | null> =>
     unwrap(ipcRenderer.invoke('fs:openFolderDialog')),
+  /** Show the native "open file" dialog (optionally filtered). Resolves to the
+   *  chosen path, or null if cancelled. */
+  openFileDialog: (opts?: {
+    filters?: { name: string; extensions: string[] }[]
+  }): Promise<string | null> => unwrap(ipcRenderer.invoke('fs:openFileDialog', opts)),
   /**
    * Show the native "save file" dialog (used for the untitled "Save As" flow).
    * `defaultName` seeds the dialog's default path. Resolves to the chosen path,

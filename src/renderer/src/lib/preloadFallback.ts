@@ -65,6 +65,7 @@ if (!w.api) {
     },
     fs: {
       openFolderDialog: P(null),
+      openFileDialog: P(null),
       readDir: P([]),
       readFile: P(''),
       writeFile: P(undefined),

@@ -71,6 +71,8 @@ export interface RobotBuildPanelProps {
   importing: boolean
   /** Editing needs a saved project file — disables add/edit with a hint. */
   canEdit: boolean
+  /** Open a different robot `.urdf` via the native picker (works popped out). */
+  onOpenRobot: () => void
 }
 
 /** metres → integer mm (display) and back. */
@@ -467,7 +469,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onImportStl,
     canImport,
     importing,
-    canEdit
+    canEdit,
+    onOpenRobot
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
   // Which tree branches are collapsed (all expanded by default).
@@ -630,6 +633,14 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       </div>
 
       <div className="robotbuild__foot">
+        <button
+          type="button"
+          className="robotbuild__open"
+          onClick={onOpenRobot}
+          title="Open a different robot (.urdf) — works when popped out full-screen"
+        >
+          📂 Open…
+        </button>
         <button
           type="button"
           className="robotbuild__stl"

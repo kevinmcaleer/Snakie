@@ -55,6 +55,20 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
     })
   )
 
+  ipcMain.handle(
+    'fs:openFileDialog',
+    (_e, opts?: { filters?: { name: string; extensions: string[] }[] }) =>
+      wrap(async () => {
+        const win = getWindow()
+        const options = { properties: ['openFile' as const], filters: opts?.filters }
+        const result = win
+          ? await dialog.showOpenDialog(win, options)
+          : await dialog.showOpenDialog(options)
+        if (result.canceled || result.filePaths.length === 0) return null
+        return result.filePaths[0]
+      })
+  )
+
   ipcMain.handle('fs:saveFileDialog', (_e, defaultPath?: string) =>
     wrap(async () => {
       const win = getWindow()

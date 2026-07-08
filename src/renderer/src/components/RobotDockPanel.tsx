@@ -67,6 +67,19 @@ export function RobotDockPanel(): JSX.Element {
     setFocus(true)
   }
 
+  // Open an existing robot model (.urdf) via the native picker, full-screen.
+  const openRobot = async (): Promise<void> => {
+    const path = await window.api.fs.openFileDialog({
+      filters: [
+        { name: 'Robot model', extensions: ['urdf', 'xacro'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    })
+    if (!path) return
+    await openFile('local', path)
+    setFocus(true)
+  }
+
   // Create a new blank robot as a REAL FILE in the selected project folder, and
   // LINK it in robot.yml (`robot.urdf`) so it's the one project robot — reopening
   // always uses this file, and STL import + poses persist alongside it. With no
@@ -121,6 +134,14 @@ export function RobotDockPanel(): JSX.Element {
           onClick={() => void newRobot()}
         >
           ＋ New robot
+        </button>
+        <button
+          type="button"
+          className="robotdock__btn"
+          title="Open an existing robot (.urdf) full-screen"
+          onClick={() => void openRobot()}
+        >
+          📂 Open…
         </button>
         <button
           type="button"

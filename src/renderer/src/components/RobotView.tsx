@@ -131,7 +131,8 @@ export function RobotView({
   basePath,
   compact = false
 }: RobotViewProps = {}): JSX.Element {
-  const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer } = useWorkspace()
+  const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer, openFile } =
+    useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const content = urdfContent ?? activeFile?.content ?? ''
   // Where to resolve mesh files from: an explicit base (docked panel) else the
@@ -480,6 +481,17 @@ export function RobotView({
     setSelectedLink(link)
     setDialogCtx({ kind: 'link', link })
     if (!buildOpen) setBuildOpen(true)
+  }
+  // Open a different robot model (.urdf) via the native file picker — lets you
+  // switch robots from the pose tool, including when it's popped out full-screen.
+  const handleOpenRobotFile = async (): Promise<void> => {
+    const path = await window.api.fs.openFileDialog({
+      filters: [
+        { name: 'Robot model', extensions: ['urdf', 'xacro'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    })
+    if (path) await openFile('local', path)
   }
   const handleSetSize = (link: string, dims: number[]): void => {
     commitUrdf(setPrimitiveSize(content, link, dims))
@@ -2170,6 +2182,7 @@ export function RobotView({
             canImport={!!canImport}
             importing={importing}
             canEdit={canEdit}
+            onOpenRobot={() => void handleOpenRobotFile()}
           />
         )}
         {showPanel && dialogCtx && (
