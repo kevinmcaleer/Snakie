@@ -89,57 +89,61 @@
   color: var(--text-muted, #7d838d);
 }
 
-/* Bottom-right zoom cluster (mirrors the node-graph viewport control). */
+/* Bottom-right zoom cluster — identical to the node-graph viewport control
+   (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
 .robotview__zoom {
   position: absolute;
-  right: 0.6rem;
-  bottom: 0.55rem;
-  z-index: 6;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px;
-  border-radius: 10px;
+  padding: 5px;
+  border-radius: 12px;
   background: rgba(31, 32, 36, 0.92);
-  border: 1px solid var(--border, #3a3d44);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  border: 1px solid #3a3d44;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(6px);
   user-select: none;
-}
-:root[data-theme='skeuomorph'] .robotview__zoom {
-  background: rgba(231, 226, 211, 0.9);
 }
 .robotview__zbtn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
+  min-width: 32px;
+  height: 32px;
   padding: 0 6px;
-  font-family: inherit;
-  font-size: 15px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 17px;
   line-height: 1;
-  color: var(--text, #c2c7cf);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  color: #c2c7cf;
+  background: linear-gradient(180deg, #2c2f35, #232529);
+  border: 1px solid #3d414a;
+  border-radius: 8px;
   cursor: pointer;
 }
 .robotview__zbtn:hover {
-  color: #c8a24a;
-  border-color: var(--border, #3a3d44);
+  color: #fff;
+  border-color: #5a606b;
+  background: linear-gradient(180deg, #34373e, #292b30);
+}
+.robotview__zbtn:active {
+  background: #202227;
 }
 .robotview__zbtn--pct {
-  min-width: 46px;
-  font-size: 11px;
+  min-width: 48px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.02em;
 }
 .robotview__zsep {
   width: 1px;
-  height: 18px;
+  height: 22px;
   margin: 0 2px;
-  background: var(--border, #3d414a);
+  background: #3d414a;
   flex: 0 0 auto;
 }
 
