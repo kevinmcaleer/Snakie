@@ -92,6 +92,28 @@ describe('KRF robot model round-trips (#312)', () => {
     expect(yaml).not.toMatch(/\brobot:/)
     expect(robotFromYaml(yaml).robot).toBeUndefined()
   })
+
+  it('round-trips a motion timeline + mirror (#314)', () => {
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: {
+        version: 1,
+        urdf: 'urdf/biped.urdf',
+        timeline: {
+          duration: 2,
+          easing: 'easeInOut',
+          loop: true,
+          fps: 20,
+          tracks: [{ joint: 'hip_left', keys: [{ t: 0, value: 45 }, { t: 1, value: 70 }] }]
+        },
+        mirror: [{ a: 'hip_left', b: 'hip_right', invert: true }]
+      }
+    }
+    const round = robotFromYaml(robotToYaml(def))
+    expect(round.robot?.timeline).toEqual(def.robot!.timeline)
+    expect(round.robot?.mirror).toEqual(def.robot!.mirror)
+  })
 })
 
 describe('connection colours', () => {

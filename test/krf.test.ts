@@ -70,6 +70,36 @@ describe('sanitiseRobotModel — corruption-safe (#310)', () => {
     expect(sanitiseRobotModel('nonsense')).toBeUndefined()
     // Only-version, no real content → still "no model".
     expect(sanitiseRobotModel({ servoJointMap: [], defaultPose: {} })).toBeUndefined()
+    // An empty/keyless timeline + mirror don't count as content.
+    expect(sanitiseRobotModel({ timeline: { tracks: [] }, mirror: [] })).toBeUndefined()
+  })
+
+  it('sanitises a motion timeline (#314): drops bad keys, sorts, defaults', () => {
+    const m = sanitiseRobotModel({
+      timeline: {
+        duration: -5, // invalid → default 2
+        easing: 'bogus', // → easeInOut
+        fps: 999, // clamped 60
+        tracks: [
+          { joint: 'a', keys: [{ t: 2, value: 20 }, { t: 0, value: 0 }, { t: 1, value: 'x' }] },
+          { keys: [{ t: 0, value: 1 }] }, // no joint → dropped
+          { joint: 'b', keys: [] } // no keys → dropped
+        ]
+      }
+    })
+    expect(m!.timeline!.duration).toBe(2)
+    expect(m!.timeline!.easing).toBe('easeInOut')
+    expect(m!.timeline!.fps).toBe(60)
+    expect(m!.timeline!.tracks).toHaveLength(1)
+    expect(m!.timeline!.tracks[0].keys.map((k) => k.t)).toEqual([0, 2]) // sorted, bad dropped
+  })
+
+  it('sanitises mirror pairs (#314)', () => {
+    const m = sanitiseRobotModel({
+      urdf: 'a.urdf',
+      mirror: [{ a: 'l', b: 'r', invert: true }, { a: 'x' }, 'junk']
+    })
+    expect(m!.mirror).toEqual([{ a: 'l', b: 'r', invert: true }])
   })
 
   it('readRobotModel pulls the model off a RobotDefinition', () => {

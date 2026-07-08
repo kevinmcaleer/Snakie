@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — motion timeline → MicroPython (#314, epic #309 Phase 4).** A
+  keyframe timeline docks under the pose tool: a track per joint, **play / loop /
+  scrub** with **linear or ease-in-out** easing, snapshot the pose as a keyframe
+  or **import a saved pose**, and **mirror** a track onto its left↔right partner
+  (**Mirror ½** offsets half a cycle — a walk). **Export .py** bakes the eased
+  motion into runnable MicroPython that drives the servos from the servo↔joint
+  map — the *same* clip plays in the simulator and on a board. Persists in
+  `robot.yml` (`timeline` + `mirror`). Try `examples/biped/`. The generated code
+  is proven runnable by an end-to-end test that executes it on the real
+  MicroPython interpreter and checks the servo stream.
 - **New blank robot (.urdf) from Robot mode.** The docked mini-viewer gains a
   **＋ New robot** button (highlighted when there's no robot yet) that creates a
   minimal starter `.urdf` (one `base_link`) and opens it in the pose tool — a

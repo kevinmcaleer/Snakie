@@ -61,6 +61,10 @@ export interface RobotModel {
   defaultPose?: Record<string, number>
   /** Saved named poses (Phase 2). */
   poses?: NamedPose[]
+  /** The choreographed motion timeline (Phase 4, #314). */
+  timeline?: MotionTimeline
+  /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
+  mirror?: MirrorPair[]
 }
 
 /** A servo(pin) ↔ URDF joint binding with angle-range calibration (Phase 3). */
@@ -89,6 +93,45 @@ export interface JointConfig {
 export interface NamedPose {
   name: string
   values: Record<string, number>
+}
+
+/** Interpolation between motion keyframes (Phase 4). */
+export type MotionEasing = 'linear' | 'easeInOut'
+
+/** One keyframe on a joint's track: time `t` (seconds) → `value` (deg / mm). */
+export interface MotionKey {
+  t: number
+  value: number
+}
+
+/** A per-joint keyframe track (`joint` is a movable, non-mimic joint). */
+export interface MotionTrack {
+  joint: string
+  /** Keyframes, sorted ascending by `t`. */
+  keys: MotionKey[]
+}
+
+/** A choreographed motion clip — the timeline (Phase 4, #314). Values are in
+ *  DISPLAY units (deg / mm) like {@link NamedPose}. */
+export interface MotionTimeline {
+  /** Loop length in seconds. */
+  duration: number
+  /** Interpolation between keys. */
+  easing: MotionEasing
+  /** Preview loop + exported `while True`. */
+  loop: boolean
+  /** Preview / export sample rate (default 20). */
+  fps?: number
+  /** One track per animated joint. */
+  tracks: MotionTrack[]
+}
+
+/** A left↔right mirror pairing (`a` copies onto `b`), for symmetric gaits. */
+export interface MirrorPair {
+  a: string
+  b: string
+  /** Reflect the value about the joint's neutral (opposite-axis partner). */
+  invert?: boolean
 }
 
 /** A full robot/project definition. */
