@@ -25,15 +25,16 @@ describe('workspace presets (epic #259 Phase 1; slimmed to 3 by the modes review
     }
   })
 
-  it("'code' preserves today's default layout; the others open the dock", () => {
+  it("'code' preserves today's default layout; instrument dock per workspace", () => {
     const code = WORKSPACE_PRESETS.code
     expect(code.filesCollapsed).toBe(false)
     expect(code.shellCollapsed).toBe(false)
     expect(code.rightCollapsed).toBe(true)
+    // Instrument dock: closed in Code + Board (the board is the star), open only
+    // in Data Lab (the instrument bench).
     expect(code.dockOpen).toBe(false)
-    for (const id of ['board', 'datalab'] as const) {
-      expect(WORKSPACE_PRESETS[id].dockOpen, id).toBe(true)
-    }
+    expect(WORKSPACE_PRESETS.board.dockOpen).toBe(false)
+    expect(WORKSPACE_PRESETS.datalab.dockOpen).toBe(true)
     // Board: the embedded Board View pane opens with a real share beside the
     // code; the other workspaces keep it closed at 0.
     expect(WORKSPACE_PRESETS.board.boardPaneOpen).toBe(true)

@@ -44,6 +44,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   store (writable without elevation).
 
 ### Changed
+- **Instrument dock defaults per mode + exports always fit the whole board.**
+  The instrument dock now starts **closed in Board mode** (the board gets the
+  room) and **Code**, and **open in Data Lab** (the instrument bench). And
+  image/PDF exports of the breadboard now always save the **zoom-to-fit** view —
+  every placed item is included and fully backed by the grid/paper, whatever the
+  on-screen zoom.
 - **Blueprint is now the default breadboard background**, and the wiring grid is
   hidden on the **schematic** view (the schematic is a clean sheet). Image/PDF
   exports now bake in the on-screen sheet colour — the blueprint blue for the
