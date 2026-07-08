@@ -4,6 +4,7 @@
  * and appending an imported mesh as a new link/joint. Regex-based (no DOM) so
  * they're cheap to unit-test in a node env.
  */
+import type { PrimitiveKind } from './robot-build'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -129,4 +130,244 @@ export function addMeshLink(
   const idx = urdf.lastIndexOf('</robot>')
   const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
   return { urdf: next, link: name }
+}
+
+// ── Primitive builder (#315a) ────────────────────────────────────────────────
+
+/** A primitive link's geometry, read from / written to the URDF. Sizes in metres:
+ *  box `dims=[x,y,z]`, cylinder `[radius,length]`, sphere `[radius]`. */
+export interface PrimitiveGeom {
+  kind: PrimitiveKind
+  dims: number[]
+  /** The visual `<origin xyz>` (default [0,0,0]). */
+  origin: [number, number, number]
+}
+
+/** Compact metre formatter — up to 4 dp, trailing zeros stripped (`0.05`, `0.1`). */
+function fmtNum(n: number): string {
+  return (Math.round(n * 1e4) / 1e4).toString()
+}
+function fmtVec(v: readonly number[]): string {
+  return v.map(fmtNum).join(' ')
+}
+function parseVec3(s: string): [number, number, number] {
+  const p = s.trim().split(/\s+/).map(Number)
+  return [p[0] || 0, p[1] || 0, p[2] || 0]
+}
+function escapeRe(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** The `<link name="X"> … </link>` span in the text (byte offsets), or null. */
+function linkSpan(
+  urdf: string,
+  name: string
+): { start: number; end: number; bodyStart: number; bodyEnd: number } | null {
+  const re = /<link\b([^>]*?)(\/?)>/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    const nm = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    if (nm !== name) continue
+    const openEnd = re.lastIndex
+    if (m[2] === '/') return { start: m.index, end: openEnd, bodyStart: openEnd, bodyEnd: openEnd }
+    const close = urdf.indexOf('</link>', openEnd)
+    if (close < 0) return null
+    return { start: m.index, end: close + 7, bodyStart: openEnd, bodyEnd: close }
+  }
+  return null
+}
+
+/** The `<box|cylinder|sphere .../>` tag for a primitive. */
+function primitiveTag(kind: PrimitiveKind, dims: readonly number[]): string {
+  if (kind === 'cylinder') return `<cylinder radius="${fmtNum(dims[0])}" length="${fmtNum(dims[1])}"/>`
+  if (kind === 'sphere') return `<sphere radius="${fmtNum(dims[0])}"/>`
+  return `<box size="${fmtVec(dims)}"/>`
+}
+
+/** Sensible kid-friendly starter size (metres) per kind. */
+export function defaultPrimitiveDims(kind: PrimitiveKind): number[] {
+  if (kind === 'cylinder') return [0.02, 0.06]
+  if (kind === 'sphere') return [0.03]
+  return [0.04, 0.04, 0.04]
+}
+
+/** Ensure a `<material name="X">` DEFINITION exists (a bare ref renders default). */
+function ensureMaterial(urdf: string, name: string): string {
+  if (new RegExp(`<material\\b[^>]*\\bname\\s*=\\s*"${name}"[^>]*>[\\s\\S]*?</material>`).test(urdf)) {
+    return urdf
+  }
+  const def = `  <material name="${name}"><color rgba="0.62 0.65 0.69 1"/></material>\n`
+  const m = /<robot\b[^>]*>/i.exec(urdf)
+  return m ? urdf.slice(0, m.index + m[0].length) + '\n' + def + urdf.slice(m.index + m[0].length) : def + urdf
+}
+
+/** The first `<visual> … </visual>` sub-span within a link body, or null. Scopes
+ *  edits to the VISUAL (never a sibling `<collision>`, which also has geometry). */
+function visualSlice(body: string): { start: number; end: number } | null {
+  const open = /<visual\b[^>]*>/i.exec(body)
+  if (!open) return null
+  const close = body.indexOf('</visual>', open.index + open[0].length)
+  if (close < 0) return null
+  return { start: open.index, end: close + 9 }
+}
+
+/** Read a primitive link's geometry + visual origin, or null (mesh/none link). */
+export function readPrimitive(urdf: string, link: string): PrimitiveGeom | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return null
+  const visual = body.slice(vs.start, vs.end)
+  const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(visual)
+  const origin = originM ? parseVec3(originM[1]) : ([0, 0, 0] as [number, number, number])
+  const box = /<box\b[^>]*\bsize\s*=\s*"([^"]+)"/i.exec(visual)
+  if (box) return { kind: 'box', dims: parseVec3(box[1]), origin }
+  const cyl = /<cylinder\b[^>]*>/i.exec(visual)?.[0]
+  if (cyl) {
+    const r = Number(/\bradius\s*=\s*"([^"]+)"/i.exec(cyl)?.[1])
+    const l = Number(/\blength\s*=\s*"([^"]+)"/i.exec(cyl)?.[1])
+    return { kind: 'cylinder', dims: [r || 0, l || 0], origin }
+  }
+  const sph = /<sphere\b[^>]*\bradius\s*=\s*"([^"]+)"/i.exec(visual)
+  if (sph) return { kind: 'sphere', dims: [Number(sph[1]) || 0], origin }
+  return null
+}
+
+/** Rewrite ONLY the primitive geometry tag inside a link's VISUAL (any kind, any
+ *  self-closing or open/close form). */
+export function setPrimitiveSize(urdf: string, link: string, dims: readonly number[]): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return urdf
+  const visual = body
+    .slice(vs.start, vs.end)
+    .replace(/<(box|cylinder|sphere)\b[\s\S]*?(?:\/>|<\/\1>)/i, (_full, kind) =>
+      primitiveTag(kind.toLowerCase() as PrimitiveKind, dims)
+    )
+  const nextBody = body.slice(0, vs.start) + visual + body.slice(vs.end)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/** Insert-or-replace a link's `<visual><origin xyz>` (keeps the opposite face put). */
+export function setVisualOrigin(
+  urdf: string,
+  link: string,
+  xyz: readonly [number, number, number]
+): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return urdf
+  const tag = `<origin xyz="${fmtVec(xyz)}" rpy="0 0 0"/>`
+  let visual = body.slice(vs.start, vs.end)
+  if (/<origin\b[^>]*\/>/i.test(visual)) visual = visual.replace(/<origin\b[^>]*\/>/i, tag)
+  else visual = visual.replace(/<visual\b[^>]*>/i, (v) => `${v}\n      ${tag}`)
+  const nextBody = body.slice(0, vs.start) + visual + body.slice(vs.end)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/** Set the fixed-joint origin whose child is `childLink` (moves the whole part). */
+export function setJointOrigin(
+  urdf: string,
+  childLink: string,
+  xyz: readonly [number, number, number]
+): string {
+  const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+  const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    if (!childRe.test(m[0])) continue
+    const tag = `<origin xyz="${fmtVec(xyz)}" rpy="0 0 0"/>`
+    const block = /<origin\b[^>]*\/>/i.test(m[0])
+      ? m[0].replace(/<origin\b[^>]*\/>/i, tag)
+      : m[0].replace(/<\/joint>/i, `  ${tag}\n  </joint>`)
+    return urdf.slice(0, m.index) + block + urdf.slice(m.index + m[0].length)
+  }
+  return urdf
+}
+
+/**
+ * Add a primitive as a new link + FIXED joint onto `parent` (root fallback), so it
+ * attaches to the selected part. Returns the new URDF + the created link name.
+ */
+export function addPrimitive(
+  urdf: string,
+  opts: {
+    kind: PrimitiveKind
+    parent?: string
+    linkBase?: string
+    dims?: number[]
+    origin?: [number, number, number]
+    jointXyz?: [number, number, number]
+  }
+): { urdf: string; link: string } {
+  const parent = opts.parent ?? rootLink(urdf)
+  const name = uniqueLinkName(urdf, opts.linkBase ?? opts.kind)
+  const dims = opts.dims ?? defaultPrimitiveDims(opts.kind)
+  const origin = opts.origin ?? [0, 0, 0]
+  const jointXyz = opts.jointXyz ?? [0.06, 0, 0] // beside the parent so it doesn't overlap
+  const linkBlock =
+    `  <link name="${name}">\n` +
+    `    <visual>\n` +
+    `      <origin xyz="${fmtVec(origin)}" rpy="0 0 0"/>\n` +
+    `      <geometry>${primitiveTag(opts.kind, dims)}</geometry>\n` +
+    `      <material name="steel"/>\n` +
+    `    </visual>\n` +
+    `  </link>\n`
+  const jointBlock = parent
+    ? `  <joint name="${name}_joint" type="fixed">\n` +
+      `    <parent link="${parent}"/>\n` +
+      `    <child link="${name}"/>\n` +
+      `    <origin xyz="${fmtVec(jointXyz)}" rpy="0 0 0"/>\n` +
+      `  </joint>\n`
+    : ''
+  const block = linkBlock + jointBlock
+  const idx = urdf.lastIndexOf('</robot>')
+  const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
+  return { urdf: ensureMaterial(next, 'steel'), link: name }
+}
+
+/**
+ * Remove a link AND its whole subtree (every descendant reachable through child
+ * joints), plus every joint that references any removed link. A URDF is a tree —
+ * deleting a non-leaf block otherwise leaves a joint with a dangling parent, which
+ * crashes the loader. Best-effort, corruption-safe.
+ */
+export function removeLink(urdf: string, link: string): string {
+  // Collect the subtree: `link` + everything joined below it (transitively).
+  const doomed = new Set<string>([link])
+  const jointOf = (block: string, attr: 'parent' | 'child'): string | undefined =>
+    new RegExp(`<${attr}\\b[^>]*\\blink\\s*=\\s*"([^"]+)"`, 'i').exec(block)?.[1]
+  for (let changed = true; changed; ) {
+    changed = false
+    const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+    let m: RegExpExecArray | null
+    while ((m = re.exec(urdf))) {
+      const parent = jointOf(m[0], 'parent')
+      const child = jointOf(m[0], 'child')
+      if (parent && child && doomed.has(parent) && !doomed.has(child)) {
+        doomed.add(child)
+        changed = true
+      }
+    }
+  }
+  let out = urdf
+  for (const name of doomed) {
+    const span = linkSpan(out, name)
+    if (!span) continue
+    let start = span.start
+    while (start > 0 && /\s/.test(out[start - 1])) start--
+    out = out.slice(0, start) + '\n' + out.slice(span.end)
+  }
+  // Drop every joint touching a removed link (as parent OR child).
+  out = out.replace(/\s*<joint\b[^>]*>[\s\S]*?<\/joint>/gi, (block) => {
+    const parent = jointOf(block, 'parent')
+    const child = jointOf(block, 'child')
+    return (parent && doomed.has(parent)) || (child && doomed.has(child)) ? '\n' : block
+  })
+  return out
 }

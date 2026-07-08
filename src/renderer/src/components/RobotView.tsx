@@ -17,7 +17,19 @@ import {
   toDisplay,
   toNative
 } from './robot-pose'
-import { addMeshLink, parseAssembly } from './robot-assembly'
+import {
+  addMeshLink,
+  addPrimitive,
+  parseAssembly,
+  readPrimitive,
+  removeLink,
+  setPrimitiveSize,
+  setVisualOrigin,
+  type PrimitiveGeom
+} from './robot-assembly'
+import { classifyFace, resizeFromDrag, type FaceEdit, type PrimitiveKind } from './robot-build'
+import { RobotBuildPanel } from './RobotBuildPanel'
+import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
 import {
   autoMirrorPairs,
@@ -122,6 +134,7 @@ export function RobotView({
   const defaultPoseRef = useRef<Record<string, number>>({}) // native, non-mimic
   const measureActiveRef = useRef(false)
   const measureApiRef = useRef<{ clear: () => void } | null>(null)
+  const highlightApiRef = useRef<{ apply: (link: string | null) => void } | null>(null)
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -241,6 +254,78 @@ export function RobotView({
       void saveFile(id)
     }
   }, [content, saveFile])
+
+  // ── Block builder (#315a) ──────────────────────────────────────────────────
+  const [buildOpen, setBuildOpen] = useState(false)
+  const [buildPinned, setBuildPinned] = useState(() =>
+    loadPin(window.localStorage, PIN_KEYS.builder, false)
+  )
+  const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  const [editLink, setEditLink] = useState<string | null>(null)
+  const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: string } | null>(null)
+  // Refs the three.js pointer callbacks read (avoids re-subscribing on each edit).
+  const buildOpenRef = useRef(false)
+  const selectedLinkRef = useRef<string | null>(null)
+  const editLinkRef = useRef<string | null>(null)
+  buildOpenRef.current = buildOpen && poseUI
+  selectedLinkRef.current = selectedLink
+  editLinkRef.current = editLink
+  // Editing needs a real saved file (so the URDF text can be written next to it).
+  const canEdit = poseUI && activeFile?.source === 'local' && !!activeFile.path
+  const canEditRef = useRef(false)
+  canEditRef.current = canEdit
+  // Camera state preserved across the content re-parse (so an edit never jumps
+  // the view); keyed by the open file so a NEW robot still auto-frames.
+  const cameraStateRef = useRef<{
+    pos: THREE.Vector3
+    target: THREE.Vector3
+    zoom: number
+    halfView: number
+  } | null>(null)
+  const framedKeyRef = useRef<string | null>(null)
+
+  const editGeom: PrimitiveGeom | null = useMemo(
+    () => (editLink ? readPrimitive(content, editLink) : null),
+    [content, editLink]
+  )
+
+  const setBuildPinnedPersist = (p: boolean): void => {
+    setBuildPinned(p)
+    savePin(window.localStorage, PIN_KEYS.builder, p)
+  }
+
+  // Patch the URDF text + re-render + deferred-save (the STL-import path).
+  const commitUrdf = (next: string): void => {
+    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    updateContent(activeFile.id, next)
+    pendingSaveRef.current = activeFile.id
+  }
+  const commitUrdfRef = useRef<((next: string) => void) | null>(null)
+  commitUrdfRef.current = commitUrdf
+  const contentRef = useRef(content)
+  contentRef.current = content
+
+  const handleAddPrimitive = (kind: PrimitiveKind): void => {
+    if (!canEdit) return // needs a saved project file — don't set a phantom selection
+    const { urdf, link } = addPrimitive(content, { kind, parent: selectedLink ?? undefined })
+    commitUrdf(urdf)
+    setSelectedLink(link)
+    setEditLink(link)
+    if (!buildOpen) setBuildOpen(true)
+  }
+  const handleSetSize = (link: string, dims: number[]): void => {
+    commitUrdf(setPrimitiveSize(content, link, dims))
+  }
+  const handleDeleteLink = (link: string): void => {
+    commitUrdf(removeLink(content, link))
+    setSelectedLink(null)
+    setEditLink(null)
+  }
+
+  // Re-apply the selection outline when the picked block changes (no re-parse).
+  useEffect(() => {
+    highlightApiRef.current?.apply(selectedLink)
+  }, [selectedLink])
 
   // ── Servo → joint binding + code-driven simulation (#313) ──────────────────
   // The KRF servo↔joint map, loaded from robot.yml. Kept in a ref for the
@@ -618,6 +703,44 @@ export function RobotView({
       resize()
     }
 
+    // Frame a NEW robot isometrically, but PRESERVE the camera when the same file
+    // is just re-parsed after a build edit (#315a must-fix — no view jump). The
+    // grid is refreshed to the new bounds either way.
+    const frameKey = activeFile?.id ?? ''
+    const relayGrid = (robot: URDFRobot): void => {
+      robot.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(robot)
+      if (box.isEmpty()) return
+      const size = box.getSize(new THREE.Vector3())
+      if (grid) {
+        scene.remove(grid)
+        grid.geometry.dispose()
+        ;(grid.material as THREE.Material).dispose()
+      }
+      grid = new THREE.GridHelper(Math.max(size.x, size.z) * 3 + 0.4, 20, 0x3a3d44, 0x27292e)
+      grid.position.y = box.min.y
+      scene.add(grid)
+    }
+    const framePreservingCamera = (robot: URDFRobot): void => {
+      const saved = cameraStateRef.current
+      if (saved && framedKeyRef.current === frameKey) {
+        halfView = saved.halfView
+        camera.position.copy(saved.pos)
+        controls.target.copy(saved.target)
+        camera.zoom = saved.zoom
+        camera.updateProjectionMatrix()
+        controls.update()
+        relayGrid(robot)
+        resize()
+      } else {
+        frameModel(robot)
+        framedKeyRef.current = frameKey
+        // A genuinely new robot: drop any prior camera so the SECOND call this
+        // run (finalize/mesh-settle) re-frames THIS model, not the old one.
+        cameraStateRef.current = null
+      }
+    }
+
     let disposed = false
     let robot: URDFRobot | null = null
     let pending = 0 // async meshes still loading
@@ -630,7 +753,7 @@ export function RobotView({
     // may have grown the model) and surface any that couldn't load.
     const finalize = (): void => {
       if (disposed || !ready || pending > 0 || !robot) return
-      frameModel(robot)
+      framePreservingCamera(robot)
       if (failed.length) {
         const shown = failed.slice(0, 3).join(', ')
         const more = failed.length > 3 ? ` +${failed.length - 3} more` : ''
@@ -714,7 +837,7 @@ export function RobotView({
           joints: Object.keys(robot.joints).length,
           links: Object.keys(robot.links).length
         })
-        frameModel(robot) // frame primitives immediately; reframe when meshes land
+        framePreservingCamera(robot) // frame a new robot; keep the camera on an edit
 
         if (poseUI) {
           // POSE TOOL (#312): expose the movable joints, seed a neutral pose, then
@@ -834,15 +957,194 @@ export function RobotView({
               setMeasureDist(null)
             }
           }
+          // BLOCK BUILDER (#315a): push/pull a primitive face to resize (opposite
+          // face stays put) + a selection outline. Active when the build dock is
+          // open and NOT measuring — one guarded pointer path on this canvas.
+          const buildRay = new THREE.Raycaster()
+          const buildNdc = new THREE.Vector2()
+          const camDir = new THREE.Vector3()
+          const accentLineMat = new THREE.LineBasicMaterial({ color: 0xc8a24a, depthTest: false })
+          let outline: THREE.LineSegments | null = null
+          const applyHighlight = (link: string | null): void => {
+            if (outline) {
+              outline.parent?.remove(outline)
+              outline.geometry.dispose()
+              outline = null
+            }
+            const r = robotRef.current
+            if (!link || !r || !r.links[link]) return
+            let mesh: THREE.Mesh | null = null
+            r.links[link].traverse((o) => {
+              if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh
+            })
+            if (!mesh) return
+            const seg = new THREE.LineSegments(new THREE.EdgesGeometry((mesh as THREE.Mesh).geometry), accentLineMat)
+            seg.renderOrder = 999
+            seg.raycast = () => {} // the outline must never intercept a face pick
+            ;(mesh as THREE.Mesh).add(seg)
+            outline = seg
+          }
+          highlightApiRef.current = { apply: applyHighlight }
+          applyHighlight(selectedLinkRef.current) // survive re-parse
+
+          const buildActive = (): boolean => buildOpenRef.current && !measureActiveRef.current
+          const buildNdcFrom = (e: PointerEvent): void => {
+            const rect = renderer.domElement.getBoundingClientRect()
+            buildNdc.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+            buildNdc.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+          }
+          const applyPreview = (
+            kind: PrimitiveKind,
+            m: THREE.Mesh,
+            g: THREE.Object3D,
+            dims: number[],
+            origin: [number, number, number]
+          ): void => {
+            if (kind === 'box') m.scale.set(dims[0], dims[1], dims[2])
+            else if (kind === 'cylinder') m.scale.set(dims[0], dims[1], dims[0])
+            else m.scale.set(dims[0], dims[0], dims[0])
+            g.position.set(origin[0], origin[1], origin[2])
+          }
+          const dimText = (kind: PrimitiveKind, face: FaceEdit, dims: number[]): string => {
+            const v = (x: number): number => Math.round(x * 1000)
+            if (kind === 'sphere') return `⌀ ${v(dims[0] * 2)} mm`
+            if (kind === 'cylinder') return face.dim === 1 ? `length ${v(dims[1])} mm` : `⌀ ${v(dims[0] * 2)} mm`
+            return `${v(dims[face.dim])} mm`
+          }
+          type Drag = {
+            link: string
+            kind: PrimitiveKind
+            face: FaceEdit
+            dims0: number[]
+            origin0: [number, number, number]
+            mesh: THREE.Mesh
+            group: THREE.Object3D
+            nWorld: THREE.Vector3
+            plane: THREE.Plane
+            anchor: THREE.Vector3
+            preview: { dims: number[]; origin: [number, number, number] } | null
+          }
+          let drag: Drag | null = null
+          let bDownX = 0
+          let bDownY = 0
+          const onBuildDown = (e: PointerEvent): void => {
+            bDownX = e.clientX
+            bDownY = e.clientY
+            const editName = editLinkRef.current
+            if (!buildActive() || !canEditRef.current || !robotRef.current || !editName) return
+            const linkObj = robotRef.current.links[editName]
+            const geom = readPrimitive(contentRef.current, editName)
+            if (!linkObj || !geom) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            // Skip non-face hits (e.g. the selection outline) — we need a mesh face.
+            const hit = buildRay.intersectObject(linkObj, true).find((h) => h.face)
+            if (!hit || !hit.face) return
+            // The face must belong to editName's OWN visual, not a nested child
+            // link's mesh (the link object contains its descendant subtree).
+            let owner: THREE.Object3D | null = hit.object
+            while (owner && !(owner as unknown as { isURDFLink?: boolean }).isURDFLink) owner = owner.parent
+            if ((owner as unknown as { urdfName?: string } | null)?.urdfName !== editName) return
+            const mesh = hit.object as THREE.Mesh
+            const group = mesh.parent
+            if (!group) return
+            const nWorld = hit.face.normal.clone().transformDirection(mesh.matrixWorld).normalize()
+            const q = new THREE.Quaternion()
+            linkObj.getWorldQuaternion(q)
+            const nLink = nWorld.clone().applyQuaternion(q.invert())
+            const face = classifyFace([nLink.x, nLink.y, nLink.z], geom.kind)
+            camera.getWorldDirection(camDir)
+            const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point)
+            drag = {
+              link: editName,
+              kind: geom.kind,
+              face,
+              dims0: geom.dims,
+              origin0: geom.origin,
+              mesh,
+              group,
+              nWorld,
+              plane,
+              anchor: hit.point.clone(),
+              preview: null
+            }
+            controls.enabled = false // orbit yields to the drag (move early-returns)
+            ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+          }
+          const onBuildMove = (e: PointerEvent): void => {
+            if (!drag) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const p = new THREE.Vector3()
+            if (!buildRay.ray.intersectPlane(drag.plane, p)) return
+            const delta = p.sub(drag.anchor).dot(drag.nWorld)
+            const step = e.shiftKey ? 0.001 : 0.005
+            const res = resizeFromDrag(drag.dims0, drag.origin0, drag.face, delta, { step })
+            applyPreview(drag.kind, drag.mesh, drag.group, res.dims, res.origin)
+            drag.preview = res
+            const rect = mount.getBoundingClientRect()
+            setBuildDim({
+              x: e.clientX - rect.left + 14,
+              y: e.clientY - rect.top + 14,
+              text: dimText(drag.kind, drag.face, res.dims)
+            })
+          }
+          const onBuildUp = (e: PointerEvent): void => {
+            const d = drag
+            drag = null
+            controls.enabled = true
+            if (d) {
+              setBuildDim(null)
+              if (d.preview) {
+                let next = setPrimitiveSize(contentRef.current, d.link, d.preview.dims)
+                next = setVisualOrigin(next, d.link, d.preview.origin)
+                commitUrdfRef.current?.(next)
+              }
+              return
+            }
+            if (!buildActive() || !robotRef.current) return
+            if (Math.hypot(e.clientX - bDownX, e.clientY - bDownY) > 4) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const hit = buildRay.intersectObject(robotRef.current, true)[0]
+            if (!hit) return
+            let o: THREE.Object3D | null = hit.object
+            while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
+            const name = (o as unknown as { urdfName?: string } | null)?.urdfName
+            if (name) setSelectedLink(name)
+          }
+
+          // A cancelled/interrupted drag must never strand OrbitControls disabled
+          // or leave a half-resized preview: revert to the pre-drag size.
+          const onBuildCancel = (): void => {
+            const d = drag
+            drag = null
+            controls.enabled = true
+            setBuildDim(null)
+            if (d) applyPreview(d.kind, d.mesh, d.group, d.dims0, d.origin0)
+          }
           renderer.domElement.addEventListener('pointerdown', onDown)
           renderer.domElement.addEventListener('pointerup', onUp)
+          renderer.domElement.addEventListener('pointerdown', onBuildDown)
+          renderer.domElement.addEventListener('pointermove', onBuildMove)
+          renderer.domElement.addEventListener('pointerup', onBuildUp)
+          renderer.domElement.addEventListener('pointercancel', onBuildCancel)
+          renderer.domElement.addEventListener('lostpointercapture', onBuildCancel)
           teardownPose = () => {
             renderer.domElement.removeEventListener('pointerdown', onDown)
             renderer.domElement.removeEventListener('pointerup', onUp)
+            renderer.domElement.removeEventListener('pointerdown', onBuildDown)
+            renderer.domElement.removeEventListener('pointermove', onBuildMove)
+            renderer.domElement.removeEventListener('pointerup', onBuildUp)
+            renderer.domElement.removeEventListener('pointercancel', onBuildCancel)
+            renderer.domElement.removeEventListener('lostpointercapture', onBuildCancel)
             clearMeasure()
             markerMat.dispose()
             lineMat.dispose()
+            if (outline) outline.geometry.dispose()
+            accentLineMat.dispose()
             measureApiRef.current = null
+            highlightApiRef.current = null
           }
         }
       }
@@ -871,6 +1173,14 @@ export function RobotView({
 
     return () => {
       disposed = true
+      // Snapshot the camera so the next rebuild (after a build edit) restores it
+      // instead of re-framing (#315a). Cleared by a NEW file via framedKeyRef.
+      cameraStateRef.current = {
+        pos: camera.position.clone(),
+        target: controls.target.clone(),
+        zoom: camera.zoom,
+        halfView
+      }
       robotRef.current = null
       teardownPose()
       cancelAnimationFrame(raf)
@@ -886,7 +1196,7 @@ export function RobotView({
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [content, effectiveBase, isEmpty, poseUI, currentFolder])
+  }, [content, effectiveBase, isEmpty, poseUI, currentFolder, activeFile?.id])
 
   const showPanel = poseUI && !error && !isEmpty
   const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0
@@ -917,6 +1227,32 @@ export function RobotView({
         {!error && meshNote && (
           <div className="robotview__note" role="status">
             {meshNote}
+          </div>
+        )}
+        {showPanel && (
+          <RobotBuildPanel
+            open={buildOpen}
+            pinned={buildPinned}
+            onSetOpen={setBuildOpen}
+            onSetPinned={setBuildPinnedPersist}
+            assembly={assembly}
+            selected={selectedLink}
+            onSelect={setSelectedLink}
+            editLink={editLink}
+            onEdit={setEditLink}
+            editGeom={editGeom}
+            onAdd={handleAddPrimitive}
+            onSetSize={handleSetSize}
+            onDelete={handleDeleteLink}
+            onImportStl={() => void handleImportStl()}
+            canImport={!!canImport}
+            importing={importing}
+            canEdit={canEdit}
+          />
+        )}
+        {buildDim && (
+          <div className="robotbuild__dim" style={{ left: buildDim.x, top: buildDim.y }}>
+            {buildDim.text}
           </div>
         )}
       </div>
