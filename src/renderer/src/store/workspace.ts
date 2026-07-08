@@ -53,8 +53,7 @@ import {
   readSession,
   restoreMode,
   markRestoreStart,
-  markRestoreDone,
-  RESTORE_STABLE_MS
+  markRestoreDone
 } from './session-restore'
 
 export type FileSource = 'local' | 'device'
@@ -428,10 +427,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     }
 
     markRestoreStart(storage)
-    let cancelled = false
     void (async () => {
       for (const path of session.paths) {
-        if (cancelled) return
         try {
           await openFile('local', path)
         } catch {
@@ -439,25 +436,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         }
       }
       // Re-activate the tab that was focused last session.
-      if (!cancelled && session.activePath) {
+      if (session.activePath) {
         try {
           await openFile('local', session.activePath)
         } catch {
           // ignore
         }
       }
-      // Now that the restore has applied, allow future edits to persist.
-      if (!cancelled) hydrated.current = true
+      // Restore applied → allow future edits to persist, then disarm the guard
+      // on the NEXT painted frame. If a restored file had crashed the renderer,
+      // the crash would happen during this render — before these fire — so the
+      // guard survives and the next launch recovers. Otherwise it clears almost
+      // immediately, so a quick relaunch / dev HMR reload can't strand it (the
+      // old 4 s window did, which wiped the session).
+      hydrated.current = true
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => markRestoreDone(storage))
+      )
     })()
-
-    // Trust the restore once the app has stayed up a moment, then disarm the
-    // guard. If a restored file crashes the renderer first, this timer never
-    // fires, the guard survives, and the NEXT launch recovers.
-    const stable = window.setTimeout(() => markRestoreDone(storage), RESTORE_STABLE_MS)
-    return () => {
-      cancelled = true
-      window.clearTimeout(stable)
-    }
+    // NB: deliberately no cleanup that cancels the restore or the guard-clear —
+    // a StrictMode unmount/remount (or any remount) must not strand the marker.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
