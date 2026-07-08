@@ -154,6 +154,10 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       tabIndex={-1}
       aria-label="Build panel"
       onBlur={(e) => {
+        // Don't auto-hide when focus moves to the tool toolbar (part of the
+        // builder, but a separate DOM subtree over the stage).
+        const rt = e.relatedTarget as Element | null
+        if (rt && typeof rt.closest === 'function' && rt.closest('.robottool')) return
         if (shouldAutoHide(pinned, dockRef.current, e.relatedTarget)) onSetOpen(false)
       }}
     >

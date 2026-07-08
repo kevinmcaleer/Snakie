@@ -1,0 +1,43 @@
+/* Build tool cluster (#335) — floating pill, top-centre of the 3-D stage. */
+.robottool {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 8px;
+  background: rgba(20, 21, 24, 0.55);
+  backdrop-filter: blur(8px);
+}
+:root[data-theme='skeuomorph'] .robottool {
+  background: rgba(231, 226, 211, 0.78);
+}
+.robottool__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  color: var(--text, #cdd2d9);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robottool__btn:hover:not(:disabled) {
+  border-color: var(--border, #3a3d44);
+  color: #c8a24a;
+}
+.robottool__btn.is-active {
+  color: #c8a24a;
+  border-color: #c8a24a;
+  background: rgba(200, 162, 74, 0.18);
+}
+.robottool__btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

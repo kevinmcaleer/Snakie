@@ -21,14 +21,26 @@ import {
   addMeshLink,
   addPrimitive,
   parseAssembly,
+  readJoint,
   readPrimitive,
   removeLink,
+  setJointOrigin,
   setPrimitiveSize,
   setVisualOrigin,
   type PrimitiveGeom
 } from './robot-assembly'
-import { classifyFace, resizeFromDrag, type FaceEdit, type PrimitiveKind } from './robot-build'
+import {
+  classifyFace,
+  faceSnapPoints,
+  movedJointOrigin,
+  resizeFromDrag,
+  type BuildTool,
+  type FaceEdit,
+  type PrimitiveKind,
+  type Vec3
+} from './robot-build'
 import { RobotBuildPanel } from './RobotBuildPanel'
+import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
 import {
@@ -274,6 +286,13 @@ export function RobotView({
   const canEdit = poseUI && activeFile?.source === 'local' && !!activeFile.path
   const canEditRef = useRef(false)
   canEditRef.current = canEdit
+  const [buildTool, setBuildTool] = useState<BuildTool>('select')
+  const buildToolRef = useRef<BuildTool>('select')
+  buildToolRef.current = buildTool
+  const onSetTool = (t: BuildTool): void => {
+    setBuildTool(t)
+    setMeasureActive(false) // the two canvas interaction modes are exclusive
+  }
   // Camera state preserved across the content re-parse (so an edit never jumps
   // the view); keyed by the open file so a NEW robot still auto-frames.
   const cameraStateRef = useRef<{
@@ -1027,24 +1046,86 @@ export function RobotView({
           let drag: Drag | null = null
           let bDownX = 0
           let bDownY = 0
-          const onBuildDown = (e: PointerEvent): void => {
-            bDownX = e.clientX
-            bDownY = e.clientY
-            const editName = editLinkRef.current
-            if (!buildActive() || !canEditRef.current || !robotRef.current || !editName) return
+
+          // Snap-handle pool (Fusion-style dots on a hovered/target face). Shared
+          // geometry/materials; spheres never intercept a raycast.
+          const snapGroup = new THREE.Group()
+          scene.add(snapGroup)
+          const handleGeo = new THREE.SphereGeometry(1, 10, 10)
+          const handleMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, depthTest: false })
+          const handleMatOn = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false })
+          const clearHandles = (): void => {
+            snapGroup.clear()
+          }
+          const showHandles = (pts: THREE.Vector3[], activeIdx: number): void => {
+            snapGroup.clear()
+            const r = halfView * 0.02
+            pts.forEach((p, i) => {
+              const s = new THREE.Mesh(handleGeo, i === activeIdx ? handleMatOn : handleMat)
+              s.position.copy(p)
+              s.scale.setScalar(i === activeIdx ? r * 1.7 : r)
+              s.renderOrder = 999
+              s.raycast = () => {}
+              snapGroup.add(s)
+            })
+          }
+          const mmv = (m: number): number => Math.round(m * 1000)
+          const ownerLinkName = (obj: THREE.Object3D | null): string | null => {
+            let o = obj
+            while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
+            return (o as unknown as { urdfName?: string } | null)?.urdfName ?? null
+          }
+          // Classify the hovered face + return its world snap handles.
+          const hitToHandles = (
+            hit: THREE.Intersection,
+            link: string,
+            geom: PrimitiveGeom
+          ): { pts: THREE.Vector3[]; roles: string[]; face: FaceEdit } => {
+            const linkObj = robotRef.current!.links[link]
+            const mesh = hit.object as THREE.Mesh
+            const nW = hit.face!.normal.clone().transformDirection(mesh.matrixWorld).normalize()
+            const q = new THREE.Quaternion()
+            linkObj.getWorldQuaternion(q)
+            const nL = nW.clone().applyQuaternion(q.invert())
+            const face = classifyFace([nL.x, nL.y, nL.z], geom.kind)
+            const sp = faceSnapPoints(geom, face)
+            const m = linkObj.matrixWorld
+            return {
+              pts: sp.map((s) => new THREE.Vector3(s.p[0], s.p[1], s.p[2]).applyMatrix4(m)),
+              roles: sp.map((s) => s.role),
+              face
+            }
+          }
+          const nearestScreen = (pts: THREE.Vector3[], e: PointerEvent): { index: number; distPx: number } => {
+            const rect = renderer.domElement.getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            let index = -1
+            let best = Infinity
+            pts.forEach((p, i) => {
+              const v = p.clone().project(camera)
+              const sx = (v.x * 0.5 + 0.5) * rect.width
+              const sy = (-v.y * 0.5 + 0.5) * rect.height
+              const d = Math.hypot(sx - px, sy - py)
+              if (d < best) {
+                best = d
+                index = i
+              }
+            })
+            return { index, distPx: best }
+          }
+
+          // ── Resize (push/pull tool) ──
+          const startResize = (e: PointerEvent): void => {
+            const editName = selectedLinkRef.current ?? editLinkRef.current
+            if (!editName || !robotRef.current) return
             const linkObj = robotRef.current.links[editName]
             const geom = readPrimitive(contentRef.current, editName)
             if (!linkObj || !geom) return
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
-            // Skip non-face hits (e.g. the selection outline) — we need a mesh face.
             const hit = buildRay.intersectObject(linkObj, true).find((h) => h.face)
-            if (!hit || !hit.face) return
-            // The face must belong to editName's OWN visual, not a nested child
-            // link's mesh (the link object contains its descendant subtree).
-            let owner: THREE.Object3D | null = hit.object
-            while (owner && !(owner as unknown as { isURDFLink?: boolean }).isURDFLink) owner = owner.parent
-            if ((owner as unknown as { urdfName?: string } | null)?.urdfName !== editName) return
+            if (!hit || !hit.face || ownerLinkName(hit.object) !== editName) return
             const mesh = hit.object as THREE.Mesh
             const group = mesh.parent
             if (!group) return
@@ -1054,7 +1135,6 @@ export function RobotView({
             const nLink = nWorld.clone().applyQuaternion(q.invert())
             const face = classifyFace([nLink.x, nLink.y, nLink.z], geom.kind)
             camera.getWorldDirection(camDir)
-            const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point)
             drag = {
               link: editName,
               kind: geom.kind,
@@ -1064,36 +1144,143 @@ export function RobotView({
               mesh,
               group,
               nWorld,
-              plane,
+              plane: new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point),
               anchor: hit.point.clone(),
               preview: null
             }
-            controls.enabled = false // orbit yields to the drag (move early-returns)
+            controls.enabled = false
             ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
           }
+
+          // ── Move tool ──
+          type Move = {
+            link: string
+            jointObj: THREE.Object3D
+            oldXyz: THREE.Vector3
+            parentBasis: number[]
+            grab: THREE.Vector3
+            anchor: THREE.Vector3
+            plane: THREE.Plane
+            newXyz: THREE.Vector3
+          }
+          let move: Move | null = null
+          const startMove = (e: PointerEvent): void => {
+            const robot = robotRef.current
+            if (!robot) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
+            if (!hit || !hit.face) return
+            const link = ownerLinkName(hit.object)
+            if (!link) return
+            setSelectedLink(link)
+            const joint = readJoint(contentRef.current, link) // null for the root
+            const linkObj = robot.links[link]
+            const jointObj = linkObj?.parent
+            const geom = readPrimitive(contentRef.current, link)
+            const parentLink = jointObj?.parent
+            if (!joint || !jointObj || !linkObj || !geom || !parentLink) return
+            robot.updateMatrixWorld(true)
+            const parentBasis = [...new THREE.Matrix3().setFromMatrix4(parentLink.matrixWorld).elements]
+            const { pts } = hitToHandles(hit, link, geom)
+            const near = nearestScreen(pts, e)
+            const grab = (near.index >= 0 ? pts[near.index] : hit.point).clone()
+            camera.getWorldDirection(camDir)
+            move = {
+              link,
+              jointObj,
+              oldXyz: jointObj.position.clone(),
+              parentBasis,
+              grab,
+              anchor: hit.point.clone(),
+              plane: new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point),
+              newXyz: jointObj.position.clone()
+            }
+            controls.enabled = false
+            ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+          }
+
+          const onBuildDown = (e: PointerEvent): void => {
+            bDownX = e.clientX
+            bDownY = e.clientY
+            if (!buildActive() || !canEditRef.current || !robotRef.current) return
+            if (buildToolRef.current === 'pushpull') startResize(e)
+            else if (buildToolRef.current === 'move') startMove(e)
+          }
+
           const onBuildMove = (e: PointerEvent): void => {
-            if (!drag) return
+            if (drag) {
+              buildNdcFrom(e)
+              buildRay.setFromCamera(buildNdc, camera)
+              const p = new THREE.Vector3()
+              if (!buildRay.ray.intersectPlane(drag.plane, p)) return
+              const delta = p.sub(drag.anchor).dot(drag.nWorld)
+              const res = resizeFromDrag(drag.dims0, drag.origin0, drag.face, delta, {
+                step: e.shiftKey ? 0.001 : 0.005
+              })
+              applyPreview(drag.kind, drag.mesh, drag.group, res.dims, res.origin)
+              drag.preview = res
+              const rect = mount.getBoundingClientRect()
+              setBuildDim({ x: e.clientX - rect.left + 14, y: e.clientY - rect.top + 14, text: dimText(drag.kind, drag.face, res.dims) })
+              return
+            }
+            if (!move || !robotRef.current) return
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
             const p = new THREE.Vector3()
-            if (!buildRay.ray.intersectPlane(drag.plane, p)) return
-            const delta = p.sub(drag.anchor).dot(drag.nWorld)
-            const step = e.shiftKey ? 0.001 : 0.005
-            const res = resizeFromDrag(drag.dims0, drag.origin0, drag.face, delta, { step })
-            applyPreview(drag.kind, drag.mesh, drag.group, res.dims, res.origin)
-            drag.preview = res
+            if (!buildRay.ray.intersectPlane(move.plane, p)) return
+            const freeDelta = p.clone().sub(move.anchor)
+            const movedGrab = move.grab.clone().add(freeDelta)
+            // Snap the moved grab point to a handle on ANOTHER block under the cursor.
+            let snapWorld: THREE.Vector3 | null = null
+            let snapRole: string | null = null
+            let handles: THREE.Vector3[] = []
+            let activeIdx = -1
+            const tHit = buildRay
+              .intersectObject(robotRef.current, true)
+              .filter((h) => h.face && ownerLinkName(h.object) !== move!.link)
+              .find((h) => h.face)
+            if (tHit) {
+              const tLink = ownerLinkName(tHit.object)!
+              const tGeom = readPrimitive(contentRef.current, tLink)
+              if (tGeom) {
+                const th = hitToHandles(tHit, tLink, tGeom)
+                handles = th.pts
+                const near = nearestScreen(handles, e)
+                const gp = movedGrab.clone().project(camera)
+                const hp = near.index >= 0 ? handles[near.index].clone().project(camera) : gp
+                const rect = renderer.domElement.getBoundingClientRect()
+                const dpx = Math.hypot(((hp.x - gp.x) * rect.width) / 2, ((hp.y - gp.y) * rect.height) / 2)
+                if (near.index >= 0 && dpx < 16) {
+                  snapWorld = handles[near.index]
+                  snapRole = th.roles[near.index]
+                  activeIdx = near.index
+                }
+              }
+            }
+            const worldDelta = snapWorld ? snapWorld.clone().sub(move.grab) : freeDelta
+            const nx = movedJointOrigin(
+              [move.oldXyz.x, move.oldXyz.y, move.oldXyz.z],
+              [worldDelta.x, worldDelta.y, worldDelta.z] as Vec3,
+              move.parentBasis,
+              snapWorld ? {} : { step: e.shiftKey ? 0.001 : 0.005 }
+            )
+            move.newXyz.set(nx[0], nx[1], nx[2])
+            move.jointObj.position.copy(move.newXyz)
+            showHandles(handles, activeIdx)
             const rect = mount.getBoundingClientRect()
             setBuildDim({
               x: e.clientX - rect.left + 14,
               y: e.clientY - rect.top + 14,
-              text: dimText(drag.kind, drag.face, res.dims)
+              text: snapRole ? `snap ✓ ${snapRole}` : `${mmv(nx[0])} · ${mmv(nx[1])} · ${mmv(nx[2])} mm`
             })
           }
+
           const onBuildUp = (e: PointerEvent): void => {
-            const d = drag
-            drag = null
-            controls.enabled = true
-            if (d) {
+            if (drag) {
+              const d = drag
+              drag = null
+              controls.enabled = true
               setBuildDim(null)
               if (d.preview) {
                 let next = setPrimitiveSize(contentRef.current, d.link, d.preview.dims)
@@ -1102,42 +1289,87 @@ export function RobotView({
               }
               return
             }
+            if (move) {
+              const mv = move
+              move = null
+              controls.enabled = true
+              setBuildDim(null)
+              clearHandles()
+              if (!mv.newXyz.equals(mv.oldXyz)) {
+                commitUrdfRef.current?.(
+                  setJointOrigin(contentRef.current, mv.link, [mv.newXyz.x, mv.newXyz.y, mv.newXyz.z])
+                )
+              }
+              return
+            }
+            // Select tool / plain click → pick the block under the cursor.
             if (!buildActive() || !robotRef.current) return
             if (Math.hypot(e.clientX - bDownX, e.clientY - bDownY) > 4) return
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
-            const hit = buildRay.intersectObject(robotRef.current, true)[0]
-            if (!hit) return
-            let o: THREE.Object3D | null = hit.object
-            while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
-            const name = (o as unknown as { urdfName?: string } | null)?.urdfName
+            const name = ownerLinkName(buildRay.intersectObject(robotRef.current, true)[0]?.object ?? null)
             if (name) setSelectedLink(name)
           }
 
+          // Hover: show a face's snap handles when the Move tool is active + idle.
+          const onBuildHover = (e: PointerEvent): void => {
+            if (drag || move) return
+            if (!buildActive() || buildToolRef.current !== 'move' || !robotRef.current) {
+              if (snapGroup.children.length) clearHandles()
+              return
+            }
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
+            const link = hit ? ownerLinkName(hit.object) : null
+            const geom = link ? readPrimitive(contentRef.current, link) : null
+            if (!hit || !link || !geom) {
+              clearHandles()
+              return
+            }
+            const th = hitToHandles(hit, link, geom)
+            const near = nearestScreen(th.pts, e)
+            showHandles(th.pts, near.distPx < 16 ? near.index : -1)
+          }
+
           // A cancelled/interrupted drag must never strand OrbitControls disabled
-          // or leave a half-resized preview: revert to the pre-drag size.
+          // or leave a half-applied preview.
           const onBuildCancel = (): void => {
-            const d = drag
-            drag = null
             controls.enabled = true
             setBuildDim(null)
-            if (d) applyPreview(d.kind, d.mesh, d.group, d.dims0, d.origin0)
+            clearHandles()
+            if (drag) {
+              applyPreview(drag.kind, drag.mesh, drag.group, drag.dims0, drag.origin0)
+              drag = null
+            }
+            if (move) {
+              move.jointObj.position.copy(move.oldXyz)
+              move = null
+            }
           }
           renderer.domElement.addEventListener('pointerdown', onDown)
           renderer.domElement.addEventListener('pointerup', onUp)
           renderer.domElement.addEventListener('pointerdown', onBuildDown)
           renderer.domElement.addEventListener('pointermove', onBuildMove)
+          renderer.domElement.addEventListener('pointermove', onBuildHover)
           renderer.domElement.addEventListener('pointerup', onBuildUp)
           renderer.domElement.addEventListener('pointercancel', onBuildCancel)
           renderer.domElement.addEventListener('lostpointercapture', onBuildCancel)
+          renderer.domElement.addEventListener('pointerleave', clearHandles)
           teardownPose = () => {
             renderer.domElement.removeEventListener('pointerdown', onDown)
             renderer.domElement.removeEventListener('pointerup', onUp)
             renderer.domElement.removeEventListener('pointerdown', onBuildDown)
             renderer.domElement.removeEventListener('pointermove', onBuildMove)
+            renderer.domElement.removeEventListener('pointermove', onBuildHover)
             renderer.domElement.removeEventListener('pointerup', onBuildUp)
             renderer.domElement.removeEventListener('pointercancel', onBuildCancel)
             renderer.domElement.removeEventListener('lostpointercapture', onBuildCancel)
+            renderer.domElement.removeEventListener('pointerleave', clearHandles)
+            scene.remove(snapGroup)
+            handleGeo.dispose()
+            handleMat.dispose()
+            handleMatOn.dispose()
             clearMeasure()
             markerMat.dispose()
             lineMat.dispose()
@@ -1228,6 +1460,9 @@ export function RobotView({
           <div className="robotview__note" role="status">
             {meshNote}
           </div>
+        )}
+        {showPanel && buildOpen && (
+          <RobotToolbar tool={buildTool} onSetTool={onSetTool} canEdit={canEdit} />
         )}
         {showPanel && (
           <RobotBuildPanel

@@ -4,7 +4,7 @@
  * and appending an imported mesh as a new link/joint. Regex-based (no DOM) so
  * they're cheap to unit-test in a node env.
  */
-import type { PrimitiveKind } from './robot-build'
+import type { PrimitiveKind, Vec3 } from './robot-build'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -268,6 +268,30 @@ export function setVisualOrigin(
   else visual = visual.replace(/<visual\b[^>]*>/i, (v) => `${v}\n      ${tag}`)
   const nextBody = body.slice(0, vs.start) + visual + body.slice(vs.end)
   return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/** Read the joint whose `<child>` is `childLink`, or null (e.g. the root link has
+ *  none — the move tool uses that to refuse moving the base). */
+export function readJoint(
+  urdf: string,
+  childLink: string
+): { name: string; parent: string; type: string; xyz: Vec3; rpy: Vec3 } | null {
+  const re = /<joint\b([^>]*)>([\s\S]*?)<\/joint>/gi
+  const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    if (!childRe.test(m[2])) continue
+    const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(m[2])
+    const rpyM = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(m[2])
+    return {
+      name: /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
+      type: /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? 'fixed',
+      parent: /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(m[2])?.[1] ?? '',
+      xyz: originM ? parseVec3(originM[1]) : [0, 0, 0],
+      rpy: rpyM ? parseVec3(rpyM[1]) : [0, 0, 0]
+    }
+  }
+  return null
 }
 
 /** Set the fixed-joint origin whose child is `childLink` (moves the whole part). */
