@@ -17,10 +17,18 @@ import './RobotView.css'
  * phases add the pose tool, servo↔joint binding and the timeline; this is just
  * "see the robot". Code-split so three.js stays out of the initial bundle.
  */
-export function RobotView(): JSX.Element {
+export interface RobotViewProps {
+  /** URDF text to render. When omitted, the active editor file is used (opening
+   *  a `.urdf`). Provided directly by the docked Robot-mode panel (#320). */
+  urdfContent?: string
+  /** Compact chrome for the small docked panel (a slimmer HUD). */
+  compact?: boolean
+}
+
+export function RobotView({ urdfContent, compact = false }: RobotViewProps = {}): JSX.Element {
   const { openFiles, activeId } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
-  const content = activeFile?.content ?? ''
+  const content = urdfContent ?? activeFile?.content ?? ''
 
   const mountRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
@@ -56,7 +64,10 @@ export function RobotView(): JSX.Element {
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x191a1d)
 
-    const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100)
+    // Isometric ORTHOGRAPHIC camera (#320) — the three axes foreshorten equally
+    // and there's no perspective distortion, which reads cleaner for poses. Its
+    // frustum is sized from the model bounds below.
+    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100)
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
     renderer.outputColorSpace = THREE.SRGBColorSpace
@@ -88,13 +99,15 @@ export function RobotView(): JSX.Element {
       links: Object.keys(robot.links).length
     })
 
-    // Frame the model: fit the camera to its bounds + a ground grid at its base.
+    // Frame the model: an ISO viewpoint (equal x/y/z direction) + a ground grid.
     const box = new THREE.Box3().setFromObject(robot)
     const size = box.getSize(new THREE.Vector3())
     const centre = box.getCenter(new THREE.Vector3())
     const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-    const dist = radius / Math.sin((camera.fov * Math.PI) / 180 / 2)
-    camera.position.set(centre.x + dist * 0.8, box.max.y + dist * 0.35, centre.z + dist * 1.0)
+    // Half-height the ortho frustum should show (a little padding around the model).
+    const halfView = radius * 1.35
+    const isoDir = new THREE.Vector3(1, 0.9, 1).normalize()
+    camera.position.copy(centre).addScaledVector(isoDir, radius * 6)
     controls.target.copy(centre)
     controls.update()
 
@@ -108,10 +121,15 @@ export function RobotView(): JSX.Element {
       const h = mount.clientHeight
       if (w === 0 || h === 0) return
       // updateStyle defaults true → the canvas CSS size fits the container while
-      // the drawing buffer scales by the pixel ratio (passing false made the
-      // canvas render at its oversized device-pixel size and overflow).
+      // the drawing buffer scales by the pixel ratio.
       renderer.setSize(w, h)
-      camera.aspect = w / h
+      // Orthographic: keep `halfView` world units visible vertically, widen the
+      // frustum by the aspect ratio so nothing is squashed.
+      const aspect = w / h
+      camera.left = -halfView * aspect
+      camera.right = halfView * aspect
+      camera.top = halfView
+      camera.bottom = -halfView
       camera.updateProjectionMatrix()
     }
     resize()
@@ -143,7 +161,7 @@ export function RobotView(): JSX.Element {
   }, [parsed])
 
   return (
-    <div className="robotview">
+    <div className={`robotview${compact ? ' robotview--compact' : ''}`}>
       <div className="robotview__canvas" ref={mountRef} />
       {error ? (
         <div className="robotview__overlay robotview__overlay--error" role="alert">
@@ -159,7 +177,7 @@ export function RobotView(): JSX.Element {
         info && (
           <div className="robotview__hud" aria-hidden="true">
             <strong>{info.name}</strong> · {info.joints} joints · {info.links} links
-            <span className="robotview__hud-hint">drag to orbit · scroll to zoom</span>
+            {!compact && <span className="robotview__hud-hint">drag to orbit · scroll to zoom</span>}
           </div>
         )
       )}

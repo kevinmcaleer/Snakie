@@ -41,14 +41,15 @@ import type { ActivityView } from '../components/ActivityBar'
 /** The named workspaces (Phase 1; slimmed 4 → 3 by the modes review). Order =
  *  the switcher's display order. Old `lab`/`data` envelopes migrate to
  *  `datalab` in {@link loadLayoutState}. */
-export const WORKSPACE_IDS = ['code', 'board', 'datalab'] as const
+export const WORKSPACE_IDS = ['code', 'board', 'datalab', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
   board: { label: 'Board', hint: 'Focused Board View beside your code' },
-  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' }
+  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' },
+  robot: { label: 'Robot', hint: 'Code · board · a 3D robot over the instruments' }
 }
 
 /** One workspace's remembered geometry. */
@@ -120,6 +121,19 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     boardPaneOpen: false,
     horizontal: [0, 100, 0, 0],
     vertical: [50, 50]
+  },
+  // Robot (#320): the robotics cockpit — files collapsed, CODE ~⅓ on the left,
+  // the Board View (breadboard) in the middle, and the dock on the right (which
+  // in this mode carries a mini 3-D Robot panel above the instruments).
+  robot: {
+    activityView: 'files',
+    filesCollapsed: true,
+    shellCollapsed: false,
+    rightCollapsed: true,
+    dockOpen: true,
+    boardPaneOpen: true,
+    horizontal: [0, 34, 66, 0],
+    vertical: [65, 35]
   }
 }
 

@@ -2118,6 +2118,31 @@ body {
   display: flex;
 }
 
+/* Robot mode (#320): the mini 3-D Robot panel sits ABOVE the instrument dock. */
+.shell__main .shell__dock--robot {
+  flex-direction: column;
+}
+.shell__robot3d {
+  flex: 0 0 42%;
+  min-height: 160px;
+  position: relative;
+  border-bottom: var(--border-w) solid var(--border);
+}
+.shell__robot3d-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+/* The instrument dock takes the remaining height + scrolls. */
+.shell__dock--robot .instr-dock {
+  min-height: 0;
+}
+
 .activitybar {
   display: flex;
   flex-direction: column;
