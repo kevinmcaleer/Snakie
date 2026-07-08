@@ -41,3 +41,9 @@
   opacity: 0.4;
   cursor: default;
 }
+.robottool__sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 0.15rem 0.15rem;
+  background: var(--border, #3a3d44);
+}

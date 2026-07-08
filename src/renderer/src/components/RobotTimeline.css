@@ -96,6 +96,25 @@
 .robottimeline__spacer {
   flex: 1 1 auto;
 }
+/* Mirror-pair invert toggles (#332). */
+.robottimeline__mirpairs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.robottimeline__mirpair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.58rem;
+  color: var(--text-muted, #9aa0a6);
+  cursor: pointer;
+}
+.robottimeline__mirpair input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
 
 .robottimeline__tracks {
   position: relative;

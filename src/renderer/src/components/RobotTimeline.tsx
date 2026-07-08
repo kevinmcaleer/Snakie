@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { MotionEasing, MotionTimeline } from '../../../shared/robot'
+import type { MirrorPair, MotionEasing, MotionTimeline } from '../../../shared/robot'
 import type { NamedPoseLike } from './RobotJointPanel'
 import './RobotTimeline.css'
 
@@ -26,6 +26,11 @@ export interface RobotTimelineProps {
   onCapture: () => void
   onImportPose: (pose: NamedPoseLike) => void
   onMirror: (halfCycle: boolean) => void
+  /** Left↔right mirror pairs + a per-pair invert toggle (#332). */
+  mirrorPairs: MirrorPair[]
+  onToggleInvert: (index: number) => void
+  /** Duplicate the selected keyframe (or the whole pose at the playhead). */
+  onDuplicate: () => void
   onExport: () => void
   onSelectKey: (joint: string, t: number) => void
   onMoveKey: (joint: string, fromT: number, toT: number) => void
@@ -57,6 +62,9 @@ export function RobotTimeline(props: RobotTimelineProps): JSX.Element {
     onCapture,
     onImportPose,
     onMirror,
+    mirrorPairs,
+    onToggleInvert,
+    onDuplicate,
     onExport,
     onSelectKey,
     onMoveKey,
@@ -65,6 +73,7 @@ export function RobotTimeline(props: RobotTimelineProps): JSX.Element {
   } = props
   const duration = timeline.duration
   const trackByJoint = new Map(timeline.tracks.map((t) => [t.joint, t]))
+  const hasKeys = timeline.tracks.some((t) => t.keys.length > 0)
   const dragRef = useRef<{ joint: string; fromT: number; el: HTMLElement } | null>(null)
 
   // Pointer x within a track element → time in seconds (clamped).
@@ -193,6 +202,31 @@ export function RobotTimeline(props: RobotTimelineProps): JSX.Element {
           title="Mirror to the opposite joints, offset half a cycle (a walk)"
         >
           Mirror ½
+        </button>
+        {mirrorPairs.length > 0 && (
+          <span className="robottimeline__mirpairs">
+            {mirrorPairs.map((p, i) => (
+              <label
+                key={`${p.a} ${p.b}`}
+                className="robottimeline__mirpair"
+                title={`Mirror ${p.a} ↔ ${p.b}. Tick "inv" if the partner joint faces the opposite way (reflect the value about its neutral).`}
+              >
+                <input type="checkbox" checked={!!p.invert} onChange={() => onToggleInvert(i)} />
+                <span>
+                  {p.a}↔{p.b}
+                </span>
+              </label>
+            ))}
+          </span>
+        )}
+        <button
+          type="button"
+          className="robottimeline__btn"
+          disabled={!hasKeys}
+          onClick={onDuplicate}
+          title={selected ? 'Duplicate the selected keyframe' : 'Duplicate the whole pose at the playhead'}
+        >
+          ⧉ Duplicate
         </button>
         {selected && (
           <button

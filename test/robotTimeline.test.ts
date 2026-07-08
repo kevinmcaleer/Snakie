@@ -6,6 +6,8 @@ import {
   upsertKey,
   deleteKey,
   moveKey,
+  duplicateKey,
+  duplicatePose,
   dropPose,
   mirrorName,
   autoMirrorPairs,
@@ -24,6 +26,53 @@ const tl = (over: Partial<MotionTimeline> = {}): MotionTimeline => ({
   fps: 4,
   tracks: [{ joint: 'a', keys: [{ t: 0, value: 0 }, { t: 2, value: 100 }] }],
   ...over
+})
+
+describe('duplicateKey / duplicatePose (#332)', () => {
+  it('copies the key nearest t to t+dt, keeping the value', () => {
+    const out = duplicateKey(tl(), 'a', 0, 0.5) // nearest to 0 is the key at 0 (value 0)
+    const track = out.tracks.find((t) => t.joint === 'a')!
+    expect(track.keys).toContainEqual({ t: 0.5, value: 0 })
+    expect(track.keys).toHaveLength(3) // original two + the duplicate
+  })
+  it('duplicating the LAST key grows the clip instead of overwriting the end key', () => {
+    const out = duplicateKey(tl(), 'a', 2, 0.5) // key at t=2 (value 100) → new key at 2.5
+    expect(out.duration).toBeCloseTo(2.5) // clip extended
+    const track = out.tracks.find((t) => t.joint === 'a')!
+    expect(track.keys).toHaveLength(3)
+    expect(track.keys.find((k) => Math.abs(k.t - 2.5) < 1e-6)!.value).toBe(100)
+    expect(track.keys.find((k) => k.t === 2)!.value).toBe(100) // original end key untouched
+  })
+  it('never overwrites a DISTINCT existing key — drops the copy into the gap', () => {
+    const base = tl({ tracks: [{ joint: 'a', keys: [{ t: 1, value: 10 }, { t: 1.2, value: 99 }] }] })
+    const out = duplicateKey(base, 'a', 1, 0.2) // 1+0.2=1.2 is taken (value 99) → land at 1.1
+    const track = out.tracks.find((t) => t.joint === 'a')!
+    expect(track.keys.find((k) => k.t === 1.2)!.value).toBe(99) // NOT clobbered
+    expect(track.keys.find((k) => Math.abs(k.t - 1.1) < 1e-6)!.value).toBe(10) // copy in the gap
+    expect(track.keys).toHaveLength(3)
+  })
+  it('is a no-op for an unknown / empty track', () => {
+    const base = tl()
+    expect(duplicateKey(base, 'ghost', 0, 0.5)).toBe(base)
+  })
+  it('duplicatePose stamps every animatable joint value at t onto t+dt', () => {
+    const base = tl({
+      tracks: [
+        { joint: 'a', keys: [{ t: 0, value: 10 }, { t: 2, value: 30 }] },
+        { joint: 'b', keys: [{ t: 0, value: 5 }] }
+      ]
+    })
+    const out = duplicatePose(base, 1, 0.5, ['a', 'b']) // sample at t=1 → a=20 (mid), b=5
+    const a = out.tracks.find((t) => t.joint === 'a')!
+    const b = out.tracks.find((t) => t.joint === 'b')!
+    expect(a.keys.find((k) => k.t === 1.5)!.value).toBeCloseTo(20)
+    expect(b.keys.find((k) => k.t === 1.5)!.value).toBeCloseTo(5)
+  })
+  it('duplicatePose skips non-animatable (mimic) joints', () => {
+    const base = tl({ tracks: [{ joint: 'a', keys: [{ t: 0, value: 10 }] }] })
+    const out = duplicatePose(base, 0, 0.5, []) // nothing animatable → unchanged tracks
+    expect(out.tracks.find((t) => t.joint === 'a')!.keys).toHaveLength(1)
+  })
 })
 
 describe('ease + sampleTrack (#314)', () => {

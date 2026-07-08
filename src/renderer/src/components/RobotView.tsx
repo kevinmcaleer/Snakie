@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -37,6 +37,15 @@ import {
 import { reRoot } from './robot-reroot'
 import { createViewCube } from './robot-viewcube'
 import {
+  historyInit,
+  historyPush,
+  historyUndo,
+  historyRedo,
+  canUndo as histCanUndo,
+  canRedo as histCanRedo,
+  type History
+} from './use-history'
+import {
   classifyFace,
   faceSnapPoints,
   movedJointOrigin,
@@ -54,6 +63,8 @@ import {
   autoMirrorPairs,
   deleteKey,
   dropPose,
+  duplicateKey,
+  duplicatePose,
   generateMicroPython,
   mirrorTracks,
   moveKey,
@@ -334,16 +345,89 @@ export function RobotView({
     savePin(window.localStorage, PIN_KEYS.builder, p)
   }
 
-  // Patch the URDF text + re-render + deferred-save (the STL-import path).
-  const commitUrdf = (next: string): void => {
+  const contentRef = useRef(content)
+  contentRef.current = content
+
+  // ── Undo/redo (#338) ──────────────────────────────────────────────────────
+  // Every builder action funnels through commitUrdf, so checkpointing the
+  // pre-edit text there gives undo over ALL of them. The URDF's "present" lives
+  // in the workspace store (and can also change via a Monaco text edit), so we
+  // sync `present` from the live content before each op — an interleaved text
+  // edit is still captured. Reuses the pure #187 stack ops.
+  const histRef = useRef<History<string>>(historyInit(content))
+  const [, bumpHist] = useReducer((n: number) => n + 1, 0)
+  const syncPresent = (): void => {
+    if (histRef.current.present !== contentRef.current) {
+      // An out-of-band content change is a fresh checkpoint: fold it in AND clear
+      // the redo stack (like any undo manager) so a later Redo can't resurrect a
+      // stale future state on top of it.
+      histRef.current = historyPush(histRef.current, contentRef.current, 50)
+    }
+  }
+  // Low-level: patch the buffer + schedule the deferred save. NO checkpoint.
+  const applyUrdf = (next: string): void => {
     if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
     updateContent(activeFile.id, next)
     pendingSaveRef.current = activeFile.id
   }
+  // Commit a builder edit (the one choke point → one undo step per action).
+  const commitUrdf = (next: string): void => {
+    if (next === contentRef.current) return
+    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    syncPresent()
+    histRef.current = historyPush(histRef.current, next, 50)
+    applyUrdf(next)
+    bumpHist()
+  }
+  const undoUrdf = (): void => {
+    syncPresent()
+    if (!histCanUndo(histRef.current)) return
+    histRef.current = historyUndo(histRef.current)
+    applyUrdf(histRef.current.present)
+    bumpHist()
+  }
+  const redoUrdf = (): void => {
+    syncPresent()
+    if (!histCanRedo(histRef.current)) return
+    histRef.current = historyRedo(histRef.current)
+    applyUrdf(histRef.current.present)
+    bumpHist()
+  }
+  // Latest undo/redo for the (stable-deps) keyboard listener.
+  const undoRedoRef = useRef({ undo: (): void => {}, redo: (): void => {} })
+  undoRedoRef.current = { undo: undoUrdf, redo: redoUrdf }
   const commitUrdfRef = useRef<((next: string) => void) | null>(null)
   commitUrdfRef.current = commitUrdf
-  const contentRef = useRef(content)
-  contentRef.current = content
+
+  // Undo history is per-file — reset it when the open file changes.
+  useEffect(() => {
+    histRef.current = historyInit(contentRef.current)
+    bumpHist()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFile?.id])
+  // Cmd/Ctrl+Z = undo, +Shift (or Ctrl+Y) = redo — only in the full builder view,
+  // and never while typing in a field or the Monaco editor (it has its own undo).
+  useEffect(() => {
+    if (!poseUI) return
+    const onKey = (e: KeyboardEvent): void => {
+      const k = e.key.toLowerCase()
+      if (!(e.metaKey || e.ctrlKey) || (k !== 'z' && k !== 'y')) return
+      const el = document.activeElement as HTMLElement | null
+      if (
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.isContentEditable ||
+          el.closest('.monaco-editor'))
+      )
+        return
+      e.preventDefault()
+      if (k === 'y' || e.shiftKey) undoRedoRef.current.redo()
+      else undoRedoRef.current.undo()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [poseUI])
 
   const handleAddPrimitive = (kind: PrimitiveKind): void => {
     if (!canEdit) return // needs a saved project file — don't set a phantom selection
@@ -633,6 +717,28 @@ export function RobotView({
     commitTimeline(deleteKey(timelineRef.current, joint, t))
     setSelectedKey(null)
   }
+  // Duplicate (#332): the selected keyframe → a nudge later, else the whole pose
+  // at the playhead → a nudge later (a visible copy the user can then drag).
+  const handleDuplicate = (): void => {
+    const tl = timelineRef.current
+    const dt = Math.max(0.05, tl.duration * 0.1)
+    if (selectedKey) {
+      // The copy may land in a gap or extend the clip, so its exact time isn't
+      // `t+dt` — leave the selection on the source key rather than guess.
+      commitTimeline(duplicateKey(tl, selectedKey.joint, selectedKey.t, dt))
+    } else {
+      commitTimeline(duplicatePose(tl, playheadRef.current, dt, movableNames))
+    }
+  }
+  // Toggle a mirror pair's invert (#332): reflect the value about neutral for an
+  // opposite-facing partner. Persist so the next Mirror uses it.
+  const handleToggleInvert = (index: number): void => {
+    const next = mirrorPairs.map((p, i) => (i === index ? { ...p, invert: !p.invert } : p))
+    setMirrorPairs(next)
+    void persist((m) => {
+      m.mirror = next
+    })
+  }
   const handleAddKey = (joint: string, t: number): void => {
     const m = metaRef.current.find((x) => x.name === joint)
     if (!m || m.isMimic) return
@@ -654,11 +760,9 @@ export function RobotView({
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
       const next = addMeshLink(content, { meshRel: res.rel, linkBase })
       refitNextRef.current = true
-      // Update the buffer (RobotView re-renders + the tab reflects it), then let
-      // an effect persist it once the store state is fresh (saveFile() called
-      // here would write the stale pre-edit content).
-      updateContent(activeFile.id, next.urdf)
-      pendingSaveRef.current = activeFile.id
+      // Route through the choke point so the import is ONE undoable step and the
+      // history stays in sync (commitUrdf updates the buffer + schedules the save).
+      commitUrdf(next.urdf)
       setSelectedLink(next.link)
       setEditLink(next.link)
       if (!buildOpen) setBuildOpen(true)
@@ -1623,7 +1727,15 @@ export function RobotView({
           </div>
         )}
         {showPanel && buildOpen && (
-          <RobotToolbar tool={buildTool} onSetTool={onSetTool} canEdit={canEdit} />
+          <RobotToolbar
+            tool={buildTool}
+            onSetTool={onSetTool}
+            canEdit={canEdit}
+            canUndo={histCanUndo(histRef.current)}
+            canRedo={histCanRedo(histRef.current)}
+            onUndo={undoUrdf}
+            onRedo={redoUrdf}
+          />
         )}
         {showPanel && (
           <RobotBuildPanel
@@ -1708,6 +1820,9 @@ export function RobotView({
           onCapture={handleCapture}
           onImportPose={handleImportPose}
           onMirror={handleMirror}
+          mirrorPairs={mirrorPairs}
+          onToggleInvert={handleToggleInvert}
+          onDuplicate={handleDuplicate}
           onExport={handleExport}
           onSelectKey={handleSelectKey}
           onMoveKey={handleMoveKey}

@@ -7,6 +7,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — undo / redo for builder actions (#338).** Every builder edit
+  (add / push-pull / move / delete / joint change / mesh import / re-root) is now
+  an undo step: **⌘Z / Ctrl+Z** to undo, **⇧⌘Z / Ctrl+Y** to redo, plus undo/redo
+  buttons on the build toolbar. A drag is a single step; undoing a delete restores
+  the block + its sub-tree; the camera doesn't jump. (History is per-file.)
+- **Robot View — timeline: duplicate keyframes + mirror-invert toggle (#332).**
+  The motion timeline gains a **⧉ Duplicate** control (copies the selected
+  keyframe — or the whole pose at the playhead — to a free slot, growing the clip
+  if it lands past the end, never overwriting an existing key), and a per-pair
+  **mirror-invert** checkbox so a reversed-axis left↔right joint mirrors correctly
+  in one click (persists to `robot.yml`).
 - **Robot View — navigation cube.** A CAD-style **ViewCube** floats at the
   top-right of the 3-D viewer, mirroring the camera's orientation as you orbit;
   **click a face** (Front / Back / Left / Right / Top / Bottom) to snap the view
