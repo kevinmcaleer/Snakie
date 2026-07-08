@@ -56,6 +56,7 @@ import {
   type Vec3
 } from './robot-build'
 import { RobotBuildPanel } from './RobotBuildPanel'
+import { RobotPropertiesDialog } from './RobotPropertiesDialog'
 import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
@@ -470,6 +471,26 @@ export function RobotView({
   }
   const handleMakeBase = (link: string): void => {
     commitUrdf(reRoot(content, link))
+  }
+  // Properties dialog (#352): the pencil opens it (snapshot the URDF so Cancel can
+  // revert); OK keeps the (live-applied) edits, Cancel restores the snapshot.
+  const editSnapshotRef = useRef<string | null>(null)
+  const handleOpenProps = (link: string | null): void => {
+    if (link) {
+      editSnapshotRef.current = contentRef.current
+      setSelectedLink(link)
+    }
+    setEditLink(link)
+  }
+  const handlePropsOk = (): void => {
+    editSnapshotRef.current = null
+    setEditLink(null)
+  }
+  const handlePropsCancel = (): void => {
+    const snap = editSnapshotRef.current
+    editSnapshotRef.current = null
+    if (snap != null && snap !== contentRef.current) commitUrdf(snap) // discard edits
+    setEditLink(null)
   }
 
   // Re-apply the selection outline when the picked block changes (no re-parse).
@@ -2066,19 +2087,26 @@ export function RobotView({
               if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
             }}
             editLink={editLink}
-            onEdit={setEditLink}
-            editGeom={editGeom}
-            editJoint={editJoint}
-            jointNames={allJointNames}
+            onEdit={handleOpenProps}
             rootLink={rootName}
-            onSetSize={handleSetSize}
-            onSetJoint={handleSetJoint}
             onMakeBase={handleMakeBase}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}
             importing={importing}
             canEdit={canEdit}
+          />
+        )}
+        {showPanel && editLink && (
+          <RobotPropertiesDialog
+            link={editLink}
+            geom={editGeom}
+            joint={editJoint}
+            jointNames={allJointNames}
+            onSetSize={handleSetSize}
+            onSetJoint={handleSetJoint}
+            onOk={handlePropsOk}
+            onCancel={handlePropsCancel}
           />
         )}
         {buildDim && (

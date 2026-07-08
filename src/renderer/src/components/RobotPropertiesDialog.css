@@ -1,0 +1,103 @@
+/* Fusion-style floating Properties dialog (#352), docked top-right of the stage
+   by default, draggable by its title bar. Prefix robotprops__. */
+.robotprops {
+  position: absolute;
+  top: 3.2rem; /* below the nav zone */
+  right: 12px;
+  z-index: 20;
+  width: 13rem;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 8px;
+  background: rgba(20, 21, 24, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  color: var(--text, #cdd2d9);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.66rem;
+}
+:root[data-theme='skeuomorph'] .robotprops {
+  background: rgba(231, 226, 211, 0.94);
+}
+.robotprops__head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border, #3a3d44);
+  cursor: grab;
+  user-select: none;
+}
+.robotprops__head:active {
+  cursor: grabbing;
+}
+.robotprops__grip {
+  color: var(--text-muted, #8b919b);
+  letter-spacing: -1px;
+}
+.robotprops__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.robotprops__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.robotprops__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.robotprops__label {
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__note {
+  margin: 0;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+  font-style: italic;
+}
+.robotprops__foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border, #3a3d44);
+}
+.robotprops__btn {
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.7rem;
+  cursor: pointer;
+}
+.robotprops__btn:hover {
+  border-color: var(--text-muted, #6b7079);
+  color: var(--text, #f2f4f7);
+}
+.robotprops__btn--ok {
+  color: var(--accent-contrast, #15161a);
+  background: var(--accent, #d6a23f);
+  border-color: var(--accent, #d6a23f);
+  font-weight: 700;
+}
+.robotprops__btn--ok:hover {
+  color: var(--accent-contrast, #15161a);
+  filter: brightness(1.08);
+}

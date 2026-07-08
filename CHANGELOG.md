@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Fusion-style Properties dialog (#352).** Clicking a block's
+  **edit pencil** now opens a floating, **draggable** properties dialog on the
+  right (size + joint) instead of expanding the hierarchy row. Edits apply live to
+  the 3-D preview; **OK** keeps them, **Cancel** discards them (the URDF is
+  snapshotted on open and restored on cancel) — both close the dialog. Delete
+  moved onto the hierarchy row.
 - **Robot View — animated camera moves.** Clicking a nav-cube face/edge/corner,
   focusing a block from the hierarchy, **Home** and **Fit** now **glide** the
   camera to the destination (eased ~0.3s) instead of jumping, so you can see where
