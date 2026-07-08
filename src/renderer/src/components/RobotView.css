@@ -95,9 +95,10 @@
   right: 12px;
   top: 12px;
   z-index: 30;
-  width: 72px;
-  height: 72px;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+  width: 96px;
+  height: 96px;
+  /* Shadow drops down-back, consistent with the cube being lit from lower-front. */
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.5));
 }
 .robotview__viewcube canvas {
   display: block;

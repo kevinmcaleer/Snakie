@@ -828,7 +828,22 @@ export function RobotView({
       camera.position.copy(controls.target).addScaledVector(dir, dist)
       controls.update()
     }
-    const viewCube = cubeMountRef.current ? createViewCube({ size: 72, onPick: snapView }) : null
+    // Drag the cube → orbit the camera (spherical around the target), same feel
+    // as dragging the viewport.
+    const cubeSph = new THREE.Spherical()
+    const cubeOffset = new THREE.Vector3()
+    const orbitBy = (dxPx: number, dyPx: number): void => {
+      cubeOffset.copy(camera.position).sub(controls.target)
+      cubeSph.setFromVector3(cubeOffset)
+      cubeSph.theta -= dxPx * 0.01
+      cubeSph.phi = Math.max(0.01, Math.min(Math.PI - 0.01, cubeSph.phi - dyPx * 0.01))
+      cubeOffset.setFromSpherical(cubeSph)
+      camera.position.copy(controls.target).add(cubeOffset)
+      controls.update()
+    }
+    const viewCube = cubeMountRef.current
+      ? createViewCube({ size: 96, onPick: snapView, onOrbit: orbitBy })
+      : null
     if (viewCube && cubeMountRef.current) cubeMountRef.current.appendChild(viewCube.dom)
 
     // Half-height of the ortho frustum (updated by frameModel as bounds change).
