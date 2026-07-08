@@ -257,6 +257,11 @@ const fs = {
   readDir: (path: string): Promise<FsEntry[]> => unwrap(ipcRenderer.invoke('fs:readDir', path)),
   /** Read a file's contents (UTF-8). */
   readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('fs:readFile', path)),
+  /** Read a file's raw bytes (for binary meshes — #319). */
+  readFileBytes: (path: string): Promise<Uint8Array> =>
+    unwrap<string>(ipcRenderer.invoke('fs:readFileBase64', path)).then((b64) =>
+      Uint8Array.from(Buffer.from(b64, 'base64'))
+    ),
   /** Write contents to a file (created/overwritten). */
   writeFile: (path: string, contents: string): Promise<void> =>
     unwrap(ipcRenderer.invoke('fs:writeFile', path, contents)),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { RobotView } from './RobotView'
+import { dirname } from './robot-mesh'
 import { useWorkspace } from '../store/workspace'
 import { readRobotModel } from '../../../shared/krf'
 import demoArm from '../assets/demo-arm.urdf?raw'
@@ -14,6 +15,9 @@ import demoArm from '../assets/demo-arm.urdf?raw'
 export function RobotDockPanel(): JSX.Element {
   const { currentFolder } = useWorkspace()
   const [urdf, setUrdf] = useState<string>(demoArm)
+  // The URDF's folder, so RobotView resolves the robot's meshes (#319). Empty
+  // for the bundled demo arm (all primitives — no meshes to resolve).
+  const [base, setBase] = useState<string>('')
 
   useEffect(() => {
     let live = true
@@ -26,20 +30,24 @@ export function RobotDockPanel(): JSX.Element {
           const content = await window.api.fs.readFile(path)
           if (live && content.trim()) {
             setUrdf(content)
+            setBase(dirname(path))
             return
           }
         }
       } catch {
         // No project URDF (or unreadable) — fall through to the demo arm.
       }
-      if (live) setUrdf(demoArm)
+      if (live) {
+        setUrdf(demoArm)
+        setBase('')
+      }
     })()
     return () => {
       live = false
     }
   }, [currentFolder])
 
-  return <RobotView urdfContent={urdf} compact />
+  return <RobotView urdfContent={urdf} basePath={base} compact />
 }
 
 export default RobotDockPanel

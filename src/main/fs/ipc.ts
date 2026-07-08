@@ -71,6 +71,12 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
 
   ipcMain.handle('fs:readFile', (_e, path: string) => wrap(() => fs.readFile(path, 'utf-8')))
 
+  // Binary read (base64) — for meshes (binary STL etc.) that a utf-8 read would
+  // corrupt. Robot View decodes it back to an ArrayBuffer (#319).
+  ipcMain.handle('fs:readFileBase64', (_e, path: string) =>
+    wrap(async () => (await fs.readFile(path)).toString('base64'))
+  )
+
   ipcMain.handle('fs:writeFile', (_e, path: string, contents: string) =>
     wrap(async () => {
       await fs.writeFile(path, contents, 'utf-8')

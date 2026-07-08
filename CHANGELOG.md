@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — STL & DAE meshes (#319, epic #309).** Robot View now renders
+  real robots: a URDF's `.stl` / `.dae` (Collada) meshes load straight from the
+  project folder — no web server. Relative (`meshes/link.stl`) and `package://`
+  paths both resolve against the URDF's folder, the URDF `<material>` colour is
+  applied to meshes that carry none, and the camera reframes once they arrive. A
+  mesh that can't load degrades to a small placeholder + a panel note (the rest
+  of the robot still shows) instead of a blank model or a crash. Try
+  `examples/mesh-demo/mesh-demo.urdf`. The mesh loaders stay code-split in the
+  Robot View chunk.
 - **Robot workspace mode (#320, epic #309).** A new **Robot** tab joins Code ·
   Board · Data Lab: files collapsed, your code on the left (~⅓), the Board View
   in the middle, and on the right a **mini 3-D Robot panel over the instrument

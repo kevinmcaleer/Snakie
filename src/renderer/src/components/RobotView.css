@@ -69,3 +69,19 @@
 .robotview__hud-hint {
   color: var(--text-muted, #7d838d);
 }
+
+/* A non-blocking banner when one or more meshes couldn't load (#319). */
+.robotview__note {
+  position: absolute;
+  right: 0.6rem;
+  top: 0.55rem;
+  max-width: 70%;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(80, 44, 40, 0.82);
+  border: 1px solid #b4544e;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #f2d7d3;
+  pointer-events: none;
+}
