@@ -305,6 +305,9 @@ export interface LayoutStore {
   workspace: WorkspaceLayout
   /** Bumps when geometry must be re-applied to the panel groups (switch/reset). */
   applyNonce: number
+  /** Transient editor focus (Robot pop-out): hide board/instruments/console so the
+   *  URDF fills the editor. NOT persisted; cleared on workspace switch. */
+  focus: boolean
   /** Latest sizes for a group (live ref-backed; safe to call every render). */
   getSizes: (group: 'horizontal' | 'vertical') => number[]
   switchWorkspace: (id: WorkspaceId) => void
@@ -313,6 +316,8 @@ export interface LayoutStore {
   setActivityView: (view: ActivityView) => void
   setCollapsed: (panel: 'files' | 'shell' | 'right', collapsed: boolean) => void
   setDockOpen: (open: boolean) => void
+  /** Enter/leave transient editor-focus mode. */
+  setFocus: (focus: boolean) => void
   /** Record a live panel-group layout (called from onLayout every drag frame). */
   recordSizes: (group: 'horizontal' | 'vertical', sizes: number[]) => void
 }
@@ -333,6 +338,8 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     stateRef.current.workspaces[stateRef.current.active]
   )
   const [applyNonce, setApplyNonce] = useState(0)
+  // Transient editor-focus (Robot pop-out) — never persisted.
+  const [focus, setFocusState] = useState(false)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persist = useCallback((): void => {
@@ -387,10 +394,19 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
   const switchWorkspace = useCallback(
     (id: WorkspaceId): void => {
       const s = stateRef.current as LayoutState
-      if (s.active === id) return
+      if (s.active === id) {
+        // Re-clicking the active workspace tab exits focus mode (a way back to
+        // the normal layout without switching away).
+        setFocusState((f) => {
+          if (f) setApplyNonce((n) => n + 1)
+          return false
+        })
+        return
+      }
       s.active = id
       setActive(id)
       setWorkspace(s.workspaces[id])
+      setFocusState(false) // leaving focus mode when the workspace changes
       setApplyNonce((n) => n + 1)
       persist()
     },
@@ -430,29 +446,45 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     [patchActive]
   )
 
+  // TRANSIENT focus mode (not persisted): the Robot pop-out hides the board,
+  // instruments + console so the URDF fills the editor, without changing the
+  // workspace. Bumps applyNonce so the shell re-collapses/expands + the board
+  // pane elides; switching workspace clears it (below).
+  const setFocus = useCallback((next: boolean): void => {
+    setFocusState((cur) => {
+      if (cur === next) return cur
+      setApplyNonce((n) => n + 1)
+      return next
+    })
+  }, [])
+
   const store = useMemo<LayoutStore>(
     () => ({
       active,
       workspace,
       applyNonce,
+      focus,
       getSizes,
       switchWorkspace,
       resetActive,
       setActivityView,
       setCollapsed,
       setDockOpen,
+      setFocus,
       recordSizes
     }),
     [
       active,
       workspace,
       applyNonce,
+      focus,
       getSizes,
       switchWorkspace,
       resetActive,
       setActivityView,
       setCollapsed,
       setDockOpen,
+      setFocus,
       recordSizes
     ]
   )

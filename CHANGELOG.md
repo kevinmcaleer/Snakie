@@ -64,6 +64,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Built on the KRF format (#310); the pose tool, servo↔joint binding and motion
   timeline follow.
 
+### Changed
+- **Robot pop-out now keeps you in Robot mode.** Instead of switching to Code
+  mode, popping the robot out (or creating a new one) enters a transient *focus*:
+  it hides the board, instruments and console so the URDF fills the editor, and
+  restores your Robot layout the moment you switch modes, re-click the Robot tab,
+  or reopen any panel. Nothing about Robot mode is permanently changed.
+
 ### Fixed
 - **Files panel now always reopens from the toolbar button / activity icon.** A
   workspace switch (or the Robot pop-out) could leave the panel visually
