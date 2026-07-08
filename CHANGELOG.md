@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — "Make base" + base protection (#309 builder).** A URDF hangs off
+  its **base** link, so deleting the base used to leave an empty, unusable file.
+  Now the base **can't be deleted** (its ✕ is disabled with a hint, and it shows a
+  "★ This is the base" badge), and every other block gains a **★ Make base** button
+  that re-roots the whole model onto it — reversing the joint chain up to the old
+  base (origins inverted exactly, off-path sub-trees left untouched). So you can
+  bless a new base mid-build and then delete the old one. Fixed joints re-root
+  perfectly; a movable joint that happens to sit on the reversed path keeps its
+  axis/limits (best effort).
 - **Robot View — joint editor: hinges, sliders, wheels + mimic (#315, epic #309
   Phase 5).** Editing a block in the Build panel now also sets **how it moves**
   relative to its parent: pick **Fixed / Hinge / Slider / Wheel** (URDF

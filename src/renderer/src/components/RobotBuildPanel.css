@@ -318,9 +318,33 @@
   padding: 0 0.35rem;
   cursor: pointer;
 }
-.robotbuild__del:hover {
+.robotbuild__del:hover:not(:disabled) {
   color: #b4544e;
   border-color: #b4544e;
+}
+.robotbuild__del:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.robotbuild__makebase {
+  align-self: flex-start;
+  font-family: inherit;
+  font-size: 0.55rem;
+  color: var(--text-muted, #9aa0a6);
+  background: transparent;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.08rem 0.4rem;
+  cursor: pointer;
+}
+.robotbuild__makebase:hover {
+  color: #c8a24a;
+  border-color: #c8a24a;
+}
+.robotbuild__basebadge {
+  align-self: flex-start;
+  font-size: 0.55rem;
+  color: #c8a24a;
 }
 .robotbuild__empty {
   color: var(--text-muted, #8b919b);

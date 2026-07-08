@@ -25,6 +25,7 @@ import {
   readJoint,
   readPrimitive,
   removeLink,
+  rootLink,
   setJoint,
   setJointOrigin,
   setPrimitiveSize,
@@ -33,6 +34,7 @@ import {
   type JointSpec,
   type PrimitiveGeom
 } from './robot-assembly'
+import { reRoot } from './robot-reroot'
 import {
   classifyFace,
   faceSnapPoints,
@@ -316,6 +318,7 @@ export function RobotView({
     [content, editLink]
   )
   const allJointNames = useMemo(() => jointNames(content), [content])
+  const rootName = useMemo(() => rootLink(content) ?? null, [content])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -348,9 +351,15 @@ export function RobotView({
     commitUrdf(setJoint(content, link, spec))
   }
   const handleDeleteLink = (link: string): void => {
+    // Deleting the root would cascade-remove the whole tree → an empty, unusable
+    // URDF. The UI disables it; guard here too. Re-root onto a keeper first.
+    if (link === rootLink(content)) return
     commitUrdf(removeLink(content, link))
     setSelectedLink(null)
     setEditLink(null)
+  }
+  const handleMakeBase = (link: string): void => {
+    commitUrdf(reRoot(content, link))
   }
 
   // Re-apply the selection outline when the picked block changes (no re-parse).
@@ -1490,9 +1499,11 @@ export function RobotView({
             editGeom={editGeom}
             editJoint={editJoint}
             jointNames={allJointNames}
+            rootLink={rootName}
             onAdd={handleAddPrimitive}
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
+            onMakeBase={handleMakeBase}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}
