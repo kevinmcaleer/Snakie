@@ -1653,14 +1653,19 @@ export function RobotView({
             const joint = readJoint(contentRef.current, link) // null for the root
             const linkObj = robot.links[link]
             const jointObj = linkObj?.parent
-            const geom = readPrimitive(contentRef.current, link)
+            const geom = readPrimitive(contentRef.current, link) // null for mesh links
             const parentLink = jointObj?.parent
-            if (!joint || !jointObj || !linkObj || !geom || !parentLink) return
+            // A mesh has no primitive geometry → no face snap points, but it can
+            // still be moved (grab the hit point). Only the ROOT (no joint) is barred.
+            if (!joint || !jointObj || !linkObj || !parentLink) return
             robot.updateMatrixWorld(true)
             const parentBasis = [...new THREE.Matrix3().setFromMatrix4(parentLink.matrixWorld).elements]
-            const { pts } = hitToHandles(hit, link, geom)
-            const near = nearestScreen(pts, e)
-            const grab = (near.index >= 0 ? pts[near.index] : hit.point).clone()
+            let grab = hit.point.clone()
+            if (geom) {
+              const { pts } = hitToHandles(hit, link, geom)
+              const near = nearestScreen(pts, e)
+              if (near.index >= 0) grab = pts[near.index].clone()
+            }
             camera.getWorldDirection(camDir)
             move = {
               link,

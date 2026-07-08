@@ -155,11 +155,12 @@
   justify-content: space-between;
   gap: 0.3rem;
   font-family: inherit;
-  font-size: 0.64rem;
+  /* Match the breadboard library "Browser" list text (a touch larger). */
+  font-size: 0.72rem;
   color: var(--text, #cdd2d9);
   background: transparent;
   border: none;
-  padding: 0.15rem 0.3rem;
+  padding: 0.2rem 0.3rem;
   cursor: pointer;
   text-align: left;
 }
@@ -170,7 +171,7 @@
 }
 .robotbuild__part-geo {
   flex: 0 0 auto;
-  font-size: 0.54rem;
+  font-size: 0.6rem;
   color: var(--text-muted, #8b919b);
 }
 .robotbuild__part-geo.is-mesh {
