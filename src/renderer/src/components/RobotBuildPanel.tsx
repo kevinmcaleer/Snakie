@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AssemblyItem, PrimitiveGeom, JointDef, JointType, JointSpec } from './robot-assembly'
+import type {
+  AssemblyItem,
+  PrimitiveGeom,
+  JointDef,
+  JointFull,
+  JointType,
+  JointSpec
+} from './robot-assembly'
 import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
-import { toDisplay, toNative, unitLabel, type MovableType } from './robot-pose'
+import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
 import { baseName } from './robot-mesh'
 import { shouldAutoHide } from './pin-overlay'
+import type { ServoJointBinding } from '../../../shared/robot'
+import type { NamedPoseLike } from './RobotJointPanel'
+import type { PropsContext } from './RobotPropertiesDialog'
 import './RobotBuildPanel.css'
 
 /**
@@ -40,10 +50,18 @@ export interface RobotBuildPanelProps {
   onSetOpen: (open: boolean) => void
   onSetPinned: (pinned: boolean) => void
   assembly: AssemblyItem[]
+  /** The model's joints, servo bindings and named poses — extra tree branches. */
+  joints: JointFull[]
+  servos: ServoJointBinding[]
+  poses: NamedPoseLike[]
   selected: string | null
   onSelect: (link: string | null) => void
-  editLink: string | null
+  /** The node whose context dialog is open (highlighted in the tree). */
+  active: PropsContext | null
   onEdit: (link: string | null) => void
+  onOpenJoint: (child: string, joint: string) => void
+  onOpenServo: (pin: string) => void
+  onOpenPose: (name: string) => void
   /** The current root link, and an action to re-root the model at a link. */
   rootLink: string | null
   onMakeBase: (link: string) => void
@@ -307,6 +325,125 @@ function MimicRatio({
   )
 }
 
+/** Kid-friendly label for a joint type (matches the joint editor's chips). */
+function jointTypeLabel(type: JointType): string {
+  return JOINT_KINDS.find((k) => k.id === type)?.label ?? type
+}
+
+/** A collapsible branch of the hierarchy tree (disclosure ▸/▾ + label + count). */
+function Section({
+  id,
+  label,
+  count,
+  collapsed,
+  onToggle,
+  children
+}: {
+  id: string
+  label: string
+  count: number
+  collapsed: Record<string, boolean>
+  onToggle: (id: string) => void
+  children: React.ReactNode
+}): JSX.Element {
+  const isCollapsed = !!collapsed[id]
+  return (
+    <div className="robotbuild__section">
+      <button
+        type="button"
+        className="robotbuild__branch"
+        aria-expanded={!isCollapsed}
+        onClick={() => onToggle(id)}
+      >
+        <span className="robotbuild__caret">{isCollapsed ? '▸' : '▾'}</span>
+        <span className="robotbuild__branch-label">{label}</span>
+        <span className="robotbuild__branch-count">{count}</span>
+      </button>
+      {!isCollapsed && <ul className="robotbuild__parts">{children}</ul>}
+    </div>
+  )
+}
+
+/** A block / mesh row: base marker (☆/★), edit pencil, delete, and the name
+ *  (click selects + zooms). Shared by the Blocks + Meshes branches. */
+function BodyRow({
+  it,
+  isSel,
+  isEdit,
+  isRoot,
+  onSelect,
+  onEdit,
+  onMakeBase,
+  onDelete
+}: {
+  it: AssemblyItem
+  isSel: boolean
+  isEdit: boolean
+  isRoot: boolean
+  onSelect: (link: string) => void
+  onEdit: (link: string | null) => void
+  onMakeBase: (link: string) => void
+  onDelete: (link: string) => void
+}): JSX.Element {
+  return (
+    <li className={`robotbuild__part${isSel ? ' is-sel' : ''}`}>
+      <div className="robotbuild__part-row">
+        {/* Action icons sit to the LEFT of the name so they never overlap long
+            titles (the name button flexes to fill the rest). */}
+        {isRoot ? (
+          <span className="robotbuild__rowbase is-base" title="This is the base — every block hangs off it">
+            ★
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="robotbuild__rowbase"
+            onClick={() => onMakeBase(it.link)}
+            title="Make this the base"
+            aria-label={`Make ${it.link} the base`}
+          >
+            ☆
+          </button>
+        )}
+        <button
+          type="button"
+          className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
+          onClick={() => onEdit(isEdit ? null : it.link)}
+          title={isEdit ? 'Close properties' : 'Edit properties'}
+          aria-label={`Edit ${it.link}`}
+        >
+          {PENCIL}
+        </button>
+        <button
+          type="button"
+          className="robotbuild__del"
+          disabled={isRoot}
+          onClick={() => onDelete(it.link)}
+          title={
+            isRoot
+              ? 'The base can’t be deleted — make another block the base first'
+              : `Delete ${it.link}`
+          }
+          aria-label={`Delete ${it.link}`}
+        >
+          ✕
+        </button>
+        <button
+          type="button"
+          className="robotbuild__part-name"
+          title={it.link}
+          onClick={() => onSelect(it.link)}
+        >
+          <span className="robotbuild__part-label">{it.link}</span>
+          <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
+            {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
+          </span>
+        </button>
+      </div>
+    </li>
+  )
+}
+
 export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   const {
     open,
@@ -314,10 +451,16 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onSetOpen,
     onSetPinned,
     assembly,
+    joints,
+    servos,
+    poses,
     selected,
     onSelect,
-    editLink,
+    active,
     onEdit,
+    onOpenJoint,
+    onOpenServo,
+    onOpenPose,
     rootLink,
     onMakeBase,
     onDelete,
@@ -327,6 +470,13 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     canEdit
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
+  // Which tree branches are collapsed (all expanded by default).
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const toggle = (id: string): void => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+
+  const blocks = assembly.filter((it) => it.kind !== 'mesh')
+  const meshes = assembly.filter((it) => it.kind === 'mesh')
+  const editLink = active?.kind === 'link' ? active.link : null
 
   if (!open) {
     return (
@@ -384,73 +534,100 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         <p className="robotbuild__hint">Save this robot to a folder to build.</p>
       )}
 
-      <ul className="robotbuild__parts">
-        {assembly.map((it) => {
-          const isSel = it.link === selected
-          const isEdit = it.link === editLink
-          return (
-            <li
-              className={`robotbuild__part${isSel ? ' is-sel' : ''}`}
+      <div className="robotbuild__tree">
+        <Section id="blocks" label="Blocks" count={blocks.length} collapsed={collapsed} onToggle={toggle}>
+          {blocks.map((it) => (
+            <BodyRow
               key={it.link}
-            >
-              <div className="robotbuild__part-row">
-                {/* Action icons sit to the LEFT of the name so they never overlap
-                    long titles (the name button flexes to fill the rest). */}
-                {it.link === rootLink ? (
-                  <span className="robotbuild__rowbase is-base" title="This is the base — every block hangs off it">
-                    ★
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    className="robotbuild__rowbase"
-                    onClick={() => onMakeBase(it.link)}
-                    title="Make this the base"
-                    aria-label={`Make ${it.link} the base`}
-                  >
-                    ☆
-                  </button>
-                )}
+              it={it}
+              isSel={it.link === selected}
+              isEdit={it.link === editLink}
+              isRoot={it.link === rootLink}
+              onSelect={onSelect}
+              onEdit={onEdit}
+              onMakeBase={onMakeBase}
+              onDelete={onDelete}
+            />
+          ))}
+          {blocks.length === 0 && <li className="robotbuild__empty">No blocks yet — add one above.</li>}
+        </Section>
+
+        <Section id="meshes" label="Meshes" count={meshes.length} collapsed={collapsed} onToggle={toggle}>
+          {meshes.map((it) => (
+            <BodyRow
+              key={it.link}
+              it={it}
+              isSel={it.link === selected}
+              isEdit={it.link === editLink}
+              isRoot={it.link === rootLink}
+              onSelect={onSelect}
+              onEdit={onEdit}
+              onMakeBase={onMakeBase}
+              onDelete={onDelete}
+            />
+          ))}
+          {meshes.length === 0 && <li className="robotbuild__empty">No imported meshes.</li>}
+        </Section>
+
+        <Section id="joints" label="Joints" count={joints.length} collapsed={collapsed} onToggle={toggle}>
+          {joints.map((j) => {
+            const on = active?.kind === 'joint' && active.joint === j.name
+            return (
+              <li className="robotbuild__part" key={j.name}>
                 <button
                   type="button"
-                  className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
-                  onClick={() => onEdit(isEdit ? null : it.link)}
-                  title={isEdit ? 'Close properties' : 'Edit properties'}
-                  aria-label={`Edit ${it.link}`}
+                  className={`robotbuild__node${on ? ' is-on' : ''}`}
+                  title={`Edit joint ${j.name}`}
+                  onClick={() => onOpenJoint(j.child, j.name)}
                 >
-                  {PENCIL}
+                  <span className="robotbuild__part-label">{j.name}</span>
+                  <span className="robotbuild__part-geo">{jointTypeLabel(j.type)}</span>
                 </button>
+              </li>
+            )
+          })}
+          {joints.length === 0 && <li className="robotbuild__empty">No joints.</li>}
+        </Section>
+
+        <Section id="servos" label="Servos" count={servos.length} collapsed={collapsed} onToggle={toggle}>
+          {servos.map((b) => {
+            const on = active?.kind === 'servo' && normPin(active.pin) === normPin(b.pin)
+            return (
+              <li className="robotbuild__part" key={b.pin}>
                 <button
                   type="button"
-                  className="robotbuild__del"
-                  disabled={it.link === rootLink}
-                  onClick={() => onDelete(it.link)}
-                  title={
-                    it.link === rootLink
-                      ? 'The base can’t be deleted — make another block the base first'
-                      : `Delete ${it.link}`
-                  }
-                  aria-label={`Delete ${it.link}`}
+                  className={`robotbuild__node${on ? ' is-on' : ''}`}
+                  title={`Edit servo GP${normPin(b.pin)}`}
+                  onClick={() => onOpenServo(b.pin)}
                 >
-                  ✕
+                  <span className="robotbuild__part-label">GP{normPin(b.pin)}</span>
+                  <span className="robotbuild__part-geo">→ {b.joint || '—'}</span>
                 </button>
+              </li>
+            )
+          })}
+          {servos.length === 0 && <li className="robotbuild__empty">No servos mapped.</li>}
+        </Section>
+
+        <Section id="poses" label="Poses" count={poses.length} collapsed={collapsed} onToggle={toggle}>
+          {poses.map((p) => {
+            const on = active?.kind === 'pose' && active.name === p.name
+            return (
+              <li className="robotbuild__part" key={p.name}>
                 <button
                   type="button"
-                  className="robotbuild__part-name"
-                  title={it.link}
-                  onClick={() => onSelect(it.link)}
+                  className={`robotbuild__node${on ? ' is-on' : ''}`}
+                  title={`Edit pose ${p.name}`}
+                  onClick={() => onOpenPose(p.name)}
                 >
-                  <span className="robotbuild__part-label">{it.link}</span>
-                  <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
-                    {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
-                  </span>
+                  <span className="robotbuild__part-label">{p.name}</span>
                 </button>
-              </div>
-            </li>
-          )
-        })}
-        {assembly.length === 0 && <li className="robotbuild__empty">No blocks yet — add one above.</li>}
-      </ul>
+              </li>
+            )
+          })}
+          {poses.length === 0 && <li className="robotbuild__empty">No saved poses.</li>}
+        </Section>
+      </div>
 
       <div className="robotbuild__foot">
         <button
