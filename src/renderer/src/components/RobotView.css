@@ -3,11 +3,19 @@
 .robotview {
   position: relative;
   display: flex;
-  flex-direction: row;
+  flex-direction: column; /* [main row] over [timeline dock] */
   height: 100%;
   min-height: 0;
   background: #191a1d;
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* The main row: 3D stage + the pose sidebar beside it. */
+.robotview__main {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* The 3D area (canvas + overlays); the pose sidebar sits beside it. */

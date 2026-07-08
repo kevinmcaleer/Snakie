@@ -18,9 +18,30 @@ import {
   toNative
 } from './robot-pose'
 import { addMeshLink, parseAssembly } from './robot-assembly'
+import { RobotTimeline } from './RobotTimeline'
+import {
+  autoMirrorPairs,
+  deleteKey,
+  dropPose,
+  generateMicroPython,
+  mirrorTracks,
+  moveKey,
+  sampleTimeline,
+  upsertKey
+} from '../../../shared/robot-timeline'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
-import type { RobotDefinition, RobotModel, ServoJointBinding } from '../../../shared/robot'
+import type {
+  MirrorPair,
+  MotionEasing,
+  MotionTimeline,
+  RobotDefinition,
+  RobotModel,
+  ServoJointBinding
+} from '../../../shared/robot'
 import './RobotView.css'
+
+/** An empty motion clip (2 s, ease-in-out, looping). */
+const EMPTY_TIMELINE: MotionTimeline = { duration: 2, easing: 'easeInOut', loop: true, fps: 20, tracks: [] }
 
 /**
  * ROBOT VIEW (#311, epic #309) — a 3D panel that renders a URDF robot.
@@ -66,7 +87,7 @@ export function RobotView({
   basePath,
   compact = false
 }: RobotViewProps = {}): JSX.Element {
-  const { openFiles, activeId, currentFolder, updateContent, saveFile } = useWorkspace()
+  const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const content = urdfContent ?? activeFile?.content ?? ''
   // Where to resolve mesh files from: an explicit base (docked panel) else the
@@ -292,6 +313,193 @@ export function RobotView({
     void persist((mm) => {
       mm.servoJointMap = next
     })
+  }
+
+  // ── Motion timeline (#314, epic #309 Phase 4) ──────────────────────────────
+  const [timeline, setTimeline] = useState<MotionTimeline>(EMPTY_TIMELINE)
+  const [mirrorPairs, setMirrorPairs] = useState<MirrorPair[]>([])
+  const [playing, setPlaying] = useState(false)
+  const [playhead, setPlayhead] = useState(0)
+  const [selectedKey, setSelectedKey] = useState<{ joint: string; t: number } | null>(null)
+  const timelineRef = useRef<MotionTimeline>(EMPTY_TIMELINE)
+  const playheadRef = useRef(0)
+  const lastPlayheadPush = useRef(0)
+  const timelineSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingTimelineSave = useRef<(() => Promise<void>) | null>(null)
+  const timelineLoadedFolder = useRef<string | null>(null)
+  timelineRef.current = timeline
+
+  const movableNames = jointMeta.filter((m) => !m.isMimic).map((m) => m.name)
+
+  // Apply a sampled timeline frame to the robot IMPERATIVELY (mimics auto-follow).
+  // `commitState` also pushes the sliders (only on scrub/stop — never per frame).
+  const applyTimelineAt = (t: number, commitState = false): void => {
+    const r = robotRef.current
+    if (!r) return
+    const sampled = sampleTimeline(timelineRef.current, t)
+    const patch: Record<string, number> = {}
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const disp = sampled[m.name]
+      if (typeof disp !== 'number') continue
+      const lim = effectiveLimit(m, overridesRef.current[m.name])
+      const native = clamp(toNative(m.type, disp), lim.lower, lim.upper)
+      r.setJointValue(m.name, native)
+      patch[m.name] = native
+    }
+    if (commitState) setValues((v) => ({ ...v, ...patch }))
+  }
+
+  // Playback: a rAF loop drives setJointValue every frame; the scrubber/playhead
+  // React state is throttled to ~20 Hz so it never causes a per-frame re-render.
+  useEffect(() => {
+    if (!playing) return
+    let raf = 0
+    const start = performance.now() - playheadRef.current * 1000
+    const tick = (): void => {
+      const tl = timelineRef.current
+      const elapsed = (performance.now() - start) / 1000
+      let t: number
+      if (tl.loop) {
+        t = tl.duration > 0 ? elapsed % tl.duration : 0
+      } else {
+        t = Math.min(elapsed, tl.duration)
+        if (elapsed >= tl.duration) {
+          applyTimelineAt(t, true)
+          playheadRef.current = t
+          setPlayhead(t)
+          setPlaying(false)
+          return
+        }
+      }
+      applyTimelineAt(t)
+      playheadRef.current = t
+      const now = performance.now()
+      if (now - lastPlayheadPush.current > 50) {
+        lastPlayheadPush.current = now
+        setPlayhead(t)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry the rest
+  }, [playing])
+
+  // Update the timeline + schedule a debounced persist (drags/edits coalesce).
+  // The deferred save SNAPSHOTS the target folder and loads a FRESH def for it,
+  // writing only the timeline — so a folder switch within the 400 ms window can
+  // never write this timeline into a different project's robot.yml (data loss).
+  const commitTimeline = (next: MotionTimeline): void => {
+    timelineRef.current = next
+    setTimeline(next)
+    const folder = currentFolder || undefined
+    pendingTimelineSave.current = async (): Promise<void> => {
+      pendingTimelineSave.current = null
+      try {
+        const def = await window.api.robot.load(folder)
+        def.robot = { ...(def.robot ?? {}), timeline: next }
+        await window.api.robot.save(folder, def)
+      } catch {
+        // best-effort — a keyframe save failing is non-fatal
+      }
+    }
+    if (timelineSaveTimer.current) clearTimeout(timelineSaveTimer.current)
+    timelineSaveTimer.current = setTimeout(() => {
+      void pendingTimelineSave.current?.()
+    }, 400)
+  }
+
+  // Flush a pending timeline save on unmount so the last edit isn't lost (and the
+  // timer can't fire after unmount). Runs once.
+  useEffect(
+    () => () => {
+      if (timelineSaveTimer.current) clearTimeout(timelineSaveTimer.current)
+      void pendingTimelineSave.current?.()
+    },
+    []
+  )
+
+  const seek = (t: number): void => {
+    setPlaying(false)
+    const cl = Math.max(0, Math.min(timelineRef.current.duration, t))
+    playheadRef.current = cl
+    setPlayhead(cl)
+    applyTimelineAt(cl, true)
+  }
+
+  const handlePlayPause = (): void => {
+    setPlaying((p) => {
+      if (p) {
+        applyTimelineAt(playheadRef.current, true) // pausing → sync the sliders to the pose
+        return false
+      }
+      // Starting: rewind a FINISHED one-shot clip so it replays from the top.
+      const tl = timelineRef.current
+      if (!tl.loop && playheadRef.current >= tl.duration) {
+        playheadRef.current = 0
+        setPlayhead(0)
+      }
+      return true
+    })
+  }
+
+  const handleCapture = (): void => {
+    // A keyframe for every movable joint at the playhead, from the live pose.
+    let next = timelineRef.current
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      next = upsertKey(next, m.name, playheadRef.current, toDisplay(m.type, valuesRef.current[m.name] ?? 0))
+    }
+    commitTimeline(next)
+  }
+
+  const handleImportPose = (pose: NamedPoseLike): void => {
+    commitTimeline(dropPose(timelineRef.current, pose.values, playheadRef.current, movableNames))
+  }
+
+  const handleMirror = (halfCycle: boolean): void => {
+    // Neutral = each joint's mid-limit (display units) so an inverted mirror
+    // reflects about the middle, not a hard 0.
+    const neutral: Record<string, number> = {}
+    for (const m of metaRef.current) {
+      const lim = effectiveLimit(m, overridesRef.current[m.name])
+      neutral[m.name] = toDisplay(m.type, (lim.lower + lim.upper) / 2)
+    }
+    commitTimeline(mirrorTracks(timelineRef.current, mirrorPairs, { phase: halfCycle, neutral }))
+    void persist((m) => {
+      m.mirror = mirrorPairs
+    })
+  }
+
+  const handleExport = (): void => {
+    const ex = generateMicroPython(timelineRef.current, bindingsRef.current, {
+      robotName: info?.name,
+      fps: timelineRef.current.fps
+    })
+    openBuffer('motion.py', ex.code)
+    setSavingLabel(
+      ex.warnings.length ? `exported (${ex.warnings.length} note${ex.warnings.length > 1 ? 's' : ''})` : 'exported motion.py'
+    )
+  }
+
+  const handleSelectKey = (joint: string, t: number): void => {
+    setSelectedKey({ joint, t })
+    seek(t)
+  }
+  const handleMoveKey = (joint: string, fromT: number, toT: number): void => {
+    commitTimeline(moveKey(timelineRef.current, joint, fromT, toT))
+    setSelectedKey({ joint, t: Math.max(0, Math.min(timelineRef.current.duration, toT)) })
+  }
+  const handleDeleteKey = (joint: string, t: number): void => {
+    commitTimeline(deleteKey(timelineRef.current, joint, t))
+    setSelectedKey(null)
+  }
+  const handleAddKey = (joint: string, t: number): void => {
+    const m = metaRef.current.find((x) => x.name === joint)
+    if (!m || m.isMimic) return
+    commitTimeline(upsertKey(timelineRef.current, joint, t, toDisplay(m.type, valuesRef.current[joint] ?? 0)))
+    setSelectedKey({ joint, t })
   }
 
   const handleImportStl = async (): Promise<void> => {
@@ -549,6 +757,23 @@ export function RobotView({
               setOverrides(ov)
               setPoses(Array.isArray(model.poses) ? model.poses : [])
               setValues(nv)
+              // Motion timeline + mirror pairs (#314) — seed ONCE per folder, so a
+              // content-only rerun (e.g. after an STL import) doesn't clobber
+              // unsaved timeline edits still inside the save debounce.
+              const folderKey = currentFolder || ''
+              if (timelineLoadedFolder.current !== folderKey) {
+                timelineLoadedFolder.current = folderKey
+                const tl = model.timeline
+                const loaded = tl && Array.isArray(tl.tracks) ? (tl as MotionTimeline) : EMPTY_TIMELINE
+                timelineRef.current = loaded
+                setTimeline(loaded)
+                const movable = meta.filter((m) => !m.isMimic).map((m) => m.name)
+                setMirrorPairs(
+                  Array.isArray(model.mirror) && model.mirror.length
+                    ? model.mirror
+                    : autoMirrorPairs(movable)
+                )
+              }
             } catch {
               // No robot.yml (or unreadable) — keep the neutral pose.
             }
@@ -664,9 +889,11 @@ export function RobotView({
   }, [content, effectiveBase, isEmpty, poseUI, currentFolder])
 
   const showPanel = poseUI && !error && !isEmpty
+  const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0
 
   return (
     <div className={`robotview${compact ? ' robotview--compact' : ''}${poseUI ? ' robotview--pose' : ''}`}>
+      <div className="robotview__main">
       <div className="robotview__stage">
         <div className="robotview__canvas" ref={mountRef} />
         {error ? (
@@ -717,6 +944,38 @@ export function RobotView({
           onAddBinding={handleAddBinding}
           onUpdateBinding={handleUpdateBinding}
           onDeleteBinding={handleDeleteBinding}
+        />
+      )}
+      </div>
+      {showTimeline && (
+        <RobotTimeline
+          timeline={timeline}
+          movableJoints={movableNames}
+          playhead={playhead}
+          playing={playing}
+          selected={selectedKey}
+          poses={poses}
+          canExport={bindings.length > 0}
+          canMirror={mirrorPairs.length > 0}
+          onPlayPause={handlePlayPause}
+          onStop={() => seek(0)}
+          onToggleLoop={() => commitTimeline({ ...timelineRef.current, loop: !timelineRef.current.loop })}
+          onScrub={seek}
+          onSetDuration={(d) =>
+            commitTimeline({ ...timelineRef.current, duration: Math.max(0.1, d) })
+          }
+          onSetEasing={(e: MotionEasing) => commitTimeline({ ...timelineRef.current, easing: e })}
+          onSetFps={(f) =>
+            commitTimeline({ ...timelineRef.current, fps: Math.max(1, Math.min(60, Math.round(f))) })
+          }
+          onCapture={handleCapture}
+          onImportPose={handleImportPose}
+          onMirror={handleMirror}
+          onExport={handleExport}
+          onSelectKey={handleSelectKey}
+          onMoveKey={handleMoveKey}
+          onDeleteKey={handleDeleteKey}
+          onAddKey={handleAddKey}
         />
       )}
     </div>

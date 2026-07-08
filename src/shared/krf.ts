@@ -20,6 +20,11 @@
 import {
   blankRobot,
   type JointConfig,
+  type MirrorPair,
+  type MotionEasing,
+  type MotionKey,
+  type MotionTimeline,
+  type MotionTrack,
   type NamedPose,
   type RobotDefinition,
   type RobotModel,
@@ -48,6 +53,76 @@ export function servoToJoint(b: ServoJointBinding, servoAngle: number): number {
   t = Math.max(0, Math.min(1, t))
   if (b.invert) t = 1 - t
   return b.jointMin + t * (b.jointMax - b.jointMin)
+}
+
+/**
+ * Map a joint value BACK to its servo angle (degrees) — the exact inverse of
+ * {@link servoToJoint}. Zero-span-safe (jointMin===jointMax → 0), honours
+ * `invert`, and rounds + clamps to a whole servo degree in 0..180 (what the
+ * on-device `Servo.angle` accepts). Used by the motion-timeline export (#314).
+ */
+export function jointToServo(b: ServoJointBinding, jointValue: number): number {
+  const jSpan = b.jointMax - b.jointMin
+  let t = jSpan === 0 ? 0 : (jointValue - b.jointMin) / jSpan
+  t = Math.max(0, Math.min(1, t))
+  if (b.invert) t = 1 - t
+  const sMin = b.servoMin ?? DEFAULT_SERVO_MIN
+  const sMax = b.servoMax ?? DEFAULT_SERVO_MAX
+  return Math.max(0, Math.min(180, Math.round(sMin + t * (sMax - sMin))))
+}
+
+/** Validate one motion keyframe; null if unusable. `t` clamped ≥ 0. */
+function sanitiseKey(raw: unknown): MotionKey | null {
+  const r = (raw ?? {}) as Record<string, unknown>
+  if (!isFiniteNum(r.t) || !isFiniteNum(r.value)) return null
+  return { t: Math.max(0, r.t), value: r.value }
+}
+
+/**
+ * Validate the motion timeline, corruption-safe: drops bad keys/tracks, sorts
+ * keys by `t`, defaults duration (>0 else 2), easing (whitelist else easeInOut),
+ * loop (`!== false`), optional fps (1..60). Returns `undefined` when there are no
+ * usable tracks (so a pose-only / wiring-only robot.yml gains no `timeline:`).
+ */
+function sanitiseTimeline(raw: unknown): MotionTimeline | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const r = raw as Record<string, unknown>
+  const tracks: MotionTrack[] = []
+  if (Array.isArray(r.tracks)) {
+    for (const t of r.tracks) {
+      const tr = (t ?? {}) as Record<string, unknown>
+      if (!isStr(tr.joint)) continue
+      const keys = (Array.isArray(tr.keys) ? tr.keys : [])
+        .map(sanitiseKey)
+        .filter((k): k is MotionKey => k !== null)
+        .sort((a, b) => a.t - b.t)
+      if (keys.length) tracks.push({ joint: tr.joint, keys })
+    }
+  }
+  if (!tracks.length) return undefined
+  const easing: MotionEasing = r.easing === 'linear' ? 'linear' : 'easeInOut'
+  const tl: MotionTimeline = {
+    duration: isFiniteNum(r.duration) && r.duration > 0 ? r.duration : 2,
+    easing,
+    loop: r.loop !== false,
+    tracks
+  }
+  if (isFiniteNum(r.fps)) tl.fps = Math.max(1, Math.min(60, Math.round(r.fps)))
+  return tl
+}
+
+/** Validate the mirror pairs; `undefined` when none are usable. */
+function sanitiseMirror(raw: unknown): MirrorPair[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: MirrorPair[] = []
+  for (const p of raw) {
+    const r = (p ?? {}) as Record<string, unknown>
+    if (!isStr(r.a) || !isStr(r.b)) continue
+    const pair: MirrorPair = { a: r.a, b: r.b }
+    if (r.invert === true) pair.invert = true
+    out.push(pair)
+  }
+  return out.length ? out : undefined
 }
 
 /** Validate one servo↔joint binding; null if it can't be salvaged. */
@@ -115,6 +190,12 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
       .filter((p): p is NamedPose => p !== null)
     if (poses.length) model.poses = poses
   }
+
+  const tl = sanitiseTimeline(r.timeline)
+  if (tl) model.timeline = tl
+
+  const mirror = sanitiseMirror(r.mirror)
+  if (mirror) model.mirror = mirror
 
   // Nothing but the version stamp → treat as "no model".
   const keys = Object.keys(model)

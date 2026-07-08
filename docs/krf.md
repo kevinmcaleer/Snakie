@@ -101,6 +101,33 @@ button: pick an `.stl`/`.dae` and Snakie copies it into `<urdf-folder>/meshes/`
 that `<mesh>`) plus a fixed `<joint>` onto the root link, so it shows in the model
 straight away. The assembly panel lists every link + the mesh file it uses.
 
+## Motion timeline (#314)
+
+The pose tool has a bottom **timeline** dock — choreograph a motion and export it
+as MicroPython. It persists in the `robot:` section as `timeline` (+ `mirror`):
+
+```yaml
+robot:
+  timeline:
+    duration: 1.2       # loop length, seconds
+    easing: easeInOut   # linear | easeInOut (interpolation between keys)
+    loop: true          # preview loop + exported `while True`
+    fps: 20             # preview + export sample rate
+    tracks:             # one keyframe track per movable (non-mimic) joint
+      - joint: hip_left
+        keys: [ { t: 0, value: -30 }, { t: 0.6, value: 30 }, { t: 1.2, value: -30 } ]
+  mirror:               # left↔right pairs (seeded from joint names, editable)
+    - { a: hip_left, b: hip_right }
+```
+
+Keyframe values are DISPLAY units (deg / mm), like poses. **＋ Keyframe** snapshots
+the current pose at the playhead; **＋ pose…** drops a saved pose; **Mirror** /
+**Mirror ½** copy a track onto its left↔right partner (½ offsets by half a cycle —
+a walk); **Export .py** bakes the eased frames into runnable code that drives
+`inst.servo_on(pin).angle(...)` from the `servoJointMap` (so the same clip plays
+in the simulator and on a board). Mimic joints are never keyframed (they
+auto-follow). Worked example: `examples/biped/` (open `biped.urdf`).
+
 ## Versioning
 
 `robot.version` is bumped on breaking changes; `sanitiseRobotModel` migrates /
