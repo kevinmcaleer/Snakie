@@ -30,14 +30,15 @@ function faceTexture(text: string): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const ctx = c.getContext('2d')!
-  // Bright brass faces with a soft metallic sheen (top-lit) + a brass border.
+  // Bright brass faces (matching the lightest part of the panel/instrument
+  // buttons) with a soft metallic sheen + a brass border.
   const g = ctx.createLinearGradient(0, 0, 0, 128)
-  g.addColorStop(0, '#f2dd9c')
-  g.addColorStop(0.5, '#e6c46a')
-  g.addColorStop(1, '#d0a844')
+  g.addColorStop(0, '#fbf1cf')
+  g.addColorStop(0.5, '#f0d68a')
+  g.addColorStop(1, '#e0bd5e')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 128, 128)
-  ctx.strokeStyle = '#9a7526'
+  ctx.strokeStyle = '#a9822f'
   ctx.lineWidth = 6
   ctx.strokeRect(3, 3, 122, 122)
   ctx.fillStyle = '#2b2205' // dark-brass ink, readable on brass
@@ -127,11 +128,12 @@ export function createViewCube(opts: {
     cube.add(new THREE.Line(lg, lm))
     axisDisposables.push(lg, lm)
     const lt = axisLabelTexture(a.label, a.color)
-    const sm = new THREE.SpriteMaterial({ map: lt, depthTest: false, transparent: true })
+    // depthTest on → labels are occluded by the cube when behind it (they looked
+    // odd showing through). transparent so the letter's alpha reads cleanly.
+    const sm = new THREE.SpriteMaterial({ map: lt, transparent: true })
     const sprite = new THREE.Sprite(sm)
     sprite.position.copy(corner.clone().add(a.end.clone().multiplyScalar(AXIS_LEN + 0.2)))
     sprite.scale.set(0.34, 0.34, 1)
-    sprite.renderOrder = 4
     cube.add(sprite)
     axisDisposables.push(lt, sm)
   }
