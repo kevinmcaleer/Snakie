@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — animated camera moves.** Clicking a nav-cube face/edge/corner,
+  focusing a block from the hierarchy, **Home** and **Fit** now **glide** the
+  camera to the destination (eased ~0.3s) instead of jumping, so you can see where
+  the view came from and went to. Grabbing the viewport cancels the glide. The
+  zoom **%** now also tracks scroll-zoom in **perspective** mode (dolly distance),
+  and focusing one block no longer clips the others.
 - **Robot View — themed background + a richer navigation cube.** The 3-D viewer
   background now follows the theme (**white** in light, **black** in dark). The
   ViewCube is **brass**, always drawn in **perspective** (independent of the view's

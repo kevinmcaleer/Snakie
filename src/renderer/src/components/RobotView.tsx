@@ -865,9 +865,8 @@ export function RobotView({
       // Keep "up" sane for straight top/bottom views (else the view is degenerate).
       camera.up.set(0, 1, 0)
       if (Math.abs(dir.y) > 0.9) camera.up.set(0, 0, dir.y > 0 ? -1 : 1)
-      camera.position.copy(controls.target).addScaledVector(dir, dist)
-      controls.update()
-      recordCamera()
+      const toP = controls.target.clone().addScaledVector(dir, dist)
+      flyTo(toP, controls.target.clone(), camera.zoom, halfView, dist)
     }
     // Drag the cube → orbit the camera (spherical around the target), same feel
     // as dragging the viewport.
@@ -890,6 +889,9 @@ export function RobotView({
 
     // Half-height of the ortho frustum (updated by frameModel as bounds change).
     let halfView = 1
+    // Camera→target distance at "100%" — perspective zooms by dollying (distance),
+    // not camera.zoom, so the % readout is derived from this (set when framing).
+    let zoomBase = 1
     const resize = (): void => {
       const w = mount.clientWidth
       const h = mount.clientHeight
@@ -932,8 +934,67 @@ export function RobotView({
       }
     }
 
+    // Smoothly FLY the camera to a destination (discrete navigation — cube click,
+    // hierarchy focus, home, fit) so the user sees where they came from + went to.
+    // The tick loop advances it; frameModel-on-load stays instant.
+    let anim: {
+      fromP: THREE.Vector3
+      toP: THREE.Vector3
+      fromT: THREE.Vector3
+      toT: THREE.Vector3
+      fromZoom: number
+      toZoom: number
+      fromHV: number
+      toHV: number
+      t0: number
+      dur: number
+    } | null = null
+    const flyTo = (toP: THREE.Vector3, toT: THREE.Vector3, toZoom: number, toHV: number, clipRadius: number): void => {
+      // Bracket near/far around BOTH ends of the flight so nothing clips mid-move.
+      const maxD = Math.max(camera.position.distanceTo(controls.target), toP.distanceTo(toT))
+      camera.near = Math.max(0.001, maxD - clipRadius * 10)
+      camera.far = maxD + clipRadius * 10 + 0.5
+      camera.updateProjectionMatrix()
+      anim = {
+        fromP: camera.position.clone(),
+        toP: toP.clone(),
+        fromT: controls.target.clone(),
+        toT: toT.clone(),
+        fromZoom: camera.zoom,
+        toZoom,
+        fromHV: halfView,
+        toHV,
+        t0: performance.now(),
+        dur: 320
+      }
+    }
+    const stepAnim = (): void => {
+      if (!anim) return
+      const u = Math.min(1, (performance.now() - anim.t0) / anim.dur)
+      const e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2 // easeInOutQuad
+      camera.position.lerpVectors(anim.fromP, anim.toP, e)
+      controls.target.lerpVectors(anim.fromT, anim.toT, e)
+      camera.zoom = anim.fromZoom + (anim.toZoom - anim.fromZoom) * e
+      halfView = anim.fromHV + (anim.toHV - anim.fromHV) * e
+      resize() // applies halfView (ortho) / aspect + updateProjectionMatrix
+      syncZoomPct()
+      if (u >= 1) {
+        anim = null
+        recordCamera()
+      }
+    }
+
     // ── Zoom controls (mirrors the node-graph viewport cluster) ──
-    const syncZoomPct = (): void => setZoomPct(Math.round(camera.zoom * 100))
+    const syncZoomPct = (): void => {
+      let z = camera.zoom
+      if (camera instanceof THREE.PerspectiveCamera) {
+        // Perspective "zoom" is dolly distance: closer = bigger. Combine with any
+        // camera.zoom (from the +/- buttons) so both scroll and buttons move the %.
+        const d = camera.position.distanceTo(controls.target)
+        if (d > 0) z *= zoomBase / d
+      }
+      setZoomPct(Math.round(z * 100))
+    }
     const applyZoom = (z: number): void => {
       camera.zoom = Math.min(8, Math.max(0.2, z))
       camera.updateProjectionMatrix()
@@ -951,21 +1012,13 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-      halfView = radius * 1.35
-      if (camera instanceof THREE.PerspectiveCamera) {
-        // Re-seat the camera at a fitting distance along its current direction.
-        const dir = camera.position.clone().sub(controls.target).normalize()
-        const dist = (radius * 1.4) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
-        camera.position.copy(centre).addScaledVector(dir, dist)
-      }
-      controls.target.copy(centre)
-      camera.zoom = 1
-      camera.updateProjectionMatrix()
-      controls.update()
-      setClip(radius)
-      resize()
-      syncZoomPct()
-      recordCamera()
+      const dir = camera.position.clone().sub(controls.target).normalize()
+      const dist =
+        camera instanceof THREE.PerspectiveCamera
+          ? (radius * 1.4) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
+          : camera.position.distanceTo(controls.target) || radius * 6
+      zoomBase = dist
+      flyTo(centre.clone().addScaledVector(dir, dist), centre, 1, radius * 1.35, radius)
     }
     // Zoom-to-fit a SINGLE link's bounds (clicking a block in the hierarchy).
     const focusLink = (name: string): void => {
@@ -978,20 +1031,17 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.03) * 0.5
-      halfView = radius * 1.6
-      if (camera instanceof THREE.PerspectiveCamera) {
-        const dir = camera.position.clone().sub(controls.target).normalize()
-        const dist = (radius * 1.6) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
-        camera.position.copy(centre).addScaledVector(dir, dist)
-      }
-      controls.target.copy(centre)
-      camera.zoom = 1
-      camera.updateProjectionMatrix()
-      controls.update()
-      setClip(radius)
-      resize()
-      syncZoomPct()
-      recordCamera()
+      const dir = camera.position.clone().sub(controls.target).normalize()
+      const dist =
+        camera instanceof THREE.PerspectiveCamera
+          ? (radius * 1.6) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
+          : camera.position.distanceTo(controls.target) || radius * 6
+      zoomBase = dist
+      // Clip generously around the WHOLE model so focusing one small link doesn't
+      // clip the others (e.g. a 2nd imported STL hiding the 1st).
+      const whole = new THREE.Box3().setFromObject(robot).getSize(new THREE.Vector3())
+      const wholeRadius = Math.max(whole.x, whole.y, whole.z, radius) * 0.5
+      flyTo(centre.clone().addScaledVector(dir, dist), centre, 1, radius * 1.6, wholeRadius * 2)
     }
     zoomApiRef.current = {
       in: () => applyZoom(camera.zoom * 1.2),
@@ -999,21 +1049,25 @@ export function RobotView({
       fit: fitView,
       // Double-clicking the % readout: 100% ↔ fit (keyed on the live zoom).
       toggle: () => (Math.abs(camera.zoom - 1) < 0.005 ? fitView() : applyZoom(1)),
-      // Home: the default isometric framing at 100%.
+      // Home: fly to the default isometric framing at 100%.
       home: () => {
-        if (!robotRef.current) return
-        frameModel(robotRef.current)
-        applyZoom(1)
+        if (robotRef.current) frameModel(robotRef.current, true)
       },
       focusLink
     }
     const onControlsChange = (): void => syncZoomPct()
     controls.addEventListener('change', onControlsChange)
+    // A user grabbing the viewport cancels any in-flight camera animation (else
+    // the tween and OrbitControls fight over the camera).
+    const onControlsStart = (): void => {
+      anim = null
+    }
+    controls.addEventListener('start', onControlsStart)
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
     let grid: THREE.GridHelper | null = null
-    const frameModel = (robot: URDFRobot): void => {
+    const frameModel = (robot: URDFRobot, animate = false): void => {
       // Flush world matrices BEFORE measuring — a dirty transform frames stale.
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
@@ -1021,7 +1075,6 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-      halfView = radius * 1.35 // a little padding around the model (ortho)
       const isoDir = new THREE.Vector3(1, 0.9, 1).normalize()
       // Ortho apparent size is set by halfView, so distance is arbitrary; perspective
       // must sit back far enough that the model fits the vertical fov.
@@ -1029,9 +1082,8 @@ export function RobotView({
         camera instanceof THREE.PerspectiveCamera
           ? (radius * 1.4) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
           : radius * 6
-      camera.position.copy(centre).addScaledVector(isoDir, dist)
-      controls.target.copy(centre)
-      controls.update()
+      zoomBase = dist
+      const destPos = centre.clone().addScaledVector(isoDir, dist)
       if (grid) {
         scene.remove(grid)
         grid.geometry.dispose()
@@ -1041,6 +1093,15 @@ export function RobotView({
       grid = new THREE.GridHelper(gridSize, 20, 0x3a3d44, 0x27292e)
       grid.position.y = box.min.y
       scene.add(grid)
+      if (animate) {
+        flyTo(destPos, centre, 1, radius * 1.35, radius)
+        return
+      }
+      halfView = radius * 1.35 // a little padding around the model (ortho)
+      camera.position.copy(destPos)
+      controls.target.copy(centre)
+      camera.zoom = 1
+      controls.update()
       setClip(radius)
       resize()
     }
@@ -1774,6 +1835,7 @@ export function RobotView({
 
     let raf = 0
     const tick = (): void => {
+      stepAnim()
       controls.update()
       renderer.render(scene, camera)
       if (viewCube) {
@@ -1800,6 +1862,7 @@ export function RobotView({
       ro.disconnect()
       themeObserver.disconnect()
       controls.removeEventListener('change', onControlsChange)
+      controls.removeEventListener('start', onControlsStart)
       zoomApiRef.current = null
       if (viewCube) {
         viewCube.dom.remove()
