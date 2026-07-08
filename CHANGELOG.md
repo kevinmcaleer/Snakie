@@ -186,6 +186,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — the Move tool now moves imported meshes.** It bailed on any link
+  without primitive geometry, so STL/DAE parts couldn't be dragged; meshes now
+  move (grabbing the hit point; primitives still get the face snap points). The
+  Build hierarchy text is also a little larger (matching the breadboard browser).
 - **Robot View readouts are readable in light mode.** The 3-D viewer's info/hint
   HUD (also the docked mini-viewer's text) used a dark pill, so its text was
   dark-on-dark on the parchment theme; it now uses a parchment pill with brass
