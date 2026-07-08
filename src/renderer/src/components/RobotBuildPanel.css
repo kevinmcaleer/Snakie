@@ -30,7 +30,9 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  bottom: 0.5rem;
+  /* Size to fit its contents (capped), so it never overlaps the Help hint in the
+     bottom-left; the parts list scrolls if the robot has more blocks than fit. */
+  max-height: calc(100% - 1rem);
   z-index: 4;
   width: 12.5rem;
   display: flex;
@@ -127,6 +129,7 @@
 
 .robotbuild__parts {
   flex: 1 1 auto;
+  min-height: 0; /* allow the list to shrink + scroll under the dock's max-height */
   overflow-y: auto;
   list-style: none;
   margin: 0;

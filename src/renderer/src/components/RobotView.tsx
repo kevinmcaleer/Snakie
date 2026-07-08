@@ -1025,10 +1025,13 @@ export function RobotView({
       dur: number
     } | null = null
     const flyTo = (toP: THREE.Vector3, toT: THREE.Vector3, toZoom: number, toHV: number, clipRadius: number): void => {
-      // Bracket near/far around BOTH ends of the flight so nothing clips mid-move.
-      const maxD = Math.max(camera.position.distanceTo(controls.target), toP.distanceTo(toT))
-      camera.near = Math.max(0.001, maxD - clipRadius * 10)
-      camera.far = maxD + clipRadius * 10 + 0.5
+      // Bracket near/far around BOTH ends of the flight so nothing clips. NEAR must
+      // use the CLOSEST distance (min) — using max clipped the model when flying in
+      // from a far view (near plane ended up beyond the model → first-fit clipping).
+      const dFrom = camera.position.distanceTo(controls.target)
+      const dTo = toP.distanceTo(toT)
+      camera.near = Math.max(0.001, Math.min(dFrom, dTo) - clipRadius * 4)
+      camera.far = Math.max(dFrom, dTo) + clipRadius * 4 + 0.5
       camera.updateProjectionMatrix()
       anim = {
         fromP: camera.position.clone(),
@@ -1149,8 +1152,8 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-      // Home = the cube's top-right-front corner (+X right, +Y up, +Z front).
-      const isoDir = new THREE.Vector3(1, 1, 1).normalize()
+      // Home = the top-LEFT-front corner (−X left, +Y up, +Z front) facing us.
+      const isoDir = new THREE.Vector3(-1, 1, 1).normalize()
       // Ortho apparent size is set by halfView, so distance is arbitrary; perspective
       // must sit back far enough that the model fits the vertical fov.
       const dist =

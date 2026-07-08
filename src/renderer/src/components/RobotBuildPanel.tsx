@@ -394,17 +394,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               key={it.link}
             >
               <div className="robotbuild__part-row">
-                <button
-                  type="button"
-                  className="robotbuild__part-name"
-                  title={it.link}
-                  onClick={() => onSelect(it.link)}
-                >
-                  <span className="robotbuild__part-label">{it.link}</span>
-                  <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
-                    {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
-                  </span>
-                </button>
+                {/* Action icons sit to the LEFT of the name so they never overlap
+                    long titles (the name button flexes to fill the rest). */}
                 {it.link === rootLink ? (
                   <span className="robotbuild__rowbase is-base" title="This is the base — every block hangs off it">
                     ★
@@ -422,6 +413,15 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                 )}
                 <button
                   type="button"
+                  className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
+                  onClick={() => onEdit(isEdit ? null : it.link)}
+                  title={isEdit ? 'Close properties' : 'Edit properties'}
+                  aria-label={`Edit ${it.link}`}
+                >
+                  {PENCIL}
+                </button>
+                <button
+                  type="button"
                   className="robotbuild__del"
                   disabled={it.link === rootLink}
                   onClick={() => onDelete(it.link)}
@@ -436,12 +436,14 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                 </button>
                 <button
                   type="button"
-                  className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
-                  onClick={() => onEdit(isEdit ? null : it.link)}
-                  title={isEdit ? 'Close properties' : 'Edit properties'}
-                  aria-label={`Edit ${it.link}`}
+                  className="robotbuild__part-name"
+                  title={it.link}
+                  onClick={() => onSelect(it.link)}
                 >
-                  {PENCIL}
+                  <span className="robotbuild__part-label">{it.link}</span>
+                  <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
+                    {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
+                  </span>
                 </button>
               </div>
             </li>
