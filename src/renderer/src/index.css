@@ -2162,26 +2162,32 @@ body {
   font-family: var(--font-mono);
   font-size: 0.6rem;
   color: var(--text, #cdd2d9);
+  /* Dark glass by default; a light parchment in the skeuomorph skin so the
+     (dark) label isn't dark-on-dark. */
   background: rgba(20, 21, 24, 0.78);
   border: 1px solid var(--border, #3a3d44);
   border-radius: 5px;
   padding: 0.15rem 0.4rem;
   cursor: pointer;
 }
+:root[data-theme='skeuomorph'] .robotdock__btn {
+  background: rgba(231, 226, 211, 0.9);
+}
 .robotdock__btn:hover {
-  border-color: #c8a24a;
-  color: #c8a24a;
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
 }
 /* Highlight "New robot" when there's no project robot yet (the demo is a stand-in). */
 .robotdock__btn--cta {
-  color: #191a1d;
-  background: #c8a24a;
-  border-color: #c8a24a;
+  color: var(--accent-contrast, #191a1d);
+  background: var(--accent, #c8a24a);
+  border-color: var(--accent, #c8a24a);
   font-weight: 700;
 }
 .robotdock__btn--cta:hover {
-  color: #191a1d;
-  background: #d8b45c;
+  color: var(--accent-contrast, #191a1d);
+  background: var(--accent, #c8a24a);
+  filter: brightness(1.08);
 }
 
 .activitybar {
