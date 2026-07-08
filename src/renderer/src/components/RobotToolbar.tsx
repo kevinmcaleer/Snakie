@@ -11,6 +11,10 @@ export interface RobotToolbarProps {
   onSetTool: (t: BuildTool) => void
   /** Editing needs a saved project file — tools disable without one. */
   canEdit: boolean
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
 }
 
 const ICONS: Record<BuildTool, JSX.Element> = {
@@ -51,7 +55,26 @@ const TOOLS: Array<{ id: BuildTool; label: string; soon?: boolean }> = [
   { id: 'joint', label: 'Join two blocks (coming soon)', soon: true }
 ]
 
-export function RobotToolbar({ tool, onSetTool, canEdit }: RobotToolbarProps): JSX.Element {
+const UNDO_ICON = (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <path d="M6 4L2.5 7 6 10M2.8 7h6.7a3.5 3.5 0 0 1 0 7H7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+const REDO_ICON = (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <path d="M10 4l3.5 3L10 10M13.2 7H6.5a3.5 3.5 0 0 0 0 7H9" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
+export function RobotToolbar({
+  tool,
+  onSetTool,
+  canEdit,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo
+}: RobotToolbarProps): JSX.Element {
   return (
     <div className="robottool" role="toolbar" aria-label="Build tools">
       {TOOLS.map((t) => {
@@ -71,6 +94,27 @@ export function RobotToolbar({ tool, onSetTool, canEdit }: RobotToolbarProps): J
           </button>
         )
       })}
+      <span className="robottool__sep" aria-hidden="true" />
+      <button
+        type="button"
+        className="robottool__btn"
+        disabled={!canUndo}
+        title="Undo (⌘Z)"
+        aria-label="Undo"
+        onClick={onUndo}
+      >
+        {UNDO_ICON}
+      </button>
+      <button
+        type="button"
+        className="robottool__btn"
+        disabled={!canRedo}
+        title="Redo (⇧⌘Z)"
+        aria-label="Redo"
+        onClick={onRedo}
+      >
+        {REDO_ICON}
+      </button>
     </div>
   )
 }
