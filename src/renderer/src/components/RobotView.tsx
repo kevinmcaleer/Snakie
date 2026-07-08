@@ -22,6 +22,7 @@ import {
   addPrimitive,
   jointNames,
   parseAssembly,
+  readAllJoints,
   readJoint,
   readPrimitive,
   removeLink,
@@ -56,7 +57,7 @@ import {
   type Vec3
 } from './robot-build'
 import { RobotBuildPanel } from './RobotBuildPanel'
-import { RobotPropertiesDialog } from './RobotPropertiesDialog'
+import { RobotPropertiesDialog, type PropsContext } from './RobotPropertiesDialog'
 import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
@@ -272,6 +273,19 @@ export function RobotView({
     })
   }
 
+  // Rename a pose (#353 pose dialog): keep its captured values, drop the old + any
+  // clashing name. (Committed on the dialog's OK, which then closes it.)
+  const handleRenamePose = (oldName: string, newName: string): void => {
+    const target = newName.trim()
+    const pose = poses.find((p) => p.name === oldName)
+    if (!pose || !target || target === oldName) return
+    const next = [...poses.filter((p) => p.name !== oldName && p.name !== target), { name: target, values: pose.values }]
+    setPoses(next)
+    void persist((m) => {
+      m.poses = next
+    })
+  }
+
   const handleResetPose = (): void => {
     const dp = defaultPoseRef.current
     const nv = { ...valuesRef.current }
@@ -286,6 +300,8 @@ export function RobotView({
 
   // The model's links + meshes, for the assembly panel.
   const assembly = useMemo(() => parseAssembly(content), [content])
+  // The model's joints, for the hierarchy's Joints branch (#353).
+  const joints = useMemo(() => readAllJoints(content), [content])
   // Import is only possible for a saved local `.urdf` (a file we can edit).
   const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
   const [importing, setImporting] = useState(false)
@@ -310,7 +326,12 @@ export function RobotView({
     loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
-  const [editLink, setEditLink] = useState<string | null>(null)
+  // The hierarchy node whose context dialog (#353) is open — a block/mesh, a
+  // joint, a servo binding or a pose. `editLink` (the block whose URDF is being
+  // edited + highlighted in 3-D) is DERIVED from it (link + joint contexts).
+  const [dialogCtx, setDialogCtx] = useState<PropsContext | null>(null)
+  const editLink =
+    dialogCtx?.kind === 'link' ? dialogCtx.link : dialogCtx?.kind === 'joint' ? dialogCtx.child : null
   const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: string } | null>(null)
   // Refs the three.js pointer callbacks read (avoids re-subscribing on each edit).
   const buildOpenRef = useRef(false)
@@ -452,7 +473,7 @@ export function RobotView({
     const { urdf, link } = addPrimitive(content, { kind, jointXyz: [0, 0, 0] })
     commitUrdf(urdf)
     setSelectedLink(link)
-    setEditLink(link)
+    setDialogCtx({ kind: 'link', link })
     if (!buildOpen) setBuildOpen(true)
   }
   const handleSetSize = (link: string, dims: number[]): void => {
@@ -467,30 +488,46 @@ export function RobotView({
     if (link === rootLink(content)) return
     commitUrdf(removeLink(content, link))
     setSelectedLink(null)
-    setEditLink(null)
+    setDialogCtx(null)
   }
   const handleMakeBase = (link: string): void => {
     commitUrdf(reRoot(content, link))
   }
-  // Properties dialog (#352): the pencil opens it (snapshot the URDF so Cancel can
-  // revert); OK keeps the (live-applied) edits, Cancel restores the snapshot.
+  // Properties dialog (#352 / #353): clicking a node opens its context here. For a
+  // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
+  // keeps them. Servo/pose contexts hold their own drafts (committed on OK).
   const editSnapshotRef = useRef<string | null>(null)
   const handleOpenProps = (link: string | null): void => {
     if (link) {
       editSnapshotRef.current = contentRef.current
       setSelectedLink(link)
+      setDialogCtx({ kind: 'link', link })
+    } else {
+      setDialogCtx(null)
     }
-    setEditLink(link)
+  }
+  const handleOpenJoint = (child: string, joint: string): void => {
+    editSnapshotRef.current = contentRef.current
+    setSelectedLink(child) // highlight the joint's child block in 3-D
+    setDialogCtx({ kind: 'joint', child, joint })
+  }
+  const handleOpenServo = (pin: string): void => {
+    editSnapshotRef.current = null // servo edits are drafted in the dialog, not URDF
+    setDialogCtx({ kind: 'servo', pin })
+  }
+  const handleOpenPose = (name: string): void => {
+    editSnapshotRef.current = null
+    setDialogCtx({ kind: 'pose', name })
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
-    setEditLink(null)
+    setDialogCtx(null)
   }
   const handlePropsCancel = (): void => {
     const snap = editSnapshotRef.current
     editSnapshotRef.current = null
     if (snap != null && snap !== contentRef.current) commitUrdf(snap) // discard edits
-    setEditLink(null)
+    setDialogCtx(null)
   }
 
   // Re-apply the selection outline when the picked block changes (no re-parse).
@@ -814,7 +851,7 @@ export function RobotView({
       // history stays in sync (commitUrdf updates the buffer + schedules the save).
       commitUrdf(next.urdf)
       setSelectedLink(next.link)
-      setEditLink(next.link)
+      setDialogCtx({ kind: 'link', link: next.link })
       if (!buildOpen) setBuildOpen(true)
       setSavingLabel(scale !== 1 ? `added ${next.link} (scaled mm→m)` : `added ${next.link}`)
     } catch (e) {
@@ -2084,13 +2121,19 @@ export function RobotView({
             onSetOpen={setBuildOpen}
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
+            joints={joints}
+            servos={bindings}
+            poses={poses}
             selected={selectedLink}
             onSelect={(link) => {
               setSelectedLink(link)
               if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
             }}
-            editLink={editLink}
+            active={dialogCtx}
             onEdit={handleOpenProps}
+            onOpenJoint={handleOpenJoint}
+            onOpenServo={handleOpenServo}
+            onOpenPose={handleOpenPose}
             rootLink={rootName}
             onMakeBase={handleMakeBase}
             onDelete={handleDeleteLink}
@@ -2100,14 +2143,31 @@ export function RobotView({
             canEdit={canEdit}
           />
         )}
-        {showPanel && editLink && (
+        {showPanel && dialogCtx && (
           <RobotPropertiesDialog
-            link={editLink}
+            key={`${dialogCtx.kind}:${
+              dialogCtx.kind === 'link'
+                ? dialogCtx.link
+                : dialogCtx.kind === 'joint'
+                  ? dialogCtx.joint
+                  : dialogCtx.kind === 'servo'
+                    ? dialogCtx.pin
+                    : dialogCtx.name
+            }`}
+            context={dialogCtx}
             geom={editGeom}
             joint={editJoint}
             jointNames={allJointNames}
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
+            servo={dialogCtx.kind === 'servo' ? bindings.find((b) => b.pin === dialogCtx.pin) ?? null : null}
+            movableJoints={movableNames}
+            onSetServo={handleUpdateBinding}
+            onDeleteServo={handleDeleteBinding}
+            pose={dialogCtx.kind === 'pose' ? poses.find((p) => p.name === dialogCtx.name) ?? null : null}
+            onRecallPose={handleRecallPose}
+            onRenamePose={handleRenamePose}
+            onDeletePose={handleDeletePose}
             onOk={handlePropsOk}
             onCancel={handlePropsCancel}
           />

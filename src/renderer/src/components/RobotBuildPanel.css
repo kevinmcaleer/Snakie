@@ -127,19 +127,89 @@
   color: var(--text-muted, #8b919b);
 }
 
-.robotbuild__parts {
+/* The hierarchy tree scrolls as one under the dock's max-height. */
+.robotbuild__tree {
   flex: 1 1 auto;
-  min-height: 0; /* allow the list to shrink + scroll under the dock's max-height */
+  min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.robotbuild__section {
+  display: flex;
+  flex-direction: column;
+}
+/* A branch header: disclosure caret + label + a muted count. */
+.robotbuild__branch {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9aa0a6);
+  background: transparent;
+  border: none;
+  padding: 0.22rem 0.2rem 0.12rem;
+  cursor: pointer;
+  text-align: left;
+}
+.robotbuild__branch:hover {
+  color: var(--accent-ink);
+}
+.robotbuild__caret {
+  flex: 0 0 auto;
+  width: 0.7rem;
+  font-size: 0.6rem;
+}
+.robotbuild__branch-label {
+  flex: 1 1 auto;
+}
+.robotbuild__branch-count {
+  flex: 0 0 auto;
+  font-weight: 400;
+  /* Lean on the AA-tuned muted token directly — fading it with opacity dropped it
+     below AA on the parchment theme. */
+  color: var(--text-muted, #9aa0a6);
+}
+.robotbuild__parts {
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 0.35rem;
   display: flex;
   flex-direction: column;
   gap: 0.12rem;
 }
 .robotbuild__part {
   border-radius: 5px;
+}
+/* A leaf node that opens a context dialog (joint / servo / pose). */
+.robotbuild__node {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.72rem;
+  color: var(--text, #cdd2d9);
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 0.2rem 0.3rem;
+  cursor: pointer;
+  text-align: left;
+}
+.robotbuild__node:hover {
+  background: rgba(128, 128, 128, 0.14);
+}
+.robotbuild__node.is-on {
+  background: rgba(200, 162, 74, 0.18);
+  outline: 1px solid rgba(200, 162, 74, 0.5);
 }
 .robotbuild__part.is-sel {
   background: rgba(200, 162, 74, 0.18);

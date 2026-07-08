@@ -70,12 +70,58 @@
   color: var(--text-muted, #8b919b);
   font-style: italic;
 }
+/* Servo / pose form controls. */
+.robotprops__row {
+  display: flex;
+  gap: 0.4rem;
+}
+.robotprops__mm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__mm input {
+  width: 3.2rem;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.12rem 0.25rem;
+}
+.robotprops__sel,
+.robotprops__text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.2rem 0.3rem;
+}
+.robotprops__check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6rem;
+  color: var(--text-muted, #8b919b);
+  cursor: pointer;
+}
 .robotprops__foot {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: 0.4rem;
   padding: 0.4rem 0.5rem;
   border-top: 1px solid var(--border, #3a3d44);
+}
+.robotprops__foot-spacer {
+  flex: 1 1 auto;
 }
 .robotprops__btn {
   font-family: inherit;
@@ -100,4 +146,12 @@
 .robotprops__btn--ok:hover {
   color: var(--accent-contrast, #15161a);
   filter: brightness(1.08);
+}
+.robotprops__btn--danger {
+  color: var(--danger);
+}
+.robotprops__btn--danger:hover {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
 }

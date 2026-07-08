@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — hierarchy is now a node tree with context dialogs (#353).** The
+  Build panel groups the model into collapsible branches — **Blocks**, **Meshes**,
+  **Joints**, **Servos** and **Poses** — each with a count. Clicking a node opens
+  a Fusion-style floating dialog on the right tailored to it: a **joint** shows its
+  type/axis/limits/mimic; a **servo** shows its joint mapping, servo/joint ranges,
+  invert and a delete; a **pose** shows rename, **Recall** and delete; a
+  **block/mesh** (edit pencil) shows size + joint. Block/joint edits apply live and
+  **Cancel** reverts them; servo/pose edits are held until **OK**.
 - **Robot View — Fusion-style Properties dialog (#352).** Clicking a block's
   **edit pencil** now opens a floating, **draggable** properties dialog on the
   right (size + joint) instead of expanding the hierarchy row. Edits apply live to
