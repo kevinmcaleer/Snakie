@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — navigation cube.** A CAD-style **ViewCube** floats at the
+  top-right of the 3-D viewer, mirroring the camera's orientation as you orbit;
+  **click a face** (Front / Back / Left / Right / Top / Bottom) to snap the view
+  to that straight-on orthographic angle. Runs in its own small canvas so it never
+  fights the viewer's orbit/zoom.
 - **Robot View — new blocks & meshes arrive at the origin, not stuck to the
   selection.** Adding a block or importing an STL/DAE now drops it at the
   **workspace origin** (attached to the base), **selects it**, and **reframes** so

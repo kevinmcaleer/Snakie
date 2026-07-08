@@ -35,6 +35,7 @@ import {
   type PrimitiveGeom
 } from './robot-assembly'
 import { reRoot } from './robot-reroot'
+import { createViewCube } from './robot-viewcube'
 import {
   classifyFace,
   faceSnapPoints,
@@ -126,6 +127,7 @@ export function RobotView({
     basePath ?? (activeFile && activeFile.source === 'local' ? dirname(activeFile.path) : '')
 
   const mountRef = useRef<HTMLDivElement>(null)
+  const cubeMountRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<{ name: string; joints: number; links: number } | null>(null)
   const [meshNote, setMeshNote] = useState<string | null>(null)
@@ -711,6 +713,19 @@ export function RobotView({
     const fill = new THREE.DirectionalLight(0x9fb4d0, 0.35)
     fill.position.set(-1.5, 1, -1.2)
     scene.add(fill)
+
+    // Navigation cube (top-right): mirrors the camera; a face-click snaps the
+    // view to that orthographic direction. Its own canvas → no OrbitControls clash.
+    const snapView = (dir: THREE.Vector3): void => {
+      const dist = camera.position.distanceTo(controls.target) || 1
+      // Keep "up" sane for straight top/bottom views (else the view is degenerate).
+      camera.up.set(0, 1, 0)
+      if (Math.abs(dir.y) > 0.9) camera.up.set(0, 0, dir.y > 0 ? -1 : 1)
+      camera.position.copy(controls.target).addScaledVector(dir, dist)
+      controls.update()
+    }
+    const viewCube = cubeMountRef.current ? createViewCube({ size: 72, onPick: snapView }) : null
+    if (viewCube && cubeMountRef.current) cubeMountRef.current.appendChild(viewCube.dom)
 
     // Half-height of the ortho frustum (updated by frameModel as bounds change).
     let halfView = 1
@@ -1482,6 +1497,10 @@ export function RobotView({
     const tick = (): void => {
       controls.update()
       renderer.render(scene, camera)
+      if (viewCube) {
+        viewCube.sync(camera.quaternion)
+        viewCube.render()
+      }
       raf = requestAnimationFrame(tick)
     }
     tick()
@@ -1502,6 +1521,10 @@ export function RobotView({
       ro.disconnect()
       controls.removeEventListener('change', onControlsChange)
       zoomApiRef.current = null
+      if (viewCube) {
+        viewCube.dom.remove()
+        viewCube.dispose()
+      }
       controls.dispose()
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh
@@ -1545,6 +1568,9 @@ export function RobotView({
           <div className="robotview__note" role="status">
             {meshNote}
           </div>
+        )}
+        {!isEmpty && !error && !compact && (
+          <div className="robotview__viewcube" ref={cubeMountRef} title="Click a face to snap the view" />
         )}
         {!isEmpty && !error && !compact && (
           <div className="robotview__zoom" role="toolbar" aria-label="Zoom controls">
