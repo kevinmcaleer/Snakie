@@ -102,7 +102,9 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     filesCollapsed: true,
     shellCollapsed: false,
     rightCollapsed: true,
-    dockOpen: true,
+    // Instruments HIDDEN by default in Board mode — the board is the star, so it
+    // gets the room (Data Lab opens the dock, Code keeps it closed).
+    dockOpen: false,
     boardPaneOpen: true,
     horizontal: [0, 42, 58, 0],
     vertical: [65, 35]

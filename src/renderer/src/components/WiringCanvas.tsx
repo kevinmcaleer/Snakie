@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
+import { flushSync } from 'react-dom'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
 import {
   connectionColor,
@@ -97,6 +98,36 @@ function visibleWorldBounds(
  *  any export frame margin — comfortably beyond the 24-unit export margin. */
 const GRID_OVERSCAN = 90
 
+interface WorldRect {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+/**
+ * The world rect the grid/paper should COVER: the visible area (overscanned)
+ * UNION the placed content's bounds. The union means an EXPORT — which frames to
+ * all parts regardless of the on-screen zoom — always has grid/paper to its
+ * edges, even for parts currently scrolled off-screen. Off-screen coverage is
+ * clipped by the viewport on screen, so it's free visually.
+ */
+function coverBounds(
+  view: { tx: number; ty: number; scale: number },
+  stageW: number,
+  stageH: number,
+  content: WorldRect | null
+): WorldRect {
+  const v = visibleWorldBounds(view, stageW, stageH, GRID_OVERSCAN)
+  if (!content) return v
+  return {
+    minX: Math.min(v.minX, content.minX - GRID_OVERSCAN),
+    minY: Math.min(v.minY, content.minY - GRID_OVERSCAN),
+    maxX: Math.max(v.maxX, content.maxX + GRID_OVERSCAN),
+    maxY: Math.max(v.maxY, content.maxY + GRID_OVERSCAN)
+  }
+}
+
 /**
  * PROCEDURAL PAPER (blueprint mode): a whisper-subtle fractal-noise mottle drawn
  * INSIDE the pan/zoom content group so it pans + scales with the grid + parts,
@@ -108,14 +139,16 @@ const GRID_OVERSCAN = 90
 function WiringPaper({
   view,
   stageW,
-  stageH
+  stageH,
+  content
 }: {
   view: { tx: number; ty: number; scale: number }
   stageW: number
   stageH: number
+  content: WorldRect | null
 }): JSX.Element | null {
   if (!(view.scale > 0)) return null
-  const { minX, maxX, minY, maxY } = visibleWorldBounds(view, stageW, stageH, GRID_OVERSCAN)
+  const { minX, maxX, minY, maxY } = coverBounds(view, stageW, stageH, content)
   if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
   return (
     <>
@@ -163,22 +196,25 @@ function WiringGrid({
   view,
   pxPerMm,
   stageW,
-  stageH
+  stageH,
+  content
 }: {
   view: { tx: number; ty: number; scale: number }
   pxPerMm: number
   /** The SVG element's pixel size, to fill the letterbox margins too. */
   stageW: number
   stageH: number
+  /** Placed-content bounds — covered too, so exports fill to the edges. */
+  content: WorldRect | null
 }): JSX.Element | null {
   const { scale } = view
   if (!(scale > 0) || !(pxPerMm > 0)) return null
 
-  const { minX: wMinX, maxX: wMaxX, minY: wMinY, maxY: wMaxY } = visibleWorldBounds(
+  const { minX: wMinX, maxX: wMaxX, minY: wMinY, maxY: wMaxY } = coverBounds(
     view,
     stageW,
     stageH,
-    GRID_OVERSCAN
+    content
   )
 
   // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
@@ -1178,6 +1214,12 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     setExportOpen(false)
     const svg = svgRef.current
     if (!svg) return
+    // Always export the ZOOM-TO-FIT view so every item is included AND fully
+    // backed by the grid/paper (which are view-derived). flushSync applies the
+    // fit + restores the previous view WITHIN this call, so the serialise reads
+    // the fit-state DOM while the user never sees the intermediate frame paint.
+    const prev = { ...view }
+    flushSync(() => fitView())
     // The sheet colour lives in CSS on the stage (blueprint blue / schematic
     // white / dark mat) — read the LIVE computed value so the export matches
     // exactly what's on screen, whatever the mode/theme.
@@ -1190,6 +1232,7 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       // Frame to the parts, not the full-canvas grid/paper — they just fill it.
       bboxExclude: ['.wc__grid-layer', '.wc__paper']
     })
+    flushSync(() => setView(prev))
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
@@ -1381,6 +1424,21 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     return { left: top.x - rect.left, top: y, below }
   })()
 
+  // The placed content's world bounds (all subjects) — the grid/paper cover this
+  // too, so an EXPORT (which frames to all parts) always fills to its edges even
+  // for parts scrolled off-screen. Null when nothing is placed.
+  const partsBounds: WorldRect | null = subjects.length
+    ? subjects.reduce<WorldRect>(
+        (b, s) => ({
+          minX: Math.min(b.minX, s.hit.x),
+          minY: Math.min(b.minY, s.hit.y),
+          maxX: Math.max(b.maxX, s.hit.x + s.hit.w),
+          maxY: Math.max(b.maxY, s.hit.y + s.hit.h)
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+      )
+    : null
+
   return (
     <div
       className={`wc wc--${renderMode}${dropActive ? ' wc--drop' : ''}`}
@@ -1411,9 +1469,15 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
             {renderMode === 'lifelike' && (
               <>
                 {/* Procedural paper mottle (blueprint mode only, via CSS). */}
-                <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} />
+                <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} content={partsBounds} />
                 {/* Graph-paper grid at true 2.54 mm pitch, behind the parts. */}
-                <WiringGrid view={view} pxPerMm={pxPerMm} stageW={stageSize.w} stageH={stageSize.h} />
+                <WiringGrid
+                  view={view}
+                  pxPerMm={pxPerMm}
+                  stageW={stageSize.w}
+                  stageH={stageSize.h}
+                  content={partsBounds}
+                />
               </>
             )}
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
