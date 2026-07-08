@@ -30,12 +30,19 @@
 }
 .robottool__btn:hover:not(:disabled) {
   border-color: var(--border, #3a3d44);
-  color: var(--accent);
+  color: var(--text, #cdd2d9);
+  background: rgba(128, 128, 128, 0.18);
 }
+/* Active tool: a neutral filled state (no brass) — brighter text on a subtle
+   sunken fill so it reads without the hard-to-see orange highlight. */
 .robottool__btn.is-active {
-  color: var(--accent);
-  border-color: var(--accent);
-  background: rgba(200, 162, 74, 0.18);
+  color: var(--text, #f2f4f7);
+  border-color: var(--text-muted, #6b7079);
+  background: rgba(128, 128, 128, 0.28);
+}
+.robottool__btn--add {
+  font-size: 1rem;
+  line-height: 1;
 }
 .robottool__btn:disabled {
   opacity: 0.4;

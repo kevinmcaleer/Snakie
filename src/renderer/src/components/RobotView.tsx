@@ -1731,6 +1731,9 @@ export function RobotView({
             tool={buildTool}
             onSetTool={onSetTool}
             canEdit={canEdit}
+            onAdd={handleAddPrimitive}
+            measureActive={measureActive}
+            onToggleMeasure={() => setMeasureActive((a) => !a)}
             canUndo={histCanUndo(histRef.current)}
             canRedo={histCanRedo(histRef.current)}
             onUndo={undoUrdf}
@@ -1752,7 +1755,6 @@ export function RobotView({
             editJoint={editJoint}
             jointNames={allJointNames}
             rootLink={rootName}
-            onAdd={handleAddPrimitive}
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
             onMakeBase={handleMakeBase}
@@ -1782,7 +1784,6 @@ export function RobotView({
           onDeletePose={handleDeletePose}
           onResetPose={handleResetPose}
           measureActive={measureActive}
-          onToggleMeasure={() => setMeasureActive((a) => !a)}
           measureDistance={measureDist}
           savingLabel={savingLabel}
           assembly={assembly}
