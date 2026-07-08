@@ -171,6 +171,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — imported meshes no longer render massive / clipped.** STLs
+  authored in millimetres loaded 1000× too big (a huge mesh pushed the camera past
+  the fixed far-plane, so only a "letterbox" sliver rendered). Imports now measure
+  the mesh and normalise the scale (mm→m via `<mesh scale>`); the camera's near/far
+  planes are also bracketed dynamically around the framed model so nothing clips at
+  any size/offset.
+- **Robot View — clicking a block in the hierarchy zooms to fit it**, and the
+  navigation cube: **lighter brass**, 25% smaller, **longer X/Y/Z axes**, a
+  **primary-button-only** guard (right/middle click no longer snaps the view), and
+  a `pointercancel`/`lostpointercapture` reset so a stolen drag can't leave it
+  orbiting on hover. A manual camera move (zoom / fit / home / focus / cube) is now
+  preserved when async meshes finish loading (previously the settle re-frame wiped it).
 - **Local Files refresh now updates expanded sub-folders too.** The refresh button
   re-read only the root listing, so files added/removed inside an already-expanded
   sub-folder didn't show up. Refresh now signals every expanded folder to re-read

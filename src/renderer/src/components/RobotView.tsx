@@ -174,6 +174,7 @@ export function RobotView({
     fit: () => void
     toggle: () => void
     home: () => void
+    focusLink: (name: string) => void
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
   // Camera projection (orthographic default; the ViewCube dropdown toggles it).
@@ -764,10 +765,26 @@ export function RobotView({
         if (res.error) setSavingLabel(`import failed: ${res.error}`)
         return
       }
+      // Normalise scale: the URDF world is metres, but STLs are commonly authored
+      // in millimetres (they'd load 1000× too big). Measure the mesh and, if its
+      // largest dimension is implausibly large for a metre-scale part, scale mm→m.
+      let scale = 1
+      if (/\.stl$/i.test(res.rel)) {
+        try {
+          const bytes = await window.api.fs.readFileBytes(`${dirname(activeFile.path)}/${res.rel}`)
+          const geo = new STLLoader().parse(bytes.buffer as ArrayBuffer)
+          geo.computeBoundingBox()
+          const size = new THREE.Vector3()
+          geo.boundingBox?.getSize(size)
+          if (Math.max(size.x, size.y, size.z) > 3) scale = 0.001
+        } catch {
+          /* leave scale 1 if the mesh can't be measured */
+        }
+      }
       // Add the mesh to the URDF (a new link + fixed joint at the origin) so it
       // renders now. Select it + reframe so the user can see + place it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
-      const next = addMeshLink(content, { meshRel: res.rel, linkBase })
+      const next = addMeshLink(content, { meshRel: res.rel, linkBase, scale })
       refitNextRef.current = true
       // Route through the choke point so the import is ONE undoable step and the
       // history stays in sync (commitUrdf updates the buffer + schedules the save).
@@ -775,7 +792,7 @@ export function RobotView({
       setSelectedLink(next.link)
       setEditLink(next.link)
       if (!buildOpen) setBuildOpen(true)
-      setSavingLabel(`added ${next.link}`)
+      setSavingLabel(scale !== 1 ? `added ${next.link} (scaled mm→m)` : `added ${next.link}`)
     } catch (e) {
       setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
     } finally {
@@ -850,6 +867,7 @@ export function RobotView({
       if (Math.abs(dir.y) > 0.9) camera.up.set(0, 0, dir.y > 0 ? -1 : 1)
       camera.position.copy(controls.target).addScaledVector(dir, dist)
       controls.update()
+      recordCamera()
     }
     // Drag the cube → orbit the camera (spherical around the target), same feel
     // as dragging the viewport.
@@ -863,9 +881,10 @@ export function RobotView({
       cubeOffset.setFromSpherical(cubeSph)
       camera.position.copy(controls.target).add(cubeOffset)
       controls.update()
+      recordCamera()
     }
     const viewCube = cubeMountRef.current
-      ? createViewCube({ size: 192, onPick: snapView, onOrbit: orbitBy })
+      ? createViewCube({ size: 144, onPick: snapView, onOrbit: orbitBy })
       : null
     if (viewCube && cubeMountRef.current) cubeMountRef.current.appendChild(viewCube.dom)
 
@@ -891,12 +910,35 @@ export function RobotView({
       camera.updateProjectionMatrix()
     }
 
+    // Bracket the near/far planes around the framed model so a large or offset
+    // model never gets sliced ("letterbox" clipping). `radius` = model half-size,
+    // `d` = camera→target distance. Fixed far=100 clipped big/scaled-off meshes.
+    const setClip = (radius: number): void => {
+      const d = camera.position.distanceTo(controls.target)
+      camera.near = Math.max(0.001, d - radius * 8)
+      camera.far = d + radius * 8 + 0.5
+      camera.updateProjectionMatrix()
+    }
+    // Snapshot the camera as the PRESERVED state so a later re-parse / async
+    // mesh-settle restores THIS view instead of re-framing the whole model. Called
+    // by manual camera actions (zoom, fit, home, focus-a-link, cube snap/orbit) so
+    // a click made while meshes are still loading isn't clobbered on settle.
+    const recordCamera = (): void => {
+      cameraStateRef.current = {
+        pos: camera.position.clone(),
+        target: controls.target.clone(),
+        zoom: camera.zoom,
+        halfView
+      }
+    }
+
     // ── Zoom controls (mirrors the node-graph viewport cluster) ──
     const syncZoomPct = (): void => setZoomPct(Math.round(camera.zoom * 100))
     const applyZoom = (z: number): void => {
       camera.zoom = Math.min(8, Math.max(0.2, z))
       camera.updateProjectionMatrix()
       syncZoomPct()
+      recordCamera()
     }
     // Zoom-to-fit: recentre on the model + size the frustum to its bounds, keeping
     // the current orbit orientation (zoom multiplier back to 1).
@@ -920,8 +962,36 @@ export function RobotView({
       camera.zoom = 1
       camera.updateProjectionMatrix()
       controls.update()
+      setClip(radius)
       resize()
       syncZoomPct()
+      recordCamera()
+    }
+    // Zoom-to-fit a SINGLE link's bounds (clicking a block in the hierarchy).
+    const focusLink = (name: string): void => {
+      const robot = robotRef.current
+      const link = robot?.links[name]
+      if (!robot || !link) return
+      robot.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(link)
+      if (box.isEmpty() || !Number.isFinite(box.min.x)) return
+      const size = box.getSize(new THREE.Vector3())
+      const centre = box.getCenter(new THREE.Vector3())
+      const radius = Math.max(size.x, size.y, size.z, 0.03) * 0.5
+      halfView = radius * 1.6
+      if (camera instanceof THREE.PerspectiveCamera) {
+        const dir = camera.position.clone().sub(controls.target).normalize()
+        const dist = (radius * 1.6) / Math.sin(THREE.MathUtils.degToRad(camera.fov / 2))
+        camera.position.copy(centre).addScaledVector(dir, dist)
+      }
+      controls.target.copy(centre)
+      camera.zoom = 1
+      camera.updateProjectionMatrix()
+      controls.update()
+      setClip(radius)
+      resize()
+      syncZoomPct()
+      recordCamera()
     }
     zoomApiRef.current = {
       in: () => applyZoom(camera.zoom * 1.2),
@@ -934,7 +1004,8 @@ export function RobotView({
         if (!robotRef.current) return
         frameModel(robotRef.current)
         applyZoom(1)
-      }
+      },
+      focusLink
     }
     const onControlsChange = (): void => syncZoomPct()
     controls.addEventListener('change', onControlsChange)
@@ -970,6 +1041,7 @@ export function RobotView({
       grid = new THREE.GridHelper(gridSize, 20, 0x3a3d44, 0x27292e)
       grid.position.y = box.min.y
       scene.add(grid)
+      setClip(radius)
       resize()
     }
 
@@ -1882,7 +1954,10 @@ export function RobotView({
             onSetPinned={setBuildPinnedPersist}
             assembly={assembly}
             selected={selectedLink}
-            onSelect={setSelectedLink}
+            onSelect={(link) => {
+              setSelectedLink(link)
+              if (link) zoomApiRef.current?.focusLink(link) // hierarchy click zooms to fit
+            }}
             editLink={editLink}
             onEdit={setEditLink}
             editGeom={editGeom}

@@ -109,7 +109,7 @@ export function uniqueLinkName(urdf: string, base: string): string {
  */
 export function addMeshLink(
   urdf: string,
-  opts: { meshRel: string; linkBase: string }
+  opts: { meshRel: string; linkBase: string; scale?: number }
 ): { urdf: string; link: string } {
   const parent = rootLink(urdf)
   const name = uniqueLinkName(urdf, opts.linkBase)
@@ -120,10 +120,12 @@ export function addMeshLink(
       `    <origin xyz="0 0 0" rpy="0 0 0"/>\n` +
       `  </joint>\n`
     : '' // first link of an empty URDF needs no joint
+  // A `scale` normalises a mesh authored in different units (e.g. mm → m).
+  const s = opts.scale && opts.scale !== 1 ? ` scale="${fmtNum(opts.scale)} ${fmtNum(opts.scale)} ${fmtNum(opts.scale)}"` : ''
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
-    `      <geometry><mesh filename="${opts.meshRel}"/></geometry>\n` +
+    `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
     `    </visual>\n` +
     `  </link>\n` +
     joint
