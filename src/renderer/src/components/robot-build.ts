@@ -178,3 +178,17 @@ export function movedJointOrigin(
 export function jointOriginForCoincident(aLocal: Vec3, bLocal: Vec3): Vec3 {
   return [bLocal[0] - aLocal[0], bLocal[1] - aLocal[1], bLocal[2] - aLocal[2]]
 }
+
+/**
+ * Which principal axis a joint's `<axis>` vector points along, so the editor can
+ * highlight the right X/Y/Z button. `'custom'` = an off-axis vector, `'none'` =
+ * no axis (a fixed joint). Sign is ignored (X and −X both read as `'x'`).
+ */
+export function principalAxisName(axis: Vec3 | null): 'x' | 'y' | 'z' | 'custom' | 'none' {
+  if (!axis) return 'none'
+  const [x, y, z] = axis.map((n) => Math.abs(n))
+  if (x > 0 && y === 0 && z === 0) return 'x'
+  if (y > 0 && x === 0 && z === 0) return 'y'
+  if (z > 0 && x === 0 && y === 0) return 'z'
+  return 'custom'
+}

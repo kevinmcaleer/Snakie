@@ -20,13 +20,17 @@ import {
 import {
   addMeshLink,
   addPrimitive,
+  jointNames,
   parseAssembly,
   readJoint,
   readPrimitive,
   removeLink,
+  setJoint,
   setJointOrigin,
   setPrimitiveSize,
   setVisualOrigin,
+  type JointDef,
+  type JointSpec,
   type PrimitiveGeom
 } from './robot-assembly'
 import {
@@ -307,6 +311,11 @@ export function RobotView({
     () => (editLink ? readPrimitive(content, editLink) : null),
     [content, editLink]
   )
+  const editJoint: JointDef | null = useMemo(
+    () => (editLink ? readJoint(content, editLink) : null),
+    [content, editLink]
+  )
+  const allJointNames = useMemo(() => jointNames(content), [content])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -334,6 +343,9 @@ export function RobotView({
   }
   const handleSetSize = (link: string, dims: number[]): void => {
     commitUrdf(setPrimitiveSize(content, link, dims))
+  }
+  const handleSetJoint = (link: string, spec: JointSpec): void => {
+    commitUrdf(setJoint(content, link, spec))
   }
   const handleDeleteLink = (link: string): void => {
     commitUrdf(removeLink(content, link))
@@ -1476,8 +1488,11 @@ export function RobotView({
             editLink={editLink}
             onEdit={setEditLink}
             editGeom={editGeom}
+            editJoint={editJoint}
+            jointNames={allJointNames}
             onAdd={handleAddPrimitive}
             onSetSize={handleSetSize}
+            onSetJoint={handleSetJoint}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}

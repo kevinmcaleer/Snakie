@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — joint editor: hinges, sliders, wheels + mimic (#315, epic #309
+  Phase 5).** Editing a block in the Build panel now also sets **how it moves**
+  relative to its parent: pick **Fixed / Hinge / Slider / Wheel** (URDF
+  fixed / revolute / prismatic / continuous), choose the **axis** (X / Y / Z) and
+  set **limits** (degrees for a hinge, mm for a slider). A **Copies** dropdown
+  makes the joint **mimic** another with a gear ratio (× multiplier + offset) —
+  e.g. a gripper's two fingers, or a geared pair. Every change rewrites the URDF
+  and shows up **live** in the pose tool and the motion timeline, so you can
+  build a 2-link arm from blocks, make the elbow a hinge and pose it straight
+  away. Completes the #315 builder scope (primitives + push/pull + move + joints).
 - **Robot View — builder tools: a toolbar + move-with-snap (#335, epic #309
   Phase 5).** The block builder gains a floating **tool toolbar** (top-centre of
   the stage): **Pick** (select), **Push & pull** (resize a face), **Move** a

@@ -272,26 +272,133 @@ export function setVisualOrigin(
 
 /** Read the joint whose `<child>` is `childLink`, or null (e.g. the root link has
  *  none — the move tool uses that to refuse moving the base). */
-export function readJoint(
-  urdf: string,
-  childLink: string
-): { name: string; parent: string; type: string; xyz: Vec3; rpy: Vec3 } | null {
+/** The four joint types the builder can author (a subset of the URDF set). */
+export type JointType = 'fixed' | 'revolute' | 'continuous' | 'prismatic'
+const JOINT_TYPES: readonly string[] = ['fixed', 'revolute', 'continuous', 'prismatic']
+
+export interface JointDef {
+  name: string
+  parent: string
+  type: JointType
+  xyz: Vec3
+  rpy: Vec3
+  /** The rotation/slide axis, or null for a fixed joint (no `<axis>`). */
+  axis: Vec3 | null
+  /** Native lower/upper (rad for revolute, m for prismatic); null when absent. */
+  limit: { lower: number; upper: number } | null
+  /** A `<mimic>` coupling (`value = multiplier·master + offset`), or null. */
+  mimic: { joint: string; multiplier: number; offset: number } | null
+}
+
+/** The full definition of the joint whose CHILD is `childLink`, or null (root). */
+export function readJoint(urdf: string, childLink: string): JointDef | null {
   const re = /<joint\b([^>]*)>([\s\S]*?)<\/joint>/gi
   const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
   let m: RegExpExecArray | null
   while ((m = re.exec(urdf))) {
     if (!childRe.test(m[2])) continue
-    const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(m[2])
-    const rpyM = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(m[2])
+    const body = m[2]
+    const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
+    const rpyM = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(body)
+    const axisM = /<axis\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
+    const limM = /<limit\b([^>]*?)\/?>/i.exec(body)
+    const lower = limM ? /\blower\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
+    const upper = limM ? /\bupper\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
+    const mimM = /<mimic\b([^>]*?)\/?>/i.exec(body)
+    const typeRaw = /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? 'fixed'
     return {
       name: /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
-      type: /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? 'fixed',
-      parent: /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(m[2])?.[1] ?? '',
+      type: (JOINT_TYPES.includes(typeRaw) ? typeRaw : 'fixed') as JointType,
+      parent: /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(body)?.[1] ?? '',
       xyz: originM ? parseVec3(originM[1]) : [0, 0, 0],
-      rpy: rpyM ? parseVec3(rpyM[1]) : [0, 0, 0]
+      rpy: rpyM ? parseVec3(rpyM[1]) : [0, 0, 0],
+      axis: axisM ? parseVec3(axisM[1]) : null,
+      limit: lower != null && upper != null ? { lower: Number(lower), upper: Number(upper) } : null,
+      mimic: mimM
+        ? {
+            joint: /\bjoint\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '',
+            multiplier: Number(/\bmultiplier\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '1'),
+            offset: Number(/\boffset\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '0')
+          }
+        : null
     }
   }
   return null
+}
+
+/** Names of every `<joint>` in the model (for the mimic master picker). */
+export function jointNames(urdf: string): string[] {
+  const re = /<joint\b([^>]*)>/gi
+  const out: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    const nm = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    if (nm) out.push(nm)
+  }
+  return out
+}
+
+/** A sensible native limit when a joint first becomes movable. */
+export function defaultJointLimit(type: JointType): { lower: number; upper: number } {
+  return type === 'prismatic'
+    ? { lower: 0, upper: 0.05 } // 0–50 mm
+    : { lower: -Math.PI / 2, upper: Math.PI / 2 } // ±90°
+}
+
+export interface JointSpec {
+  type: JointType
+  /** Rotation/slide axis (movable joints); defaults to +Z. */
+  axis?: Vec3
+  /** Native lower/upper (rad/m) for revolute/prismatic; defaults per type. */
+  lower?: number
+  upper?: number
+  /** A `<mimic>` coupling, or null/undefined for none. */
+  mimic?: { joint: string; multiplier: number; offset: number } | null
+}
+
+/**
+ * Rewrite the joint whose child is `childLink` to a new type + axis/limit/mimic,
+ * PRESERVING its name, parent and origin. The block is regenerated wholesale
+ * (not surgically patched) so a type change can never strand a stale
+ * `<axis>`/`<limit>`/`<mimic>`. Movable joints get an `<axis>`; revolute/prismatic
+ * additionally get a `<limit>` (the URDF spec requires it), continuous a bare
+ * effort/velocity limit. Returns the URDF unchanged if the joint isn't found.
+ */
+export function setJoint(urdf: string, childLink: string, spec: JointSpec): string {
+  const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+  const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    if (!childRe.test(m[0])) continue
+    const blk = m[0]
+    const name = /\bname\s*=\s*"([^"]+)"/.exec(blk)?.[1] ?? `${childLink}_joint`
+    const parent = /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(blk)?.[1] ?? ''
+    const oxyz = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(blk)?.[1] ?? '0 0 0'
+    const orpy = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(blk)?.[1] ?? '0 0 0'
+    const { type } = spec
+    const movable = type !== 'fixed'
+    const axis = spec.axis ?? [0, 0, 1]
+    let inner =
+      `    <parent link="${parent}"/>\n` +
+      `    <child link="${childLink}"/>\n` +
+      `    <origin xyz="${oxyz}" rpy="${orpy}"/>\n`
+    if (movable) inner += `    <axis xyz="${fmtVec(axis)}"/>\n`
+    if (type === 'revolute' || type === 'prismatic') {
+      const def = defaultJointLimit(type)
+      const lower = spec.lower ?? def.lower
+      const upper = spec.upper ?? def.upper
+      inner += `    <limit lower="${fmtNum(lower)}" upper="${fmtNum(upper)}" effort="1" velocity="1"/>\n`
+    } else if (type === 'continuous') {
+      inner += `    <limit effort="1" velocity="1"/>\n`
+    }
+    if (movable && spec.mimic && spec.mimic.joint) {
+      const mi = spec.mimic
+      inner += `    <mimic joint="${mi.joint}" multiplier="${fmtNum(mi.multiplier)}" offset="${fmtNum(mi.offset)}"/>\n`
+    }
+    const block = `  <joint name="${name}" type="${type}">\n${inner}  </joint>`
+    return urdf.slice(0, m.index) + block + urdf.slice(m.index + m[0].length)
+  }
+  return urdf
 }
 
 /** Set the fixed-joint origin whose child is `childLink` (moves the whole part). */
