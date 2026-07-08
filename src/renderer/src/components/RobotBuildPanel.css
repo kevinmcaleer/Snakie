@@ -410,9 +410,12 @@
 .robotbuild__foot {
   border-top: 1px solid var(--border, #2c2e33);
   padding-top: 0.35rem;
+  display: flex;
+  gap: 0.3rem;
 }
+.robotbuild__open,
 .robotbuild__stl {
-  width: 100%;
+  flex: 1 1 auto;
   font-family: inherit;
   font-size: 0.62rem;
   color: var(--text, #cdd2d9);
@@ -421,6 +424,10 @@
   border-radius: 5px;
   padding: 0.25rem;
   cursor: pointer;
+}
+.robotbuild__open:hover,
+.robotbuild__stl:hover:not(:disabled) {
+  border-color: var(--text-muted, #6b7079);
 }
 .robotbuild__stl:hover:not(:disabled) {
   border-color: var(--accent-ink);

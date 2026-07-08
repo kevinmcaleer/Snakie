@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — open a different robot (.urdf).** The docked mini viewer gains an
+  **📂 Open…** button (alongside New robot / Pop out) and the pose tool's Build
+  panel gains one too, so you can pick and open another robot model via the native
+  file dialog — including when the view is popped out full-screen.
 - **Robot View — hierarchy is now a node tree with context dialogs (#353).** The
   Build panel groups the model into collapsible branches — **Blocks**, **Meshes**,
   **Joints**, **Servos** and **Poses** — each with a count. Clicking a node opens
