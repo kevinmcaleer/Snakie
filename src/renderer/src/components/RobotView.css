@@ -89,6 +89,60 @@
   color: var(--text-muted, #7d838d);
 }
 
+/* Bottom-right zoom cluster (mirrors the node-graph viewport control). */
+.robotview__zoom {
+  position: absolute;
+  right: 0.6rem;
+  bottom: 0.55rem;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid var(--border, #3a3d44);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+:root[data-theme='skeuomorph'] .robotview__zoom {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__zbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--text, #c2c7cf);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robotview__zbtn:hover {
+  color: #c8a24a;
+  border-color: var(--border, #3a3d44);
+}
+.robotview__zbtn--pct {
+  min-width: 46px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.robotview__zsep {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border, #3d414a);
+  flex: 0 0 auto;
+}
+
 /* A non-blocking banner when one or more meshes couldn't load (#319). */
 .robotview__note {
   position: absolute;

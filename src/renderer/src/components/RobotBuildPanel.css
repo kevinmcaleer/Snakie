@@ -83,9 +83,13 @@
   cursor: pointer;
 }
 .robotbuild__pin.is-pinned {
-  color: #c8a24a;
+  /* Canonical pinned colour (matches WiringCanvas / BoardGraph). */
+  color: var(--accent, #34ad4f);
 }
-.robotbuild__pin:hover,
+.robotbuild__pin:hover {
+  color: var(--text, #d6dae0);
+  background: rgba(128, 128, 128, 0.18);
+}
 .robotbuild__collapse:hover {
   color: #c8a24a;
   border-color: var(--border, #3a3d44);

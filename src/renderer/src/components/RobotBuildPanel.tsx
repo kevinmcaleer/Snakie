@@ -15,11 +15,16 @@ import './RobotBuildPanel.css'
  * import, and — while a primitive is being edited — a numeric size form. All the
  * 3-D interaction (select, push/pull faces) lives in RobotView.
  */
-const STAR = (
+// The app-wide pushpin (canonical across WiringCanvas / BoardGraph): an outline
+// when unpinned, filled when pinned. Kept identical so the builder dock matches.
+const PinIcon = ({ pinned }: { pinned: boolean }): JSX.Element => (
   <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
     <path
-      d="M8 1.6l1.9 3.9 4.3.6-3.1 3 .8 4.3L8 11.9 4.1 13.4l.8-4.3-3.1-3 4.3-.6z"
-      fill="currentColor"
+      d="M9.5 1.5l5 5-2.2.6-2.5 2.5.4 3.1-1.8-.3-2.6-2.6L2 13.6 1.4 13l3.8-3.8L2.6 6.6l-.3-1.8 3.1.4L7.9 2.7z"
+      fill={pinned ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
     />
   </svg>
 )
@@ -375,7 +380,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           title={pinned ? 'Unpin — hide when it loses focus' : 'Pin the panel open'}
           aria-label={pinned ? 'Unpin the build panel' : 'Pin the build panel open'}
         >
-          {STAR}
+          <PinIcon pinned={pinned} />
         </button>
         <span className="robotbuild__title">Build</span>
         <button

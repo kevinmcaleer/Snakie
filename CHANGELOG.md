@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — zoom controls + a consistent pin.** The 3-D viewer gains the
+  usual floating **zoom cluster** bottom-right (−, a live **%** readout, +, and a
+  **zoom-to-fit** button); **double-click the %** toggles 100% ↔ fit. The Build
+  panel's pin button now uses the app's standard **pushpin** icon (outline when
+  loose, filled when pinned) and accent colour, instead of a one-off gold star.
 - **Robot View — "Make base" + base protection (#309 builder).** A URDF hangs off
   its **base** link, so deleting the base used to leave an empty, unusable file.
   Now the base **can't be deleted** (its ✕ is disabled with a hint, and it shows a

@@ -153,6 +153,10 @@ export function RobotView({
   const measureActiveRef = useRef(false)
   const measureApiRef = useRef<{ clear: () => void } | null>(null)
   const highlightApiRef = useRef<{ apply: (link: string | null) => void } | null>(null)
+  // Imperative zoom API (the buttons live in React; the ortho camera lives in the
+  // three.js effect) + the live zoom % for the readout.
+  const zoomApiRef = useRef<{ in: () => void; out: () => void; fit: () => void; toggle: () => void } | null>(null)
+  const [zoomPct, setZoomPct] = useState(100)
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -714,6 +718,41 @@ export function RobotView({
       camera.bottom = -halfView
       camera.updateProjectionMatrix()
     }
+
+    // ── Zoom controls (mirrors the node-graph viewport cluster) ──
+    const syncZoomPct = (): void => setZoomPct(Math.round(camera.zoom * 100))
+    const applyZoom = (z: number): void => {
+      camera.zoom = Math.min(8, Math.max(0.2, z))
+      camera.updateProjectionMatrix()
+      syncZoomPct()
+    }
+    // Zoom-to-fit: recentre on the model + size the frustum to its bounds, keeping
+    // the current orbit orientation (zoom multiplier back to 1).
+    const fitView = (): void => {
+      const robot = robotRef.current
+      if (!robot) return
+      robot.updateMatrixWorld(true)
+      const box = new THREE.Box3().setFromObject(robot)
+      if (box.isEmpty() || !Number.isFinite(box.min.x)) return
+      const size = box.getSize(new THREE.Vector3())
+      const centre = box.getCenter(new THREE.Vector3())
+      halfView = Math.max(size.x, size.y, size.z, 0.1) * 0.5 * 1.35
+      controls.target.copy(centre)
+      camera.zoom = 1
+      camera.updateProjectionMatrix()
+      controls.update()
+      resize()
+      syncZoomPct()
+    }
+    zoomApiRef.current = {
+      in: () => applyZoom(camera.zoom * 1.2),
+      out: () => applyZoom(camera.zoom / 1.2),
+      fit: fitView,
+      // Double-clicking the % readout: 100% ↔ fit (keyed on the live zoom).
+      toggle: () => (Math.abs(camera.zoom - 1) < 0.005 ? fitView() : applyZoom(1))
+    }
+    const onControlsChange = (): void => syncZoomPct()
+    controls.addEventListener('change', onControlsChange)
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
@@ -1438,6 +1477,8 @@ export function RobotView({
       teardownPose()
       cancelAnimationFrame(raf)
       ro.disconnect()
+      controls.removeEventListener('change', onControlsChange)
+      zoomApiRef.current = null
       controls.dispose()
       scene.traverse((o) => {
         const mesh = o as THREE.Mesh
@@ -1480,6 +1521,56 @@ export function RobotView({
         {!error && meshNote && (
           <div className="robotview__note" role="status">
             {meshNote}
+          </div>
+        )}
+        {!isEmpty && !error && !compact && (
+          <div className="robotview__zoom" role="toolbar" aria-label="Zoom controls">
+            <button
+              type="button"
+              className="robotview__zbtn"
+              onClick={() => zoomApiRef.current?.out()}
+              title="Zoom out"
+              aria-label="Zoom out"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              className="robotview__zbtn robotview__zbtn--pct"
+              onDoubleClick={() => zoomApiRef.current?.toggle()}
+              title="Double-click: 100% ↔ zoom to fit"
+              aria-label={`Zoom ${zoomPct}% — double-click to toggle 100% / fit`}
+            >
+              {zoomPct}%
+            </button>
+            <button
+              type="button"
+              className="robotview__zbtn"
+              onClick={() => zoomApiRef.current?.in()}
+              title="Zoom in"
+              aria-label="Zoom in"
+            >
+              +
+            </button>
+            <span className="robotview__zsep" aria-hidden="true" />
+            <button
+              type="button"
+              className="robotview__zbtn"
+              onClick={() => zoomApiRef.current?.fit()}
+              title="Zoom to fit"
+              aria-label="Zoom to fit"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
         )}
         {showPanel && buildOpen && (
