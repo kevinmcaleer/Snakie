@@ -8,11 +8,44 @@
  * handlers return serialisable values and never throw across the bridge.
  */
 
-import { app, ipcMain, BrowserWindow } from 'electron'
-import { join } from 'path'
+import { app, ipcMain, BrowserWindow, dialog } from 'electron'
+import { basename, dirname, extname, join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
+
+/** Result of importing a mesh: the path relative to the URDF's folder, or a
+ *  cancellation. */
+export interface ImportMeshResult {
+  cancelled?: boolean
+  error?: string
+  /** Mesh path relative to the URDF's folder, e.g. `meshes/wheel.stl`. */
+  rel?: string
+  /** The copied file's base name, e.g. `wheel.stl`. */
+  name?: string
+}
+
+/** Copy `src` into `<urdfDir>/meshes/`, never overwriting (appends -1, -2 …). */
+async function copyIntoMeshes(urdfPath: string, src: string): Promise<{ rel: string; name: string }> {
+  const meshesDir = join(dirname(urdfPath), 'meshes')
+  await fsp.mkdir(meshesDir, { recursive: true })
+  const ext = extname(src)
+  const stem = basename(src, ext)
+  let name = `${stem}${ext}`
+  let n = 1
+  // Collision-safe: keep an existing file, land the import next to it.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    try {
+      await fsp.access(join(meshesDir, name))
+      name = `${stem}-${n++}${ext}`
+    } catch {
+      break
+    }
+  }
+  await fsp.copyFile(src, join(meshesDir, name))
+  return { rel: `meshes/${name}`, name }
+}
 
 /** Resolve the robot.yml path: `<folder>/robot.yml` if the folder is a real
  *  directory, else `<userData>/robot.yml`. */
@@ -68,6 +101,34 @@ export function registerRobotIpc(): void {
         return { ok: true }
       } catch (err) {
         return { ok: false, error: (err as Error).message }
+      }
+    }
+  )
+
+  // Import an STL/DAE mesh into the robot's KRF folder (#309): a native picker,
+  // then copy the chosen file into `<urdf-folder>/meshes/`. The renderer wires
+  // the returned relative path into the URDF. The copy is binary-safe.
+  ipcMain.handle(
+    'robot:importMesh',
+    async (e, args: { urdfPath: string }): Promise<ImportMeshResult> => {
+      try {
+        if (!args?.urdfPath) return { error: 'No robot file to import into.' }
+        const win = BrowserWindow.fromWebContents(e.sender) ?? undefined
+        const opts = {
+          title: 'Import mesh',
+          properties: ['openFile' as const],
+          filters: [
+            { name: '3D mesh', extensions: ['stl', 'dae'] },
+            { name: 'All files', extensions: ['*'] }
+          ]
+        }
+        const result = win
+          ? await dialog.showOpenDialog(win, opts)
+          : await dialog.showOpenDialog(opts)
+        if (result.canceled || result.filePaths.length === 0) return { cancelled: true }
+        return await copyIntoMeshes(args.urdfPath, result.filePaths[0])
+      } catch (err) {
+        return { error: (err as Error).message }
       }
     }
   )

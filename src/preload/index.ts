@@ -971,6 +971,12 @@ const robot = {
   /** Save the robot definition. Resolves to {ok,error} — never rejects. */
   save: (folder: string | undefined, def: RobotDefinition): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('robot:save', { folder, def }),
+  /** Import an STL/DAE mesh into the robot's `<urdf-folder>/meshes/` via a native
+   *  picker (#309). Resolves to the mesh path relative to the URDF, or cancelled. */
+  importMesh: (
+    urdfPath: string
+  ): Promise<{ cancelled?: boolean; error?: string; rel?: string; name?: string }> =>
+    ipcRenderer.invoke('robot:importMesh', { urdfPath }),
   /** Subscribe to robot.yml changes from ANOTHER window (e.g. the Board View
    *  adding/removing a part). Returns an unsubscribe. */
   onChanged: (cb: () => void): (() => void) => {

@@ -82,6 +82,12 @@ note in the panel — the rest of the robot still renders. `.obj`/`.glb` and oth
 formats aren't loaded yet (they show a placeholder). See
 `examples/mesh-demo/mesh-demo.urdf` for a zero-setup example.
 
+**Importing a mesh (#324).** The pose tool's **Assembly** panel has a **+ STL**
+button: pick an `.stl`/`.dae` and Snakie copies it into `<urdf-folder>/meshes/`
+(never overwriting — it appends `-1`, `-2`, …) and appends a new `<link>` (with
+that `<mesh>`) plus a fixed `<joint>` onto the root link, so it shows in the model
+straight away. The assembly panel lists every link + the mesh file it uses.
+
 ## Versioning
 
 `robot.version` is bumped on breaking changes; `sanitiseRobotModel` migrates /
