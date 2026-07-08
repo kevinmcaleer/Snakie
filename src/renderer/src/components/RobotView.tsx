@@ -177,9 +177,9 @@ export function RobotView({
     focusLink: (name: string) => void
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
-  // Camera projection (orthographic default; the ViewCube dropdown toggles it).
-  // Changing it rebuilds the 3-D effect with the matching camera type + re-frames.
-  const [projection, setProjection] = useState<'ortho' | 'persp'>('ortho')
+  // Camera projection — PERSPECTIVE is the default view (the ViewCube dropdown
+  // toggles it). Changing it rebuilds the 3-D effect + re-frames.
+  const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -1128,7 +1128,8 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
-      const isoDir = new THREE.Vector3(1, 0.9, 1).normalize()
+      // Home = the cube's top-right-front corner (+X right, +Y up, +Z front).
+      const isoDir = new THREE.Vector3(1, 1, 1).normalize()
       // Ortho apparent size is set by halfView, so distance is arbitrary; perspective
       // must sit back far enough that the model fits the vertical fov.
       const dist =
