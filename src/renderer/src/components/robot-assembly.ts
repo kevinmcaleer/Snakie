@@ -290,40 +290,61 @@ export interface JointDef {
   mimic: { joint: string; multiplier: number; offset: number } | null
 }
 
+/** A joint definition that also carries its child link (from `readAllJoints`). */
+export interface JointFull extends JointDef {
+  child: string
+}
+
+/** Parse one `<joint>` from its opening attrs + inner body. */
+function parseJoint(attrs: string, body: string): JointFull {
+  const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
+  const rpyM = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(body)
+  const axisM = /<axis\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
+  const limM = /<limit\b([^>]*?)\/?>/i.exec(body)
+  const lower = limM ? /\blower\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
+  const upper = limM ? /\bupper\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
+  const mimM = /<mimic\b([^>]*?)\/?>/i.exec(body)
+  const typeRaw = /\btype\s*=\s*"([^"]+)"/.exec(attrs)?.[1] ?? 'fixed'
+  return {
+    name: /\bname\s*=\s*"([^"]+)"/.exec(attrs)?.[1] ?? '',
+    type: (JOINT_TYPES.includes(typeRaw) ? typeRaw : 'fixed') as JointType,
+    parent: /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(body)?.[1] ?? '',
+    child: /<child\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(body)?.[1] ?? '',
+    xyz: originM ? parseVec3(originM[1]) : [0, 0, 0],
+    rpy: rpyM ? parseVec3(rpyM[1]) : [0, 0, 0],
+    axis: axisM ? parseVec3(axisM[1]) : null,
+    limit: lower != null && upper != null ? { lower: Number(lower), upper: Number(upper) } : null,
+    mimic: mimM
+      ? {
+          joint: /\bjoint\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '',
+          multiplier: Number(/\bmultiplier\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '1'),
+          offset: Number(/\boffset\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '0')
+        }
+      : null
+  }
+}
+
 /** The full definition of the joint whose CHILD is `childLink`, or null (root). */
 export function readJoint(urdf: string, childLink: string): JointDef | null {
   const re = /<joint\b([^>]*)>([\s\S]*?)<\/joint>/gi
   const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
   let m: RegExpExecArray | null
   while ((m = re.exec(urdf))) {
-    if (!childRe.test(m[2])) continue
-    const body = m[2]
-    const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
-    const rpyM = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(body)
-    const axisM = /<axis\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(body)
-    const limM = /<limit\b([^>]*?)\/?>/i.exec(body)
-    const lower = limM ? /\blower\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
-    const upper = limM ? /\bupper\s*=\s*"([^"]+)"/.exec(limM[1])?.[1] : undefined
-    const mimM = /<mimic\b([^>]*?)\/?>/i.exec(body)
-    const typeRaw = /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? 'fixed'
-    return {
-      name: /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1] ?? '',
-      type: (JOINT_TYPES.includes(typeRaw) ? typeRaw : 'fixed') as JointType,
-      parent: /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(body)?.[1] ?? '',
-      xyz: originM ? parseVec3(originM[1]) : [0, 0, 0],
-      rpy: rpyM ? parseVec3(rpyM[1]) : [0, 0, 0],
-      axis: axisM ? parseVec3(axisM[1]) : null,
-      limit: lower != null && upper != null ? { lower: Number(lower), upper: Number(upper) } : null,
-      mimic: mimM
-        ? {
-            joint: /\bjoint\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '',
-            multiplier: Number(/\bmultiplier\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '1'),
-            offset: Number(/\boffset\s*=\s*"([^"]+)"/.exec(mimM[1])?.[1] ?? '0')
-          }
-        : null
-    }
+    if (childRe.test(m[2])) return parseJoint(m[1], m[2])
   }
   return null
+}
+
+/** Every `<joint>` in the model (with its child link), in document order. */
+export function readAllJoints(urdf: string): JointFull[] {
+  const re = /<joint\b([^>]*)>([\s\S]*?)<\/joint>/gi
+  const out: JointFull[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    const j = parseJoint(m[1], m[2])
+    if (j.child) out.push(j)
+  }
+  return out
 }
 
 /** Names of every `<joint>` in the model (for the mimic master picker). */

@@ -47,6 +47,9 @@ export interface RobotBuildPanelProps {
   editJoint: JointDef | null
   jointNames: string[]
   onSetJoint: (link: string, spec: JointSpec) => void
+  /** The current root link, and an action to re-root the model at a link. */
+  rootLink: string | null
+  onMakeBase: (link: string) => void
   onDelete: (link: string) => void
   onImportStl: () => void
   canImport: boolean
@@ -324,6 +327,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     editJoint,
     jointNames,
     onSetJoint,
+    rootLink,
+    onMakeBase,
     onDelete,
     onImportStl,
     canImport,
@@ -432,34 +437,55 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                   {PENCIL}
                 </button>
               </div>
-              {isEdit && (
-                <div className="robotbuild__editrow">
-                  <div className="robotbuild__editmain">
-                    {editGeom ? (
-                      <SizeForm geom={editGeom} onChange={(d) => onSetSize(it.link, d)} />
-                    ) : (
-                      <span className="robotbuild__editnote">Grab a face in 3D to resize, or…</span>
-                    )}
-                    {editJoint ? (
-                      <JointForm
-                        joint={editJoint}
-                        names={jointNames}
-                        onChange={(spec) => onSetJoint(it.link, spec)}
-                      />
-                    ) : (
-                      <span className="robotbuild__editnote">This is the base — nothing to join to.</span>
-                    )}
-                  </div>
-                  <button
-                    type="button"
-                    className="robotbuild__del"
-                    onClick={() => onDelete(it.link)}
-                    title={`Delete ${it.link}`}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
+              {isEdit &&
+                (() => {
+                  const isRoot = it.link === rootLink
+                  return (
+                    <div className="robotbuild__editrow">
+                      <div className="robotbuild__editmain">
+                        {editGeom ? (
+                          <SizeForm geom={editGeom} onChange={(d) => onSetSize(it.link, d)} />
+                        ) : (
+                          <span className="robotbuild__editnote">Grab a face in 3D to resize, or…</span>
+                        )}
+                        {editJoint && (
+                          <JointForm
+                            joint={editJoint}
+                            names={jointNames}
+                            onChange={(spec) => onSetJoint(it.link, spec)}
+                          />
+                        )}
+                        {isRoot ? (
+                          <span className="robotbuild__basebadge" title="Every other block hangs off the base">
+                            ★ This is the base
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="robotbuild__makebase"
+                            onClick={() => onMakeBase(it.link)}
+                            title="Make this the base — the whole model re-hangs off this block"
+                          >
+                            ★ Make base
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        className="robotbuild__del"
+                        disabled={isRoot}
+                        onClick={() => onDelete(it.link)}
+                        title={
+                          isRoot
+                            ? 'The base can’t be deleted — make another block the base first'
+                            : `Delete ${it.link}`
+                        }
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )
+                })()}
             </li>
           )
         })}
