@@ -289,16 +289,22 @@ export function AppShell(): JSX.Element {
   }
 
   // Collapse/expand a panel; the Panel's own onCollapse/onExpand callbacks sync
-  // the store flag, so this stays the single imperative entry point.
-  const toggle = useCallback(
-    (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
-      const panel = ref.current
-      if (!panel) return
-      if (collapsed) panel.expand()
-      else panel.collapse()
-    },
-    []
-  )
+  // the store flag, so this stays the single imperative entry point. Read the
+  // ACTUAL panel state (not the store flag), so a transient desync — e.g. after
+  // a workspace switch or a drag-collapse — can never leave the toggle stuck
+  // calling collapse() on an already-collapsed panel (the "won't reopen" bug).
+  const toggle = useCallback((ref: React.RefObject<ImperativePanelHandle>): void => {
+    const panel = ref.current
+    if (!panel) return
+    if (panel.isCollapsed()) panel.expand()
+    else panel.collapse()
+  }, [])
+
+  // Ensure a panel is open (no-op when already expanded).
+  const openPanel = useCallback((ref: React.RefObject<ImperativePanelHandle>): void => {
+    const panel = ref.current
+    if (panel && panel.isCollapsed()) panel.expand()
+  }, [])
 
   // Apply the active workspace's geometry whenever it changes (switch / reset).
   // setLayout drives the sizes; the explicit collapse() calls are belt-and-braces
@@ -319,9 +325,18 @@ export function AppShell(): JSX.Element {
           : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
       )
       vGroupRef.current?.setLayout([...ws.vertical])
-      if (ws.filesCollapsed) filesRef.current?.collapse()
-      if (ws.shellCollapsed) shellRef.current?.collapse()
-      if (ws.rightCollapsed) rightRef.current?.collapse()
+      // Sync each collapsible panel BOTH ways to the target workspace, so the RRP
+      // panel state can't drift from the store flag (which would strand the
+      // toggle button / activity icon on the next click).
+      const sync = (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
+        const panel = ref.current
+        if (!panel) return
+        if (collapsed) panel.collapse()
+        else panel.expand()
+      }
+      sync(filesRef, ws.filesCollapsed)
+      sync(shellRef, ws.shellCollapsed)
+      sync(rightRef, ws.rightCollapsed)
     })
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyNonce IS the signal
@@ -920,11 +935,11 @@ export function AppShell(): JSX.Element {
       </div>
       <Toolbar
         filesCollapsed={filesCollapsed}
-        onToggleFiles={() => toggle(filesRef, filesCollapsed)}
+        onToggleFiles={() => toggle(filesRef)}
         shellCollapsed={shellCollapsed}
-        onToggleShell={() => toggle(shellRef, shellCollapsed)}
+        onToggleShell={() => toggle(shellRef)}
         rightCollapsed={rightCollapsed}
-        onToggleRight={() => toggle(rightRef, rightCollapsed)}
+        onToggleRight={() => toggle(rightRef)}
         onOpenBoard={toggleBoard}
         onToggleInstruments={toggleInstruments}
         instrumentsVisible={instrumentsVisible}
@@ -939,13 +954,13 @@ export function AppShell(): JSX.Element {
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
             if (view === activityView) {
-              toggle(filesRef, filesCollapsed)
+              toggle(filesRef)
               return
             }
             // Switching to a different view selects it and reveals the sidebar
             // if it was collapsed.
             setActivityView(view)
-            if (filesCollapsed) toggle(filesRef, true)
+            openPanel(filesRef)
           }}
         />
         {/* Sizes are recorded into the ACTIVE workspace via onLayout and applied
