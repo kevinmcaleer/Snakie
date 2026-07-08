@@ -37,6 +37,9 @@ export interface RobotLike {
   joints: Record<string, JointLike>
 }
 
+import type { ServoJointBinding } from '../../../shared/robot'
+import { servoToJoint } from '../../../shared/krf'
+
 /** A continuous (limitless) joint gets a ±180° slider range so it's usable. */
 export const CONTINUOUS_RANGE = Math.PI
 
@@ -111,6 +114,33 @@ export function extractJoints(robot: RobotLike): JointMeta[] {
 /** A mimic joint's native value from its master's native value. */
 export function mimicValue(meta: JointMeta, masterNative: number): number {
   return (meta.multiplier ?? 1) * masterNative + (meta.offset ?? 0)
+}
+
+/** Normalise a pin token for comparison: drop a `GP`/`gp` prefix + whitespace,
+ *  so `GP16`, `gp16` and `16` all match. */
+export function normPin(pin: string): string {
+  return String(pin).trim().replace(/^gp/i, '')
+}
+
+/**
+ * Resolve a servo telemetry reading (pin + angle in degrees) to a NATIVE joint
+ * value via the matching KRF binding (calibration + inversion in `servoToJoint`)
+ * and the joint's type. Returns null when no binding or joint matches — the
+ * live code-driven-robot pipe (#313).
+ */
+export function servoToJointNative(
+  bindings: ServoJointBinding[],
+  meta: JointMeta[],
+  pin: string,
+  servoAngle: number
+): { joint: string; native: number } | null {
+  const p = normPin(pin)
+  const b = bindings.find((x) => normPin(x.pin) === p)
+  if (!b) return null
+  const m = meta.find((j) => j.name === b.joint)
+  if (!m) return null
+  // servoToJoint returns the joint value in the binding's units (deg / mm).
+  return { joint: b.joint, native: toNative(m.type, servoToJoint(b, servoAngle)) }
 }
 
 /**

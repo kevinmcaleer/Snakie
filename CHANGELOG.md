@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — servo↔joint binding & code-driven simulation (#313, epic #309
+  Phase 3).** The keystone: a running MicroPython program's servo writes now
+  animate the 3-D robot, **headless** (no board — it runs in the simulator).
+  Bind a servo pin to a URDF joint in the pose tool's new **Servos** panel, with
+  angle-range calibration (servo 0–180° ↔ joint min–max, plus invert); the map
+  persists in `robot.yml` (`servoJointMap`). `inst.servo_on(pin).angle(...)`
+  emits pin-keyed telemetry that drives the bound joint in real time — try
+  `examples/servo-arm/` (open `arm.urdf`, Run `sweep.py`). Works tethered too
+  (same telemetry path on a real board).
 - **Robot View — pop-out, assembly panel & one-click STL import (#324, epic
   #309).** The docked mini 3-D viewer gains a **⤢ Pop out** button that opens the
   robot full-screen (Code mode) with the pose tool. The full-screen view now
@@ -48,6 +57,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   panel. The 3D engine is code-split, so it only loads when you open a robot.
   Built on the KRF format (#310); the pose tool, servo↔joint binding and motion
   timeline follow.
+
+### Fixed
+- **Robot pose/servo panel is now legible in the light skin.** The panel used an
+  undefined colour token, so it rendered dark-on-dark in the parchment theme; it
+  now uses the theme surface tokens (parchment ⇄ charcoal) like the file panel.
 
 ## [0.24.0] - 2026-07-08
 

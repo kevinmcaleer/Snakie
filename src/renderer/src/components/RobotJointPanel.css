@@ -7,7 +7,9 @@
   overflow-y: auto;
   box-sizing: border-box;
   padding: 0.55rem 0.6rem 1rem;
-  background: var(--panel, #202227);
+  /* Parchment in the light skin, charcoal in dark — matches the file panel and
+     keeps text legible (uses the same theme tokens, #312/#313). */
+  background: var(--bg, #202227);
   border-left: var(--border-w, 2px) solid var(--border, #2c2e33);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   color: var(--text, #cdd2d9);
@@ -37,7 +39,7 @@
   font-family: inherit;
   font-size: 0.64rem;
   color: var(--text, #cdd2d9);
-  background: var(--panel-2, #2a2d33);
+  background: var(--bg-elevated, #2a2d33);
   border: 1px solid var(--border, #3a3d44);
   border-radius: 5px;
   padding: 0.22rem 0.5rem;
@@ -94,7 +96,7 @@
   font-family: inherit;
   font-size: 0.6rem;
   color: var(--text-muted, #9aa0a6);
-  background: var(--panel-2, #24262b);
+  background: var(--bg-sunken, #24262b);
   border: 1px solid var(--border, #34373d);
   border-radius: 4px;
   padding: 0.12rem 0.2rem;
@@ -139,7 +141,7 @@
   font-family: inherit;
   font-size: 0.64rem;
   color: var(--text, #cdd2d9);
-  background: var(--panel-2, #24262b);
+  background: var(--bg-sunken, #24262b);
   border: 1px solid var(--border, #34373d);
   border-radius: 5px;
   padding: 0.2rem 0.4rem;
@@ -163,7 +165,7 @@
   font-family: inherit;
   font-size: 0.64rem;
   color: var(--text, #cdd2d9);
-  background: var(--panel-2, #2a2d33);
+  background: var(--bg-elevated, #2a2d33);
   border: 1px solid var(--border, #3a3d44);
   border-radius: 5px;
   padding: 0.2rem 0.45rem;
@@ -218,6 +220,101 @@
 }
 .robotpanel__part-geo.is-mesh {
   color: #c8a24a;
+}
+
+/* Servo → joint bindings (#313). */
+.robotpanel__servos {
+  list-style: none;
+  margin: 0 0 0.35rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.robotpanel__servo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px dashed var(--border, #2c2e33);
+}
+.robotpanel__servo-head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.robotpanel__servo-pin {
+  color: #c8a24a;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+.robotpanel__servo-arrow {
+  color: var(--text-muted, #7d838d);
+}
+.robotpanel__servo-joint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
+}
+.robotpanel__servo-cal {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-wrap: wrap;
+}
+.robotpanel__servo-cal input[type='number'] {
+  width: 2.4rem;
+  font-family: inherit;
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+  background: var(--bg-sunken, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 4px;
+  padding: 0.08rem 0.15rem;
+  text-align: center;
+}
+.robotpanel__servo-lbl {
+  font-size: 0.55rem;
+  color: var(--text-muted, #7d838d);
+}
+.robotpanel__servo-inv {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.55rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robotpanel__servo-add {
+  display: flex;
+  gap: 0.3rem;
+}
+.robotpanel__servo-newpin {
+  flex: 0 0 3rem;
+  width: 3rem;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 5px;
+  padding: 0.15rem 0.3rem;
+}
+.robotpanel__servo-newjoint {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 5px;
+  padding: 0.15rem 0.3rem;
 }
 
 .robotpanel__measure.is-on {

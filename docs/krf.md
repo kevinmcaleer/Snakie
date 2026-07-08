@@ -58,12 +58,25 @@ master + offset`). Editing a joint's min/max writes an override into
 (display units — deg/mm). A measure tool reports the distance between two clicked
 points. The `robot.yml` (de)serialiser round-trips this whole `robot:` section.
 
-### Servo → joint mapping
+### Servo → joint mapping (#313)
 
-A running program's servo write drives the mapped joint (Phase 3): the servo
-angle is clamped to `servoMin..servoMax`, optionally inverted, and lerped onto
-`jointMin..jointMax`. Pure implementation + tests: `src/shared/krf.ts`
-(`servoToJoint`), `test/krf.test.ts`.
+A running program's servo write drives the mapped joint — **headless**, in the
+simulator, no board required. The servo angle is clamped to `servoMin..servoMax`,
+optionally inverted, and lerped onto `jointMin..jointMax` (`servoToJoint` in
+`src/shared/krf.ts`; tests in `test/krf.test.ts`).
+
+Bind a pin to a joint in the pose tool's **Servos** panel (calibration + invert);
+it persists here as `servoJointMap`. In code, use one servo per joint::
+
+    import instruments as inst
+    shoulder = inst.servo_on(0)   # GP0
+    elbow = inst.servo_on(1)      # GP1
+    shoulder.angle(90)            # -> SNK SERVO 0 90 -> the joint bound to pin 0 moves
+
+`inst.servo_on(pin).angle(deg)` emits pin-keyed `SNK SERVO <pin> <deg>`
+telemetry, which Robot View parses and maps onto the bound joint in real time —
+so the same code animates the 3-D model (simulator) and drives real servos on a
+board. Worked example: `examples/servo-arm/` (open `arm.urdf`, Run `sweep.py`).
 
 ## Meshes (#319)
 

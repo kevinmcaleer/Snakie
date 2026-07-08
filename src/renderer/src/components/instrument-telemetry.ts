@@ -65,6 +65,20 @@ export interface PwmTelemetry {
   duty: number
 }
 /**
+ * A servo position keyed by GPIO PIN (`SNK SERVO <pin> <deg>`), emitted by
+ * `inst.servo_on(pin).angle(...)`. Robot View maps the pin to a URDF joint via
+ * the KRF `servoJointMap` and animates it live — the code-driven-robot pipe
+ * (#313). Pin-keyed (unlike `SNK PWM`'s channel name) so several servos map to
+ * several joints. `angle` is in degrees (0..180).
+ */
+export interface ServoTelemetry {
+  kind: 'servo'
+  /** The GPIO pin the servo signal is on (e.g. `0`, `16`), as a string token. */
+  pin: string
+  /** Commanded servo angle in degrees (0..180). */
+  angle: number
+}
+/**
  * An object-BINDING descriptor from `inst.watch(name=obj)` — the board announces
  * a real Python object it's tracking, classified by duck-typing, so the IDE can
  * offer the right instrument BY TYPE. `objKind` is the object's kind (`pwm`,
@@ -191,6 +205,7 @@ export interface ReadyTelemetry {
 export type Telemetry =
   | ScopeTelemetry
   | PwmTelemetry
+  | ServoTelemetry
   | BindTelemetry
   | MeterTelemetry
   | PlotTelemetry
@@ -260,6 +275,15 @@ export function parseTelemetry(line: string): Telemetry | null {
     const duty = Number(parts[4])
     if (!ch || !Number.isFinite(freq) || !Number.isFinite(duty)) return null
     return { kind: 'pwm', ch, freq, duty }
+  }
+
+  if (kind === 'SERVO') {
+    // SNK SERVO <pin> <deg> — a servo position keyed by GPIO pin (Robot View
+    // maps it to a URDF joint). `inst.servo_on(pin).angle()` emits this.
+    const pin = parts[2]
+    const angle = Number(parts[3])
+    if (!pin || !Number.isFinite(angle)) return null
+    return { kind: 'servo', pin, angle }
   }
 
   if (kind === 'BIND') {
