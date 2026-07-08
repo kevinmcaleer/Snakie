@@ -615,7 +615,10 @@ export function BoardGraph({
   // row-count changes so the board always opens nicely framed.
   const touchedRef = useRef(false)
 
-  // Measure the canvas (clip) box and keep it current on resize.
+  // Measure the canvas (clip) box and keep it current on resize. Re-runs on
+  // `effectiveView` too: the node-graph canvas only mounts in the graph view, so
+  // without this the measure never fired when switching INTO node graph and `vp`
+  // stayed 0 — breaking auto-fit and the fit/100% toggle.
   useLayoutEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -626,7 +629,7 @@ export function BoardGraph({
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [hasRows])
+  }, [hasRows, effectiveView])
 
   // Auto-fit until the user interacts (re-fit on rotation / board change while
   // untouched, so switching board in the picker reframes the whole new pinout).
@@ -659,18 +662,20 @@ export function BoardGraph({
     setIsOneToOne(false)
   }, [vp.w, vp.h, stageW, stageH, rotation])
 
-  // 100% button: toggles between a centred 1:1 view and zoom-to-fit.
+  // The zoom readout toggles between a centred 1:1 view and zoom-to-fit, keyed
+  // on the LIVE zoom (like the breadboard) so clicking at 100% fits even when
+  // the user got to 100% by hand.
   const onToggleOneToOne = useCallback((): void => {
     touchedRef.current = true
     if (vp.w === 0 || vp.h === 0) return
-    if (isOneToOne) {
+    if (Math.abs(view.zoom - 1) < 0.005) {
       setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(false)
     } else {
       setView(oneToOneTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(true)
     }
-  }, [isOneToOne, vp.w, vp.h, stageW, stageH, rotation])
+  }, [view.zoom, vp.w, vp.h, stageW, stageH, rotation])
 
   const onRotate = useCallback((): void => {
     touchedRef.current = true
@@ -1093,9 +1098,11 @@ export function BoardGraph({
                 className="boardgraph__vbtn boardgraph__vbtn--pct"
                 onClick={onToggleOneToOne}
                 title={isOneToOne ? 'Zoom to fit' : 'Actual size (100%)'}
-                aria-label={isOneToOne ? 'Zoom to fit' : 'Actual size, 100 percent'}
+                aria-label={`Zoom ${zoomPercent(view.zoom)} — click to toggle 100% / fit`}
               >
-                {isOneToOne ? zoomPercent(view.zoom) : '100%'}
+                {/* Always the LIVE zoom (like the breadboard), and clicking
+                    toggles 100% ↔ fit. */}
+                {zoomPercent(view.zoom)}
               </button>
               <button
                 type="button"
