@@ -30,16 +30,36 @@ function faceTexture(text: string): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const ctx = c.getContext('2d')!
-  ctx.fillStyle = '#e7e2d3'
+  // Brass faces with a soft metallic sheen (top-lit) + a darker brass border.
+  const g = ctx.createLinearGradient(0, 0, 0, 128)
+  g.addColorStop(0, '#d8b25a')
+  g.addColorStop(0.5, '#c39b45')
+  g.addColorStop(1, '#a97f2e')
+  ctx.fillStyle = g
   ctx.fillRect(0, 0, 128, 128)
-  ctx.strokeStyle = '#8a6a2a'
+  ctx.strokeStyle = '#7a5c1e'
   ctx.lineWidth = 6
   ctx.strokeRect(3, 3, 122, 122)
-  ctx.fillStyle = '#34373d'
+  ctx.fillStyle = '#2b2205' // dark-brass ink, readable on brass
   ctx.font = 'bold 22px sans-serif'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, 64, 66)
+  const tex = new THREE.CanvasTexture(c)
+  tex.anisotropy = 4
+  return tex
+}
+
+/** A coloured axis letter (X/Y/Z) on a transparent canvas for a billboard sprite. */
+function axisLabelTexture(text: string, colorHex: number): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = `#${colorHex.toString(16).padStart(6, '0')}`
+  ctx.font = 'bold 46px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(text, 32, 34)
   const tex = new THREE.CanvasTexture(c)
   tex.anisotropy = 4
   return tex
@@ -69,8 +89,10 @@ export function createViewCube(opts: {
   renderer.setSize(size, size)
 
   const scene = new THREE.Scene()
-  const camera = new THREE.OrthographicCamera(-1.5, 1.5, 1.5, -1.5, 0.1, 10)
-  camera.position.set(0, 0, 4)
+  // A PERSPECTIVE nav camera so the cube always looks 3-D (independent of the main
+  // viewer's ortho/perspective mode).
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20)
+  camera.position.set(0, 0, 4.6)
   camera.lookAt(0, 0, 0)
   // Lit from the lower-front so the cube looks like a solid, shaded block.
   scene.add(new THREE.HemisphereLight(0xffffff, 0x6b6b6b, 0.9))
@@ -87,10 +109,36 @@ export function createViewCube(opts: {
   const edges = new THREE.LineSegments(edgeGeo, edgeMat)
   cube.add(edges)
 
-  // A brass overlay that snaps to the hovered face / edge / corner — a thin plate
+  // X/Y/Z orientation axes from the bottom-back-left corner along the three edges
+  // meeting there (X red, Y green, Z blue), with a labelled tip. Children of the
+  // cube so they track its orientation; occluded naturally (depthTest on).
+  const AXES = [
+    { end: new THREE.Vector3(1, 0, 0), color: 0xe0483a, label: 'X' },
+    { end: new THREE.Vector3(0, 1, 0), color: 0x40b04a, label: 'Y' },
+    { end: new THREE.Vector3(0, 0, 1), color: 0x4a78e0, label: 'Z' }
+  ]
+  const corner = new THREE.Vector3(-0.5, -0.5, -0.5)
+  const axisDisposables: Array<{ dispose: () => void }> = []
+  for (const a of AXES) {
+    const tip = corner.clone().add(a.end)
+    const lg = new THREE.BufferGeometry().setFromPoints([corner, tip])
+    const lm = new THREE.LineBasicMaterial({ color: a.color, linewidth: 2 })
+    cube.add(new THREE.Line(lg, lm))
+    axisDisposables.push(lg, lm)
+    const lt = axisLabelTexture(a.label, a.color)
+    const sm = new THREE.SpriteMaterial({ map: lt, depthTest: false, transparent: true })
+    const sprite = new THREE.Sprite(sm)
+    sprite.position.copy(corner.clone().add(a.end.clone().multiplyScalar(1.16)))
+    sprite.scale.set(0.34, 0.34, 1)
+    sprite.renderOrder = 4
+    cube.add(sprite)
+    axisDisposables.push(lt, sm)
+  }
+
+  // A bright overlay that snaps to the hovered face / edge / corner — a thin plate
   // on a face, a bar along an edge, a small cube on a corner (from `raw`).
   const hlGeo = new THREE.BoxGeometry(1, 1, 1)
-  const hlMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, transparent: true, opacity: 0.55, depthTest: false })
+  const hlMat = new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.5, depthTest: false })
   const highlight = new THREE.Mesh(hlGeo, hlMat)
   highlight.visible = false
   highlight.renderOrder = 3
@@ -154,7 +202,7 @@ export function createViewCube(opts: {
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
   canvas.addEventListener('pointerleave', onLeave)
-  canvas.style.cursor = 'grab'
+  canvas.style.cursor = 'pointer'
 
   const inv = new THREE.Quaternion()
   return {
@@ -172,6 +220,7 @@ export function createViewCube(opts: {
       geometry.dispose()
       edgeGeo.dispose()
       edgeMat.dispose()
+      axisDisposables.forEach((d) => d.dispose())
       hlGeo.dispose()
       hlMat.dispose()
       materials.forEach((m) => {

@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — themed background + a richer navigation cube.** The 3-D viewer
+  background now follows the theme (**white** in light, **black** in dark). The
+  ViewCube is **brass**, always drawn in **perspective** (independent of the view's
+  projection), sits tight in the top-right, shows **X/Y/Z axes** (red/green/blue
+  with labels) along its base, and uses a pointer cursor so corner picks aren't
+  hidden by the hand cursor.
 - **Robot View — orthographic / perspective toggle.** A dropdown beneath the
   navigation cube switches the camera between **Orthographic** (default, no
   distortion — best for building) and **Perspective** (a natural, lens-like view).
