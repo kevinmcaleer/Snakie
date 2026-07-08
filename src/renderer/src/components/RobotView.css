@@ -1,0 +1,71 @@
+/* ROBOT VIEW (#311) — the 3D URDF panel. Prefix `robotview__`. */
+
+.robotview {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  background: #191a1d;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+.robotview__canvas {
+  position: absolute;
+  inset: 0;
+}
+.robotview__canvas canvas {
+  display: block;
+}
+
+/* Centred overlay: empty-state prompt or an error. */
+.robotview__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-muted, #8b919b);
+  pointer-events: none;
+}
+
+.robotview__overlay-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text, #d6dae0);
+}
+.robotview__overlay-msg {
+  margin: 0;
+  font-size: 0.72rem;
+  max-width: 24rem;
+}
+
+.robotview__overlay--error .robotview__overlay-title {
+  color: #e0774a;
+}
+
+/* Bottom-left readout. */
+.robotview__hud {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.55rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(20, 21, 24, 0.72);
+  border: 1px solid var(--border, #2c2e33);
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  pointer-events: none;
+}
+.robotview__hud strong {
+  color: #c8a24a;
+}
+.robotview__hud-hint {
+  color: var(--text-muted, #7d838d);
+}
