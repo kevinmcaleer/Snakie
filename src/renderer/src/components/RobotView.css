@@ -89,14 +89,48 @@
   color: var(--text-muted, #7d838d);
 }
 
-/* Navigation cube — top-right of the stage (its own canvas is appended here). */
-.robotview__viewcube {
+/* Navigation zone — top-right of the stage: the ViewCube + a hover-revealed
+   Home button. */
+.robotview__navzone {
   position: absolute;
   right: 12px;
   top: 12px;
   z-index: 30;
-  width: 96px;
-  height: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.robotview__home {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text, #cdd2d9);
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  /* Revealed only when the pointer is over the nav zone (top-right area). */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.robotview__navzone:hover .robotview__home {
+  opacity: 1;
+}
+.robotview__home:hover {
+  color: #c8a24a;
+  border-color: #5a606b;
+}
+:root[data-theme='skeuomorph'] .robotview__home {
+  background: rgba(231, 226, 211, 0.92);
+}
+/* The ViewCube's own canvas is appended here (2× — was 96px). */
+.robotview__viewcube {
+  width: 192px;
+  height: 192px;
   /* Shadow drops down-back, consistent with the cube being lit from lower-front. */
   filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.5));
 }
@@ -166,7 +200,7 @@
    of the navigation cube (top-right). */
 .robotview__note {
   position: absolute;
-  right: 96px;
+  right: 216px;
   top: 0.55rem;
   max-width: 70%;
   padding: 0.3rem 0.55rem;

@@ -168,7 +168,13 @@ export function RobotView({
   const highlightApiRef = useRef<{ apply: (link: string | null) => void } | null>(null)
   // Imperative zoom API (the buttons live in React; the ortho camera lives in the
   // three.js effect) + the live zoom % for the readout.
-  const zoomApiRef = useRef<{ in: () => void; out: () => void; fit: () => void; toggle: () => void } | null>(null)
+  const zoomApiRef = useRef<{
+    in: () => void
+    out: () => void
+    fit: () => void
+    toggle: () => void
+    home: () => void
+  } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
   metaRef.current = jointMeta
   valuesRef.current = values
@@ -842,7 +848,7 @@ export function RobotView({
       controls.update()
     }
     const viewCube = cubeMountRef.current
-      ? createViewCube({ size: 96, onPick: snapView, onOrbit: orbitBy })
+      ? createViewCube({ size: 192, onPick: snapView, onOrbit: orbitBy })
       : null
     if (viewCube && cubeMountRef.current) cubeMountRef.current.appendChild(viewCube.dom)
 
@@ -895,7 +901,13 @@ export function RobotView({
       out: () => applyZoom(camera.zoom / 1.2),
       fit: fitView,
       // Double-clicking the % readout: 100% ↔ fit (keyed on the live zoom).
-      toggle: () => (Math.abs(camera.zoom - 1) < 0.005 ? fitView() : applyZoom(1))
+      toggle: () => (Math.abs(camera.zoom - 1) < 0.005 ? fitView() : applyZoom(1)),
+      // Home: the default isometric framing at 100%.
+      home: () => {
+        if (!robotRef.current) return
+        frameModel(robotRef.current)
+        applyZoom(1)
+      }
     }
     const onControlsChange = (): void => syncZoomPct()
     controls.addEventListener('change', onControlsChange)
@@ -1732,7 +1744,24 @@ export function RobotView({
           </div>
         )}
         {!isEmpty && !error && !compact && (
-          <div className="robotview__viewcube" ref={cubeMountRef} title="Click a face to snap the view" />
+          <div className="robotview__navzone">
+            <button
+              type="button"
+              className="robotview__home"
+              onClick={() => zoomApiRef.current?.home()}
+              title="Home — default view"
+              aria-label="Home view"
+            >
+              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+                <path d="M2 7.5L8 2.5l6 5M3.5 6.6V13h9V6.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" />
+              </svg>
+            </button>
+            <div
+              className="robotview__viewcube"
+              ref={cubeMountRef}
+              title="Click a face / edge / corner to snap · drag to orbit"
+            />
+          </div>
         )}
         {!isEmpty && !error && !compact && (
           <div className="robotview__zoom" role="toolbar" aria-label="Zoom controls">
