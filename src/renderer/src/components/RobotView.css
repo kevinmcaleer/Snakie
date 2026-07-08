@@ -109,6 +109,7 @@
   position: absolute;
   top: 3px;
   left: 3px;
+  z-index: 2; /* above the cube canvas, so clicks land on the button */
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -120,12 +121,15 @@
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   cursor: pointer;
-  /* Revealed only when the pointer is over the nav zone (top-right area). */
+  /* Revealed + clickable only on nav-zone hover; click-through otherwise so it
+     doesn't block the cube corner it overlaps. */
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
 }
 .robotview__navzone:hover .robotview__home {
   opacity: 1;
+  pointer-events: auto;
 }
 .robotview__home:hover {
   color: #c8a24a;
@@ -162,11 +166,13 @@
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
 }
 .robotview__navzone:hover .robotview__proj,
 .robotview__proj:focus {
   opacity: 1;
+  pointer-events: auto;
 }
 :root[data-theme='skeuomorph'] .robotview__proj {
   background: rgba(231, 226, 211, 0.92);

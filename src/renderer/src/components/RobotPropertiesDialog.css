@@ -2,7 +2,7 @@
    by default, draggable by its title bar. Prefix robotprops__. */
 .robotprops {
   position: absolute;
-  top: 3.2rem; /* below the nav zone */
+  top: 190px; /* comfortably below the 144px nav cube + its projection dropdown */
   right: 12px;
   z-index: 20;
   width: 13rem;

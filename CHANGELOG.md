@@ -195,6 +195,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — a batch of navigation / layout fixes.** The **Home** button now
+  responds to clicks (it sat under the cube canvas — it's raised above it and only
+  captures clicks while the nav zone is hovered, so the cube corner stays pickable)
+  and orients to the **top-left-front** corner. The first **Fit / 100%** no longer
+  clips the model (the near plane was bracketed off the *far* end of the glide;
+  it now uses the nearer end). The Properties dialog opens **comfortably below the
+  nav cube** instead of behind it. In the Build hierarchy, the ☆/✎/✕ icons moved to
+  the **left of the block name** so they no longer overlap long titles, and the
+  panel now **sizes to its contents** (scrolling if needed) so it no longer covers
+  the Help hint in the bottom-left.
 - **Robot View — the Move tool now moves imported meshes.** It bailed on any link
   without primitive geometry, so STL/DAE parts couldn't be dragged; meshes now
   move (grabbing the hit point; primitives still get the face snap points). The
