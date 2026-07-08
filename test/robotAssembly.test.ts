@@ -4,7 +4,8 @@ import {
   meshFiles,
   rootLink,
   uniqueLinkName,
-  addMeshLink
+  addMeshLink,
+  blankUrdf
 } from '../src/renderer/src/components/robot-assembly'
 
 const URDF = `<?xml version="1.0"?>
@@ -72,5 +73,20 @@ describe('addMeshLink (#309)', () => {
     expect(link).toBe('x')
     expect(urdf).toContain('<link name="x">')
     expect(urdf).not.toContain('<joint')
+  })
+})
+
+describe('blankUrdf — new robot starter', () => {
+  it('is a valid single-link URDF the parser accepts', () => {
+    const u = blankUrdf('My Robot!')
+    expect(u).toContain('<robot name="My_Robot">') // sanitised name
+    const a = parseAssembly(u)
+    expect(a).toEqual([{ link: 'base_link', kind: 'box' }])
+    expect(rootLink(u)).toBe('base_link')
+  })
+  it('an imported mesh attaches to its base_link', () => {
+    const { urdf, link } = addMeshLink(blankUrdf(), { meshRel: 'meshes/w.stl', linkBase: 'w' })
+    expect(link).toBe('w')
+    expect(urdf).toContain('<parent link="base_link"/>')
   })
 })

@@ -2142,16 +2142,21 @@ body {
 .shell__dock--robot .instr-dock {
   min-height: 0;
 }
-/* The docked mini-viewer fills its slot; an expand button opens it full-screen. */
+/* The docked mini-viewer fills its slot; a top action row creates a new robot
+   or pops the viewer out full-screen (#320 / new-URDF). */
 .robotdock {
   position: absolute;
   inset: 0;
 }
-.robotdock__expand {
+.robotdock__actions {
   position: absolute;
   top: 0.35rem;
   left: 0.35rem;
   z-index: 2;
+  display: flex;
+  gap: 0.3rem;
+}
+.robotdock__btn {
   font-family: var(--font-mono);
   font-size: 0.6rem;
   color: var(--text, #cdd2d9);
@@ -2161,9 +2166,20 @@ body {
   padding: 0.15rem 0.4rem;
   cursor: pointer;
 }
-.robotdock__expand:hover {
+.robotdock__btn:hover {
   border-color: #c8a24a;
   color: #c8a24a;
+}
+/* Highlight "New robot" when there's no project robot yet (the demo is a stand-in). */
+.robotdock__btn--cta {
+  color: #191a1d;
+  background: #c8a24a;
+  border-color: #c8a24a;
+  font-weight: 700;
+}
+.robotdock__btn--cta:hover {
+  color: #191a1d;
+  background: #d8b45c;
 }
 
 .activitybar {

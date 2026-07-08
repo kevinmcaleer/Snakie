@@ -5,6 +5,28 @@
  * they're cheap to unit-test in a node env.
  */
 
+/**
+ * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
+ * tool renders something and an imported STL (via `addMeshLink`) has a root to
+ * attach to. `name` is sanitised to a URDF-safe robot name.
+ */
+export function blankUrdf(name = 'my_robot'): string {
+  const safe = name.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'my_robot'
+  return (
+    `<?xml version="1.0"?>\n` +
+    `<!-- New robot — add links/joints, or import meshes from the Assembly panel. -->\n` +
+    `<robot name="${safe}">\n` +
+    `  <material name="steel"><color rgba="0.62 0.65 0.69 1"/></material>\n` +
+    `  <link name="base_link">\n` +
+    `    <visual>\n` +
+    `      <geometry><box size="0.08 0.08 0.02"/></geometry>\n` +
+    `      <material name="steel"/>\n` +
+    `    </visual>\n` +
+    `  </link>\n` +
+    `</robot>\n`
+  )
+}
+
 /** One link of the model + the visual geometry it uses. */
 export interface AssemblyItem {
   link: string
