@@ -30,14 +30,14 @@ function faceTexture(text: string): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = c.height = 128
   const ctx = c.getContext('2d')!
-  // Brass faces with a soft metallic sheen (top-lit) + a darker brass border.
+  // Bright brass faces with a soft metallic sheen (top-lit) + a brass border.
   const g = ctx.createLinearGradient(0, 0, 0, 128)
-  g.addColorStop(0, '#d8b25a')
-  g.addColorStop(0.5, '#c39b45')
-  g.addColorStop(1, '#a97f2e')
+  g.addColorStop(0, '#f2dd9c')
+  g.addColorStop(0.5, '#e6c46a')
+  g.addColorStop(1, '#d0a844')
   ctx.fillStyle = g
   ctx.fillRect(0, 0, 128, 128)
-  ctx.strokeStyle = '#7a5c1e'
+  ctx.strokeStyle = '#9a7526'
   ctx.lineWidth = 6
   ctx.strokeRect(3, 3, 122, 122)
   ctx.fillStyle = '#2b2205' // dark-brass ink, readable on brass
@@ -118,9 +118,10 @@ export function createViewCube(opts: {
     { end: new THREE.Vector3(0, 0, 1), color: 0x4a78e0, label: 'Z' }
   ]
   const corner = new THREE.Vector3(-0.5, -0.5, -0.5)
+  const AXIS_LEN = 1.32 // poke ~0.32 beyond the far edge so the colour shows
   const axisDisposables: Array<{ dispose: () => void }> = []
   for (const a of AXES) {
-    const tip = corner.clone().add(a.end)
+    const tip = corner.clone().add(a.end.clone().multiplyScalar(AXIS_LEN))
     const lg = new THREE.BufferGeometry().setFromPoints([corner, tip])
     const lm = new THREE.LineBasicMaterial({ color: a.color, linewidth: 2 })
     cube.add(new THREE.Line(lg, lm))
@@ -128,7 +129,7 @@ export function createViewCube(opts: {
     const lt = axisLabelTexture(a.label, a.color)
     const sm = new THREE.SpriteMaterial({ map: lt, depthTest: false, transparent: true })
     const sprite = new THREE.Sprite(sm)
-    sprite.position.copy(corner.clone().add(a.end.clone().multiplyScalar(1.16)))
+    sprite.position.copy(corner.clone().add(a.end.clone().multiplyScalar(AXIS_LEN + 0.2)))
     sprite.scale.set(0.34, 0.34, 1)
     sprite.renderOrder = 4
     cube.add(sprite)
@@ -166,21 +167,24 @@ export function createViewCube(opts: {
     return hit ? classify(cube.worldToLocal(hit.point.clone())) : null
   }
 
-  // Drag-to-orbit vs click-to-snap: a near-stationary press is a click.
-  let down: { x: number; y: number; moved: boolean } | null = null
+  // Drag-to-orbit vs click-to-snap: a near-stationary press is a click. Orbit by
+  // the PER-MOVE delta (last→now), never `movementX` (unreliable under capture) or
+  // the total-from-down (which re-applied the whole delta each frame → wild spin).
+  let down: { x: number; y: number; lastX: number; lastY: number; moved: boolean } | null = null
   const onPointerDown = (e: PointerEvent): void => {
-    down = { x: e.clientX, y: e.clientY, moved: false }
+    if (e.button !== 0 || down) return // primary button only; ignore right/middle
+    down = { x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false }
     canvas.setPointerCapture(e.pointerId)
   }
   const onPointerMove = (e: PointerEvent): void => {
     if (down) {
-      const dx = e.clientX - down.x
-      const dy = e.clientY - down.y
-      if (down.moved || Math.hypot(dx, dy) > 3) {
+      if (down.moved || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 3) {
         down.moved = true
-        onOrbit(e.movementX || dx, e.movementY || dy)
+        onOrbit(e.clientX - down.lastX, e.clientY - down.lastY)
         setHighlight(null)
       }
+      down.lastX = e.clientX
+      down.lastY = e.clientY
       return
     }
     const r = pick(e)
@@ -198,9 +202,18 @@ export function createViewCube(opts: {
   const onLeave = (): void => {
     if (!down) setHighlight(null)
   }
+  // If the OS/browser steals the gesture (touch cancel, capture loss) it fires
+  // pointercancel, NOT pointerup — reset so a later bare hover doesn't keep orbiting.
+  const onCancel = (e: PointerEvent): void => {
+    canvas.releasePointerCapture?.(e.pointerId)
+    down = null
+    setHighlight(null)
+  }
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
+  canvas.addEventListener('pointercancel', onCancel)
+  canvas.addEventListener('lostpointercapture', onCancel)
   canvas.addEventListener('pointerleave', onLeave)
   canvas.style.cursor = 'pointer'
 
@@ -216,6 +229,8 @@ export function createViewCube(opts: {
       canvas.removeEventListener('pointerdown', onPointerDown)
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('pointercancel', onCancel)
+      canvas.removeEventListener('lostpointercapture', onCancel)
       canvas.removeEventListener('pointerleave', onLeave)
       geometry.dispose()
       edgeGeo.dispose()

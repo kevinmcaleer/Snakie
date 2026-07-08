@@ -98,8 +98,8 @@
   right: 10px;
   top: 10px;
   z-index: 30;
-  width: 192px;
-  height: 192px;
+  width: 144px;
+  height: 144px;
 }
 .robotview__home {
   position: absolute;
@@ -132,8 +132,8 @@
 }
 /* The ViewCube's own canvas is appended here (2× — was 96px). */
 .robotview__viewcube {
-  width: 192px;
-  height: 192px;
+  width: 144px;
+  height: 144px;
   /* Shadow drops down-back, consistent with the cube being lit from lower-front. */
   filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.5));
 }
