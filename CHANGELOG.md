@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot workspace mode (#320, epic #309).** A new **Robot** tab joins Code ·
+  Board · Data Lab: files collapsed, your code on the left (~⅓), the Board View
+  in the middle, and on the right a **mini 3-D Robot panel over the instrument
+  dock** — code, wiring, the robot and live instruments in one glance. The 3-D
+  view now defaults to an **isometric** (orthographic) camera, and the docked
+  panel finds the project's URDF via the KRF `robot.yml` (falling back to the
+  bundled demo arm). The 3-D engine stays code-split (only loads in Robot mode).
+
 - **Robot View — 3D URDF viewer (#311, epic #309 Phase 1).** Opening a `.urdf`
   file now shows the robot model in a three.js scene with orbit / pan / zoom.
   URDF primitives render with no external meshes (the bundled

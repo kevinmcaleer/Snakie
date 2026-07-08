@@ -13,9 +13,9 @@ const storage = (entries: Record<string, string> = {}): StorageLike => ({
   getItem: (k: string) => (k in entries ? entries[k] : null)
 })
 
-describe('workspace presets (epic #259 Phase 1; slimmed to 3 by the modes review)', () => {
-  it('defines the three workspaces with valid geometry', () => {
-    expect(WORKSPACE_IDS).toEqual(['code', 'board', 'datalab'])
+describe('workspace presets (epic #259; +Robot mode #320)', () => {
+  it('defines the workspaces with valid geometry', () => {
+    expect(WORKSPACE_IDS).toEqual(['code', 'board', 'datalab', 'robot'])
     for (const id of WORKSPACE_IDS) {
       const p = WORKSPACE_PRESETS[id]
       expect(p.horizontal).toHaveLength(4)
@@ -23,6 +23,27 @@ describe('workspace presets (epic #259 Phase 1; slimmed to 3 by the modes review
       expect(p.horizontal.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0)
       expect(p.vertical.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0)
     }
+  })
+
+  it("Robot mode: files collapsed, code ~1/3, board middle, dock open (#320)", () => {
+    const r = WORKSPACE_PRESETS.robot
+    expect(r.filesCollapsed).toBe(true)
+    expect(r.boardPaneOpen).toBe(true)
+    expect(r.dockOpen).toBe(true)
+    // code (centre) is roughly a third and the board (slot 2) gets the rest.
+    expect(r.horizontal[1]).toBeGreaterThan(25)
+    expect(r.horizontal[1]).toBeLessThan(45)
+    expect(r.horizontal[2]).toBeGreaterThan(r.horizontal[1])
+  })
+
+  it('a pre-Robot saved envelope gains the robot preset (migration)', () => {
+    const saved = {
+      version: 1,
+      active: 'code',
+      workspaces: { code: { ...WORKSPACE_PRESETS.code } } // no robot key
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(saved) }))
+    expect(s.workspaces.robot).toEqual(WORKSPACE_PRESETS.robot)
   })
 
   it("'code' preserves today's default layout; instrument dock per workspace", () => {

@@ -7,12 +7,15 @@ import {
   PanelResizeHandle
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { useWorkspaceLayout } from '../store/layout'
+import { useWorkspaceLayout, type WorkspaceId } from '../store/layout'
 
 // The embedded Board View pane (the Board workspace's tri-split, #259) is
 // code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
 // loads only when a workspace with the pane open is activated.
 const BoardPane = lazy(() => import('./BoardPane'))
+// The mini 3-D Robot panel (Robot mode, #320) — lazy so three.js only loads
+// when you enter Robot mode.
+const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView } from './ActivityBar'
@@ -186,8 +189,8 @@ export function AppShell(): JSX.Element {
   // they can consult/flip these synchronously. The `.current` values are kept
   // fresh in the workspace-layout block further down (after `layout` exists).
   const poppedFromBoardRef = useRef(false)
-  const switchWorkspaceRef = useRef<(id: 'code' | 'board' | 'datalab') => void>(() => undefined)
-  const activeWsRef = useRef<'code' | 'board' | 'datalab'>('code')
+  const switchWorkspaceRef = useRef<(id: WorkspaceId) => void>(() => undefined)
+  const activeWsRef = useRef<WorkspaceId>('code')
 
   // Toggle the floating Board View window from the toolbar button: open (and
   // push the current file immediately so it isn't blank) if closed, or close it
@@ -1043,7 +1046,17 @@ export function AppShell(): JSX.Element {
             redistribute each other's freed space). Shown by the toolbar
             Instruments button or an incoming `instruments:open`. */}
         {instrumentsVisible && (
-          <aside className="shell__dock" aria-label="Instrument dock">
+          <aside
+            className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ''}`}
+            aria-label="Instrument dock"
+          >
+            {layout.active === 'robot' && (
+              <div className="shell__robot3d">
+                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
+                  <RobotDockPanel />
+                </Suspense>
+              </div>
+            )}
             <InstrumentDockRegion
               host={instruments}
               vis={visibility}
