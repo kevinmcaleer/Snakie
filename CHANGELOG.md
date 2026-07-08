@@ -160,6 +160,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Local Files refresh now updates expanded sub-folders too.** The refresh button
+  re-read only the root listing, so files added/removed inside an already-expanded
+  sub-folder didn't show up. Refresh now signals every expanded folder to re-read
+  its children.
 - **Robot View accent text is readable on the parchment theme.** The Robot-View
   panels hard-coded a light gold (`#c8a24a`) for highlight/active text, which
   didn't darken for the skeuomorph (parchment) theme — gold-on-cream was hard to

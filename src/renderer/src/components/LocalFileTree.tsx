@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
@@ -85,6 +85,8 @@ interface TreeNodeProps {
   isSynced: (path: string) => boolean
   /** Tag / untag a (file) path for device sync (#178). */
   toggleSync: (path: string) => void
+  /** Bumped by the Refresh button — expanded folders re-read their children. */
+  refreshNonce: number
 }
 
 /** Recursively renders a directory entry and (when expanded) its children. */
@@ -97,7 +99,8 @@ function TreeNode({
   onChanged,
   onContextMenu,
   isSynced,
-  toggleSync
+  toggleSync,
+  refreshNonce
 }: TreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsEntry[] | null>(null)
@@ -111,6 +114,16 @@ function TreeNode({
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [entry.path])
+
+  // Refresh signal from above: re-read an EXPANDED folder's children so newly
+  // added/removed files show up (the root re-reads separately). Skip the first
+  // render — only react to actual bumps.
+  const firstNonce = useRef(refreshNonce)
+  useEffect(() => {
+    if (refreshNonce === firstNonce.current) return
+    if (expanded) void loadChildren()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshNonce])
 
   const toggle = useCallback(async (): Promise<void> => {
     if (!expanded && children === null) await loadChildren()
@@ -186,6 +199,7 @@ function TreeNode({
             onContextMenu={onContextMenu}
             isSynced={isSynced}
             toggleSync={toggleSync}
+            refreshNonce={refreshNonce}
           />
         ))}
     </div>
@@ -214,8 +228,12 @@ export function LocalFileTree(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
 
+  // Bumping this tells every EXPANDED subfolder to re-read its children too, so
+  // Refresh reflects changes anywhere in the open tree (not just the root).
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const refresh = useCallback(async (): Promise<void> => {
     if (!root) return
+    setRefreshNonce((n) => n + 1)
     try {
       setEntries(await window.api.fs.readDir(root))
       setError(null)
@@ -526,6 +544,7 @@ export function LocalFileTree(): JSX.Element {
                 onContextMenu={handleContextMenu}
                 isSynced={isSynced}
                 toggleSync={toggleSync}
+                refreshNonce={refreshNonce}
               />
             ))}
           </div>
