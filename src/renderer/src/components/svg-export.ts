@@ -152,6 +152,8 @@ const INLINE_PROPS = [
   'opacity',
   // Preserve the blueprint paper's soft-light mottle in exports.
   'mix-blend-mode',
+  // Preserve CSS-applied filters (e.g. the blueprint grid's ink-on-paper wobble).
+  'filter',
   'color',
   'font-family',
   'font-size',
