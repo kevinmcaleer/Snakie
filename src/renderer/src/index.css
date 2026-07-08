@@ -43,6 +43,7 @@
   --text-muted: #9aa0aa;
 
   --accent: #d6a23f; /* brass — active/selected/links */
+  --accent-ink: #d6a23f; /* brass for TEXT — readable on the dark chrome */
   --accent-2: #3fae5a; /* green — connected / run / saved */
   --accent-contrast: #15161a;
   --danger: #e3624f;
@@ -100,6 +101,7 @@
   --text-muted: #5c616a;
 
   --accent: #b07d1e; /* brass — active/selected/links */
+  --accent-ink: #5c3f0c; /* DARK brass for TEXT — readable on the parchment */
   --accent-2: #1c7a34; /* green — connected / run / saved */
   --accent-contrast: #fffdf6;
   --danger: #c4301f;

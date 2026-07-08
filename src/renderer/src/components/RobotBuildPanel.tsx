@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { AssemblyItem, PrimitiveGeom, JointDef, JointType, JointSpec } from './robot-assembly'
-import type { PrimitiveKind, Vec3 } from './robot-build'
+import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, type MovableType } from './robot-pose'
 import { baseName } from './robot-mesh'
@@ -46,7 +46,6 @@ export interface RobotBuildPanelProps {
   onEdit: (link: string | null) => void
   /** Geometry of the link being edited (for the size form), or null. */
   editGeom: PrimitiveGeom | null
-  onAdd: (kind: PrimitiveKind) => void
   onSetSize: (link: string, dims: number[]) => void
   /** The parent joint of the link being edited (null for the root), + a setter. */
   editJoint: JointDef | null
@@ -327,7 +326,6 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     editLink,
     onEdit,
     editGeom,
-    onAdd,
     onSetSize,
     editJoint,
     jointNames,
@@ -394,22 +392,9 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         </button>
       </div>
 
-      <div className="robotbuild__add" role="group" aria-label="Add a block">
-        {(['box', 'cylinder', 'sphere'] as const).map((k) => (
-          <button
-            key={k}
-            type="button"
-            disabled={!canEdit}
-            onClick={() => onAdd(k)}
-            title={canEdit ? `Add a ${k}` : 'Save the robot to a project folder first'}
-          >
-            {k === 'box' ? '▦ Box' : k === 'cylinder' ? '⬭ Tube' : '● Ball'}
-          </button>
-        ))}
-      </div>
-      <p className="robotbuild__hint">
-        {canEdit ? 'A new block sticks to the part you picked.' : 'Save this robot to a folder to build.'}
-      </p>
+      {!canEdit && (
+        <p className="robotbuild__hint">Save this robot to a folder to build.</p>
+      )}
 
       <ul className="robotbuild__parts">
         {assembly.map((it) => {
@@ -432,6 +417,21 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                     {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
                   </span>
                 </button>
+                {it.link === rootLink ? (
+                  <span className="robotbuild__rowbase is-base" title="This is the base — every block hangs off it">
+                    ★
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="robotbuild__rowbase"
+                    onClick={() => onMakeBase(it.link)}
+                    title="Make this the base"
+                    aria-label={`Make ${it.link} the base`}
+                  >
+                    ☆
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
@@ -459,20 +459,6 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                             names={jointNames}
                             onChange={(spec) => onSetJoint(it.link, spec)}
                           />
-                        )}
-                        {isRoot ? (
-                          <span className="robotbuild__basebadge" title="Every other block hangs off the base">
-                            ★ This is the base
-                          </span>
-                        ) : (
-                          <button
-                            type="button"
-                            className="robotbuild__makebase"
-                            onClick={() => onMakeBase(it.link)}
-                            title="Make this the base — the whole model re-hangs off this block"
-                          >
-                            ★ Make base
-                          </button>
                         )}
                       </div>
                       <button

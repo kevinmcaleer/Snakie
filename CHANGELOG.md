@@ -140,6 +140,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View builder — tidier toolbar + panel.** The **add Box / Tube / Ball**
+  buttons and the **Measure** tool moved onto the floating build toolbar (with the
+  select / push-pull / move / join tools and undo/redo). The left panel keeps the
+  hierarchy; **★ Make base** is now a one-click star on each block's row (no longer
+  hidden in edit mode). The collapsed **Build** tab is squared off and reads
+  top-to-bottom. Accent text in the builder (headings, the STL filename) uses a
+  **darker brass** (`--accent-ink`) so it's readable on the parchment theme, and
+  the toolbar's active-tool highlight is a neutral fill instead of hard-to-see gold.
 - **Robot pop-out now keeps you in Robot mode.** Instead of switching to Code
   mode, popping the robot out (or creating a new one) enters a transient *focus*:
   it hides the board, instruments and console so the URDF fills the editor, and

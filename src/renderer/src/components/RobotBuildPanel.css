@@ -7,8 +7,8 @@
   top: 0.6rem;
   left: 0;
   z-index: 4;
+  /* Vertical label reading top→bottom (no 180° flip — that read wrong-way-round). */
   writing-mode: vertical-rl;
-  transform: rotate(180deg);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.62rem;
   letter-spacing: 0.06em;
@@ -16,13 +16,13 @@
   background: rgba(20, 21, 24, 0.72);
   border: 1px solid var(--border, #3a3d44);
   border-left: none;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0; /* square edge tab — no rounded corners */
   padding: 0.5rem 0.2rem;
   cursor: pointer;
 }
 .robotbuild__tab:hover {
-  color: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
 }
 
 /* Open: the glass dock, anchored left. */
@@ -67,7 +67,7 @@
 .robotbuild__title {
   flex: 1 1 auto;
   font-weight: 700;
-  color: var(--accent);
+  color: var(--accent-ink);
   letter-spacing: 0.04em;
 }
 .robotbuild__pin,
@@ -91,7 +91,7 @@
   background: rgba(128, 128, 128, 0.18);
 }
 .robotbuild__collapse:hover {
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--border, #3a3d44);
 }
 .robotbuild__collapse {
@@ -99,27 +99,24 @@
   line-height: 1;
 }
 
-.robotbuild__add {
-  display: flex;
-  gap: 0.25rem;
-}
-.robotbuild__add button {
-  flex: 1 1 0;
-  font-family: inherit;
-  font-size: 0.62rem;
-  color: var(--text, #cdd2d9);
-  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 5px;
-  padding: 0.25rem 0.1rem;
+/* Per-row base marker: ☆ makes this the base, ★ marks the current base. */
+.robotbuild__rowbase {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--text-muted, #8b919b);
+  background: transparent;
+  border: none;
+  padding: 0.1rem 0.15rem;
   cursor: pointer;
 }
-.robotbuild__add button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
+.robotbuild__rowbase:hover {
+  color: var(--accent-ink);
 }
-.robotbuild__add button:disabled {
-  opacity: 0.45;
+.robotbuild__rowbase.is-base {
+  color: var(--accent-ink);
   cursor: default;
 }
 .robotbuild__hint {
@@ -177,7 +174,7 @@
   color: var(--text-muted, #8b919b);
 }
 .robotbuild__part-geo.is-mesh {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .robotbuild__edit {
   flex: 0 0 auto;
@@ -192,7 +189,7 @@
 }
 .robotbuild__edit:hover,
 .robotbuild__edit.is-on {
-  color: var(--accent);
+  color: var(--accent-ink);
   border-color: var(--border, #3a3d44);
 }
 .robotbuild__editrow {
@@ -246,7 +243,7 @@
 .robotbuild__chip.is-on {
   color: #1a1c20;
   background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
 }
 .robotbuild__jnote,
 .robotbuild__jsel {
@@ -330,26 +327,6 @@
   opacity: 0.35;
   cursor: default;
 }
-.robotbuild__makebase {
-  align-self: flex-start;
-  font-family: inherit;
-  font-size: 0.55rem;
-  color: var(--text-muted, #9aa0a6);
-  background: transparent;
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 4px;
-  padding: 0.08rem 0.4rem;
-  cursor: pointer;
-}
-.robotbuild__makebase:hover {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.robotbuild__basebadge {
-  align-self: flex-start;
-  font-size: 0.55rem;
-  color: var(--accent);
-}
 .robotbuild__empty {
   color: var(--text-muted, #8b919b);
   font-size: 0.6rem;
@@ -372,7 +349,7 @@
   cursor: pointer;
 }
 .robotbuild__stl:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--accent-ink);
 }
 .robotbuild__stl:disabled {
   opacity: 0.45;

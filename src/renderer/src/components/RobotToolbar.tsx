@@ -1,21 +1,39 @@
-import type { BuildTool } from './robot-build'
+import type { BuildTool, PrimitiveKind } from './robot-build'
 import './RobotToolbar.css'
 
 /**
  * ROBOT TOOLBAR (#335) — a small floating tool cluster (top-centre of the 3-D
- * stage) that sets the active builder tool. Only the active tool owns the canvas
- * pointer (RobotView gates on it). Kid-friendly labels, no jargon.
+ * stage): add a block, set the active builder tool, and undo/redo. Only the
+ * active tool owns the canvas pointer (RobotView gates on it).
  */
 export interface RobotToolbarProps {
   tool: BuildTool
   onSetTool: (t: BuildTool) => void
   /** Editing needs a saved project file — tools disable without one. */
   canEdit: boolean
+  /** Add a primitive at the workspace origin. */
+  onAdd: (kind: PrimitiveKind) => void
+  /** Point-to-point measure tool (toggle). */
+  measureActive: boolean
+  onToggleMeasure: () => void
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
 }
+
+const MEASURE_ICON = (
+  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+    <rect x="1.5" y="5" width="13" height="6" rx="1" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M4 5v2.5M6.5 5v3.5M9 5v2.5M11.5 5v3.5" fill="none" stroke="currentColor" strokeWidth="1.1" />
+  </svg>
+)
+
+const ADD: Array<{ kind: PrimitiveKind; glyph: string; label: string }> = [
+  { kind: 'box', glyph: '▦', label: 'Add a box' },
+  { kind: 'cylinder', glyph: '⬭', label: 'Add a tube' },
+  { kind: 'sphere', glyph: '●', label: 'Add a ball' }
+]
 
 const ICONS: Record<BuildTool, JSX.Element> = {
   select: (
@@ -70,6 +88,9 @@ export function RobotToolbar({
   tool,
   onSetTool,
   canEdit,
+  onAdd,
+  measureActive,
+  onToggleMeasure,
   canUndo,
   canRedo,
   onUndo,
@@ -77,6 +98,20 @@ export function RobotToolbar({
 }: RobotToolbarProps): JSX.Element {
   return (
     <div className="robottool" role="toolbar" aria-label="Build tools">
+      {ADD.map((a) => (
+        <button
+          key={a.kind}
+          type="button"
+          className="robottool__btn robottool__btn--add"
+          disabled={!canEdit}
+          title={canEdit ? a.label : 'Save the robot to a folder first'}
+          aria-label={a.label}
+          onClick={() => onAdd(a.kind)}
+        >
+          {a.glyph}
+        </button>
+      ))}
+      <span className="robottool__sep" aria-hidden="true" />
       {TOOLS.map((t) => {
         const disabled = t.soon || !canEdit
         return (
@@ -94,6 +129,16 @@ export function RobotToolbar({
           </button>
         )
       })}
+      <button
+        type="button"
+        className={`robottool__btn${measureActive ? ' is-active' : ''}`}
+        aria-pressed={measureActive}
+        title="Measure distance (click two points)"
+        aria-label="Measure distance"
+        onClick={onToggleMeasure}
+      >
+        {MEASURE_ICON}
+      </button>
       <span className="robottool__sep" aria-hidden="true" />
       <button
         type="button"

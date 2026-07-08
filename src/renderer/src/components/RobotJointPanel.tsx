@@ -32,8 +32,8 @@ export interface RobotJointPanelProps {
   onRecallPose: (pose: NamedPoseLike) => void
   onDeletePose: (name: string) => void
   onResetPose: () => void
+  /** True while the measure tool (in the toolbar) is active — shows the readout. */
   measureActive: boolean
-  onToggleMeasure: () => void
   /** Point-to-point distance in mm, or null when fewer than 2 points are set. */
   measureDistance: number | null
   /** Whether the current pose has been persisted (for a subtle saved hint). */
@@ -68,7 +68,6 @@ export function RobotJointPanel({
   onDeletePose,
   onResetPose,
   measureActive,
-  onToggleMeasure,
   measureDistance,
   savingLabel,
   assembly,
@@ -388,25 +387,20 @@ export function RobotJointPanel({
         )}
       </section>
 
-      <section className="robotpanel__section">
-        <div className="robotpanel__section-head">
-          <span>Measure</span>
-        </div>
-        <button
-          type="button"
-          className={`robotpanel__btn robotpanel__measure${measureActive ? ' is-on' : ''}`}
-          onClick={onToggleMeasure}
-        >
-          {measureActive ? 'Measuring — click 2 points' : 'Measure distance'}
-        </button>
-        {measureDistance != null && (
-          <div className="robotpanel__measure-out">
-            {measureDistance < 1000
-              ? `${measureDistance.toFixed(1)} mm`
-              : `${(measureDistance / 1000).toFixed(3)} m`}
+      {measureActive && (
+        <section className="robotpanel__section">
+          <div className="robotpanel__section-head">
+            <span>Measure</span>
           </div>
-        )}
-      </section>
+          <div className="robotpanel__measure-out">
+            {measureDistance == null
+              ? 'Click two points…'
+              : measureDistance < 1000
+                ? `${measureDistance.toFixed(1)} mm`
+                : `${(measureDistance / 1000).toFixed(3)} m`}
+          </div>
+        </section>
+      )}
     </aside>
   )
 }
