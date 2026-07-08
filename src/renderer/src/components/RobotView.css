@@ -137,6 +137,23 @@
 .robotview__viewcube canvas {
   display: block;
 }
+/* Projection dropdown beneath the cube's bottom-right. */
+.robotview__proj {
+  align-self: flex-end;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 6px;
+  padding: 0.12rem 0.3rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme='skeuomorph'] .robotview__proj {
+  background: rgba(231, 226, 211, 0.92);
+  color: var(--text, #34373d);
+}
 
 /* Bottom-right zoom cluster — identical to the node-graph viewport control
    (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
