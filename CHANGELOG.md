@@ -140,6 +140,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View — clearer measure tool.** Measuring now draws a **dashed line**
+  between the two picked points with the distance shown in a **floating pill on
+  the model** (mm / m), so you read it in context. Clears on re-measure or when
+  the tool is turned off.
 - **Robot View builder — tidier toolbar + panel.** The **add Box / Tube / Ball**
   buttons and the **Measure** tool moved onto the floating build toolbar (with the
   select / push-pull / move / join tools and undo/redo). The left panel keeps the

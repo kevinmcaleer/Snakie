@@ -1128,9 +1128,44 @@ export function RobotView({
           const ndc = new THREE.Vector2()
           const pts: THREE.Vector3[] = []
           const markerMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, depthTest: false })
-          const lineMat = new THREE.LineBasicMaterial({ color: 0xc8a24a, depthTest: false })
+          const lineMat = new THREE.LineDashedMaterial({ color: 0xc8a24a, depthTest: false, transparent: true })
           const markers: THREE.Mesh[] = []
           let line: THREE.Line | null = null
+          let label: THREE.Sprite | null = null
+          const disposeLabel = (): void => {
+            if (!label) return
+            scene.remove(label)
+            const m = label.material as THREE.SpriteMaterial
+            m.map?.dispose()
+            m.dispose()
+            label = null
+          }
+          // A floating pill showing the distance, centred on the dashed line.
+          const showMeasureLabel = (text: string, at: THREE.Vector3): void => {
+            disposeLabel()
+            const c = document.createElement('canvas')
+            c.width = 256
+            c.height = 72
+            const ctx = c.getContext('2d')!
+            ctx.fillStyle = 'rgba(18, 19, 22, 0.86)'
+            ctx.fillRect(8, 14, 240, 44)
+            ctx.strokeStyle = '#c8a24a'
+            ctx.lineWidth = 3
+            ctx.strokeRect(8, 14, 240, 44)
+            ctx.fillStyle = '#f0e4bf'
+            ctx.font = 'bold 34px sans-serif'
+            ctx.textAlign = 'center'
+            ctx.textBaseline = 'middle'
+            ctx.fillText(text, 128, 38)
+            const tex = new THREE.CanvasTexture(c)
+            tex.anisotropy = 4
+            label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }))
+            const w = halfView * 0.95
+            label.scale.set(w, (w * 72) / 256, 1)
+            label.position.copy(at)
+            label.renderOrder = 1000
+            scene.add(label)
+          }
           const clearMeasure = (): void => {
             pts.length = 0
             markers.forEach((m) => {
@@ -1143,6 +1178,7 @@ export function RobotView({
               line.geometry.dispose()
               line = null
             }
+            disposeLabel()
           }
           measureApiRef.current = { clear: clearMeasure }
           let downX = 0
@@ -1170,12 +1206,19 @@ export function RobotView({
             scene.add(dot)
             markers.push(dot)
             if (pts.length === 2) {
+              lineMat.dashSize = halfView * 0.05
+              lineMat.gapSize = halfView * 0.03
               line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat)
+              line.computeLineDistances() // required for the dashes to render
               line.renderOrder = 998
               scene.add(line)
-              setMeasureDist(pts[0].distanceTo(pts[1]) * 1000)
+              const mm = pts[0].distanceTo(pts[1]) * 1000
+              setMeasureDist(mm)
+              const text = mm < 1000 ? `${mm.toFixed(1)} mm` : `${(mm / 1000).toFixed(3)} m`
+              showMeasureLabel(text, pts[0].clone().add(pts[1]).multiplyScalar(0.5))
             } else {
               setMeasureDist(null)
+              disposeLabel()
             }
           }
           // BLOCK BUILDER (#315a): push/pull a primitive face to resize (opposite
