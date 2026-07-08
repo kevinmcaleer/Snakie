@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — builder tools: a toolbar + move-with-snap (#335, epic #309
+  Phase 5).** The block builder gains a floating **tool toolbar** (top-centre of
+  the stage): **Pick** (select), **Push & pull** (resize a face), **Move** a
+  block, and **Join** (coming soon). The new **Move** tool slides a block around
+  with a live mm read-out and a 5 mm grid (hold **Shift** for 1 mm); hover a face
+  and Fusion-style **snap handles** appear on its corners, edge-midpoints and
+  centre, so you can drop a block with its face point landing exactly on another
+  block's corner / edge / centre (the read-out shows **snap ✓**). Moves rewrite
+  the block's fixed-joint origin in the linked URDF, and the camera never jumps.
 - **Robot View — kid-friendly block builder (#315a, epic #309 Phase 5).** Build a
   robot from blocks: a floating, transparent, pinnable **Build** panel on the left
   (like the breadboard's library dock) lists your components with a per-item edit
