@@ -89,6 +89,20 @@
   color: var(--text-muted, #7d838d);
 }
 
+/* Navigation cube — top-right of the stage (its own canvas is appended here). */
+.robotview__viewcube {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  z-index: 30;
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+.robotview__viewcube canvas {
+  display: block;
+}
+
 /* Bottom-right zoom cluster — identical to the node-graph viewport control
    (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
 .robotview__zoom {
@@ -147,10 +161,11 @@
   flex: 0 0 auto;
 }
 
-/* A non-blocking banner when one or more meshes couldn't load (#319). */
+/* A non-blocking banner when one or more meshes couldn't load (#319). Sits left
+   of the navigation cube (top-right). */
 .robotview__note {
   position: absolute;
-  right: 0.6rem;
+  right: 96px;
   top: 0.55rem;
   max-width: 70%;
   padding: 0.3rem 0.55rem;
