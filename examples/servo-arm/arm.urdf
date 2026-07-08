@@ -1,0 +1,33 @@
+<?xml version="1.0"?>
+<!--
+  SERVO ARM (#313) — a 2-joint arm driven from MicroPython code. Bind GP0 →
+  shoulder and GP1 → elbow in the Robot View's Servos panel (or use the bundled
+  robot.yml), then Run sweep.py: each servo write animates the mapped joint live,
+  headless in the simulator — no board needed.
+-->
+<robot name="servo_arm">
+  <material name="steel"><color rgba="0.62 0.65 0.69 1"/></material>
+  <material name="amber"><color rgba="0.85 0.55 0.18 1"/></material>
+  <material name="blue"><color rgba="0.34 0.55 0.82 1"/></material>
+
+  <link name="base">
+    <visual><geometry><box size="0.14 0.14 0.04"/></geometry><material name="steel"/></visual>
+  </link>
+  <link name="upper_arm">
+    <visual><origin xyz="0 0 0.12"/><geometry><box size="0.05 0.05 0.24"/></geometry><material name="amber"/></visual>
+  </link>
+  <link name="forearm">
+    <visual><origin xyz="0 0 0.1"/><geometry><box size="0.04 0.04 0.2"/></geometry><material name="blue"/></visual>
+  </link>
+
+  <joint name="shoulder" type="revolute">
+    <parent link="base"/><child link="upper_arm"/>
+    <origin xyz="0 0 0.04"/><axis xyz="0 0 1"/>
+    <limit lower="-1.5708" upper="1.5708" effort="1" velocity="1"/>
+  </joint>
+  <joint name="elbow" type="revolute">
+    <parent link="upper_arm"/><child link="forearm"/>
+    <origin xyz="0 0 0.24"/><axis xyz="0 1 0"/>
+    <limit lower="-1.5708" upper="1.5708" effort="1" velocity="1"/>
+  </joint>
+</robot>

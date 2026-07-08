@@ -13,11 +13,13 @@ import {
   clamp,
   effectiveLimit,
   extractJoints,
+  servoToJointNative,
   toDisplay,
   toNative
 } from './robot-pose'
 import { addMeshLink, parseAssembly } from './robot-assembly'
-import type { RobotDefinition, RobotModel } from '../../../shared/robot'
+import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import type { RobotDefinition, RobotModel, ServoJointBinding } from '../../../shared/robot'
 import './RobotView.css'
 
 /**
@@ -115,7 +117,16 @@ export function RobotView({
   // Merge a patch into robot.yml's `robot:` section and persist (preserving the
   // wiring). Writes to the project folder's robot.yml, else userData.
   const persist = async (mutate: (m: RobotModel) => void): Promise<void> => {
-    const def: RobotDefinition = defRef.current ?? { parts: [], connections: [] }
+    // Never overwrite an existing robot.yml with a blank: load it first if we
+    // haven't captured the full definition yet (preserves wiring + urdf ref).
+    let def = defRef.current
+    if (!def) {
+      try {
+        def = await window.api.robot.load(currentFolder || undefined)
+      } catch {
+        def = { parts: [], connections: [] }
+      }
+    }
     def.robot = { ...(def.robot ?? {}) }
     mutate(def.robot)
     defRef.current = def
@@ -209,6 +220,79 @@ export function RobotView({
       void saveFile(id)
     }
   }, [content, saveFile])
+
+  // ── Servo → joint binding + code-driven simulation (#313) ──────────────────
+  // The KRF servo↔joint map, loaded from robot.yml. Kept in a ref for the
+  // telemetry callback (which must not re-subscribe on every binding edit).
+  const [bindings, setBindings] = useState<ServoJointBinding[]>([])
+  const bindingsRef = useRef<ServoJointBinding[]>([])
+  bindingsRef.current = bindings
+
+  // Load the servo map whenever the project folder changes — for the docked mini
+  // viewer too, so it animates on Run. (The full pose tool also refreshes it in
+  // its model load below.)
+  useEffect(() => {
+    let live = true
+    void (async () => {
+      try {
+        const def = await window.api.robot.load(currentFolder || undefined)
+        if (!live) return
+        defRef.current = def // seed so persist() never clobbers an unloaded robot.yml
+        setBindings(def.robot?.servoJointMap ?? [])
+      } catch {
+        if (live) setBindings([])
+      }
+    })()
+    return () => {
+      live = false
+    }
+  }, [currentFolder])
+
+  // A running program's servo writes drive the mapped joints in real time. This
+  // works headless: the simulator runs the Python and `inst.servo_on(pin).angle`
+  // emits `SNK SERVO <pin> <deg>` — no board required.
+  useTelemetryStream((r) => {
+    if (r.kind !== 'servo') return
+    const res = servoToJointNative(bindingsRef.current, metaRef.current, r.pin, r.angle)
+    if (!res || !robotRef.current) return
+    robotRef.current.setJointValue(res.joint, res.native)
+    setValues((v) => (v[res.joint] === res.native ? v : { ...v, [res.joint]: res.native }))
+  })
+
+  const handleAddBinding = (pin: string, joint: string): void => {
+    const m = metaRef.current.find((j) => j.name === joint)
+    const lim = m ? effectiveLimit(m, overridesRef.current[joint]) : null
+    // Default the joint range to its limits (display units) + servo 0..180.
+    const binding: ServoJointBinding = {
+      pin,
+      joint,
+      servoMin: 0,
+      servoMax: 180,
+      jointMin: m && lim ? Math.round(toDisplay(m.type, lim.lower)) : 0,
+      jointMax: m && lim ? Math.round(toDisplay(m.type, lim.upper)) : 180
+    }
+    const next = [...bindings.filter((b) => b.pin !== pin), binding]
+    setBindings(next)
+    void persist((mm) => {
+      mm.servoJointMap = next
+    })
+  }
+
+  const handleUpdateBinding = (pin: string, patch: Partial<ServoJointBinding>): void => {
+    const next = bindings.map((b) => (b.pin === pin ? { ...b, ...patch } : b))
+    setBindings(next)
+    void persist((mm) => {
+      mm.servoJointMap = next
+    })
+  }
+
+  const handleDeleteBinding = (pin: string): void => {
+    const next = bindings.filter((b) => b.pin !== pin)
+    setBindings(next)
+    void persist((mm) => {
+      mm.servoJointMap = next
+    })
+  }
 
   const handleImportStl = async (): Promise<void> => {
     if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
@@ -629,6 +713,10 @@ export function RobotView({
           onImportStl={() => void handleImportStl()}
           canImport={!!canImport}
           importing={importing}
+          bindings={bindings}
+          onAddBinding={handleAddBinding}
+          onUpdateBinding={handleUpdateBinding}
+          onDeleteBinding={handleDeleteBinding}
         />
       )}
     </div>

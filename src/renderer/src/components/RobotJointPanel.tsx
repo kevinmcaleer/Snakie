@@ -3,11 +3,13 @@ import {
   type JointMeta,
   effectiveLimit,
   mimicValue,
+  normPin,
   toDisplay,
   toNative,
   unitLabel
 } from './robot-pose'
 import type { AssemblyItem } from './robot-assembly'
+import type { ServoJointBinding } from '../../../shared/robot'
 import { baseName } from './robot-mesh'
 import './RobotJointPanel.css'
 
@@ -42,6 +44,11 @@ export interface RobotJointPanelProps {
   /** Import is only possible for a saved project robot (a file to edit). */
   canImport: boolean
   importing: boolean
+  /** Servo → joint bindings (KRF servoJointMap) + editors (#313). */
+  bindings: ServoJointBinding[]
+  onAddBinding: (pin: string, joint: string) => void
+  onUpdateBinding: (pin: string, patch: Partial<ServoJointBinding>) => void
+  onDeleteBinding: (pin: string) => void
 }
 
 /** Round a display value for compact display. */
@@ -67,9 +74,15 @@ export function RobotJointPanel({
   assembly,
   onImportStl,
   canImport,
-  importing
+  importing,
+  bindings,
+  onAddBinding,
+  onUpdateBinding,
+  onDeleteBinding
 }: RobotJointPanelProps): JSX.Element {
   const [poseName, setPoseName] = useState('')
+  const [newPin, setNewPin] = useState('')
+  const [newJoint, setNewJoint] = useState('')
   const movable = joints.filter((j) => !j.isMimic)
   const mimics = joints.filter((j) => j.isMimic)
 
@@ -202,6 +215,120 @@ export function RobotJointPanel({
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="robotpanel__section">
+        <div className="robotpanel__section-head">
+          <span>Servos</span>
+        </div>
+        {movable.length === 0 ? (
+          <p className="robotpanel__empty">No joints to bind.</p>
+        ) : (
+          <>
+            {bindings.length > 0 && (
+              <ul className="robotpanel__servos">
+                {bindings.map((b) => (
+                  <li className="robotpanel__servo" key={b.pin}>
+                    <div className="robotpanel__servo-head">
+                      <span className="robotpanel__servo-pin">GP{normPin(b.pin)}</span>
+                      <span className="robotpanel__servo-arrow">→</span>
+                      <select
+                        className="robotpanel__servo-joint"
+                        value={b.joint}
+                        aria-label={`Joint for GP${normPin(b.pin)}`}
+                        onChange={(e) => onUpdateBinding(b.pin, { joint: e.target.value })}
+                      >
+                        {movable.map((j) => (
+                          <option key={j.name} value={j.name}>
+                            {j.name}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="robotpanel__pose-del"
+                        onClick={() => onDeleteBinding(b.pin)}
+                        aria-label={`Unbind GP${normPin(b.pin)}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div className="robotpanel__servo-cal">
+                      <span className="robotpanel__servo-lbl">servo</span>
+                      <input
+                        type="number"
+                        aria-label={`GP${normPin(b.pin)} servo min`}
+                        value={b.servoMin ?? 0}
+                        onChange={(e) => onUpdateBinding(b.pin, { servoMin: Number(e.target.value) })}
+                      />
+                      <input
+                        type="number"
+                        aria-label={`GP${normPin(b.pin)} servo max`}
+                        value={b.servoMax ?? 180}
+                        onChange={(e) => onUpdateBinding(b.pin, { servoMax: Number(e.target.value) })}
+                      />
+                      <span className="robotpanel__servo-lbl">joint</span>
+                      <input
+                        type="number"
+                        aria-label={`GP${normPin(b.pin)} joint min`}
+                        value={b.jointMin}
+                        onChange={(e) => onUpdateBinding(b.pin, { jointMin: Number(e.target.value) })}
+                      />
+                      <input
+                        type="number"
+                        aria-label={`GP${normPin(b.pin)} joint max`}
+                        value={b.jointMax}
+                        onChange={(e) => onUpdateBinding(b.pin, { jointMax: Number(e.target.value) })}
+                      />
+                      <label className="robotpanel__servo-inv" title="Reverse the mapping">
+                        <input
+                          type="checkbox"
+                          checked={!!b.invert}
+                          onChange={(e) => onUpdateBinding(b.pin, { invert: e.target.checked })}
+                        />
+                        inv
+                      </label>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="robotpanel__servo-add">
+              <input
+                className="robotpanel__servo-newpin"
+                placeholder="pin"
+                aria-label="Servo pin"
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value)}
+              />
+              <select
+                className="robotpanel__servo-newjoint"
+                aria-label="Joint to bind"
+                value={newJoint}
+                onChange={(e) => setNewJoint(e.target.value)}
+              >
+                <option value="">joint…</option>
+                {movable.map((j) => (
+                  <option key={j.name} value={j.name}>
+                    {j.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="robotpanel__btn"
+                disabled={!normPin(newPin) || !newJoint}
+                onClick={() => {
+                  onAddBinding(normPin(newPin), newJoint)
+                  setNewPin('')
+                  setNewJoint('')
+                }}
+              >
+                Bind
+              </button>
+            </div>
+          </>
         )}
       </section>
 

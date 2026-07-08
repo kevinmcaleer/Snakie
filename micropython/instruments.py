@@ -1490,16 +1490,23 @@ class Servo:
     ``SNK PWM servo <freq> <duty>`` so the IDE Servo panel shows the position.
     """
 
-    def __init__(self, pwm=None, freq=50, min_us=500, max_us=2500):
+    def __init__(self, pwm=None, freq=50, min_us=500, max_us=2500, pin=None):
         self._pwm = pwm
         self._freq = freq
         self._period_us = 1000000 // freq
         self.min_us = min_us
         self.max_us = max_us
         self.angle_deg = 90
+        # The GPIO number, when known — emitted as pin-keyed SERVO telemetry so
+        # Robot View can drive the mapped URDF joint (#313). Set here works even
+        # with no ``machine`` (the simulator), so headless robots still animate.
+        self.pin = None
+        if pin is not None:
+            self.set_pin(pin)
 
     def set_pin(self, n):
         """(Re)target the PWM pin: build ``PWM(Pin(n))`` at 50 Hz (no-op w/o hw)."""
+        self.pin = int(n)  # remembered regardless of hardware, for SERVO telemetry
         try:
             from machine import Pin, PWM
         except ImportError:
@@ -1519,6 +1526,9 @@ class Servo:
         if self._pwm is not None:
             self._pwm.duty_u16(int(duty * 65535))
         print("%s PWM servo %s %s" % (SENTINEL, self._freq, duty))
+        # Pin-keyed position for Robot View's servo->joint binding (#313).
+        if self.pin is not None:
+            print("%s SERVO %s %s" % (SENTINEL, self.pin, deg))
         return deg
 
     def detach(self):
@@ -1770,3 +1780,19 @@ led = Led()
 ranger = Rangefinder()
 display = Display()
 servo = Servo()
+
+
+def servo_on(pin, freq=50):
+    """A :class:`Servo` attached to GPIO ``pin`` for the Robot View (#313).
+
+    Each ``angle(deg)`` emits ``SNK SERVO <pin> <deg>`` (pin-keyed), so the IDE
+    maps this servo onto its bound URDF joint and animates the 3-D robot — even
+    headless in the simulator (no ``machine`` needed). On a real board it also
+    drives ``PWM(Pin(pin))``. Use one per joint::
+
+        import instruments as inst
+        shoulder = inst.servo_on(0)
+        elbow = inst.servo_on(1)
+        shoulder.angle(90)   # -> SNK SERVO 0 90 -> the joint bound to pin 0 moves
+    """
+    return Servo(pin=pin, freq=freq)

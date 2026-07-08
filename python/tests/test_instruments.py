@@ -472,6 +472,26 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIsNone(inst.servo_command("wat", srv))
         self.assertIsNone(inst.servo_command("", srv))
 
+    def test_servo_on_emits_pin_keyed_telemetry(self):
+        # servo_on(pin).angle() prints both the legacy channel line AND a
+        # pin-keyed SERVO line for Robot View (#313) — no `machine` needed.
+        srv = inst.servo_on(5)
+        self.assertEqual(srv.pin, 5)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            srv.angle(90)
+        lines = buf.getvalue().strip().splitlines()
+        self.assertIn("SNK SERVO 5 90", lines)
+        # the legacy channel line is still emitted for the Servo panel/scope
+        self.assertTrue(any(ln.startswith("SNK PWM servo ") for ln in lines))
+
+    def test_plain_servo_without_pin_omits_servo_line(self):
+        # A pin-less Servo (legacy singleton) emits no SERVO line.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.Servo().angle(45)
+        self.assertNotIn("SNK SERVO", buf.getvalue())
+
     def test_buzzer_receiver_via_control_feed(self):
         # Feed real SNKCMD buzzer lines through a Control wired to a fake-PWM
         # Buzzer — the registered handler must actuate it (end-to-end protocol).

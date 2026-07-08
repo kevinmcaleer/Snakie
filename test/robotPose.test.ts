@@ -7,9 +7,13 @@ import {
   clamp,
   mimicValue,
   effectiveLimit,
+  normPin,
+  servoToJointNative,
   CONTINUOUS_RANGE,
+  type JointMeta,
   type RobotLike
 } from '../src/renderer/src/components/robot-pose'
+import type { ServoJointBinding } from '../src/shared/robot'
 
 describe('robot-pose unit conversions (#312)', () => {
   it('converts revolute rad ↔ deg and prismatic m ↔ mm', () => {
@@ -105,5 +109,40 @@ describe('mimicValue + effectiveLimit (#312)', () => {
     const j = { name: 'j', type: 'prismatic' as const, lower: 0, upper: 0, isMimic: false }
     const lim = effectiveLimit(j)
     expect(lim.upper).toBeGreaterThan(lim.lower)
+  })
+})
+
+describe('servoToJointNative — the code-driven pipe (#313)', () => {
+  const meta: JointMeta[] = [
+    { name: 'shoulder', type: 'revolute', lower: -Math.PI / 2, upper: Math.PI / 2, isMimic: false }
+  ]
+  it('normalises pin tokens (GP16 == 16)', () => {
+    expect(normPin('GP16')).toBe('16')
+    expect(normPin('gp0')).toBe('0')
+    expect(normPin(' 5 ')).toBe('5')
+  })
+  it('maps a servo angle onto the joint in native radians', () => {
+    const bindings: ServoJointBinding[] = [
+      { pin: 'GP16', joint: 'shoulder', servoMin: 0, servoMax: 180, jointMin: -90, jointMax: 90 }
+    ]
+    // servo 0 → joint -90° → -PI/2 rad ; via pin "16" (telemetry emits bare pin)
+    expect(servoToJointNative(bindings, meta, '16', 0)?.native).toBeCloseTo(-Math.PI / 2)
+    // servo 90 → joint 0° ; servo 180 → 90° → +PI/2
+    expect(servoToJointNative(bindings, meta, '16', 90)?.native).toBeCloseTo(0)
+    expect(servoToJointNative(bindings, meta, '16', 180)?.native).toBeCloseTo(Math.PI / 2)
+  })
+  it('honours inversion', () => {
+    const bindings: ServoJointBinding[] = [
+      { pin: '16', joint: 'shoulder', servoMin: 0, servoMax: 180, jointMin: -90, jointMax: 90, invert: true }
+    ]
+    // inverted: servo 0 → joint +90° → +PI/2
+    expect(servoToJointNative(bindings, meta, '16', 0)?.native).toBeCloseTo(Math.PI / 2)
+  })
+  it('returns null for an unbound pin or missing joint', () => {
+    const bindings: ServoJointBinding[] = [
+      { pin: '16', joint: 'shoulder', jointMin: -90, jointMax: 90 }
+    ]
+    expect(servoToJointNative(bindings, meta, '99', 90)).toBeNull()
+    expect(servoToJointNative([{ pin: '16', joint: 'ghost', jointMin: 0, jointMax: 1 }], meta, '16', 90)).toBeNull()
   })
 })
