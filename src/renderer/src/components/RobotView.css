@@ -82,8 +82,12 @@
   color: var(--text, #cdd2d9);
   pointer-events: none;
 }
+/* Light theme: parchment pill so the (dark) text is readable, not black-on-dark. */
+:root[data-theme='skeuomorph'] .robotview__hud {
+  background: rgba(231, 226, 211, 0.86);
+}
 .robotview__hud strong {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 .robotview__hud-hint {
   color: var(--text-muted, #7d838d);
@@ -140,20 +144,29 @@
 .robotview__viewcube canvas {
   display: block;
 }
-/* Projection dropdown beneath the cube's bottom-right. */
+/* Projection dropdown beneath the cube's bottom-right. Collapsed to just the ▾
+   arrow (the value text is clipped by the narrow width); revealed on nav-zone
+   hover like the Home button; clicking opens the full native option list. */
 .robotview__proj {
   position: absolute;
   top: calc(100% + 2px);
   right: 0;
+  width: 26px;
   font-family: inherit;
   font-size: 0.6rem;
   color: var(--text, #cdd2d9);
   background: rgba(31, 32, 36, 0.92);
   border: 1px solid var(--border, #3a3d44);
   border-radius: 6px;
-  padding: 0.12rem 0.3rem;
+  padding: 0.12rem 0.1rem;
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.robotview__navzone:hover .robotview__proj,
+.robotview__proj:focus {
+  opacity: 1;
 }
 :root[data-theme='skeuomorph'] .robotview__proj {
   background: rgba(231, 226, 211, 0.92);

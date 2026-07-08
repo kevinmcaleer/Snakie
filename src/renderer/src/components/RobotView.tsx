@@ -301,9 +301,12 @@ export function RobotView({
   }, [content, saveFile])
 
   // ── Block builder (#315a) ──────────────────────────────────────────────────
-  const [buildOpen, setBuildOpen] = useState(false)
+  // The build menu defaults to PINNED OPEN (first run / no stored preference).
   const [buildPinned, setBuildPinned] = useState(() =>
-    loadPin(window.localStorage, PIN_KEYS.builder, false)
+    loadPin(window.localStorage, PIN_KEYS.builder, true)
+  )
+  const [buildOpen, setBuildOpen] = useState(() =>
+    loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
   const [editLink, setEditLink] = useState<string | null>(null)

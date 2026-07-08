@@ -158,6 +158,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View polish.** The **build menu defaults to pinned-open**; the
+  navigation cube is **brighter brass** with its X/Y/Z labels **occluded** by the
+  cube (no longer showing through); and the ortho/perspective dropdown collapses to
+  just its ▾ arrow, revealed (like the Home button) only when the pointer is over
+  the top-right nav zone.
 - **Robot View — clearer measure tool.** Measuring now draws a **dashed line**
   between the two picked points with the distance shown in a **floating pill on
   the model** (mm / m), so you read it in context. Clears on re-measure or when
@@ -177,6 +182,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View readouts are readable in light mode.** The 3-D viewer's info/hint
+  HUD (also the docked mini-viewer's text) used a dark pill, so its text was
+  dark-on-dark on the parchment theme; it now uses a parchment pill with brass
+  emphasis in light mode.
 - **Robot View — imported meshes no longer render massive / clipped.** STLs
   authored in millimetres loaded 1000× too big (a huge mesh pushed the camera past
   the fixed far-plane, so only a "letterbox" sliver rendered). Imports now measure
