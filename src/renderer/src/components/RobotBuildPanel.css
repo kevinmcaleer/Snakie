@@ -21,8 +21,8 @@
   cursor: pointer;
 }
 .robotbuild__tab:hover {
-  color: #c8a24a;
-  border-color: #c8a24a;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* Open: the glass dock, anchored left. */
@@ -67,7 +67,7 @@
 .robotbuild__title {
   flex: 1 1 auto;
   font-weight: 700;
-  color: #c8a24a;
+  color: var(--accent);
   letter-spacing: 0.04em;
 }
 .robotbuild__pin,
@@ -91,7 +91,7 @@
   background: rgba(128, 128, 128, 0.18);
 }
 .robotbuild__collapse:hover {
-  color: #c8a24a;
+  color: var(--accent);
   border-color: var(--border, #3a3d44);
 }
 .robotbuild__collapse {
@@ -115,8 +115,8 @@
   cursor: pointer;
 }
 .robotbuild__add button:hover:not(:disabled) {
-  border-color: #c8a24a;
-  color: #c8a24a;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .robotbuild__add button:disabled {
   opacity: 0.45;
@@ -177,7 +177,7 @@
   color: var(--text-muted, #8b919b);
 }
 .robotbuild__part-geo.is-mesh {
-  color: #c8a24a;
+  color: var(--accent);
 }
 .robotbuild__edit {
   flex: 0 0 auto;
@@ -192,7 +192,7 @@
 }
 .robotbuild__edit:hover,
 .robotbuild__edit.is-on {
-  color: #c8a24a;
+  color: var(--accent);
   border-color: var(--border, #3a3d44);
 }
 .robotbuild__editrow {
@@ -245,8 +245,8 @@
 }
 .robotbuild__chip.is-on {
   color: #1a1c20;
-  background: #c8a24a;
-  border-color: #c8a24a;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .robotbuild__jnote,
 .robotbuild__jsel {
@@ -342,13 +342,13 @@
   cursor: pointer;
 }
 .robotbuild__makebase:hover {
-  color: #c8a24a;
-  border-color: #c8a24a;
+  color: var(--accent);
+  border-color: var(--accent);
 }
 .robotbuild__basebadge {
   align-self: flex-start;
   font-size: 0.55rem;
-  color: #c8a24a;
+  color: var(--accent);
 }
 .robotbuild__empty {
   color: var(--text-muted, #8b919b);
@@ -372,7 +372,7 @@
   cursor: pointer;
 }
 .robotbuild__stl:hover:not(:disabled) {
-  border-color: #c8a24a;
+  border-color: var(--accent);
 }
 .robotbuild__stl:disabled {
   opacity: 0.45;
@@ -387,7 +387,7 @@
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.66rem;
   color: #191a1d;
-  background: #c8a24a;
+  background: var(--accent);
   border-radius: 4px;
   padding: 0.1rem 0.35rem;
   white-space: nowrap;

@@ -27,7 +27,7 @@
 .robotpanel__title {
   font-size: 0.8rem;
   font-weight: 700;
-  color: #c8a24a;
+  color: var(--accent);
   letter-spacing: 0.04em;
 }
 .robotpanel__empty {
@@ -46,7 +46,7 @@
   cursor: pointer;
 }
 .robotpanel__btn:hover {
-  border-color: #c8a24a;
+  border-color: var(--accent);
 }
 .robotpanel__btn:disabled {
   opacity: 0.45;
@@ -75,7 +75,7 @@
   white-space: nowrap;
 }
 .robotpanel__joint-val {
-  color: #c8a24a;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
 }
@@ -87,7 +87,7 @@
 .robotpanel__slider {
   flex: 1 1 auto;
   min-width: 0;
-  accent-color: #c8a24a;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 .robotpanel__limit {
@@ -172,7 +172,7 @@
   cursor: pointer;
 }
 .robotpanel__pose-recall:hover {
-  border-color: #c8a24a;
+  border-color: var(--accent);
 }
 .robotpanel__pose-del {
   flex: 0 0 auto;
@@ -219,7 +219,7 @@
   font-size: 0.58rem;
 }
 .robotpanel__part-geo.is-mesh {
-  color: #c8a24a;
+  color: var(--accent);
 }
 
 /* Servo → joint bindings (#313). */
@@ -244,7 +244,7 @@
   gap: 0.3rem;
 }
 .robotpanel__servo-pin {
-  color: #c8a24a;
+  color: var(--accent);
   font-weight: 700;
   flex: 0 0 auto;
 }
@@ -318,12 +318,12 @@
 }
 
 .robotpanel__measure.is-on {
-  border-color: #c8a24a;
-  color: #c8a24a;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 .robotpanel__measure-out {
   font-size: 0.72rem;
-  color: #c8a24a;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
   text-align: center;
   padding: 0.2rem;

@@ -29,7 +29,7 @@
   white-space: nowrap;
 }
 .robottimeline__btn:hover:not(:disabled) {
-  border-color: #c8a24a;
+  border-color: var(--accent);
 }
 .robottimeline__btn:disabled {
   opacity: 0.45;
@@ -37,8 +37,8 @@
 }
 .robottimeline__btn.is-on {
   color: #191a1d;
-  background: #c8a24a;
-  border-color: #c8a24a;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 .robottimeline__btn--del:hover:not(:disabled) {
   border-color: #b4544e;
@@ -63,12 +63,12 @@
 .robottimeline__scrub {
   flex: 1 1 auto;
   min-width: 4rem;
-  accent-color: #c8a24a;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 .robottimeline__time {
   flex: 0 0 auto;
-  color: #c8a24a;
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
   min-width: 3.2rem;
   text-align: right;
@@ -112,7 +112,7 @@
   bottom: 0;
   width: 2px;
   margin-left: 6.5rem; /* line up with the track start (after the name column) */
-  background: #c8a24a;
+  background: var(--accent);
   pointer-events: none;
   z-index: 3;
 }
@@ -146,7 +146,7 @@
   width: 9px;
   height: 9px;
   transform: translate(-50%, -50%) rotate(45deg);
-  background: #c8a24a;
+  background: var(--accent);
   border: 1px solid #191a1d;
   border-radius: 2px;
   padding: 0;
