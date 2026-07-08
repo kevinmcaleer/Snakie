@@ -158,6 +158,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View — default view is the perspective "home" corner.** The viewer now
+  opens in **perspective**, framed from the cube's **top-right-front corner**
+  (+X/+Y/+Z), zoomed to fit — and that's exactly where the **Home** button returns.
 - **Robot View — blueprint-style ground grid.** The grid is now much **lighter**
   and theme-aware (subtle on both white and black backgrounds), with **major +
   minor** subdivision lines, plus **red-X / blue-Z origin lines** through the
