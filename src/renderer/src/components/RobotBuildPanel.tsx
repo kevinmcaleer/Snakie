@@ -10,11 +10,12 @@ import type {
 import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
-import { baseName } from './robot-mesh'
 import { shouldAutoHide } from './pin-overlay'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './RobotJointPanel'
 import type { PropsContext } from './RobotPropertiesDialog'
+import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
+import { usePrompt } from './PromptModal'
 import './RobotBuildPanel.css'
 
 /**
@@ -43,6 +44,20 @@ const PENCIL = (
     <path d="M11.5 1.5l3 3L5 14l-3.5.5L2 11z" fill="none" stroke="currentColor" strokeWidth="1.4" />
   </svg>
 )
+// An anchor marks the base link (Fusion-style) — the part everything hangs off.
+const ANCHOR = (
+  <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+    <circle cx="8" cy="3" r="1.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    <path
+      d="M8 4.8V14M4 8H2.4c0 3 2.4 4.8 5.6 4.8S13.6 11 13.6 8H12M4.8 10.2L8 13l3.2-2.8"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
 
 export interface RobotBuildPanelProps {
   open: boolean
@@ -65,6 +80,7 @@ export interface RobotBuildPanelProps {
   /** The current root link, and an action to re-root the model at a link. */
   rootLink: string | null
   onMakeBase: (link: string) => void
+  onRename: (link: string, to: string) => void
   onDelete: (link: string) => void
   onImportStl: () => void
   canImport: boolean
@@ -366,8 +382,9 @@ function Section({
   )
 }
 
-/** A block / mesh row: base marker (☆/★), edit pencil, delete, and the name
- *  (click selects + zooms). Shared by the Blocks + Meshes branches. */
+/** A block / mesh row: an anchor on the base + an edit pencil to the left, then the
+ *  name (click selects + zooms). Rename / Make base / Delete live on the right-click
+ *  menu (Fusion-style). Shared by the Blocks / Meshes / Not-connected branches. */
 function BodyRow({
   it,
   isSel,
@@ -376,8 +393,7 @@ function BodyRow({
   loose = false,
   onSelect,
   onEdit,
-  onMakeBase,
-  onDelete
+  onContextMenu
 }: {
   it: AssemblyItem
   isSel: boolean
@@ -386,29 +402,25 @@ function BodyRow({
   loose?: boolean
   onSelect: (link: string) => void
   onEdit: (link: string | null) => void
-  onMakeBase: (link: string) => void
-  onDelete: (link: string) => void
+  onContextMenu: (e: React.MouseEvent, link: string) => void
 }): JSX.Element {
   return (
-    <li className={`robotbuild__part${isSel ? ' is-sel' : ''}${loose ? ' is-loose' : ''}`}>
+    <li
+      className={`robotbuild__part${isSel ? ' is-sel' : ''}${loose ? ' is-loose' : ''}`}
+      onContextMenu={(e) => onContextMenu(e, it.link)}
+    >
       <div className="robotbuild__part-row">
-        {/* Action icons sit to the LEFT of the name so they never overlap long
-            titles (the name button flexes to fill the rest). */}
-        {isRoot ? (
-          <span className="robotbuild__rowbase is-base" title="This is the base — every block hangs off it">
-            ★
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="robotbuild__rowbase"
-            onClick={() => onMakeBase(it.link)}
-            title="Make this the base"
-            aria-label={`Make ${it.link} the base`}
-          >
-            ☆
-          </button>
-        )}
+        {/* Icons sit to the LEFT of the name (Fusion-style); the name button flexes
+            to fill the rest so long mesh filenames get room to breathe. */}
+        <span
+          className={`robotbuild__rowbase${isRoot ? ' is-base' : ''}`}
+          title={isRoot ? 'This is the base — everything hangs off it' : undefined}
+          role={isRoot ? 'img' : undefined}
+          aria-label={isRoot ? 'Base — everything hangs off it' : undefined}
+          aria-hidden={isRoot ? undefined : true}
+        >
+          {isRoot ? ANCHOR : null}
+        </span>
         <button
           type="button"
           className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
@@ -420,34 +432,18 @@ function BodyRow({
         </button>
         <button
           type="button"
-          className="robotbuild__del"
-          disabled={isRoot}
-          onClick={() => onDelete(it.link)}
-          title={
-            isRoot
-              ? 'The base can’t be deleted — make another block the base first'
-              : `Delete ${it.link}`
-          }
-          aria-label={`Delete ${it.link}`}
-        >
-          ✕
-        </button>
-        <button
-          type="button"
           className="robotbuild__part-name"
-          title={it.link}
+          title={`${it.link} — right-click for rename / base / delete`}
           onClick={() => onSelect(it.link)}
+          onContextMenu={(e) => onContextMenu(e, it.link)}
         >
           <span className="robotbuild__part-label">{it.link}</span>
           <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
-            {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
+            {/* A compact type tag — for a mesh the file extension, so the (long) link
+                name gets the row's width instead of repeating the filename. */}
+            {it.kind === 'mesh' ? (it.mesh?.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'mesh') : it.kind}
           </span>
         </button>
-        {loose && (
-          <span className="robotbuild__loosebadge" title="Not connected — join it into the robot">
-            not connected
-          </span>
-        )}
       </div>
     </li>
   )
@@ -472,6 +468,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onOpenPose,
     rootLink,
     onMakeBase,
+    onRename,
     onDelete,
     onImportStl,
     canImport,
@@ -480,9 +477,46 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onOpenRobot
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
+  const prompt = usePrompt()
   // Which tree branches are collapsed (all expanded by default).
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggle = (id: string): void => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
+  // Right-click menu (Fusion-style): rename / make base / delete a part.
+  const [menu, setMenu] = useState<{ pos: ContextMenuPosition; link: string } | null>(null)
+  const openMenu = (e: React.MouseEvent, link: string): void => {
+    if (!canEdit) return
+    e.preventDefault()
+    e.stopPropagation()
+    setMenu({ pos: { x: e.clientX, y: e.clientY }, link })
+  }
+  const menuItems = (link: string): ContextMenuItem[] => {
+    const isBase = link === rootLink
+    return [
+      {
+        key: 'rename',
+        label: 'Rename…',
+        onSelect: () => {
+          void (async () => {
+            const to = await prompt('Rename part', link)
+            if (to && to.trim() && to.trim() !== link) onRename(link, to.trim())
+          })()
+        }
+      },
+      {
+        key: 'base',
+        label: isBase ? 'Base (already)' : 'Make base',
+        disabled: isBase,
+        onSelect: () => onMakeBase(link)
+      },
+      {
+        key: 'delete',
+        label: 'Delete',
+        danger: true,
+        disabled: isBase,
+        onSelect: () => onDelete(link)
+      }
+    ]
+  }
 
   // A part is LOOSE (not connected yet) when it has no parent joint AND it isn't the
   // chosen base — i.e. an imported part still waiting to be joined into the chain.
@@ -554,8 +588,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       <div className="robotbuild__tree">
         {needsBase && (
           <p className="robotbuild__basehint">
-            ⭐ Pick a <strong>base</strong> part (tap its ☆) — it&rsquo;s the anchor the
-            rest of the robot hangs off.
+            ⭐ Pick a <strong>base</strong> part (right-click → <em>Make base</em>) — it&rsquo;s
+            the anchor the rest of the robot hangs off.
           </p>
         )}
         {looseParts.length > 0 && (
@@ -567,8 +601,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
             onToggle={toggle}
           >
             <li className="robotbuild__loosehint">
-              Join each of these to your robot with the Add Joint tool — or tap ☆ to make
-              one the base.
+              Join each of these to your robot with the Add Joint tool — or right-click →
+              <em> Make base</em>.
             </li>
             {looseParts.map((it) => (
               <BodyRow
@@ -580,8 +614,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                 loose
                 onSelect={onSelect}
                 onEdit={onEdit}
-                onMakeBase={onMakeBase}
-                onDelete={onDelete}
+                onContextMenu={openMenu}
               />
             ))}
           </Section>
@@ -596,8 +629,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               isRoot={it.link === rootLink}
               onSelect={onSelect}
               onEdit={onEdit}
-              onMakeBase={onMakeBase}
-              onDelete={onDelete}
+              onContextMenu={openMenu}
             />
           ))}
           {blocks.length === 0 && <li className="robotbuild__empty">No blocks yet — add one above.</li>}
@@ -613,8 +645,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               isRoot={it.link === rootLink}
               onSelect={onSelect}
               onEdit={onEdit}
-              onMakeBase={onMakeBase}
-              onDelete={onDelete}
+              onContextMenu={openMenu}
             />
           ))}
           {meshes.length === 0 && <li className="robotbuild__empty">No imported meshes.</li>}
@@ -699,6 +730,9 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           {importing ? 'Importing…' : '+ STL / DAE'}
         </button>
       </div>
+      {menu && (
+        <ContextMenu position={menu.pos} items={menuItems(menu.link)} onClose={() => setMenu(null)} />
+      )}
     </aside>
   )
 }

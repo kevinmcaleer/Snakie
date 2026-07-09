@@ -6,6 +6,7 @@ import {
   uniqueLinkName,
   addMeshLink,
   looseLinks,
+  renameLink,
   blankUrdf,
   connectJoint,
   orientJoint,
@@ -96,6 +97,23 @@ describe('looseLinks (#354)', () => {
   it('with no base, every root is loose', () => {
     const u = `<robot name="r"><link name="p1"/><link name="p2"/></robot>`
     expect(looseLinks(u).sort()).toEqual(['p1', 'p2'])
+  })
+})
+
+describe('renameLink (#354)', () => {
+  it('renames the link + every joint parent/child reference', () => {
+    const { urdf, name } = renameLink(URDF, 'upper', 'arm')
+    expect(name).toBe('arm')
+    expect(urdf).toContain('<link name="arm">')
+    expect(urdf).not.toContain('<link name="upper">')
+    expect(urdf).toContain('<child link="arm"/>') // j1's child
+    expect(urdf).toContain('<parent link="arm"/>') // j2's parent
+    expect(urdf).not.toContain('link="upper"')
+  })
+  it('sanitises + de-collides the new name; same-name is a no-op', () => {
+    expect(renameLink(URDF, 'tip', 'my tip!').name).toBe('my_tip') // XML-safe
+    expect(renameLink(URDF, 'tip', 'base_link').name).toBe('base_link_2') // collision bump
+    expect(renameLink(URDF, 'tip', 'tip')).toEqual({ urdf: URDF, name: 'tip' }) // no-op
   })
 })
 

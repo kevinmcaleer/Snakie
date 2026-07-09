@@ -34,29 +34,23 @@
      bottom-left; the parts list scrolls if the robot has more blocks than fit. */
   max-height: calc(100% - 1rem);
   z-index: 4;
-  width: 12.5rem;
+  width: 15.5rem;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   padding: 0.4rem 0.45rem;
   box-sizing: border-box;
-  border: 1px solid var(--border, #3a3d44);
+  border: none;
   border-radius: 8px;
-  /* Transparent glassy fill (the "floating browser" look). */
-  background: rgba(20, 21, 24, 0.55);
-  backdrop-filter: blur(8px);
+  /* Fully floating (Fusion-style): no panel slab — each tree line carries its own
+     subtle backing (below) so it reads over the 3-D canvas. */
+  background: transparent;
   color: var(--text, #cdd2d9);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.66rem;
   outline: none;
 }
-.robotbuild__dock--overlay {
-  box-shadow: 14px 0 28px -16px rgba(0, 0, 0, 0.55);
-}
 /* Light skin: a warm translucent parchment instead of dark glass. */
-:root[data-theme='skeuomorph'] .robotbuild__dock {
-  background: rgba(231, 226, 211, 0.72);
-}
 :root[data-theme='skeuomorph'] .robotbuild__tab {
   background: rgba(231, 226, 211, 0.85);
 }
@@ -102,24 +96,19 @@
 }
 
 /* Per-row base marker: ☆ makes this the base, ★ marks the current base. */
+/* A fixed-width slot on the left of every row: the ANCHOR on the base link, empty
+   otherwise (keeps the names aligned). */
 .robotbuild__rowbase {
   flex: 0 0 auto;
+  width: 0.95rem;
   display: inline-flex;
   align-items: center;
-  font-size: 0.72rem;
+  justify-content: center;
   line-height: 1;
   color: var(--text-muted, #8b919b);
-  background: transparent;
-  border: none;
-  padding: 0.1rem 0.15rem;
-  cursor: pointer;
-}
-.robotbuild__rowbase:hover {
-  color: var(--accent-ink);
 }
 .robotbuild__rowbase.is-base {
   color: var(--accent-ink);
-  cursor: default;
 }
 .robotbuild__hint {
   margin: 0;
@@ -148,18 +137,7 @@
   color: var(--text-muted, #8b919b);
 }
 .robotbuild__part.is-loose {
-  border-left: 2px solid rgba(230, 160, 60, 0.5);
-}
-.robotbuild__loosebadge {
-  flex: 0 0 auto;
-  font-size: 0.5rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 0.05rem 0.3rem;
-  border-radius: 999px;
-  color: #b5651d;
-  background: rgba(230, 160, 60, 0.18);
-  border: 1px solid rgba(230, 160, 60, 0.45);
+  border-left: 2px solid rgba(230, 160, 60, 0.6);
 }
 
 /* The hierarchy tree scrolls as one under the dock's max-height. */
@@ -186,14 +164,18 @@
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--text-muted, #9aa0a6);
-  background: transparent;
+  background: rgba(24, 26, 30, 0.62);
   border: none;
-  padding: 0.22rem 0.2rem 0.12rem;
+  border-radius: 5px;
+  padding: 0.22rem 0.35rem 0.2rem;
   cursor: pointer;
   text-align: left;
 }
 .robotbuild__branch:hover {
   color: var(--accent-ink);
+}
+:root[data-theme='skeuomorph'] .robotbuild__branch {
+  background: rgba(246, 242, 232, 0.82);
 }
 .robotbuild__caret {
   flex: 0 0 auto;
@@ -220,6 +202,11 @@
 }
 .robotbuild__part {
   border-radius: 5px;
+  /* Each row is its own subtle line over the canvas (Fusion-style). */
+  background: rgba(28, 30, 35, 0.62);
+}
+:root[data-theme='skeuomorph'] .robotbuild__part {
+  background: rgba(250, 247, 240, 0.82);
 }
 /* A leaf node that opens a context dialog (joint / servo / pose). */
 .robotbuild__node {
@@ -273,12 +260,16 @@
   text-align: left;
 }
 .robotbuild__part-label {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .robotbuild__part-geo {
   flex: 0 0 auto;
+  white-space: nowrap;
+  padding-left: 0.3rem;
   font-size: 0.6rem;
   color: var(--text-muted, #8b919b);
 }
@@ -291,15 +282,14 @@
   align-items: center;
   color: var(--text-muted, #8b919b);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   border-radius: 4px;
-  padding: 0.15rem 0.25rem;
+  padding: 0.12rem 0.15rem;
   cursor: pointer;
 }
 .robotbuild__edit:hover,
 .robotbuild__edit.is-on {
   color: var(--accent-ink);
-  border-color: var(--border, #3a3d44);
 }
 .robotbuild__editrow {
   display: flex;
@@ -418,23 +408,6 @@
   font-size: 0.56rem;
   color: var(--text-muted, #8b919b);
   font-style: italic;
-}
-.robotbuild__del {
-  margin-left: auto;
-  color: var(--text-muted, #9aa0a6);
-  background: transparent;
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 4px;
-  padding: 0 0.35rem;
-  cursor: pointer;
-}
-.robotbuild__del:hover:not(:disabled) {
-  color: #b4544e;
-  border-color: #b4544e;
-}
-.robotbuild__del:disabled {
-  opacity: 0.35;
-  cursor: default;
 }
 .robotbuild__empty {
   color: var(--text-muted, #8b919b);

@@ -31,6 +31,7 @@ import {
   readVisualOrigin,
   removeJoint,
   removeLink,
+  renameLink,
   rootLink,
   setJoint,
   setJointOrigin,
@@ -592,6 +593,27 @@ export function RobotView({
       m.baseLink = link
     })
     commitUrdf(reRoot(content, link))
+  }
+  const handleRenameLink = (link: string, to: string): void => {
+    const { urdf, name } = renameLink(content, link, to)
+    if (name === link) return // unchanged / no-op
+    commitUrdf(urdf)
+    if (selectedLink === link) setSelectedLink(name)
+    // Follow the rename through the base bookkeeping so the anchor + robot.yml stay in
+    // sync — keyed on the EFFECTIVE base (which may be the implicit `base_link` fallback,
+    // with chosenBase still null) so renaming the base never silently loses it.
+    if (link === effectiveBaseLink || chosenBase === link) {
+      setChosenBase(name)
+      void persist((m) => {
+        m.baseLink = name
+      })
+    }
+    // Follow it through an open properties dialog so it doesn't orphan onto the old name.
+    setDialogCtx((c) => {
+      if (c?.kind === 'link' && c.link === link) return { kind: 'link', link: name }
+      if (c?.kind === 'joint' && c.child === link) return { ...c, child: name }
+      return c
+    })
   }
   // Properties dialog (#352 / #353): clicking a node opens its context here. For a
   // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
@@ -2878,6 +2900,7 @@ export function RobotView({
             onOpenPose={handleOpenPose}
             rootLink={effectiveBaseLink}
             onMakeBase={handleMakeBase}
+            onRename={handleRenameLink}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}
