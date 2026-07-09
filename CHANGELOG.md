@@ -290,6 +290,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — the mini 3-D viewer zooms to fit the robot on load (#320).** The dock
+  viewer starts on the demo arm and swaps to your project robot once it resolves, but it
+  kept the demo arm's camera — so your robot loaded tiny and off-centre. It now re-frames
+  when the robot changes, filling the mini view.
 - **Robot View — Join tool: holes are easier to grab (#354).** Snapping a joint point
   onto a hole was fiddly — an edge that was a touch closer would win, so the cross-hair
   flicked off the hole as you moved to click. A **hole / loop centre now sticks** when
