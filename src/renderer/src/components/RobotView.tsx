@@ -1756,15 +1756,13 @@ export function RobotView({
           const buildRay = new THREE.Raycaster()
           const buildNdc = new THREE.Vector2()
           const camDir = new THREE.Vector3()
-          // Selection highlight: tint the block LIGHT BLUE (keeping the material's
-          // shading, so the sides still shade rather than going flat) + a thick BLACK
-          // perimeter outline via an inflated back-side hull behind it. (The old brass
-          // wireframe drew every edge, which read as a transparent cage.)
+          // Selection highlight: tint the one selected block LIGHT BLUE, keeping the
+          // material's shading (so the sides still shade rather than going flat). Only
+          // ever ONE block is highlighted — clearHighlight() restores the previous one
+          // first — even when blocks are joined into a chain.
           const HL_BLUE = new THREE.Color(0x9db8dd)
           let highlight: {
             entries: { mesh: THREE.Mesh; origMat: THREE.Material | THREE.Material[]; tint: THREE.Material[] }[]
-            hulls: THREE.Mesh[]
-            hullMat: THREE.Material
           } | null = null
           const clearHighlight = (): void => {
             if (!highlight) return
@@ -1772,31 +1770,22 @@ export function RobotView({
               e.mesh.material = e.origMat
               e.tint.forEach((m) => m.dispose())
             }
-            for (const h of highlight.hulls) h.parent?.remove(h)
-            highlight.hullMat.dispose()
             highlight = null
           }
           const applyHighlight = (link: string | null): void => {
             clearHighlight()
             const r = robotRef.current
             if (!link || !r || !r.links[link]) return
-            // Collect the link's own meshes FIRST — adding the outline hull as a child
-            // mid-traverse would make traverse recurse into it (→ stack overflow).
-            const meshes: THREE.Mesh[] = []
-            r.links[link].traverse((o) => {
-              const mesh = o as THREE.Mesh
-              if (mesh.isMesh && !mesh.userData.isOutlineHull && ownerLinkName(mesh) === link) {
-                meshes.push(mesh)
-              }
-            })
             const entries: {
               mesh: THREE.Mesh
               origMat: THREE.Material | THREE.Material[]
               tint: THREE.Material[]
             }[] = []
-            const hulls: THREE.Mesh[] = []
-            const hullMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
-            for (const mesh of meshes) {
+            r.links[link].traverse((o) => {
+              const mesh = o as THREE.Mesh
+              // A joined child link nests under its parent in the scene graph, so only
+              // tint meshes this link actually OWNS — never the joined neighbours.
+              if (!mesh.isMesh || ownerLinkName(mesh) !== link) return
               const origMat = mesh.material
               const mk = (m: THREE.Material): THREE.Material => {
                 const c = m.clone() as THREE.MeshStandardMaterial
@@ -1806,14 +1795,8 @@ export function RobotView({
               const tint = Array.isArray(origMat) ? origMat.map(mk) : [mk(origMat)]
               mesh.material = Array.isArray(origMat) ? tint : tint[0]
               entries.push({ mesh, origMat, tint })
-              const hull = new THREE.Mesh(mesh.geometry, hullMat)
-              hull.scale.multiplyScalar(1.05)
-              hull.raycast = () => {} // never intercept a face pick
-              hull.userData.isOutlineHull = true
-              mesh.add(hull)
-              hulls.push(hull)
-            }
-            highlight = { entries, hulls, hullMat }
+            })
+            highlight = { entries }
           }
           highlightApiRef.current = { apply: applyHighlight }
           applyHighlight(selectedLinkRef.current) // survive re-parse
@@ -1859,24 +1842,46 @@ export function RobotView({
           let bDownX = 0
           let bDownY = 0
 
-          // Snap-handle pool (Fusion-style dots on a hovered/target face). Shared
-          // geometry/materials; spheres never intercept a raycast.
+          // Snap-handle pool (Fusion-style dots on a hovered/target face) — small
+          // TRANSLUCENT discs laid FLAT on the surface (oriented by the face normal) so
+          // they read as painted onto the face rather than floating in front of it.
+          // Shared geometry/materials; discs never intercept a raycast.
+          const zAxis = new THREE.Vector3(0, 0, 1)
           const snapGroup = new THREE.Group()
           scene.add(snapGroup)
-          const handleGeo = new THREE.SphereGeometry(1, 10, 10)
-          const handleMat = new THREE.MeshBasicMaterial({ color: 0xc8a24a, depthTest: false })
-          const handleMatOn = new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false })
+          const discGeo = new THREE.CircleGeometry(1, 28) // unit disc in XY, +Z normal
+          const handleMat = new THREE.MeshBasicMaterial({
+            color: 0xbfe0ff,
+            transparent: true,
+            opacity: 0.4,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false
+          })
+          const handleMatOn = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.85,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false
+          })
           const clearHandles = (): void => {
             snapGroup.clear()
           }
-          const showHandles = (pts: THREE.Vector3[], activeIdx: number): void => {
+          const showHandles = (pts: THREE.Vector3[], activeIdx: number, normal?: THREE.Vector3): void => {
             snapGroup.clear()
-            const r = halfView * 0.02
+            const r = halfView * 0.025
+            const q = normal
+              ? new THREE.Quaternion().setFromUnitVectors(zAxis, normal.clone().normalize())
+              : null
             pts.forEach((p, i) => {
-              const s = new THREE.Mesh(handleGeo, i === activeIdx ? handleMatOn : handleMat)
+              const s = new THREE.Mesh(discGeo, i === activeIdx ? handleMatOn : handleMat)
               s.position.copy(p)
-              s.scale.setScalar(i === activeIdx ? r * 1.7 : r)
-              s.renderOrder = 999
+              if (q) s.quaternion.copy(q) // lie flat on the face
+              else s.quaternion.copy(camera.quaternion) // billboard fallback
+              s.scale.setScalar(i === activeIdx ? r * 1.8 : r)
+              s.renderOrder = 998
               s.raycast = () => {}
               snapGroup.add(s)
             })
@@ -2024,8 +2029,22 @@ export function RobotView({
           // ── Join tool (#354): click a point on two blocks to connect them ──
           // Markers are a CIRCLE laid flat on the picked face + an X/Y/Z axis triad
           // (Z = the face normal) so the pick reads accurately in 3-D from any angle.
-          const jointMatParent = new THREE.LineBasicMaterial({ color: 0x4ea1ff, depthTest: false })
-          const jointMatChild = new THREE.LineBasicMaterial({ color: 0x34ad4f, depthTest: false })
+          // Committed pick markers: component 1 (parent) = GREEN, component 2 (child)
+          // = BLUE — a filled translucent disc laid on the face + a bright ring, both
+          // drawn on top of the geometry (depthTest off) so they're always visible.
+          const jointMatParent = new THREE.LineBasicMaterial({ color: 0x34ad4f, depthTest: false })
+          const jointMatChild = new THREE.LineBasicMaterial({ color: 0x4ea1ff, depthTest: false })
+          const mkDisc = (color: number): THREE.MeshBasicMaterial =>
+            new THREE.MeshBasicMaterial({
+              color,
+              transparent: true,
+              opacity: 0.3,
+              side: THREE.DoubleSide,
+              depthTest: false,
+              depthWrite: false
+            })
+          const jointDiscParent = mkDisc(0x34ad4f)
+          const jointDiscChild = mkDisc(0x4ea1ff)
           const axisMatX = new THREE.LineBasicMaterial({ color: 0xff5566, depthTest: false })
           const axisMatY = new THREE.LineBasicMaterial({ color: 0x55dd66, depthTest: false })
           const axisMatZ = new THREE.LineBasicMaterial({ color: 0x5599ff, depthTest: false })
@@ -2044,7 +2063,8 @@ export function RobotView({
             scene.remove(g)
             g.traverse((o) => {
               const l = o as THREE.Line
-              if (l.geometry) l.geometry.dispose()
+              // Dispose per-marker line geometries; never the shared disc geometry.
+              if (l.geometry && l.geometry !== discGeo) l.geometry.dispose()
             })
           }
           // Fusion-style: fade ONLY the first-picked block (so it's obviously chosen
@@ -2068,7 +2088,7 @@ export function RobotView({
             if (!lo) return
             lo.traverse((o) => {
               const mesh = o as THREE.Mesh
-              if (!mesh.isMesh || mesh.userData.isOutlineHull || ownerLinkName(mesh) !== link) return
+              if (!mesh.isMesh || ownerLinkName(mesh) !== link) return
               const orig = mesh.material
               const mk = (m: THREE.Material): THREE.Material => {
                 const c = m.clone() as DimMat
@@ -2096,6 +2116,11 @@ export function RobotView({
             const g = new THREE.Group()
             const r = halfView * 0.11
             const ax = halfView * 0.16
+            // A filled translucent disc laid on the face + a bright ring on its rim.
+            const disc = new THREE.Mesh(discGeo, isChild ? jointDiscChild : jointDiscParent)
+            disc.scale.setScalar(r)
+            disc.renderOrder = 998
+            disc.raycast = () => {}
             const circle = new THREE.LineLoop(
               new THREE.BufferGeometry().setFromPoints(circlePts(r)),
               isChild ? jointMatChild : jointMatParent
@@ -2112,6 +2137,7 @@ export function RobotView({
             circle.renderOrder = 999
             circle.raycast = () => {}
             g.add(
+              disc,
               circle,
               line(new THREE.Vector3(1, 0, 0), axisMatX),
               line(new THREE.Vector3(0, 1, 0), axisMatY),
@@ -2185,16 +2211,45 @@ export function RobotView({
           // land on a hole centre (empty space, no surface to raycast).
           let hoverSnaps: Snaps | null = null
 
-          // The hover TARGET drawn on the surface: a circle + X/Y/Z axis triad (Z =
-          // face normal) at the nearest snap, plus a cross-hair over a hole centre.
-          const hoverMat = new THREE.LineBasicMaterial({ color: 0xffe27a, depthTest: false })
+          // While picking the CHILD the chosen parent is fixed AND faded — its
+          // transparent geometry still hit-tests, so if it sits in front it would steal
+          // the ray and you could never click the second block. Exclude the already-
+          // picked block (parent during the child step, child during a parent re-pick)
+          // so you always select the OTHER one. (A joined child link is a scene-graph
+          // descendant, but ownerLinkName resolves each mesh to the link it belongs to.)
+          const otherPickedLink = (): string | null => {
+            const jr = jointPickRef.current
+            return jr.step === 'child' ? jr.parentLink : jr.childLink
+          }
+          const jointRayHit = (): THREE.Intersection | undefined => {
+            const robot = robotRef.current
+            if (!robot) return undefined
+            const ex = otherPickedLink()
+            return buildRay
+              .intersectObject(robot, true)
+              .find((h) => h.face && ownerLinkName(h.object) !== ex)
+          }
+
+          // The hover TARGET drawn on the surface (where the next click will land): a
+          // TRANSPARENT BLUE disc laid flat on the face + a blue ring + an X/Y/Z axis
+          // triad (Z = face normal), plus a cross-hair over a hole / loop centre.
+          const hoverMat = new THREE.LineBasicMaterial({ color: 0x4ea1ff, depthTest: false })
+          const hoverDiscMat = new THREE.MeshBasicMaterial({
+            color: 0x4ea1ff,
+            transparent: true,
+            opacity: 0.28,
+            side: THREE.DoubleSide,
+            depthTest: false,
+            depthWrite: false
+          })
           let hoverMarker: THREE.Group | null = null
           const clearHoverMarker = (): void => {
             if (!hoverMarker) return
             scene.remove(hoverMarker)
             hoverMarker.traverse((o) => {
-              const l = o as THREE.Line
-              if (l.geometry) l.geometry.dispose()
+              const m = o as THREE.Mesh
+              // Dispose the per-marker line geometries; never the shared disc geometry.
+              if (m.geometry && m.geometry !== discGeo) m.geometry.dispose()
             })
             hoverMarker = null
           }
@@ -2209,10 +2264,15 @@ export function RobotView({
             const g = new THREE.Group()
             const r = halfView * 0.09
             const ax = halfView * 0.14
+            const disc = new THREE.Mesh(discGeo, hoverDiscMat)
+            disc.scale.setScalar(r)
+            disc.renderOrder = 999
+            disc.raycast = () => {}
             const circle = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(circlePts(r)), hoverMat)
             circle.renderOrder = 1000
             circle.raycast = () => {}
             g.add(
+              disc,
               circle,
               seg(new THREE.Vector3(), new THREE.Vector3(ax, 0, 0), axisMatX),
               seg(new THREE.Vector3(), new THREE.Vector3(0, ax, 0), axisMatY),
@@ -2259,7 +2319,7 @@ export function RobotView({
               // snaps): raycast the surface under the cursor and snap if close.
               buildNdcFrom(e)
               buildRay.setFromCamera(buildNdc, camera)
-              const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
+              const hit = jointRayHit() // never the already-picked block
               if (!hit) return
               link = ownerLinkName(hit.object)
               if (!link || !robot.links[link]) return
@@ -2333,12 +2393,17 @@ export function RobotView({
             let snapWorld: THREE.Vector3 | null = null
             let snapRole: string | null = null
             let handles: THREE.Vector3[] = []
+            let handleNormal: THREE.Vector3 | undefined
             let activeIdx = -1
             const tHit = buildRay
               .intersectObject(robotRef.current, true)
               .filter((h) => h.face && ownerLinkName(h.object) !== move!.link)
               .find((h) => h.face)
             if (tHit) {
+              handleNormal = tHit
+                .face!.normal.clone()
+                .transformDirection((tHit.object as THREE.Mesh).matrixWorld)
+                .normalize()
               const tLink = ownerLinkName(tHit.object)!
               const tGeom = readPrimitive(contentRef.current, tLink)
               if (tGeom) {
@@ -2365,7 +2430,7 @@ export function RobotView({
             )
             move.newXyz.set(nx[0], nx[1], nx[2])
             move.jointObj.position.copy(move.newXyz)
-            showHandles(handles, activeIdx)
+            showHandles(handles, activeIdx, handleNormal)
             const rect = mount.getBoundingClientRect()
             setBuildDim({
               x: e.clientX - rect.left + 14,
@@ -2433,9 +2498,9 @@ export function RobotView({
             }
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
-            const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
 
             if (jointActive) {
+              const hit = jointRayHit() // never the already-picked block
               if (hit) {
                 const s = computeSnaps(hit)
                 if (s) hoverSnaps = s
@@ -2455,7 +2520,7 @@ export function RobotView({
                 return
               }
               const near = nearestScreen(hoverSnaps.pts, e)
-              showHandles(hoverSnaps.pts, near.index)
+              showHandles(hoverSnaps.pts, near.index, hoverSnaps.worldNormal)
               if (near.index >= 0) {
                 setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, hoverSnaps.roles[near.index])
               } else clearHoverMarker()
@@ -2463,6 +2528,7 @@ export function RobotView({
             }
 
             // Move tool: primitive face handles only.
+            const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
             const link = hit ? ownerLinkName(hit.object) : null
             const geom = link ? readPrimitive(contentRef.current, link) : null
             if (!hit || !link || !geom) {
@@ -2471,7 +2537,11 @@ export function RobotView({
             }
             const th = hitToHandles(hit, link, geom)
             const near = nearestScreen(th.pts, e)
-            showHandles(th.pts, near.distPx < 16 ? near.index : -1)
+            const nW = hit.face!.normal
+              .clone()
+              .transformDirection((hit.object as THREE.Mesh).matrixWorld)
+              .normalize()
+            showHandles(th.pts, near.distPx < 16 ? near.index : -1, nW)
           }
 
           // A cancelled/interrupted drag must never strand OrbitControls disabled
@@ -2512,21 +2582,26 @@ export function RobotView({
             renderer.domElement.removeEventListener('pointercancel', onBuildCancel)
             renderer.domElement.removeEventListener('lostpointercapture', onBuildCancel)
             renderer.domElement.removeEventListener('pointerleave', onHoverLeave)
+            // Remove everything that references the shared discGeo / materials FIRST,
+            // then dispose those shared resources.
+            clearMeasure()
+            clearHighlight()
+            clearJointMarkers() // disposes the pick + hover markers
             scene.remove(snapGroup)
-            handleGeo.dispose()
+            discGeo.dispose()
             handleMat.dispose()
             handleMatOn.dispose()
-            clearMeasure()
             markerMat.dispose()
             lineMat.dispose()
-            clearHighlight()
-            clearJointMarkers()
             jointMatParent.dispose()
             jointMatChild.dispose()
+            jointDiscParent.dispose()
+            jointDiscChild.dispose()
             axisMatX.dispose()
             axisMatY.dispose()
             axisMatZ.dispose()
             hoverMat.dispose()
+            hoverDiscMat.dispose()
             measureApiRef.current = null
             highlightApiRef.current = null
             jointPickApiRef.current = null

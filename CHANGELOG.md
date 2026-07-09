@@ -230,8 +230,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (corner/edge/centre) — the exact point the target marker previews.
 - **Robot View — a clearer selection highlight.** The selected block was outlined
   with a brass wireframe of every edge, which read as a see-through cage. It's now
-  tinted **light blue** (keeping the material's shading, so the sides still shade
-  rather than going flat) with a **thick black outline** around its perimeter.
+  tinted **light blue**, keeping the material's shading (so the sides still shade
+  rather than going flat). Clicking a part in the build hierarchy highlights it, and
+  only **one** part is ever highlighted — even when parts are joined into a chain.
+- **Robot View — Join tool: on-surface, colour-coded pick markers (#354).** The
+  pick guides now read as painted onto the face: the **hover target** is a
+  translucent **blue** disc, every **snap point** is a small translucent disc laid
+  flat on the surface, and the committed picks are filled discs — **green** for
+  component 1, **blue** for component 2 — each with a bright ring + axis triad, drawn
+  on top so they're always visible.
 - **Robot View — default view is the perspective "home" corner.** The viewer now
   opens in **perspective**, framed from the cube's **top-right-front corner**
   (+X/+Y/+Z), zoomed to fit — and that's exactly where the **Home** button returns.
@@ -263,6 +270,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — Join tool: the second block is now always selectable (#354).**
+  After picking Component 1 it fades — but the faded mesh still hit-tested, so when it
+  sat in front of the camera it stole every click and Component 2 "went dark and
+  wouldn't select". The picker now **excludes the already-picked block** from the ray
+  (and the selection highlight no longer draws a black outline that made the block
+  look dark), so you can always click the other part.
 - **Robot View — Join tool: only the first block fades.** Picking Component 1 faded
   the whole robot, because its material is usually shared (everything uses "steel");
   the fade now swaps in a transparent clone for just that block's mesh, so every
