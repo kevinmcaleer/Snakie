@@ -384,9 +384,17 @@ function PoseBody({
   const trimmed = draftName.trim()
   // A name that already belongs to a DIFFERENT pose would overwrite it.
   const clash = trimmed !== name && poseNames.includes(trimmed)
-  // OK renames an EXISTING pose if the name changed to a free, non-empty name.
+  // Save the current joint values as this pose. For an EXISTING pose the values are
+  // saved under its ORIGINAL name (so a name-field edit never duplicates it); the
+  // rename is a separate op via OK. For a NEW pose, Save creates it under the name.
+  const saveValues = (): void => {
+    if (name || trimmed) onSavePose(name || trimmed)
+  }
+  // Footer OK: save a NEW pose (else it'd discard silently), or rename an EXISTING
+  // pose whose name was changed. (Editing an existing pose's values is the Save button.)
   commitRef.current = () => {
-    if (name && trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
+    if (!name && trimmed) onSavePose(trimmed)
+    else if (name && trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
   }
   const movable = jointMeta.filter((j) => !j.isMimic)
   const mimics = jointMeta.filter((j) => j.isMimic)
@@ -473,9 +481,15 @@ function PoseBody({
         <button
           type="button"
           className="robotprops__btn robotprops__btn--ok robotprops__savepose"
-          disabled={!trimmed}
-          onClick={() => onSavePose(trimmed)}
-          title={trimmed ? 'Save the current joint values as this pose' : 'Name the pose first'}
+          disabled={!(name || trimmed)}
+          onClick={saveValues}
+          title={
+            name
+              ? `Save the current joint values to “${name}” (rename via OK)`
+              : trimmed
+                ? 'Save the current joint values as this pose'
+                : 'Name the pose first'
+          }
         >
           {name ? 'Save pose' : 'Save new pose'}
         </button>

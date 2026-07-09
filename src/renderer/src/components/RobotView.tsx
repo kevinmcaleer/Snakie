@@ -14,6 +14,7 @@ import {
   clamp,
   effectiveLimit,
   extractJoints,
+  normPin,
   servoToJointNative,
   toDisplay,
   toNative
@@ -247,6 +248,9 @@ export function RobotView({
     void persist((m) => {
       m.poses = next
     })
+    // Advance the editor to the just-saved pose so it flips from "new" to edit mode
+    // (Recall/Delete appear, the name locks in), instead of a stale new-pose draft.
+    if (name) setDialogCtx({ kind: 'pose', name })
   }
 
   const handleRecallPose = (pose: NamedPoseLike): void => {
@@ -604,6 +608,9 @@ export function RobotView({
   // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
   // keeps them. Servo/pose contexts hold their own drafts (committed on OK).
   const editSnapshotRef = useRef<string | null>(null)
+  // Live joint values captured when the pose editor opens (it recalls the pose onto
+  // the model) — restored on Cancel so opening a pose to peek/rename can be undone.
+  const poseRevertRef = useRef<Record<string, number> | null>(null)
   // Opening a DIFFERENT node while a link/joint edit is live keeps that edit
   // (Fusion-style — it's already a step in the undo history, so ⌘Z still discards
   // it). We just re-base the snapshot to the current content so the NEW node's
@@ -632,14 +639,17 @@ export function RobotView({
     openContext({ kind: 'servo', pin }, null) // servo edits are drafted, not URDF
   }
   const handleOpenPose = (name: string): void => {
-    // Recall the pose so the editor's sliders start on its saved values.
+    // Recall the pose so the editor's sliders start on its saved values — snapshot the
+    // current live posture first so Cancel can put it back.
     const p = poses.find((x) => x.name === name)
+    poseRevertRef.current = { ...valuesRef.current }
     if (p) handleRecallPose(p)
     openContext({ kind: 'pose', name }, null)
   }
   // "+ Pose" — open the editor for a NEW pose: keep the current joint values so the
   // user tweaks the live posture, names it, and Saves.
   const handleNewPose = (): void => {
+    poseRevertRef.current = null // a new pose starts from the live posture — no revert
     openContext({ kind: 'pose', name: '' }, null)
   }
   // Add Joint (#354): the toolbar opens the dialog + ARMS picking. The user clicks
@@ -806,6 +816,7 @@ export function RobotView({
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
+    poseRevertRef.current = null
     setDialogCtx(null)
     setJointPick(null)
     jointPickApiRef.current?.clear()
@@ -814,6 +825,13 @@ export function RobotView({
     const snap = editSnapshotRef.current
     editSnapshotRef.current = null
     if (snap != null && snap !== contentRef.current) commitUrdf(snap) // discard edits
+    // Put the model back to the posture it had before the pose editor recalled a pose.
+    const revert = poseRevertRef.current
+    poseRevertRef.current = null
+    if (revert) {
+      applyToRobot(revert)
+      setValues(revert)
+    }
     setDialogCtx(null)
     setJointPick(null)
     jointPickApiRef.current?.clear()
@@ -900,10 +918,11 @@ export function RobotView({
   // "+ Servo" — bind the next free pin to the first movable joint, then open its
   // editor (the pose sidebar's add-servo, moved to the build panel — #312).
   const handleNewServo = (): void => {
-    const used = new Set(bindings.map((b) => b.pin))
+    if (movableNames.length === 0) return // nothing to drive — no valid binding
+    const used = new Set(bindings.map((b) => normPin(b.pin)))
     let pin = 0
-    while (used.has(String(pin))) pin++
-    handleAddBinding(String(pin), movableNames[0] ?? '')
+    while (used.has(normPin(String(pin)))) pin++
+    handleAddBinding(String(pin), movableNames[0])
     handleOpenServo(String(pin))
   }
 
@@ -1706,7 +1725,10 @@ export function RobotView({
               defRef.current = def
               const model = def.robot ?? {}
               setChosenBase(typeof model.baseLink === 'string' ? model.baseLink : null)
-              const ov = (model.joints ?? {}) as Record<string, { min?: number; max?: number }>
+              // Limits are edited via the joint dialog now (URDF <limit>); ignore the
+              // retired robot.yml `joints` OVERRIDE layer so a legacy override can't
+              // silently clamp the sliders below a widened URDF limit (#312).
+              const ov = {} as Record<string, { min?: number; max?: number }>
               const dp = model.defaultPose ?? {}
               const nv = { ...initial }
               for (const m of meta) {
