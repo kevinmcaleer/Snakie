@@ -736,7 +736,9 @@ export function RobotView({
     ]
     const ov = readVisualOrigin(base, child.link) ?? { xyz: [0, 0, 0], rpy: [0, 0, 0] }
     next = setVisualOrigin(next, child.link, shift(ov.xyz), ov.rpy as [number, number, number])
-    for (const j of readAllJoints(base)) {
+    // Read the child's own sub-joints from `next` (connectJoint only re-parented the
+    // child itself, never these) and shift each so descendants stay put too.
+    for (const j of readAllJoints(next)) {
       if (j.parent === child.link) next = setJointOrigin(next, j.child, shift(j.xyz), j.rpy)
     }
     commitUrdf(next)
