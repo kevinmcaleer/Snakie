@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool snaps to hole centres (#354).** When you pick a joint
+  point on an imported mesh (STL), the tool detects **hole centres** on the clicked
+  face — an STL is just triangles, so it finds the coplanar rim-edge loops, and a
+  roughly-circular loop's centre becomes a snap point (plus the face outline centre
+  and midpoints of long edges as alignment guides). Hover reveals the snaps.
 - **Robot View — Join tool (#354).** A new **Add Joint** button on the build
   toolbar opens a floating dialog, then you **click a point on each block in 3-D**
   to connect them: Component 1 (parent) then Component 2 (child), each snapping to a
