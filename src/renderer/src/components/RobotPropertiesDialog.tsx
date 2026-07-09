@@ -540,7 +540,7 @@ function AddJointBody({
       ) : (
         <p className="robotprops__note">
           {!parent || !child
-            ? 'Click a point on each block in the 3-D view (snaps to corners / edges / centres).'
+            ? 'Click a point on each block (snaps to corners / edges / hole centres). Hold Shift to lock a snap onto a hole.'
             : type === 'revolute'
               ? 'Component 2 mates to Component 1; after Add, drag the joint in the pose panel to preview the swing.'
               : 'Component 2 will snap so its point meets Component 1’s point.'}
