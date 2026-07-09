@@ -424,6 +424,107 @@ export function setJoint(urdf: string, childLink: string, spec: JointSpec): stri
   return urdf
 }
 
+/** A link + every descendant reachable through child joints (transitive). Used
+ *  by the Join tool to forbid a re-parent that would create a cycle. */
+export function subtreeOf(urdf: string, link: string): Set<string> {
+  const inside = new Set<string>([link])
+  const jointOf = (block: string, attr: 'parent' | 'child'): string | undefined =>
+    new RegExp(`<${attr}\\b[^>]*\\blink\\s*=\\s*"([^"]+)"`, 'i').exec(block)?.[1]
+  for (let changed = true; changed; ) {
+    changed = false
+    const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+    let m: RegExpExecArray | null
+    while ((m = re.exec(urdf))) {
+      const parent = jointOf(m[0], 'parent')
+      const child = jointOf(m[0], 'child')
+      if (parent && child && inside.has(parent) && !inside.has(child)) {
+        inside.add(child)
+        changed = true
+      }
+    }
+  }
+  return inside
+}
+
+/** A joint name derived from `base`, made unique within the URDF. */
+function uniqueJointName(urdf: string, base: string): string {
+  const existing = new Set(jointNames(urdf))
+  if (!existing.has(base)) return base
+  let n = 2
+  while (existing.has(`${base}_${n}`)) n++
+  return `${base}_${n}`
+}
+
+/** Render a complete `<joint>` block from parsed fields — regenerated wholesale
+ *  (never surgically patched) so it's immune to open-vs-self-closing tag forms and
+ *  can't strand/duplicate a child tag. Movable joints get an `<axis>`;
+ *  revolute/prismatic additionally a `<limit>`, continuous a bare effort/velocity. */
+function renderJointBlock(j: JointFull): string {
+  const movable = j.type !== 'fixed'
+  let inner =
+    `    <parent link="${j.parent}"/>\n` +
+    `    <child link="${j.child}"/>\n` +
+    `    <origin xyz="${fmtVec(j.xyz)}" rpy="${fmtVec(j.rpy)}"/>\n`
+  if (movable) inner += `    <axis xyz="${fmtVec(j.axis ?? [0, 0, 1])}"/>\n`
+  if (j.type === 'revolute' || j.type === 'prismatic') {
+    const lim = j.limit ?? defaultJointLimit(j.type)
+    inner += `    <limit lower="${fmtNum(lim.lower)}" upper="${fmtNum(lim.upper)}" effort="1" velocity="1"/>\n`
+  } else if (j.type === 'continuous') {
+    inner += `    <limit effort="1" velocity="1"/>\n`
+  }
+  if (movable && j.mimic && j.mimic.joint) {
+    const mi = j.mimic
+    inner += `    <mimic joint="${mi.joint}" multiplier="${fmtNum(mi.multiplier)}" offset="${fmtNum(mi.offset)}"/>\n`
+  }
+  return `  <joint name="${j.name}" type="${j.type}">\n${inner}  </joint>`
+}
+
+/**
+ * The Join tool (#354): connect `child` (Component 2) under `parent` (Component 1)
+ * at joint origin `xyz`. If the child already has a parent joint it is re-parented
+ * (parent + origin rewritten, type/axis/limits preserved); otherwise a new fixed
+ * joint is created. Refuses a no-op or a re-parent that would form a cycle
+ * (parent within the child's own subtree) — returns the URDF unchanged.
+ */
+export function connectJoint(
+  urdf: string,
+  opts: { parent: string; child: string; xyz?: readonly [number, number, number] }
+): string {
+  const { parent, child } = opts
+  const xyz: Vec3 = [...(opts.xyz ?? [0, 0, 0])] as Vec3
+  if (!parent || !child || parent === child) return urdf
+  // A URDF is a tree: attaching `child` under one of its own descendants (or
+  // itself) would create a loop the loader can't build.
+  if (subtreeOf(urdf, child).has(parent)) return urdf
+  // Re-parent the child's existing joint by regenerating its block wholesale
+  // (accepts any tag form; preserves type/axis/limit/mimic + rpy).
+  const re = /<joint\b([^>]*)>([\s\S]*?)<\/joint>/gi
+  const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(child)}"`, 'i')
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    if (!childRe.test(m[2])) continue
+    const j = parseJoint(m[1], m[2])
+    const block = renderJointBlock({ ...j, parent, child, xyz })
+    return urdf.slice(0, m.index) + block + urdf.slice(m.index + m[0].length)
+  }
+  // No existing joint (child is the root / an orphan) → create a fixed one.
+  const name = uniqueJointName(urdf, `${child}_joint`)
+  const block =
+    renderJointBlock({
+      name,
+      type: 'fixed',
+      parent,
+      child,
+      xyz,
+      rpy: [0, 0, 0],
+      axis: null,
+      limit: null,
+      mimic: null
+    }) + '\n'
+  const idx = urdf.lastIndexOf('</robot>')
+  return idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
+}
+
 /** Set the fixed-joint origin whose child is `childLink` (moves the whole part). */
 export function setJointOrigin(
   urdf: string,

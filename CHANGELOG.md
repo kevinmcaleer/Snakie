@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool (#354).** A new **Add Joint** button on the build
+  toolbar opens a floating dialog to connect two blocks: pick **Component 1**
+  (parent) and **Component 2** (child) and an **X/Y/Z offset** (mm) for the joint
+  origin, then **Add**. It re-parents the child under the chosen parent (preserving
+  the joint's type/axis/limits) or creates a fixed joint if it had none, refusing a
+  connection that would form a loop. Tune the joint's type in the Joints branch.
 - **Robot View — open a different robot (.urdf).** The docked mini viewer gains an
   **📂 Open…** button (alongside New robot / Pop out) and the pose tool's Build
   panel gains one too, so you can pick and open another robot model via the native

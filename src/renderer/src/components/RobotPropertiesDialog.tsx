@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { JointDef, JointSpec, PrimitiveGeom } from './robot-assembly'
+import type { JointDef, JointFull, JointSpec, PrimitiveGeom } from './robot-assembly'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './RobotJointPanel'
 import { normPin } from './robot-pose'
@@ -17,6 +17,7 @@ export type PropsContext =
   | { kind: 'joint'; child: string; joint: string }
   | { kind: 'servo'; pin: string }
   | { kind: 'pose'; name: string }
+  | { kind: 'addjoint' }
 
 /** A short human title for the dialog header, per context. */
 function contextTitle(ctx: PropsContext): string {
@@ -29,6 +30,8 @@ function contextTitle(ctx: PropsContext): string {
       return `Servo — GP${normPin(ctx.pin)}`
     case 'pose':
       return `Pose — ${ctx.name}`
+    case 'addjoint':
+      return 'Add Joint'
   }
 }
 
@@ -52,6 +55,14 @@ export interface RobotPropertiesDialogProps {
   onRecallPose: (pose: NamedPoseLike) => void
   onRenamePose: (oldName: string, newName: string) => void
   onDeletePose: (name: string) => void
+  // addjoint
+  /** All link names, for the Add Joint parent/child pickers. */
+  links: string[]
+  /** Every joint (to seed the offset from a child's current origin). */
+  joints: JointFull[]
+  /** Connect `child` under `parent` at joint origin `xyz` (metres). Returns
+   *  whether anything changed (false = invalid pick, e.g. would form a loop). */
+  onConnect: (parent: string, child: string, xyz: [number, number, number]) => boolean
   // footer
   onOk: () => void
   onCancel: () => void
@@ -70,8 +81,10 @@ export interface RobotPropertiesDialogProps {
 export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.Element {
   const { context, onOk, onCancel } = props
 
-  // Bodies with a local draft (servo/pose) register a commit here; OK runs it.
-  const commitRef = useRef<(() => void) | null>(null)
+  // Bodies with a local draft (servo/pose/addjoint) register a commit here; OK
+  // runs it. A commit that returns `false` (an invalid Add-Joint pick) keeps the
+  // dialog open instead of closing as if it succeeded.
+  const commitRef = useRef<(() => void | boolean) | null>(null)
 
   // Drag the dialog by its title bar. `pos` null = the default docked spot (CSS).
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -93,7 +106,7 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
   const style = pos ? { left: `${pos.x}px`, top: `${pos.y}px`, right: 'auto' } : undefined
   const title = contextTitle(context)
   const handleOk = (): void => {
-    commitRef.current?.()
+    if (commitRef.current?.() === false) return // invalid — keep the dialog open
     onOk()
   }
 
@@ -122,6 +135,7 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
         {context.kind === 'pose' && (
           <PoseBody {...props} name={context.name} commitRef={commitRef} />
         )}
+        {context.kind === 'addjoint' && <AddJointBody {...props} commitRef={commitRef} />}
       </div>
       <div className="robotprops__foot">
         {context.kind === 'servo' && (
@@ -162,7 +176,7 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
           Cancel
         </button>
         <button type="button" className="robotprops__btn robotprops__btn--ok" onClick={handleOk}>
-          OK
+          {context.kind === 'addjoint' ? 'Add' : 'OK'}
         </button>
       </div>
     </aside>
@@ -214,7 +228,7 @@ function ServoBody({
   commitRef
 }: RobotPropertiesDialogProps & {
   pin: string
-  commitRef: React.MutableRefObject<(() => void) | null>
+  commitRef: React.MutableRefObject<(() => void | boolean) | null>
 }): JSX.Element {
   const [joint, setJoint] = useState(servo?.joint ?? movableJoints[0] ?? '')
   const [invert, setInvert] = useState(!!servo?.invert)
@@ -301,7 +315,7 @@ function PoseBody({
   commitRef
 }: RobotPropertiesDialogProps & {
   name: string
-  commitRef: React.MutableRefObject<(() => void) | null>
+  commitRef: React.MutableRefObject<(() => void | boolean) | null>
 }): JSX.Element {
   const [draftName, setDraftName] = useState(name)
   const trimmed = draftName.trim()
@@ -333,6 +347,122 @@ function PoseBody({
         <p className="robotprops__note">
           Captures {jointCount} joint{jointCount === 1 ? '' : 's'}. <strong>Recall</strong> applies
           it to the model.
+        </p>
+      )}
+    </>
+  )
+}
+
+/** The Add Joint body (#354): pick Component 1 (parent) + Component 2 (child) and
+ *  an X/Y/Z offset (mm) for the joint origin; commit on **Add**. */
+function AddJointBody({
+  links,
+  joints,
+  onConnect,
+  commitRef
+}: RobotPropertiesDialogProps & {
+  commitRef: React.MutableRefObject<(() => void | boolean) | null>
+}): JSX.Element {
+  const [parent, setParent] = useState(links[0] ?? '')
+  const [child, setChild] = useState(links.find((l) => l !== (links[0] ?? '')) ?? '')
+  // The child's current joint origin (metres → mm), so re-attaching without
+  // touching the offset leaves the part where it is. Re-seeded as the child changes.
+  const currentOrigin = (link: string): Record<'x' | 'y' | 'z', string> => {
+    const j = joints.find((x) => x.child === link)
+    const mm = (n: number): string => String(Math.round((n ?? 0) * 1000))
+    return j ? { x: mm(j.xyz[0]), y: mm(j.xyz[1]), z: mm(j.xyz[2]) } : { x: '0', y: '0', z: '0' }
+  }
+  // Offsets in mm (raw strings so you can clear / type a leading "-").
+  const [off, setOff] = useState<Record<'x' | 'y' | 'z', string>>(() => currentOrigin(child))
+  const [err, setErr] = useState<string | null>(null)
+  const same = !!parent && parent === child
+  const alreadyJointed = joints.some((x) => x.child === child)
+
+  commitRef.current = (): boolean => {
+    if (!parent || !child) {
+      setErr('Add another block to join to.')
+      return false
+    }
+    if (same) {
+      setErr('Pick two different blocks.')
+      return false
+    }
+    const mm = (s: string): number => {
+      const v = Number(s)
+      return Number.isFinite(v) ? v / 1000 : 0 // mm → m
+    }
+    const ok = onConnect(parent, child, [mm(off.x), mm(off.y), mm(off.z)])
+    if (!ok) {
+      setErr('Can’t connect — that would form a loop (the parent hangs off the child).')
+      return false
+    }
+    return true
+  }
+  const pickChild = (c: string): void => {
+    setChild(c)
+    setOff(currentOrigin(c)) // seed the offset from its current origin
+    setErr(null)
+  }
+  const axis = (k: 'x' | 'y' | 'z'): JSX.Element => (
+    <label className="robotprops__mm">
+      <span>{k.toUpperCase()}</span>
+      <input
+        type="number"
+        value={off[k]}
+        onChange={(e) => setOff((o) => ({ ...o, [k]: e.target.value }))}
+      />
+    </label>
+  )
+  const warn = err ?? (same ? 'Pick two different blocks.' : !child ? 'Add another block to join to.' : null)
+  return (
+    <>
+      <section className="robotprops__section">
+        <div className="robotprops__label">Component 1 (parent)</div>
+        <select
+          className="robotprops__sel"
+          value={parent}
+          onChange={(e) => {
+            const p = e.target.value
+            setParent(p)
+            setErr(null)
+            if (p === child) pickChild(links.find((l) => l !== p) ?? '') // keep child ≠ parent
+          }}
+        >
+          {links.map((l) => (
+            <option key={l} value={l}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </section>
+      <section className="robotprops__section">
+        <div className="robotprops__label">Component 2 (child)</div>
+        <select className="robotprops__sel" value={child} onChange={(e) => pickChild(e.target.value)}>
+          {links
+            .filter((l) => l !== parent)
+            .map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+        </select>
+      </section>
+      <section className="robotprops__section">
+        <div className="robotprops__label">Offset (mm)</div>
+        <div className="robotprops__row">
+          {axis('x')}
+          {axis('y')}
+          {axis('z')}
+        </div>
+      </section>
+      {warn ? (
+        <p className="robotprops__note robotprops__note--warn">{warn}</p>
+      ) : (
+        <p className="robotprops__note">
+          {alreadyJointed ? 'Re-attaches ' : 'Attaches '}
+          <strong>{child}</strong> under <strong>{parent}</strong>
+          {alreadyJointed ? ', keeping its joint type.' : ' as a fixed joint.'} Tune the type in the
+          Joints branch.
         </p>
       )}
     </>

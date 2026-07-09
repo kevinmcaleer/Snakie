@@ -20,6 +20,8 @@ export interface RobotToolbarProps {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  /** Open the Add Joint dialog (#354) — connect two blocks with a joint. */
+  onAddJoint: () => void
 }
 
 const MEASURE_ICON = (
@@ -69,8 +71,7 @@ const ICONS: Record<BuildTool, JSX.Element> = {
 const TOOLS: Array<{ id: BuildTool; label: string; soon?: boolean }> = [
   { id: 'select', label: 'Pick a block' },
   { id: 'pushpull', label: 'Push & pull to resize' },
-  { id: 'move', label: 'Move a block' },
-  { id: 'joint', label: 'Join two blocks (coming soon)', soon: true }
+  { id: 'move', label: 'Move a block' }
 ]
 
 const UNDO_ICON = (
@@ -94,7 +95,8 @@ export function RobotToolbar({
   canUndo,
   canRedo,
   onUndo,
-  onRedo
+  onRedo,
+  onAddJoint
 }: RobotToolbarProps): JSX.Element {
   return (
     <div className="robottool" role="toolbar" aria-label="Build tools">
@@ -129,6 +131,16 @@ export function RobotToolbar({
           </button>
         )
       })}
+      <button
+        type="button"
+        className="robottool__btn"
+        disabled={!canEdit}
+        title={canEdit ? 'Add a joint — connect two blocks' : 'Save the robot to a folder first'}
+        aria-label="Add a joint"
+        onClick={onAddJoint}
+      >
+        {ICONS.joint}
+      </button>
       <button
         type="button"
         className={`robottool__btn${measureActive ? ' is-active' : ''}`}
