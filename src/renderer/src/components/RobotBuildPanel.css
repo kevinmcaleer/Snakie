@@ -116,30 +116,6 @@
   color: var(--text-muted, #8b919b);
 }
 
-/* "Pick a base" prompt + the loose-parts helpers (#354). Amber attention tones as
-   translucent overlays so they read on BOTH the dark and light (parchment) skins. */
-.robotbuild__basehint {
-  margin: 0 0 0.15rem;
-  padding: 0.3rem 0.4rem;
-  font-size: 0.6rem;
-  line-height: 1.3;
-  color: var(--text, #cdd2d9);
-  background: rgba(230, 160, 60, 0.14);
-  border: 1px solid rgba(230, 160, 60, 0.4);
-  border-radius: 6px;
-}
-.robotbuild__loosehint {
-  list-style: none;
-  margin: 0;
-  padding: 0.1rem 0.35rem 0.25rem;
-  font-size: 0.55rem;
-  line-height: 1.3;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__part.is-loose {
-  border-left: 2px solid rgba(230, 160, 60, 0.6);
-}
-
 /* The hierarchy tree scrolls as one under the dock's max-height. */
 .robotbuild__tree {
   flex: 1 1 auto;

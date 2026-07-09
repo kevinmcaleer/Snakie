@@ -1130,9 +1130,8 @@ export function RobotView({
           /* leave scale 1 if the mesh can't be measured */
         }
       }
-      // Add the mesh as a LOOSE link (no joint) so it renders now but stays an
-      // unconnected part — the user picks the base + joins it into the chain. Select
-      // it + reframe so the user can see + place it.
+      // Add the mesh attached to the base with a movable joint, staggered so it lands
+      // beside the base (not on top of it). Select it + reframe so the user can see it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
       const next = addMeshLink(content, { meshRel: res.rel, linkBase, scale })
       refitNextRef.current = true
@@ -1144,8 +1143,8 @@ export function RobotView({
       if (!buildOpen) setBuildOpen(true)
       setSavingLabel(
         scale !== 1
-          ? `added ${next.link} (scaled mm→m) — now join it to your robot`
-          : `added ${next.link} — now join it to your robot`
+          ? `added ${next.link} (scaled mm→m) — drag to place, or Add Joint to articulate`
+          : `added ${next.link} — drag to place, or Add Joint to articulate`
       )
     } catch (e) {
       setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
