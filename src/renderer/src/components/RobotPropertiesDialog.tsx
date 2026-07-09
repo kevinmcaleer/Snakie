@@ -43,6 +43,8 @@ export interface RobotPropertiesDialogProps {
   jointNames: string[]
   onSetSize: (link: string, dims: number[]) => void
   onSetJoint: (link: string, spec: JointSpec) => void
+  /** Remove the joint whose child is this link (the block re-attaches to the base). */
+  onDeleteJoint: (child: string) => void
   // servo
   servo: ServoJointBinding | null
   movableJoints: string[]
@@ -146,6 +148,19 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
         {context.kind === 'addjoint' && <AddJointBody {...props} commitRef={commitRef} />}
       </div>
       <div className="robotprops__foot">
+        {context.kind === 'joint' && (
+          <button
+            type="button"
+            className="robotprops__btn robotprops__btn--danger"
+            title="Remove this joint — the block re-attaches to the base"
+            onClick={() => {
+              props.onDeleteJoint(context.child)
+              onOk()
+            }}
+          >
+            Delete
+          </button>
+        )}
         {context.kind === 'servo' && (
           <button
             type="button"
