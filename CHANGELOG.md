@@ -290,6 +290,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — Join tool: holes are easier to grab (#354).** Snapping a joint point
+  onto a hole was fiddly — an edge that was a touch closer would win, so the cross-hair
+  flicked off the hole as you moved to click. A **hole / loop centre now sticks** when
+  the cursor is within a generous radius (it wins over a marginally-closer edge), so the
+  cross-hair stays on the hole and the click lands there.
 - **Robot View — Join tool: the hinge pivots at the joint, not the part's middle (#354).**
   A rotation joint rotated the child about its *own centre* instead of the point you
   picked, so a hinge ended up "halfway along the part". The joint origin now sits **on

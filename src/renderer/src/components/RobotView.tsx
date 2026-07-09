@@ -2022,6 +2022,35 @@ export function RobotView({
             })
             return { index, distPx: best }
           }
+          // A HOLE centre is a joint's natural target but hard to hit dead-on (it sits
+          // over empty space). Bias toward one within a generous radius so it STICKS even
+          // when an edge midpoint is marginally closer — otherwise the target flicks off
+          // the hole as you move to click it. Only role 'hole' is magnetised (NOT the
+          // 'outline' = face centroid every mesh face has, which would swallow edge picks
+          // on small faces). Falls back to the plain nearest.
+          const HOLE_CATCH_PX = 48
+          const nearestSnap = (
+            pts: THREE.Vector3[],
+            roles: string[],
+            e: PointerEvent
+          ): { index: number; distPx: number } => {
+            const rect = renderer.domElement.getBoundingClientRect()
+            const px = e.clientX - rect.left
+            const py = e.clientY - rect.top
+            let best = { index: -1, distPx: Infinity }
+            let hole = { index: -1, distPx: Infinity }
+            pts.forEach((p, i) => {
+              const v = p.clone().project(camera)
+              if (!(v.z >= -1 && v.z <= 1)) return
+              const sx = (v.x * 0.5 + 0.5) * rect.width
+              const sy = (-v.y * 0.5 + 0.5) * rect.height
+              if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
+              const d = Math.hypot(sx - px, sy - py)
+              if (d < best.distPx) best = { index: i, distPx: d }
+              if (roles[i] === 'hole' && d < hole.distPx) hole = { index: i, distPx: d }
+            })
+            return hole.index >= 0 && hole.distPx <= HOLE_CATCH_PX ? hole : best
+          }
 
           // ── Resize (push/pull tool) ──
           const startResize = (e: PointerEvent): void => {
@@ -2393,7 +2422,7 @@ export function RobotView({
             // directly clickable, with no pixel-threshold gap and no need to hold
             // SHIFT to reach it.
             if (hoverSnaps && hoverSnaps.pts.length && robot.links[hoverSnaps.link]) {
-              const near = nearestScreen(hoverSnaps.pts, e)
+              const near = nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e)
               if (near.index >= 0) {
                 link = hoverSnaps.link
                 world = hoverSnaps.pts[near.index].clone()
@@ -2415,8 +2444,9 @@ export function RobotView({
               world = hit.point.clone()
               const geom = readPrimitive(contentRef.current, link)
               const th = geom ? hitToHandles(hit, link, geom) : meshSnapCentres(hit)
-              const near = nearestScreen(th.pts, e)
-              if (near.index >= 0 && near.distPx < (geom ? 24 : 28)) {
+              const near = nearestSnap(th.pts, th.roles, e)
+              const isHole = near.index >= 0 && th.roles[near.index] === 'hole'
+              if (near.index >= 0 && near.distPx < (isHole ? HOLE_CATCH_PX : geom ? 24 : 28)) {
                 world = th.pts[near.index].clone()
                 role = th.roles[near.index]
               }
@@ -2606,7 +2636,7 @@ export function RobotView({
                 clearHoverMarker()
                 return
               }
-              const near = nearestScreen(hoverSnaps.pts, e)
+              const near = nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e)
               showHandles(hoverSnaps.pts, near.index, hoverSnaps.worldNormal)
               if (near.index >= 0) {
                 setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, hoverSnaps.roles[near.index])
