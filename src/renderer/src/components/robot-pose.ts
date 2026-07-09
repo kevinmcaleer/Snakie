@@ -9,6 +9,12 @@
 /** Joint types the pose tool exposes as a slider. */
 export type MovableType = 'revolute' | 'continuous' | 'prismatic'
 
+/** A saved pose (name + joint→display-value map). Mirrors KRF `NamedPose`. */
+export interface NamedPoseLike {
+  name: string
+  values: Record<string, number>
+}
+
 /** What the sidebar needs to render + drive one joint. Angles are NATIVE. */
 export interface JointMeta {
   name: string

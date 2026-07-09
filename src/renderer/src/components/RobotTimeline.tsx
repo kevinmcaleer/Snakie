@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { MirrorPair, MotionEasing, MotionTimeline } from '../../../shared/robot'
-import type { NamedPoseLike } from './RobotJointPanel'
+import type { NamedPoseLike } from './robot-pose'
 import './RobotTimeline.css'
 
 export interface RobotTimelineProps {

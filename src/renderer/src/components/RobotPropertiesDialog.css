@@ -216,3 +216,51 @@
   background: var(--danger);
   border-color: var(--danger);
 }
+
+/* Pose editor (#312) — the retired sidebar's joint sliders live here now. */
+.robotprops__poserow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.robotprops__poses-joints {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  margin: 0.15rem 0 0.35rem;
+}
+.robotprops__poj {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 3rem;
+  align-items: center;
+  gap: 0.4rem;
+}
+.robotprops__poj-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+}
+.robotprops__poj-slider {
+  width: 100%;
+  accent-color: var(--accent, #d6a23f);
+}
+.robotprops__poj-val {
+  text-align: right;
+  font-size: 0.6rem;
+  color: var(--text-muted, #9aa0a6);
+  font-variant-numeric: tabular-nums;
+}
+.robotprops__poj--mimic .robotprops__poj-mimic {
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+  font-style: italic;
+}
+.robotprops__savepose {
+  width: 100%;
+  margin-top: 0.15rem;
+}

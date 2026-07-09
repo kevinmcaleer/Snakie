@@ -1,8 +1,16 @@
 import { useRef, useState } from 'react'
 import type { JointDef, JointType, JointSpec, PrimitiveGeom } from './robot-assembly'
 import type { ServoJointBinding } from '../../../shared/robot'
-import type { NamedPoseLike } from './RobotJointPanel'
-import { normPin } from './robot-pose'
+import {
+  normPin,
+  effectiveLimit,
+  mimicValue,
+  toDisplay,
+  toNative,
+  unitLabel,
+  type NamedPoseLike,
+  type JointMeta
+} from './robot-pose'
 import { SizeForm, JointForm } from './RobotBuildPanel'
 import './RobotPropertiesDialog.css'
 
@@ -57,6 +65,14 @@ export interface RobotPropertiesDialogProps {
   onRecallPose: (pose: NamedPoseLike) => void
   onRenamePose: (oldName: string, newName: string) => void
   onDeletePose: (name: string) => void
+  /** The movable joints + live values, so the pose editor can pose the robot with
+   *  sliders (the retired pose sidebar's controls moved here — #312). */
+  jointMeta: JointMeta[]
+  values: Record<string, number>
+  overrides: Record<string, { min?: number; max?: number }>
+  onJointChange: (name: string, native: number) => void
+  onSavePose: (name: string) => void
+  onResetPose: () => void
   // addjoint (#354 — pick two points in 3-D)
   /** The Add Joint pick state (which block/point is Component 1 / 2), driven by
    *  clicks in the 3-D view. */
@@ -188,7 +204,7 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
             Delete
           </button>
         )}
-        {context.kind === 'pose' && (
+        {context.kind === 'pose' && props.pose && (
           <>
             <button
               type="button"
@@ -343,13 +359,22 @@ function ServoBody({
   )
 }
 
-/** The pose body: rename (commit on OK) + a count; Recall / Delete live in the
- *  footer. */
+const fmtDeg = (v: number): string => (Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString())
+
+/** The pose editor (#312 — the retired pose sidebar's controls moved here): a name,
+ *  a live joint SLIDER per movable joint (drag to pose the robot), and Save / Reset.
+ *  Recall / Delete + the OK rename live in the footer. Opening an existing pose recalls
+ *  it first, so the sliders start on its saved values. */
 function PoseBody({
   name,
-  pose,
   poseNames,
   onRenamePose,
+  jointMeta,
+  values,
+  overrides,
+  onJointChange,
+  onSavePose,
+  onResetPose,
   commitRef
 }: RobotPropertiesDialogProps & {
   name: string
@@ -359,17 +384,19 @@ function PoseBody({
   const trimmed = draftName.trim()
   // A name that already belongs to a DIFFERENT pose would overwrite it.
   const clash = trimmed !== name && poseNames.includes(trimmed)
-  // OK renames the pose if the name changed to something non-empty + non-clashing.
+  // OK renames an EXISTING pose if the name changed to a free, non-empty name.
   commitRef.current = () => {
-    if (trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
+    if (name && trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
   }
-  const jointCount = pose ? Object.keys(pose.values).length : 0
+  const movable = jointMeta.filter((j) => !j.isMimic)
+  const mimics = jointMeta.filter((j) => j.isMimic)
   return (
     <>
       <section className="robotprops__section">
         <div className="robotprops__label">Name</div>
         <input
           className={`robotprops__text${clash ? ' is-invalid' : ''}`}
+          placeholder="name this pose"
           value={draftName}
           onChange={(e) => setDraftName(e.target.value)}
           onKeyDown={(e) => {
@@ -377,16 +404,82 @@ function PoseBody({
           }}
         />
       </section>
-      {clash ? (
+      {clash && (
         <p className="robotprops__note robotprops__note--warn">
-          A pose named “{trimmed}” already exists — pick another name.
-        </p>
-      ) : (
-        <p className="robotprops__note">
-          Captures {jointCount} joint{jointCount === 1 ? '' : 's'}. <strong>Recall</strong> applies
-          it to the model.
+          A pose named “{trimmed}” already exists — Save overwrites it.
         </p>
       )}
+      <section className="robotprops__section">
+        <div className="robotprops__poserow">
+          <span className="robotprops__label">Joints — drag to pose</span>
+          <button
+            type="button"
+            className="robotprops__chip"
+            onClick={onResetPose}
+            title="Reset all joints to the default pose"
+          >
+            Reset
+          </button>
+        </div>
+        {movable.length === 0 ? (
+          <p className="robotprops__note">This robot has no movable joints.</p>
+        ) : (
+          <div className="robotprops__poses-joints">
+            {movable.map((j) => {
+              const lim = effectiveLimit(j, overrides[j.name])
+              const dLower = toDisplay(j.type, lim.lower)
+              const dUpper = toDisplay(j.type, lim.upper)
+              const dVal = toDisplay(j.type, values[j.name] ?? 0)
+              const step = j.type === 'prismatic' ? 0.5 : 1
+              return (
+                <label className="robotprops__poj" key={j.name}>
+                  <span className="robotprops__poj-name" title={j.name}>
+                    {j.name}
+                  </span>
+                  <input
+                    className="robotprops__poj-slider"
+                    type="range"
+                    aria-label={j.name}
+                    min={dLower}
+                    max={dUpper}
+                    step={step}
+                    value={Math.min(Math.max(dVal, dLower), dUpper)}
+                    onChange={(e) => onJointChange(j.name, toNative(j.type, Number(e.target.value)))}
+                  />
+                  <span className="robotprops__poj-val">
+                    {fmtDeg(dVal)}
+                    {unitLabel(j.type)}
+                  </span>
+                </label>
+              )
+            })}
+            {mimics.map((j) => {
+              const dVal = toDisplay(j.type, mimicValue(j, values[j.master ?? ''] ?? 0))
+              return (
+                <div className="robotprops__poj robotprops__poj--mimic" key={j.name}>
+                  <span className="robotprops__poj-name" title={j.name}>
+                    {j.name}
+                  </span>
+                  <span className="robotprops__poj-mimic">follows {j.master}</span>
+                  <span className="robotprops__poj-val">
+                    {fmtDeg(dVal)}
+                    {unitLabel(j.type)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        <button
+          type="button"
+          className="robotprops__btn robotprops__btn--ok robotprops__savepose"
+          disabled={!trimmed}
+          onClick={() => onSavePose(trimmed)}
+          title={trimmed ? 'Save the current joint values as this pose' : 'Name the pose first'}
+        >
+          {name ? 'Save pose' : 'Save new pose'}
+        </button>
+      </section>
     </>
   )
 }

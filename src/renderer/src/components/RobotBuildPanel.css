@@ -430,3 +430,12 @@
   white-space: nowrap;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
 }
+
+/* "+ New pose" / "+ Bind a servo" — a subtle create affordance in the panel (#312). */
+.robotbuild__newpose {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.robotbuild__newpose:hover {
+  background: rgba(128, 128, 128, 0.14);
+}

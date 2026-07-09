@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Robot View — the pose sidebar is retired; posing moves to a popup (#312).** The
+  old right-hand pose panel duplicated the build panel (assembly, servos, poses). It's
+  gone: **pose the robot in a popup** — the build panel's **Poses → ＋ New pose** (or
+  clicking a pose) opens an editor with a **slider per joint**; drag to pose, name it,
+  **Save**. Servos got a **＋ Bind a servo** in the build panel, and the save-status /
+  measure readouts moved to small floating pills. The Timeline still animates.
 - **Robot View — a cleaner, Fusion-style build hierarchy (#354).** The panel is
   **wider** so long STL names have room, and it drops its solid slab — each line now
   sits on its own **subtle off-white card** so it reads over the 3-D canvas. Per-row

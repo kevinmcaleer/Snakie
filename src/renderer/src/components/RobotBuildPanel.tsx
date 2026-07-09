@@ -12,7 +12,7 @@ import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
 import { shouldAutoHide } from './pin-overlay'
 import type { ServoJointBinding } from '../../../shared/robot'
-import type { NamedPoseLike } from './RobotJointPanel'
+import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
@@ -76,7 +76,11 @@ export interface RobotBuildPanelProps {
   onEdit: (link: string | null) => void
   onOpenJoint: (child: string, joint: string) => void
   onOpenServo: (pin: string) => void
+  /** Bind a servo to the next free pin + open its editor. */
+  onNewServo: () => void
   onOpenPose: (name: string) => void
+  /** Open the pose editor for a new pose (captures the current joint values). */
+  onNewPose: () => void
   /** The current root link, and an action to re-root the model at a link. */
   rootLink: string | null
   onMakeBase: (link: string) => void
@@ -463,7 +467,9 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onEdit,
     onOpenJoint,
     onOpenServo,
+    onNewServo,
     onOpenPose,
+    onNewPose,
     rootLink,
     onMakeBase,
     onRename,
@@ -632,8 +638,18 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         </Section>
         )}
 
-        {servos.length > 0 && (
+        {canEdit && joints.some((j) => j.type !== 'fixed') && (
         <Section id="servos" label="Servos" count={servos.length} collapsed={collapsed} onToggle={toggle}>
+          <li className="robotbuild__part">
+            <button
+              type="button"
+              className="robotbuild__node robotbuild__newpose"
+              onClick={onNewServo}
+              title="Bind a servo pin to a joint"
+            >
+              ＋ Bind a servo
+            </button>
+          </li>
           {servos.map((b) => {
             const on = active?.kind === 'servo' && normPin(active.pin) === normPin(b.pin)
             return (
@@ -653,24 +669,34 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
         </Section>
         )}
 
-        {poses.length > 0 && (
-        <Section id="poses" label="Poses" count={poses.length} collapsed={collapsed} onToggle={toggle}>
-          {poses.map((p) => {
-            const on = active?.kind === 'pose' && active.name === p.name
-            return (
-              <li className="robotbuild__part" key={p.name}>
-                <button
-                  type="button"
-                  className={`robotbuild__node${on ? ' is-on' : ''}`}
-                  title={`Edit pose ${p.name}`}
-                  onClick={() => onOpenPose(p.name)}
-                >
-                  <span className="robotbuild__part-label">{p.name}</span>
-                </button>
-              </li>
-            )
-          })}
-        </Section>
+        {canEdit && (
+          <Section id="poses" label="Poses" count={poses.length} collapsed={collapsed} onToggle={toggle}>
+            <li className="robotbuild__part">
+              <button
+                type="button"
+                className="robotbuild__node robotbuild__newpose"
+                onClick={onNewPose}
+                title="Save the current joint positions as a new pose"
+              >
+                ＋ New pose
+              </button>
+            </li>
+            {poses.map((p) => {
+              const on = active?.kind === 'pose' && active.name === p.name
+              return (
+                <li className="robotbuild__part" key={p.name}>
+                  <button
+                    type="button"
+                    className={`robotbuild__node${on ? ' is-on' : ''}`}
+                    title={`Edit pose ${p.name}`}
+                    onClick={() => onOpenPose(p.name)}
+                  >
+                    <span className="robotbuild__part-label">{p.name}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </Section>
         )}
         {assembly.length === 0 && (
           <p className="robotbuild__hint">Add a block or import an STL to start building.</p>

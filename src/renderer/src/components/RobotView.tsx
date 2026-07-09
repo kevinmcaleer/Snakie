@@ -8,9 +8,9 @@ import type { URDFRobot } from 'urdf-loader'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { baseName, dirname, meshKind } from './robot-mesh'
-import { RobotJointPanel, type NamedPoseLike } from './RobotJointPanel'
 import {
   type JointMeta,
+  type NamedPoseLike,
   clamp,
   effectiveLimit,
   extractJoints,
@@ -236,21 +236,6 @@ export function RobotView({
     setValues((v) => ({ ...v, [name]: native }))
   }
 
-  const handleLimitChange = (name: string, raw: { min: number; max: number }): void => {
-    const round2 = (n: number): number => Math.round(n * 100) / 100
-    const next = { min: round2(raw.min), max: round2(raw.max) }
-    setOverrides((o) => ({ ...o, [name]: next }))
-    const meta = metaRef.current.find((m) => m.name === name)
-    if (meta) {
-      const lim = effectiveLimit(meta, next)
-      const cur = valuesRef.current[name] ?? 0
-      const cl = clamp(cur, lim.lower, lim.upper)
-      if (cl !== cur) handleJointChange(name, cl)
-    }
-    void persist((m) => {
-      m.joints = { ...(m.joints ?? {}), [name]: next }
-    })
-  }
 
   const handleSavePose = (name: string): void => {
     const vals: Record<string, number> = {}
@@ -647,7 +632,15 @@ export function RobotView({
     openContext({ kind: 'servo', pin }, null) // servo edits are drafted, not URDF
   }
   const handleOpenPose = (name: string): void => {
+    // Recall the pose so the editor's sliders start on its saved values.
+    const p = poses.find((x) => x.name === name)
+    if (p) handleRecallPose(p)
     openContext({ kind: 'pose', name }, null)
+  }
+  // "+ Pose" — open the editor for a NEW pose: keep the current joint values so the
+  // user tweaks the live posture, names it, and Saves.
+  const handleNewPose = (): void => {
+    openContext({ kind: 'pose', name: '' }, null)
   }
   // Add Joint (#354): the toolbar opens the dialog + ARMS picking. The user clicks
   // a point on each block in 3-D (onJointPick), picks a type + offset, then Add.
@@ -903,6 +896,15 @@ export function RobotView({
     void persist((mm) => {
       mm.servoJointMap = next
     })
+  }
+  // "+ Servo" — bind the next free pin to the first movable joint, then open its
+  // editor (the pose sidebar's add-servo, moved to the build panel — #312).
+  const handleNewServo = (): void => {
+    const used = new Set(bindings.map((b) => b.pin))
+    let pin = 0
+    while (used.has(String(pin))) pin++
+    handleAddBinding(String(pin), movableNames[0] ?? '')
+    handleOpenServo(String(pin))
   }
 
   const handleUpdateBinding = (pin: string, patch: Partial<ServoJointBinding>): void => {
@@ -2959,7 +2961,9 @@ export function RobotView({
             onEdit={handleOpenProps}
             onOpenJoint={handleOpenJoint}
             onOpenServo={handleOpenServo}
+            onNewServo={handleNewServo}
             onOpenPose={handleOpenPose}
+            onNewPose={handleNewPose}
             rootLink={effectiveBaseLink}
             onMakeBase={handleMakeBase}
             onRename={handleRenameLink}
@@ -3000,6 +3004,12 @@ export function RobotView({
             onRecallPose={handleRecallPose}
             onRenamePose={handleRenamePose}
             onDeletePose={handleDeletePose}
+            jointMeta={jointMeta}
+            values={values}
+            overrides={overrides}
+            onJointChange={handleJointChange}
+            onSavePose={handleSavePose}
+            onResetPose={handleResetPose}
             jointPick={
               jointPick && {
                 step: jointPick.step,
@@ -3024,32 +3034,17 @@ export function RobotView({
             {buildDim.text}
           </div>
         )}
+        {/* Floating status pills (formerly hosted in the retired pose sidebar): the
+            save state, and the measure tool's live readout. */}
+        {showPanel && (savingLabel || (measureActive && measureDist != null)) && (
+          <div className="robotview__hud-status">
+            {measureActive && measureDist != null && (
+              <span className="robotview__hud-pill">📏 {Math.round(measureDist)} mm</span>
+            )}
+            {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}
+          </div>
+        )}
       </div>
-      {showPanel && (
-        <RobotJointPanel
-          joints={jointMeta}
-          values={values}
-          overrides={overrides}
-          onJointChange={handleJointChange}
-          onLimitChange={handleLimitChange}
-          poses={poses}
-          onSavePose={handleSavePose}
-          onRecallPose={handleRecallPose}
-          onDeletePose={handleDeletePose}
-          onResetPose={handleResetPose}
-          measureActive={measureActive}
-          measureDistance={measureDist}
-          savingLabel={savingLabel}
-          assembly={assembly}
-          onImportStl={() => void handleImportStl()}
-          canImport={!!canImport}
-          importing={importing}
-          bindings={bindings}
-          onAddBinding={handleAddBinding}
-          onUpdateBinding={handleUpdateBinding}
-          onDeleteBinding={handleDeleteBinding}
-        />
-      )}
       </div>
       {showTimeline && (
         <RobotTimeline
