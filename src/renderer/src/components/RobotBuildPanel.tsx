@@ -415,7 +415,9 @@ function BodyRow({
         <span
           className={`robotbuild__rowbase${isRoot ? ' is-base' : ''}`}
           title={isRoot ? 'This is the base — everything hangs off it' : undefined}
-          aria-hidden={!isRoot}
+          role={isRoot ? 'img' : undefined}
+          aria-label={isRoot ? 'Base — everything hangs off it' : undefined}
+          aria-hidden={isRoot ? undefined : true}
         >
           {isRoot ? ANCHOR : null}
         </span>

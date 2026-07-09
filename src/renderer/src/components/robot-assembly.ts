@@ -155,11 +155,13 @@ export function renameLink(urdf: string, from: string, to: string): { urdf: stri
   let name = safe
   let n = 2
   while (existing.has(name)) name = `${safe}_${n++}`
+  // URDF link references are case-SENSITIVE — match the link def + its joint refs
+  // with the same case so a rename can't rewrite a different-cased link's joints.
   const e = escapeRe(from)
   const out = urdf
     .replace(new RegExp(`(<link\\b[^>]*\\bname\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
-    .replace(new RegExp(`(<parent\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'gi'), `$1${name}$2`)
-    .replace(new RegExp(`(<child\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'gi'), `$1${name}$2`)
+    .replace(new RegExp(`(<parent\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
+    .replace(new RegExp(`(<child\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
   return { urdf: out, name }
 }
 
