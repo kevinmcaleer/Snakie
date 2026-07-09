@@ -219,6 +219,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View — a clearer selection highlight.** The selected block was outlined
+  with a brass wireframe of every edge, which read as a see-through cage. It's now
+  tinted **light blue** (keeping the material's shading, so the sides still shade
+  rather than going flat) with a **thick black outline** around its perimeter.
 - **Robot View — default view is the perspective "home" corner.** The viewer now
   opens in **perspective**, framed from the cube's **top-right-front corner**
   (+X/+Y/+Z), zoomed to fit — and that's exactly where the **Home** button returns.

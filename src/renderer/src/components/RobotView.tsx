@@ -1756,26 +1756,64 @@ export function RobotView({
           const buildRay = new THREE.Raycaster()
           const buildNdc = new THREE.Vector2()
           const camDir = new THREE.Vector3()
-          const accentLineMat = new THREE.LineBasicMaterial({ color: 0xc8a24a, depthTest: false })
-          let outline: THREE.LineSegments | null = null
-          const applyHighlight = (link: string | null): void => {
-            if (outline) {
-              outline.parent?.remove(outline)
-              outline.geometry.dispose()
-              outline = null
+          // Selection highlight: tint the block LIGHT BLUE (keeping the material's
+          // shading, so the sides still shade rather than going flat) + a thick BLACK
+          // perimeter outline via an inflated back-side hull behind it. (The old brass
+          // wireframe drew every edge, which read as a transparent cage.)
+          const HL_BLUE = new THREE.Color(0x9db8dd)
+          let highlight: {
+            entries: { mesh: THREE.Mesh; origMat: THREE.Material | THREE.Material[]; tint: THREE.Material[] }[]
+            hulls: THREE.Mesh[]
+            hullMat: THREE.Material
+          } | null = null
+          const clearHighlight = (): void => {
+            if (!highlight) return
+            for (const e of highlight.entries) {
+              e.mesh.material = e.origMat
+              e.tint.forEach((m) => m.dispose())
             }
+            for (const h of highlight.hulls) h.parent?.remove(h)
+            highlight.hullMat.dispose()
+            highlight = null
+          }
+          const applyHighlight = (link: string | null): void => {
+            clearHighlight()
             const r = robotRef.current
             if (!link || !r || !r.links[link]) return
-            let mesh: THREE.Mesh | null = null
+            // Collect the link's own meshes FIRST — adding the outline hull as a child
+            // mid-traverse would make traverse recurse into it (→ stack overflow).
+            const meshes: THREE.Mesh[] = []
             r.links[link].traverse((o) => {
-              if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh
+              const mesh = o as THREE.Mesh
+              if (mesh.isMesh && !mesh.userData.isOutlineHull && ownerLinkName(mesh) === link) {
+                meshes.push(mesh)
+              }
             })
-            if (!mesh) return
-            const seg = new THREE.LineSegments(new THREE.EdgesGeometry((mesh as THREE.Mesh).geometry), accentLineMat)
-            seg.renderOrder = 999
-            seg.raycast = () => {} // the outline must never intercept a face pick
-            ;(mesh as THREE.Mesh).add(seg)
-            outline = seg
+            const entries: {
+              mesh: THREE.Mesh
+              origMat: THREE.Material | THREE.Material[]
+              tint: THREE.Material[]
+            }[] = []
+            const hulls: THREE.Mesh[] = []
+            const hullMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.BackSide })
+            for (const mesh of meshes) {
+              const origMat = mesh.material
+              const mk = (m: THREE.Material): THREE.Material => {
+                const c = m.clone() as THREE.MeshStandardMaterial
+                if ('color' in c && c.color) c.color = HL_BLUE.clone()
+                return c
+              }
+              const tint = Array.isArray(origMat) ? origMat.map(mk) : [mk(origMat)]
+              mesh.material = Array.isArray(origMat) ? tint : tint[0]
+              entries.push({ mesh, origMat, tint })
+              const hull = new THREE.Mesh(mesh.geometry, hullMat)
+              hull.scale.multiplyScalar(1.05)
+              hull.raycast = () => {} // never intercept a face pick
+              hull.userData.isOutlineHull = true
+              mesh.add(hull)
+              hulls.push(hull)
+            }
+            highlight = { entries, hulls, hullMat }
           }
           highlightApiRef.current = { apply: applyHighlight }
           applyHighlight(selectedLinkRef.current) // survive re-parse
@@ -2026,7 +2064,7 @@ export function RobotView({
             if (!lo) return
             lo.traverse((o) => {
               const mesh = o as THREE.Mesh
-              if (!mesh.isMesh || ownerLinkName(mesh) !== link) return // this link's own visual only
+              if (!mesh.isMesh || mesh.userData.isOutlineHull || ownerLinkName(mesh) !== link) return
               const orig = mesh.material
               const mk = (m: THREE.Material): THREE.Material => {
                 const c = m.clone() as DimMat
@@ -2458,8 +2496,7 @@ export function RobotView({
             clearMeasure()
             markerMat.dispose()
             lineMat.dispose()
-            if (outline) outline.geometry.dispose()
-            accentLineMat.dispose()
+            clearHighlight()
             clearJointMarkers()
             jointMatParent.dispose()
             jointMatChild.dispose()
