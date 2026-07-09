@@ -253,20 +253,41 @@ export function setPrimitiveSize(urdf: string, link: string, dims: readonly numb
   return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
 }
 
-/** Insert-or-replace a link's `<visual><origin xyz>` (keeps the opposite face put). */
+/** Read a link's `<visual><origin>` (xyz + rpy), for ANY geometry (mesh included),
+ *  or null when the link has no visual. */
+export function readVisualOrigin(
+  urdf: string,
+  link: string
+): { xyz: [number, number, number]; rpy: [number, number, number] } | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return null
+  const visual = body.slice(vs.start, vs.end)
+  const x = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(visual)
+  const r = /<origin\b[^>]*\brpy\s*=\s*"([^"]+)"/i.exec(visual)
+  return { xyz: x ? parseVec3(x[1]) : [0, 0, 0], rpy: r ? parseVec3(r[1]) : [0, 0, 0] }
+}
+
+/** Insert-or-replace a link's `<visual><origin>` (keeps the opposite face put).
+ *  `rpy` defaults to zero; pass it to also orient the visual. Handles both the
+ *  self-closing and open `<origin>…</origin>` tag forms. */
 export function setVisualOrigin(
   urdf: string,
   link: string,
-  xyz: readonly [number, number, number]
+  xyz: readonly [number, number, number],
+  rpy: readonly [number, number, number] = [0, 0, 0]
 ): string {
   const span = linkSpan(urdf, link)
   if (!span) return urdf
   const body = urdf.slice(span.bodyStart, span.bodyEnd)
   const vs = visualSlice(body)
   if (!vs) return urdf
-  const tag = `<origin xyz="${fmtVec(xyz)}" rpy="0 0 0"/>`
+  const tag = `<origin xyz="${fmtVec(xyz)}" rpy="${fmtVec(rpy)}"/>`
+  const originRe = /<origin\b[^>]*\/>|<origin\b[^>]*>[\s\S]*?<\/origin>/i
   let visual = body.slice(vs.start, vs.end)
-  if (/<origin\b[^>]*\/>/i.test(visual)) visual = visual.replace(/<origin\b[^>]*\/>/i, tag)
+  if (originRe.test(visual)) visual = visual.replace(originRe, tag)
   else visual = visual.replace(/<visual\b[^>]*>/i, (v) => `${v}\n      ${tag}`)
   const nextBody = body.slice(0, vs.start) + visual + body.slice(vs.end)
   return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
@@ -598,6 +619,31 @@ export function addPrimitive(
   const idx = urdf.lastIndexOf('</robot>')
   const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
   return { urdf: ensureMaterial(next, 'steel'), link: name }
+}
+
+/**
+ * Remove the `<joint>` whose child is `childLink` (leaves the child a detached
+ * root — the caller keeps it in place / re-homes it). Returns the URDF unchanged
+ * when no such joint exists. Handles any joint-tag / attribute layout.
+ */
+export function removeJoint(urdf: string, childLink: string): string {
+  const re = /\s*<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+  const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
+  let removedName: string | undefined
+  let out = urdf.replace(re, (block) => {
+    if (!childRe.test(block)) return block
+    removedName = /\bname\s*=\s*"([^"]+)"/.exec(block)?.[1]
+    return '\n'
+  })
+  // A joint that MIMICKED the removed one now dangles — drop the stale <mimic>.
+  if (removedName) {
+    const mimicRe = new RegExp(
+      `\\s*<mimic\\b[^>]*\\bjoint\\s*=\\s*"${escapeRe(removedName)}"[^>]*\\/?>`,
+      'gi'
+    )
+    out = out.replace(mimicRe, '')
+  }
+  return out
 }
 
 /**
