@@ -556,6 +556,22 @@ export function RobotView({
   const handleSetJoint = (link: string, spec: JointSpec): void => {
     commitUrdf(setJoint(content, link, spec))
   }
+  // Reposition an existing joint's origin (keep its orientation) — the Offset fields
+  // on the joint editor.
+  const handleSetJointOrigin = (child: string, xyz: [number, number, number]): void => {
+    const j = readJoint(content, child)
+    if (j) commitUrdf(setJointOrigin(content, child, xyz, j.rpy))
+  }
+  // Roll an existing joint about its own normal axis (its origin's local Z) by
+  // `deltaDeg`, keeping its position — the roll field on the joint editor.
+  const handleRollJoint = (child: string, deltaDeg: number): void => {
+    const j = readJoint(content, child)
+    if (!j || !deltaDeg) return
+    const R = new THREE.Quaternion().setFromEuler(new THREE.Euler(j.rpy[0], j.rpy[1], j.rpy[2], 'ZYX'))
+    R.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (deltaDeg * Math.PI) / 180))
+    const e = new THREE.Euler().setFromQuaternion(R, 'ZYX')
+    commitUrdf(setJointOrigin(content, child, j.xyz, [e.x, e.y, e.z]))
+  }
   const handleDeleteLink = (link: string): void => {
     // Deleting the base would cascade-remove the whole tree → an empty, unusable
     // URDF. The UI disables it; guard here too. (A loose, unconnected part is fine
@@ -3022,6 +3038,8 @@ export function RobotView({
             jointNames={allJointNames}
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
+            onSetJointOrigin={handleSetJointOrigin}
+            onRollJoint={handleRollJoint}
             onDeleteJoint={handleDeleteJoint}
             servo={dialogCtx.kind === 'servo' ? bindings.find((b) => b.pin === dialogCtx.pin) ?? null : null}
             movableJoints={movableNames}

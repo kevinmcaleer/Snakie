@@ -51,6 +51,9 @@ export interface RobotPropertiesDialogProps {
   jointNames: string[]
   onSetSize: (link: string, dims: number[]) => void
   onSetJoint: (link: string, spec: JointSpec) => void
+  /** Reposition the joint origin (offset, mm→m) and roll it about its normal (deg). */
+  onSetJointOrigin: (child: string, xyz: [number, number, number]) => void
+  onRollJoint: (child: string, deltaDeg: number) => void
   /** Remove the joint whose child is this link (the block re-attaches to the base). */
   onDeleteJoint: (child: string) => void
   // servo
@@ -247,7 +250,9 @@ function LinkBody({
   joint,
   jointNames,
   onSetSize,
-  onSetJoint
+  onSetJoint,
+  onSetJointOrigin,
+  onRollJoint
 }: RobotPropertiesDialogProps & { context: PropsContext }): JSX.Element {
   // `link` = the block being edited, or the joint's child link (which carries it).
   const link = context.kind === 'joint' ? context.child : context.kind === 'link' ? context.link : ''
@@ -265,7 +270,13 @@ function LinkBody({
       {joint ? (
         <section className="robotprops__section">
           <div className="robotprops__label">Joint</div>
-          <JointForm joint={joint} names={jointNames} onChange={(spec) => onSetJoint(link, spec)} />
+          <JointForm
+            joint={joint}
+            names={jointNames}
+            onChange={(spec) => onSetJoint(link, spec)}
+            onSetOrigin={(xyz) => onSetJointOrigin(link, xyz)}
+            onRoll={(deltaDeg) => onRollJoint(link, deltaDeg)}
+          />
         </section>
       ) : (
         <p className="robotprops__note">This is the base — nothing to join to.</p>
