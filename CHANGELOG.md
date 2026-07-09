@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Robot View — a cleaner, Fusion-style build hierarchy (#354).** The panel is
+  **wider** so long STL names have room, and it drops its solid slab — each line now
+  sits on its own **subtle off-white card** so it reads over the 3-D canvas. Per-row
+  clutter is gone: the base is marked with an **anchor** (not a star), and **Rename /
+  Make base / Delete** moved to a **right-click menu** (renaming a part updates it
+  everywhere it's referenced). Mesh rows show a compact `stl`/`dae` tag instead of
+  repeating the filename.
+
 ### Added
 - **Robot View — import parts loose, pick a base, then join them into a chain (#354).**
   Imported STLs no longer auto-weld to the first part with a hidden fixed joint (which

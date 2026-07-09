@@ -141,6 +141,28 @@ export function looseLinks(urdf: string, base?: string | null): string[] {
   return links.filter((l) => !children.has(l) && l !== base)
 }
 
+/**
+ * Rename a link everywhere it's referenced: its `<link name="…">` and every
+ * joint's `<parent link="…">` / `<child link="…">`. `to` is sanitised to an
+ * XML-safe name, made unique (a collision with another link bumps a suffix); a
+ * rename to the same name is a no-op. Returns the new URDF + the final name.
+ */
+export function renameLink(urdf: string, from: string, to: string): { urdf: string; name: string } {
+  const safe = to.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'part'
+  if (safe === from) return { urdf, name: from }
+  const existing = new Set(parseAssembly(urdf).map((i) => i.link))
+  existing.delete(from)
+  let name = safe
+  let n = 2
+  while (existing.has(name)) name = `${safe}_${n++}`
+  const e = escapeRe(from)
+  const out = urdf
+    .replace(new RegExp(`(<link\\b[^>]*\\bname\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
+    .replace(new RegExp(`(<parent\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'gi'), `$1${name}$2`)
+    .replace(new RegExp(`(<child\\b[^>]*\\blink\\s*=\\s*")${e}(")`, 'gi'), `$1${name}$2`)
+  return { urdf: out, name }
+}
+
 // ── Primitive builder (#315a) ────────────────────────────────────────────────
 
 /** A primitive link's geometry, read from / written to the URDF. Sizes in metres:

@@ -31,6 +31,7 @@ import {
   readVisualOrigin,
   removeJoint,
   removeLink,
+  renameLink,
   rootLink,
   setJoint,
   setJointOrigin,
@@ -592,6 +593,19 @@ export function RobotView({
       m.baseLink = link
     })
     commitUrdf(reRoot(content, link))
+  }
+  const handleRenameLink = (link: string, to: string): void => {
+    const { urdf, name } = renameLink(content, link, to)
+    if (name === link) return // unchanged / no-op
+    commitUrdf(urdf)
+    if (selectedLink === link) setSelectedLink(name)
+    // Follow the rename through the base bookkeeping so the ★ + robot.yml stay in sync.
+    if (chosenBase === link) {
+      setChosenBase(name)
+      void persist((m) => {
+        m.baseLink = name
+      })
+    }
   }
   // Properties dialog (#352 / #353): clicking a node opens its context here. For a
   // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
@@ -2878,6 +2892,7 @@ export function RobotView({
             onOpenPose={handleOpenPose}
             rootLink={effectiveBaseLink}
             onMakeBase={handleMakeBase}
+            onRename={handleRenameLink}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}
