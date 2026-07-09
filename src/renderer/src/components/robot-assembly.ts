@@ -102,35 +102,51 @@ export function uniqueLinkName(urdf: string, base: string): string {
 }
 
 /**
- * Append an imported mesh to a URDF as a new **loose** link — no joint, so it
- * comes in as an unconnected part (a root) the user then designates as the base
- * or joins into the chain with the Add Joint tool. (Auto-welding every import to
- * the root with a fixed joint fused the whole assembly into one rigid blob.)
- * `meshRel` is the mesh path relative to the URDF folder (e.g. `meshes/wheel.stl`).
- * Returns the new URDF text and the created link name.
+ * Append an imported mesh to a URDF as a new link, attached to the current base
+ * with a **fixed (but movable) joint** at a **staggered** origin so it doesn't pile
+ * onto the base at the origin. The joint gives it its OWN scene-graph identity —
+ * urdf-loader collapses ALL rootless links into one node (they'd co-select /
+ * "fuse"), so every part except the single base root must be a joint child. The
+ * part is freely re-homable (drag it, or re-joint it into the chain). The very
+ * first link of an empty URDF becomes the root (no joint). `meshRel` is relative
+ * to the URDF folder. Returns the new URDF text + the created link name.
  */
 export function addMeshLink(
   urdf: string,
-  opts: { meshRel: string; linkBase: string; scale?: number }
+  opts: { meshRel: string; linkBase: string; scale?: number; parent?: string }
 ): { urdf: string; link: string } {
+  // Attach under the UI's chosen base if given (it can differ from the doc-first
+  // root in a transitional multi-root URDF); else the sole/first root.
+  const parent = opts.parent ?? rootLink(urdf)
   const name = uniqueLinkName(urdf, opts.linkBase)
   // A `scale` normalises a mesh authored in different units (e.g. mm → m).
   const s = opts.scale && opts.scale !== 1 ? ` scale="${fmtNum(opts.scale)} ${fmtNum(opts.scale)} ${fmtNum(opts.scale)}"` : ''
+  // Stagger each new part along X (by the current link count) so imports land beside
+  // the base rather than co-located at (0,0,0) where they'd look fused.
+  const stagger = fmtNum(0.08 * parseAssembly(urdf).length)
+  const joint = parent
+    ? `  <joint name="${name}_joint" type="fixed">\n` +
+      `    <parent link="${parent}"/>\n` +
+      `    <child link="${name}"/>\n` +
+      `    <origin xyz="${stagger} 0 0" rpy="0 0 0"/>\n` +
+      `  </joint>\n`
+    : '' // first link of an empty URDF is the root — no joint
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
     `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
     `    </visual>\n` +
-    `  </link>\n`
+    `  </link>\n` +
+    joint
   const idx = urdf.lastIndexOf('</robot>')
   const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
   return { urdf: next, link: name }
 }
 
 /**
- * The **unconnected** links: every link that is a root (never a joint's `<child>`)
- * EXCEPT the chosen base. These are parts imported but not yet joined into the
- * chain. `base` is the designated base link (from robot.yml, or the sole root).
+ * The **root** links (never a joint's `<child>`), optionally excluding `base`. A
+ * well-formed robot has exactly one root (the base); this enumerates them so the UI
+ * can find the base / detect a stray extra root.
  */
 export function looseLinks(urdf: string, base?: string | null): string[] {
   const links = parseAssembly(urdf).map((i) => i.link)

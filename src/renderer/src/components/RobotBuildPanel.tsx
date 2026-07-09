@@ -390,7 +390,6 @@ function BodyRow({
   isSel,
   isEdit,
   isRoot,
-  loose = false,
   onSelect,
   onEdit,
   onContextMenu
@@ -399,14 +398,13 @@ function BodyRow({
   isSel: boolean
   isEdit: boolean
   isRoot: boolean
-  loose?: boolean
   onSelect: (link: string) => void
   onEdit: (link: string | null) => void
   onContextMenu: (e: React.MouseEvent, link: string) => void
 }): JSX.Element {
   return (
     <li
-      className={`robotbuild__part${isSel ? ' is-sel' : ''}${loose ? ' is-loose' : ''}`}
+      className={`robotbuild__part${isSel ? ' is-sel' : ''}`}
       onContextMenu={(e) => onContextMenu(e, it.link)}
     >
       <div className="robotbuild__part-row">
@@ -518,15 +516,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     ]
   }
 
-  // A part is LOOSE (not connected yet) when it has no parent joint AND it isn't the
-  // chosen base — i.e. an imported part still waiting to be joined into the chain.
-  const jointChildren = new Set(joints.map((j) => j.child))
-  const isLoose = (it: AssemblyItem): boolean => !jointChildren.has(it.link) && it.link !== rootLink
-  const looseParts = assembly.filter(isLoose)
-  const blocks = assembly.filter((it) => it.kind !== 'mesh' && !isLoose(it))
-  const meshes = assembly.filter((it) => it.kind === 'mesh' && !isLoose(it))
-  // No base picked yet but parts exist → prompt the user to choose one.
-  const needsBase = rootLink === null && assembly.length > 0
+  const blocks = assembly.filter((it) => it.kind !== 'mesh')
+  const meshes = assembly.filter((it) => it.kind === 'mesh')
   const editLink = active?.kind === 'link' ? active.link : null
 
   if (!open) {
@@ -586,32 +577,15 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       )}
 
       <div className="robotbuild__tree">
-        {needsBase && (
-          <p className="robotbuild__basehint">
-            ⭐ Pick a <strong>base</strong> part (right-click → <em>Make base</em>) — it&rsquo;s
-            the anchor the rest of the robot hangs off.
-          </p>
-        )}
-        {looseParts.length > 0 && (
-          <Section
-            id="loose"
-            label="Not connected yet"
-            count={looseParts.length}
-            collapsed={collapsed}
-            onToggle={toggle}
-          >
-            <li className="robotbuild__loosehint">
-              Join each of these to your robot with the Add Joint tool — or right-click →
-              <em> Make base</em>.
-            </li>
-            {looseParts.map((it) => (
+        {blocks.length > 0 && (
+          <Section id="blocks" label="Blocks" count={blocks.length} collapsed={collapsed} onToggle={toggle}>
+            {blocks.map((it) => (
               <BodyRow
                 key={it.link}
                 it={it}
                 isSel={it.link === selected}
                 isEdit={it.link === editLink}
-                isRoot={false}
-                loose
+                isRoot={it.link === rootLink}
                 onSelect={onSelect}
                 onEdit={onEdit}
                 onContextMenu={openMenu}
@@ -619,38 +593,25 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
             ))}
           </Section>
         )}
-        <Section id="blocks" label="Blocks" count={blocks.length} collapsed={collapsed} onToggle={toggle}>
-          {blocks.map((it) => (
-            <BodyRow
-              key={it.link}
-              it={it}
-              isSel={it.link === selected}
-              isEdit={it.link === editLink}
-              isRoot={it.link === rootLink}
-              onSelect={onSelect}
-              onEdit={onEdit}
-              onContextMenu={openMenu}
-            />
-          ))}
-          {blocks.length === 0 && <li className="robotbuild__empty">No blocks yet — add one above.</li>}
-        </Section>
 
-        <Section id="meshes" label="Meshes" count={meshes.length} collapsed={collapsed} onToggle={toggle}>
-          {meshes.map((it) => (
-            <BodyRow
-              key={it.link}
-              it={it}
-              isSel={it.link === selected}
-              isEdit={it.link === editLink}
-              isRoot={it.link === rootLink}
-              onSelect={onSelect}
-              onEdit={onEdit}
-              onContextMenu={openMenu}
-            />
-          ))}
-          {meshes.length === 0 && <li className="robotbuild__empty">No imported meshes.</li>}
-        </Section>
+        {meshes.length > 0 && (
+          <Section id="meshes" label="Meshes" count={meshes.length} collapsed={collapsed} onToggle={toggle}>
+            {meshes.map((it) => (
+              <BodyRow
+                key={it.link}
+                it={it}
+                isSel={it.link === selected}
+                isEdit={it.link === editLink}
+                isRoot={it.link === rootLink}
+                onSelect={onSelect}
+                onEdit={onEdit}
+                onContextMenu={openMenu}
+              />
+            ))}
+          </Section>
+        )}
 
+        {joints.length > 0 && (
         <Section id="joints" label="Joints" count={joints.length} collapsed={collapsed} onToggle={toggle}>
           {joints.map((j) => {
             const on = active?.kind === 'joint' && active.joint === j.name
@@ -668,9 +629,10 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               </li>
             )
           })}
-          {joints.length === 0 && <li className="robotbuild__empty">No joints.</li>}
         </Section>
+        )}
 
+        {servos.length > 0 && (
         <Section id="servos" label="Servos" count={servos.length} collapsed={collapsed} onToggle={toggle}>
           {servos.map((b) => {
             const on = active?.kind === 'servo' && normPin(active.pin) === normPin(b.pin)
@@ -688,9 +650,10 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               </li>
             )
           })}
-          {servos.length === 0 && <li className="robotbuild__empty">No servos mapped.</li>}
         </Section>
+        )}
 
+        {poses.length > 0 && (
         <Section id="poses" label="Poses" count={poses.length} collapsed={collapsed} onToggle={toggle}>
           {poses.map((p) => {
             const on = active?.kind === 'pose' && active.name === p.name
@@ -707,8 +670,11 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
               </li>
             )
           })}
-          {poses.length === 0 && <li className="robotbuild__empty">No saved poses.</li>}
         </Section>
+        )}
+        {assembly.length === 0 && (
+          <p className="robotbuild__hint">Add a block or import an STL to start building.</p>
+        )}
       </div>
 
       <div className="robotbuild__foot">
