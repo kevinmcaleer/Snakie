@@ -119,6 +119,60 @@
   color: var(--text-muted, #8b919b);
   cursor: pointer;
 }
+/* Add Joint — the pick slot for Component 1 / 2 (filled by a 3-D click). */
+.robotprops__pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  text-align: left;
+}
+.robotprops__pick.is-arming {
+  border-color: var(--accent, #d6a23f);
+  box-shadow: 0 0 0 1px var(--accent, #d6a23f) inset;
+}
+.robotprops__pick-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.robotprops__pick-role {
+  flex: 0 0 auto;
+  font-size: 0.56rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__pick-hint {
+  color: var(--text-muted, #8b919b);
+}
+/* Joint-type chips (Static / Rotation / Linear). */
+.robotprops__chip {
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.2rem;
+  cursor: pointer;
+}
+.robotprops__chip.is-on {
+  color: var(--accent-contrast, #15161a);
+  background: var(--accent, #d6a23f);
+  border-color: var(--accent, #d6a23f);
+  font-weight: 700;
+}
 .robotprops__foot {
   display: flex;
   align-items: center;

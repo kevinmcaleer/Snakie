@@ -34,6 +34,7 @@ import {
   setVisualOrigin,
   type JointDef,
   type JointSpec,
+  type JointType,
   type PrimitiveGeom
 } from './robot-assembly'
 import { reRoot } from './robot-reroot'
@@ -340,10 +341,40 @@ export function RobotView({
   const editLink =
     dialogCtx?.kind === 'link' ? dialogCtx.link : dialogCtx?.kind === 'joint' ? dialogCtx.child : null
   const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: string } | null>(null)
+  // Join tool (#354): the two points picked in 3-D. Non-null = pick mode is armed.
+  type JointPickPt = { link: string; local: [number, number, number]; role: string }
+  const [jointPick, setJointPick] = useState<{
+    step: 'parent' | 'child'
+    parent: JointPickPt | null
+    child: JointPickPt | null
+  } | null>(null)
   // Refs the three.js pointer callbacks read (avoids re-subscribing on each edit).
   const buildOpenRef = useRef(false)
   const selectedLinkRef = useRef<string | null>(null)
   const editLinkRef = useRef<string | null>(null)
+  // Join-tool bridges: pick mode state for the effect, the pick callback, + a
+  // handle to clear the 3-D pick markers. `parentLink`/`childLink` let the pick
+  // handler reject a same-block pick BEFORE it draws a marker.
+  const jointPickRef = useRef<{
+    active: boolean
+    step: 'parent' | 'child'
+    parentLink: string | null
+    childLink: string | null
+  }>({ active: false, step: 'parent', parentLink: null, childLink: null })
+  jointPickRef.current = {
+    active: !!jointPick,
+    step: jointPick?.step ?? 'parent',
+    parentLink: jointPick?.parent?.link ?? null,
+    childLink: jointPick?.child?.link ?? null
+  }
+  // The full pick state (with local coords) for the effect to REDRAW markers after
+  // a rebuild mid-pick (deps change) — otherwise the dialog shows picks but 3-D is bare.
+  const jointPickStateRef = useRef(jointPick)
+  jointPickStateRef.current = jointPick
+  const onJointPickRef = useRef<
+    ((link: string, local: [number, number, number], role: string) => void) | null
+  >(null)
+  const jointPickApiRef = useRef<{ clear: () => void } | null>(null)
   buildOpenRef.current = buildOpen && poseUI
   selectedLinkRef.current = selectedLink
   editLinkRef.current = editLink
@@ -522,6 +553,10 @@ export function RobotView({
   const openContext = (ctx: PropsContext | null, snapshot: string | null): void => {
     editSnapshotRef.current = snapshot
     setDialogCtx(ctx)
+    if (ctx?.kind !== 'addjoint') {
+      setJointPick(null) // leaving the Join tool disarms picking + clears markers
+      jointPickApiRef.current?.clear()
+    }
   }
   const handleOpenProps = (link: string | null): void => {
     if (link) {
@@ -541,31 +576,71 @@ export function RobotView({
   const handleOpenPose = (name: string): void => {
     openContext({ kind: 'pose', name }, null)
   }
-  // Add Joint (#354): the toolbar opens the dialog; Add commits a connectJoint.
+  // Add Joint (#354): the toolbar opens the dialog + ARMS picking. The user clicks
+  // a point on each block in 3-D (onJointPick), picks a type + offset, then Add.
   const handleAddJoint = (): void => {
+    setMeasureActive(false) // picking + measuring both own clicks — don't double-fire
+    jointPickApiRef.current?.clear()
+    setJointPick({ step: 'parent', parent: null, child: null })
     openContext({ kind: 'addjoint' }, null)
     if (!buildOpen) setBuildOpen(true)
   }
-  const handleConnectJoint = (
-    parent: string,
-    child: string,
-    xyz: [number, number, number]
-  ): boolean => {
-    const next = connectJoint(content, { parent, child, xyz })
-    if (next === content) return false // no-op (cycle / invalid) — tell the dialog
+  // A 3-D pick landed (the effect resolved the click → link + local snap point).
+  const onJointPick = (link: string, local: [number, number, number], role: string): void => {
+    setJointPick((jp) => {
+      if (!jp) return jp
+      const pt: JointPickPt = { link, local, role }
+      if (jp.step === 'parent') return { ...jp, parent: pt, step: 'child' }
+      if (jp.parent && link === jp.parent.link) return jp // can't join a block to itself
+      return { ...jp, child: pt }
+    })
+  }
+  onJointPickRef.current = onJointPick
+  // Re-arm picking for one component (its 3-D marker is replaced on the next click).
+  const handleRepick = (which: 'parent' | 'child'): void => {
+    setJointPick((jp) =>
+      jp
+        ? which === 'parent'
+          ? { ...jp, step: 'parent', parent: null }
+          : { ...jp, step: 'child', child: null }
+        : jp
+    )
+  }
+  // Add: place the child so its picked point meets the parent's picked point
+  // (origin = parentLocal − childLocal + offset), re-parent it, and set the type.
+  const handleConnectPicked = (type: JointType, offsetMm: [number, number, number]): boolean => {
+    const jp = jointPick
+    if (!jp?.parent || !jp?.child) return false
+    const base = contentRef.current
+    const xyz: [number, number, number] = [
+      jp.parent.local[0] - jp.child.local[0] + offsetMm[0],
+      jp.parent.local[1] - jp.child.local[1] + offsetMm[1],
+      jp.parent.local[2] - jp.child.local[2] + offsetMm[2]
+    ]
+    let next = connectJoint(base, { parent: jp.parent.link, child: jp.child.link, xyz })
+    if (next === base) return false // cycle / invalid — keep the dialog open
+    next = setJoint(next, jp.child.link, { type }) // apply the chosen joint type
+    // Force the joint rotation to identity (rpy 0): the origin math above assumes
+    // it, and connectJoint/setJoint otherwise PRESERVE a child's old rpy — which
+    // would leave the two picked points misaligned. setJointOrigin emits rpy="0 0 0".
+    next = setJointOrigin(next, jp.child.link, xyz)
     commitUrdf(next)
-    setSelectedLink(child)
+    setSelectedLink(jp.child.link)
     return true
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
     setDialogCtx(null)
+    setJointPick(null)
+    jointPickApiRef.current?.clear()
   }
   const handlePropsCancel = (): void => {
     const snap = editSnapshotRef.current
     editSnapshotRef.current = null
     if (snap != null && snap !== contentRef.current) commitUrdf(snap) // discard edits
     setDialogCtx(null)
+    setJointPick(null)
+    jointPickApiRef.current?.clear()
   }
 
   // Re-apply the selection outline when the picked block changes (no re-parse).
@@ -1781,9 +1856,87 @@ export function RobotView({
             ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
           }
 
+          // ── Join tool (#354): click a point on two blocks to connect them ──
+          const jointMarkerMat = new THREE.MeshBasicMaterial({ color: 0x4ea1ff, depthTest: false }) // parent
+          const jointMarkerMatChild = new THREE.MeshBasicMaterial({ color: 0x34ad4f, depthTest: false }) // child
+          let parentMarker: THREE.Mesh | null = null
+          let childMarker: THREE.Mesh | null = null
+          const clearJointMarkers = (): void => {
+            for (const mk of [parentMarker, childMarker]) {
+              if (mk) {
+                scene.remove(mk)
+                mk.geometry.dispose()
+              }
+            }
+            parentMarker = null
+            childMarker = null
+          }
+          jointPickApiRef.current = { clear: clearJointMarkers }
+          const setJointMarker = (world: THREE.Vector3, isChild: boolean): void => {
+            const prev = isChild ? childMarker : parentMarker
+            if (prev) {
+              scene.remove(prev)
+              prev.geometry.dispose()
+            }
+            const mk = new THREE.Mesh(
+              new THREE.SphereGeometry(halfView * 0.03 + 0.002, 12, 12),
+              isChild ? jointMarkerMatChild : jointMarkerMat
+            )
+            mk.position.copy(world)
+            mk.renderOrder = 999
+            mk.raycast = () => {}
+            scene.add(mk)
+            if (isChild) childMarker = mk
+            else parentMarker = mk
+          }
+          // Redraw markers for any picks that survived an effect rebuild mid-pick
+          // (the state persists in jointPickStateRef; the old scene objects didn't).
+          {
+            const jp = jointPickStateRef.current
+            const drawFrom = (p: { link: string; local: [number, number, number] } | null, child: boolean): void => {
+              const lo = p && robotRef.current?.links[p.link]
+              if (p && lo) setJointMarker(lo.localToWorld(new THREE.Vector3(...p.local)), child)
+            }
+            robotRef.current?.updateMatrixWorld(true)
+            drawFrom(jp?.parent ?? null, false)
+            drawFrom(jp?.child ?? null, true)
+          }
+          const pickJointPoint = (e: PointerEvent): void => {
+            const robot = robotRef.current
+            if (!robot) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
+            if (!hit) return
+            const link = ownerLinkName(hit.object)
+            if (!link || !robot.links[link]) return
+            // Reject a same-block pick BEFORE drawing a marker (else the marker moves
+            // but the dialog state rejects the pick → visual/state desync).
+            const jr = jointPickRef.current
+            if (jr.step === 'child' && jr.parentLink === link) return
+            if (jr.step === 'parent' && jr.childLink === link) return
+            let world = hit.point.clone()
+            let role = 'point'
+            // Snap to a face corner/edge/centre for a primitive; a mesh has none, so
+            // the raw hit point stands in.
+            const geom = readPrimitive(contentRef.current, link)
+            if (geom) {
+              const th = hitToHandles(hit, link, geom)
+              const near = nearestScreen(th.pts, e)
+              if (near.index >= 0 && near.distPx < 24) {
+                world = th.pts[near.index].clone()
+                role = th.roles[near.index]
+              }
+            }
+            const local = robot.links[link].worldToLocal(world.clone())
+            setJointMarker(world, jr.step === 'child')
+            onJointPickRef.current?.(link, [local.x, local.y, local.z], role)
+          }
+
           const onBuildDown = (e: PointerEvent): void => {
             bDownX = e.clientX
             bDownY = e.clientY
+            if (jointPickRef.current.active) return // pick mode owns clicks (no move/resize)
             if (!buildActive() || !canEditRef.current || !robotRef.current) return
             if (buildToolRef.current === 'pushpull') startResize(e)
             else if (buildToolRef.current === 'move') startMove(e)
@@ -1858,6 +2011,14 @@ export function RobotView({
           }
 
           const onBuildUp = (e: PointerEvent): void => {
+            // Join tool: a near-stationary click picks a point (drags orbit). Skip
+            // if measuring (that tool consumes the click via its own handler).
+            if (jointPickRef.current.active) {
+              if (!measureActiveRef.current && Math.hypot(e.clientX - bDownX, e.clientY - bDownY) <= 4) {
+                pickJointPoint(e)
+              }
+              return
+            }
             if (drag) {
               const d = drag
               drag = null
@@ -1892,10 +2053,12 @@ export function RobotView({
             if (name) setSelectedLink(name)
           }
 
-          // Hover: show a face's snap handles when the Move tool is active + idle.
+          // Hover: show a face's snap handles when the Move tool OR the Join picker
+          // is active + idle, so the user sees the corner/edge/centre snaps.
           const onBuildHover = (e: PointerEvent): void => {
             if (drag || move) return
-            if (!buildActive() || buildToolRef.current !== 'move' || !robotRef.current) {
+            const wantHandles = buildToolRef.current === 'move' || jointPickRef.current.active
+            if (!buildActive() || !wantHandles || !robotRef.current) {
               if (snapGroup.children.length) clearHandles()
               return
             }
@@ -1956,8 +2119,12 @@ export function RobotView({
             lineMat.dispose()
             if (outline) outline.geometry.dispose()
             accentLineMat.dispose()
+            clearJointMarkers()
+            jointMarkerMat.dispose()
+            jointMarkerMatChild.dispose()
             measureApiRef.current = null
             highlightApiRef.current = null
+            jointPickApiRef.current = null
           }
         }
       }
@@ -2231,9 +2398,21 @@ export function RobotView({
             onRecallPose={handleRecallPose}
             onRenamePose={handleRenamePose}
             onDeletePose={handleDeletePose}
-            links={assembly.map((a) => a.link)}
-            joints={joints}
-            onConnect={handleConnectJoint}
+            jointPick={
+              jointPick && {
+                step: jointPick.step,
+                parent: jointPick.parent && {
+                  link: jointPick.parent.link,
+                  role: jointPick.parent.role
+                },
+                child: jointPick.child && {
+                  link: jointPick.child.link,
+                  role: jointPick.child.role
+                }
+              }
+            }
+            onRepick={handleRepick}
+            onConnectPicked={handleConnectPicked}
             onOk={handlePropsOk}
             onCancel={handlePropsCancel}
           />
