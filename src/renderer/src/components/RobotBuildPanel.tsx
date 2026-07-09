@@ -1,12 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   AssemblyItem,
+  ChainNode,
   PrimitiveGeom,
   JointDef,
   JointFull,
   JointType,
   JointSpec
 } from './robot-assembly'
+import { buildChainTree } from './robot-assembly'
 import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
@@ -461,66 +463,82 @@ function Section({
   )
 }
 
-/** A block / mesh row: an anchor on the base + an edit pencil to the left, then the
- *  name (click selects + zooms). Rename / Make base / Delete live on the right-click
- *  menu (Fusion-style). Shared by the Blocks / Meshes / Not-connected branches. */
-function BodyRow({
-  it,
+const INDENT = 14 // px of indent per depth level in the chain tree
+
+/** One row of the kinematic Chain tree (#354): the part name (indented by depth), the
+ *  joint type that connects it to its parent, and a "loose" flag for unconnected parts. */
+function ChainRow({
+  node,
   isSel,
   isEdit,
-  isRoot,
+  activeJoint,
   onSelect,
   onEdit,
+  onOpenJoint,
   onContextMenu
 }: {
-  it: AssemblyItem
+  node: ChainNode
   isSel: boolean
   isEdit: boolean
-  isRoot: boolean
+  activeJoint: string | null
   onSelect: (link: string) => void
   onEdit: (link: string | null) => void
+  onOpenJoint: (child: string, joint: string) => void
   onContextMenu: (e: React.MouseEvent, link: string) => void
 }): JSX.Element {
+  const geo = node.kind === 'mesh' ? node.mesh?.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'mesh' : node.kind
   return (
     <li
-      className={`robotbuild__part${isSel ? ' is-sel' : ''}`}
-      onContextMenu={(e) => onContextMenu(e, it.link)}
+      className={`robotbuild__part${isSel ? ' is-sel' : ''}${node.loose ? ' robotbuild__chain--loose' : ''}`}
+      style={{ paddingLeft: node.depth * INDENT }}
+      onContextMenu={(e) => onContextMenu(e, node.link)}
     >
       <div className="robotbuild__part-row">
-        {/* Icons sit to the LEFT of the name (Fusion-style); the name button flexes
-            to fill the rest so long mesh filenames get room to breathe. */}
+        {node.depth > 0 && (
+          <span className="robotbuild__chain-elbow" aria-hidden="true">
+            └
+          </span>
+        )}
         <span
-          className={`robotbuild__rowbase${isRoot ? ' is-base' : ''}`}
-          title={isRoot ? 'This is the base — everything hangs off it' : undefined}
-          role={isRoot ? 'img' : undefined}
-          aria-label={isRoot ? 'Base — everything hangs off it' : undefined}
-          aria-hidden={isRoot ? undefined : true}
+          className={`robotbuild__rowbase${node.isBase ? ' is-base' : ''}`}
+          title={node.isBase ? 'This is the base — everything hangs off it' : undefined}
+          aria-hidden={node.isBase ? undefined : true}
         >
-          {isRoot ? ANCHOR : null}
+          {node.isBase ? ANCHOR : null}
         </span>
         <button
           type="button"
           className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
-          onClick={() => onEdit(isEdit ? null : it.link)}
+          onClick={() => onEdit(isEdit ? null : node.link)}
           title={isEdit ? 'Close properties' : 'Edit properties'}
-          aria-label={`Edit ${it.link}`}
+          aria-label={`Edit ${node.link}`}
         >
           {PENCIL}
         </button>
         <button
           type="button"
           className="robotbuild__part-name"
-          title={`${it.link} — right-click for rename / base / delete`}
-          onClick={() => onSelect(it.link)}
-          onContextMenu={(e) => onContextMenu(e, it.link)}
+          title={`${node.link} — right-click for rename / base / delete / attach`}
+          onClick={() => onSelect(node.link)}
+          onContextMenu={(e) => onContextMenu(e, node.link)}
         >
-          <span className="robotbuild__part-label">{it.link}</span>
-          <span className={`robotbuild__part-geo${it.kind === 'mesh' ? ' is-mesh' : ''}`}>
-            {/* A compact type tag — for a mesh the file extension, so the (long) link
-                name gets the row's width instead of repeating the filename. */}
-            {it.kind === 'mesh' ? (it.mesh?.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'mesh') : it.kind}
-          </span>
+          <span className="robotbuild__part-label">{node.link}</span>
+          <span className={`robotbuild__part-geo${node.kind === 'mesh' ? ' is-mesh' : ''}`}>{geo}</span>
         </button>
+        {node.joint ? (
+          <button
+            type="button"
+            className={`robotbuild__jtype${activeJoint === node.joint.name ? ' is-on' : ''}`}
+            title={`${node.joint.name} — click to edit (parent: ${node.joint.parent})`}
+            onClick={() => onOpenJoint(node.link, node.joint!.name)}
+          >
+            {jointTypeLabel(node.joint.type)}
+          </button>
+        ) : node.loose ? (
+          <span className="robotbuild__loose-tag" title="Not connected to the base — open it and pick a parent">
+            ⚠ loose
+          </span>
+        ) : null}
       </div>
     </li>
   )
@@ -597,9 +615,14 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     ]
   }
 
-  const blocks = assembly.filter((it) => it.kind !== 'mesh')
-  const meshes = assembly.filter((it) => it.kind === 'mesh')
-  const editLink = active?.kind === 'link' ? active.link : null
+  // The kinematic chain, flattened for an indented list: base's subtree first, then any
+  // loose (unconnected) parts. This replaces the flat Blocks/Meshes/Joints lists so the
+  // parent→child structure is always visible.
+  const tree = useMemo(() => buildChainTree(assembly, joints, rootLink), [assembly, joints, rootLink])
+  const activeLink =
+    active?.kind === 'link' ? active.link : active?.kind === 'joint' ? active.child : null
+  const activeJoint = active?.kind === 'joint' ? active.joint : null
+  const looseStart = tree.findIndex((n) => n.loose)
 
   if (!open) {
     return (
@@ -658,59 +681,33 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       )}
 
       <div className="robotbuild__tree">
-        {blocks.length > 0 && (
-          <Section id="blocks" label="Blocks" count={blocks.length} collapsed={collapsed} onToggle={toggle}>
-            {blocks.map((it) => (
-              <BodyRow
-                key={it.link}
-                it={it}
-                isSel={it.link === selected}
-                isEdit={it.link === editLink}
-                isRoot={it.link === rootLink}
-                onSelect={onSelect}
-                onEdit={onEdit}
-                onContextMenu={openMenu}
-              />
+        {tree.length > 0 && (
+          <Section id="chain" label="Chain" count={tree.length} collapsed={collapsed} onToggle={toggle}>
+            {tree.map((node, i) => (
+              <Fragment key={node.link}>
+                {i === looseStart && looseStart > 0 && (
+                  <li className="robotbuild__loose-head" aria-hidden="true">
+                    Not connected
+                  </li>
+                )}
+                <ChainRow
+                  node={node}
+                  isSel={node.link === selected}
+                  isEdit={node.link === activeLink}
+                  activeJoint={activeJoint}
+                  onSelect={onSelect}
+                  onEdit={onEdit}
+                  onOpenJoint={onOpenJoint}
+                  onContextMenu={openMenu}
+                />
+              </Fragment>
             ))}
           </Section>
         )}
-
-        {meshes.length > 0 && (
-          <Section id="meshes" label="Meshes" count={meshes.length} collapsed={collapsed} onToggle={toggle}>
-            {meshes.map((it) => (
-              <BodyRow
-                key={it.link}
-                it={it}
-                isSel={it.link === selected}
-                isEdit={it.link === editLink}
-                isRoot={it.link === rootLink}
-                onSelect={onSelect}
-                onEdit={onEdit}
-                onContextMenu={openMenu}
-              />
-            ))}
-          </Section>
-        )}
-
-        {joints.length > 0 && (
-        <Section id="joints" label="Joints" count={joints.length} collapsed={collapsed} onToggle={toggle}>
-          {joints.map((j) => {
-            const on = active?.kind === 'joint' && active.joint === j.name
-            return (
-              <li className="robotbuild__part" key={j.name}>
-                <button
-                  type="button"
-                  className={`robotbuild__node${on ? ' is-on' : ''}`}
-                  title={`Edit joint ${j.name}`}
-                  onClick={() => onOpenJoint(j.child, j.name)}
-                >
-                  <span className="robotbuild__part-label">{j.name}</span>
-                  <span className="robotbuild__part-geo">{jointTypeLabel(j.type)}</span>
-                </button>
-              </li>
-            )
-          })}
-        </Section>
+        {rootLink === null && assembly.length > 1 && (
+          <p className="robotbuild__hint">
+            Several parts, no base yet — right-click a part ▸ <b>Make base</b> to start the chain.
+          </p>
         )}
 
         {canEdit && joints.some((j) => j.type !== 'fixed') && (

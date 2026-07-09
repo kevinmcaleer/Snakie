@@ -10,6 +10,7 @@ import {
   blankUrdf,
   connectJoint,
   orientJoint,
+  buildChainTree,
   subtreeOf,
   readAllJoints,
   removeJoint,
@@ -328,5 +329,70 @@ describe('blankUrdf — new robot starter', () => {
     expect(urdf).toContain('<joint name="w_joint" type="fixed">')
     expect(urdf).toContain('<parent link="base_link"/>')
     expect(looseLinks(urdf, 'base_link')).toEqual([]) // it's a joint child, not a loose root
+  })
+})
+
+describe('buildChainTree — the explicit chain view (#354)', () => {
+  const parse = (urdf: string) => ({ a: parseAssembly(urdf), j: readAllJoints(urdf) })
+  it('flattens a linear chain with increasing depth', () => {
+    const urdf = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/><link name="shoulder"/><link name="arm"/><link name="servo"/>
+  <joint name="js" type="revolute"><parent link="base"/><child link="shoulder"/></joint>
+  <joint name="ja" type="fixed"><parent link="shoulder"/><child link="arm"/></joint>
+  <joint name="jv" type="fixed"><parent link="arm"/><child link="servo"/></joint>
+</robot>`
+    const { a, j } = parse(urdf)
+    const tree = buildChainTree(a, j, 'base')
+    expect(tree.map((n) => [n.link, n.depth])).toEqual([
+      ['base', 0],
+      ['shoulder', 1],
+      ['arm', 2],
+      ['servo', 3]
+    ])
+    expect(tree[0].isBase).toBe(true)
+    expect(tree.every((n) => !n.loose)).toBe(true)
+    // The connecting joint rides on each row (base has none).
+    expect(tree[0].joint).toBeNull()
+    expect(tree[1].joint?.name).toBe('js')
+  })
+  it('makes the "servo is a parent of arm" mistake visible (nested under servo)', () => {
+    // base -> shoulder, base -> servo -> arm (the reported tangle).
+    const urdf = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/><link name="shoulder"/><link name="servo"/><link name="arm"/>
+  <joint name="js" type="revolute"><parent link="base"/><child link="shoulder"/></joint>
+  <joint name="jv" type="fixed"><parent link="base"/><child link="servo"/></joint>
+  <joint name="ja" type="fixed"><parent link="servo"/><child link="arm"/></joint>
+</robot>`
+    const { a, j } = parse(urdf)
+    const tree = buildChainTree(a, j, 'base')
+    const byLink = Object.fromEntries(tree.map((n) => [n.link, n]))
+    expect(byLink.servo.depth).toBe(1)
+    expect(byLink.arm.depth).toBe(2) // arm nested UNDER servo — the bug is now visible
+    expect(byLink.servo.childCount).toBe(1)
+  })
+  it('lists a stray imported mesh as a loose depth-0 node', () => {
+    const urdf = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/><link name="arm"/><link name="stray"/>
+  <joint name="ja" type="fixed"><parent link="base"/><child link="arm"/></joint>
+</robot>`
+    const { a, j } = parse(urdf)
+    const tree = buildChainTree(a, j, 'base')
+    const stray = tree.find((n) => n.link === 'stray')!
+    expect(stray.loose).toBe(true)
+    expect(stray.depth).toBe(0)
+    expect(stray.joint).toBeNull()
+    expect(tree.find((n) => n.link === 'arm')!.loose).toBe(false)
+  })
+  it('puts everything in the loose group when no base is chosen', () => {
+    const urdf = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="a"/><link name="b"/>
+</robot>`
+    const { a, j } = parse(urdf)
+    const tree = buildChainTree(a, j, null)
+    expect(tree.every((n) => n.loose)).toBe(true)
   })
 })

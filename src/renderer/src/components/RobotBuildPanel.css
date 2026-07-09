@@ -252,6 +252,54 @@
 .robotbuild__part-geo.is-mesh {
   color: var(--accent-ink);
 }
+/* Chain tree (#354): indent connector, the clickable joint-type chip, and the
+   "loose / not connected" markers. Colours come from theme tokens (both skins). */
+.robotbuild__chain-elbow {
+  flex: 0 0 auto;
+  color: var(--text-muted, #8b919b);
+  opacity: 0.55;
+  margin-right: 0.05rem;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.robotbuild__jtype {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  margin-left: 0.25rem;
+  padding: 0.05rem 0.32rem;
+  font-family: inherit;
+  font-size: 0.56rem;
+  color: var(--text-muted, #8b919b);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.22));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.robotbuild__jtype:hover,
+.robotbuild__jtype.is-on {
+  color: var(--accent-contrast, #15161a);
+  background: var(--accent, #d6a23f);
+  border-color: var(--accent, #d6a23f);
+}
+.robotbuild__loose-tag {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  margin-left: 0.25rem;
+  font-size: 0.56rem;
+  color: var(--accent);
+}
+.robotbuild__chain--loose .robotbuild__part-label {
+  font-style: italic;
+  opacity: 0.85;
+}
+.robotbuild__loose-head {
+  list-style: none;
+  padding: 0.25rem 0.4rem 0.1rem;
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #8b919b);
+}
 .robotbuild__edit {
   flex: 0 0 auto;
   display: inline-flex;
