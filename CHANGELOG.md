@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool: smart parent/child + multi-joint chains (#354).** You
+  no longer have to pick the two blocks in the "right" order — if the chosen order
+  would form a loop but the reverse wouldn't, the tool **swaps** parent and child
+  for you. Building a chain of joints works (each new joint keeps the earlier ones);
+  note that a joined child snaps to meet its parent, so it visibly moves.
 - **Robot View — Join tool snaps to hole centres (#354).** When you pick a joint
   point on an imported mesh (STL), the tool detects **hole centres** on the clicked
   face — an STL is just triangles, so it finds the coplanar rim-edge loops, and a

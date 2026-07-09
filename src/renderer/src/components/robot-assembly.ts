@@ -446,6 +446,17 @@ export function subtreeOf(urdf: string, link: string): Set<string> {
   return inside
 }
 
+/**
+ * Decide the parent/child orientation for a joint between two links (#354). A URDF
+ * tree needs the child NOT to already sit above the parent; if making `a` the
+ * parent of `b` would form a loop but the reverse wouldn't, swap them. When either
+ * order works (or neither), keep `a` as the parent.
+ */
+export function orientJoint(urdf: string, a: string, b: string): { parent: string; child: string } {
+  if (subtreeOf(urdf, b).has(a) && !subtreeOf(urdf, a).has(b)) return { parent: b, child: a }
+  return { parent: a, child: b }
+}
+
 /** A joint name derived from `base`, made unique within the URDF. */
 function uniqueJointName(urdf: string, base: string): string {
   const existing = new Set(jointNames(urdf))

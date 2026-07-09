@@ -7,6 +7,7 @@ import {
   addMeshLink,
   blankUrdf,
   connectJoint,
+  orientJoint,
   subtreeOf,
   readAllJoints
 } from '../src/renderer/src/components/robot-assembly'
@@ -154,6 +155,43 @@ describe('connectJoint — the Join tool (#354)', () => {
     const wheelBlock = /<joint name="j_wheel"[\s\S]*?<\/joint>/.exec(out)![0]
     expect((wheelBlock.match(/<origin\b/g) || []).length).toBe(1)
     expect((wheelBlock.match(/<child\b/g) || []).length).toBe(1)
+  })
+
+  it('orientJoint swaps parent/child when the chosen order would loop', () => {
+    // base → upper → tip. Making `tip` the parent of `upper` would loop.
+    expect(orientJoint(URDF, 'tip', 'upper')).toEqual({ parent: 'upper', child: 'tip' })
+    // The already-valid order is kept as-is.
+    expect(orientJoint(URDF, 'base_link', 'tip')).toEqual({ parent: 'base_link', child: 'tip' })
+    // Two unrelated siblings: keep `a` as the parent (either order is fine).
+    const branched = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/><link name="l"/><link name="r"/>
+  <joint name="jl" type="fixed"><parent link="base"/><child link="l"/></joint>
+  <joint name="jr" type="fixed"><parent link="base"/><child link="r"/></joint>
+</robot>`
+    expect(orientJoint(branched, 'l', 'r')).toEqual({ parent: 'l', child: 'r' })
+  })
+
+  it('supports a CHAIN of joints — a second connect keeps the first (#354 IK chains)', () => {
+    // base → a, base → b, base → c (all fixed to base).
+    const flat = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/>
+  <link name="a"/>
+  <link name="b"/>
+  <link name="c"/>
+  <joint name="ja" type="fixed"><parent link="base"/><child link="a"/></joint>
+  <joint name="jb" type="fixed"><parent link="base"/><child link="b"/></joint>
+  <joint name="jc" type="fixed"><parent link="base"/><child link="c"/></joint>
+</robot>`
+    let out = connectJoint(flat, { parent: 'a', child: 'b' }) // b under a
+    out = connectJoint(out, { parent: 'b', child: 'c' }) // c under b (chain a→b→c)
+    const js = readAllJoints(out)
+    expect(js.find((x) => x.child === 'b')!.parent).toBe('a') // first join intact
+    expect(js.find((x) => x.child === 'c')!.parent).toBe('b') // second join
+    expect(js.find((x) => x.child === 'a')!.parent).toBe('base') // untouched
+    // Still exactly 3 joints (no dupes / drops).
+    expect(js.length).toBe(3)
   })
 
   it('subtreeOf collects a link + its descendants', () => {
