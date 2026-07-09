@@ -579,7 +579,13 @@ const llm = {
     const listener = (_e: IpcRendererEvent, event: LlmStreamEvent): void => cb(event)
     ipcRenderer.on('llm:stream', listener)
     return () => ipcRenderer.removeListener('llm:stream', listener)
-  }
+  },
+  /** Read a provider's stored config (base URL, etc.) — used by the Local LLM provider. */
+  getProviderConfig: (providerId: string): Promise<Record<string, string>> =>
+    unwrap(ipcRenderer.invoke('llm:getProviderConfig', providerId)),
+  /** Persist a provider's config (base URL, etc.). */
+  setProviderConfig: (providerId: string, config: Record<string, string>): Promise<void> =>
+    unwrap(ipcRenderer.invoke('llm:setProviderConfig', providerId, config))
 }
 
 /**

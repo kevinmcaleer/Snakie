@@ -7,32 +7,9 @@ import { useChatProviders } from '../hooks/useChatProviders'
 import { openSettings } from './settingsBus'
 import './ChatPanel.css'
 
-/**
- * CHAT TAB (issue #18, generalized in #77 + #78; settings moved out in #83)
- * ========================================================================
- *
- * An in-app multi-provider chat assistant. The message thread, an input box, a
- * subtle footer bar to pick provider / model / effort / speed (plus Clear and a
- * ⚙ that opens the Settings dialog's Chat tab), and toggles to attach the active
- * editor file and recent console output as context.
- *
- * The redundant title bar and the inline key-settings form were removed in
- * issue #83 — the per-provider API keys, the GitHub Copilot sign-in and the
- * autocomplete settings now live in the Settings dialog's Chat tab
- * ({@link ChatSettings}). Provider/model/key state is shared via
- * {@link useChatProviders} so the footer here and that tab stay in sync.
- *
- * All provider API calls run in the MAIN process (the renderer CSP blocks
- * external requests), so this panel only talks to `window.api.llm`. Replies are
- * streamed: `sendMessage` resolves with the full text, but we also subscribe to
- * `onStream` deltas so the assistant bubble fills in live.
- */
-
-/** Window CustomEvent name the ShellPanel "Send to chat" button dispatches (issue #78). */
 export const SEND_CONSOLE_EVENT = 'snakie:send-console-to-chat'
 
 interface ChatTurn extends LlmMessage {
-  /** Stable key for React lists. */
   id: string
 }
 
@@ -41,11 +18,6 @@ export function ChatPanel(): JSX.Element {
   const activeFile = openFiles.find((f) => f.id === activeId)
   const { getSinceRun } = useConsole()
 
-  // ── Shared provider registry + selection + key status (issue #83) ─────────
-  // The per-provider keys, Copilot sign-in and autocomplete settings now live in
-  // the Settings dialog's Chat tab; this panel keeps the quick footer selectors,
-  // reading/writing the same persisted values via the shared hook so the two
-  // stay in sync.
   const {
     providers,
     provider,
@@ -57,15 +29,12 @@ export function ChatPanel(): JSX.Element {
     speed,
     setSpeed,
     keyStatus,
-    error: providerError
+    error: providerError,
+    customModel
   } = useChatProviders()
 
-  // ── Thread state ──────────────────────────────────────────────────────────
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
-  // AI-first default (issue #82): include the active file ON by default so the
-  // model always sees the up-to-date editor content. Persisted so a user who
-  // turns it off keeps it off.
   const [includeFile, setIncludeFile] = useLocalStorage<boolean>(
     'snakie.chat.includeActiveFile',
     true
@@ -73,13 +42,19 @@ export function ChatPanel(): JSX.Element {
   const [includeConsole, setIncludeConsole] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  /** Live-streaming assistant text for the in-flight reply. */
   const [streaming, setStreaming] = useState<string | null>(null)
+  const [localModelInput, setLocalModelInput] = useState('')
 
   const threadRef = useRef<HTMLDivElement>(null)
   const streamingRef = useRef('')
 
-  // Subscribe to streamed deltas for the in-flight request.
+  // Seed the local model input from the persisted model + config.
+  useEffect(() => {
+    if (provider?.customModel) {
+      setLocalModelInput(customModel || model || '')
+    }
+  }, [provider?.id, customModel, model])
+
   useEffect(() => {
     const unsub = window.api.llm.onStream((event: LlmStreamEvent) => {
       if (event.type === 'start') {
@@ -89,12 +64,10 @@ export function ChatPanel(): JSX.Element {
         streamingRef.current += event.text
         setStreaming(streamingRef.current)
       }
-      // `done` / `error` are handled by the sendMessage promise below.
     })
     return unsub
   }, [])
 
-  // Keep the thread scrolled to the bottom as content grows.
   useEffect(() => {
     const el = threadRef.current
     if (el) el.scrollTop = el.scrollHeight
@@ -116,10 +89,12 @@ export function ChatPanel(): JSX.Element {
       const consoleOutput =
         console ?? (includeConsole ? getSinceRun() || undefined : undefined)
 
+      const effectiveModel = provider.customModel ? localModelInput || model : model
+
       try {
         const reply = await window.api.llm.sendMessage({
           providerId: provider.id,
-          model,
+          model: effectiveModel,
           effort,
           speed,
           messages: history.map((t) => ({ role: t.role, content: t.content })),
@@ -138,7 +113,10 @@ export function ChatPanel(): JSX.Element {
         streamingRef.current = ''
       }
     },
-    [busy, turns, provider, model, effort, speed, includeFile, activeFile, includeConsole, getSinceRun]
+    [
+      busy, turns, provider, model, effort, speed, includeFile, activeFile,
+      includeConsole, getSinceRun, localModelInput
+    ]
   )
 
   const send = useCallback(
@@ -149,9 +127,6 @@ export function ChatPanel(): JSX.Element {
     [input, sendText]
   )
 
-  // Listen for "Send to chat" from the ShellPanel: stage the console output into
-  // the composer prefilled with a prompt (issue #78). We stage rather than
-  // auto-submit so the user can add a question before sending.
   useEffect(() => {
     const handler = (e: Event): void => {
       const detail = (e as CustomEvent<string>).detail ?? ''
@@ -163,8 +138,6 @@ export function ChatPanel(): JSX.Element {
             ? 'Here is my console output — can you help me understand it?'
             : ''
       )
-      // Reveal the staged output context to the user via the toggle; the actual
-      // text is grabbed fresh from the console store at send time.
       const el = threadRef.current
       if (el) el.scrollTop = el.scrollHeight
     }
@@ -178,14 +151,6 @@ export function ChatPanel(): JSX.Element {
     setStreaming(null)
   }, [])
 
-  /**
-   * Apply an assistant code block to the ACTIVE file (issue #82). Writes the code
-   * through the workspace store; Monaco is bound to the active file and syncs on
-   * drift, so the editor updates live and the change is undoable (Ctrl-Z). We
-   * REPLACE the file's contents with the block — predictable and easy to undo —
-   * rather than trying to merge/splice (the model already sees the whole file
-   * since "Include active file" defaults on, so blocks are usually full files).
-   */
   const applyToEditor = useCallback(
     (code: string): void => {
       if (!activeId) return
@@ -194,9 +159,8 @@ export function ChatPanel(): JSX.Element {
     [activeId, updateContent]
   )
 
-  const ready = keyStatus?.hasKey ?? false
+  const ready = provider?.id === 'local' || (keyStatus?.hasKey ?? false)
   const providerLabel = provider?.label ?? 'Loading…'
-  // Surface a provider-load error or an in-flight send error (whichever is set).
   const shownError = error ?? providerError
 
   return (
@@ -270,7 +234,6 @@ export function ChatPanel(): JSX.Element {
         </div>
       </form>
 
-      {/* Subtle footer bar: active provider + model with clickable dropdowns. */}
       {provider && (
         <div className="chat__footer" aria-label="Model selection">
           <FooterSelect
@@ -279,12 +242,24 @@ export function ChatPanel(): JSX.Element {
             onChange={setProviderId}
             options={providers.map((p) => ({ value: p.id, label: p.label }))}
           />
-          <FooterSelect
-            label="Model"
-            value={model}
-            onChange={setModel}
-            options={provider.models.map((m) => ({ value: m.id, label: m.label }))}
-          />
+          {provider.customModel ? (
+            <FooterTextInput
+              label="Model"
+              value={localModelInput}
+              onChange={(v) => {
+                setLocalModelInput(v)
+                setModel(v)
+              }}
+              placeholder="e.g. llama3.2, mistral, qwen2.5"
+            />
+          ) : (
+            <FooterSelect
+              label="Model"
+              value={model}
+              onChange={setModel}
+              options={provider.models.map((m) => ({ value: m.id, label: m.label }))}
+            />
+          )}
           {provider.efforts && provider.efforts.length > 0 && (
             <FooterSelect
               label="Effort"
@@ -307,10 +282,10 @@ export function ChatPanel(): JSX.Element {
               ]}
             />
           )}
-          {/* Quick actions: clear the thread + open the Settings dialog's Chat
-              tab (keys, Copilot sign-in, autocomplete — moved here in #83). */}
           <div className="chat__footer-actions">
-            {!ready && <span className="chat__footer-warn">no key</span>}
+            {!ready && provider?.id !== 'local' && (
+              <span className="chat__footer-warn">no key</span>
+            )}
             <button
               type="button"
               className="chat__btn"
@@ -335,7 +310,6 @@ export function ChatPanel(): JSX.Element {
   )
 }
 
-/** A compact labelled `<select>` used in the chat footer bar. */
 function FooterSelect({
   label,
   value,
@@ -361,17 +335,31 @@ function FooterSelect({
   )
 }
 
-/**
- * A single chat bubble. Renders text with fenced code blocks broken out into
- * styled `<pre>` blocks (each with a Copy button — and, when `onApply` is given,
- * an Apply button that writes the block into the active editor file, issue #82);
- * a Copy button also covers the whole assistant message. Markdown beyond fenced
- * code is rendered as plain text.
- *
- * `onApply` is only supplied for completed ASSISTANT bubbles when there is an
- * active file, so Apply never appears on user messages, while streaming, or with
- * no file to apply to.
- */
+function FooterTextInput({
+  label,
+  value,
+  onChange,
+  placeholder
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+}): JSX.Element {
+  return (
+    <label className="chat__footer-select" title={label}>
+      <span className="chat__footer-label">{label}</span>
+      <input
+        type="text"
+        className="chat__footer-input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
+  )
+}
+
 function Bubble({
   role,
   content,
@@ -415,11 +403,6 @@ function Bubble({
   )
 }
 
-/**
- * Apply a code block to the active editor file (issue #82). Calls `onApply`
- * (which writes the block via the workspace store) and shows a brief "Applied"
- * confirmation, mirroring the Copy button's affordance.
- */
 function ApplyButton({
   code,
   onApply
@@ -444,7 +427,6 @@ function ApplyButton({
   )
 }
 
-/** A button that copies `text` to the clipboard, with brief confirmation. */
 function CopyButton({
   text,
   label,
@@ -476,11 +458,6 @@ function CopyButton({
 
 type Segment = { type: 'text' | 'code'; text: string }
 
-/**
- * Split a message into alternating text and fenced-code segments. Handles
- * ```lang fences; the optional language tag on the opening fence is dropped.
- * Empty text segments are omitted.
- */
 function parseSegments(content: string): Segment[] {
   const segments: Segment[] = []
   const fence = /```[^\n]*\n?([\s\S]*?)```/g
