@@ -684,8 +684,10 @@ export function RobotView({
         : jp
     )
   }
-  // Add: place the child so its picked point meets the parent's picked point
-  // (origin = parentLocal − childLocal + offset), re-parent it, and set the type.
+  // Add: mate the child's picked face against the parent's, re-parent it, set the
+  // type — and put the joint origin (the PIVOT) AT the mating point by re-origining
+  // the child link onto its picked point (so a hinge rotates about the joint, not the
+  // child's centre).
   const handleConnectPicked = (
     type: JointType,
     offsetMm: [number, number, number],
@@ -698,15 +700,22 @@ export function RobotView({
     // reverse wouldn't, orientJoint swaps them so the user needn't get it "right".
     const o = orientJoint(base, jp.parent.link, jp.child.link)
     const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
-    // Orient the joint from the two picked FACE NORMALS: rotate the child so its
-    // face mates flush against the parent's and the picked points coincide.
-    const { xyz, rpy } = jointFromPicks(
+    // The mating ROTATION (rotate the child so its picked face meets the parent's
+    // flush). The origin is handled separately below so the pivot lands on the joint.
+    const { rpy } = jointFromPicks(
       parent.local,
       parent.normal,
       child.local,
       child.normal,
       offsetMm
     )
+    // Joint origin — the PIVOT — at the mating point (parent's picked point + offset).
+    // Exact because we re-origin the child onto its picked point below.
+    const xyz: [number, number, number] = [
+      parent.local[0] + offsetMm[0],
+      parent.local[1] + offsetMm[1],
+      parent.local[2] + offsetMm[2]
+    ]
     let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
     if (next === base) return false // cycle / invalid — keep the dialog open
     const rad = (d: number): number => (d * Math.PI) / 180
@@ -716,6 +725,20 @@ export function RobotView({
         ? setJoint(next, child.link, { type, lower: rad(rotation.minDeg), upper: rad(rotation.maxDeg) })
         : setJoint(next, child.link, { type })
     next = setJointOrigin(next, child.link, xyz, rpy) // xyz + the mating rotation
+    // Re-origin the child onto its picked point: shift its mesh (+ any of its own
+    // child-joints) by −childLocal so the geometry stays exactly put while the link
+    // origin (the pivot) lands on the mating point.
+    const cl = child.local
+    const shift = (v: readonly number[]): [number, number, number] => [
+      v[0] - cl[0],
+      v[1] - cl[1],
+      v[2] - cl[2]
+    ]
+    const ov = readVisualOrigin(base, child.link) ?? { xyz: [0, 0, 0], rpy: [0, 0, 0] }
+    next = setVisualOrigin(next, child.link, shift(ov.xyz), ov.rpy as [number, number, number])
+    for (const j of readAllJoints(base)) {
+      if (j.parent === child.link) next = setJointOrigin(next, j.child, shift(j.xyz), j.rpy)
+    }
     commitUrdf(next)
     setSelectedLink(child.link)
     // Rotation default angle: persist it to the robot.yml defaultPose (keyed by the

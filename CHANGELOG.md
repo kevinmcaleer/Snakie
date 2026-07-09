@@ -290,6 +290,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — Join tool: the hinge pivots at the joint, not the part's middle (#354).**
+  A rotation joint rotated the child about its *own centre* instead of the point you
+  picked, so a hinge ended up "halfway along the part". The joint origin now sits **on
+  the mating point**, and the child is re-origined onto its picked point (its mesh — and
+  any parts hanging off it — stay exactly put), so a hinge swings about the joint.
 - **Robot View — Join tool: the second block is now always selectable (#354).**
   After picking Component 1 it fades — but the faded mesh still hit-tested, so when it
   sat in front of the camera it stole every click and Component 2 "went dark and
