@@ -29,8 +29,7 @@ export function ChatPanel(): JSX.Element {
     speed,
     setSpeed,
     keyStatus,
-    error: providerError,
-    customModel
+    error: providerError
   } = useChatProviders()
 
   const [turns, setTurns] = useState<ChatTurn[]>([])
@@ -43,7 +42,6 @@ export function ChatPanel(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [streaming, setStreaming] = useState<string | null>(null)
-  const [localModelInput, setLocalModelInput] = useState('')
 
   // Read detected models from localStorage (set by ChatSettings)
   const detectedModels = useMemo<string[]>(() => {
@@ -57,13 +55,6 @@ export function ChatPanel(): JSX.Element {
 
   const threadRef = useRef<HTMLDivElement>(null)
   const streamingRef = useRef('')
-
-  // Seed the local model input from the persisted model + config.
-  useEffect(() => {
-    if (provider?.customModel) {
-      setLocalModelInput(customModel || model || '')
-    }
-  }, [provider?.id, customModel, model])
 
   useEffect(() => {
     const unsub = window.api.llm.onStream((event: LlmStreamEvent) => {
@@ -99,7 +90,7 @@ export function ChatPanel(): JSX.Element {
       const consoleOutput =
         console ?? (includeConsole ? getSinceRun() || undefined : undefined)
 
-      const effectiveModel = provider.customModel ? localModelInput || model : model
+      const effectiveModel = model
 
       try {
         const reply = await window.api.llm.sendMessage({
@@ -125,7 +116,7 @@ export function ChatPanel(): JSX.Element {
     },
     [
       busy, turns, provider, model, effort, speed, includeFile, activeFile,
-      includeConsole, getSinceRun, localModelInput
+      includeConsole, getSinceRun
     ]
   )
 
@@ -255,11 +246,8 @@ export function ChatPanel(): JSX.Element {
           {provider.customModel ? (
             <FooterTextInput
               label="Model"
-              value={localModelInput}
-              onChange={(v) => {
-                setLocalModelInput(v)
-                setModel(v)
-              }}
+              value={model}
+              onChange={(v) => setModel(v)}
               placeholder="e.g. llama3.2, mistral, qwen2.5"
               suggestions={detectedModels}
             />

@@ -9,6 +9,7 @@
   "type": "module",
   "scripts": {
     "dev": "electron-vite dev",
+    "dev:safe": "ELECTRON_DISABLE_SANDBOX=1 electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",

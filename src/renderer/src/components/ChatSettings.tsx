@@ -22,8 +22,8 @@ export function ChatSettings(): JSX.Element {
     error,
     baseUrl,
     setBaseUrl,
-    customModel,
-    setCustomModel,
+    model,
+    setModel,
     availableModels,
     fetchModels,
     modelsLoading,
@@ -34,7 +34,7 @@ export function ChatSettings(): JSX.Element {
   const [savingKey, setSavingKey] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
   const [baseUrlInput, setBaseUrlInput] = useState('')
-  const [customModelInput, setCustomModelInput] = useState('')
+  const [modelInput, setModelInput] = useState('')
   const [savingConfig, setSavingConfig] = useState(false)
 
   useEffect(() => {
@@ -45,9 +45,9 @@ export function ChatSettings(): JSX.Element {
   useEffect(() => {
     if (provider?.id === 'local') {
       setBaseUrlInput(baseUrl)
-      setCustomModelInput(customModel)
+      setModelInput(model)
     }
-  }, [provider?.id, baseUrl, customModel])
+  }, [provider?.id, baseUrl, model])
 
   const saveKey = useCallback(
     async (e: FormEvent): Promise<void> => {
@@ -87,11 +87,11 @@ export function ChatSettings(): JSX.Element {
     setSavingConfig(true)
     try {
       await setBaseUrl(baseUrlInput)
-      await setCustomModel(customModelInput)
+      setModel(modelInput)
     } finally {
       setSavingConfig(false)
     }
-  }, [baseUrlInput, customModelInput, setBaseUrl, setCustomModel])
+  }, [baseUrlInput, modelInput, setBaseUrl, setModel])
 
   const shown = localError ?? error
 
@@ -135,7 +135,11 @@ export function ChatSettings(): JSX.Element {
             <button
               type="button"
               className="chat-settings__btn"
-              onClick={() => void fetchModels(baseUrlInput || baseUrl)}
+              onClick={() => {
+                setModelInput('')
+                setModel('')
+                void fetchModels(baseUrlInput || baseUrl)
+              }}
               disabled={modelsLoading || !(baseUrlInput || baseUrl)}
             >
               {modelsLoading ? 'Detecting…' : 'Detect models'}
@@ -150,8 +154,8 @@ export function ChatSettings(): JSX.Element {
             <input
               type="text"
               className="chat-settings__input-text"
-              value={customModelInput}
-              onChange={(e) => setCustomModelInput(e.target.value)}
+              value={modelInput}
+              onChange={(e) => setModelInput(e.target.value)}
               placeholder="e.g. llama3.2, mistral, qwen2.5"
               list="local-model-suggestions"
             />

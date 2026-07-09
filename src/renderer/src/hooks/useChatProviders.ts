@@ -56,8 +56,6 @@ export interface ChatProvidersStore {
   error: string | null
   baseUrl: string
   setBaseUrl: (url: string) => Promise<void>
-  customModel: string
-  setCustomModel: (model: string) => Promise<void>
   availableModels: string[]
   fetchModels: (baseURL: string) => Promise<void>
   modelsLoading: boolean
@@ -69,7 +67,6 @@ export function useChatProviders(): ChatProvidersStore {
   const [error, setError] = useState<string | null>(null)
   const [keyStatus, setKeyStatus] = useState<LlmKeyStatus | null>(null)
   const [baseUrl, setBaseUrlState] = useState<string>('')
-  const [customModel, setCustomModelState] = useState<string>('')
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelsLoading, setModelsLoading] = useState(false)
   const [modelsError, setModelsError] = useState<string | null>(null)
@@ -103,14 +100,13 @@ export function useChatProviders(): ChatProvidersStore {
     provider?.defaultModel ||
     ''
 
-  // Load provider config (base URL, custom model name) from main process
+  // Load provider config (base URL) from main process
   useEffect(() => {
     if (!provider || provider.id !== 'local') return
     void window.api.llm
       .getProviderConfig('local')
       .then((cfg) => {
         setBaseUrlState(cfg.baseURL || 'http://localhost:11434/v1')
-        setCustomModelState(cfg.model || '')
       })
       .catch(() => undefined)
   }, [provider])
@@ -199,21 +195,9 @@ export function useChatProviders(): ChatProvidersStore {
 
   const setBaseUrl = useCallback(async (url: string): Promise<void> => {
     setBaseUrlState(url)
-    await window.api.llm.setProviderConfig('local', {
-      baseURL: url,
-      model: customModel
-    })
+    await window.api.llm.setProviderConfig('local', { baseURL: url })
     notifyChatConfigChanged()
-  }, [customModel])
-
-  const setCustomModelFn = useCallback(async (model: string): Promise<void> => {
-    setCustomModelState(model)
-    await window.api.llm.setProviderConfig('local', {
-      baseURL: baseUrl,
-      model
-    })
-    notifyChatConfigChanged()
-  }, [baseUrl])
+  }, [])
 
   const fetchModelsFn = useCallback(async (baseURL: string): Promise<void> => {
     setModelsLoading(true)
@@ -252,8 +236,6 @@ export function useChatProviders(): ChatProvidersStore {
     error,
     baseUrl,
     setBaseUrl,
-    customModel,
-    setCustomModel: setCustomModelFn,
     availableModels,
     fetchModels: fetchModelsFn,
     modelsLoading,
