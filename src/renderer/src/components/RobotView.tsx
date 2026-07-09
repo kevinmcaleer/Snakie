@@ -6,6 +6,7 @@ import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
 import type { URDFRobot } from 'urdf-loader'
 import { useWorkspace } from '../store/workspace'
+import { useWorkspaceLayout } from '../store/layout'
 import { baseName, dirname, meshKind } from './robot-mesh'
 import { RobotJointPanel, type NamedPoseLike } from './RobotJointPanel'
 import {
@@ -759,6 +760,16 @@ export function RobotView({
     const dim = jointPick?.parent && !jointPick?.child ? jointPick.parent.link : null
     jointPickApiRef.current?.dim(dim)
   }, [jointPick])
+
+  // Popping the robot out full-screen (the dock's Pop-out enters focus mode) should
+  // open in the HOME view — but a RobotView already mounted for this file keeps its
+  // preserved camera. Re-frame home on the transition into focus (full-screen only).
+  const { focus: layoutFocus } = useWorkspaceLayout()
+  const prevFocusRef = useRef(layoutFocus)
+  useEffect(() => {
+    if (poseUI && layoutFocus && !prevFocusRef.current) zoomApiRef.current?.home()
+    prevFocusRef.current = layoutFocus
+  }, [layoutFocus, poseUI])
 
   // ── Servo → joint binding + code-driven simulation (#313) ──────────────────
   // The KRF servo↔joint map, loaded from robot.yml. Kept in a ref for the
@@ -1994,15 +2005,21 @@ export function RobotView({
               if (l.geometry) l.geometry.dispose()
             })
           }
-          // Fusion-style: fade the first-picked block so it's obvious it's chosen
-          // (and can't be re-picked as the second). Restores the original materials.
+          // Fusion-style: fade ONLY the first-picked block (so it's obviously chosen
+          // and can't be re-picked as the second). The block's material is usually
+          // SHARED across links (e.g. everything uses "steel"), so editing it in place
+          // would fade the whole robot — instead we swap in a transparent CLONE for
+          // just this link's mesh and restore (+ dispose the clone) on un-dim.
           type DimMat = THREE.Material & { transparent: boolean; opacity: number }
-          let dimmed: { mat: DimMat; transparent: boolean; opacity: number }[] = []
+          let dimmed: {
+            mesh: THREE.Mesh
+            orig: THREE.Material | THREE.Material[]
+            clones: THREE.Material[]
+          }[] = []
           const dimLink = (link: string | null): void => {
             for (const d of dimmed) {
-              d.mat.transparent = d.transparent
-              d.mat.opacity = d.opacity
-              d.mat.needsUpdate = true
+              d.mesh.material = d.orig
+              d.clones.forEach((c) => c.dispose())
             }
             dimmed = []
             const lo = link && robotRef.current?.links[link]
@@ -2010,14 +2027,16 @@ export function RobotView({
             lo.traverse((o) => {
               const mesh = o as THREE.Mesh
               if (!mesh.isMesh || ownerLinkName(mesh) !== link) return // this link's own visual only
-              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-              for (const mat of mats) {
-                const m = mat as DimMat
-                dimmed.push({ mat: m, transparent: m.transparent, opacity: m.opacity })
-                m.transparent = true
-                m.opacity = 0.28
-                m.needsUpdate = true
+              const orig = mesh.material
+              const mk = (m: THREE.Material): THREE.Material => {
+                const c = m.clone() as DimMat
+                c.transparent = true
+                c.opacity = 0.28
+                return c
               }
+              const clones = Array.isArray(orig) ? orig.map(mk) : [mk(orig)]
+              mesh.material = Array.isArray(orig) ? clones : clones[0]
+              dimmed.push({ mesh, orig, clones })
             })
           }
           const clearJointMarkers = (): void => {

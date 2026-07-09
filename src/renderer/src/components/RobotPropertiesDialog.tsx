@@ -101,16 +101,27 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
   const commitRef = useRef<(() => void | boolean) | null>(null)
 
   // Drag the dialog by its title bar. `pos` null = the default docked spot (CSS).
+  // `left`/`top` are relative to the dialog's positioned ancestor (the 3-D stage),
+  // NOT the viewport — so we convert the (viewport) pointer coords by the ancestor's
+  // offset; otherwise the dialog jumps by that offset on the first move.
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
-  const drag = useRef<{ dx: number; dy: number } | null>(null)
+  const drag = useRef<{ dx: number; dy: number; ox: number; oy: number } | null>(null)
   const onHeadDown = (e: React.PointerEvent): void => {
-    const rect = (e.currentTarget.parentElement as HTMLElement).getBoundingClientRect()
-    drag.current = { dx: e.clientX - rect.left, dy: e.clientY - rect.top }
+    const aside = e.currentTarget.parentElement as HTMLElement
+    const rect = aside.getBoundingClientRect()
+    const parent = (aside.offsetParent as HTMLElement | null)?.getBoundingClientRect()
+    drag.current = {
+      dx: e.clientX - rect.left, // cursor offset within the dialog
+      dy: e.clientY - rect.top,
+      ox: parent?.left ?? 0, // the ancestor's viewport offset
+      oy: parent?.top ?? 0
+    }
     ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
   }
   const onHeadMove = (e: React.PointerEvent): void => {
     if (!drag.current) return
-    setPos({ x: e.clientX - drag.current.dx, y: e.clientY - drag.current.dy })
+    const d = drag.current
+    setPos({ x: e.clientX - d.dx - d.ox, y: e.clientY - d.dy - d.oy })
   }
   const onHeadUp = (e: React.PointerEvent): void => {
     drag.current = null
