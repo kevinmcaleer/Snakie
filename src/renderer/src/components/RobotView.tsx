@@ -2022,10 +2022,12 @@ export function RobotView({
             })
             return { index, distPx: best }
           }
-          // Hole/loop centres are a joint's natural target but hard to hit dead-on (they
-          // sit over empty space). Bias toward one within a generous radius so it STICKS
-          // even when an edge midpoint is marginally closer — otherwise the target flicks
-          // off the hole as you move to click it. Falls back to the plain nearest.
+          // A HOLE centre is a joint's natural target but hard to hit dead-on (it sits
+          // over empty space). Bias toward one within a generous radius so it STICKS even
+          // when an edge midpoint is marginally closer — otherwise the target flicks off
+          // the hole as you move to click it. Only role 'hole' is magnetised (NOT the
+          // 'outline' = face centroid every mesh face has, which would swallow edge picks
+          // on small faces). Falls back to the plain nearest.
           const HOLE_CATCH_PX = 48
           const nearestSnap = (
             pts: THREE.Vector3[],
@@ -2045,9 +2047,7 @@ export function RobotView({
               if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
               const d = Math.hypot(sx - px, sy - py)
               if (d < best.distPx) best = { index: i, distPx: d }
-              if ((roles[i] === 'hole' || roles[i] === 'outline') && d < hole.distPx) {
-                hole = { index: i, distPx: d }
-              }
+              if (roles[i] === 'hole' && d < hole.distPx) hole = { index: i, distPx: d }
             })
             return hole.index >= 0 && hole.distPx <= HOLE_CATCH_PX ? hole : best
           }
@@ -2445,7 +2445,7 @@ export function RobotView({
               const geom = readPrimitive(contentRef.current, link)
               const th = geom ? hitToHandles(hit, link, geom) : meshSnapCentres(hit)
               const near = nearestSnap(th.pts, th.roles, e)
-              const isHole = near.index >= 0 && (th.roles[near.index] === 'hole' || th.roles[near.index] === 'outline')
+              const isHole = near.index >= 0 && th.roles[near.index] === 'hole'
               if (near.index >= 0 && near.distPx < (isHole ? HOLE_CATCH_PX : geom ? 24 : 28)) {
                 world = th.pts[near.index].clone()
                 role = th.roles[near.index]
