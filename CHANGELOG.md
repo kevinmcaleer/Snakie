@@ -244,6 +244,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — deleting a joint now actually removes it (#354).** Delete used to
+  re-attach the block to the base, which is a no-op for a joint that's already off
+  the base — so those joints (e.g. the two fixed joints in a fresh robot) couldn't
+  be removed. Delete now strips the joint outright; the block becomes free-standing
+  and stays where it was (its position is baked into its visual origin so it doesn't
+  jump).
 - **Robot View — nav + mini-viewer polish.** The projection dropdown under the
   navigation cube no longer vanishes when you reach for it (it sat just outside the
   nav zone's hover box, so moving the pointer down dropped the hover; the zone now

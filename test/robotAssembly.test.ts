@@ -9,7 +9,10 @@ import {
   connectJoint,
   orientJoint,
   subtreeOf,
-  readAllJoints
+  readAllJoints,
+  removeJoint,
+  readVisualOrigin,
+  setVisualOrigin
 } from '../src/renderer/src/components/robot-assembly'
 
 const URDF = `<?xml version="1.0"?>
@@ -192,6 +195,55 @@ describe('connectJoint — the Join tool (#354)', () => {
     expect(js.find((x) => x.child === 'a')!.parent).toBe('base') // untouched
     // Still exactly 3 joints (no dupes / drops).
     expect(js.length).toBe(3)
+  })
+
+  it('removeJoint removes the joint whose child matches — incl. a TOP-LEVEL joint', () => {
+    // The reported bug: a joint straight off the base couldn't be deleted.
+    const flat = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base_link"/>
+  <link name="partA"/>
+  <link name="partB"/>
+  <joint name="jA" type="fixed"><parent link="base_link"/><child link="partA"/><origin xyz="0 0 0.1"/></joint>
+  <joint name="jB" type="fixed"><parent link="base_link"/><child link="partB"/></joint>
+</robot>`
+    const out = removeJoint(flat, 'partA')
+    expect(out).not.toContain('name="jA"') // the joint is gone
+    expect(readAllJoints(out).map((j) => j.child)).toEqual(['partB']) // only jB remains
+    expect(out).toContain('<link name="partA"/>') // the link itself is kept (now a root)
+  })
+
+  it('removeJoint is a no-op when no joint has that child', () => {
+    expect(removeJoint(URDF, 'base_link')).toBe(URDF) // the root has no parent joint
+    expect(removeJoint(URDF, 'nope')).toBe(URDF)
+  })
+
+  it('removeJoint strips a dangling <mimic> reference to the removed joint', () => {
+    const withMimic = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/><link name="a"/><link name="b"/>
+  <joint name="j_master" type="revolute"><parent link="base"/><child link="a"/><axis xyz="0 0 1"/><limit lower="-1" upper="1" effort="1" velocity="1"/></joint>
+  <joint name="j_follow" type="revolute"><parent link="base"/><child link="b"/><axis xyz="0 0 1"/><limit lower="-1" upper="1" effort="1" velocity="1"/><mimic joint="j_master" multiplier="1" offset="0"/></joint>
+</robot>`
+    const out = removeJoint(withMimic, 'a') // removes j_master
+    expect(out).not.toContain('name="j_master"')
+    expect(out).not.toContain('<mimic') // the follower's dangling mimic is gone
+    expect(readAllJoints(out).map((j) => j.child)).toEqual(['b'])
+  })
+
+  it('readVisualOrigin reads a mesh link visual origin (xyz + rpy)', () => {
+    const u = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="m"><visual><origin xyz="0.02 0 0.01" rpy="0 1.5708 0"/><geometry><mesh filename="x.stl"/></geometry></visual></link>
+</robot>`
+    const vo = readVisualOrigin(u, 'm')!
+    expect(vo.xyz).toEqual([0.02, 0, 0.01])
+    expect(vo.rpy.map((v) => Math.round(v * 1e4) / 1e4)).toEqual([0, 1.5708, 0])
+    // setVisualOrigin round-trips xyz + rpy.
+    const w = setVisualOrigin(u, 'm', [0.1, 0.2, 0.3], [0.5, 0, 0])
+    const vo2 = readVisualOrigin(w, 'm')!
+    expect(vo2.xyz).toEqual([0.1, 0.2, 0.3])
+    expect(vo2.rpy).toEqual([0.5, 0, 0])
   })
 
   it('subtreeOf collects a link + its descendants', () => {

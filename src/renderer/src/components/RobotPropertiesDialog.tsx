@@ -156,7 +156,7 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
           <button
             type="button"
             className="robotprops__btn robotprops__btn--danger"
-            title="Remove this joint — the block re-attaches to the base"
+            title="Remove this joint — the part is freed and kept where it is"
             onClick={() => {
               props.onDeleteJoint(context.child)
               onOk()

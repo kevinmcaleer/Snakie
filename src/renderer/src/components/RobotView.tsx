@@ -26,6 +26,8 @@ import {
   readAllJoints,
   readJoint,
   readPrimitive,
+  readVisualOrigin,
+  removeJoint,
   removeLink,
   rootLink,
   setJoint,
@@ -677,27 +679,59 @@ export function RobotView({
     }
     return true
   }
-  // Delete a joint (#354): detach its child from the current parent by re-attaching
-  // it to the base, KEEPING its current world position (so the part doesn't jump).
+  // Delete a joint (#354): strip it so the child becomes a free-standing root, and
+  // keep the whole sub-assembly EXACTLY where it is. Because a root has no frame
+  // transform, moving the child frame to the origin is compensated two ways: the
+  // child's own visual origin is baked with its full world transform, and each of
+  // the child's DIRECT-child joints is pre-multiplied by that same transform (so
+  // descendants — which hang off those joints — don't teleport). Handles rotation
+  // (full rel matrix → rpy), meshes (readVisualOrigin), and dangling mimics.
   const handleDeleteJoint = (child: string): void => {
-    const root = rootLink(content)
-    if (!root || child === root) return
-    let xyz: [number, number, number] = [0, 0, 0]
+    const before = content
+    const root = rootLink(before)
+    if (!root || child === root) {
+      setDialogCtx(null)
+      return
+    }
+    const stripped = removeJoint(before, child)
+    if (stripped === before) {
+      setDialogCtx(null) // no such joint
+      return
+    }
+    // The child's full transform relative to the base (which loads at the origin).
     const robot = robotRef.current
+    let relM = new THREE.Matrix4()
     if (robot?.links[child] && robot.links[root]) {
       robot.updateMatrixWorld(true)
-      const rel = new THREE.Matrix4()
+      relM = new THREE.Matrix4()
         .copy(robot.links[root].matrixWorld)
         .invert()
         .multiply(robot.links[child].matrixWorld)
-      const pos = new THREE.Vector3().setFromMatrixPosition(rel)
-      xyz = [pos.x, pos.y, pos.z]
     }
-    let next = connectJoint(content, { parent: root, child, xyz })
-    next = setJoint(next, child, { type: 'fixed' })
-    next = setJointOrigin(next, child, xyz)
-    if (next !== content) commitUrdf(next)
+    const toMat = (xyz: readonly number[], rpy: readonly number[]): THREE.Matrix4 =>
+      new THREE.Matrix4()
+        .makeRotationFromEuler(new THREE.Euler(rpy[0], rpy[1], rpy[2], 'ZYX'))
+        .setPosition(xyz[0], xyz[1], xyz[2])
+    const fromMat = (m: THREE.Matrix4): { xyz: [number, number, number]; rpy: [number, number, number] } => {
+      const p = new THREE.Vector3()
+      const q = new THREE.Quaternion()
+      m.decompose(p, q, new THREE.Vector3())
+      const e = new THREE.Euler().setFromQuaternion(q, 'ZYX') // URDF rpy convention
+      return { xyz: [p.x, p.y, p.z], rpy: [e.x, e.y, e.z] }
+    }
+    // Bake the child's own visual so it stays put.
+    const ov = readVisualOrigin(before, child) ?? { xyz: [0, 0, 0], rpy: [0, 0, 0] }
+    const nv = fromMat(relM.clone().multiply(toMat(ov.xyz, ov.rpy)))
+    let next = setVisualOrigin(stripped, child, nv.xyz, nv.rpy)
+    // Re-base the child's direct-child joints so the subtree keeps its world pose.
+    for (const j of readAllJoints(before)) {
+      if (j.parent !== child) continue
+      const nj = fromMat(relM.clone().multiply(toMat(j.xyz, j.rpy)))
+      next = setJointOrigin(next, j.child, nj.xyz, nj.rpy)
+    }
+    commitUrdf(next)
     setDialogCtx(null)
+    setSelectedLink(child)
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
