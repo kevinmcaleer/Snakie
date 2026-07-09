@@ -5,6 +5,7 @@ import {
   rootLink,
   uniqueLinkName,
   addMeshLink,
+  looseLinks,
   blankUrdf,
   connectJoint,
   orientJoint,
@@ -57,18 +58,19 @@ describe('rootLink + uniqueLinkName (#309)', () => {
   })
 })
 
-describe('addMeshLink (#309)', () => {
-  it('appends a link + fixed joint before </robot>, parented to the root', () => {
+describe('addMeshLink (#354 — loose import)', () => {
+  it('appends a LOOSE link (no joint) before </robot>', () => {
     const { urdf, link } = addMeshLink(URDF, { meshRel: 'meshes/wheel.stl', linkBase: 'wheel' })
     expect(link).toBe('wheel')
     expect(urdf).toContain('<mesh filename="meshes/wheel.stl"/>')
-    expect(urdf).toContain('<joint name="wheel_joint" type="fixed">')
-    expect(urdf).toContain('<parent link="base_link"/>')
-    expect(urdf.indexOf('wheel_joint')).toBeLessThan(urdf.indexOf('</robot>'))
-    // the new link now parses back out
+    // No auto fixed-joint any more — the part comes in unconnected.
+    expect(urdf).not.toContain('wheel_joint')
+    expect(urdf.indexOf('<link name="wheel">')).toBeLessThan(urdf.indexOf('</robot>'))
+    // the new link now parses back out, and is a loose root (never a joint child)
     expect(parseAssembly(urdf).some((i) => i.link === 'wheel' && i.mesh === 'meshes/wheel.stl')).toBe(
       true
     )
+    expect(looseLinks(urdf, 'base_link')).toContain('wheel')
   })
   it('avoids a name collision', () => {
     const { link } = addMeshLink(URDF, { meshRel: 'meshes/upper.stl', linkBase: 'upper' })
@@ -80,6 +82,20 @@ describe('addMeshLink (#309)', () => {
     expect(link).toBe('x')
     expect(urdf).toContain('<link name="x">')
     expect(urdf).not.toContain('<joint')
+  })
+})
+
+describe('looseLinks (#354)', () => {
+  it('returns roots that are not the base (unconnected parts)', () => {
+    // URDF: base_link → upper → tip is one chain; add two loose imports.
+    let u = addMeshLink(URDF, { meshRel: 'meshes/a.stl', linkBase: 'a' }).urdf
+    u = addMeshLink(u, { meshRel: 'meshes/b.stl', linkBase: 'b' }).urdf
+    // base_link is the chosen base; upper/tip are jointed; a + b are loose.
+    expect(looseLinks(u, 'base_link').sort()).toEqual(['a', 'b'])
+  })
+  it('with no base, every root is loose', () => {
+    const u = `<robot name="r"><link name="p1"/><link name="p2"/></robot>`
+    expect(looseLinks(u).sort()).toEqual(['p1', 'p2'])
   })
 })
 
@@ -261,9 +277,11 @@ describe('blankUrdf — new robot starter', () => {
     expect(a).toEqual([{ link: 'base_link', kind: 'box' }])
     expect(rootLink(u)).toBe('base_link')
   })
-  it('an imported mesh attaches to its base_link', () => {
+  it('imports a mesh as a loose part (unconnected to base_link)', () => {
     const { urdf, link } = addMeshLink(blankUrdf(), { meshRel: 'meshes/w.stl', linkBase: 'w' })
     expect(link).toBe('w')
-    expect(urdf).toContain('<parent link="base_link"/>')
+    expect(urdf).toContain('<link name="w">')
+    expect(urdf).not.toContain('<joint') // no auto-weld; the user joins it explicitly
+    expect(looseLinks(urdf, 'base_link')).toEqual(['w'])
   })
 })

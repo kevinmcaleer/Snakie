@@ -23,6 +23,7 @@ import {
   addPrimitive,
   connectJoint,
   jointNames,
+  looseLinks,
   parseAssembly,
   readAllJoints,
   readJoint,
@@ -41,7 +42,7 @@ import {
   type JointType,
   type PrimitiveGeom
 } from './robot-assembly'
-import { reRoot } from './robot-reroot'
+import { canReRoot, reRoot } from './robot-reroot'
 import { createViewCube } from './robot-viewcube'
 import {
   historyInit,
@@ -340,6 +341,9 @@ export function RobotView({
     loadPin(window.localStorage, PIN_KEYS.builder, true)
   )
   const [selectedLink, setSelectedLink] = useState<string | null>(null)
+  // The link the user designated as the base (root) of the chain, from robot.yml.
+  // Distinguishes the intended base from other still-unconnected imported parts (#354).
+  const [chosenBase, setChosenBase] = useState<string | null>(null)
   // The hierarchy node whose context dialog (#353) is open — a block/mesh, a
   // joint, a servo binding or a pose. `editLink` (the block whose URDF is being
   // edited + highlighted in 3-D) is DERIVED from it (link + joint contexts).
@@ -432,7 +436,17 @@ export function RobotView({
     [content, editLink]
   )
   const allJointNames = useMemo(() => jointNames(content), [content])
-  const rootName = useMemo(() => rootLink(content) ?? null, [content])
+  // The effective base for the hierarchy's ★ marker: the user's chosen base if it's
+  // still a root, else the sole root of a single-tree robot, else null — meaning
+  // several loose parts and no base picked yet (the panel then prompts to pick one).
+  const effectiveBaseLink = useMemo(() => {
+    const roots = looseLinks(content) // every childless link
+    if (chosenBase && roots.includes(chosenBase)) return chosenBase
+    if (roots.length === 1) return roots[0] // a single-tree robot: its sole root
+    // Several roots + no explicit choice: honour the conventional `base_link` (the
+    // new-robot starter's base) if present, else prompt the user to pick one.
+    return roots.includes('base_link') ? 'base_link' : null
+  }, [content, chosenBase])
 
   const setBuildPinnedPersist = (p: boolean): void => {
     setBuildPinned(p)
@@ -553,14 +567,30 @@ export function RobotView({
     commitUrdf(setJoint(content, link, spec))
   }
   const handleDeleteLink = (link: string): void => {
-    // Deleting the root would cascade-remove the whole tree → an empty, unusable
-    // URDF. The UI disables it; guard here too. Re-root onto a keeper first.
-    if (link === rootLink(content)) return
+    // Deleting the base would cascade-remove the whole tree → an empty, unusable
+    // URDF. The UI disables it; guard here too. (A loose, unconnected part is fine
+    // to delete — it just removes that one link.)
+    if (link === effectiveBaseLink) return
     commitUrdf(removeLink(content, link))
     setSelectedLink(null)
     setDialogCtx(null)
   }
   const handleMakeBase = (link: string): void => {
+    // A link can become the base only if it's already a root (a loose part) or it can
+    // be re-rooted up to the current root. A link stuck in a SEPARATE, still-detached
+    // sub-assembly can't yet — persisting it would leave robot.yml pointing at a base
+    // the UI will never honour. Guide the user to connect it first instead.
+    const isRoot = looseLinks(content).includes(link)
+    if (!isRoot && !canReRoot(content, link)) {
+      setSavingLabel('connect this part to the rest first to make it the base')
+      return
+    }
+    // Record the choice in robot.yml AND re-root the tree onto it (a no-op flip when
+    // the link is already a loose root; flips the joint chain when it isn't).
+    setChosenBase(link)
+    void persist((m) => {
+      m.baseLink = link
+    })
     commitUrdf(reRoot(content, link))
   }
   // Properties dialog (#352 / #353): clicking a node opens its context here. For a
@@ -1078,8 +1108,9 @@ export function RobotView({
           /* leave scale 1 if the mesh can't be measured */
         }
       }
-      // Add the mesh to the URDF (a new link + fixed joint at the origin) so it
-      // renders now. Select it + reframe so the user can see + place it.
+      // Add the mesh as a LOOSE link (no joint) so it renders now but stays an
+      // unconnected part — the user picks the base + joins it into the chain. Select
+      // it + reframe so the user can see + place it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
       const next = addMeshLink(content, { meshRel: res.rel, linkBase, scale })
       refitNextRef.current = true
@@ -1089,7 +1120,11 @@ export function RobotView({
       setSelectedLink(next.link)
       setDialogCtx({ kind: 'link', link: next.link })
       if (!buildOpen) setBuildOpen(true)
-      setSavingLabel(scale !== 1 ? `added ${next.link} (scaled mm→m)` : `added ${next.link}`)
+      setSavingLabel(
+        scale !== 1
+          ? `added ${next.link} (scaled mm→m) — now join it to your robot`
+          : `added ${next.link} — now join it to your robot`
+      )
     } catch (e) {
       setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
     } finally {
@@ -1614,6 +1649,7 @@ export function RobotView({
               if (disposed || !robotRef.current) return
               defRef.current = def
               const model = def.robot ?? {}
+              setChosenBase(typeof model.baseLink === 'string' ? model.baseLink : null)
               const ov = (model.joints ?? {}) as Record<string, { min?: number; max?: number }>
               const dp = model.defaultPose ?? {}
               const nv = { ...initial }
@@ -2840,7 +2876,7 @@ export function RobotView({
             onOpenJoint={handleOpenJoint}
             onOpenServo={handleOpenServo}
             onOpenPose={handleOpenPose}
-            rootLink={rootName}
+            rootLink={effectiveBaseLink}
             onMakeBase={handleMakeBase}
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}

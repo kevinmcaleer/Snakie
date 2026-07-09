@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — import parts loose, pick a base, then join them into a chain (#354).**
+  Imported STLs no longer auto-weld to the first part with a hidden fixed joint (which
+  fused everything into one rigid blob). Each import now comes in as a **loose,
+  unconnected part**, listed under a new **"Not connected yet"** group with a friendly
+  hint. You **pick which part is the base** (its ☆ — the anchor everything hangs off,
+  remembered in `robot.yml`), then use **Add Joint** to build the kinematic chain; each
+  part leaves "Not connected yet" as it's joined. When several parts are loose and no
+  base is obvious, a "⭐ Pick a base part to start your robot" prompt guides you.
 - **Robot View — Join tool: SHIFT-lock snapping + an on-surface target (#354).**
   While picking a joint point, an accurate **target** is drawn on the surface (a
   circle + X/Y/Z axis triad; a **cross-hair** over a hole / loop centre) so you can
