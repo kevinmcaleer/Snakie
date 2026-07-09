@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Robot View — an explicit kinematic Chain view + a parent picker (#354).** The build
+  panel now shows the robot as an indented **Chain** — `Base → Shoulder → Arm → Servo` —
+  so the parent→child structure is always visible (a part nested under the wrong parent
+  is obvious at a glance), with the connecting joint type on each row and a **⚠ loose**
+  tag for parts not yet in the chain. Editing a part now has an **"Attaches to"** dropdown:
+  pick its parent explicitly from the existing structure instead of relying on 3-D
+  pick-order. Re-parenting **keeps the part exactly where it is** (world pose preserved) and
+  can't form a loop — so you can build a chain reliably, and repair a tangled one (move the
+  arm under the shoulder, the servo under the arm) without deleting and re-mating. The 3-D
+  Add Joint tool stays, now purely for geometry (where parts meet + orientation).
+
 ### Changed
 - **Robot View — the pose sidebar is retired; posing moves to a popup (#312).** The
   old right-hand pose panel duplicated the build panel (assembly, servos, poses). It's

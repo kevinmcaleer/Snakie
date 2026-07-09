@@ -417,6 +417,72 @@ export function readAllJoints(urdf: string): JointFull[] {
   return out
 }
 
+/** One row of the kinematic chain view (#354): a link, its depth in the tree, and
+ *  the joint that attaches it to its parent (null for the base / a loose root). */
+export interface ChainNode {
+  link: string
+  depth: number
+  kind: AssemblyItem['kind']
+  mesh?: string
+  /** The joint connecting this link to its parent — null for the base / a loose root. */
+  joint: JointFull | null
+  isBase: boolean
+  /** Not reachable from the base — a stray import / detached sub-assembly. */
+  loose: boolean
+  childCount: number
+}
+
+/**
+ * Flatten the kinematic hierarchy for the build panel (#354): the base's subtree
+ * first (base at depth 0, children indented via child joints, document order among
+ * siblings), then every DETACHED part/sub-assembly as its own depth-0 root marked
+ * `loose`. Pure — derived from the parsed links + joints, so it's cheap to test and
+ * cycle-safe (a malformed loop can't recurse forever).
+ */
+export function buildChainTree(
+  assembly: AssemblyItem[],
+  joints: JointFull[],
+  base: string | null
+): ChainNode[] {
+  const info = new Map(assembly.map((it) => [it.link, it]))
+  const kids = new Map<string, JointFull[]>() // parent link → its child joints (doc order)
+  const isChild = new Set<string>()
+  for (const j of joints) {
+    const list = kids.get(j.parent)
+    if (list) list.push(j)
+    else kids.set(j.parent, [j])
+    isChild.add(j.child)
+  }
+  const out: ChainNode[] = []
+  const seen = new Set<string>()
+  const walk = (link: string, depth: number, joint: JointFull | null, loose: boolean): void => {
+    if (seen.has(link)) return // guard: a broken cycle never recurses forever
+    seen.add(link)
+    const it = info.get(link)
+    const children = kids.get(link) ?? []
+    out.push({
+      link,
+      depth,
+      kind: it?.kind ?? 'none',
+      mesh: it?.mesh,
+      joint,
+      isBase: link === base && !loose,
+      loose,
+      childCount: children.length
+    })
+    for (const j of children) walk(j.child, depth + 1, j, loose)
+  }
+  // 1) the connected robot, rooted at the base.
+  if (base && info.has(base)) walk(base, 0, null, false)
+  // 2) loose sub-assemblies: an unseen link that is nobody's child is a loose root.
+  for (const it of assembly) {
+    if (!seen.has(it.link) && !isChild.has(it.link)) walk(it.link, 0, null, true)
+  }
+  // 3) safety net — anything still unseen (part of a cycle) is listed flat, loose.
+  for (const it of assembly) if (!seen.has(it.link)) walk(it.link, 0, null, true)
+  return out
+}
+
 /** Names of every `<joint>` in the model (for the mimic master picker). */
 export function jointNames(urdf: string): string[] {
   const re = /<joint\b([^>]*)>/gi

@@ -428,6 +428,15 @@ export function RobotView({
     [content, editLink]
   )
   const allJointNames = useMemo(() => jointNames(content), [content])
+  // Valid parents for the part being edited: every link EXCEPT itself and its own
+  // descendants (attaching onto its own branch would loop) — the "Attaches to" picker.
+  const parentOptions = useMemo(() => {
+    if (!editLink) return []
+    const banned = subtreeOf(content, editLink) // includes editLink itself
+    return parseAssembly(content)
+      .map((i) => i.link)
+      .filter((l) => !banned.has(l))
+  }, [content, editLink])
   // The effective base for the hierarchy's ★ marker: the user's chosen base if it's
   // still a root, else the sole root of a single-tree robot, else null — meaning
   // several loose parts and no base picked yet (the panel then prompts to pick one).
@@ -563,6 +572,83 @@ export function RobotView({
   const handleSetJointOrigin = (child: string, xyz: [number, number, number]): void => {
     const j = readJoint(content, child)
     if (j) commitUrdf(setJointOrigin(content, child, xyz, j.rpy))
+  }
+  // Explicit re-parent (#354): move `child` under `newParent` in the chain WITHOUT
+  // moving it on screen (topology only). Keeps the joint TYPE/axis/limit (connectJoint
+  // preserves them) and computes a REST-pose-preserving origin. The origin is derived
+  // by PURE forward-kinematics over the authored joint origins (not the live/articulated
+  // matrixWorld) — so re-parenting while the robot is posed can't bake a transient
+  // articulation into the saved rest pose. The base has no parent (use Make base).
+  const handleReparent = (child: string, newParent: string): void => {
+    if (!child || !newParent || child === newParent || child === effectiveBaseLink) return
+    if (subtreeOf(content, child).has(newParent)) return // would form a loop
+    const old = readJoint(content, child) // null for a loose/rootless part
+    if (old && old.parent === newParent) return // already there
+    const joints = readAllJoints(content)
+    const parentJointOf = new Map(joints.map((j) => [j.child, j]))
+    // A link's REST world transform = product of authored joint origins from the root
+    // down to it. Pose-independent; the robot's root rotation is a common prefix that
+    // cancels in the newParent⁻¹·old relative, so we can ignore it. Cycle-guarded.
+    const restWorld = (link: string): THREE.Matrix4 => {
+      const chain: JointDef[] = []
+      const seen = new Set<string>()
+      let cur: string | undefined = link
+      while (cur && parentJointOf.has(cur) && !seen.has(cur)) {
+        seen.add(cur)
+        const j = parentJointOf.get(cur)!
+        chain.push(j)
+        cur = j.parent
+      }
+      const m = new THREE.Matrix4()
+      for (let i = chain.length - 1; i >= 0; i--) {
+        const j = chain[i]
+        m.multiply(
+          new THREE.Matrix4().compose(
+            new THREE.Vector3(j.xyz[0], j.xyz[1], j.xyz[2]),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(j.rpy[0], j.rpy[1], j.rpy[2], 'ZYX')),
+            new THREE.Vector3(1, 1, 1)
+          )
+        )
+      }
+      return m
+    }
+    // The child's authored origin frame in the robot frame (rest). For a loose part its
+    // own link frame IS that frame (restWorld walks no joints → identity/its position).
+    const childRestWorld = old ? restWorld(old.parent).multiply(
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(old.xyz[0], old.xyz[1], old.xyz[2]),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(old.rpy[0], old.rpy[1], old.rpy[2], 'ZYX')),
+        new THREE.Vector3(1, 1, 1)
+      )
+    ) : restWorld(child)
+    const local = restWorld(newParent).invert().multiply(childRestWorld)
+    const p = new THREE.Vector3()
+    const q = new THREE.Quaternion()
+    local.decompose(p, q, new THREE.Vector3())
+    const e = new THREE.Euler().setFromQuaternion(q, 'ZYX') // URDF rpy order
+    const xyz: [number, number, number] = [p.x, p.y, p.z]
+    const rpy: [number, number, number] = [e.x, e.y, e.z]
+    let next = connectJoint(content, { parent: newParent, child, xyz })
+    if (next === content) return // refused (cycle / no-op) — backstop to the guard above
+    next = setJointOrigin(next, child, xyz, rpy) // connectJoint keeps the OLD rpy; set ours
+    commitUrdf(next)
+    setSelectedLink(child)
+    // The stored mating normal lived in the OLD parent frame → now stale. Reset the roll
+    // baseline to 0 and drop the normal (mirrors handleDeleteJoint); the world-preserving
+    // rpy already holds the real orientation, so nothing moves — only the roll baseline.
+    const jn = readJoint(next, child)?.name
+    if (jn) {
+      jointRollRef.current = { ...jointRollRef.current, [jn]: 0 }
+      const norm = { ...jointNormalRef.current }
+      delete norm[jn]
+      jointNormalRef.current = norm
+      void persist((m) => {
+        m.jointRoll = { ...(m.jointRoll ?? {}), [jn]: 0 }
+        const mn = { ...(m.jointNormal ?? {}) }
+        delete mn[jn]
+        m.jointNormal = mn
+      })
+    }
   }
   // Set an existing joint's ABSOLUTE roll about the MATING NORMAL — the same axis the
   // Add-Joint mate rolled about (the parent's picked face normal, stored per joint since
@@ -3101,6 +3187,10 @@ export function RobotView({
             onSetJointOrigin={handleSetJointOrigin}
             onRollJoint={setJointRoll}
             jointRoll={editJoint ? jointRollRef.current[editJoint.name] ?? 0 : 0}
+            parentOptions={parentOptions}
+            currentParent={editJoint?.parent ?? null}
+            isBase={editLink === effectiveBaseLink}
+            onSetParent={handleReparent}
             onDeleteJoint={handleDeleteJoint}
             servo={dialogCtx.kind === 'servo' ? bindings.find((b) => b.pin === dialogCtx.pin) ?? null : null}
             movableJoints={movableNames}

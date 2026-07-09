@@ -57,6 +57,14 @@ export interface RobotPropertiesDialogProps {
   onRollJoint: (child: string, absDeg: number) => void
   /** The open joint's current absolute roll (deg), for seeding the Roll field. */
   jointRoll?: number
+  /** Valid parents for the open part (every link except itself + its descendants). */
+  parentOptions: string[]
+  /** The part's current parent link (null for the base / a loose root). */
+  currentParent: string | null
+  /** True when the open part is the base (no parent — the picker is hidden). */
+  isBase: boolean
+  /** Re-home the part under a new parent — keeps it where it is, only moves it in the chain. */
+  onSetParent: (child: string, parent: string) => void
   /** Remove the joint whose child is this link (the block re-attaches to the base). */
   onDeleteJoint: (child: string) => void
   // servo
@@ -258,7 +266,11 @@ function LinkBody({
   onSetJoint,
   onSetJointOrigin,
   onRollJoint,
-  jointRoll
+  jointRoll,
+  parentOptions,
+  currentParent,
+  isBase,
+  onSetParent
 }: RobotPropertiesDialogProps & { context: PropsContext }): JSX.Element {
   // `link` = the block being edited, or the joint's child link (which carries it).
   const link = context.kind === 'joint' ? context.child : context.kind === 'link' ? context.link : ''
@@ -273,6 +285,34 @@ function LinkBody({
         ) : (
           <p className="robotprops__note">This is a mesh — grab a face in 3-D to move it.</p>
         ))}
+      {!isBase && parentOptions.length > 0 && (
+        <section className="robotprops__section">
+          <div className="robotprops__label" title="Which part this connects to in the chain">
+            Attaches to
+          </div>
+          <select
+            className="robotprops__sel"
+            value={currentParent ?? ''}
+            onChange={(e) => e.target.value && onSetParent(link, e.target.value)}
+          >
+            {currentParent === null && (
+              <option value="" disabled>
+                — choose a parent —
+              </option>
+            )}
+            {parentOptions.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+          <p className="robotprops__note">
+            {currentParent === null
+              ? 'This part isn’t in the chain yet — pick where it connects.'
+              : 'Changing the parent keeps this part where it is — it only moves it in the chain.'}
+          </p>
+        </section>
+      )}
       {joint ? (
         <section className="robotprops__section">
           <div className="robotprops__label">Joint</div>
@@ -285,9 +325,9 @@ function LinkBody({
             onRoll={(absDeg) => onRollJoint(link, absDeg)}
           />
         </section>
-      ) : (
-        <p className="robotprops__note">This is the base — nothing to join to.</p>
-      )}
+      ) : isBase ? (
+        <p className="robotprops__note">This is the base — everything hangs off it.</p>
+      ) : null}
     </>
   )
 }
