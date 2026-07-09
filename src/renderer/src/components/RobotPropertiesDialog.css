@@ -237,13 +237,23 @@
   overflow-y: auto;
   margin: 0.15rem 0 0.35rem;
 }
+/* Each joint: a head row (name + editable value) then a FULL-WIDTH slider below, so
+   the slider isn't squashed into a sliver by the narrow dialog (#312). */
 .robotprops__poj {
-  display: grid;
-  grid-template-columns: 6.5rem 1fr 3rem;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.1rem 0;
+}
+.robotprops__poj-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 0.4rem;
 }
 .robotprops__poj-name {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -254,7 +264,31 @@
   width: 100%;
   accent-color: var(--accent, #d6a23f);
 }
+.robotprops__poj-valwrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+}
+.robotprops__poj-num {
+  width: 3rem;
+  box-sizing: border-box;
+  text-align: right;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.08rem 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
+.robotprops__poj-unit {
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+}
 .robotprops__poj-val {
+  flex: 0 0 auto;
   text-align: right;
   font-size: 0.6rem;
   color: var(--text-muted, #9aa0a6);

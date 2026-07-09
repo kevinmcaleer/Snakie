@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { JointDef, JointType, JointSpec, PrimitiveGeom } from './robot-assembly'
 import type { ServoJointBinding } from '../../../shared/robot'
 import {
@@ -379,6 +379,52 @@ function ServoBody({
 
 const fmtDeg = (v: number): string => (Math.abs(v) < 10 ? v.toFixed(1) : Math.round(v).toString())
 
+/** A directly-editable joint value (display units), paired with the pose slider so the
+ *  user can type an exact angle/offset. Applies LIVE as it changes; re-seeds from the
+ *  slider's value when it moves — but not while the field is focused, so typing isn't
+ *  clobbered by rounding. Clamped to the joint's limits on commit. */
+function PoseNum({
+  value,
+  min,
+  max,
+  step,
+  onCommit
+}: {
+  value: number
+  min: number
+  max: number
+  step: number
+  onCommit: (v: number) => void
+}): JSX.Element {
+  const [v, setV] = useState(fmtDeg(value))
+  const editing = useRef(false)
+  useEffect(() => {
+    if (!editing.current) setV(fmtDeg(value))
+  }, [value])
+  const clamp = (n: number): number => Math.min(Math.max(n, min), max)
+  return (
+    <input
+      className="robotprops__poj-num"
+      type="number"
+      min={min}
+      max={max}
+      step={step}
+      value={v}
+      onFocus={() => (editing.current = true)}
+      onChange={(e) => {
+        setV(e.target.value)
+        const n = Number(e.target.value)
+        if (e.target.value.trim() !== '' && Number.isFinite(n)) onCommit(clamp(n))
+      }}
+      onBlur={() => {
+        editing.current = false
+        const n = Number(v)
+        onCommit(Number.isFinite(n) ? clamp(n) : value)
+      }}
+    />
+  )
+}
+
 /** The pose editor (#312 — the retired pose sidebar's controls moved here): a name,
  *  a live joint SLIDER per movable joint (drag to pose the robot), and Save / Reset.
  *  Recall / Delete + the OK rename live in the footer. Opening an existing pose recalls
@@ -458,10 +504,22 @@ function PoseBody({
               const dVal = toDisplay(j.type, values[j.name] ?? 0)
               const step = j.type === 'prismatic' ? 0.5 : 1
               return (
-                <label className="robotprops__poj" key={j.name}>
-                  <span className="robotprops__poj-name" title={j.name}>
-                    {j.name}
-                  </span>
+                <div className="robotprops__poj" key={j.name}>
+                  <div className="robotprops__poj-head">
+                    <span className="robotprops__poj-name" title={j.name}>
+                      {j.name}
+                    </span>
+                    <span className="robotprops__poj-valwrap">
+                      <PoseNum
+                        value={dVal}
+                        min={dLower}
+                        max={dUpper}
+                        step={step}
+                        onCommit={(v) => onJointChange(j.name, toNative(j.type, v))}
+                      />
+                      <span className="robotprops__poj-unit">{unitLabel(j.type)}</span>
+                    </span>
+                  </div>
                   <input
                     className="robotprops__poj-slider"
                     type="range"
@@ -472,25 +530,23 @@ function PoseBody({
                     value={Math.min(Math.max(dVal, dLower), dUpper)}
                     onChange={(e) => onJointChange(j.name, toNative(j.type, Number(e.target.value)))}
                   />
-                  <span className="robotprops__poj-val">
-                    {fmtDeg(dVal)}
-                    {unitLabel(j.type)}
-                  </span>
-                </label>
+                </div>
               )
             })}
             {mimics.map((j) => {
               const dVal = toDisplay(j.type, mimicValue(j, values[j.master ?? ''] ?? 0))
               return (
                 <div className="robotprops__poj robotprops__poj--mimic" key={j.name}>
-                  <span className="robotprops__poj-name" title={j.name}>
-                    {j.name}
-                  </span>
+                  <div className="robotprops__poj-head">
+                    <span className="robotprops__poj-name" title={j.name}>
+                      {j.name}
+                    </span>
+                    <span className="robotprops__poj-val">
+                      {fmtDeg(dVal)}
+                      {unitLabel(j.type)}
+                    </span>
+                  </div>
                   <span className="robotprops__poj-mimic">follows {j.master}</span>
-                  <span className="robotprops__poj-val">
-                    {fmtDeg(dVal)}
-                    {unitLabel(j.type)}
-                  </span>
                 </div>
               )
             })}
