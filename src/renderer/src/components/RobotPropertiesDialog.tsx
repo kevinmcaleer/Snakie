@@ -79,12 +79,14 @@ export interface RobotPropertiesDialogProps {
   jointPick: JointPickView | null
   /** Arm the picker for a component again (the next 3-D click re-picks it). */
   onRepick: (step: 'parent' | 'child') => void
-  /** Create the joint from the two picks + chosen type + offset (mm). Returns
-   *  false (keeps the dialog open) if the picks are incomplete / would loop. */
+  /** Create the joint from the two picks + chosen type + offset (mm) + a roll angle
+   *  (degrees) about the joint normal. Returns false (keeps the dialog open) if the
+   *  picks are incomplete / would loop. */
   onConnectPicked: (
     type: JointType,
     offsetMm: [number, number, number],
-    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number }
+    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number },
+    angleDeg?: number
   ) => boolean
   // footer
   onOk: () => void
@@ -521,6 +523,8 @@ function AddJointBody({
 }): JSX.Element {
   const [type, setType] = useState<JointType>('fixed')
   const [off, setOff] = useState<Record<'x' | 'y' | 'z', string>>({ x: '0', y: '0', z: '0' })
+  // Roll of the child ABOUT the joint normal (degrees) — for every joint type.
+  const [angle, setAngle] = useState('0')
   // Rotation (revolute) limits + default angle, in DEGREES (raw strings).
   const [rot, setRot] = useState<{ min: string; max: string; def: string }>({
     min: '-90',
@@ -545,7 +549,7 @@ function AddJointBody({
       type === 'revolute'
         ? { minDeg: Number(rot.min) || 0, maxDeg: Number(rot.max) || 0, defaultDeg: Number(rot.def) || 0 }
         : undefined
-    const ok = onConnectPicked(type, [mm(off.x), mm(off.y), mm(off.z)], rotation)
+    const ok = onConnectPicked(type, [mm(off.x), mm(off.y), mm(off.z)], rotation, Number(angle) || 0)
     if (!ok) {
       setErr('Can’t connect — that would form a loop (the parent hangs off the child).')
       return false
@@ -651,6 +655,12 @@ function AddJointBody({
           {axis('x')}
           {axis('y')}
           {axis('z')}
+        </div>
+        <div className="robotprops__row">
+          <label className="robotprops__mm" title="Rotate the child about the joint's normal axis">
+            <span>roll °</span>
+            <input type="number" value={angle} onChange={(e) => setAngle(e.target.value)} />
+          </label>
         </div>
       </section>
       {err ? (

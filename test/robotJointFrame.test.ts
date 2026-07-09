@@ -36,6 +36,20 @@ describe('jointFromPicks — mate two picked faces (#354)', () => {
   it('handles an arbitrary pick', () => {
     check([0.1, -0.05, 0.2], [0.3, 0.6, 0.74], [-0.02, 0.04, 0.01], [-0.5, 0.5, 0.707])
   })
+  it('rolls the child about the mating normal, keeping the faces flush (#354)', () => {
+    const pN: Vec3 = [0, 0, 1]
+    const cN: Vec3 = [0, 0, 1]
+    const r0 = jointFromPicks([0, 0, 0], pN, [0, 0, 0], cN, [0, 0, 0], 0)
+    const r90 = jointFromPicks([0, 0, 0], pN, [0, 0, 0], cN, [0, 0, 0], 90)
+    const R0 = rotOf(r0.rpy)
+    const R90 = rotOf(r90.rpy)
+    // Mate still holds: the child's normal faces OPPOSITE the parent's.
+    expect(near(v(cN).normalize().applyQuaternion(R90), v(pN).normalize().negate())).toBe(true)
+    // R90 differs from R0 by exactly a 90° spin about the normal.
+    const diff = R90.clone().multiply(R0.clone().invert())
+    const spin = new THREE.Quaternion().setFromAxisAngle(v(pN).normalize(), Math.PI / 2)
+    expect(Math.abs(Math.abs(diff.dot(spin)) - 1)).toBeLessThan(1e-6)
+  })
 })
 
 // handleConnectPicked puts the PIVOT at the mating point (not the child's centre) by

@@ -22,6 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   repeating the filename.
 
 ### Added
+- **Robot View — Join tool: a roll angle on every joint type (#354).** The Add Joint
+  dialog now has a **roll (°)** field alongside the X/Y/Z offset — for **Static** joints
+  too — that spins the child about the joint's normal axis while keeping the mated faces
+  flush, so you can orient a bracket/part however you like at the connection.
 - **Robot View — import parts, pick a base, articulate them into a chain (#354).**
   Imported STLs no longer stack on top of the first part at the origin. Each import
   now attaches to the base with a **movable joint** at a **staggered** position, so it
@@ -296,6 +300,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — the Add Joint dialog's buttons are always clickable (#354).** The
+  properties dialog sat *below* the zoom controls, so when it grew tall enough to reach
+  the bottom-right the zoom toolbar covered its **Add** button — clicks landed on "Zoom
+  to fit" and the joint was silently not added (looked like the 3rd joint "vanished").
+  The dialog now floats above the 3-D chrome and caps its height so the footer stays
+  reachable.
 - **Robot View — the mini 3-D viewer zooms to fit the robot on load (#320).** The dock
   viewer starts on the demo arm and swaps to your project robot once it resolves, but it
   kept the demo arm's camera — so your robot loaded tiny and off-centre. It now re-frames
