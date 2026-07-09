@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool fades the first-picked block (#354).** After you pick a
+  point on the first block, that block goes semi-transparent (Fusion-style) so it's
+  obviously chosen — and can't be picked as the second component. It restores when
+  the joint is added or cancelled.
 - **Robot View — Join tool mates faces by their normals + on-face markers (#354).**
   Picking a point now captures the **face normal**, drawn as a **circle laid flat on
   the face** with an **X/Y/Z axis triad** (blue = parent, green = child) — it sits in

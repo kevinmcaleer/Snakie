@@ -389,7 +389,10 @@ export function RobotView({
       ) => void)
     | null
   >(null)
-  const jointPickApiRef = useRef<{ clear: () => void } | null>(null)
+  const jointPickApiRef = useRef<{
+    clear: () => void
+    dim: (link: string | null) => void
+  } | null>(null)
   buildOpenRef.current = buildOpen && poseUI
   selectedLinkRef.current = selectedLink
   editLinkRef.current = editLink
@@ -694,6 +697,13 @@ export function RobotView({
   useEffect(() => {
     highlightApiRef.current?.apply(selectedLink)
   }, [selectedLink])
+
+  // Join tool (#354): fade the first-picked block while choosing the second, so
+  // it's obviously "taken" (Fusion-style). Cleared when both/neither are picked.
+  useEffect(() => {
+    const dim = jointPick?.parent && !jointPick?.child ? jointPick.parent.link : null
+    jointPickApiRef.current?.dim(dim)
+  }, [jointPick])
 
   // ── Servo → joint binding + code-driven simulation (#313) ──────────────────
   // The KRF servo↔joint map, loaded from robot.yml. Kept in a ref for the
@@ -1929,13 +1939,40 @@ export function RobotView({
               if (l.geometry) l.geometry.dispose()
             })
           }
+          // Fusion-style: fade the first-picked block so it's obvious it's chosen
+          // (and can't be re-picked as the second). Restores the original materials.
+          type DimMat = THREE.Material & { transparent: boolean; opacity: number }
+          let dimmed: { mat: DimMat; transparent: boolean; opacity: number }[] = []
+          const dimLink = (link: string | null): void => {
+            for (const d of dimmed) {
+              d.mat.transparent = d.transparent
+              d.mat.opacity = d.opacity
+              d.mat.needsUpdate = true
+            }
+            dimmed = []
+            const lo = link && robotRef.current?.links[link]
+            if (!lo) return
+            lo.traverse((o) => {
+              const mesh = o as THREE.Mesh
+              if (!mesh.isMesh || ownerLinkName(mesh) !== link) return // this link's own visual only
+              const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+              for (const mat of mats) {
+                const m = mat as DimMat
+                dimmed.push({ mat: m, transparent: m.transparent, opacity: m.opacity })
+                m.transparent = true
+                m.opacity = 0.28
+                m.needsUpdate = true
+              }
+            })
+          }
           const clearJointMarkers = (): void => {
             disposeMarker(parentMarker)
             disposeMarker(childMarker)
             parentMarker = null
             childMarker = null
+            dimLink(null) // un-fade the first block
           }
-          jointPickApiRef.current = { clear: clearJointMarkers }
+          jointPickApiRef.current = { clear: clearJointMarkers, dim: dimLink }
           const setJointMarker = (world: THREE.Vector3, normal: THREE.Vector3, isChild: boolean): void => {
             disposeMarker(isChild ? childMarker : parentMarker)
             const g = new THREE.Group()
