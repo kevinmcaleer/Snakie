@@ -10,9 +10,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Robot View — the pose sidebar is retired; posing moves to a popup (#312).** The
   old right-hand pose panel duplicated the build panel (assembly, servos, poses). It's
   gone: **pose the robot in a popup** — the build panel's **Poses → ＋ New pose** (or
-  clicking a pose) opens an editor with a **slider per joint**; drag to pose, name it,
-  **Save**. Servos got a **＋ Bind a servo** in the build panel, and the save-status /
-  measure readouts moved to small floating pills. The Timeline still animates.
+  clicking a pose) opens an editor with a **full-width slider per joint** (its own row,
+  no longer squashed beside the joint name) and a **directly-editable value** so you can
+  type an exact angle; drag to pose, name it, **Save**. Servos got a **＋ Bind a servo**
+  in the build panel, and the save-status / measure readouts moved to small floating
+  pills. The Timeline still animates.
 - **Robot View — a cleaner, Fusion-style build hierarchy (#354).** The panel is
   **wider** so long STL names have room, and it drops its solid slab — each line now
   sits on its own **subtle off-white card** so it reads over the 3-D canvas. Per-row
@@ -308,6 +310,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — removing a joint no longer fuses the freed part into the base (#354).**
+  Deleting a joint used to leave its part *rootless*, and the loader collapses every
+  rootless part into the base's single scene node — so the base and every freed part
+  **highlighted together** and you couldn't pick just one to re-join it (which also made
+  a follow-up joint look "ignored"). Deleting a joint now **re-attaches the part to the
+  base as a loose part** at exactly where it was (its sub-assembly comes with it and
+  stays put) — so each part stays independently selectable and you can articulate a new
+  chain from it.
 - **Robot View — adding a joint no longer blanks the view (#354).** After a joint was
   added the selected block's highlight was re-applied during the scene rebuild, but the
   helper it needed was declared *later* in the same setup — a temporal-dead-zone crash
