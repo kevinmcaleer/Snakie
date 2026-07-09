@@ -148,6 +148,19 @@ function sanitiseNumberMap(raw: unknown): Record<string, number> {
   return out
 }
 
+/** A map of joint name → a finite 3-vector (drops anything malformed). */
+function sanitiseVec3Map(raw: unknown): Record<string, [number, number, number]> {
+  const out: Record<string, [number, number, number]> = {}
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (Array.isArray(v) && v.length === 3 && v.every(isFiniteNum)) {
+        out[k] = [v[0], v[1], v[2]]
+      }
+    }
+  }
+  return out
+}
+
 /**
  * Validate the robot-model section, corruption-safe: unknown/legacy shapes and
  * bad fields are dropped, never thrown. Returns `undefined` when there's no
@@ -183,6 +196,9 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
 
   const roll = sanitiseNumberMap(r.jointRoll)
   if (Object.keys(roll).length) model.jointRoll = roll
+
+  const normals = sanitiseVec3Map(r.jointNormal)
+  if (Object.keys(normals).length) model.jointNormal = normals
 
   if (Array.isArray(r.poses)) {
     const poses = r.poses

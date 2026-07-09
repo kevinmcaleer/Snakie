@@ -66,6 +66,11 @@ export interface RobotModel {
    *  can show the current roll and edit it absolutely (deltas re-applied to the rpy),
    *  instead of the field resetting to 0 each time the dialog reopens. */
   jointRoll?: Record<string, number>
+  /** Per-joint mating normal (the parent's picked face normal, in the PARENT frame)
+   *  captured when the joint was mated (#354). It's the axis the roll turns about —
+   *  it can't be recovered from a finished joint's `rpy`, so it's stored here so the
+   *  editor's Roll rotates the child about the same axis the Add-Joint mate used. */
+  jointNormal?: Record<string, [number, number, number]>
   /** The default pose applied on load: joint name → value (deg / mm). */
   defaultPose?: Record<string, number>
   /** Saved named poses (Phase 2). */
