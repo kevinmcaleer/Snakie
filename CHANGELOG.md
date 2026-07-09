@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool: SHIFT-lock snapping + an on-surface target (#354).**
+  While picking a joint point, an accurate **target** is drawn on the surface (a
+  circle + X/Y/Z axis triad; a **cross-hair** over a hole / loop centre) so you can
+  see exactly where it will land. Sliding the cursor onto a hole used to lose the
+  snap (there's no surface at the centre to hover) — now **hold Shift** to lock the
+  snaps in place and click the hole centre.
 - **Robot View — rotation joints get min/max + a default angle (#354).** When you
   choose **Rotation** in the Add Joint dialog, min / max angle limits and a default
   angle (degrees) appear; **Add** writes the joint's `<limit>` and saves the default

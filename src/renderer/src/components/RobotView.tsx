@@ -2026,6 +2026,8 @@ export function RobotView({
             parentMarker = null
             childMarker = null
             dimLink(null) // un-fade the first block
+            clearHoverMarker() // drop the on-surface hover target
+            hoverSnaps = null
           }
           jointPickApiRef.current = { clear: clearJointMarkers, dim: dimLink }
           const setJointMarker = (world: THREE.Vector3, normal: THREE.Vector3, isChild: boolean): void => {
@@ -2105,53 +2107,115 @@ export function RobotView({
             return result
           }
 
+          // The snap candidates on the surface under a hit: primitive face handles
+          // or mesh hole/loop/edge centres, plus the (world) face normal shared by
+          // all of them. Used by hover + pick + the SHIFT-lock.
+          type Snaps = { link: string; pts: THREE.Vector3[]; roles: string[]; worldNormal: THREE.Vector3 }
+          const computeSnaps = (hit: THREE.Intersection): Snaps | null => {
+            const link = ownerLinkName(hit.object)
+            if (!link || !robotRef.current?.links[link] || !hit.face) return null
+            const mesh = hit.object as THREE.Mesh
+            const worldNormal = hit.face.normal.clone().transformDirection(mesh.matrixWorld).normalize()
+            const geom = readPrimitive(contentRef.current, link)
+            const th = geom ? hitToHandles(hit, link, geom) : meshSnapCentres(hit)
+            return { link, pts: th.pts, roles: th.roles, worldNormal }
+          }
+          // The last surface snaps — kept so SHIFT can LOCK them, letting the pick
+          // land on a hole centre (empty space, no surface to raycast).
+          let hoverSnaps: Snaps | null = null
+
+          // The hover TARGET drawn on the surface: a circle + X/Y/Z axis triad (Z =
+          // face normal) at the nearest snap, plus a cross-hair over a hole centre.
+          const hoverMat = new THREE.LineBasicMaterial({ color: 0xffe27a, depthTest: false })
+          let hoverMarker: THREE.Group | null = null
+          const clearHoverMarker = (): void => {
+            if (!hoverMarker) return
+            scene.remove(hoverMarker)
+            hoverMarker.traverse((o) => {
+              const l = o as THREE.Line
+              if (l.geometry) l.geometry.dispose()
+            })
+            hoverMarker = null
+          }
+          const seg = (a: THREE.Vector3, b: THREE.Vector3, mat: THREE.LineBasicMaterial): THREE.Line => {
+            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints([a, b]), mat)
+            l.renderOrder = 1000
+            l.raycast = () => {}
+            return l
+          }
+          const setHoverMarker = (world: THREE.Vector3, normal: THREE.Vector3, role: string): void => {
+            clearHoverMarker()
+            const g = new THREE.Group()
+            const r = halfView * 0.09
+            const ax = halfView * 0.14
+            const circle = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(circlePts(r)), hoverMat)
+            circle.renderOrder = 1000
+            circle.raycast = () => {}
+            g.add(
+              circle,
+              seg(new THREE.Vector3(), new THREE.Vector3(ax, 0, 0), axisMatX),
+              seg(new THREE.Vector3(), new THREE.Vector3(0, ax, 0), axisMatY),
+              seg(new THREE.Vector3(), new THREE.Vector3(0, 0, ax), axisMatZ)
+            )
+            if (role === 'hole' || role === 'outline') {
+              // Cross-hair through a hole / loop centre (in the face plane).
+              const c = r * 1.5
+              g.add(
+                seg(new THREE.Vector3(-c, 0, 0), new THREE.Vector3(c, 0, 0), hoverMat),
+                seg(new THREE.Vector3(0, -c, 0), new THREE.Vector3(0, c, 0), hoverMat)
+              )
+            }
+            g.position.copy(world)
+            g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal.clone().normalize())
+            scene.add(g)
+            hoverMarker = g
+          }
+
           const pickJointPoint = (e: PointerEvent): void => {
             const robot = robotRef.current
             if (!robot) return
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
             const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
-            if (!hit) return
-            const link = ownerLinkName(hit.object)
-            if (!link || !robot.links[link]) return
-            // Reject a same-block pick BEFORE drawing a marker (else the marker moves
-            // but the dialog state rejects the pick → visual/state desync).
             const jr = jointPickRef.current
+            let link: string | null = null
+            let world: THREE.Vector3
+            let worldNormal: THREE.Vector3
+            let role = 'point'
+            if (hit) {
+              link = ownerLinkName(hit.object)
+              if (!link || !robot.links[link]) return
+              const mesh = hit.object as THREE.Mesh
+              worldNormal = hit.face!.normal.clone().transformDirection(mesh.matrixWorld).normalize()
+              world = hit.point.clone()
+              const geom = readPrimitive(contentRef.current, link)
+              const th = geom ? hitToHandles(hit, link, geom) : meshSnapCentres(hit)
+              const near = nearestScreen(th.pts, e)
+              if (near.index >= 0 && near.distPx < (geom ? 24 : 28)) {
+                world = th.pts[near.index].clone()
+                role = th.roles[near.index]
+              }
+            } else if (e.shiftKey && hoverSnaps && hoverSnaps.pts.length) {
+              // SHIFT-locked: clicking over empty space (e.g. a hole centre, where
+              // there is no surface to hit) lands on the nearest frozen snap.
+              link = hoverSnaps.link
+              if (!robot.links[link]) return
+              const near = nearestScreen(hoverSnaps.pts, e)
+              if (near.index < 0) return
+              world = hoverSnaps.pts[near.index].clone()
+              worldNormal = hoverSnaps.worldNormal.clone()
+              role = hoverSnaps.roles[near.index]
+            } else return
+            // Reject a same-block pick (marker/state desync).
             if (jr.step === 'child' && jr.parentLink === link) return
             if (jr.step === 'parent' && jr.childLink === link) return
-            let world = hit.point.clone()
-            let role = 'point'
-            // The picked FACE normal (world) — the point stays ON this face even when
-            // it snaps to a corner/edge/centre/hole, so the face normal still holds.
-            const mesh = hit.object as THREE.Mesh
-            const worldNormal = hit
-              .face!.normal.clone()
-              .transformDirection(mesh.matrixWorld)
-              .normalize()
-            const geom = readPrimitive(contentRef.current, link)
-            if (geom) {
-              // Primitive: snap to a face corner / edge / centre.
-              const th = hitToHandles(hit, link, geom)
-              const near = nearestScreen(th.pts, e)
-              if (near.index >= 0 && near.distPx < 24) {
-                world = th.pts[near.index].clone()
-                role = th.roles[near.index]
-              }
-            } else {
-              // Mesh: snap to a detected hole / loop centre or edge midpoint.
-              const th = meshSnapCentres(hit)
-              const near = nearestScreen(th.pts, e)
-              if (near.index >= 0 && near.distPx < 28) {
-                world = th.pts[near.index].clone()
-                role = th.roles[near.index]
-              }
-            }
             const linkObj = robot.links[link]
             const local = linkObj.worldToLocal(world.clone())
             const lq = new THREE.Quaternion()
             linkObj.getWorldQuaternion(lq)
             const linkNormal = worldNormal.clone().applyQuaternion(lq.invert()) // face normal, link-local
             setJointMarker(world, worldNormal, jr.step === 'child')
+            clearHoverMarker()
             onJointPickRef.current?.(
               link,
               [local.x, local.y, local.z],
@@ -2280,36 +2344,54 @@ export function RobotView({
             if (name) setSelectedLink(name)
           }
 
-          // Hover: show a face's snap handles when the Move tool OR the Join picker
-          // is active + idle, so the user sees the corner/edge/centre snaps.
+          // Hover: reveal a face's snap points. The Move tool shows primitive face
+          // handles; the Join picker shows all snaps + a TARGET marker on the surface
+          // (circle + axis, cross-hair over holes), and holding SHIFT LOCKS the snaps
+          // so you can slide onto a hole centre (empty space) and click it.
           const onBuildHover = (e: PointerEvent): void => {
             if (drag || move) return
-            const wantHandles = buildToolRef.current === 'move' || jointPickRef.current.active
+            const jointActive = jointPickRef.current.active
+            const wantHandles = buildToolRef.current === 'move' || jointActive
             if (!buildActive() || !wantHandles || !robotRef.current) {
-              if (snapGroup.children.length) clearHandles()
+              clearHandles()
+              clearHoverMarker()
+              hoverSnaps = null
               return
             }
             buildNdcFrom(e)
             buildRay.setFromCamera(buildNdc, camera)
             const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
+
+            if (jointActive) {
+              if (hit) {
+                const s = computeSnaps(hit)
+                if (s) hoverSnaps = s
+              } else if (!e.shiftKey) {
+                hoverSnaps = null // over empty space + not locking → forget the snaps
+              }
+              if (!hoverSnaps || !hoverSnaps.pts.length) {
+                clearHandles()
+                clearHoverMarker()
+                return
+              }
+              const near = nearestScreen(hoverSnaps.pts, e)
+              showHandles(hoverSnaps.pts, near.index)
+              if (near.index >= 0) {
+                setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, hoverSnaps.roles[near.index])
+              } else clearHoverMarker()
+              return
+            }
+
+            // Move tool: primitive face handles only.
             const link = hit ? ownerLinkName(hit.object) : null
-            if (!hit || !link) {
+            const geom = link ? readPrimitive(contentRef.current, link) : null
+            if (!hit || !link || !geom) {
               clearHandles()
               return
             }
-            const geom = readPrimitive(contentRef.current, link)
-            if (geom) {
-              const th = hitToHandles(hit, link, geom)
-              const near = nearestScreen(th.pts, e)
-              showHandles(th.pts, near.distPx < 16 ? near.index : -1)
-            } else if (jointPickRef.current.active) {
-              // Mesh + Join picking: reveal detected hole / loop / edge snaps.
-              const th = meshSnapCentres(hit)
-              if (th.pts.length) {
-                const near = nearestScreen(th.pts, e)
-                showHandles(th.pts, near.distPx < 20 ? near.index : -1)
-              } else clearHandles()
-            } else clearHandles()
+            const th = hitToHandles(hit, link, geom)
+            const near = nearestScreen(th.pts, e)
+            showHandles(th.pts, near.distPx < 16 ? near.index : -1)
           }
 
           // A cancelled/interrupted drag must never strand OrbitControls disabled
@@ -2331,11 +2413,15 @@ export function RobotView({
           renderer.domElement.addEventListener('pointerup', onUp)
           renderer.domElement.addEventListener('pointerdown', onBuildDown)
           renderer.domElement.addEventListener('pointermove', onBuildMove)
+          const onHoverLeave = (): void => {
+            clearHandles()
+            clearHoverMarker()
+          }
           renderer.domElement.addEventListener('pointermove', onBuildHover)
           renderer.domElement.addEventListener('pointerup', onBuildUp)
           renderer.domElement.addEventListener('pointercancel', onBuildCancel)
           renderer.domElement.addEventListener('lostpointercapture', onBuildCancel)
-          renderer.domElement.addEventListener('pointerleave', clearHandles)
+          renderer.domElement.addEventListener('pointerleave', onHoverLeave)
           teardownPose = () => {
             renderer.domElement.removeEventListener('pointerdown', onDown)
             renderer.domElement.removeEventListener('pointerup', onUp)
@@ -2345,7 +2431,7 @@ export function RobotView({
             renderer.domElement.removeEventListener('pointerup', onBuildUp)
             renderer.domElement.removeEventListener('pointercancel', onBuildCancel)
             renderer.domElement.removeEventListener('lostpointercapture', onBuildCancel)
-            renderer.domElement.removeEventListener('pointerleave', clearHandles)
+            renderer.domElement.removeEventListener('pointerleave', onHoverLeave)
             scene.remove(snapGroup)
             handleGeo.dispose()
             handleMat.dispose()
@@ -2361,6 +2447,7 @@ export function RobotView({
             axisMatX.dispose()
             axisMatY.dispose()
             axisMatZ.dispose()
+            hoverMat.dispose()
             measureApiRef.current = null
             highlightApiRef.current = null
             jointPickApiRef.current = null
