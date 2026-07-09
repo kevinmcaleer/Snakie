@@ -1536,9 +1536,12 @@ export function RobotView({
     }
 
     // Frame a NEW robot isometrically, but PRESERVE the camera when the same file
-    // is just re-parsed after a build edit (#315a must-fix — no view jump). The
-    // grid is refreshed to the new bounds either way.
-    const frameKey = activeFile?.id ?? ''
+    // is just re-parsed after a build edit (#315a must-fix — no view jump). The grid
+    // is refreshed to the new bounds either way. The mini/compact viewer's content
+    // comes from `urdfContent` (the dock's demo-arm → project robot), NOT the
+    // workspace's active file — so key it on the robot's base folder, else it keeps
+    // the demo-arm camera and the real robot loads tiny + off-centre.
+    const frameKey = compact ? effectiveBase : (activeFile?.id ?? '')
     const relayGrid = (robot: URDFRobot): void => {
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
@@ -2786,7 +2789,7 @@ export function RobotView({
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
-  }, [content, effectiveBase, isEmpty, poseUI, currentFolder, activeFile?.id, projection])
+  }, [content, effectiveBase, isEmpty, poseUI, compact, currentFolder, activeFile?.id, projection])
 
   const showPanel = poseUI && !error && !isEmpty
   const showTimeline = poseUI && !error && !isEmpty && movableNames.length > 0
