@@ -250,6 +250,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — Join tool: only the first block fades.** Picking Component 1 faded
+  the whole robot, because its material is usually shared (everything uses "steel");
+  the fade now swaps in a transparent clone for just that block's mesh, so every
+  other object stays solid and pickable as Component 2.
+- **Robot View — the properties / Add-Joint dialog drags in place.** It jumped down
+  and right on the first drag because the pointer's viewport coordinates were applied
+  as `left`/`top` relative to the 3-D stage; the drag now converts by the stage offset.
+- **Robot View — Pop-out opens in the home view.** Popping the robot out full-screen
+  reused a preserved camera, so it wasn't fit/oriented; it now re-frames to home
+  (as if you clicked the Home button) when it goes full-screen.
 - **Robot View — deleting a joint now actually removes it (#354).** Delete used to
   re-attach the block to the base, which is a no-op for a joint that's already off
   the base — so those joints (e.g. the two fixed joints in a fresh robot) couldn't
