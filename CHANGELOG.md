@@ -300,6 +300,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — adding a joint no longer blanks the view (#354).** After a joint was
+  added the selected block's highlight was re-applied during the scene rebuild, but the
+  helper it needed was declared *later* in the same setup — a temporal-dead-zone crash
+  that blanked the whole Robot View (intermittent, since it only fired once the block's
+  mesh had finished loading — which is why "the 3rd joint vanished"). The helper is now
+  declared before it's used, so chaining any number of joints is solid.
 - **Robot View — the Add Joint dialog's buttons are always clickable (#354).** The
   properties dialog sat *below* the zoom controls, so when it grew tall enough to reach
   the bottom-right the zoom toolbar covered its **Add** button — clicks landed on "Zoom

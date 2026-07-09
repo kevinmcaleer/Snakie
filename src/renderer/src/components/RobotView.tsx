@@ -1873,6 +1873,14 @@ export function RobotView({
           const buildRay = new THREE.Raycaster()
           const buildNdc = new THREE.Vector2()
           const camDir = new THREE.Vector3()
+          // The URDF link an object belongs to (walk up to the marked URDFLink). Declared
+          // HERE — before applyHighlight uses it below — so re-selecting on an effect
+          // re-run (e.g. after adding a joint) can't hit a temporal-dead-zone crash.
+          const ownerLinkName = (obj: THREE.Object3D | null): string | null => {
+            let o = obj
+            while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
+            return (o as unknown as { urdfName?: string } | null)?.urdfName ?? null
+          }
           // Selection highlight: tint the one selected block LIGHT BLUE, keeping the
           // material's shading (so the sides still shade rather than going flat). Only
           // ever ONE block is highlighted — clearHighlight() restores the previous one
@@ -2004,11 +2012,6 @@ export function RobotView({
             })
           }
           const mmv = (m: number): number => Math.round(m * 1000)
-          const ownerLinkName = (obj: THREE.Object3D | null): string | null => {
-            let o = obj
-            while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
-            return (o as unknown as { urdfName?: string } | null)?.urdfName ?? null
-          }
           // Classify the hovered face + return its world snap handles.
           const hitToHandles = (
             hit: THREE.Intersection,
