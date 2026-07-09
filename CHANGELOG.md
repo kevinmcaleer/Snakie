@@ -310,14 +310,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — the Join tool respects the existing structure whichever part you pick
+  first (#354).** Picking the two parts in the "wrong" order used to re-home the part
+  that was *already* built into the chain onto the loose one — so the established part
+  jumped away and looked disconnected from the base. Joining is now **order-independent**:
+  the loose / less-established part — the one closer to the base (then with fewer
+  descendants) — is always the one that moves onto the other, so your existing structure
+  stays put no matter which you click as Component 1 (a gripper mounts onto the arm tip,
+  never the reverse).
 - **Robot View — removing a joint no longer fuses the freed part into the base (#354).**
   Deleting a joint used to leave its part *rootless*, and the loader collapses every
   rootless part into the base's single scene node — so the base and every freed part
   **highlighted together** and you couldn't pick just one to re-join it (which also made
   a follow-up joint look "ignored"). Deleting a joint now **re-attaches the part to the
-  base as a loose part** at exactly where it was (its sub-assembly comes with it and
-  stays put) — so each part stays independently selectable and you can articulate a new
-  chain from it.
+  base as a loose part**, nudged to a clear spot beside the base (like a fresh import)
+  so it's off its old parent and easy to pick — its sub-assembly relocates with it — and
+  each part stays independently selectable so you can articulate a new chain from it.
 - **Robot View — adding a joint no longer blanks the view (#354).** After a joint was
   added the selected block's highlight was re-applied during the scene rebuild, but the
   helper it needed was declared *later* in the same setup — a temporal-dead-zone crash
