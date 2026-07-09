@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { JointDef, JointFull, JointSpec, PrimitiveGeom } from './robot-assembly'
+import type { JointDef, JointType, JointSpec, PrimitiveGeom } from './robot-assembly'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './RobotJointPanel'
 import { normPin } from './robot-pose'
@@ -55,17 +55,25 @@ export interface RobotPropertiesDialogProps {
   onRecallPose: (pose: NamedPoseLike) => void
   onRenamePose: (oldName: string, newName: string) => void
   onDeletePose: (name: string) => void
-  // addjoint
-  /** All link names, for the Add Joint parent/child pickers. */
-  links: string[]
-  /** Every joint (to seed the offset from a child's current origin). */
-  joints: JointFull[]
-  /** Connect `child` under `parent` at joint origin `xyz` (metres). Returns
-   *  whether anything changed (false = invalid pick, e.g. would form a loop). */
-  onConnect: (parent: string, child: string, xyz: [number, number, number]) => boolean
+  // addjoint (#354 — pick two points in 3-D)
+  /** The Add Joint pick state (which block/point is Component 1 / 2), driven by
+   *  clicks in the 3-D view. */
+  jointPick: JointPickView | null
+  /** Arm the picker for a component again (the next 3-D click re-picks it). */
+  onRepick: (step: 'parent' | 'child') => void
+  /** Create the joint from the two picks + chosen type + offset (mm). Returns
+   *  false (keeps the dialog open) if the picks are incomplete / would loop. */
+  onConnectPicked: (type: JointType, offsetMm: [number, number, number]) => boolean
   // footer
   onOk: () => void
   onCancel: () => void
+}
+
+/** A component picked in 3-D for the Join tool: its link + the snap role. */
+export interface JointPickView {
+  step: 'parent' | 'child'
+  parent: { link: string; role: string } | null
+  child: { link: string; role: string } | null
 }
 
 /**
@@ -353,55 +361,49 @@ function PoseBody({
   )
 }
 
-/** The Add Joint body (#354): pick Component 1 (parent) + Component 2 (child) and
- *  an X/Y/Z offset (mm) for the joint origin; commit on **Add**. */
+// Kid-friendly joint kinds offered by the Join tool (a subset of the URDF set).
+const ADDJOINT_KINDS: Array<{ id: JointType; label: string; hint: string }> = [
+  { id: 'fixed', label: 'Static', hint: 'Glued in place — no movement' },
+  { id: 'revolute', label: 'Rotation', hint: 'Rotates about an axis, within limits (revolute)' },
+  { id: 'prismatic', label: 'Linear', hint: 'Slides along an axis (prismatic)' }
+]
+
+/**
+ * The Add Joint body (#354): pick a point on TWO blocks in the 3-D view (Component
+ * 1 = parent, Component 2 = child), choose the joint type + an X/Y/Z offset, then
+ * **Add**. The picks come from clicks in the 3-D stage (snapping to face
+ * corners/edges/centres); this body just reflects them + collects type/offset.
+ */
 function AddJointBody({
-  links,
-  joints,
-  onConnect,
+  jointPick,
+  onRepick,
+  onConnectPicked,
   commitRef
 }: RobotPropertiesDialogProps & {
   commitRef: React.MutableRefObject<(() => void | boolean) | null>
 }): JSX.Element {
-  const [parent, setParent] = useState(links[0] ?? '')
-  const [child, setChild] = useState(links.find((l) => l !== (links[0] ?? '')) ?? '')
-  // The child's current joint origin (metres → mm), so re-attaching without
-  // touching the offset leaves the part where it is. Re-seeded as the child changes.
-  const currentOrigin = (link: string): Record<'x' | 'y' | 'z', string> => {
-    const j = joints.find((x) => x.child === link)
-    const mm = (n: number): string => String(Math.round((n ?? 0) * 1000))
-    return j ? { x: mm(j.xyz[0]), y: mm(j.xyz[1]), z: mm(j.xyz[2]) } : { x: '0', y: '0', z: '0' }
-  }
-  // Offsets in mm (raw strings so you can clear / type a leading "-").
-  const [off, setOff] = useState<Record<'x' | 'y' | 'z', string>>(() => currentOrigin(child))
+  const [type, setType] = useState<JointType>('fixed')
+  const [off, setOff] = useState<Record<'x' | 'y' | 'z', string>>({ x: '0', y: '0', z: '0' })
   const [err, setErr] = useState<string | null>(null)
-  const same = !!parent && parent === child
-  const alreadyJointed = joints.some((x) => x.child === child)
+  const parent = jointPick?.parent ?? null
+  const child = jointPick?.child ?? null
+  const step = jointPick?.step ?? 'parent'
 
   commitRef.current = (): boolean => {
     if (!parent || !child) {
-      setErr('Add another block to join to.')
-      return false
-    }
-    if (same) {
-      setErr('Pick two different blocks.')
+      setErr('Pick a point on both blocks first.')
       return false
     }
     const mm = (s: string): number => {
       const v = Number(s)
       return Number.isFinite(v) ? v / 1000 : 0 // mm → m
     }
-    const ok = onConnect(parent, child, [mm(off.x), mm(off.y), mm(off.z)])
+    const ok = onConnectPicked(type, [mm(off.x), mm(off.y), mm(off.z)])
     if (!ok) {
       setErr('Can’t connect — that would form a loop (the parent hangs off the child).')
       return false
     }
     return true
-  }
-  const pickChild = (c: string): void => {
-    setChild(c)
-    setOff(currentOrigin(c)) // seed the offset from its current origin
-    setErr(null)
   }
   const axis = (k: 'x' | 'y' | 'z'): JSX.Element => (
     <label className="robotprops__mm">
@@ -413,39 +415,57 @@ function AddJointBody({
       />
     </label>
   )
-  const warn = err ?? (same ? 'Pick two different blocks.' : !child ? 'Add another block to join to.' : null)
+  const slot = (which: 'parent' | 'child', pick: { link: string; role: string } | null): JSX.Element => {
+    const arming = step === which && !pick
+    return (
+      <button
+        type="button"
+        className={`robotprops__pick${arming ? ' is-arming' : ''}`}
+        onClick={() => {
+          onRepick(which)
+          setErr(null)
+        }}
+        title="Click, then pick a point on the block in the 3-D view"
+      >
+        {pick ? (
+          <>
+            <span className="robotprops__pick-link">{pick.link}</span>
+            <span className="robotprops__pick-role">{pick.role}</span>
+          </>
+        ) : (
+          <span className="robotprops__pick-hint">
+            {arming ? '● Click a point in 3-D…' : 'Click to pick'}
+          </span>
+        )}
+      </button>
+    )
+  }
+
   return (
     <>
       <section className="robotprops__section">
         <div className="robotprops__label">Component 1 (parent)</div>
-        <select
-          className="robotprops__sel"
-          value={parent}
-          onChange={(e) => {
-            const p = e.target.value
-            setParent(p)
-            setErr(null)
-            if (p === child) pickChild(links.find((l) => l !== p) ?? '') // keep child ≠ parent
-          }}
-        >
-          {links.map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-        </select>
+        {slot('parent', parent)}
       </section>
       <section className="robotprops__section">
         <div className="robotprops__label">Component 2 (child)</div>
-        <select className="robotprops__sel" value={child} onChange={(e) => pickChild(e.target.value)}>
-          {links
-            .filter((l) => l !== parent)
-            .map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-        </select>
+        {slot('child', child)}
+      </section>
+      <section className="robotprops__section">
+        <div className="robotprops__label">Joint type</div>
+        <div className="robotprops__row">
+          {ADDJOINT_KINDS.map((k) => (
+            <button
+              key={k.id}
+              type="button"
+              className={`robotprops__chip${type === k.id ? ' is-on' : ''}`}
+              title={k.hint}
+              onClick={() => setType(k.id)}
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
       </section>
       <section className="robotprops__section">
         <div className="robotprops__label">Offset (mm)</div>
@@ -455,14 +475,13 @@ function AddJointBody({
           {axis('z')}
         </div>
       </section>
-      {warn ? (
-        <p className="robotprops__note robotprops__note--warn">{warn}</p>
+      {err ? (
+        <p className="robotprops__note robotprops__note--warn">{err}</p>
       ) : (
         <p className="robotprops__note">
-          {alreadyJointed ? 'Re-attaches ' : 'Attaches '}
-          <strong>{child}</strong> under <strong>{parent}</strong>
-          {alreadyJointed ? ', keeping its joint type.' : ' as a fixed joint.'} Tune the type in the
-          Joints branch.
+          {parent && child
+            ? 'Component 2 will snap so its point meets Component 1’s point.'
+            : 'Click a point on each block in the 3-D view (snaps to corners / edges / centres).'}
         </p>
       )}
     </>
