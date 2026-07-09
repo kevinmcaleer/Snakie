@@ -61,6 +61,7 @@ import {
 } from './robot-build'
 import { RobotBuildPanel } from './RobotBuildPanel'
 import { detectSnapCentres } from './robot-holes'
+import { jointFromPicks } from './robot-joint-frame'
 import { RobotPropertiesDialog, type PropsContext } from './RobotPropertiesDialog'
 import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
@@ -344,7 +345,13 @@ export function RobotView({
     dialogCtx?.kind === 'link' ? dialogCtx.link : dialogCtx?.kind === 'joint' ? dialogCtx.child : null
   const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: string } | null>(null)
   // Join tool (#354): the two points picked in 3-D. Non-null = pick mode is armed.
-  type JointPickPt = { link: string; local: [number, number, number]; role: string }
+  // `local` + `normal` are in the link's LOCAL frame (the point + its face normal).
+  type JointPickPt = {
+    link: string
+    local: [number, number, number]
+    normal: [number, number, number]
+    role: string
+  }
   const [jointPick, setJointPick] = useState<{
     step: 'parent' | 'child'
     parent: JointPickPt | null
@@ -374,7 +381,13 @@ export function RobotView({
   const jointPickStateRef = useRef(jointPick)
   jointPickStateRef.current = jointPick
   const onJointPickRef = useRef<
-    ((link: string, local: [number, number, number], role: string) => void) | null
+    | ((
+        link: string,
+        local: [number, number, number],
+        normal: [number, number, number],
+        role: string
+      ) => void)
+    | null
   >(null)
   const jointPickApiRef = useRef<{ clear: () => void } | null>(null)
   buildOpenRef.current = buildOpen && poseUI
@@ -587,11 +600,16 @@ export function RobotView({
     openContext({ kind: 'addjoint' }, null)
     if (!buildOpen) setBuildOpen(true)
   }
-  // A 3-D pick landed (the effect resolved the click → link + local snap point).
-  const onJointPick = (link: string, local: [number, number, number], role: string): void => {
+  // A 3-D pick landed (the effect resolved the click → link + local snap point + face normal).
+  const onJointPick = (
+    link: string,
+    local: [number, number, number],
+    normal: [number, number, number],
+    role: string
+  ): void => {
     setJointPick((jp) => {
       if (!jp) return jp
-      const pt: JointPickPt = { link, local, role }
+      const pt: JointPickPt = { link, local, normal, role }
       if (jp.step === 'parent') return { ...jp, parent: pt, step: 'child' }
       if (jp.parent && link === jp.parent.link) return jp // can't join a block to itself
       return { ...jp, child: pt }
@@ -618,18 +636,19 @@ export function RobotView({
     // reverse wouldn't, orientJoint swaps them so the user needn't get it "right".
     const o = orientJoint(base, jp.parent.link, jp.child.link)
     const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
-    const xyz: [number, number, number] = [
-      parent.local[0] - child.local[0] + offsetMm[0],
-      parent.local[1] - child.local[1] + offsetMm[1],
-      parent.local[2] - child.local[2] + offsetMm[2]
-    ]
+    // Orient the joint from the two picked FACE NORMALS: rotate the child so its
+    // face mates flush against the parent's and the picked points coincide.
+    const { xyz, rpy } = jointFromPicks(
+      parent.local,
+      parent.normal,
+      child.local,
+      child.normal,
+      offsetMm
+    )
     let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
     if (next === base) return false // cycle / invalid — keep the dialog open
     next = setJoint(next, child.link, { type }) // apply the chosen joint type
-    // Force the joint rotation to identity (rpy 0): the origin math above assumes
-    // it, and connectJoint/setJoint otherwise PRESERVE a child's old rpy — which
-    // would leave the two picked points misaligned. setJointOrigin emits rpy="0 0 0".
-    next = setJointOrigin(next, child.link, xyz)
+    next = setJointOrigin(next, child.link, xyz, rpy) // xyz + the mating rotation
     commitUrdf(next)
     setSelectedLink(child.link)
     return true
@@ -1885,47 +1904,85 @@ export function RobotView({
           }
 
           // ── Join tool (#354): click a point on two blocks to connect them ──
-          const jointMarkerMat = new THREE.MeshBasicMaterial({ color: 0x4ea1ff, depthTest: false }) // parent
-          const jointMarkerMatChild = new THREE.MeshBasicMaterial({ color: 0x34ad4f, depthTest: false }) // child
-          let parentMarker: THREE.Mesh | null = null
-          let childMarker: THREE.Mesh | null = null
-          const clearJointMarkers = (): void => {
-            for (const mk of [parentMarker, childMarker]) {
-              if (mk) {
-                scene.remove(mk)
-                mk.geometry.dispose()
-              }
+          // Markers are a CIRCLE laid flat on the picked face + an X/Y/Z axis triad
+          // (Z = the face normal) so the pick reads accurately in 3-D from any angle.
+          const jointMatParent = new THREE.LineBasicMaterial({ color: 0x4ea1ff, depthTest: false })
+          const jointMatChild = new THREE.LineBasicMaterial({ color: 0x34ad4f, depthTest: false })
+          const axisMatX = new THREE.LineBasicMaterial({ color: 0xff5566, depthTest: false })
+          const axisMatY = new THREE.LineBasicMaterial({ color: 0x55dd66, depthTest: false })
+          const axisMatZ = new THREE.LineBasicMaterial({ color: 0x5599ff, depthTest: false })
+          const circlePts = (r: number): THREE.Vector3[] => {
+            const a: THREE.Vector3[] = []
+            for (let i = 0; i <= 40; i++) {
+              const t = (i / 40) * Math.PI * 2
+              a.push(new THREE.Vector3(Math.cos(t) * r, Math.sin(t) * r, 0))
             }
+            return a
+          }
+          let parentMarker: THREE.Group | null = null
+          let childMarker: THREE.Group | null = null
+          const disposeMarker = (g: THREE.Group | null): void => {
+            if (!g) return
+            scene.remove(g)
+            g.traverse((o) => {
+              const l = o as THREE.Line
+              if (l.geometry) l.geometry.dispose()
+            })
+          }
+          const clearJointMarkers = (): void => {
+            disposeMarker(parentMarker)
+            disposeMarker(childMarker)
             parentMarker = null
             childMarker = null
           }
           jointPickApiRef.current = { clear: clearJointMarkers }
-          const setJointMarker = (world: THREE.Vector3, isChild: boolean): void => {
-            const prev = isChild ? childMarker : parentMarker
-            if (prev) {
-              scene.remove(prev)
-              prev.geometry.dispose()
-            }
-            const mk = new THREE.Mesh(
-              new THREE.SphereGeometry(halfView * 0.03 + 0.002, 12, 12),
-              isChild ? jointMarkerMatChild : jointMarkerMat
+          const setJointMarker = (world: THREE.Vector3, normal: THREE.Vector3, isChild: boolean): void => {
+            disposeMarker(isChild ? childMarker : parentMarker)
+            const g = new THREE.Group()
+            const r = halfView * 0.11
+            const ax = halfView * 0.16
+            const circle = new THREE.LineLoop(
+              new THREE.BufferGeometry().setFromPoints(circlePts(r)),
+              isChild ? jointMatChild : jointMatParent
             )
-            mk.position.copy(world)
-            mk.renderOrder = 999
-            mk.raycast = () => {}
-            scene.add(mk)
-            if (isChild) childMarker = mk
-            else parentMarker = mk
+            const line = (dir: THREE.Vector3, mat: THREE.LineBasicMaterial): THREE.Line => {
+              const l = new THREE.Line(
+                new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), dir.clone().multiplyScalar(ax)]),
+                mat
+              )
+              l.renderOrder = 999
+              l.raycast = () => {}
+              return l
+            }
+            circle.renderOrder = 999
+            circle.raycast = () => {}
+            g.add(
+              circle,
+              line(new THREE.Vector3(1, 0, 0), axisMatX),
+              line(new THREE.Vector3(0, 1, 0), axisMatY),
+              line(new THREE.Vector3(0, 0, 1), axisMatZ)
+            )
+            g.position.copy(world)
+            // Orient so the marker's +Z (the triad's blue axis + circle normal) points
+            // along the picked face normal — the circle then lies flat on the face.
+            g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal.clone().normalize())
+            scene.add(g)
+            if (isChild) childMarker = g
+            else parentMarker = g
           }
           // Redraw markers for any picks that survived an effect rebuild mid-pick
           // (the state persists in jointPickStateRef; the old scene objects didn't).
           {
             const jp = jointPickStateRef.current
-            const drawFrom = (p: { link: string; local: [number, number, number] } | null, child: boolean): void => {
-              const lo = p && robotRef.current?.links[p.link]
-              if (p && lo) setJointMarker(lo.localToWorld(new THREE.Vector3(...p.local)), child)
-            }
             robotRef.current?.updateMatrixWorld(true)
+            const drawFrom = (p: JointPickPt | null, child: boolean): void => {
+              const lo = p && robotRef.current?.links[p.link]
+              if (!p || !lo) return
+              const q = new THREE.Quaternion()
+              lo.getWorldQuaternion(q)
+              const wn = new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).applyQuaternion(q)
+              setJointMarker(lo.localToWorld(new THREE.Vector3(p.local[0], p.local[1], p.local[2])), wn, child)
+            }
             drawFrom(jp?.parent ?? null, false)
             drawFrom(jp?.child ?? null, true)
           }
@@ -1972,6 +2029,13 @@ export function RobotView({
             if (jr.step === 'parent' && jr.childLink === link) return
             let world = hit.point.clone()
             let role = 'point'
+            // The picked FACE normal (world) — the point stays ON this face even when
+            // it snaps to a corner/edge/centre/hole, so the face normal still holds.
+            const mesh = hit.object as THREE.Mesh
+            const worldNormal = hit
+              .face!.normal.clone()
+              .transformDirection(mesh.matrixWorld)
+              .normalize()
             const geom = readPrimitive(contentRef.current, link)
             if (geom) {
               // Primitive: snap to a face corner / edge / centre.
@@ -1990,9 +2054,18 @@ export function RobotView({
                 role = th.roles[near.index]
               }
             }
-            const local = robot.links[link].worldToLocal(world.clone())
-            setJointMarker(world, jr.step === 'child')
-            onJointPickRef.current?.(link, [local.x, local.y, local.z], role)
+            const linkObj = robot.links[link]
+            const local = linkObj.worldToLocal(world.clone())
+            const lq = new THREE.Quaternion()
+            linkObj.getWorldQuaternion(lq)
+            const linkNormal = worldNormal.clone().applyQuaternion(lq.invert()) // face normal, link-local
+            setJointMarker(world, worldNormal, jr.step === 'child')
+            onJointPickRef.current?.(
+              link,
+              [local.x, local.y, local.z],
+              [linkNormal.x, linkNormal.y, linkNormal.z],
+              role
+            )
           }
 
           const onBuildDown = (e: PointerEvent): void => {
@@ -2191,8 +2264,11 @@ export function RobotView({
             if (outline) outline.geometry.dispose()
             accentLineMat.dispose()
             clearJointMarkers()
-            jointMarkerMat.dispose()
-            jointMarkerMatChild.dispose()
+            jointMatParent.dispose()
+            jointMatChild.dispose()
+            axisMatX.dispose()
+            axisMatY.dispose()
+            axisMatZ.dispose()
             measureApiRef.current = null
             highlightApiRef.current = null
             jointPickApiRef.current = null

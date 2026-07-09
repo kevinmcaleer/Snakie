@@ -536,20 +536,23 @@ export function connectJoint(
   return idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
 }
 
-/** Set the fixed-joint origin whose child is `childLink` (moves the whole part). */
+/** Set the joint origin whose child is `childLink` (moves/orients the whole part).
+ *  `rpy` defaults to zero (a plain translation); pass it to orient the joint. */
 export function setJointOrigin(
   urdf: string,
   childLink: string,
-  xyz: readonly [number, number, number]
+  xyz: readonly [number, number, number],
+  rpy: readonly [number, number, number] = [0, 0, 0]
 ): string {
   const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
   const childRe = new RegExp(`<child\\b[^>]*\\blink\\s*=\\s*"${escapeRe(childLink)}"`, 'i')
+  const originRe = /<origin\b[^>]*\/>|<origin\b[^>]*>[\s\S]*?<\/origin>/i
   let m: RegExpExecArray | null
   while ((m = re.exec(urdf))) {
     if (!childRe.test(m[0])) continue
-    const tag = `<origin xyz="${fmtVec(xyz)}" rpy="0 0 0"/>`
-    const block = /<origin\b[^>]*\/>/i.test(m[0])
-      ? m[0].replace(/<origin\b[^>]*\/>/i, tag)
+    const tag = `<origin xyz="${fmtVec(xyz)}" rpy="${fmtVec(rpy)}"/>`
+    const block = originRe.test(m[0])
+      ? m[0].replace(originRe, tag)
       : m[0].replace(/<\/joint>/i, `  ${tag}\n  </joint>`)
     return urdf.slice(0, m.index) + block + urdf.slice(m.index + m[0].length)
   }
