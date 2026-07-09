@@ -61,6 +61,11 @@ export interface RobotModel {
   servoJointMap?: ServoJointBinding[]
   /** Per-joint limit / calibration overrides edited in-app (Phase 2). */
   joints?: Record<string, JointConfig>
+  /** Per-joint absolute roll about its own normal axis, in DEGREES (#354). The URDF
+   *  `<origin rpy>` already bakes this in; it's remembered here so the joint editor
+   *  can show the current roll and edit it absolutely (deltas re-applied to the rpy),
+   *  instead of the field resetting to 0 each time the dialog reopens. */
+  jointRoll?: Record<string, number>
   /** The default pose applied on load: joint name → value (deg / mm). */
   defaultPose?: Record<string, number>
   /** Saved named poses (Phase 2). */

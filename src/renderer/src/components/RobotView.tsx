@@ -177,6 +177,7 @@ export function RobotView({
   const valuesRef = useRef<Record<string, number>>({})
   const overridesRef = useRef<Record<string, { min?: number; max?: number }>>({})
   const defaultPoseRef = useRef<Record<string, number>>({}) // native, non-mimic
+  const jointRollRef = useRef<Record<string, number>>({}) // joint name → absolute roll (deg)
   const measureActiveRef = useRef(false)
   const measureApiRef = useRef<{ clear: () => void } | null>(null)
   const highlightApiRef = useRef<{ apply: (link: string | null) => void } | null>(null)
@@ -562,13 +563,23 @@ export function RobotView({
     const j = readJoint(content, child)
     if (j) commitUrdf(setJointOrigin(content, child, xyz, j.rpy))
   }
-  // Roll an existing joint about its own normal axis (its origin's local Z) by
-  // `deltaDeg`, keeping its position — the roll field on the joint editor.
-  const handleRollJoint = (child: string, deltaDeg: number): void => {
+  // Set an existing joint's ABSOLUTE roll about its own normal axis (its origin's
+  // local Z), keeping its position — the roll field on the joint editor. The URDF
+  // rpy bakes the roll in (so it can't be decoded back out unambiguously), so the
+  // absolute value is remembered in robot.yml and applied as a DELTA on the rpy —
+  // that keeps geometry exact while letting the field show the stored roll on reopen.
+  const setJointRoll = (child: string, absDeg: number): void => {
     const j = readJoint(content, child)
-    if (!j || !deltaDeg) return
+    if (!j) return
+    const prev = jointRollRef.current[j.name] ?? 0
+    jointRollRef.current = { ...jointRollRef.current, [j.name]: absDeg }
+    void persist((m) => {
+      m.jointRoll = { ...(m.jointRoll ?? {}), [j.name]: absDeg }
+    })
+    const delta = absDeg - prev
+    if (!delta) return
     const R = new THREE.Quaternion().setFromEuler(new THREE.Euler(j.rpy[0], j.rpy[1], j.rpy[2], 'ZYX'))
-    R.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (deltaDeg * Math.PI) / 180))
+    R.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (delta * Math.PI) / 180))
     const e = new THREE.Euler().setFromQuaternion(R, 'ZYX')
     commitUrdf(setJointOrigin(content, child, j.xyz, [e.x, e.y, e.z]))
   }
@@ -765,17 +776,24 @@ export function RobotView({
     }
     commitUrdf(next)
     setSelectedLink(child.link)
+    const jn = readJoint(next, child.link)?.name
+    // Remember the roll baked in at creation so the joint editor's Roll field shows it
+    // (and edits from it) — always write it, so a freshly re-joined link overwrites any
+    // stale roll left from a previous joint that reused this name (#354).
+    if (jn) {
+      jointRollRef.current = { ...jointRollRef.current, [jn]: angleDeg }
+      void persist((m) => {
+        m.jointRoll = { ...(m.jointRoll ?? {}), [jn]: angleDeg }
+      })
+    }
     // Rotation default angle: persist it to the robot.yml defaultPose (keyed by the
     // joint's actual name, in display degrees) so the joint loads at that angle —
     // and it seeds the pose slider for interactive preview of the swing.
-    if (rotation && type === 'revolute' && rotation.defaultDeg) {
-      const jn = readJoint(next, child.link)?.name
-      if (jn) {
-        const dd = rotation.defaultDeg
-        void persist((m) => {
-          m.defaultPose = { ...(m.defaultPose ?? {}), [jn]: dd }
-        })
-      }
+    if (jn && rotation && type === 'revolute' && rotation.defaultDeg) {
+      const dd = rotation.defaultDeg
+      void persist((m) => {
+        m.defaultPose = { ...(m.defaultPose ?? {}), [jn]: dd }
+      })
     }
     return true
   }
@@ -1760,6 +1778,7 @@ export function RobotView({
                 robot.setJointValue(m.name, nv[m.name])
               }
               defaultPoseRef.current = { ...nv } // "Reset" returns to the saved default
+              jointRollRef.current = { ...(model.jointRoll ?? {}) } // remembered joint rolls
               setOverrides(ov)
               setPoses(Array.isArray(model.poses) ? model.poses : [])
               setValues(nv)
@@ -3039,7 +3058,8 @@ export function RobotView({
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
             onSetJointOrigin={handleSetJointOrigin}
-            onRollJoint={handleRollJoint}
+            onRollJoint={setJointRoll}
+            jointRoll={editJoint ? jointRollRef.current[editJoint.name] ?? 0 : 0}
             onDeleteJoint={handleDeleteJoint}
             servo={dialogCtx.kind === 'servo' ? bindings.find((b) => b.pin === dialogCtx.pin) ?? null : null}
             movableJoints={movableNames}

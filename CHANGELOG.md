@@ -26,11 +26,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   dialog now has a **roll (°)** field alongside the X/Y/Z offset — for **Static** joints
   too — that spins the child about the joint's normal axis while keeping the mated faces
   flush, so you can orient a bracket/part however you like at the connection.
-- **Robot View — edit an existing joint's offset + roll after the fact (#354).**
-  Clicking a joint in the build panel's **Joints** list now shows an **Offset (X/Y/Z, mm)**
-  and a **Roll (°)** control in the joint editor — for **Static** joints too, not just
-  when first adding them. Nudge a connection into place or spin a part about its normal
-  without deleting and re-joining.
+- **Robot View — edit an existing joint's offset + roll, live (#354).** Clicking a
+  joint in the build panel's **Joints** list now shows an **Offset (X/Y/Z, mm)** and a
+  **Roll (°)** control in the joint editor — for **Static** joints too, not just when
+  first adding them. Both apply **immediately** as you type or nudge the spinner (no
+  Enter needed), and the **roll is an absolute value that's remembered** — reopen the
+  joint and it still reads the angle you set (instead of snapping back to 0), so you can
+  fine-tune it or return it to 0 yourself. Nudge a connection into place or spin a part
+  about its normal without deleting and re-joining.
 - **Robot View — import parts, pick a base, articulate them into a chain (#354).**
   Imported STLs no longer stack on top of the first part at the origin. Each import
   now attaches to the base with a **movable joint** at a **staggered** position, so it

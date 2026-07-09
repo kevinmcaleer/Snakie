@@ -172,17 +172,20 @@ const AXES: Array<{ id: 'x' | 'y' | 'z'; vec: Vec3 }> = [
 export function JointForm({
   joint,
   names,
+  jointRoll,
   onChange,
   onSetOrigin,
   onRoll
 }: {
   joint: JointDef
   names: string[]
+  /** The joint's current absolute roll (deg) about its normal — seeds the Roll field. */
+  jointRoll?: number
   onChange: (spec: JointSpec) => void
-  /** Move the joint origin to `xyz` (metres), keeping its orientation. */
+  /** Move the joint origin to `xyz` (metres), keeping its orientation (applied live). */
   onSetOrigin?: (xyz: [number, number, number]) => void
-  /** Roll the joint about its own normal axis by `deltaDeg` (relative nudge). */
-  onRoll?: (deltaDeg: number) => void
+  /** Set the joint's ABSOLUTE roll about its own normal axis, in degrees (applied live). */
+  onRoll?: (absDeg: number) => void
 }): JSX.Element {
   // The current joint as a full spec, so each edit preserves the other fields.
   const spec = (): JointSpec => ({
@@ -207,19 +210,30 @@ export function JointForm({
   const commitLim = (): void =>
     onChange({ ...spec(), lower: toNative(mt, lim[0]), upper: toNative(mt, lim[1]) })
 
-  // Origin offset (mm, local like the size fields) + a relative roll nudge (deg)
-  // about the joint's own normal axis. Editable for every joint type (#354).
+  // Origin offset (mm, local like the size fields) + an ABSOLUTE roll (deg) about the
+  // joint's own normal axis. Both apply LIVE as the field changes (#354). Editable for
+  // every joint type. The offset re-seeds from the model on an external change (a 3-D
+  // drag) — but NOT while the field is focused, so live typing isn't clobbered by the
+  // URDF's 0.1 mm rounding. The roll seeds from its remembered absolute value.
   const off0 = joint.xyz.map(mm) as [number, number, number]
   const [off, setOff] = useState<[number, number, number]>(off0)
+  const offEditing = useRef(false)
   const offKey = `${joint.name}:${off0.join(',')}`
-  useEffect(() => setOff(off0), [offKey]) // eslint-disable-line react-hooks/exhaustive-deps
-  const commitOff = (): void =>
-    onSetOrigin?.(off.map((v) => toM(Number.isFinite(v) ? v : 0)) as [number, number, number])
-  const [roll, setRoll] = useState('0')
-  const commitRoll = (): void => {
-    const d = Number(roll) || 0
-    if (d) onRoll?.(d)
-    setRoll('0') // a relative nudge — reset so the next entry rolls from here
+  useEffect(() => {
+    if (!offEditing.current) setOff(off0)
+  }, [offKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const toXyz = (v: number[]): [number, number, number] =>
+    v.map((n) => toM(Number.isFinite(n) ? n : 0)) as [number, number, number]
+  const pushOff = (n: [number, number, number]): void => {
+    setOff(n)
+    if (n.every((v) => Number.isFinite(v))) onSetOrigin?.(toXyz(n)) // live
+  }
+  const commitOff = (): void => onSetOrigin?.(toXyz(off))
+  const [roll, setRoll] = useState(String(jointRoll ?? 0))
+  const setRollLive = (v: string): void => {
+    setRoll(v)
+    const n = Number(v)
+    if (v.trim() !== '' && Number.isFinite(n)) onRoll?.(n) // absolute, live
   }
 
   const others = names.filter((n) => n !== joint.name)
@@ -252,12 +266,16 @@ export function JointForm({
                 type="number"
                 step={1}
                 value={Number.isFinite(off[i]) ? off[i] : ''}
+                onFocus={() => (offEditing.current = true)}
                 onChange={(e) => {
                   const n = [...off] as [number, number, number]
                   n[i] = Number(e.target.value)
-                  setOff(n)
+                  pushOff(n)
                 }}
-                onBlur={commitOff}
+                onBlur={() => {
+                  offEditing.current = false
+                  commitOff()
+                }}
                 onKeyDown={(e) => e.key === 'Enter' && commitOff()}
               />
             </label>
@@ -267,19 +285,11 @@ export function JointForm({
       )}
       {onRoll && (
         <div className="robotbuild__jrow">
-          <span className="robotbuild__jlabel" title="Rotate the joint about its own normal axis">
+          <span className="robotbuild__jlabel" title="Absolute roll about the joint's own normal axis">
             Roll
           </span>
           <label className="robotbuild__mm">
-            <span>by</span>
-            <input
-              type="number"
-              step={15}
-              value={roll}
-              onChange={(e) => setRoll(e.target.value)}
-              onBlur={commitRoll}
-              onKeyDown={(e) => e.key === 'Enter' && commitRoll()}
-            />
+            <input type="number" step={15} value={roll} onChange={(e) => setRollLive(e.target.value)} />
           </label>
           <span className="robotbuild__mm-unit">°</span>
         </div>
