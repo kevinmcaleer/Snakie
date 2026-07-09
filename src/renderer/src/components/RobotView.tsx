@@ -36,6 +36,7 @@ import {
   setJoint,
   setJointOrigin,
   orientJoint,
+  subtreeOf,
   setPrimitiveSize,
   setVisualOrigin,
   type JointDef,
@@ -726,9 +727,18 @@ export function RobotView({
     const jp = jointPick
     if (!jp?.parent || !jp?.child) return false
     const base = contentRef.current
-    // Intelligent parent/child (#354): if the chosen order would loop but the
-    // reverse wouldn't, orientJoint swaps them so the user needn't get it "right".
-    const o = orientJoint(base, jp.parent.link, jp.child.link)
+    // Intelligent parent/child (#354): orientJoint re-homes the less-established part
+    // regardless of pick order, so the existing structure stays put. It's base-agnostic
+    // and measures depth within each part's OWN root, so in a multi-root URDF it can't
+    // tell a loose separate-root import from the base's structure. Guard it here: the
+    // base's connected structure must NEVER be re-homed onto a part disconnected from the
+    // base (a loose import / the base itself) — if the chosen child is on the base but the
+    // parent isn't, flip so the disconnected part is the one that moves.
+    const baseTree = effectiveBaseLink ? subtreeOf(base, effectiveBaseLink) : new Set<string>()
+    let o = orientJoint(base, jp.parent.link, jp.child.link)
+    if (o.child !== o.parent && baseTree.has(o.child) && !baseTree.has(o.parent)) {
+      o = { parent: o.child, child: o.parent }
+    }
     const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
     // The mating ROTATION (rotate the child so its picked face meets the parent's
     // flush, then roll it about the joint normal by `angleDeg`). The origin is handled
@@ -797,12 +807,12 @@ export function RobotView({
     return true
   }
   // Delete a joint (#354): detach the child from its parent, then RE-ATTACH it to the
-  // base as a LOOSE fixed joint at its current world pose. It must NOT be left rootless
-  // — the loader collapses every rootless link into the base's single scene node, so
-  // freed parts would co-highlight and you couldn't pick one to re-join it. Its whole
-  // sub-assembly comes with it and stays put, because the child's own link frame (and
-  // thus its visual + descendant joints, all relative to it) is preserved by placing
-  // the new base→child joint at the child's former world pose.
+  // base as a LOOSE fixed joint — NUDGED to a clear, staggered spot beside the base
+  // (like a fresh import), not left on top of its old parent where it's hard to pick.
+  // It must NOT be left rootless — the loader collapses every rootless link into the
+  // base's single scene node, so freed parts would co-highlight and you couldn't pick
+  // one to re-join it. Its whole sub-assembly comes with it (descendant joints are
+  // relative to the child link, so the freed part relocates as a unit).
   const handleDeleteJoint = (child: string): void => {
     const before = content
     const base = effectiveBaseLink
@@ -810,37 +820,35 @@ export function RobotView({
       setDialogCtx(null) // can't detach the base itself
       return
     }
-    // The child's transform relative to the base (which loads at the origin).
-    const robot = robotRef.current
-    let relM = new THREE.Matrix4()
-    if (robot?.links[child] && robot.links[base]) {
-      robot.updateMatrixWorld(true)
-      relM = new THREE.Matrix4()
-        .copy(robot.links[base].matrixWorld)
-        .invert()
-        .multiply(robot.links[child].matrixWorld)
-    }
-    const p = new THREE.Vector3()
-    const q = new THREE.Quaternion()
-    relM.decompose(p, q, new THREE.Vector3())
-    const e = new THREE.Euler().setFromQuaternion(q, 'ZYX') // URDF rpy convention
-    const relXyz: [number, number, number] = [p.x, p.y, p.z]
-    const relRpy: [number, number, number] = [e.x, e.y, e.z]
+    const oldJointName = readJoint(before, child)?.name
     let next = removeJoint(before, child)
     if (next === before) {
       setDialogCtx(null) // no such joint
       return
     }
-    // Re-attach to the base (fresh fixed joint) at the former world pose.
-    next = connectJoint(next, { parent: base, child, xyz: relXyz })
-    next = setJointOrigin(next, child, relXyz, relRpy)
+    // A clear loose spot BEYOND every part already parked directly on the base, along X —
+    // so successive detaches (which don't change the link count) don't stack on the same
+    // spot. Placed just past the current max so it's off its old parent, upright + pickable.
+    const baseChildX = readAllJoints(next)
+      .filter((j) => j.parent === base)
+      .map((j) => j.xyz[0])
+    const looseXyz: [number, number, number] = [Math.max(0, ...baseChildX) + 0.08, 0, 0]
+    next = connectJoint(next, { parent: base, child, xyz: looseXyz })
+    next = setJointOrigin(next, child, looseXyz, [0, 0, 0])
     commitUrdf(next)
-    // Fresh loose attachment → its orientation is the new zero-roll baseline.
+    // Fresh loose attachment → its orientation is the new zero-roll baseline. Drop the
+    // old joint's remembered roll (its name is gone) so the map doesn't accrete cruft.
     const jn = readJoint(next, child)?.name
-    if (jn) {
-      jointRollRef.current = { ...jointRollRef.current, [jn]: 0 }
+    if (jn || oldJointName) {
+      const roll = { ...jointRollRef.current }
+      if (oldJointName) delete roll[oldJointName]
+      if (jn) roll[jn] = 0
+      jointRollRef.current = roll
       void persist((m) => {
-        m.jointRoll = { ...(m.jointRoll ?? {}), [jn]: 0 }
+        const mr = { ...(m.jointRoll ?? {}) }
+        if (oldJointName) delete mr[oldJointName]
+        if (jn) mr[jn] = 0
+        m.jointRoll = mr
       })
     }
     setDialogCtx(null)

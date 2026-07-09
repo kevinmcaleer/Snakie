@@ -514,15 +514,65 @@ export function subtreeOf(urdf: string, link: string): Set<string> {
   return inside
 }
 
+/** How many joints from `link` up to its root (0 for a root). Walks parent joints,
+ *  cycle-guarded. Used to tell a loose stub near the base from a deep chain link. */
+export function depthFromRoot(urdf: string, link: string): number {
+  const parentOf = (child: string): string | undefined => {
+    const re = /<joint\b[^>]*>[\s\S]*?<\/joint>/gi
+    let m: RegExpExecArray | null
+    while ((m = re.exec(urdf))) {
+      const c = /<child\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(m[0])?.[1]
+      if (c === child) return /<parent\b[^>]*\blink\s*=\s*"([^"]+)"/i.exec(m[0])?.[1]
+    }
+    return undefined
+  }
+  const seen = new Set<string>()
+  let cur: string | undefined = link
+  let depth = 0
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const p = parentOf(cur)
+    if (!p) break
+    depth++
+    cur = p
+  }
+  return depth
+}
+
 /**
- * Decide the parent/child orientation for a joint between two links (#354). A URDF
- * tree needs the child NOT to already sit above the parent; if making `a` the
- * parent of `b` would form a loop but the reverse wouldn't, swap them. When either
- * order works (or neither), keep `a` as the parent.
+ * Decide the parent/child orientation for a joint between two links (#354), so the
+ * SAME pair joins the same way no matter which the user picked first.
+ *
+ * 1. A URDF tree needs the child NOT to already sit above the parent — if one link
+ *    is in the other's subtree, the ancestor MUST be the parent (else a loop).
+ * 2. Otherwise (independent parts) the child is the one that gets re-homed onto the
+ *    parent, so re-home the LESS-established part and leave the deeper structure put.
+ *    Pick as child the link CLOSER to the base (a loose stub / freshly-added part, over
+ *    a deep chain link — e.g. a gripper mounts onto an arm tip, not the reverse), then
+ *    the one with FEWER descendants (a leaf over a sub-assembly root). A true tie falls
+ *    back to a deterministic name order, so the result never depends on pick order.
+ *
+ * Depth is measured within each link's OWN root, so it tracks "loose-ness" only within a
+ * single tree (the normal single-root robot). It is base-AGNOSTIC: in a multi-root URDF
+ * the caller must refuse to re-home anything connected to the designated base onto a
+ * disconnected part (a separate-root loose import) — see handleConnectPicked.
  */
 export function orientJoint(urdf: string, a: string, b: string): { parent: string; child: string } {
-  if (subtreeOf(urdf, b).has(a) && !subtreeOf(urdf, a).has(b)) return { parent: b, child: a }
-  return { parent: a, child: b }
+  if (a === b) return { parent: a, child: b }
+  const subA = subtreeOf(urdf, a)
+  const subB = subtreeOf(urdf, b)
+  // (1) Cycle avoidance — the ancestor has to be the parent.
+  if (subB.has(a) && !subA.has(b)) return { parent: b, child: a }
+  if (subA.has(b) && !subB.has(a)) return { parent: a, child: b }
+  // (2) Independent parts — re-home the less-established one (the child): shallower
+  // first (closer to base), then fewer descendants, then a stable name tie-break.
+  const depthA = depthFromRoot(urdf, a)
+  const depthB = depthFromRoot(urdf, b)
+  if (depthA !== depthB) return depthA > depthB ? { parent: a, child: b } : { parent: b, child: a }
+  const descA = subA.size - 1
+  const descB = subB.size - 1
+  if (descA !== descB) return descA < descB ? { parent: b, child: a } : { parent: a, child: b }
+  return a < b ? { parent: a, child: b } : { parent: b, child: a }
 }
 
 /** A joint name derived from `base`, made unique within the URDF. */
