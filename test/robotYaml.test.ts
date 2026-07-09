@@ -87,6 +87,18 @@ describe('KRF robot model round-trips (#312)', () => {
     expect(round.robot?.poses).toEqual([{ name: 'home', values: { shoulder: 0, elbow: 20 } }])
   })
 
+  it('round-trips the chosen baseLink (#354)', () => {
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: { version: 1, urdf: 'urdf/arm.urdf', baseLink: 'base_link' }
+    }
+    expect(robotFromYaml(robotToYaml(def)).robot?.baseLink).toBe('base_link')
+    // A blank / whitespace baseLink is dropped by the sanitiser.
+    const blank = robotFromYaml(robotToYaml({ parts: [], connections: [], robot: { baseLink: '  ' } }))
+    expect(blank.robot?.baseLink).toBeUndefined()
+  })
+
   it('a wiring-only robot.yml stays free of a robot: section', () => {
     const yaml = robotToYaml({ parts: [], connections: [] })
     expect(yaml).not.toMatch(/\brobot:/)

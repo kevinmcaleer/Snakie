@@ -159,6 +159,7 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
   const model: RobotModel = { version: KRF_VERSION }
 
   if (isStr(r.urdf) && r.urdf.trim()) model.urdf = r.urdf.trim()
+  if (isStr(r.baseLink) && r.baseLink.trim()) model.baseLink = r.baseLink.trim()
 
   if (Array.isArray(r.servoJointMap)) {
     const map = r.servoJointMap.map(sanitiseBinding).filter((b): b is ServoJointBinding => b !== null)

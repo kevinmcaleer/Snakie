@@ -373,6 +373,7 @@ function BodyRow({
   isSel,
   isEdit,
   isRoot,
+  loose = false,
   onSelect,
   onEdit,
   onMakeBase,
@@ -382,13 +383,14 @@ function BodyRow({
   isSel: boolean
   isEdit: boolean
   isRoot: boolean
+  loose?: boolean
   onSelect: (link: string) => void
   onEdit: (link: string | null) => void
   onMakeBase: (link: string) => void
   onDelete: (link: string) => void
 }): JSX.Element {
   return (
-    <li className={`robotbuild__part${isSel ? ' is-sel' : ''}`}>
+    <li className={`robotbuild__part${isSel ? ' is-sel' : ''}${loose ? ' is-loose' : ''}`}>
       <div className="robotbuild__part-row">
         {/* Action icons sit to the LEFT of the name so they never overlap long
             titles (the name button flexes to fill the rest). */}
@@ -441,6 +443,11 @@ function BodyRow({
             {it.kind === 'mesh' ? baseName(it.mesh ?? '') : it.kind}
           </span>
         </button>
+        {loose && (
+          <span className="robotbuild__loosebadge" title="Not connected — join it into the robot">
+            not connected
+          </span>
+        )}
       </div>
     </li>
   )
@@ -477,8 +484,15 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const toggle = (id: string): void => setCollapsed((c) => ({ ...c, [id]: !c[id] }))
 
-  const blocks = assembly.filter((it) => it.kind !== 'mesh')
-  const meshes = assembly.filter((it) => it.kind === 'mesh')
+  // A part is LOOSE (not connected yet) when it has no parent joint AND it isn't the
+  // chosen base — i.e. an imported part still waiting to be joined into the chain.
+  const jointChildren = new Set(joints.map((j) => j.child))
+  const isLoose = (it: AssemblyItem): boolean => !jointChildren.has(it.link) && it.link !== rootLink
+  const looseParts = assembly.filter(isLoose)
+  const blocks = assembly.filter((it) => it.kind !== 'mesh' && !isLoose(it))
+  const meshes = assembly.filter((it) => it.kind === 'mesh' && !isLoose(it))
+  // No base picked yet but parts exist → prompt the user to choose one.
+  const needsBase = rootLink === null && assembly.length > 0
   const editLink = active?.kind === 'link' ? active.link : null
 
   if (!open) {
@@ -538,6 +552,40 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       )}
 
       <div className="robotbuild__tree">
+        {needsBase && (
+          <p className="robotbuild__basehint">
+            ⭐ Pick a <strong>base</strong> part (tap its ☆) — it&rsquo;s the anchor the
+            rest of the robot hangs off.
+          </p>
+        )}
+        {looseParts.length > 0 && (
+          <Section
+            id="loose"
+            label="Not connected yet"
+            count={looseParts.length}
+            collapsed={collapsed}
+            onToggle={toggle}
+          >
+            <li className="robotbuild__loosehint">
+              Join each of these to your robot with the Add Joint tool — or tap ☆ to make
+              one the base.
+            </li>
+            {looseParts.map((it) => (
+              <BodyRow
+                key={it.link}
+                it={it}
+                isSel={it.link === selected}
+                isEdit={it.link === editLink}
+                isRoot={false}
+                loose
+                onSelect={onSelect}
+                onEdit={onEdit}
+                onMakeBase={onMakeBase}
+                onDelete={onDelete}
+              />
+            ))}
+          </Section>
+        )}
         <Section id="blocks" label="Blocks" count={blocks.length} collapsed={collapsed} onToggle={toggle}>
           {blocks.map((it) => (
             <BodyRow

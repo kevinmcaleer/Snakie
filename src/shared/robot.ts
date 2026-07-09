@@ -53,6 +53,10 @@ export interface RobotModel {
   version?: number
   /** Path to the `.urdf` file, relative to the project root (e.g. `urdf/arm.urdf`). */
   urdf?: string
+  /** The link the user designated as the base (root) of the kinematic tree — the
+   *  anchor every other part hangs off. Distinguishes the intended base from other
+   *  as-yet-unconnected imported parts (#354). */
+  baseLink?: string
   /** Servo pin ↔ URDF joint bindings with angle calibration (Phase 3). */
   servoJointMap?: ServoJointBinding[]
   /** Per-joint limit / calibration overrides edited in-app (Phase 2). */
