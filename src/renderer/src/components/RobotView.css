@@ -283,3 +283,30 @@
   color: #f2d7d3;
   pointer-events: none;
 }
+
+/* Floating status pills (#312) — the save state + measure readout, formerly in the
+   retired pose sidebar. Bottom-centre, over the 3-D stage, in both skins. */
+.robotview__hud-status {
+  position: absolute;
+  left: 50%;
+  bottom: 0.6rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  z-index: 5;
+  pointer-events: none;
+}
+.robotview__hud-pill {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.72);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  backdrop-filter: blur(6px);
+}
+:root[data-theme='skeuomorph'] .robotview__hud-pill {
+  color: #2c2a24;
+  background: rgba(246, 242, 232, 0.85);
+}
