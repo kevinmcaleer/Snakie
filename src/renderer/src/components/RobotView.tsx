@@ -30,6 +30,7 @@ import {
   rootLink,
   setJoint,
   setJointOrigin,
+  orientJoint,
   setPrimitiveSize,
   setVisualOrigin,
   type JointDef,
@@ -613,20 +614,24 @@ export function RobotView({
     const jp = jointPick
     if (!jp?.parent || !jp?.child) return false
     const base = contentRef.current
+    // Intelligent parent/child (#354): if the chosen order would loop but the
+    // reverse wouldn't, orientJoint swaps them so the user needn't get it "right".
+    const o = orientJoint(base, jp.parent.link, jp.child.link)
+    const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
     const xyz: [number, number, number] = [
-      jp.parent.local[0] - jp.child.local[0] + offsetMm[0],
-      jp.parent.local[1] - jp.child.local[1] + offsetMm[1],
-      jp.parent.local[2] - jp.child.local[2] + offsetMm[2]
+      parent.local[0] - child.local[0] + offsetMm[0],
+      parent.local[1] - child.local[1] + offsetMm[1],
+      parent.local[2] - child.local[2] + offsetMm[2]
     ]
-    let next = connectJoint(base, { parent: jp.parent.link, child: jp.child.link, xyz })
+    let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
     if (next === base) return false // cycle / invalid — keep the dialog open
-    next = setJoint(next, jp.child.link, { type }) // apply the chosen joint type
+    next = setJoint(next, child.link, { type }) // apply the chosen joint type
     // Force the joint rotation to identity (rpy 0): the origin math above assumes
     // it, and connectJoint/setJoint otherwise PRESERVE a child's old rpy — which
     // would leave the two picked points misaligned. setJointOrigin emits rpy="0 0 0".
-    next = setJointOrigin(next, jp.child.link, xyz)
+    next = setJointOrigin(next, child.link, xyz)
     commitUrdf(next)
-    setSelectedLink(jp.child.link)
+    setSelectedLink(child.link)
     return true
   }
   const handlePropsOk = (): void => {
