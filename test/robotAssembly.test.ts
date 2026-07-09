@@ -76,6 +76,10 @@ describe('addMeshLink (#354 — attach to base, staggered)', () => {
     // It's a joint child now → NOT a loose root.
     expect(looseLinks(urdf)).not.toContain('wheel')
   })
+  it('attaches under an explicit parent (the chosen base) when given', () => {
+    const { urdf } = addMeshLink(URDF, { meshRel: 'meshes/w.stl', linkBase: 'w', parent: 'tip' })
+    expect(urdf).toContain('<parent link="tip"/>')
+  })
   it('avoids a name collision', () => {
     const { link } = addMeshLink(URDF, { meshRel: 'meshes/upper.stl', linkBase: 'upper' })
     expect(link).toBe('upper_2')

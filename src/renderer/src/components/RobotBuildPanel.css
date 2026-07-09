@@ -385,11 +385,6 @@
   color: var(--text-muted, #8b919b);
   font-style: italic;
 }
-.robotbuild__empty {
-  color: var(--text-muted, #8b919b);
-  font-size: 0.6rem;
-  padding: 0.3rem;
-}
 
 .robotbuild__foot {
   border-top: 1px solid var(--border, #2c2e33);

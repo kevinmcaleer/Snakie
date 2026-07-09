@@ -113,9 +113,11 @@ export function uniqueLinkName(urdf: string, base: string): string {
  */
 export function addMeshLink(
   urdf: string,
-  opts: { meshRel: string; linkBase: string; scale?: number }
+  opts: { meshRel: string; linkBase: string; scale?: number; parent?: string }
 ): { urdf: string; link: string } {
-  const parent = rootLink(urdf)
+  // Attach under the UI's chosen base if given (it can differ from the doc-first
+  // root in a transitional multi-root URDF); else the sole/first root.
+  const parent = opts.parent ?? rootLink(urdf)
   const name = uniqueLinkName(urdf, opts.linkBase)
   // A `scale` normalises a mesh authored in different units (e.g. mm → m).
   const s = opts.scale && opts.scale !== 1 ? ` scale="${fmtNum(opts.scale)} ${fmtNum(opts.scale)} ${fmtNum(opts.scale)}"` : ''

@@ -1133,7 +1133,12 @@ export function RobotView({
       // Add the mesh attached to the base with a movable joint, staggered so it lands
       // beside the base (not on top of it). Select it + reframe so the user can see it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
-      const next = addMeshLink(content, { meshRel: res.rel, linkBase, scale })
+      const next = addMeshLink(content, {
+        meshRel: res.rel,
+        linkBase,
+        scale,
+        parent: effectiveBaseLink ?? undefined
+      })
       refitNextRef.current = true
       // Route through the choke point so the import is ONE undoable step and the
       // history stays in sync (commitUrdf updates the buffer + schedules the save).
