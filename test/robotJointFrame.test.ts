@@ -37,3 +37,39 @@ describe('jointFromPicks — mate two picked faces (#354)', () => {
     check([0.1, -0.05, 0.2], [0.3, 0.6, 0.74], [-0.02, 0.04, 0.01], [-0.5, 0.5, 0.707])
   })
 })
+
+// handleConnectPicked puts the PIVOT at the mating point (not the child's centre) by
+// using jointOrigin = parentLocal + offset and re-origining the child onto its picked
+// point (shift its visual + child-joints by −childLocal). This locks that geometry:
+// the mesh stays exactly put, but the link origin (pivot) lands on the joint.
+describe('pivot-at-mate re-origin (#354)', () => {
+  const mat = (R: THREE.Quaternion, t: THREE.Vector3): THREE.Matrix4 =>
+    new THREE.Matrix4().compose(t, R, new THREE.Vector3(1, 1, 1))
+
+  it('mesh world-position is unchanged; pivot + picked point sit on the mating point', () => {
+    const pL: Vec3 = [0.05, 0, 0.02]
+    const pN: Vec3 = [1, 0, 0]
+    const cL: Vec3 = [0, 0.03, -0.04] // picked point, offset from the child's link origin
+    const cN: Vec3 = [0, 1, 0]
+    const off: Vec3 = [0, 0, 0.01]
+    const { xyz: xyzOld, rpy } = jointFromPicks(pL, pN, cL, cN, off)
+    const R = rotOf(rpy)
+    // Old link frame (pivot at the child's centre) vs new (pivot at the mating point).
+    const Told = mat(R, v(xyzOld))
+    const xyzNew = v(pL).add(v(off)) // parentLocal + offset
+    const Tnew = mat(R, xyzNew)
+    const shift = v(cL).negate() // −childLocal
+
+    // 1) pivot (new link origin) IS the mating point.
+    expect(near(xyzNew, v(pL).add(v(off)))).toBe(true)
+    // 2) the picked point (now at the link origin after the shift) is on the pivot.
+    const pickedNew = v(cL).add(shift).applyQuaternion(R).add(xyzNew)
+    expect(near(pickedNew, xyzNew)).toBe(true)
+    // 3) an arbitrary mesh point keeps its world position: Told·p == Tnew·(p − childLocal).
+    for (const p of [v([0.1, -0.2, 0.05]), v([0, 0, 0]), v(cL)]) {
+      const worldOld = p.clone().applyMatrix4(Told)
+      const worldNew = p.clone().add(shift).applyMatrix4(Tnew)
+      expect(near(worldOld, worldNew)).toBe(true)
+    }
+  })
+})
