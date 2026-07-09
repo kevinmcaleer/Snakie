@@ -23,7 +23,11 @@ export function ChatSettings(): JSX.Element {
     baseUrl,
     setBaseUrl,
     customModel,
-    setCustomModel
+    setCustomModel,
+    availableModels,
+    fetchModels,
+    modelsLoading,
+    modelsError
   } = useChatProviders()
 
   const [keyInput, setKeyInput] = useState('')
@@ -127,6 +131,20 @@ export function ChatSettings(): JSX.Element {
               placeholder="http://localhost:11434/v1"
             />
           </label>
+          <div className="chat-settings__row">
+            <button
+              type="button"
+              className="chat-settings__btn"
+              onClick={() => void fetchModels(baseUrlInput || baseUrl)}
+              disabled={modelsLoading || !(baseUrlInput || baseUrl)}
+            >
+              {modelsLoading ? 'Detecting…' : 'Detect models'}
+            </button>
+            {availableModels.length > 0 && !modelsError && (
+              <span className="chat-settings__found">{availableModels.length} models found</span>
+            )}
+          </div>
+          {modelsError && <p className="chat-settings__error">{modelsError}</p>}
           <label className="chat-settings__field">
             <span className="chat-settings__field-label">Model name</span>
             <input
@@ -135,7 +153,15 @@ export function ChatSettings(): JSX.Element {
               value={customModelInput}
               onChange={(e) => setCustomModelInput(e.target.value)}
               placeholder="e.g. llama3.2, mistral, qwen2.5"
+              list="local-model-suggestions"
             />
+            {availableModels.length > 0 && (
+              <datalist id="local-model-suggestions">
+                {availableModels.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            )}
           </label>
           <div className="chat-settings__row">
             <button

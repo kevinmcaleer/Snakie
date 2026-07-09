@@ -585,7 +585,10 @@ const llm = {
     unwrap(ipcRenderer.invoke('llm:getProviderConfig', providerId)),
   /** Persist a provider's config (base URL, etc.). */
   setProviderConfig: (providerId: string, config: Record<string, string>): Promise<void> =>
-    unwrap(ipcRenderer.invoke('llm:setProviderConfig', providerId, config))
+    unwrap(ipcRenderer.invoke('llm:setProviderConfig', providerId, config)),
+  /** Fetch available models from an OpenAI-compatible /v1/models endpoint. */
+  fetchModels: (baseURL: string): Promise<string[]> =>
+    unwrap(ipcRenderer.invoke('llm:fetchModels', baseURL))
 }
 
 /**

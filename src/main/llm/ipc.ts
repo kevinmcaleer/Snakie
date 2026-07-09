@@ -1,7 +1,7 @@
 import { ipcMain, type WebContents } from 'electron'
 import type { IpcResult } from '../device/types'
 import { getKey, hasKey, isEncryptionAvailable, setKey } from './keyStore'
-import { getProviderConfig, setProviderConfig } from './providers/providerConfig'
+import { fetchAvailableModels, getProviderConfig, setProviderConfig } from './providers/providerConfig'
 import { DEFAULT_PROVIDER_ID, getProvider, listProviders } from './providers/registry'
 import {
   clearCopilotTokenCache,
@@ -30,7 +30,8 @@ export const LLM_CHANNELS = {
   copilotDeviceStart: 'llm:copilotDeviceStart',
   copilotDevicePoll: 'llm:copilotDevicePoll',
   getProviderConfig: 'llm:getProviderConfig',
-  setProviderConfig: 'llm:setProviderConfig'
+  setProviderConfig: 'llm:setProviderConfig',
+  fetchModels: 'llm:fetchModels'
 } as const
 
 const MAX_COMPLETION_PREFIX = 4000
@@ -158,5 +159,9 @@ export function registerLlmIpc(getWebContents: () => WebContents | undefined): v
     LLM_CHANNELS.setProviderConfig,
     (_e, providerId: string, config: Record<string, string>) =>
       wrap(() => setProviderConfig(providerId || DEFAULT_PROVIDER_ID, config))
+  )
+
+  ipcMain.handle(LLM_CHANNELS.fetchModels, (_e, baseURL: string) =>
+    wrap(async (): Promise<string[]> => fetchAvailableModels(baseURL))
   )
 }

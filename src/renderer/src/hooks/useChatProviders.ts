@@ -58,6 +58,10 @@ export interface ChatProvidersStore {
   setBaseUrl: (url: string) => Promise<void>
   customModel: string
   setCustomModel: (model: string) => Promise<void>
+  availableModels: string[]
+  fetchModels: (baseURL: string) => Promise<void>
+  modelsLoading: boolean
+  modelsError: string | null
 }
 
 export function useChatProviders(): ChatProvidersStore {
@@ -66,6 +70,9 @@ export function useChatProviders(): ChatProvidersStore {
   const [keyStatus, setKeyStatus] = useState<LlmKeyStatus | null>(null)
   const [baseUrl, setBaseUrlState] = useState<string>('')
   const [customModel, setCustomModelState] = useState<string>('')
+  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+  const [modelsError, setModelsError] = useState<string | null>(null)
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -208,6 +215,23 @@ export function useChatProviders(): ChatProvidersStore {
     notifyChatConfigChanged()
   }, [baseUrl])
 
+  const fetchModelsFn = useCallback(async (baseURL: string): Promise<void> => {
+    setModelsLoading(true)
+    setModelsError(null)
+    try {
+      const models = await window.api.llm.fetchModels(baseURL)
+      setAvailableModels(models)
+      // Also persist so ChatPanel can access them
+      writeStored('snakie.chat.localModels', models)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      setModelsError(msg)
+      setAvailableModels([])
+    } finally {
+      setModelsLoading(false)
+    }
+  }, [])
+
   return {
     providers,
     provider,
@@ -229,7 +253,11 @@ export function useChatProviders(): ChatProvidersStore {
     baseUrl,
     setBaseUrl,
     customModel,
-    setCustomModel: setCustomModelFn
+    setCustomModel: setCustomModelFn,
+    availableModels,
+    fetchModels: fetchModelsFn,
+    modelsLoading,
+    modelsError
   }
 }
 

@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LlmMessage, LlmStreamEvent } from '../../../preload/index.d'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
@@ -44,6 +44,16 @@ export function ChatPanel(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [streaming, setStreaming] = useState<string | null>(null)
   const [localModelInput, setLocalModelInput] = useState('')
+
+  // Read detected models from localStorage (set by ChatSettings)
+  const detectedModels = useMemo<string[]>(() => {
+    try {
+      const raw = window.localStorage.getItem('snakie.chat.localModels')
+      return raw ? (JSON.parse(raw) as string[]) : []
+    } catch {
+      return []
+    }
+  }, [])
 
   const threadRef = useRef<HTMLDivElement>(null)
   const streamingRef = useRef('')
@@ -251,6 +261,7 @@ export function ChatPanel(): JSX.Element {
                 setModel(v)
               }}
               placeholder="e.g. llama3.2, mistral, qwen2.5"
+              suggestions={detectedModels}
             />
           ) : (
             <FooterSelect
@@ -339,12 +350,14 @@ function FooterTextInput({
   label,
   value,
   onChange,
-  placeholder
+  placeholder,
+  suggestions
 }: {
   label: string
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  suggestions?: string[]
 }): JSX.Element {
   return (
     <label className="chat__footer-select" title={label}>
@@ -355,7 +368,15 @@ function FooterTextInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
+        list={suggestions && suggestions.length > 0 ? 'footer-model-suggestions' : undefined}
       />
+      {suggestions && suggestions.length > 0 && (
+        <datalist id="footer-model-suggestions">
+          {suggestions.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+      )}
     </label>
   )
 }
