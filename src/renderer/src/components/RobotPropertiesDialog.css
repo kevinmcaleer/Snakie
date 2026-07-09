@@ -4,8 +4,13 @@
   position: absolute;
   top: 190px; /* comfortably below the 144px nav cube + its projection dropdown */
   right: 12px;
-  z-index: 20;
+  /* Above the zoom controls + nav cube (z-index 30): a tall dialog reaches the
+     bottom-right, and if it sat below them the zoom toolbar covered its Add/OK
+     button so clicks landed on "Zoom to fit" instead (a joint silently not added). */
+  z-index: 40;
   width: 13rem;
+  /* Never grow past the stage; scroll the body so the footer stays reachable. */
+  max-height: calc(100% - 202px);
   display: flex;
   flex-direction: column;
   border: 1px solid var(--border, #3a3d44);

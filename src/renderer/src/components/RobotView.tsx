@@ -694,7 +694,8 @@ export function RobotView({
   const handleConnectPicked = (
     type: JointType,
     offsetMm: [number, number, number],
-    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number }
+    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number },
+    angleDeg = 0
   ): boolean => {
     const jp = jointPick
     if (!jp?.parent || !jp?.child) return false
@@ -704,13 +705,15 @@ export function RobotView({
     const o = orientJoint(base, jp.parent.link, jp.child.link)
     const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
     // The mating ROTATION (rotate the child so its picked face meets the parent's
-    // flush). The origin is handled separately below so the pivot lands on the joint.
+    // flush, then roll it about the joint normal by `angleDeg`). The origin is handled
+    // separately below so the pivot lands on the joint.
     const { rpy } = jointFromPicks(
       parent.local,
       parent.normal,
       child.local,
       child.normal,
-      offsetMm
+      offsetMm,
+      angleDeg
     )
     // Joint origin — the PIVOT — at the mating point (parent's picked point + offset).
     // Exact because we re-origin the child onto its picked point below.
