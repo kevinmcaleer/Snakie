@@ -85,6 +85,8 @@ export interface RobotPropertiesDialogProps {
   jointPick: JointPickView | null
   /** Arm the picker for a component again (the next 3-D click re-picks it). */
   onRepick: (step: 'parent' | 'child') => void
+  /** Swap which pick is the parent vs the child (flip the hierarchy). */
+  onSwapPicks: () => void
   /** Create the joint from the two picks + chosen type + offset (mm) + a roll angle
    *  (degrees) about the joint normal. Returns false (keeps the dialog open) if the
    *  picks are incomplete / would loop. */
@@ -588,6 +590,7 @@ const ADDJOINT_KINDS: Array<{ id: JointType; label: string; hint: string }> = [
 function AddJointBody({
   jointPick,
   onRepick,
+  onSwapPicks,
   onConnectPicked,
   commitRef
 }: RobotPropertiesDialogProps & {
@@ -667,11 +670,25 @@ function AddJointBody({
   return (
     <>
       <section className="robotprops__section">
-        <div className="robotprops__label">Component 1 (parent)</div>
+        <div className="robotprops__label">Component 1 · parent (stays put)</div>
         {slot('parent', parent)}
       </section>
+      <div className="robotprops__swaprow">
+        <button
+          type="button"
+          className="robotprops__swap"
+          onClick={() => {
+            onSwapPicks()
+            setErr(null)
+          }}
+          disabled={!parent || !child}
+          title="Swap parent ↔ child — flip which part stays put and which attaches"
+        >
+          ⇅ swap
+        </button>
+      </div>
       <section className="robotprops__section">
-        <div className="robotprops__label">Component 2 (child)</div>
+        <div className="robotprops__label">Component 2 · child (attaches onto Component 1)</div>
         {slot('child', child)}
       </section>
       <section className="robotprops__section">
@@ -740,10 +757,10 @@ function AddJointBody({
       ) : (
         <p className="robotprops__note">
           {!parent || !child
-            ? 'Click a point on each block (snaps to corners / edges / hole centres). Hold Shift to lock a snap onto a hole.'
+            ? 'Pick a point on the PARENT first, then the CHILD (snaps to corners / edges / hole centres). Hold Shift to lock a snap onto a hole.'
             : type === 'revolute'
-              ? 'Component 2 mates to Component 1; after Add, drag the joint in the pose panel to preview the swing.'
-              : 'Component 2 will snap so its point meets Component 1’s point.'}
+              ? 'The parent (1) stays put; the child (2) attaches onto it — use ⇅ swap to flip. After Add, pose the joint to preview the swing.'
+              : 'The child (2) moves so its point meets the parent (1) — use ⇅ swap if you picked them the wrong way round.'}
         </p>
       )}
     </>

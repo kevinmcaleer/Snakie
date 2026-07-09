@@ -714,6 +714,11 @@ export function RobotView({
         : jp
     )
   }
+  // Swap which pick is the parent vs the child (the dialog's ⇅ button) — so you can
+  // flip the hierarchy without re-picking both points.
+  const handleSwapPicks = (): void => {
+    setJointPick((jp) => (jp && jp.parent && jp.child ? { ...jp, parent: jp.child, child: jp.parent } : jp))
+  }
   // Add: mate the child's picked face against the parent's, re-parent it, set the
   // type — and put the joint origin (the PIVOT) AT the mating point by re-origining
   // the child link onto its picked point (so a hinge rotates about the joint, not the
@@ -727,13 +732,11 @@ export function RobotView({
     const jp = jointPick
     if (!jp?.parent || !jp?.child) return false
     const base = contentRef.current
-    // Intelligent parent/child (#354): orientJoint re-homes the less-established part
-    // regardless of pick order, so the existing structure stays put. It's base-agnostic
-    // and measures depth within each part's OWN root, so in a multi-root URDF it can't
-    // tell a loose separate-root import from the base's structure. Guard it here: the
+    // Parent/child (#354): orientJoint honours the pick order — Component 1 is the parent,
+    // Component 2 the child — and only swaps to avoid a loop. One safety override: the
     // base's connected structure must NEVER be re-homed onto a part disconnected from the
-    // base (a loose import / the base itself) — if the chosen child is on the base but the
-    // parent isn't, flip so the disconnected part is the one that moves.
+    // base (a stray separate-root import), which would float it off the base — if the
+    // chosen child is on the base but the parent isn't, flip so the loose part moves.
     const baseTree = effectiveBaseLink ? subtreeOf(base, effectiveBaseLink) : new Set<string>()
     let o = orientJoint(base, jp.parent.link, jp.child.link)
     if (o.child !== o.parent && baseTree.has(o.child) && !baseTree.has(o.parent)) {
@@ -3093,6 +3096,7 @@ export function RobotView({
               }
             }
             onRepick={handleRepick}
+            onSwapPicks={handleSwapPicks}
             onConnectPicked={handleConnectPicked}
             onOk={handlePropsOk}
             onCancel={handlePropsCancel}

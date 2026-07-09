@@ -160,6 +160,30 @@
 .robotprops__pick-hint {
   color: var(--text-muted, #8b919b);
 }
+/* Swap parent ↔ child — sits between the two pick slots. */
+.robotprops__swaprow {
+  display: flex;
+  justify-content: center;
+  margin: -0.15rem 0;
+}
+.robotprops__swap {
+  font-family: inherit;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.robotprops__swap:hover:not(:disabled) {
+  color: var(--text, #f2f4f7);
+  border-color: var(--text-muted, #6b7079);
+}
+.robotprops__swap:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 /* Joint-type chips (Static / Rotation / Linear). */
 .robotprops__chip {
   flex: 1 1 auto;
