@@ -10,7 +10,6 @@ import {
   blankUrdf,
   connectJoint,
   orientJoint,
-  depthFromRoot,
   subtreeOf,
   readAllJoints,
   removeJoint,
@@ -200,12 +199,12 @@ describe('connectJoint — the Join tool (#354)', () => {
     expect((wheelBlock.match(/<child\b/g) || []).length).toBe(1)
   })
 
-  it('orientJoint swaps parent/child when the chosen order would loop', () => {
-    // base → upper → tip. Making `tip` the parent of `upper` would loop.
+  it('orientJoint swaps parent/child ONLY when the chosen order would loop', () => {
+    // base → upper → tip. Making `tip` the parent of `upper` would loop → swap.
     expect(orientJoint(URDF, 'tip', 'upper')).toEqual({ parent: 'upper', child: 'tip' })
     // The already-valid order is kept as-is.
     expect(orientJoint(URDF, 'base_link', 'tip')).toEqual({ parent: 'base_link', child: 'tip' })
-    // Two unrelated siblings: keep `a` as the parent (either order is fine).
+    // Two unrelated siblings: `a` (Component 1) is the parent — pick order stands.
     const branched = `<?xml version="1.0"?>
 <robot name="r">
   <link name="base"/><link name="l"/><link name="r"/>
@@ -213,75 +212,27 @@ describe('connectJoint — the Join tool (#354)', () => {
   <joint name="jr" type="fixed"><parent link="base"/><child link="r"/></joint>
 </robot>`
     expect(orientJoint(branched, 'l', 'r')).toEqual({ parent: 'l', child: 'r' })
+    expect(orientJoint(branched, 'r', 'l')).toEqual({ parent: 'r', child: 'l' }) // predictable
   })
 
-  it('orientJoint is order-independent: re-homes the loose part, keeps the structure (#354)', () => {
-    // base → a → b (a has a subtree), plus a loose c fixed to base.
-    const chainC = `<?xml version="1.0"?>
+  it('orientJoint honours pick order — Component 1 is the parent, no inversion (#354)', () => {
+    // The reported bug: base → shoulder, base → arm → servo (the arm has the servo
+    // attached). Extending the chain by joining the arm onto the shoulder must NOT be
+    // inverted just because the arm has a descendant (the OLD heuristic made the arm the
+    // parent here, so you could never build base → shoulder → arm → servo).
+    const rig = `<?xml version="1.0"?>
 <robot name="r">
-  <link name="base"/><link name="a"/><link name="b"/><link name="c"/>
-  <joint name="ja" type="fixed"><parent link="base"/><child link="a"/></joint>
-  <joint name="jb" type="fixed"><parent link="a"/><child link="b"/></joint>
-  <joint name="jc" type="fixed"><parent link="base"/><child link="c"/></joint>
-</robot>`
-    // Joining a (has descendant b) with loose leaf c: c is ALWAYS the child, whichever
-    // the user picks first — so a's subtree stays put and c re-homes onto it.
-    expect(orientJoint(chainC, 'c', 'a')).toEqual({ parent: 'a', child: 'c' })
-    expect(orientJoint(chainC, 'a', 'c')).toEqual({ parent: 'a', child: 'c' })
-
-    // base → a → b → c (deep chain), plus a loose l. Both c and l are leaves (0 desc),
-    // so the tie breaks on depth: the shallow stub l re-homes onto the deep end c.
-    const deepChain = `<?xml version="1.0"?>
-<robot name="r">
-  <link name="base"/><link name="a"/><link name="b"/><link name="c"/><link name="l"/>
-  <joint name="ja" type="fixed"><parent link="base"/><child link="a"/></joint>
-  <joint name="jb" type="fixed"><parent link="a"/><child link="b"/></joint>
-  <joint name="jc" type="fixed"><parent link="b"/><child link="c"/></joint>
-  <joint name="jl" type="fixed"><parent link="base"/><child link="l"/></joint>
-</robot>`
-    expect(orientJoint(deepChain, 'l', 'c')).toEqual({ parent: 'c', child: 'l' })
-    expect(orientJoint(deepChain, 'c', 'l')).toEqual({ parent: 'c', child: 'l' })
-    // Cycle rule still wins over the heuristic: an ancestor must stay the parent.
-    expect(orientJoint(deepChain, 'c', 'a')).toEqual({ parent: 'a', child: 'c' })
-    expect(depthFromRoot(deepChain, 'c')).toBe(3)
-    expect(depthFromRoot(deepChain, 'l')).toBe(1)
-    expect(depthFromRoot(deepChain, 'base')).toBe(0)
-  })
-
-  it('orientJoint mounts a shallow sub-assembly onto a deep leaf, not vice-versa (#354)', () => {
-    // Arm base→shoulder→elbow→wrist→tip (tip is a deep LEAF, 0 descendants), plus a
-    // loose gripper gbase→f1,f2 (gbase is shallow but HAS descendants).
-    const armGripper = `<?xml version="1.0"?>
-<robot name="r">
-  <link name="base"/><link name="shoulder"/><link name="elbow"/><link name="wrist"/><link name="tip"/>
-  <link name="gbase"/><link name="f1"/><link name="f2"/>
+  <link name="base"/><link name="shoulder"/><link name="arm"/><link name="servo"/>
   <joint name="js" type="fixed"><parent link="base"/><child link="shoulder"/></joint>
-  <joint name="je" type="fixed"><parent link="shoulder"/><child link="elbow"/></joint>
-  <joint name="jw" type="fixed"><parent link="elbow"/><child link="wrist"/></joint>
-  <joint name="jt" type="fixed"><parent link="wrist"/><child link="tip"/></joint>
-  <joint name="jg" type="fixed"><parent link="base"/><child link="gbase"/></joint>
-  <joint name="jf1" type="fixed"><parent link="gbase"/><child link="f1"/></joint>
-  <joint name="jf2" type="fixed"><parent link="gbase"/><child link="f2"/></joint>
+  <joint name="ja" type="fixed"><parent link="base"/><child link="arm"/></joint>
+  <joint name="jv" type="fixed"><parent link="arm"/><child link="servo"/></joint>
 </robot>`
-    // The gripper (shallow, depth 1) mounts onto the arm tip (deep, depth 4) — NOT the
-    // arm tip re-homed onto the gripper. Descendant count must NOT override depth here.
-    expect(orientJoint(armGripper, 'tip', 'gbase')).toEqual({ parent: 'tip', child: 'gbase' })
-    expect(orientJoint(armGripper, 'gbase', 'tip')).toEqual({ parent: 'tip', child: 'gbase' })
-  })
-
-  it('orientJoint is order-independent even on a true tie — two loose leaves (#354)', () => {
-    const twoLoose = `<?xml version="1.0"?>
-<robot name="r">
-  <link name="base"/><link name="xx"/><link name="yy"/>
-  <joint name="jx" type="fixed"><parent link="base"/><child link="xx"/></joint>
-  <joint name="jy" type="fixed"><parent link="base"/><child link="yy"/></joint>
-</robot>`
-    // Equal depth (1) AND equal descendants (0) — a deterministic name tie-break makes
-    // BOTH pick orders resolve identically (the common "join two fresh imports" case).
-    const forward = orientJoint(twoLoose, 'xx', 'yy')
-    const reverse = orientJoint(twoLoose, 'yy', 'xx')
-    expect(forward).toEqual(reverse)
-    expect(forward).toEqual({ parent: 'xx', child: 'yy' })
+    // Pick the shoulder first (parent): it stays put; the arm (+servo) attaches under it.
+    expect(orientJoint(rig, 'shoulder', 'arm')).toEqual({ parent: 'shoulder', child: 'arm' })
+    // Pick the arm first (parent): the exact reverse — the user drives it, no re-flip.
+    expect(orientJoint(rig, 'arm', 'shoulder')).toEqual({ parent: 'arm', child: 'shoulder' })
+    // A cycle would still be prevented: servo is arm's child, so arm stays the parent.
+    expect(orientJoint(rig, 'servo', 'arm')).toEqual({ parent: 'arm', child: 'servo' })
   })
 
   it('supports a CHAIN of joints — a second connect keeps the first (#354 IK chains)', () => {

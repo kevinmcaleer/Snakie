@@ -310,14 +310,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
-- **Robot View — the Join tool respects the existing structure whichever part you pick
-  first (#354).** Picking the two parts in the "wrong" order used to re-home the part
-  that was *already* built into the chain onto the loose one — so the established part
-  jumped away and looked disconnected from the base. Joining is now **order-independent**:
-  the loose / less-established part — the one closer to the base (then with fewer
-  descendants) — is always the one that moves onto the other, so your existing structure
-  stays put no matter which you click as Component 1 (a gripper mounts onto the arm tip,
-  never the reverse).
+- **Robot View — the Join tool is now predictable: you control the hierarchy (#354).**
+  The tool used to *guess* which of the two picked parts was the parent, using descendant
+  count — so joining a part that already had something attached (e.g. an arm with a servo)
+  would wrongly make **it** the parent and flip your chain, and you could never build
+  `base → shoulder → arm → servo`. Now **Component 1 is the parent (the anchor that stays
+  put) and Component 2 is the child (it attaches onto Component 1)** — the tool only
+  auto-swaps to prevent a loop, and never re-homes the base. A **⇅ swap** button in the
+  Add Joint dialog flips parent ↔ child if you picked them the wrong way round, and the
+  labels/hints spell out which part moves. Build a chain by picking parent-then-child.
 - **Robot View — removing a joint no longer fuses the freed part into the base (#354).**
   Deleting a joint used to leave its part *rootless*, and the loader collapses every
   rootless part into the base's single scene node — so the base and every freed part
