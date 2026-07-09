@@ -172,11 +172,17 @@ const AXES: Array<{ id: 'x' | 'y' | 'z'; vec: Vec3 }> = [
 export function JointForm({
   joint,
   names,
-  onChange
+  onChange,
+  onSetOrigin,
+  onRoll
 }: {
   joint: JointDef
   names: string[]
   onChange: (spec: JointSpec) => void
+  /** Move the joint origin to `xyz` (metres), keeping its orientation. */
+  onSetOrigin?: (xyz: [number, number, number]) => void
+  /** Roll the joint about its own normal axis by `deltaDeg` (relative nudge). */
+  onRoll?: (deltaDeg: number) => void
 }): JSX.Element {
   // The current joint as a full spec, so each edit preserves the other fields.
   const spec = (): JointSpec => ({
@@ -201,6 +207,21 @@ export function JointForm({
   const commitLim = (): void =>
     onChange({ ...spec(), lower: toNative(mt, lim[0]), upper: toNative(mt, lim[1]) })
 
+  // Origin offset (mm, local like the size fields) + a relative roll nudge (deg)
+  // about the joint's own normal axis. Editable for every joint type (#354).
+  const off0 = joint.xyz.map(mm) as [number, number, number]
+  const [off, setOff] = useState<[number, number, number]>(off0)
+  const offKey = `${joint.name}:${off0.join(',')}`
+  useEffect(() => setOff(off0), [offKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  const commitOff = (): void =>
+    onSetOrigin?.(off.map((v) => toM(Number.isFinite(v) ? v : 0)) as [number, number, number])
+  const [roll, setRoll] = useState('0')
+  const commitRoll = (): void => {
+    const d = Number(roll) || 0
+    if (d) onRoll?.(d)
+    setRoll('0') // a relative nudge — reset so the next entry rolls from here
+  }
+
   const others = names.filter((n) => n !== joint.name)
   const unit = unitLabel(mt)
 
@@ -219,6 +240,50 @@ export function JointForm({
           </button>
         ))}
       </div>
+      {onSetOrigin && (
+        <div className="robotbuild__jrow">
+          <span className="robotbuild__jlabel" title="Position of the joint, relative to its parent">
+            Offset
+          </span>
+          {(['X', 'Y', 'Z'] as const).map((ax, i) => (
+            <label className="robotbuild__mm" key={ax}>
+              <span>{ax}</span>
+              <input
+                type="number"
+                step={1}
+                value={Number.isFinite(off[i]) ? off[i] : ''}
+                onChange={(e) => {
+                  const n = [...off] as [number, number, number]
+                  n[i] = Number(e.target.value)
+                  setOff(n)
+                }}
+                onBlur={commitOff}
+                onKeyDown={(e) => e.key === 'Enter' && commitOff()}
+              />
+            </label>
+          ))}
+          <span className="robotbuild__mm-unit">mm</span>
+        </div>
+      )}
+      {onRoll && (
+        <div className="robotbuild__jrow">
+          <span className="robotbuild__jlabel" title="Rotate the joint about its own normal axis">
+            Roll
+          </span>
+          <label className="robotbuild__mm">
+            <span>by</span>
+            <input
+              type="number"
+              step={15}
+              value={roll}
+              onChange={(e) => setRoll(e.target.value)}
+              onBlur={commitRoll}
+              onKeyDown={(e) => e.key === 'Enter' && commitRoll()}
+            />
+          </label>
+          <span className="robotbuild__mm-unit">°</span>
+        </div>
+      )}
       {movable && (
         <div className="robotbuild__jrow">
           <span className="robotbuild__jlabel">Axis</span>
