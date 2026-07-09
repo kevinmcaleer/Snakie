@@ -59,6 +59,7 @@ import {
   type Vec3
 } from './robot-build'
 import { RobotBuildPanel } from './RobotBuildPanel'
+import { detectSnapCentres } from './robot-holes'
 import { RobotPropertiesDialog, type PropsContext } from './RobotPropertiesDialog'
 import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
@@ -1901,6 +1902,33 @@ export function RobotView({
             drawFrom(jp?.parent ?? null, false)
             drawFrom(jp?.child ?? null, true)
           }
+          // Detect hole / loop / edge snap centres on the face of a MESH the pointer
+          // hit (an STL has no primitive face handles). Cached per mesh+plane — a
+          // pass over the triangles is cheap but not per-hover-pixel cheap.
+          const holeCache = new Map<string, { pts: THREE.Vector3[]; roles: string[] }>()
+          const meshSnapCentres = (hit: THREE.Intersection): { pts: THREE.Vector3[]; roles: string[] } => {
+            const mesh = hit.object as THREE.Mesh
+            const geo = mesh.geometry as THREE.BufferGeometry
+            const posAttr = geo.attributes.position
+            if (!hit.face || !posAttr) return { pts: [], roles: [] }
+            const nLocal = hit.face.normal.clone().normalize()
+            const pLocal = mesh.worldToLocal(hit.point.clone())
+            const key = `${mesh.uuid}:${Math.round(nLocal.x * 50)},${Math.round(nLocal.y * 50)},${Math.round(nLocal.z * 50)}:${Math.round(pLocal.dot(nLocal) * 2000)}`
+            const cached = holeCache.get(key)
+            if (cached) return cached
+            const centres = detectSnapCentres(
+              posAttr.array as ArrayLike<number>,
+              geo.index ? (geo.index.array as ArrayLike<number>) : null,
+              { point: [pLocal.x, pLocal.y, pLocal.z], normal: [nLocal.x, nLocal.y, nLocal.z] }
+            )
+            const result = {
+              pts: centres.map((c) => mesh.localToWorld(new THREE.Vector3(c.p[0], c.p[1], c.p[2]))),
+              roles: centres.map((c) => c.kind)
+            }
+            holeCache.set(key, result)
+            return result
+          }
+
           const pickJointPoint = (e: PointerEvent): void => {
             const robot = robotRef.current
             if (!robot) return
@@ -1917,13 +1945,20 @@ export function RobotView({
             if (jr.step === 'parent' && jr.childLink === link) return
             let world = hit.point.clone()
             let role = 'point'
-            // Snap to a face corner/edge/centre for a primitive; a mesh has none, so
-            // the raw hit point stands in.
             const geom = readPrimitive(contentRef.current, link)
             if (geom) {
+              // Primitive: snap to a face corner / edge / centre.
               const th = hitToHandles(hit, link, geom)
               const near = nearestScreen(th.pts, e)
               if (near.index >= 0 && near.distPx < 24) {
+                world = th.pts[near.index].clone()
+                role = th.roles[near.index]
+              }
+            } else {
+              // Mesh: snap to a detected hole / loop centre or edge midpoint.
+              const th = meshSnapCentres(hit)
+              const near = nearestScreen(th.pts, e)
+              if (near.index >= 0 && near.distPx < 28) {
                 world = th.pts[near.index].clone()
                 role = th.roles[near.index]
               }
@@ -2066,14 +2101,23 @@ export function RobotView({
             buildRay.setFromCamera(buildNdc, camera)
             const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
             const link = hit ? ownerLinkName(hit.object) : null
-            const geom = link ? readPrimitive(contentRef.current, link) : null
-            if (!hit || !link || !geom) {
+            if (!hit || !link) {
               clearHandles()
               return
             }
-            const th = hitToHandles(hit, link, geom)
-            const near = nearestScreen(th.pts, e)
-            showHandles(th.pts, near.distPx < 16 ? near.index : -1)
+            const geom = readPrimitive(contentRef.current, link)
+            if (geom) {
+              const th = hitToHandles(hit, link, geom)
+              const near = nearestScreen(th.pts, e)
+              showHandles(th.pts, near.distPx < 16 ? near.index : -1)
+            } else if (jointPickRef.current.active) {
+              // Mesh + Join picking: reveal detected hole / loop / edge snaps.
+              const th = meshSnapCentres(hit)
+              if (th.pts.length) {
+                const near = nearestScreen(th.pts, e)
+                showHandles(th.pts, near.distPx < 20 ? near.index : -1)
+              } else clearHandles()
+            } else clearHandles()
           }
 
           // A cancelled/interrupted drag must never strand OrbitControls disabled
