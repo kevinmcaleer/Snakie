@@ -65,7 +65,11 @@ export interface RobotPropertiesDialogProps {
   onRepick: (step: 'parent' | 'child') => void
   /** Create the joint from the two picks + chosen type + offset (mm). Returns
    *  false (keeps the dialog open) if the picks are incomplete / would loop. */
-  onConnectPicked: (type: JointType, offsetMm: [number, number, number]) => boolean
+  onConnectPicked: (
+    type: JointType,
+    offsetMm: [number, number, number],
+    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number }
+  ) => boolean
   // footer
   onOk: () => void
   onCancel: () => void
@@ -399,6 +403,12 @@ function AddJointBody({
 }): JSX.Element {
   const [type, setType] = useState<JointType>('fixed')
   const [off, setOff] = useState<Record<'x' | 'y' | 'z', string>>({ x: '0', y: '0', z: '0' })
+  // Rotation (revolute) limits + default angle, in DEGREES (raw strings).
+  const [rot, setRot] = useState<{ min: string; max: string; def: string }>({
+    min: '-90',
+    max: '90',
+    def: '0'
+  })
   const [err, setErr] = useState<string | null>(null)
   const parent = jointPick?.parent ?? null
   const child = jointPick?.child ?? null
@@ -413,7 +423,11 @@ function AddJointBody({
       const v = Number(s)
       return Number.isFinite(v) ? v / 1000 : 0 // mm → m
     }
-    const ok = onConnectPicked(type, [mm(off.x), mm(off.y), mm(off.z)])
+    const rotation =
+      type === 'revolute'
+        ? { minDeg: Number(rot.min) || 0, maxDeg: Number(rot.max) || 0, defaultDeg: Number(rot.def) || 0 }
+        : undefined
+    const ok = onConnectPicked(type, [mm(off.x), mm(off.y), mm(off.z)], rotation)
     if (!ok) {
       setErr('Can’t connect — that would form a loop (the parent hangs off the child).')
       return false
@@ -482,6 +496,37 @@ function AddJointBody({
           ))}
         </div>
       </section>
+      {type === 'revolute' && (
+        <section className="robotprops__section">
+          <div className="robotprops__label">Rotation limits (°)</div>
+          <div className="robotprops__row">
+            <label className="robotprops__mm">
+              <span>min</span>
+              <input
+                type="number"
+                value={rot.min}
+                onChange={(e) => setRot((r) => ({ ...r, min: e.target.value }))}
+              />
+            </label>
+            <label className="robotprops__mm">
+              <span>max</span>
+              <input
+                type="number"
+                value={rot.max}
+                onChange={(e) => setRot((r) => ({ ...r, max: e.target.value }))}
+              />
+            </label>
+            <label className="robotprops__mm">
+              <span>default</span>
+              <input
+                type="number"
+                value={rot.def}
+                onChange={(e) => setRot((r) => ({ ...r, def: e.target.value }))}
+              />
+            </label>
+          </div>
+        </section>
+      )}
       <section className="robotprops__section">
         <div className="robotprops__label">Offset (mm)</div>
         <div className="robotprops__row">
@@ -494,9 +539,11 @@ function AddJointBody({
         <p className="robotprops__note robotprops__note--warn">{err}</p>
       ) : (
         <p className="robotprops__note">
-          {parent && child
-            ? 'Component 2 will snap so its point meets Component 1’s point.'
-            : 'Click a point on each block in the 3-D view (snaps to corners / edges / centres).'}
+          {!parent || !child
+            ? 'Click a point on each block in the 3-D view (snaps to corners / edges / centres).'
+            : type === 'revolute'
+              ? 'Component 2 mates to Component 1; after Add, drag the joint in the pose panel to preview the swing.'
+              : 'Component 2 will snap so its point meets Component 1’s point.'}
         </p>
       )}
     </>

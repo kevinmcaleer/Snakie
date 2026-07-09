@@ -631,7 +631,11 @@ export function RobotView({
   }
   // Add: place the child so its picked point meets the parent's picked point
   // (origin = parentLocal − childLocal + offset), re-parent it, and set the type.
-  const handleConnectPicked = (type: JointType, offsetMm: [number, number, number]): boolean => {
+  const handleConnectPicked = (
+    type: JointType,
+    offsetMm: [number, number, number],
+    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number }
+  ): boolean => {
     const jp = jointPick
     if (!jp?.parent || !jp?.child) return false
     const base = contentRef.current
@@ -650,10 +654,27 @@ export function RobotView({
     )
     let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
     if (next === base) return false // cycle / invalid — keep the dialog open
-    next = setJoint(next, child.link, { type }) // apply the chosen joint type
+    const rad = (d: number): number => (d * Math.PI) / 180
+    // A Rotation joint carries its min/max limits (native rad); else just the type.
+    next =
+      rotation && type === 'revolute'
+        ? setJoint(next, child.link, { type, lower: rad(rotation.minDeg), upper: rad(rotation.maxDeg) })
+        : setJoint(next, child.link, { type })
     next = setJointOrigin(next, child.link, xyz, rpy) // xyz + the mating rotation
     commitUrdf(next)
     setSelectedLink(child.link)
+    // Rotation default angle: persist it to the robot.yml defaultPose (keyed by the
+    // joint's actual name, in display degrees) so the joint loads at that angle —
+    // and it seeds the pose slider for interactive preview of the swing.
+    if (rotation && type === 'revolute' && rotation.defaultDeg) {
+      const jn = readJoint(next, child.link)?.name
+      if (jn) {
+        const dd = rotation.defaultDeg
+        void persist((m) => {
+          m.defaultPose = { ...(m.defaultPose ?? {}), [jn]: dd }
+        })
+      }
+    }
     return true
   }
   // Delete a joint (#354): detach its child from the current parent by re-attaching

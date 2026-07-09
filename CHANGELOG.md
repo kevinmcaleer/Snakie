@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — rotation joints get min/max + a default angle (#354).** When you
+  choose **Rotation** in the Add Joint dialog, min / max angle limits and a default
+  angle (degrees) appear; **Add** writes the joint's `<limit>` and saves the default
+  to the robot's default pose. The joint is then movable — drag it in the pose
+  panel to preview the swing, and it loads at the default angle.
 - **Robot View — Join tool fades the first-picked block (#354).** After you pick a
   point on the first block, that block goes semi-transparent (Fusion-style) so it's
   obviously chosen — and can't be picked as the second component. It restores when
