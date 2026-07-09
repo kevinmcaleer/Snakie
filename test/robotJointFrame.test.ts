@@ -50,6 +50,26 @@ describe('jointFromPicks — mate two picked faces (#354)', () => {
     const spin = new THREE.Quaternion().setFromAxisAngle(v(pN).normalize(), Math.PI / 2)
     expect(Math.abs(Math.abs(diff.dot(spin)) - 1)).toBeLessThan(1e-6)
   })
+  it('editing the roll about the stored mating normal matches the Add-time roll (#354)', () => {
+    // Arbitrary mate with a non-axis-aligned normal (where local Z != the mating normal).
+    const pL: Vec3 = [0.05, 0, 0.02]
+    const pN: Vec3 = [0.3, 0.6, 0.74] // parent-frame mating normal (the stored axis)
+    const cL: Vec3 = [0, 0.03, 0]
+    const cN: Vec3 = [-0.5, 0.5, 0.707]
+    const angle = 40
+    // Add-time: the roll is baked straight into the mate.
+    const added = jointFromPicks(pL, pN, cL, cN, [0, 0, 0], angle)
+    // Edit-time: start from the un-rolled mate, then roll about the STORED normal (pN),
+    // pre-multiplied in the parent frame — exactly what setJointRoll does.
+    const mate = jointFromPicks(pL, pN, cL, cN, [0, 0, 0], 0)
+    const R = rotOf(mate.rpy)
+    R.premultiply(new THREE.Quaternion().setFromAxisAngle(v(pN).normalize(), (angle * Math.PI) / 180))
+    // Same orientation as the Add-time roll (quaternions equal up to sign).
+    const qAdd = rotOf(added.rpy)
+    expect(Math.abs(Math.abs(qAdd.dot(R)) - 1)).toBeLessThan(1e-6)
+    // And the face is still flush after the edit roll.
+    expect(near(v(cN).normalize().applyQuaternion(R), v(pN).normalize().negate())).toBe(true)
+  })
 })
 
 // handleConnectPicked puts the PIVOT at the mating point (not the child's centre) by

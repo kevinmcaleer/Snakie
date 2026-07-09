@@ -310,6 +310,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — editing a joint's Roll turns it about the mating normal, not the
+  wrong axis (#354).** The Roll field on an existing joint spun the part about the joint's
+  local Z, which usually isn't the axis the two faces are joined on — so the part rotated
+  the wrong way. Roll now turns about the **mating normal** (the same axis the Add-Joint
+  mate used), which is captured + remembered per joint (it can't be recovered from a
+  finished joint afterward). Joints mated before this update fall back to the old axis —
+  **re-run Add Joint on them once** to capture their normal.
 - **Robot View — the Join tool is now predictable: you control the hierarchy (#354).**
   The tool used to *guess* which of the two picked parts was the parent, using descendant
   count — so joining a part that already had something attached (e.g. an arm with a servo)

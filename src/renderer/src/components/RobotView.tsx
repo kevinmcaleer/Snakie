@@ -178,6 +178,7 @@ export function RobotView({
   const overridesRef = useRef<Record<string, { min?: number; max?: number }>>({})
   const defaultPoseRef = useRef<Record<string, number>>({}) // native, non-mimic
   const jointRollRef = useRef<Record<string, number>>({}) // joint name → absolute roll (deg)
+  const jointNormalRef = useRef<Record<string, [number, number, number]>>({}) // joint → mating normal (parent frame)
   const measureActiveRef = useRef(false)
   const measureApiRef = useRef<{ clear: () => void } | null>(null)
   const highlightApiRef = useRef<{ apply: (link: string | null) => void } | null>(null)
@@ -563,11 +564,13 @@ export function RobotView({
     const j = readJoint(content, child)
     if (j) commitUrdf(setJointOrigin(content, child, xyz, j.rpy))
   }
-  // Set an existing joint's ABSOLUTE roll about its own normal axis (its origin's
-  // local Z), keeping its position — the roll field on the joint editor. The URDF
-  // rpy bakes the roll in (so it can't be decoded back out unambiguously), so the
-  // absolute value is remembered in robot.yml and applied as a DELTA on the rpy —
-  // that keeps geometry exact while letting the field show the stored roll on reopen.
+  // Set an existing joint's ABSOLUTE roll about the MATING NORMAL — the same axis the
+  // Add-Joint mate rolled about (the parent's picked face normal, stored per joint since
+  // it can't be recovered from the finished rpy). Keeps position; applied as a DELTA on
+  // the rpy (pre-multiply, in the parent frame, to match jointFromPicks). The absolute
+  // value is remembered in robot.yml so the field shows the stored roll on reopen. A
+  // joint with no stored normal (mated before this shipped) falls back to its local Z —
+  // re-run Add Joint on it to capture the normal.
   const setJointRoll = (child: string, absDeg: number): void => {
     const j = readJoint(content, child)
     if (!j) return
@@ -579,7 +582,17 @@ export function RobotView({
     const delta = absDeg - prev
     if (!delta) return
     const R = new THREE.Quaternion().setFromEuler(new THREE.Euler(j.rpy[0], j.rpy[1], j.rpy[2], 'ZYX'))
-    R.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), (delta * Math.PI) / 180))
+    const spin = new THREE.Quaternion()
+    const n = jointNormalRef.current[j.name]
+    if (n) {
+      // Roll about the mating normal in the PARENT frame → pre-multiply (matches the mate).
+      spin.setFromAxisAngle(new THREE.Vector3(n[0], n[1], n[2]).normalize(), (delta * Math.PI) / 180)
+      R.premultiply(spin)
+    } else {
+      // No stored normal — fall back to the joint's local Z (post-multiply).
+      spin.setFromAxisAngle(new THREE.Vector3(0, 0, 1), (delta * Math.PI) / 180)
+      R.multiply(spin)
+    }
     const e = new THREE.Euler().setFromQuaternion(R, 'ZYX')
     commitUrdf(setJointOrigin(content, child, j.xyz, [e.x, e.y, e.z]))
   }
@@ -789,13 +802,17 @@ export function RobotView({
     commitUrdf(next)
     setSelectedLink(child.link)
     const jn = readJoint(next, child.link)?.name
-    // Remember the roll baked in at creation so the joint editor's Roll field shows it
-    // (and edits from it) — always write it, so a freshly re-joined link overwrites any
-    // stale roll left from a previous joint that reused this name (#354).
+    // Remember the roll baked in at creation, AND the mating normal it turns about (the
+    // parent's picked face normal, in the parent frame) — this axis can't be recovered
+    // from the finished rpy, so the joint editor's Roll uses it to spin the child about
+    // the SAME axis the mate did. Always overwrite, so a re-join replaces stale values.
     if (jn) {
+      const pn = parent.normal as [number, number, number]
       jointRollRef.current = { ...jointRollRef.current, [jn]: angleDeg }
+      jointNormalRef.current = { ...jointNormalRef.current, [jn]: pn }
       void persist((m) => {
         m.jointRoll = { ...(m.jointRoll ?? {}), [jn]: angleDeg }
+        m.jointNormal = { ...(m.jointNormal ?? {}), [jn]: pn }
       })
     }
     // Rotation default angle: persist it to the robot.yml defaultPose (keyed by the
@@ -840,18 +857,35 @@ export function RobotView({
     next = setJointOrigin(next, child, looseXyz, [0, 0, 0])
     commitUrdf(next)
     // Fresh loose attachment → its orientation is the new zero-roll baseline. Drop the
-    // old joint's remembered roll (its name is gone) so the map doesn't accrete cruft.
+    // old joint's remembered roll + mating normal (its name is gone, and the loose fixed
+    // joint has no mate) so the maps don't accrete cruft.
     const jn = readJoint(next, child)?.name
     if (jn || oldJointName) {
       const roll = { ...jointRollRef.current }
-      if (oldJointName) delete roll[oldJointName]
-      if (jn) roll[jn] = 0
+      const norm = { ...jointNormalRef.current }
+      if (oldJointName) {
+        delete roll[oldJointName]
+        delete norm[oldJointName]
+      }
+      if (jn) {
+        roll[jn] = 0
+        delete norm[jn]
+      }
       jointRollRef.current = roll
+      jointNormalRef.current = norm
       void persist((m) => {
         const mr = { ...(m.jointRoll ?? {}) }
-        if (oldJointName) delete mr[oldJointName]
-        if (jn) mr[jn] = 0
+        const mn = { ...(m.jointNormal ?? {}) }
+        if (oldJointName) {
+          delete mr[oldJointName]
+          delete mn[oldJointName]
+        }
+        if (jn) {
+          mr[jn] = 0
+          delete mn[jn]
+        }
         m.jointRoll = mr
+        m.jointNormal = mn
       })
     }
     setDialogCtx(null)
@@ -1785,6 +1819,7 @@ export function RobotView({
               }
               defaultPoseRef.current = { ...nv } // "Reset" returns to the saved default
               jointRollRef.current = { ...(model.jointRoll ?? {}) } // remembered joint rolls
+              jointNormalRef.current = { ...(model.jointNormal ?? {}) } // remembered mating normals
               setOverrides(ov)
               setPoses(Array.isArray(model.poses) ? model.poses : [])
               setValues(nv)
