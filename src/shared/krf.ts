@@ -181,6 +181,9 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
   const def = sanitiseNumberMap(r.defaultPose)
   if (Object.keys(def).length) model.defaultPose = def
 
+  const roll = sanitiseNumberMap(r.jointRoll)
+  if (Object.keys(roll).length) model.jointRoll = roll
+
   if (Array.isArray(r.poses)) {
     const poses = r.poses
       .map((p): NamedPose | null => {

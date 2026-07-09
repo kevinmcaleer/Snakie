@@ -51,9 +51,12 @@ export interface RobotPropertiesDialogProps {
   jointNames: string[]
   onSetSize: (link: string, dims: number[]) => void
   onSetJoint: (link: string, spec: JointSpec) => void
-  /** Reposition the joint origin (offset, mm→m) and roll it about its normal (deg). */
+  /** Reposition the joint origin (offset, mm→m) and set its ABSOLUTE roll about its
+   *  own normal axis (deg) — both applied live as the field changes. */
   onSetJointOrigin: (child: string, xyz: [number, number, number]) => void
-  onRollJoint: (child: string, deltaDeg: number) => void
+  onRollJoint: (child: string, absDeg: number) => void
+  /** The open joint's current absolute roll (deg), for seeding the Roll field. */
+  jointRoll?: number
   /** Remove the joint whose child is this link (the block re-attaches to the base). */
   onDeleteJoint: (child: string) => void
   // servo
@@ -252,7 +255,8 @@ function LinkBody({
   onSetSize,
   onSetJoint,
   onSetJointOrigin,
-  onRollJoint
+  onRollJoint,
+  jointRoll
 }: RobotPropertiesDialogProps & { context: PropsContext }): JSX.Element {
   // `link` = the block being edited, or the joint's child link (which carries it).
   const link = context.kind === 'joint' ? context.child : context.kind === 'link' ? context.link : ''
@@ -273,9 +277,10 @@ function LinkBody({
           <JointForm
             joint={joint}
             names={jointNames}
+            jointRoll={jointRoll}
             onChange={(spec) => onSetJoint(link, spec)}
             onSetOrigin={(xyz) => onSetJointOrigin(link, xyz)}
-            onRoll={(deltaDeg) => onRollJoint(link, deltaDeg)}
+            onRoll={(absDeg) => onRollJoint(link, absDeg)}
           />
         </section>
       ) : (
