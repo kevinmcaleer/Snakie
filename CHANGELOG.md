@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Join tool mates faces by their normals + on-face markers (#354).**
+  Picking a point now captures the **face normal**, drawn as a **circle laid flat on
+  the face** with an **X/Y/Z axis triad** (blue = parent, green = child) — it sits in
+  3-D on the surface instead of facing the camera, so it reads accurately from any
+  angle. The joint is oriented from those **local** face normals: the child rotates
+  so its face meets the parent's flush (its normal anti-parallel to the parent's) and
+  the two picked points coincide.
 - **Robot View — delete a joint (#354).** Clicking a joint in the **Joints** branch
   already opened its editor (type / axis / limits); it now also has a **Delete**
   button that removes the joint and re-attaches the block to the base, keeping its
