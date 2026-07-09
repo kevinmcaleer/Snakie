@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — delete a joint (#354).** Clicking a joint in the **Joints** branch
+  already opened its editor (type / axis / limits); it now also has a **Delete**
+  button that removes the joint and re-attaches the block to the base, keeping its
+  current position so it doesn't jump.
 - **Robot View — Join tool: smart parent/child + multi-joint chains (#354).** You
   no longer have to pick the two blocks in the "right" order — if the chosen order
   would form a loop but the reverse wouldn't, the tool **swaps** parent and child

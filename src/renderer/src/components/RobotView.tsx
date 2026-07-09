@@ -634,6 +634,28 @@ export function RobotView({
     setSelectedLink(child.link)
     return true
   }
+  // Delete a joint (#354): detach its child from the current parent by re-attaching
+  // it to the base, KEEPING its current world position (so the part doesn't jump).
+  const handleDeleteJoint = (child: string): void => {
+    const root = rootLink(content)
+    if (!root || child === root) return
+    let xyz: [number, number, number] = [0, 0, 0]
+    const robot = robotRef.current
+    if (robot?.links[child] && robot.links[root]) {
+      robot.updateMatrixWorld(true)
+      const rel = new THREE.Matrix4()
+        .copy(robot.links[root].matrixWorld)
+        .invert()
+        .multiply(robot.links[child].matrixWorld)
+      const pos = new THREE.Vector3().setFromMatrixPosition(rel)
+      xyz = [pos.x, pos.y, pos.z]
+    }
+    let next = connectJoint(content, { parent: root, child, xyz })
+    next = setJoint(next, child, { type: 'fixed' })
+    next = setJointOrigin(next, child, xyz)
+    if (next !== content) commitUrdf(next)
+    setDialogCtx(null)
+  }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
     setDialogCtx(null)
@@ -2438,6 +2460,7 @@ export function RobotView({
             jointNames={allJointNames}
             onSetSize={handleSetSize}
             onSetJoint={handleSetJoint}
+            onDeleteJoint={handleDeleteJoint}
             servo={dialogCtx.kind === 'servo' ? bindings.find((b) => b.pin === dialogCtx.pin) ?? null : null}
             movableJoints={movableNames}
             onSetServo={handleUpdateBinding}
