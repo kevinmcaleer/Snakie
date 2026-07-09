@@ -5,7 +5,10 @@ import {
   rootLink,
   uniqueLinkName,
   addMeshLink,
-  blankUrdf
+  blankUrdf,
+  connectJoint,
+  subtreeOf,
+  readAllJoints
 } from '../src/renderer/src/components/robot-assembly'
 
 const URDF = `<?xml version="1.0"?>
@@ -73,6 +76,90 @@ describe('addMeshLink (#309)', () => {
     expect(link).toBe('x')
     expect(urdf).toContain('<link name="x">')
     expect(urdf).not.toContain('<joint')
+  })
+})
+
+describe('connectJoint — the Join tool (#354)', () => {
+  // base_link → upper → tip. Re-parent `tip` under `base_link`.
+  it('re-parents an existing child, rewriting parent + origin, keeping type', () => {
+    const out = connectJoint(URDF, { parent: 'base_link', child: 'tip', xyz: [0.01, 0, 0.02] })
+    const tipJoint = readAllJoints(out).find((j) => j.child === 'tip')!
+    expect(tipJoint.parent).toBe('base_link')
+    expect(tipJoint.type).toBe('fixed') // preserved
+    expect(tipJoint.xyz).toEqual([0.01, 0, 0.02])
+    // The other joint (base_link → upper) is untouched.
+    expect(readAllJoints(out).find((j) => j.child === 'upper')!.parent).toBe('base_link')
+  })
+
+  it('preserves a revolute joint type when re-parenting to a sibling', () => {
+    // base → armA (revolute), base → armB (fixed). Re-home armA under armB.
+    const branched = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base"/>
+  <link name="armA"/>
+  <link name="armB"/>
+  <joint name="jA" type="revolute"><parent link="base"/><child link="armA"/><axis xyz="0 0 1"/><limit lower="-1" upper="1" effort="1" velocity="1"/></joint>
+  <joint name="jB" type="fixed"><parent link="base"/><child link="armB"/></joint>
+</robot>`
+    const out = connectJoint(branched, { parent: 'armB', child: 'armA' })
+    const j = readAllJoints(out).find((x) => x.child === 'armA')!
+    expect(j.parent).toBe('armB')
+    expect(j.type).toBe('revolute')
+  })
+
+  it('refuses a cycle (parent inside the child subtree) — returns unchanged', () => {
+    // `tip` is a descendant of `upper`; attaching upper under tip would loop.
+    expect(connectJoint(URDF, { parent: 'tip', child: 'base_link' })).toBe(URDF)
+    expect(connectJoint(URDF, { parent: 'upper', child: 'base_link' })).toBe(URDF)
+  })
+
+  it('refuses a no-op (same link / empty)', () => {
+    expect(connectJoint(URDF, { parent: 'upper', child: 'upper' })).toBe(URDF)
+    expect(connectJoint(URDF, { parent: '', child: 'tip' })).toBe(URDF)
+  })
+
+  it('creates a fixed joint for an orphan child that has none', () => {
+    // Two unconnected links (no joints) — `b` is an orphan. Join it under `a`.
+    const twoRoots = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="a"><visual><geometry><box size="0.1 0.1 0.1"/></geometry></visual></link>
+  <link name="b"><visual><geometry><box size="0.1 0.1 0.1"/></geometry></visual></link>
+</robot>`
+    const out = connectJoint(twoRoots, { parent: 'a', child: 'b', xyz: [0, 0, 0.05] })
+    const j = readAllJoints(out).find((x) => x.child === 'b')!
+    expect(j.parent).toBe('a')
+    expect(j.type).toBe('fixed')
+    expect(j.xyz).toEqual([0, 0, 0.05])
+  })
+
+  it('re-parents a joint authored with the OPEN <parent></parent> form (#354 review)', () => {
+    // The self-closing-only regex used to leave this parent untouched.
+    const openForm = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="base_link"/>
+  <link name="arm"/>
+  <link name="wheel"/>
+  <joint name="j_arm" type="fixed"><parent link="base_link"/><child link="arm"/></joint>
+  <joint name="j_wheel" type="fixed">
+    <parent link="base_link"></parent>
+    <child link="wheel"></child>
+    <origin xyz="0 0 0" rpy="0 0 0"></origin>
+  </joint>
+</robot>`
+    const out = connectJoint(openForm, { parent: 'arm', child: 'wheel', xyz: [0.01, 0, 0] })
+    const j = readAllJoints(out).find((x) => x.child === 'wheel')!
+    expect(j.parent).toBe('arm') // actually re-parented, not just moved
+    expect(j.xyz).toEqual([0.01, 0, 0])
+    // Exactly one origin in the wheel joint (no duplicate).
+    const wheelBlock = /<joint name="j_wheel"[\s\S]*?<\/joint>/.exec(out)![0]
+    expect((wheelBlock.match(/<origin\b/g) || []).length).toBe(1)
+    expect((wheelBlock.match(/<child\b/g) || []).length).toBe(1)
+  })
+
+  it('subtreeOf collects a link + its descendants', () => {
+    expect([...subtreeOf(URDF, 'base_link')].sort()).toEqual(['base_link', 'tip', 'upper'])
+    expect([...subtreeOf(URDF, 'upper')].sort()).toEqual(['tip', 'upper'])
+    expect([...subtreeOf(URDF, 'tip')]).toEqual(['tip'])
   })
 })
 

@@ -20,6 +20,7 @@ import {
 import {
   addMeshLink,
   addPrimitive,
+  connectJoint,
   jointNames,
   parseAssembly,
   readAllJoints,
@@ -539,6 +540,22 @@ export function RobotView({
   }
   const handleOpenPose = (name: string): void => {
     openContext({ kind: 'pose', name }, null)
+  }
+  // Add Joint (#354): the toolbar opens the dialog; Add commits a connectJoint.
+  const handleAddJoint = (): void => {
+    openContext({ kind: 'addjoint' }, null)
+    if (!buildOpen) setBuildOpen(true)
+  }
+  const handleConnectJoint = (
+    parent: string,
+    child: string,
+    xyz: [number, number, number]
+  ): boolean => {
+    const next = connectJoint(content, { parent, child, xyz })
+    if (next === content) return false // no-op (cycle / invalid) — tell the dialog
+    commitUrdf(next)
+    setSelectedLink(child)
+    return true
   }
   const handlePropsOk = (): void => {
     editSnapshotRef.current = null
@@ -2153,6 +2170,7 @@ export function RobotView({
             canRedo={histCanRedo(histRef.current)}
             onUndo={undoUrdf}
             onRedo={redoUrdf}
+            onAddJoint={handleAddJoint}
           />
         )}
         {showPanel && (
@@ -2194,7 +2212,9 @@ export function RobotView({
                   ? dialogCtx.joint
                   : dialogCtx.kind === 'servo'
                     ? dialogCtx.pin
-                    : dialogCtx.name
+                    : dialogCtx.kind === 'pose'
+                      ? dialogCtx.name
+                      : 'addjoint'
             }`}
             context={dialogCtx}
             geom={editGeom}
@@ -2211,6 +2231,9 @@ export function RobotView({
             onRecallPose={handleRecallPose}
             onRenamePose={handleRenamePose}
             onDeletePose={handleDeletePose}
+            links={assembly.map((a) => a.link)}
+            joints={joints}
+            onConnect={handleConnectJoint}
             onOk={handlePropsOk}
             onCancel={handlePropsCancel}
           />
