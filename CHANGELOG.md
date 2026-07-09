@@ -219,6 +219,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   timeline follow.
 
 ### Changed
+- **Robot View — Join tool: the snap target is now directly clickable (#354).** The
+  on-surface cross-hair showed exactly where a joint would land — but a click still
+  measured its own pixel distance and often dropped a raw surface point instead, so
+  the hole centre you were aiming at was frustratingly un-clickable. A click now
+  lands on **exactly the snap the cross-hair is showing** (what-you-see-is-what-you
+  -get), and the cross-hair **stays put as you move onto a hole** without needing to
+  hold Shift (Shift still force-locks for large holes). A side effect: on a
+  primitive block a joint pick always snaps to the nearest face handle
+  (corner/edge/centre) — the exact point the target marker previews.
 - **Robot View — a clearer selection highlight.** The selected block was outlined
   with a brass wireframe of every edge, which read as a see-through cage. It's now
   tinted **light blue** (keeping the material's shading, so the sides still shade

@@ -1916,8 +1916,12 @@ export function RobotView({
             let best = Infinity
             pts.forEach((p, i) => {
               const v = p.clone().project(camera)
+              // Reject points behind the camera / outside the depth frustum: their
+              // mirrored NDC would otherwise masquerade as a nearby on-screen snap.
+              if (!(v.z >= -1 && v.z <= 1)) return
               const sx = (v.x * 0.5 + 0.5) * rect.width
               const sy = (-v.y * 0.5 + 0.5) * rect.height
+              if (!Number.isFinite(sx) || !Number.isFinite(sy)) return
               const d = Math.hypot(sx - px, sy - py)
               if (d < best) {
                 best = d
@@ -2231,15 +2235,32 @@ export function RobotView({
           const pickJointPoint = (e: PointerEvent): void => {
             const robot = robotRef.current
             if (!robot) return
-            buildNdcFrom(e)
-            buildRay.setFromCamera(buildNdc, camera)
-            const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
             const jr = jointPickRef.current
             let link: string | null = null
-            let world: THREE.Vector3
-            let worldNormal: THREE.Vector3
+            let world: THREE.Vector3 | null = null
+            let worldNormal: THREE.Vector3 | null = null
             let role = 'point'
-            if (hit) {
+            // WYSIWYG: a click lands on exactly the snap the hover cross-hair is
+            // showing (its nearest snap on the last-hovered surface). This makes the
+            // on-surface target — including a hole centre drawn over empty space —
+            // directly clickable, with no pixel-threshold gap and no need to hold
+            // SHIFT to reach it.
+            if (hoverSnaps && hoverSnaps.pts.length && robot.links[hoverSnaps.link]) {
+              const near = nearestScreen(hoverSnaps.pts, e)
+              if (near.index >= 0) {
+                link = hoverSnaps.link
+                world = hoverSnaps.pts[near.index].clone()
+                worldNormal = hoverSnaps.worldNormal.clone()
+                role = hoverSnaps.roles[near.index]
+              }
+            }
+            if (!world) {
+              // Fallback (no live hover target, e.g. a mesh face with no detectable
+              // snaps): raycast the surface under the cursor and snap if close.
+              buildNdcFrom(e)
+              buildRay.setFromCamera(buildNdc, camera)
+              const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
+              if (!hit) return
               link = ownerLinkName(hit.object)
               if (!link || !robot.links[link]) return
               const mesh = hit.object as THREE.Mesh
@@ -2252,17 +2273,8 @@ export function RobotView({
                 world = th.pts[near.index].clone()
                 role = th.roles[near.index]
               }
-            } else if (e.shiftKey && hoverSnaps && hoverSnaps.pts.length) {
-              // SHIFT-locked: clicking over empty space (e.g. a hole centre, where
-              // there is no surface to hit) lands on the nearest frozen snap.
-              link = hoverSnaps.link
-              if (!robot.links[link]) return
-              const near = nearestScreen(hoverSnaps.pts, e)
-              if (near.index < 0) return
-              world = hoverSnaps.pts[near.index].clone()
-              worldNormal = hoverSnaps.worldNormal.clone()
-              role = hoverSnaps.roles[near.index]
-            } else return
+            }
+            if (!link || !world || !worldNormal) return
             // Reject a same-block pick (marker/state desync).
             if (jr.step === 'child' && jr.parentLink === link) return
             if (jr.step === 'parent' && jr.childLink === link) return
@@ -2273,6 +2285,10 @@ export function RobotView({
             const linkNormal = worldNormal.clone().applyQuaternion(lq.invert()) // face normal, link-local
             setJointMarker(world, worldNormal, jr.step === 'child')
             clearHoverMarker()
+            // Drop the consumed snaps so the NEXT pick (e.g. the child after the
+            // parent) can't reuse this surface's stale snap without a fresh hover —
+            // absent a new hover it falls through to the raycast under the cursor.
+            hoverSnaps = null
             onJointPickRef.current?.(
               link,
               [local.x, local.y, local.z],
@@ -2423,8 +2439,15 @@ export function RobotView({
               if (hit) {
                 const s = computeSnaps(hit)
                 if (s) hoverSnaps = s
-              } else if (!e.shiftKey) {
-                hoverSnaps = null // over empty space + not locking → forget the snaps
+              } else if (hoverSnaps && hoverSnaps.pts.length) {
+                // Over empty space (e.g. inside a hole). Keep the last surface's
+                // snaps while one is still near the cursor so the hole cross-hair
+                // stays put — and stays clickable — as you move onto it. SHIFT
+                // force-locks them regardless of distance (large holes).
+                const near = nearestScreen(hoverSnaps.pts, e)
+                if (!e.shiftKey && (near.index < 0 || near.distPx > 90)) hoverSnaps = null
+              } else {
+                hoverSnaps = null
               }
               if (!hoverSnaps || !hoverSnaps.pts.length) {
                 clearHandles()
