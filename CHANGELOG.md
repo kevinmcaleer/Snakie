@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Board View — bind a servo to a 3-D joint.** Select a **servo** on the breadboard and its
+  inspector gains a **"drives joint"** picker: choose which URDF joint it moves. It reads the GPIO
+  the servo's **signal** pin is wired to and stores the pin↔joint binding in `robot.yml`, so a
+  running program's servo writes drive the matching joint in the 3-D Robot View live — no extra
+  setup. The picker guides you when the signal isn't wired to a GPIO yet, or when the model has no
+  joints. (Next: the same bindings listed in the URDF editor.)
 - **Motion Studio — puppet controls (#403, #416).** A Controls panel in the Robot View lets you
   build a named **slider** from two or more saved poses. Dragging it smoothly blends between the
   ordered poses and drives the live 3-D model in real time — one slider can sweep the eyes, morph

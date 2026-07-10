@@ -311,6 +311,43 @@
   border-color: #a5281b;
 }
 
+/* Servo → joint binding controls (#): a note (not wired / no joints yet) or the
+   joint picker. Matches the dark floating toolbar. */
+.wc__parttb-note {
+  display: inline-flex;
+  align-items: center;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  font-size: 0.6rem;
+  color: #b7bcc4;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.wc__parttb-joint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 1.6rem;
+  padding: 0 0.2rem 0 0.35rem;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+}
+.wc__parttb-select {
+  max-width: 8rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  color: #d6dade;
+  background: #1c1e22;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
+  cursor: pointer;
+}
+
 .wc__parttb-input {
   width: 9rem;
   font-family: var(--font-mono);

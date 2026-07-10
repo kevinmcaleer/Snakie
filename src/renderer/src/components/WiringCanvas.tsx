@@ -20,6 +20,7 @@ import {
   type RobotNet,
   type RobotPart
 } from '../../../shared/robot'
+import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo-bind'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
@@ -527,6 +528,8 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
 export interface WiringCanvasProps {
   robot: RobotDefinition
   onChange: (next: RobotDefinition) => void
+  /** The linked URDF's joint names — lets a servo's inspector bind to a joint (#). */
+  joints?: string[]
   /** Installed libraries (to resolve a placed part's pins). */
   libraries: PartLibraryWithParts[]
   /** The microcontroller to show as the board (the board view's selection). */
@@ -576,7 +579,7 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -1424,6 +1427,21 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // parts in the breadboard view are selectable/rotatable.
   const selSubject = renderMode === 'lifelike' && selectedKey ? subjByKey.get(selectedKey) : undefined
   const selPart = selSubject?.kind === 'part' ? selSubject : undefined
+  // Servo → joint binding (#): if the selected part is a servo, which board GPIO its
+  // signal is wired to and the URDF joint it currently drives (via robot.yml's map).
+  const selIsServo = !!selPart && isServoPart(selPart.partDef)
+  const selServoGpio = selIsServo && selPart ? servoBoardGpio(selPart.key, robot.connections) : null
+  const selServoJoint = selServoGpio ? boundJoint(robot.robot?.servoJointMap, selServoGpio) : null
+  const setServoJoint = (joint: string): void => {
+    if (!selServoGpio) return
+    onChange({
+      ...robot,
+      robot: {
+        ...(robot.robot ?? {}),
+        servoJointMap: bindServoJoint(robot.robot?.servoJointMap, selServoGpio, joint)
+      }
+    })
+  }
   const selToolbar = (() => {
     const svg = svgRef.current
     if (!selPart || !svg) return null
@@ -1660,6 +1678,44 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                     </svg>
                   </button>
                 )}
+                {/* Servo → joint binding (#): pick the URDF joint this servo drives.
+                    The signal must be wired to a GPIO first; joints come from the
+                    3-D model. Writing the pin↔joint map lets live code move the model. */}
+                {selIsServo &&
+                  (selServoGpio == null ? (
+                    <span className="wc__parttb-note" title="Wire this servo's signal pin to a microcontroller GPIO to bind it to a joint">
+                      ⚡ wire signal
+                    </span>
+                  ) : joints.length === 0 ? (
+                    <span className="wc__parttb-note" title="No joints yet — add them in the 3-D Robot View">
+                      GP{selServoGpio} · no joints
+                    </span>
+                  ) : (
+                    <label className="wc__parttb-joint" title={`GP${selServoGpio} drives this URDF joint`}>
+                      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <path
+                          d="M6.5 9.5l3-3M5.5 10.5a2 2 0 0 1 0-2.8l1.4-1.4M10.5 5.5a2 2 0 0 1 0 2.8L9.1 9.7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.3}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <select
+                        className="wc__parttb-select"
+                        value={selServoJoint ?? ''}
+                        aria-label={`Joint driven by GP${selServoGpio}`}
+                        onChange={(e) => setServoJoint(e.target.value)}
+                      >
+                        <option value="">GP{selServoGpio} → (none)</option>
+                        {joints.map((j) => (
+                          <option key={j} value={j}>
+                            {j}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
                 <button type="button" className="wc__parttb-btn" title="Rotate 90°" aria-label="Rotate 90 degrees" onClick={() => rotatePart(selPart.key)}>
                   <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" fill="currentColor" />

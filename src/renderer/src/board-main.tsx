@@ -32,6 +32,7 @@ import { PartEditor } from './components/PartEditor'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import { readRobotModel } from '../../shared/krf'
 import { attachPartMesh } from './components/robot-part-mesh'
+import { jointNames } from './components/robot-assembly'
 import type {
   BoardDefinition,
   BoardSourcePayload,
@@ -213,6 +214,29 @@ function BoardWindowApp(): JSX.Element {
     [folder]
   )
 
+  // The URDF's joint names — read the linked `.urdf` so a servo's inspector can
+  // offer a "drives joint" picker (#). Empty when there's no URDF / no folder yet.
+  const [joints, setJoints] = useState<string[]>([])
+  const urdfPath = robot.robot?.urdf
+  useEffect(() => {
+    if (!folder || !urdfPath) {
+      setJoints([])
+      return
+    }
+    let live = true
+    window.api.fs
+      .readFile(`${folder}/${urdfPath}`)
+      .then((content) => {
+        if (live) setJoints(jointNames(content))
+      })
+      .catch(() => {
+        if (live) setJoints([])
+      })
+    return () => {
+      live = false
+    }
+  }, [folder, urdfPath, robotNonce])
+
   // Append a library part to the project (robot.yml), with a unique instance id.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
@@ -297,6 +321,7 @@ function BoardWindowApp(): JSX.Element {
         asWindow
         robot={robot}
         onChangeRobot={saveRobot}
+        joints={joints}
         libraries={libraries}
         onAddToProject={addToProject}
       />
