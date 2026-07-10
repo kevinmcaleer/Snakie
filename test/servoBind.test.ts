@@ -5,7 +5,8 @@ import {
   servoBoardGpio,
   boundJoint,
   bindServoJoint,
-  bindableServos
+  bindableServos,
+  poseServoAngles
 } from '../src/renderer/src/components/servo-bind'
 import type { PartDefinition } from '../src/shared/part'
 import type { RobotConnection, RobotPart, ServoJointBinding } from '../src/shared/robot'
@@ -99,5 +100,31 @@ describe('bindableServos (#)', () => {
       { id: 'sg902', label: 'SG90 Micro Servo', pin: null } // def name, not wired
     ])
     expect(list.some((s) => s.id === 'led1')).toBe(false) // not a servo
+  })
+})
+
+describe('poseServoAngles (#)', () => {
+  const bindings: ServoJointBinding[] = [
+    // GP-prefixed pin, straight 0..180 → 0..180 map
+    { pin: 'GP16', joint: 'base', servoMin: 0, servoMax: 180, jointMin: 0, jointMax: 180 },
+    // bare pin, inverted, joint range 0..90 → servo 0..180
+    { pin: '17', joint: 'elbow', servoMin: 0, servoMax: 180, jointMin: 0, jointMax: 90, invert: true }
+  ]
+
+  it('maps a pose to per-pin servo degrees, keyed by NUMERIC pin, applying calibration', () => {
+    const byPin = poseServoAngles(bindings, { base: 90, elbow: 90 })
+    // base: 90/180 → 90°; elbow: 90/90=1, inverted → 0°
+    expect(byPin).toEqual({ '16': 90, '17': 0 })
+  })
+
+  it('skips joints the pose does not set and non-finite values', () => {
+    expect(poseServoAngles(bindings, { base: 45 })).toEqual({ '16': 45 })
+    expect(poseServoAngles(bindings, { base: Number.NaN, elbow: 45 })).toEqual({ '17': 90 })
+  })
+
+  it('is empty for no bindings or no values', () => {
+    expect(poseServoAngles([], { base: 90 })).toEqual({})
+    expect(poseServoAngles(bindings, undefined)).toEqual({})
+    expect(poseServoAngles(undefined, undefined)).toEqual({})
   })
 })

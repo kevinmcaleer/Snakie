@@ -219,6 +219,19 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['servo', 'sg90', 'mg90', 'mg996', 'pca9685']
   },
   {
+    id: 'poses',
+    name: 'Poses',
+    accent: '#7fe0a8',
+    border: 'rgba(127,224,168,.5)',
+    // three slider tracks with knobs — a pose bench
+    icon: 'M4 6 h16 M4 12 h16 M4 18 h16 M9 6 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M15 12 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0 M8 18 m-2 0 a2 2 0 1 0 4 0 a2 2 0 1 0 -4 0',
+    group: 'output',
+    kind: 'singleton',
+    description: "Test a robot's saved poses live — jump to a pose or nudge each bound servo.",
+    // Lights up alongside the Servo panel — a rig with bound servos is what makes it useful.
+    hints: ['servo', 'pose', 'rig', 'sg90', 'mg90', 'mg996']
+  },
+  {
     id: 'button',
     name: 'Button',
     accent: '#6fb4ee',
@@ -412,7 +425,7 @@ export function moduleCoveredByInstrument(module: string, inUse: Set<string>): b
  */
 export const BOUND_KIND_INSTRUMENTS: Record<string, string[]> = {
   pwm: ['scope', 'servo'],
-  servo: ['servo'],
+  servo: ['servo', 'poses'],
   adc: ['meter', 'scope', 'pot'],
   i2c: ['i2c-detect'],
   pin: ['led', 'button'],

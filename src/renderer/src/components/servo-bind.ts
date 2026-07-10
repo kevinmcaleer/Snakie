@@ -8,6 +8,7 @@
  */
 import type { PartDefinition } from '../../../shared/part'
 import type { RobotConnection, RobotPart, ServoJointBinding } from '../../../shared/robot'
+import { jointToServo } from '../../../shared/krf'
 import { normPin } from './robot-pose'
 
 /** Whether a placed part is a servo (something that drives a joint). Matches the
@@ -100,4 +101,24 @@ export function bindableServos(
       label: p.label || resolveDef(p)?.name || p.part,
       pin: servoBoardGpio(p.id, connections)
     }))
+}
+
+/**
+ * The servo angle (whole degree, 0..180) each bound GPIO should hold to reach a
+ * pose — `{ "16": 90, … }`, keyed by the NUMERIC pin ({@link normPin}) so it drops
+ * straight into `buildServosPayload` and the on-device `servos_command` (which
+ * parses `pin:deg` with an integer pin). Applies each binding's calibration via
+ * {@link jointToServo}; joints the pose doesn't set are skipped. Pure — the live
+ * Pose instrument (#) uses it to snap every servo to a saved pose.
+ */
+export function poseServoAngles(
+  bindings: ServoJointBinding[] | undefined,
+  poseValues: Record<string, number> | undefined
+): Record<string, number> {
+  const byPin: Record<string, number> = {}
+  for (const b of bindings ?? []) {
+    const v = (poseValues ?? {})[b.joint]
+    if (typeof v === 'number' && Number.isFinite(v)) byPin[normPin(b.pin)] = jointToServo(b, v)
+  }
+  return byPin
 }
