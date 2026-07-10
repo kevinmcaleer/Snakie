@@ -179,5 +179,62 @@ class RigStateTests(unittest.TestCase):
         self.assertIsInstance(motion.__version__, str)
 
 
+class RoundingAndEasingTests(unittest.TestCase):
+    def test_half_degree_rounds_half_up_like_math_round(self):
+        # Identity map (joint deg == servo deg). A servo raw landing on x.5 must round
+        # UP (JS Math.round, what jointToServo uses), not to-even (Python's round()).
+        s, _ = _servo(joint_min=0, joint_max=180, servo_min=0, servo_max=180)
+        self.assertEqual(s.write_joint(0.5 * DEG2RAD), 1)  # 0.5 → 1 (not 0)
+        self.assertEqual(s.write_joint(2.5 * DEG2RAD), 3)  # 2.5 → 3 (not 2)
+
+    def test_easing_is_smoothstep_not_linear(self):
+        # At u=0.25 the smoothstep (ease_in_out) is well behind a linear ramp, so the
+        # two produce DIFFERENT servo degrees — a linear-only impl would fail this.
+        se, fe = _servo(joint_min=-90, joint_max=90, servo_min=0, servo_max=180)
+        sl, fl = _servo(joint_min=-90, joint_max=90, servo_min=0, servo_max=180)
+        re = motion.Rig({"j": se})
+        rl = motion.Rig({"j": sl})
+        re.goto_pose({"j": 90}, duration=1.0, easing="easeInOut")
+        rl.goto_pose({"j": 90}, duration=1.0, easing="linear")
+        t0 = re._move["t0"]
+        re.update(t0 + 250)
+        rl._move["t0"] = t0
+        rl.update(t0 + 250)
+        self.assertNotEqual(fe.degs[-1], fl.degs[-1])
+        self.assertLess(fe.degs[-1], fl.degs[-1])  # smoothstep starts slower
+
+    def test_reversed_servo_range_matches_the_app(self):
+        # servo_min > servo_max (a flip via range, not the invert flag) still lerps
+        # correctly (order-agnostic clamp), like jointToServo.
+        s, _ = _servo(joint_min=-90, joint_max=90, servo_min=150, servo_max=30)
+        self.assertEqual(s.write_joint(-90 * DEG2RAD), 150)
+        self.assertEqual(s.write_joint(0.0), 90)
+        self.assertEqual(s.write_joint(90 * DEG2RAD), 30)
+
+
+class TrimTests(unittest.TestCase):
+    def test_snapshot_round_trips_the_commanded_pose_with_trim(self):
+        # trim shifts the SERVO degree but Capture Pose must report the COMMANDED joint
+        # so a captured pose replays exactly (no trim drift).
+        s, _ = _servo(joint_min=-90, joint_max=90, servo_min=0, servo_max=180, trim=8)
+        rig = motion.Rig({"j": s})
+        s.write_joint(30 * DEG2RAD)
+        self.assertAlmostEqual(rig.snapshot()["j"], 30.0, places=6)
+
+    def test_looping_fixed_pose_does_not_drift_with_trim(self):
+        s, fake = _servo(joint_min=-90, joint_max=90, servo_min=0, servo_max=180, trim=8)
+        rig = motion.Rig({"j": s})
+        rig.play([({"j": 30}, 100)], loop=True)
+        t = rig._move["t0"]
+        seen = set()
+        for _ in range(6):  # several loop cycles
+            rig.update(t + 100)
+            seen.add(fake.degs[-1])
+            t = rig._move["t0"]
+        # Every cycle lands on the SAME servo degree — the start is read from the
+        # commanded value, so trim never accumulates.
+        self.assertEqual(len(seen), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -56,6 +56,15 @@ def _clamp(v, lo, hi):
     return lo if v < lo else hi if v > hi else v
 
 
+def _round_half_up(x):
+    """Round half AWAY from zero toward +∞ — matches JS ``Math.round`` (which
+    ``jointToServo`` uses), unlike Python's built-in round-half-to-even. Keeps the
+    servo degree identical to the app so preview == hardware."""
+    import math
+
+    return int(math.floor(x + 0.5))
+
+
 def ease(easing, u):
     """The Python twin of ``robot-timeline.ts`` ``ease`` — ``linear`` is the identity,
     everything else is the ``x*x*(3-2*x)`` smoothstep — so preview == hardware."""
@@ -123,6 +132,11 @@ class Servo:
             # calibration min_us/max_us is honoured; it still emits SNK SERVO.
             self._servo = instruments.Servo(pin=pin, freq=freq, min_us=min_us, max_us=max_us)
         self._current_deg = 90
+        # The last COMMANDED joint value (radians). goto_pose reads THIS as its move
+        # start (not a servo read-back), so a non-zero `trim` — which write_joint applies
+        # but the servo→joint inverse can't recover — never makes a move drift. Seeded
+        # from the neutral servo position.
+        self._cmd_rad = self.joint_radians()
 
     @property
     def deg_per_joint_rad(self):
@@ -143,12 +157,17 @@ class Servo:
         if self.invert:
             t = 1.0 - t
         raw = self.servo_min + t * (self.servo_max - self.servo_min) + self.trim
-        raw = _clamp(raw, self.servo_min, self.servo_max)  # soft servo limits
-        return int(_clamp(round(raw), 0, 180))
+        # Soft servo limits (order-agnostic — a binding may flip via servo_min>servo_max
+        # instead of `invert`, which jointToServo handles too).
+        lo = self.servo_min if self.servo_min <= self.servo_max else self.servo_max
+        hi = self.servo_max if self.servo_max >= self.servo_min else self.servo_min
+        raw = _clamp(raw, lo, hi)
+        return int(_clamp(_round_half_up(raw), 0, 180))
 
     def write_joint(self, rad):
         """Drive the servo so its bound joint reaches ``rad`` radians. Returns the
         whole servo degree written (and emits ``SNK SERVO <pin> <deg>``)."""
+        self._cmd_rad = rad
         deg = self._servo_deg_for(rad)
         self._servo.angle(deg)
         self._current_deg = deg
@@ -159,9 +178,14 @@ class Servo:
         """The last servo degree written."""
         return self._current_deg
 
+    def commanded_display(self):
+        """The last COMMANDED joint value in DISPLAY units (deg). Round-trips exactly
+        with ``write_joint`` (trim-safe) — what Capture Pose + move interpolation use."""
+        return self._cmd_rad * RAD2DEG
+
     def joint_display(self):
         """The current joint value in DISPLAY units (deg) — the ``servoToJoint`` twin
-        of the current servo degree."""
+        of the current servo degree (the app-mirror view; trim is folded into it)."""
         span = self.servo_max - self.servo_min
         t = 0.0 if span == 0 else (self._current_deg - self.servo_min) / span
         t = _clamp(t, 0.0, 1.0)
@@ -205,10 +229,12 @@ class Rig:
         start = {}
         target = {}
         for name, servo in self._servos.items():
-            cur = servo.joint_display()
+            cur = servo.commanded_display()  # last COMMANDED value → trim-safe, no drift
             start[name] = cur
             j = servo.joint
             target[name] = pose.get(j, cur) if j is not None else cur
+        # Records intent ONLY — the first servo write happens in update() (u=0), so
+        # goto_pose is truly non-blocking and doesn't burst redundant SNK SERVO lines.
         self._move = {
             "start": start,
             "target": target,
@@ -216,7 +242,6 @@ class Rig:
             "dur_ms": max(0.0, duration * 1000.0),
             "easing": easing,
         }
-        self._apply(0.0)
 
     def _apply(self, e):
         for name, servo in self._servos.items():
@@ -297,7 +322,9 @@ class Rig:
     def run(self, hz=None):
         """Blocking convenience driver: tick ``update()`` forever at ``hz``. Use as
         your ``while True:`` loop on-device."""
-        hz = hz or self.hz
+        hz = hz or self.hz or 50
+        if hz <= 0:
+            hz = 50
         dt = max(1, int(1000 / hz))
         while True:
             self.update()
@@ -310,7 +337,8 @@ class Rig:
         pose = {}
         for servo in self._servos.values():
             if servo.joint is not None:
-                pose[servo.joint] = round(servo.joint_display(), 2)
+                # The COMMANDED joint value (trim-safe), so a captured pose replays exactly.
+                pose[servo.joint] = round(servo.commanded_display(), 2)
         return pose
 
     def joint_state(self):
