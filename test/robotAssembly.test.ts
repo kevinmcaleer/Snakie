@@ -13,6 +13,7 @@ import {
   connectJoint,
   orientJoint,
   buildChainTree,
+  meshImportScale,
   setLinkColor,
   readLinkColor,
   collectLinkColors,
@@ -501,5 +502,21 @@ describe('external meshes — copy-into-project helpers (#407)', () => {
     const out = rewriteMeshFilename(dup, '../m/x.stl', 'meshes/x.stl')
     expect((out.match(/meshes\/x\.stl/g) || []).length).toBe(2)
     expect(out).not.toContain('../m/x.stl')
+  })
+})
+
+describe('meshImportScale — declared units vs bbox heuristic (#406)', () => {
+  it('an explicit meshScale wins over everything', () => {
+    expect(meshImportScale({ meshScale: 0.05, meshUnits: 'mm' }, 100)).toBe(0.05)
+    expect(meshImportScale({ meshScale: 0 }, 100)).toBe(0.001) // 0 is ignored → bbox
+  })
+  it('declared units map mm→0.001, m→1', () => {
+    expect(meshImportScale({ meshUnits: 'mm' })).toBe(0.001)
+    expect(meshImportScale({ meshUnits: 'm' }, 100)).toBe(1) // declared m beats the bbox
+  })
+  it('falls back to the bbox heuristic (>3 URDF-metres ⇒ authored in mm)', () => {
+    expect(meshImportScale({}, 40)).toBe(0.001)
+    expect(meshImportScale({}, 0.5)).toBe(1)
+    expect(meshImportScale({})).toBe(1) // nothing known ⇒ leave at 1
   })
 })

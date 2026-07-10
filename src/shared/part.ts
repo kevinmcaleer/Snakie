@@ -480,6 +480,27 @@ export interface PartDefinition {
    */
   drivers?: DriverFile[]
 
+  // --- 3-D mesh (Robot View, #406) -----------------------------------------
+  /**
+   * A 3-D mesh (STL) linked to this part. On disk this is a **relative filename**
+   * within the part folder (e.g. `"model.stl"`). Unlike `image`/`help` it is NOT
+   * inlined into the renderer; when the part is dropped onto a design the main
+   * process copies the file into the project URDF's `meshes/` folder and it's
+   * added as a loose link in the 3-D Robot View. Absent ⇒ no mesh.
+   */
+  mesh?: string
+  /**
+   * The units the linked {@link mesh} is authored in, so it loads at a sane size in
+   * the URDF world (which is metres; STLs are commonly millimetres). `'mm'` ⇒ a
+   * 0.001 scale. Absent ⇒ fall back to a bounding-box heuristic on import.
+   */
+  meshUnits?: 'mm' | 'm'
+  /**
+   * An explicit uniform scale for the linked {@link mesh}, overriding
+   * {@link meshUnits}. Absent ⇒ use `meshUnits` (or the bbox heuristic).
+   */
+  meshScale?: number
+
   // --- Editor display state (persisted) ------------------------------------
   /**
    * Which layers are shown when the part is drawn (Part Editor, Parts Library
