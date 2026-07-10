@@ -46,6 +46,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Robot View — the Build (Chain) dock is a little wider (#399).** Bumped from `15.5rem`
+  to `17.5rem` (capped `min(18rem, 42vw)`) so long STL-derived link names like
+  `left_shoulder_bracket_v3` read in full in the Chain tree instead of being cut off by the
+  ellipsis. It still floats over the 3-D stage and never claims more than a modest slice on
+  narrow windows.
 - **Robot View — the pose sidebar is retired; posing moves to a popup (#312).** The
   old right-hand pose panel duplicated the build panel (assembly, servos, poses). It's
   gone: **pose the robot in a popup** — the build panel's **Poses → ＋ New pose** (or
