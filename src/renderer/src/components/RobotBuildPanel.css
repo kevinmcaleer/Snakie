@@ -354,6 +354,55 @@
   border: 1px solid var(--border, #3a3d44);
   border-radius: 999px;
 }
+
+/* Breadboard-servo row (#): part name · GPIO · joint picker. */
+.robotbuild__servo {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.3rem;
+}
+.robotbuild__servo-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.66rem;
+  color: var(--text, #cdd2d9);
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 0;
+}
+.robotbuild__servo-name--link {
+  cursor: pointer;
+}
+.robotbuild__servo-name--link:hover {
+  color: var(--accent-ink);
+  text-decoration: underline;
+}
+.robotbuild__servo-pin {
+  flex: 0 0 auto;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotbuild__servo-pin--unwired {
+  color: #b4844a;
+  font-style: italic;
+}
+.robotbuild__servo-joint {
+  flex: 0 1 auto;
+  max-width: 7rem;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.22));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.05rem 0.2rem;
+  cursor: pointer;
+}
 .robotbuild__chain--loose .robotbuild__part-label {
   font-style: italic;
   opacity: 0.85;

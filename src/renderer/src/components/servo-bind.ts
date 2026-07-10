@@ -7,7 +7,7 @@
  * Dependency-light (only `normPin`) so both views + tests can import it.
  */
 import type { PartDefinition } from '../../../shared/part'
-import type { RobotConnection, ServoJointBinding } from '../../../shared/robot'
+import type { RobotConnection, RobotPart, ServoJointBinding } from '../../../shared/robot'
 import { normPin } from './robot-pose'
 
 /** Whether a placed part is a servo (something that drives a joint). Matches the
@@ -72,4 +72,32 @@ export function bindServoJoint(
       ? prev
       : { pin: gpio, joint, servoMin: 0, servoMax: 180, jointMin: 0, jointMax: 180 }
   ]
+}
+
+/** A breadboard servo the URDF editor can bind — its instance id, label, and the
+ *  GPIO its signal is wired to (null when not yet wired). */
+export interface BindableServo {
+  id: string
+  label: string
+  pin: string | null
+}
+
+/**
+ * The servo parts placed on the breadboard, for the URDF editor's bindable-servos
+ * list (#). Filters `parts` to servos (via `resolveDef` → {@link isServoPart}) and
+ * resolves each one's signal GPIO from the wiring. Pure — `resolveDef` looks a
+ * placed part up in the installed libraries.
+ */
+export function bindableServos(
+  parts: RobotPart[],
+  connections: RobotConnection[],
+  resolveDef: (part: RobotPart) => PartDefinition | undefined | null
+): BindableServo[] {
+  return parts
+    .filter((p) => isServoPart(resolveDef(p)))
+    .map((p) => ({
+      id: p.id,
+      label: p.label || resolveDef(p)?.name || p.part,
+      pin: servoBoardGpio(p.id, connections)
+    }))
 }

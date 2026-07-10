@@ -12,6 +12,7 @@ import { buildChainTree } from './robot-assembly'
 import type { Vec3 } from './robot-build'
 import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
+import { boundJoint, type BindableServo } from './servo-bind'
 import { shouldAutoHide } from './pin-overlay'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
@@ -94,6 +95,12 @@ export interface RobotBuildPanelProps {
   /** The model's joints, servo bindings and named poses — extra tree branches. */
   joints: JointFull[]
   servos: ServoJointBinding[]
+  /** Breadboard servos (placed servo parts) that can be bound to a joint (#). */
+  bindableServos: BindableServo[]
+  /** Joint names a servo can drive (the bind picker's options). */
+  jointOptions: string[]
+  /** Bind a servo's GPIO to a joint (`''` unbinds). */
+  onBindServo: (pin: string, joint: string) => void
   poses: NamedPoseLike[]
   selected: string | null
   onSelect: (link: string | null) => void
@@ -650,6 +657,9 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onRenameJoint,
     onOpenServo,
     onNewServo,
+    bindableServos,
+    jointOptions,
+    onBindServo,
     onOpenPose,
     onNewPose,
     rootLink,
@@ -732,6 +742,10 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     active?.kind === 'link' ? active.link : active?.kind === 'joint' ? active.child : null
   const activeJoint = active?.kind === 'joint' ? active.joint : null
   const looseStart = tree.findIndex((n) => n.loose)
+  // Servo bindings NOT backed by a breadboard servo part (manual / legacy), so they
+  // aren't shown twice in the Servos section.
+  const bindablePins = new Set(bindableServos.filter((s) => s.pin).map((s) => normPin(s.pin as string)))
+  const orphanBindings = servos.filter((b) => !bindablePins.has(normPin(b.pin)))
 
   if (!open) {
     return (
@@ -824,35 +838,93 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           </p>
         )}
 
-        {canEdit && joints.some((j) => j.type !== 'fixed') && (
-        <Section id="servos" label="Servos" count={servos.length} collapsed={collapsed} onToggle={toggle}>
-          <li className="robotbuild__part">
-            <button
-              type="button"
-              className="robotbuild__node robotbuild__newpose"
-              onClick={onNewServo}
-              title="Bind a servo pin to a joint"
-            >
-              ＋ Bind a servo
-            </button>
-          </li>
-          {servos.map((b) => {
-            const on = active?.kind === 'servo' && normPin(active.pin) === normPin(b.pin)
-            return (
-              <li className="robotbuild__part" key={b.pin}>
-                <button
-                  type="button"
-                  className={`robotbuild__node${on ? ' is-on' : ''}`}
-                  title={`Edit servo GP${normPin(b.pin)}`}
-                  onClick={() => onOpenServo(b.pin)}
-                >
-                  <span className="robotbuild__part-label">GP{normPin(b.pin)}</span>
-                  <span className="robotbuild__part-geo">→ {b.joint || '—'}</span>
-                </button>
-              </li>
-            )
-          })}
-        </Section>
+        {canEdit && (bindableServos.length > 0 || servos.length > 0 || joints.some((j) => j.type !== 'fixed')) && (
+          <Section
+            id="servos"
+            label="Servos"
+            count={bindableServos.length + orphanBindings.length}
+            collapsed={collapsed}
+            onToggle={toggle}
+          >
+            {/* Breadboard servos (#): the placed servo parts, each with a picker to
+                bind its signal GPIO to a URDF joint — mirrors the Board View. */}
+            {bindableServos.map((s) => {
+              const cur = s.pin ? boundJoint(servos, s.pin) : null
+              const on = active?.kind === 'servo' && !!s.pin && normPin(active.pin) === normPin(s.pin)
+              return (
+                <li className={`robotbuild__part${on ? ' is-sel' : ''}`} key={s.id}>
+                  <div className="robotbuild__servo">
+                    {s.pin && cur ? (
+                      <button
+                        type="button"
+                        className="robotbuild__servo-name robotbuild__servo-name--link"
+                        title={`${s.label} — click to calibrate GP${s.pin}`}
+                        onClick={() => onOpenServo(s.pin as string)}
+                      >
+                        {s.label}
+                      </button>
+                    ) : (
+                      <span className="robotbuild__servo-name" title={s.label}>
+                        {s.label}
+                      </span>
+                    )}
+                    {s.pin == null ? (
+                      <span
+                        className="robotbuild__servo-pin robotbuild__servo-pin--unwired"
+                        title="Wire this servo's signal pin to a GPIO in the Board View"
+                      >
+                        unwired
+                      </span>
+                    ) : (
+                      <>
+                        <span className="robotbuild__servo-pin">GP{s.pin}</span>
+                        <select
+                          className="robotbuild__servo-joint"
+                          value={cur ?? ''}
+                          aria-label={`Joint driven by GP${s.pin}`}
+                          onChange={(e) => onBindServo(s.pin as string, e.target.value)}
+                        >
+                          <option value="">→ (none)</option>
+                          {jointOptions.map((j) => (
+                            <option key={j} value={j}>
+                              {j}
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    )}
+                  </div>
+                </li>
+              )
+            })}
+            {/* Bindings NOT from a breadboard servo (manual / legacy) — open to calibrate. */}
+            {orphanBindings.map((b) => {
+              const on = active?.kind === 'servo' && normPin(active.pin) === normPin(b.pin)
+              return (
+                <li className="robotbuild__part" key={b.pin}>
+                  <button
+                    type="button"
+                    className={`robotbuild__node${on ? ' is-on' : ''}`}
+                    title={`Edit servo GP${normPin(b.pin)}`}
+                    onClick={() => onOpenServo(b.pin)}
+                  >
+                    <span className="robotbuild__part-label">GP{normPin(b.pin)}</span>
+                    <span className="robotbuild__part-geo">→ {b.joint || '—'}</span>
+                  </button>
+                </li>
+              )
+            })}
+            <li className="robotbuild__part">
+              <button
+                type="button"
+                className="robotbuild__node robotbuild__newpose"
+                onClick={onNewServo}
+                title="Bind a servo pin to a joint by hand"
+              >
+                ＋ Bind a servo by hand
+              </button>
+            </li>
+          </Section>
         )}
 
         {canEdit && (
