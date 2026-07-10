@@ -62,8 +62,9 @@
 }
 :root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
   stroke: #d6e6ff;
-  /* A touch softer so the graph-paper grid reads as a backdrop, not foreground. */
-  stroke-opacity: 0.5;
+  /* A whisper so the graph-paper grid reads as a faint backdrop, not foreground
+     (#452 — ~50% softer again than the previous 0.5). */
+  stroke-opacity: 0.25;
 }
 /* Blueprint only: warp the grid with the paper fibre so the lines aren't
    machine-perfect — a subtle ink-on-paper wobble that scales with the grid. */
