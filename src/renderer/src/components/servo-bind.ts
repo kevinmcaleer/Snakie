@@ -122,3 +122,23 @@ export function poseServoAngles(
   }
   return byPin
 }
+
+/**
+ * One frame of a pin→angle tween at progress `t` (0..1, already eased): each pin
+ * in `to` is lerped from its `from` angle (or, if `from` doesn't have it, held at
+ * the target so it doesn't jump from 0) and rounded to a whole servo degree. Pins
+ * only in `from` are dropped — the tween moves exactly the target set. Pure, so
+ * the live Pose instrument can smoothly glide between poses (#).
+ */
+export function tweenServoAngles(
+  from: Record<string, number>,
+  to: Record<string, number>,
+  t: number
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [pin, target] of Object.entries(to)) {
+    const start = typeof from[pin] === 'number' ? from[pin] : target
+    out[pin] = Math.round(start + (target - start) * t)
+  }
+  return out
+}

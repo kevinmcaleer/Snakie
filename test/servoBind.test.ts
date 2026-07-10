@@ -6,7 +6,8 @@ import {
   boundJoint,
   bindServoJoint,
   bindableServos,
-  poseServoAngles
+  poseServoAngles,
+  tweenServoAngles
 } from '../src/renderer/src/components/servo-bind'
 import type { PartDefinition } from '../src/shared/part'
 import type { RobotConnection, RobotPart, ServoJointBinding } from '../src/shared/robot'
@@ -126,5 +127,25 @@ describe('poseServoAngles (#)', () => {
     expect(poseServoAngles([], { base: 90 })).toEqual({})
     expect(poseServoAngles(bindings, undefined)).toEqual({})
     expect(poseServoAngles(undefined, undefined)).toEqual({})
+  })
+})
+
+describe('tweenServoAngles (#)', () => {
+  it('lerps each target pin from its start angle, rounding to whole degrees', () => {
+    const from = { '16': 0, '17': 180 }
+    const to = { '16': 100, '17': 80 }
+    expect(tweenServoAngles(from, to, 0)).toEqual({ '16': 0, '17': 180 })
+    expect(tweenServoAngles(from, to, 1)).toEqual({ '16': 100, '17': 80 })
+    expect(tweenServoAngles(from, to, 0.5)).toEqual({ '16': 50, '17': 130 })
+  })
+
+  it('only moves the target set (pins only in `from` are dropped)', () => {
+    expect(tweenServoAngles({ '16': 0, '99': 10 }, { '16': 90 }, 1)).toEqual({ '16': 90 })
+  })
+
+  it('holds a pin at its target when `from` lacks it (no jump from 0)', () => {
+    // GP17 has no prior angle → it should sit at the target the whole tween, not sweep up from 0.
+    expect(tweenServoAngles({ '16': 0 }, { '16': 90, '17': 45 }, 0)).toEqual({ '16': 0, '17': 45 })
+    expect(tweenServoAngles({ '16': 0 }, { '16': 90, '17': 45 }, 0.5)).toEqual({ '16': 45, '17': 45 })
   })
 })

@@ -114,6 +114,7 @@ import {
 import { jointToServo } from '../../../shared/krf'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
+import { onServoDrive } from './servo-drive-bus'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -1323,6 +1324,26 @@ export function RobotView({
     poseLiveTimer.current = setTimeout(() => setPoseLive(false), 1200)
   })
   useEffect(() => () => void (poseLiveTimer.current && clearTimeout(poseLiveTimer.current)), [])
+
+  // A dock instrument (the Pose bench) can drive the model directly — no running
+  // program needed. It emits pin→angle batches on the in-renderer servo-drive bus;
+  // apply each the same way as `SNK SERVO` telemetry so sliders/pose presses move
+  // the 3-D model live (the instrument also streams to hardware separately).
+  useEffect(
+    () =>
+      onServoDrive((byPin) => {
+        if (!robotRef.current) return
+        const updates: Record<string, number> = {}
+        for (const [pin, angle] of Object.entries(byPin)) {
+          const res = servoToJointNative(bindingsRef.current, metaRef.current, pin, angle)
+          if (!res) continue
+          robotRef.current.setJointValue(res.joint, res.native)
+          updates[res.joint] = res.native
+        }
+        if (Object.keys(updates).length > 0) setValues((v) => ({ ...v, ...updates }))
+      }),
+    []
+  )
 
   // Round-trip managed Motion Studio blocks (#413): when the user focuses a local
   // .py carrying Snakie-managed blocks in the full Robot View, read its pose
