@@ -3,6 +3,8 @@ import type { IpcResult } from '../device/types'
 import { PluginHost } from './PluginHost'
 import type {
   LintResult,
+  MotionCheckResult,
+  MotionReadResult,
   PluginContext,
   PluginListing,
   PluginStatus,
@@ -56,6 +58,12 @@ export function registerPluginsIpc(): void {
     wrap<LintResult>(() => h.lint(context))
   )
   ipcMain.handle('plugins:reload', () => wrap<PluginStatus>(() => h.reload()))
+  ipcMain.handle('plugins:motionRead', (_e, source: string) =>
+    wrap<MotionReadResult>(() => h.motionRead(source))
+  )
+  ipcMain.handle('plugins:motionCheck', (_e, source: string) =>
+    wrap<MotionCheckResult>(() => h.motionCheck(source))
+  )
 }
 
 /** Dispose the shared plugin host (call on app quit). */

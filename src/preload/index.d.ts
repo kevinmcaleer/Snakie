@@ -142,6 +142,8 @@ export type {
   Diagnostic,
   DiagnosticFix,
   LintResult,
+  MotionCheckResult,
+  MotionReadResult,
   RunCommandResult,
   PluginListing,
   PluginStatus

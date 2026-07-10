@@ -1,0 +1,15 @@
+board: raspberry-pi-pico
+parts:
+  - id: mx1508
+    lib: my-parts
+    part: mx1508
+    label: MX1508
+connections:
+  - id: board.GND#2__mx1508.GND#1
+    from: board.GND#2
+    to: mx1508.GND#1
+    net: gnd
+  - id: board.3V3#8__mx1508.VCC#0
+    from: board.3V3#8
+    to: mx1508.VCC#0
+    net: vcc
