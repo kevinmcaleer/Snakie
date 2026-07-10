@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Motion Studio — pose-step sequencer / walk cycles (#403, #415).** A new sequencer at the
+  bottom of the Robot View authors motion as an ordered list of **saved poses** — stand → lift
+  → step → plant — each with its own **duration** and **easing**, plus a **loop** toggle, instead
+  of a grid of per-joint keyframes (the keyframe timeline stays, unchanged). Play/pause, stop and
+  scrub against the 3-D model; add/reorder/remove steps inline. With a board connected and a servo
+  bound, a **Live** toggle streams each frame to the hardware so the physical robot mirrors the
+  preview (disconnect drops back to preview-only). Export writes the sequence into the managed
+  `SNAKIE_SEQUENCES` block (#413) — timed to match the `snakie_motion` runtime so hardware plays
+  exactly what you previewed.
 - **Motion Studio — Capture Pose, duplicate, and partial poses (#403, #414).** The Robot View
   pose editor becomes a proper authoring surface. **Capture Pose** snapshots the current live
   posture into a named pose — whether you posed it with the sliders **or** a running program's

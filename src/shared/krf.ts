@@ -23,9 +23,11 @@ import {
   type MirrorPair,
   type MotionEasing,
   type MotionKey,
+  type MotionSequence,
   type MotionTimeline,
   type MotionTrack,
   type NamedPose,
+  type PoseStep,
   type RobotDefinition,
   type RobotModel,
   type ServoJointBinding
@@ -109,6 +111,34 @@ function sanitiseTimeline(raw: unknown): MotionTimeline | undefined {
   }
   if (isFiniteNum(r.fps)) tl.fps = Math.max(1, Math.min(60, Math.round(r.fps)))
   return tl
+}
+
+/** Validate the pose-step sequences (#415); `undefined` when none are usable. A
+ *  step needs a pose name + a finite non-negative duration; a bad easing falls to
+ *  easeInOut; a step-less sequence is dropped. */
+function sanitiseSequences(raw: unknown): MotionSequence[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: MotionSequence[] = []
+  for (const s of raw) {
+    const r = (s ?? {}) as Record<string, unknown>
+    const steps: PoseStep[] = []
+    if (Array.isArray(r.steps)) {
+      for (const st of r.steps) {
+        const sr = (st ?? {}) as Record<string, unknown>
+        if (!isStr(sr.pose) || !sr.pose.trim()) continue
+        const duration = isFiniteNum(sr.duration) && sr.duration >= 0 ? sr.duration : 0
+        const step: PoseStep = { pose: sr.pose, duration }
+        step.easing = sr.easing === 'linear' ? 'linear' : 'easeInOut'
+        steps.push(step)
+      }
+    }
+    if (!steps.length) continue
+    const seq: MotionSequence = { loop: r.loop !== false, steps }
+    if (isStr(r.name) && r.name.trim()) seq.name = r.name.trim()
+    if (isFiniteNum(r.fps)) seq.fps = Math.max(1, Math.min(60, Math.round(r.fps)))
+    out.push(seq)
+  }
+  return out.length ? out : undefined
 }
 
 /** Validate the mirror pairs; `undefined` when none are usable. */
@@ -213,6 +243,9 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
 
   const tl = sanitiseTimeline(r.timeline)
   if (tl) model.timeline = tl
+
+  const sequences = sanitiseSequences(r.sequences)
+  if (sequences) model.sequences = sequences
 
   const mirror = sanitiseMirror(r.mirror)
   if (mirror) model.mirror = mirror

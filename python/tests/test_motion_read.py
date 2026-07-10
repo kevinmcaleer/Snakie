@@ -154,6 +154,20 @@ class MotionReadRobustnessTests(unittest.TestCase):
         self.assertTrue(res["ok"])
         self.assertEqual(res["poses"]["p"], {"good": 45.0})  # only the finite value
 
+    def test_sequence_step_keeps_an_optional_easing_third_element(self) -> None:
+        # #415 exports [pose, ms, easing]; the reader must carry the easing (and
+        # still accept the legacy 2-tuple form).
+        res = read(
+            "# --- snakie:sequences v1 ---\n"
+            'SNAKIE_SEQUENCES = { "walk": [ ["a", 0, "linear"], ["b", 500, "easeInOut"], ["c", 200] ] }\n'
+            "# --- snakie:sequences:end ---\n"
+        )
+        self.assertTrue(res["ok"])
+        self.assertEqual(
+            res["sequences"]["walk"],
+            [["a", 0.0, "linear"], ["b", 500.0, "easeInOut"], ["c", 200.0]],
+        )
+
     def test_boolean_values_are_rejected_not_coerced(self) -> None:
         # bool subclasses int; True must NOT become 1.0 in a numeric slot.
         res = read(

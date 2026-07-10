@@ -94,6 +94,43 @@ describe('sanitiseRobotModel — corruption-safe (#310)', () => {
     expect(m!.timeline!.tracks[0].keys.map((k) => k.t)).toEqual([0, 2]) // sorted, bad dropped
   })
 
+  it('sanitises pose sequences (#415): keeps valid steps, drops empties, defaults easing/loop', () => {
+    const m = sanitiseRobotModel({
+      sequences: [
+        {
+          name: '  walk  ',
+          loop: false,
+          fps: 999, // clamped to 60
+          steps: [
+            { pose: 'stand', duration: 1, easing: 'linear' },
+            { pose: 'lift', duration: -3 }, // negative → 0, easing defaults
+            { pose: '', duration: 1 }, // no pose → dropped
+            { duration: 2 } // no pose → dropped
+          ]
+        },
+        { steps: [] }, // no steps → whole sequence dropped
+        'junk'
+      ]
+    })
+    expect(m!.sequences).toHaveLength(1)
+    const seq = m!.sequences![0]
+    expect(seq.name).toBe('walk') // trimmed
+    expect(seq.loop).toBe(false)
+    expect(seq.fps).toBe(60)
+    expect(seq.steps).toEqual([
+      { pose: 'stand', duration: 1, easing: 'linear' },
+      { pose: 'lift', duration: 0, easing: 'easeInOut' }
+    ])
+  })
+
+  it('a sequences-only model round-trips (regression for the drop-on-save bug)', () => {
+    // Before the fix sanitiseRobotModel silently omitted `sequences`, so a robot with
+    // only a sequence saved+loaded as empty. It must survive.
+    const m = sanitiseRobotModel({ sequences: [{ loop: true, steps: [{ pose: 'a', duration: 0.5 }] }] })
+    expect(m).toBeDefined()
+    expect(m!.sequences![0].steps[0].pose).toBe('a')
+  })
+
   it('sanitises mirror pairs (#314)', () => {
     const m = sanitiseRobotModel({
       urdf: 'a.urdf',

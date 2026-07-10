@@ -21,6 +21,7 @@ import type {
   MotionTrack,
   ServoJointBinding
 } from './robot'
+import type { ManagedSequenceStep } from './managed-blocks'
 import { jointToServo } from './krf'
 
 /** Default preview / export sample rate. */
@@ -159,12 +160,31 @@ export function samplePoseSequence(
 }
 
 /**
- * Convert a sequence's steps to the managed-block form (#413):
- * `[[poseName, durationMs], …]` — seconds rounded to whole milliseconds, matching
- * the `snakie_motion.Rig.play` runtime and the `SNAKIE_SEQUENCES` literal.
+ * Convert a sequence's steps to the managed-block / runtime form (#413/#415):
+ * `[[poseName, durationMs, easing], …]`. The editor stores each step's duration as
+ * the OUTGOING segment (time to the next pose), but `snakie_motion.Rig.play`
+ * transitions INTO each step's pose over that step's duration. So each exported
+ * step's duration/easing is the PREVIOUS segment's — the one that reaches this
+ * pose — keeping hardware timing identical to the preview:
+ *  - one-shot: pose[0] is reached at 0 ms (start there); pose[k>0] over step[k-1].
+ *  - loop: pose[k] over step[k-1] (pose[0]'s incoming is the seam = the last step).
  */
-export function poseSequenceToManagedSteps(seq: MotionSequence): Array<[string, number]> {
-  return seq.steps.map((s) => [s.pose, Math.max(0, Math.round((s.duration || 0) * 1000))])
+export function poseSequenceToManagedSteps(seq: MotionSequence): ManagedSequenceStep[] {
+  const steps = seq.steps
+  const n = steps.length
+  if (n === 0) return []
+  const durMs = (s: number): number => Math.max(0, Math.round((s || 0) * 1000))
+  const easeOf = (i: number): MotionEasing => steps[i].easing ?? 'easeInOut'
+  if (n === 1) return [[steps[0].pose, 0, 'linear']]
+  if (seq.loop) {
+    return steps.map((s, i): ManagedSequenceStep => {
+      const prev = (i - 1 + n) % n
+      return [s.pose, durMs(steps[prev].duration), easeOf(prev)]
+    })
+  }
+  const out: ManagedSequenceStep[] = [[steps[0].pose, 0, 'linear']]
+  for (let i = 1; i < n; i++) out.push([steps[i].pose, durMs(steps[i - 1].duration), easeOf(i - 1)])
+  return out
 }
 
 // ── Editing ────────────────────────────────────────────────────────────────

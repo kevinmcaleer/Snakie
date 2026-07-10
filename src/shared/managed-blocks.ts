@@ -34,8 +34,9 @@ export const MANAGED_SCHEMA_VERSION = 1
 /** A saved pose in managed form: joint name → value (deg / mm), DISPLAY units. */
 export type ManagedPose = Record<string, number>
 
-/** A sequence step: a pose name held for a duration in milliseconds. */
-export type ManagedSequenceStep = [pose: string, durationMs: number]
+/** A sequence step in the exported form: a pose REACHED over `durationMs` from the
+ *  previous pose, with an optional easing (matching `snakie_motion.Rig.play`). */
+export type ManagedSequenceStep = [pose: string, durationMs: number, easing?: string]
 
 /**
  * The managed datasets. Every field is OPTIONAL: an absent field means "I don't

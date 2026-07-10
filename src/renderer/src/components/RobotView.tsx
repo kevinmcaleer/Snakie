@@ -1452,31 +1452,42 @@ export function RobotView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry the rest
   }, [playing])
 
-  // Update the timeline + schedule a debounced persist (drags/edits coalesce).
-  // The deferred save SNAPSHOTS the target folder and loads a FRESH def for it,
-  // writing only the timeline — so a folder switch within the 400 ms window can
-  // never write this timeline into a different project's robot.yml (data loss).
-  const commitTimeline = (next: MotionTimeline): void => {
-    timelineRef.current = next
-    setTimeline(next)
+  // Persist the motion state (keyframe timeline + pose sequence, #314/#415) with a
+  // SINGLE debounced, folder-snapshotting save. Both editors sit together at the
+  // bottom of the pose tool, so routing them through one saver (reading the latest
+  // refs) means a sequence edit can never clobber a concurrent timeline edit, or
+  // vice-versa. A field is written only once its own load-seed has run for this
+  // folder, so an early edit can't wipe a not-yet-loaded disk value; loading a
+  // FRESH def keeps a fast folder switch from writing into another project. defRef
+  // is kept in sync so a later persist() (poses/servos) never reverts motion.
+  const scheduleMotionSave = (): void => {
     const folder = currentFolder || undefined
+    const folderKey = currentFolder || ''
     pendingTimelineSave.current = async (): Promise<void> => {
       pendingTimelineSave.current = null
       try {
         const def = await window.api.robot.load(folder)
-        def.robot = { ...(def.robot ?? {}), timeline: next }
+        def.robot = { ...(def.robot ?? {}) }
+        if (timelineLoadedFolder.current === folderKey) def.robot.timeline = timelineRef.current
+        if (seqLoadedFolder.current === folderKey)
+          def.robot.sequences = sequenceRef.current.steps.length ? [sequenceRef.current] : []
         await window.api.robot.save(folder, def)
       } catch {
-        // best-effort — a keyframe save failing is non-fatal
+        // best-effort — a motion save failing is non-fatal
       }
     }
     if (timelineSaveTimer.current) clearTimeout(timelineSaveTimer.current)
-    timelineSaveTimer.current = setTimeout(() => {
-      void pendingTimelineSave.current?.()
-    }, 400)
+    timelineSaveTimer.current = setTimeout(() => void pendingTimelineSave.current?.(), 400)
   }
 
-  // Flush a pending timeline save on unmount so the last edit isn't lost (and the
+  const commitTimeline = (next: MotionTimeline): void => {
+    timelineRef.current = next
+    setTimeline(next)
+    if (defRef.current) defRef.current.robot = { ...(defRef.current.robot ?? {}), timeline: next }
+    scheduleMotionSave()
+  }
+
+  // Flush a pending motion save on unmount so the last edit isn't lost (and the
   // timer can't fire after unmount). Runs once.
   useEffect(
     () => () => {
@@ -1520,8 +1531,6 @@ export function RobotView({
   const seqPlayheadRef = useRef(0)
   const lastSeqPush = useRef(0)
   const lastLiveSend = useRef(0)
-  const seqSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pendingSeqSave = useRef<(() => Promise<void>) | null>(null)
   const seqLoadedFolder = useRef<string | null>(null)
   const seqLiveRef = useRef(false)
   sequenceRef.current = sequence
@@ -1612,33 +1621,16 @@ export function RobotView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry the rest
   }, [seqPlaying])
 
-  // Update the sequence + debounced persist (folder-snapshotting like commitTimeline,
-  // so a fast folder switch can't write it into another project's robot.yml).
+  // Update the sequence + persist via the shared motion saver (which also carries
+  // the timeline, so the two can't clobber each other). defRef is kept in sync so a
+  // later persist() (poses/servos) never reverts the sequence.
   const commitSequence = (next: MotionSequence): void => {
     sequenceRef.current = next
     setSequence(next)
-    const folder = currentFolder || undefined
-    pendingSeqSave.current = async (): Promise<void> => {
-      pendingSeqSave.current = null
-      try {
-        const def = await window.api.robot.load(folder)
-        def.robot = { ...(def.robot ?? {}), sequences: [next] }
-        await window.api.robot.save(folder, def)
-      } catch {
-        // best-effort — a sequence save failing is non-fatal
-      }
-    }
-    if (seqSaveTimer.current) clearTimeout(seqSaveTimer.current)
-    seqSaveTimer.current = setTimeout(() => void pendingSeqSave.current?.(), 400)
+    if (defRef.current)
+      defRef.current.robot = { ...(defRef.current.robot ?? {}), sequences: next.steps.length ? [next] : [] }
+    scheduleMotionSave()
   }
-  // Flush a pending sequence save on unmount (and stop the timer firing after).
-  useEffect(
-    () => () => {
-      if (seqSaveTimer.current) clearTimeout(seqSaveTimer.current)
-      void pendingSeqSave.current?.()
-    },
-    []
-  )
 
   const seqSeek = (t: number): void => {
     setSeqPlaying(false)

@@ -119,12 +119,35 @@ describe('samplePoseSequence (#415)', () => {
   })
 })
 
-describe('poseSequenceToManagedSteps (#415 → #413 block)', () => {
-  it('emits [pose, durationMs] with whole-ms rounding', () => {
+describe('poseSequenceToManagedSteps (#415 → #413 block, runtime INCOMING convention)', () => {
+  it('one-shot: pose[0] at 0ms, then each pose reached over the PRIOR step duration + easing', () => {
+    // Editor durations are OUTGOING (time to the next pose); the runtime moves INTO
+    // each pose over that step's duration, so a→b(0.5s) exports as b reached over 500ms.
     const s = seq({ steps: [
-      { pose: 'a', duration: 0.5 },
-      { pose: 'b', duration: 1.2345 }
+      { pose: 'a', duration: 0.5, easing: 'linear' },
+      { pose: 'b', duration: 1.2345, easing: 'easeInOut' }
     ] })
-    expect(poseSequenceToManagedSteps(s)).toEqual([['a', 500], ['b', 1235]])
+    expect(poseSequenceToManagedSteps(s)).toEqual([
+      ['a', 0, 'linear'],
+      ['b', 500, 'linear'] // reached over a's 0.5s with a's easing
+    ])
+  })
+
+  it('loop: each pose reached over the PREVIOUS segment (pose[0] over the seam = last step)', () => {
+    const s = seq({ loop: true, steps: [
+      { pose: 'a', duration: 1, easing: 'linear' },
+      { pose: 'b', duration: 2, easing: 'easeInOut' },
+      { pose: 'c', duration: 3, easing: 'linear' }
+    ] })
+    // a's incoming = c's segment (3000ms, linear); b's = a's (1000, linear); c's = b's (2000, smooth)
+    expect(poseSequenceToManagedSteps(s)).toEqual([
+      ['a', 3000, 'linear'],
+      ['b', 1000, 'linear'],
+      ['c', 2000, 'easeInOut']
+    ])
+  })
+
+  it('a single-step sequence exports as an instant hold', () => {
+    expect(poseSequenceToManagedSteps(seq({ steps: [{ pose: 'b', duration: 1 }] }))).toEqual([['b', 0, 'linear']])
   })
 })

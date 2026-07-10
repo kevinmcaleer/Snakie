@@ -147,8 +147,8 @@ export interface MotionReadResult {
   schema?: number
   /** pose name → { joint → value } (display units). */
   poses?: Record<string, Record<string, number>>
-  /** sequence name → [poseName, durationMs] steps. */
-  sequences?: Record<string, Array<[string, number]>>
+  /** sequence name → [poseName, durationMs, easing?] steps. */
+  sequences?: Record<string, Array<[string, number] | [string, number, string]>>
   /** Servo bindings (pin/joint required; camelCase like `ServoJointBinding`). */
   servos?: Array<{
     pin: string
