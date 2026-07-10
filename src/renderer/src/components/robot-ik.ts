@@ -55,7 +55,10 @@ export function solveCCD(
   const tgt = new THREE.Vector3(target[0], target[1], target[2])
   const pivots = joints.map((j) => new THREE.Vector3(j.pivot[0], j.pivot[1], j.pivot[2]))
   const axes = joints.map((j) => new THREE.Vector3(j.axis[0], j.axis[1], j.axis[2]).normalize())
-  const angles = joints.map((j) => j.angle)
+  // Start each joint at its CLAMPED current angle. A continuous joint driven past its
+  // ±range elsewhere (e.g. by unclamped live telemetry) must not snap on the first
+  // solve — clamping here keeps every applied delta a genuine incremental move.
+  const angles = joints.map((j) => Math.min(j.upper, Math.max(j.lower, j.angle)))
 
   const q = new THREE.Quaternion()
   const toEff = new THREE.Vector3()

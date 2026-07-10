@@ -3639,7 +3639,9 @@ export function RobotView({
             tool={buildTool}
             onSetTool={onSetTool}
             canEdit={canEdit}
-            canPose={movableNames.length > 0}
+            canPose={jointMeta.some(
+              (m) => !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')
+            )}
             onAdd={handleAddPrimitive}
             measureActive={measureActive}
             onToggleMeasure={() => setMeasureActive((a) => !a)}

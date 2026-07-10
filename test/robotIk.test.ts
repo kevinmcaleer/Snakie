@@ -64,8 +64,22 @@ describe('solveCCD — inverse kinematics (#410)', () => {
       { pivot: [1, 0, 0], axis: [0, 0, 1], angle: 0, lower: -Math.PI, upper: Math.PI },
       { pivot: [0, 0, 0], axis: [0, 0, 1], angle: 0, lower: -0.3, upper: 0.3 }
     ]
+    // The target [0,2,0] is at the arm's max reach straight up, which needs the base
+    // to turn well past +0.3 — so the base joint must be DRIVEN INTO its cap (not just
+    // left within it: a no-op solver would fail this).
     const angles = solveCCD(joints, EFFECTOR, [0, 2, 0], { iterations: 40 })
-    expect(angles[1]).toBeLessThanOrEqual(0.3 + 1e-9)
-    expect(angles[1]).toBeGreaterThanOrEqual(-0.3 - 1e-9)
+    expect(angles[1]).toBeCloseTo(0.3, 4) // pinned at the cap
+  })
+
+  it('clamps a joint whose CURRENT angle starts OUTSIDE its limits (no first-frame snap past the cap)', () => {
+    // A continuous joint driven to 4 rad (past its ±π range) elsewhere; the solver must
+    // treat it as starting at the clamped π, never return a value beyond the limit.
+    const joints: IkJoint[] = [
+      { pivot: [1, 0, 0], axis: [0, 0, 1], angle: 4, lower: -Math.PI, upper: Math.PI },
+      { pivot: [0, 0, 0], axis: [0, 0, 1], angle: 0, lower: -Math.PI, upper: Math.PI }
+    ]
+    const angles = solveCCD(joints, EFFECTOR, [1, 1, 0], { iterations: 20 })
+    expect(angles[0]).toBeLessThanOrEqual(Math.PI + 1e-9)
+    expect(angles[0]).toBeGreaterThanOrEqual(-Math.PI - 1e-9)
   })
 })
