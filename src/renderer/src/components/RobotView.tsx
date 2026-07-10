@@ -270,24 +270,14 @@ export function RobotView({
     if (name) setDialogCtx({ kind: 'pose', name })
   }
 
-  const handleRecallPose = (pose: NamedPoseLike): void => {
-    const nv = { ...valuesRef.current }
-    for (const m of metaRef.current) {
-      if (!m.isMimic && typeof pose.values[m.name] === 'number') {
-        const lim = effectiveLimit(m, overridesRef.current[m.name])
-        nv[m.name] = clamp(toNative(m.type, pose.values[m.name]), lim.lower, lim.upper)
-      }
-    }
-    applyToRobot(nv)
-    setValues(nv)
-  }
-
-  // Smoothly EASE the docked model from its current joints to a saved pose (#409),
-  // rather than snapping. Self-contained rAF (the scene renders every frame anyway),
-  // used only by the compact preview dropdown; the full pose tool's Recall stays
-  // instant. Re-picking mid-tween re-targets smoothly from the live joint angles.
+  // Recall a pose by smoothly EASING the model from its current joints to the saved
+  // ones (#409/#409-follow-up), rather than snapping — used EVERYWHERE a pose is
+  // selected (the compact preview dropdown, the Poses list, and the pose dialog's
+  // Recall). Self-contained rAF (the scene renders every frame anyway); re-picking
+  // mid-tween re-targets smoothly from the live joint angles. `values` is settled at
+  // the end so the sidebar sliders land on the pose.
   const poseTweenRef = useRef<number | null>(null)
-  const smoothRecallPose = (pose: NamedPoseLike): void => {
+  const handleRecallPose = (pose: NamedPoseLike): void => {
     const r = robotRef.current
     if (!r) return
     const target = { ...valuesRef.current }
@@ -3417,7 +3407,7 @@ export function RobotView({
             value=""
             onChange={(e) => {
               const p = dockPoses.find((x) => x.name === e.target.value)
-              if (p) smoothRecallPose(p)
+              if (p) handleRecallPose(p)
             }}
             title="Preview a saved pose"
             aria-label="Preview a saved pose"

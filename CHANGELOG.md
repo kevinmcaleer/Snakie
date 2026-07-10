@@ -60,6 +60,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Robot View — poses ease smoothly everywhere (#399).** Selecting a saved pose now
+  **eases** the robot from its current position to the new one (≈0.4 s) instead of snapping —
+  not just in the docked mini viewer but also in the full pose tool's Poses list and the
+  pose dialog's **Recall**. Re-picking mid-transition re-targets smoothly.
 - **Robot View — clearer snap targets when joining parts (#399).** Adding a joint now draws
   each snap candidate with a **role-distinct glyph** (corner = square, edge = diamond, centre =
   dot, hole = ring) instead of identical dots, emphasises the one you're about to land on, and
