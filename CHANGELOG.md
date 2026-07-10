@@ -109,6 +109,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **`Servo` accepts a PWM you made yourself.** The bundled SG90 driver's `Servo(...)` now takes a
+  GPIO number, a `Pin`, **or** an already-made `PWM` — so `base_pwm = PWM(Pin(0)); base = Servo(base_pwm)`
+  works and the code reads `pin → PWM → Servo → joint`, mirroring how a servo connects to the model.
+  A bare pin is still wrapped for you; a PWM is used (and shared) as-is.
 - **Exported motion is plain-MicroPython pin → variable setup.** The Robot View's exported motion
   code now sets each servo up as a pure `<joint>_servo = PWM(Pin(n))` followed by
   `<joint> = Servo(<joint>_servo, pin=n)` — servos are named by the joint they drive, so the code
