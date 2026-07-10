@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Motion Studio — Capture Pose, duplicate, and partial poses (#403, #414).** The Robot View
+  pose editor becomes a proper authoring surface. **Capture Pose** snapshots the current live
+  posture into a named pose — whether you posed it with the sliders **or** a running program's
+  servos are driving the model (`SNK SERVO` telemetry back-drives the joints, and a **Live ●**
+  hint shows when they are). **Duplicate** copies a pose under a unique "*name* copy" without
+  touching the original. And poses can now be **partial**: tick only the joints a pose should
+  capture (e.g. a face-only wave) and the rest are left exactly where they are when you recall
+  it. The pose library keeps its rename / delete / preview. `NamedPose[]` stays the single
+  source the managed-block round-trip (#413) reads.
 - **Motion Studio — an exported `.py` round-trips its poses & servo map (#403, #413).** The
   Robot View's exported motion file now carries Snakie's pose library, sequences and servo map
   in **guarded, versioned managed blocks** (`# --- snakie:poses v1 ---` … `:end`), written as

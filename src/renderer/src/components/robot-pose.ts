@@ -150,6 +150,66 @@ export function servoToJointNative(
 }
 
 /**
+ * Capture the current live posture as a pose's stored values (#414): each
+ * movable, non-mimic joint's NATIVE value converted to DISPLAY units (deg/mm)
+ * and rounded to 2dp, matching KRF `NamedPose`. When `include` is given the pose
+ * is PARTIAL — only those joints are written, so a face-only pose leaves the legs
+ * out of `values` entirely (and recall then leaves them alone). Mimic joints are
+ * never captured (they follow their master).
+ */
+export function capturePoseValues(
+  meta: JointMeta[],
+  valuesNative: Record<string, number>,
+  include?: Iterable<string>
+): Record<string, number> {
+  const inc = include ? new Set(include) : null
+  const out: Record<string, number> = {}
+  for (const m of meta) {
+    if (m.isMimic) continue
+    if (inc && !inc.has(m.name)) continue
+    out[m.name] = Number(toDisplay(m.type, valuesNative[m.name] ?? 0).toFixed(2))
+  }
+  return out
+}
+
+/**
+ * The NATIVE target values for recalling a pose onto the model (#414): each
+ * movable joint the pose lists is clamped into its effective limits; a joint the
+ * pose OMITS (a partial pose) keeps its `current` value — so recalling a
+ * face-only pose never disturbs the legs. Mimic joints follow their master and
+ * are left out.
+ */
+export function poseTargetNative(
+  meta: JointMeta[],
+  current: Record<string, number>,
+  poseValues: Record<string, number>,
+  overrides: Record<string, { min?: number; max?: number }> = {}
+): Record<string, number> {
+  const target = { ...current }
+  for (const m of meta) {
+    if (m.isMimic) continue
+    if (typeof poseValues[m.name] !== 'number') continue // partial: leave this joint alone
+    const lim = effectiveLimit(m, overrides[m.name])
+    target[m.name] = clamp(toNative(m.type, poseValues[m.name]), lim.lower, lim.upper)
+  }
+  return target
+}
+
+/**
+ * A unique "<base> copy" name for duplicating a pose (#414) — `Wave` → `Wave
+ * copy`, then `Wave copy 2`, `Wave copy 3`… — never colliding with an existing
+ * pose so a duplicate can't clobber the original or another entry.
+ */
+export function uniquePoseName(base: string, existing: Iterable<string>): string {
+  const taken = new Set(existing)
+  const first = `${base} copy`
+  if (!taken.has(first)) return first
+  let n = 2
+  while (taken.has(`${base} copy ${n}`)) n++
+  return `${base} copy ${n}`
+}
+
+/**
  * The EFFECTIVE native limits for a joint: the URDF limits, overridden by any
  * in-app min/max (stored in KRF as display units — deg/mm).
  */

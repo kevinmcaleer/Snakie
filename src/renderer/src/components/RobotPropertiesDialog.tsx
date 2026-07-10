@@ -88,13 +88,20 @@ export interface RobotPropertiesDialogProps {
   onRecallPose: (pose: NamedPoseLike) => void
   onRenamePose: (oldName: string, newName: string) => void
   onDeletePose: (name: string) => void
+  /** Duplicate a pose under a unique "<name> copy" name (#414). */
+  onDuplicatePose: (name: string) => void
+  /** True while a running program's servo telemetry is driving a mapped joint —
+   *  the pose editor shows a "Live ●" hint that a Capture reads that posture (#414). */
+  poseLive?: boolean
   /** The movable joints + live values, so the pose editor can pose the robot with
    *  sliders (the retired pose sidebar's controls moved here — #312). */
   jointMeta: JointMeta[]
   values: Record<string, number>
   overrides: Record<string, { min?: number; max?: number }>
   onJointChange: (name: string, native: number) => void
-  onSavePose: (name: string) => void
+  /** Capture the live posture as a pose. `include` (when given) writes only those
+   *  joints — a PARTIAL pose that leaves the rest untouched on recall (#414). */
+  onSavePose: (name: string, include?: string[]) => void
   onResetPose: () => void
   // addjoint (#354 — pick two points in 3-D)
   /** The Add Joint pick state (which block/point is Component 1 / 2), driven by
@@ -247,6 +254,14 @@ export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.El
               onClick={() => props.pose && props.onRecallPose(props.pose)}
             >
               Recall
+            </button>
+            <button
+              type="button"
+              className="robotprops__btn"
+              onClick={() => props.onDuplicatePose(context.name)}
+              title="Copy this pose under a new name"
+            >
+              Duplicate
             </button>
             <button
               type="button"
@@ -516,7 +531,9 @@ function PoseNum({
  *  it first, so the sliders start on its saved values. */
 function PoseBody({
   name,
+  pose,
   poseNames,
+  poseLive,
   onRenamePose,
   jointMeta,
   values,
@@ -533,20 +550,36 @@ function PoseBody({
   const trimmed = draftName.trim()
   // A name that already belongs to a DIFFERENT pose would overwrite it.
   const clash = trimmed !== name && poseNames.includes(trimmed)
+  const movable = jointMeta.filter((j) => !j.isMimic)
+  const mimics = jointMeta.filter((j) => j.isMimic)
+
+  // Which joints this capture INCLUDES (#414). Default: all movable joints on;
+  // when editing an existing PARTIAL pose, start from the joints it actually
+  // stored so re-capturing keeps its shape.
+  const [included, setIncluded] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {}
+    const saved = pose?.values
+    for (const j of movable) init[j.name] = saved ? Object.prototype.hasOwnProperty.call(saved, j.name) : true
+    return init
+  })
+  const includedNames = movable.filter((j) => included[j.name] !== false).map((j) => j.name)
+  const allIncluded = includedNames.length === movable.length
+  const partial = includedNames.length > 0 && !allIncluded
+
   // Save the current joint values as this pose. For an EXISTING pose the values are
   // saved under its ORIGINAL name (so a name-field edit never duplicates it); the
   // rename is a separate op via OK. For a NEW pose, Save creates it under the name.
+  // Only the INCLUDED joints are written (a partial pose); when all are on we pass
+  // no filter so the stored shape stays "full".
   const saveValues = (): void => {
-    if (name || trimmed) onSavePose(name || trimmed)
+    if (name || trimmed) onSavePose(name || trimmed, allIncluded ? undefined : includedNames)
   }
   // Footer OK: save a NEW pose (else it'd discard silently), or rename an EXISTING
   // pose whose name was changed. (Editing an existing pose's values is the Save button.)
   commitRef.current = () => {
-    if (!name && trimmed) onSavePose(trimmed)
+    if (!name && trimmed) onSavePose(trimmed, allIncluded ? undefined : includedNames)
     else if (name && trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
   }
-  const movable = jointMeta.filter((j) => !j.isMimic)
-  const mimics = jointMeta.filter((j) => j.isMimic)
   return (
     <>
       <section className="robotprops__section">
@@ -569,6 +602,26 @@ function PoseBody({
       <section className="robotprops__section">
         <div className="robotprops__poserow">
           <span className="robotprops__label">Joints — drag to pose</span>
+          {poseLive && (
+            <span className="robotprops__live" title="A running program's servos are driving these joints — Capture reads the live posture">
+              <span className="robotprops__live-dot" aria-hidden="true" />
+              Live
+            </span>
+          )}
+          <span className="robotprops__foot-spacer" />
+          {movable.length > 1 && (
+            <button
+              type="button"
+              className="robotprops__chip"
+              onClick={() => {
+                const next = !allIncluded
+                setIncluded(Object.fromEntries(movable.map((j) => [j.name, next])))
+              }}
+              title={allIncluded ? 'Exclude all joints (then pick which to capture)' : 'Include every joint'}
+            >
+              {allIncluded ? 'None' : 'All'}
+            </button>
+          )}
           <button
             type="button"
             className="robotprops__chip"
@@ -578,6 +631,12 @@ function PoseBody({
             Reset
           </button>
         </div>
+        {partial && (
+          <p className="robotprops__note">
+            Partial pose — only the {includedNames.length} ticked joint
+            {includedNames.length > 1 ? 's' : ''} will be captured; the rest stay where they are on recall.
+          </p>
+        )}
         {movable.length === 0 ? (
           <p className="robotprops__note">This robot has no movable joints.</p>
         ) : (
@@ -588,9 +647,18 @@ function PoseBody({
               const dUpper = toDisplay(j.type, lim.upper)
               const dVal = toDisplay(j.type, values[j.name] ?? 0)
               const step = j.type === 'prismatic' ? 0.5 : 1
+              const inc = included[j.name] !== false
               return (
-                <div className="robotprops__poj" key={j.name}>
+                <div className={`robotprops__poj${inc ? '' : ' robotprops__poj--excluded'}`} key={j.name}>
                   <div className="robotprops__poj-head">
+                    <label className="robotprops__poj-inc" title={inc ? 'Included in this pose' : 'Excluded — left untouched on recall'}>
+                      <input
+                        type="checkbox"
+                        checked={inc}
+                        onChange={(e) => setIncluded((prev) => ({ ...prev, [j.name]: e.target.checked }))}
+                        aria-label={`Include ${j.name}`}
+                      />
+                    </label>
                     <span className="robotprops__poj-name" title={j.name}>
                       {j.name}
                     </span>
@@ -640,17 +708,19 @@ function PoseBody({
         <button
           type="button"
           className="robotprops__btn robotprops__btn--ok robotprops__savepose"
-          disabled={!(name || trimmed)}
+          disabled={!(name || trimmed) || includedNames.length === 0}
           onClick={saveValues}
           title={
-            name
-              ? `Save the current joint values to “${name}” (rename via OK)`
-              : trimmed
-                ? 'Save the current joint values as this pose'
-                : 'Name the pose first'
+            includedNames.length === 0
+              ? 'Tick at least one joint to capture'
+              : name
+                ? `Capture the current posture into “${name}” (rename via OK)`
+                : trimmed
+                  ? 'Capture the current posture as this pose'
+                  : 'Name the pose first'
           }
         >
-          {name ? 'Save pose' : 'Save new pose'}
+          {name ? 'Capture Pose' : 'Capture new pose'}
         </button>
       </section>
     </>
