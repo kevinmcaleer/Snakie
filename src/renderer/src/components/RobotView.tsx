@@ -379,10 +379,14 @@ export function RobotView({
     const next = poses.filter((p) => p.name !== name)
     setPoses(next)
     // Degrade any puppet control that referenced this pose: drop the ref (#416). A
-    // control that falls below 2 poses stays but is disabled in the UI, never throws.
+    // control left with <2 poses can't blend and (unlike the sanitiser's silent
+    // drop on reload) has no UI to recover, so remove it outright — in-memory and
+    // persisted state stay in step. Never throws.
     const cur = controlsRef.current
-    const pruned = cur.map((c) => ({ ...c, poses: c.poses.filter((p) => p !== name) }))
-    const controlsChanged = pruned.some((c, i) => c.poses.length !== cur[i].poses.length)
+    const pruned = cur
+      .map((c) => ({ ...c, poses: c.poses.filter((p) => p !== name) }))
+      .filter((c) => c.poses.length >= 2)
+    const controlsChanged = pruned.length !== cur.length || pruned.some((c, i) => c.poses.length !== cur[i].poses.length)
     if (controlsChanged) setControls(pruned)
     void persist((m) => {
       m.poses = next
@@ -1574,6 +1578,15 @@ export function RobotView({
   controlsRef.current = controls
   const [controlVals, setControlVals] = useState<Record<string, number>>({}) // id → t (0..1)
   const controlIdSeq = useRef(0) // in-session counter for collision-free control ids
+  // Board streaming for puppet controls is EXPLICITLY armed (like the sequencer's
+  // Live), so dragging a slider previews on the model without surprising the
+  // hardware until the user opts in.
+  const [controlsLive, setControlsLive] = useState(false)
+  const controlsLiveRef = useRef(false)
+  controlsLiveRef.current = controlsLive
+  // Trailing-edge flush for streamServos so the final drag position always lands.
+  const pendingServoSend = useRef<string | null>(null)
+  const servoFlushTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const deviceStatus = useDeviceStatus()
   const canSeqLive = deviceStatus.state === 'connected' && bindings.length > 0
@@ -1581,7 +1594,10 @@ export function RobotView({
   // is on, drop back to preview-only rather than streaming into the void.
   useEffect(() => {
     if (!canSeqLive && seqLive) setSeqLive(false)
-  }, [canSeqLive, seqLive])
+    if (!canSeqLive && controlsLive) setControlsLive(false)
+  }, [canSeqLive, seqLive, controlsLive])
+  // Stop the trailing-flush timer firing after unmount.
+  useEffect(() => () => void (servoFlushTimer.current && clearTimeout(servoFlushTimer.current)), [])
 
   // Stream a DISPLAY-unit pose's servo angles to a connected board over the reverse
   // SNKCMD control channel (#415/#416): one "SNKCMD servos <pin>:<deg> …" line — a
@@ -1590,16 +1606,38 @@ export function RobotView({
   // is swallowed so preview never breaks. Shared by the sequence Live preview and
   // the puppet-control drag.
   const streamServos = (display: Record<string, number>): void => {
-    const now = performance.now()
-    if (now - lastLiveSend.current < 40) return // ~25 Hz cap on serial writes
-    lastLiveSend.current = now
     const byPin: Record<string, number> = {}
     for (const b of bindingsRef.current) {
       const disp = display[b.joint]
       if (typeof disp === 'number') byPin[b.pin] = jointToServo(b, disp)
     }
     const payload = buildServosPayload(byPin)
-    if (payload) void window.api.device.sendControl('servos', payload).catch(() => undefined)
+    if (!payload) return
+    const send = (p: string): void => void window.api.device.sendControl('servos', p).catch(() => undefined)
+    const now = performance.now()
+    if (now - lastLiveSend.current >= 40) {
+      // Leading edge — send now, cancel any queued trailing flush (it's superseded).
+      lastLiveSend.current = now
+      if (servoFlushTimer.current) {
+        clearTimeout(servoFlushTimer.current)
+        servoFlushTimer.current = null
+      }
+      send(payload)
+    } else {
+      // Throttled — remember the LATEST and schedule a trailing flush so the final
+      // slider position (on drag-release) always lands on the board, never one stale.
+      pendingServoSend.current = payload
+      if (!servoFlushTimer.current) {
+        servoFlushTimer.current = setTimeout(() => {
+          servoFlushTimer.current = null
+          if (pendingServoSend.current) {
+            lastLiveSend.current = performance.now()
+            send(pendingServoSend.current)
+            pendingServoSend.current = null
+          }
+        }, 40)
+      }
+    }
   }
 
   // Apply a sampled sequence frame (mirrors auto-follow); `commitState` syncs the
@@ -1607,7 +1645,7 @@ export function RobotView({
   const applySequenceAt = (t: number, commitState = false): void => {
     const sampled = samplePoseSequence(sequenceRef.current, posesByNameRef.current, t)
     applyDisplayPose(sampled, commitState)
-    if (seqLiveRef.current) streamServos(sampled)
+    if (seqLiveRef.current && robotRef.current) streamServos(sampled)
   }
 
   // rAF playback loop (mirrors the timeline's at :1410) — drives setJointValue each
@@ -1710,7 +1748,7 @@ export function RobotView({
     setSeqPlaying(false)
     const display = sampleControl(c, posesByNameRef.current, t)
     applyDisplayPose(display, true)
-    if (canSeqLive) streamServos(display)
+    if (controlsLiveRef.current) streamServos(display) // only when board streaming is armed
   }
   const handleCreateControl = (name: string, posesSel: string[]): void => {
     if (!name.trim() || posesSel.length < 2) return
@@ -4246,7 +4284,9 @@ export function RobotView({
           controls={controls}
           poses={poses}
           values={controlVals}
-          live={canSeqLive}
+          live={controlsLive}
+          canLive={canSeqLive}
+          onToggleLive={() => setControlsLive((v) => !v)}
           onChange={handleControlChange}
           onCreate={handleCreateControl}
           onRename={handleRenameControl}

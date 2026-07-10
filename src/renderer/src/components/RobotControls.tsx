@@ -17,8 +17,11 @@ export interface RobotControlsProps {
   poses: NamedPose[]
   /** Current slider position per control id (0..1). */
   values: Record<string, number>
-  /** Whether a board is streaming (shows a Live hint on the panel). */
+  /** Board streaming is ARMED (dragging a slider also moves the physical servos). */
   live: boolean
+  /** A board is connected + a servo is bound (else Live can't be armed). */
+  canLive: boolean
+  onToggleLive: () => void
   onChange: (id: string, t: number) => void
   onCreate: (name: string, poses: string[]) => void
   onRename: (id: string, name: string) => void
@@ -30,6 +33,8 @@ export function RobotControls({
   poses,
   values,
   live,
+  canLive,
+  onToggleLive,
   onChange,
   onCreate,
   onRename,
@@ -56,12 +61,18 @@ export function RobotControls({
     <div className="robotctl" aria-label="Puppet controls">
       <div className="robotctl__bar">
         <span className="robotctl__title">Controls</span>
-        {live && (
-          <span className="robotctl__live" title="Streaming to the connected board">
-            <span className="robotctl__live-dot" aria-hidden="true" />
-            Live
-          </span>
-        )}
+        <label
+          className={`robotctl__live${live ? ' is-on' : ''}`}
+          title={
+            canLive
+              ? 'Stream slider drags to the connected board (SNKCMD servos)'
+              : 'Connect a board and bind a servo to drive it live'
+          }
+        >
+          <input type="checkbox" checked={live} onChange={onToggleLive} disabled={!canLive} />
+          <span className="robotctl__live-dot" aria-hidden="true" />
+          Live
+        </label>
         <span className="robotctl__spacer" />
         <button
           type="button"
@@ -141,8 +152,15 @@ export function RobotControls({
               <div className="robotctl__ctl-head">
                 <input
                   className="robotctl__ctl-name"
-                  value={c.name}
-                  onChange={(e) => onRename(c.id, e.target.value)}
+                  // Uncontrolled + commit on blur/Enter (keyed by id so it never
+                  // remounts on rename) so we don't serialize robot.yml per keystroke.
+                  key={c.id}
+                  defaultValue={c.name}
+                  onBlur={(e) => {
+                    const v = e.target.value.trim()
+                    if (v && v !== c.name) onRename(c.id, v)
+                  }}
+                  onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
                   aria-label={`Rename ${c.name}`}
                 />
                 <span className="robotctl__ctl-poses" title={c.poses.join(' → ')}>

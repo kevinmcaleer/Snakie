@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Motion Studio — puppet controls (#403, #416).** A Controls panel in the Robot View lets you
+  build a named **slider** from two or more saved poses. Dragging it smoothly blends between the
+  ordered poses and drives the live 3-D model in real time — one slider can sweep the eyes, morph
+  a smile→frown, or play a stride. Arm **Live** (board connected + a servo bound) and the same drag
+  streams to the physical servos too. Create a control by naming it and picking its poses in order;
+  rename or delete controls, and pose renames/deletes cascade through them safely. Completes the
+  Motion Studio epic (runtime · round-trip · pose authoring · sequences · controls).
 - **Motion Studio — pose-step sequencer / walk cycles (#403, #415).** A new sequencer at the
   bottom of the Robot View authors motion as an ordered list of **saved poses** — stand → lift
   → step → plant — each with its own **duration** and **easing**, plus a **loop** toggle, instead
