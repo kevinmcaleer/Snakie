@@ -1432,6 +1432,12 @@ export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef
   const selIsServo = !!selPart && isServoPart(selPart.partDef)
   const selServoGpio = selIsServo && selPart ? servoBoardGpio(selPart.key, robot.connections) : null
   const selServoJoint = selServoGpio ? boundJoint(robot.robot?.servoJointMap, selServoGpio) : null
+  // The joints the picker offers: the URDF's joints, plus the current binding if
+  // it's an ORPHAN (a saved joint the URDF no longer has), so a bound servo always
+  // shows its joint — matching the URDF editor's servo list (avoids the "editor
+  // shows base_joint, board shows nothing" disconnect).
+  const selServoJointChoices =
+    selServoJoint && !joints.includes(selServoJoint) ? [selServoJoint, ...joints] : joints
   const setServoJoint = (joint: string): void => {
     if (!selServoGpio) return
     onChange({
@@ -1686,7 +1692,7 @@ export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef
                     <span className="wc__parttb-note" title="Wire this servo's signal pin to a microcontroller GPIO to bind it to a joint">
                       ⚡ wire signal
                     </span>
-                  ) : joints.length === 0 ? (
+                  ) : selServoJointChoices.length === 0 ? (
                     <span className="wc__parttb-note" title="No joints yet — add them in the 3-D Robot View">
                       GP{selServoGpio} · no joints
                     </span>
@@ -1708,7 +1714,7 @@ export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef
                         onChange={(e) => setServoJoint(e.target.value)}
                       >
                         <option value="">GP{selServoGpio} → (none)</option>
-                        {joints.map((j) => (
+                        {selServoJointChoices.map((j) => (
                           <option key={j} value={j}>
                             {j}
                           </option>

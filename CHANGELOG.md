@@ -461,6 +461,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Servo "drives joint" picker works in the in-window board pane.** In the main window's
+  breadboard view, clicking a servo always showed "GPn · no joints" even when the linked rig had
+  joints — because that pane never loaded the URDF's joint names (only the pop-out Board *window*
+  did). It now reads the linked `.urdf`'s joints like the pop-out, so you can bind a servo to a
+  joint from either place. The picker also keeps showing a servo's current joint even if that
+  joint was renamed/removed from the URDF (an orphan binding), instead of silently blanking —
+  matching the URDF editor's servo list.
 - **Robot View — the 3-D view keeps its camera when you switch editor tabs (#399).**
   Flipping to another file tab and back used to reset the robot to the default framing,
   losing your orbit. Two causes: orbiting/panning wasn't recorded (only the zoom/home/fit
