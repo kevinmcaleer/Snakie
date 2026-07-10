@@ -77,11 +77,43 @@ target. ``control`` stores the LATEST payload per target; poll it in your loop::
 
 import sys
 
+# Real machine.Pin / machine.PWM on a board; tiny no-op stubs under CPython (the
+# Snakie simulator runs exported device code headless). Re-exported so generated
+# code can fall back to `from instruments import Pin, PWM` and still run in the
+# simulator, where the Servo emits SNK telemetry to drive the 3-D model anyway.
+try:
+    from machine import Pin, PWM  # noqa: F401 - re-exported for generated code
+except ImportError:  # pragma: no cover - CPython simulator has no `machine`
+
+    class Pin:  # noqa: N801 - mirror machine.Pin's name
+        OUT = 1
+        IN = 0
+
+        def __init__(self, n, *args, **kwargs):
+            self.id = n
+
+        def value(self, *args):
+            return 0
+
+    class PWM:  # noqa: N801 - mirror machine.PWM's name
+        def __init__(self, pin, *args, **kwargs):
+            self.pin = pin
+
+        def freq(self, *args):
+            return 50
+
+        def duty_u16(self, *args):
+            return 0
+
+        def deinit(self):
+            pass
+
+
 # Library version. Bump this on ANY change to this file — the IDE compares it
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.9.0"
+__version__ = "0.9.1"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -1503,8 +1535,18 @@ class Servo:
         # Robot View can drive the mapped URDF joint (#313). Set here works even
         # with no ``machine`` (the simulator), so headless robots still animate.
         self.pin = None
-        if pin is not None:
-            self.set_pin(pin)
+        if pwm is not None:
+            # A hand-built ``PWM(Pin(n))`` may not be at the servo frequency — set
+            # it so ``Servo(PWM(Pin(n)))`` from generated code works electrically.
+            try:
+                pwm.freq(freq)
+            except Exception:  # noqa: BLE001 - a fake/odd PWM without freq() is fine
+                pass
+            # ``Servo(pwm, pin=n)`` remembers the GPIO for SNK SERVO telemetry.
+            if pin is not None:
+                self.pin = int(pin)
+        elif pin is not None:
+            self.set_pin(pin)  # build the PWM from the pin
 
     def set_pin(self, n):
         """(Re)target the PWM pin: build ``PWM(Pin(n))`` at 50 Hz (no-op w/o hw)."""
