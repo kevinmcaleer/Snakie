@@ -60,6 +60,30 @@ const ANCHOR = (
     />
   </svg>
 )
+// Row type glyphs (#): tell a MESH-backed link apart from a primitive/block at a
+// glance — a little triangle-mesh vs a cube, sat between the elbow and the pencil.
+const MESH_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+    <path
+      d="M8 2.2l5.6 9.6H2.4z M8 2.2v9.6 M4.9 8.6h6.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+const CUBE_ICON = (
+  <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+    <path
+      d="M8 2.3l5.4 3.1v5.2L8 13.7 2.6 10.6V5.4z M2.6 5.4L8 8.5l5.4-3.1 M8 8.5v5.2"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
 
 export interface RobotBuildPanelProps {
   open: boolean
@@ -506,6 +530,13 @@ function ChainRow({
         >
           {node.isBase ? ANCHOR : null}
         </span>
+        <span
+          className="robotbuild__typeicon"
+          title={node.kind === 'mesh' ? 'Mesh part' : 'Primitive block'}
+          aria-hidden="true"
+        >
+          {node.kind === 'mesh' ? MESH_ICON : CUBE_ICON}
+        </span>
         <button
           type="button"
           className={`robotbuild__edit${isEdit ? ' is-on' : ''}`}
@@ -529,10 +560,10 @@ function ChainRow({
           <button
             type="button"
             className={`robotbuild__jtype${activeJoint === node.joint.name ? ' is-on' : ''}`}
-            title={`${node.joint.name} — click to edit (parent: ${node.joint.parent})`}
+            title={`Joint “${node.joint.name}” · ${jointTypeLabel(node.joint.type)} · parent ${node.joint.parent} — click to edit`}
             onClick={() => onOpenJoint(node.link, node.joint!.name)}
           >
-            {jointTypeLabel(node.joint.type)}
+            {node.joint.name}
           </button>
         ) : node.loose ? (
           <span className="robotbuild__loose-tag" title="Not connected to the base — open it and pick a parent">

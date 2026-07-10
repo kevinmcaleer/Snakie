@@ -95,6 +95,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Robot View — clearer, self-sizing Build hierarchy.** Each row in the Chain tree now shows a
+  **type glyph** (a mesh triangle vs a primitive cube) between the tree connector and the pencil,
+  and the joint tag shows the **joint name** (e.g. `shoulder`) instead of just its type — so it
+  matches the joint names in the Servos list and the pose editor. The panel now **sizes to its
+  longest row** (name + indentation) and truncates anything past **a third of the screen**, and it
+  only grows down to the top of the bottom-left help hint — the **Open** / **+ STL / DAE** buttons
+  no longer sit over it; the list scrolls instead.
 - **Robot View — Motion Studio tools share one collapsible dock (#403).** The keyframe timeline,
   pose sequencer and puppet controls no longer stack as three full-width bars crowding the bottom
   of the screen. They're now **tabs in a single dock** — pick **Keyframes / Sequence / Controls**,

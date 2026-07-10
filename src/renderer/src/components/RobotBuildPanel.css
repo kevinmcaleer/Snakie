@@ -30,15 +30,17 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  /* Size to fit its contents (capped), so it never overlaps the Help hint in the
-     bottom-left; the parts list scrolls if the robot has more blocks than fit. */
-  max-height: calc(100% - 1rem);
+  /* Grow only to the top of the bottom-left Help hint (`.robotview__hud`, ~2.7rem
+     tall) + the foot buttons: leave that much clearance so the buttons never sit
+     over the hint; the parts list scrolls past that. */
+  max-height: calc(100% - 3.25rem);
   z-index: 4;
-  /* A little wider so STL-derived link names (e.g. left_shoulder_bracket_v3, plus
-     _2/_3 suffixes) read without the ellipsis; capped viewport-relative so on narrow
-     windows the floating dock still only claims a modest slice of the 3-D stage (#408). */
-  width: 17.5rem;
-  max-width: min(18rem, 42vw);
+  /* Fit the widest row (a long STL-derived link name + its indentation), capped at
+     a THIRD of the screen — beyond that, row labels truncate (ellipsis) rather than
+     let the floating dock swallow the 3-D stage. */
+  width: max-content;
+  min-width: 13rem;
+  max-width: 33vw;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -114,8 +116,25 @@
 .robotbuild__rowbase.is-base {
   color: var(--accent-ink);
 }
+/* Type glyph between the elbow and the pencil: a mesh triangle vs a primitive cube,
+   so meshes and blocks read apart at a glance. */
+.robotbuild__typeicon {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #8b919b);
+  opacity: 0.8;
+}
+.robotbuild__typeicon svg {
+  display: block;
+}
 .robotbuild__hint {
   margin: 0;
+  /* Cap + wrap so a full-sentence hint doesn't drag the max-content dock out to its
+     full 1/3-screen width; the tree rows decide the width instead. */
+  max-width: 15rem;
   font-size: 0.56rem;
   color: var(--text-muted, #8b919b);
 }
@@ -267,7 +286,12 @@
   line-height: 1;
 }
 .robotbuild__jtype {
-  flex: 0 0 auto;
+  /* Shows the JOINT NAME (so it matches the servo/pose joint refs); can shrink +
+     ellipsis so a long joint name doesn't crowd out the link label. */
+  flex: 0 1 auto;
+  max-width: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
   margin-left: 0.25rem;
   padding: 0.05rem 0.32rem;
