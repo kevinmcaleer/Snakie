@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`snakie` — a friendly hardware module.** Board code can now `from snakie import Servo, Buzzer,
+  Led, Pin, PWM` — the *hardware* classes, under a clear, collision-proof name (a vendor `servo`
+  module, e.g. Pimoroni's frozen one, can't shadow it). It's a thin re-export of the on-device
+  runtime, so `snakie.Servo` *is* `instruments.Servo`; the measurement tools (scope/meter/plotter)
+  stay in `instruments`. Snakie installs `/lib/snakie.py` alongside `instruments.py` when you install
+  or update the board library, so `from snakie import …` just works.
 - **Poses instrument — a live servo test bench.** A new dock instrument reads your rig's
   servo↔joint map and saved poses from `robot.yml` and gives two quick ways to move the servos:
   **pose buttons** glide every bound servo smoothly into a saved pose (eased, applying each servo's
