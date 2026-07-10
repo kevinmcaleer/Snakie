@@ -107,12 +107,15 @@ export function registerRobotIpc(): void {
 
   // Import an STL/DAE mesh into the robot's KRF folder (#309): a native picker,
   // then copy the chosen file into `<urdf-folder>/meshes/`. The renderer wires
-  // the returned relative path into the URDF. The copy is binary-safe.
+  // the returned relative path into the URDF. The copy is binary-safe. With an
+  // explicit `src` (#407) the picker is skipped — used to pull a URDF's own
+  // out-of-project meshes into the project so it's self-contained.
   ipcMain.handle(
     'robot:importMesh',
-    async (e, args: { urdfPath: string }): Promise<ImportMeshResult> => {
+    async (e, args: { urdfPath: string; src?: string }): Promise<ImportMeshResult> => {
       try {
         if (!args?.urdfPath) return { error: 'No robot file to import into.' }
+        if (args.src) return await copyIntoMeshes(args.urdfPath, args.src)
         const win = BrowserWindow.fromWebContents(e.sender) ?? undefined
         const opts = {
           title: 'Import mesh',

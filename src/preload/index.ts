@@ -976,12 +976,16 @@ const robot = {
   /** Save the robot definition. Resolves to {ok,error} — never rejects. */
   save: (folder: string | undefined, def: RobotDefinition): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('robot:save', { folder, def }),
-  /** Import an STL/DAE mesh into the robot's `<urdf-folder>/meshes/` via a native
-   *  picker (#309). Resolves to the mesh path relative to the URDF, or cancelled. */
+  /** Import an STL/DAE mesh into the robot's `<urdf-folder>/meshes/` (#309).
+   *  Without `src`, a native picker chooses the file; with `src` (an absolute path)
+   *  that file is copied straight in — used to pull a URDF's own out-of-project
+   *  meshes into the project (#407). Resolves to the mesh path relative to the
+   *  URDF, or cancelled. */
   importMesh: (
-    urdfPath: string
+    urdfPath: string,
+    src?: string
   ): Promise<{ cancelled?: boolean; error?: string; rel?: string; name?: string }> =>
-    ipcRenderer.invoke('robot:importMesh', { urdfPath }),
+    ipcRenderer.invoke('robot:importMesh', { urdfPath, src }),
   /** Subscribe to robot.yml changes from ANOTHER window (e.g. the Board View
    *  adding/removing a part). Returns an unsubscribe. */
   onChanged: (cb: () => void): (() => void) => {

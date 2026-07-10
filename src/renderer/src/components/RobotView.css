@@ -269,11 +269,23 @@
 
 /* A non-blocking banner when one or more meshes couldn't load (#319). Sits left
    of the navigation cube (top-right). */
-.robotview__note {
+/* Stack the mesh notes (couldn't-load warning + copy-external offer) top-right so
+   they never overlap; the container owns the positioning. */
+.robotview__notes {
   position: absolute;
   right: 216px;
   top: 0.55rem;
   max-width: 70%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  z-index: 5;
+  /* Click-through by default (#319) so an orbit/drag started over a note reaches the
+     canvas; only the interactive offer note re-enables pointer-events on itself. */
+  pointer-events: none;
+}
+.robotview__note {
   padding: 0.3rem 0.55rem;
   border-radius: 6px;
   background: rgba(80, 44, 40, 0.82);
@@ -282,6 +294,38 @@
   line-height: 1.35;
   color: #f2d7d3;
   pointer-events: none;
+}
+/* The "copy external meshes into the project" offer (#407) — informational (not an
+   error) and interactive, so it overrides the warning tone + pointer-events. Reads
+   in both skins (dark slate + accent border/button). */
+.robotview__note--offer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(28, 32, 38, 0.88);
+  border-color: var(--accent, #c8a24a);
+  color: #e8ecf1;
+  pointer-events: auto;
+}
+.robotview__note-action {
+  flex: none;
+  padding: 0.22rem 0.5rem;
+  border-radius: 5px;
+  border: 1px solid var(--accent, #c8a24a);
+  background: var(--accent, #c8a24a);
+  color: #1a1d22;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.robotview__note-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.robotview__note-action:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* Floating status pills (#312) — the save state + measure readout, formerly in the

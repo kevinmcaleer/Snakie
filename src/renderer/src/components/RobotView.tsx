@@ -23,6 +23,8 @@ import {
   addMeshLink,
   addPrimitive,
   connectJoint,
+  externalMeshes,
+  rewriteMeshFilename,
   jointNames,
   looseLinks,
   parseAssembly,
@@ -322,6 +324,13 @@ export function RobotView({
   // Import is only possible for a saved local `.urdf` (a file we can edit).
   const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
   const [importing, setImporting] = useState(false)
+  // Meshes this URDF points at that live OUTSIDE the project folder (#407) — they
+  // load now but go missing if the project is moved/shared. Offer to copy them in.
+  const externalMeshRefs = useMemo(
+    () => (canImport ? externalMeshes(content, effectiveBase) : []),
+    [canImport, content, effectiveBase]
+  )
+  const [copyingMeshes, setCopyingMeshes] = useState(false)
   const pendingSaveRef = useRef<string | null>(null)
 
   // Persist a just-imported URDF once the buffer state has updated (so saveFile
@@ -1431,6 +1440,46 @@ export function RobotView({
       setSavingLabel(`import failed: ${e instanceof Error ? e.message : 'error'}`)
     } finally {
       setImporting(false)
+    }
+  }
+
+  // Copy the URDF's out-of-project meshes into `<urdf-folder>/meshes/` and rewrite
+  // each `<mesh filename>` to the copied path (#407), so the robot is self-contained.
+  // One commitUrdf (⇒ one undo step + one save); the banner clears as refs re-resolve.
+  const handleCopyExternalMeshes = async (): Promise<void> => {
+    if (!activeFile?.path || externalMeshRefs.length === 0 || copyingMeshes) return
+    setCopyingMeshes(true)
+    try {
+      const rewrites: { ref: string; rel: string }[] = []
+      let failed = 0
+      const total = externalMeshRefs.length
+      for (const { ref, abs } of externalMeshRefs) {
+        setSavingLabel(`copying meshes… ${rewrites.length + failed + 1}/${total}`)
+        const res = await window.api.robot.importMesh(activeFile.path, abs)
+        if (res.error || !res.rel) {
+          failed += 1
+          continue
+        }
+        rewrites.push({ ref, rel: res.rel })
+      }
+      if (rewrites.length) {
+        // Rebase onto the CURRENT buffer (not the click-time snapshot) so an edit that
+        // landed during the async copies survives; the rewrites are keyed on the mesh
+        // ref, so applying them to the latest text is a no-op for any ref that changed.
+        let next = contentRef.current
+        for (const { ref, rel } of rewrites) next = rewriteMeshFilename(next, ref, rel)
+        commitUrdf(next) // one undoable step; pendingSaveRef → saveFile persists it
+      }
+      const done = rewrites.length
+      setSavingLabel(
+        failed === 0
+          ? `copied ${done} mesh${done === 1 ? '' : 'es'} into the project ✓`
+          : `copied ${done}, ${failed} couldn't be copied`
+      )
+    } catch (e) {
+      setSavingLabel(`copy failed: ${e instanceof Error ? e.message : 'error'}`)
+    } finally {
+      setCopyingMeshes(false)
     }
   }
 
@@ -3105,9 +3154,31 @@ export function RobotView({
             </div>
           )
         )}
-        {!error && meshNote && (
-          <div className="robotview__note" role="status">
-            {meshNote}
+        {!error && (meshNote || externalMeshRefs.length > 0) && (
+          <div className="robotview__notes">
+            {meshNote && (
+              <div className="robotview__note" role="status">
+                {meshNote}
+              </div>
+            )}
+            {externalMeshRefs.length > 0 && (
+              <div className="robotview__note robotview__note--offer" role="status">
+                <span>
+                  {externalMeshRefs.length} mesh{externalMeshRefs.length === 1 ? '' : 'es'} live
+                  outside this project and will go missing if it&apos;s moved.
+                </span>
+                <button
+                  type="button"
+                  className="robotview__note-action"
+                  onClick={handleCopyExternalMeshes}
+                  disabled={copyingMeshes}
+                >
+                  {copyingMeshes
+                    ? 'Copying…'
+                    : `Copy ${externalMeshRefs.length} mesh${externalMeshRefs.length === 1 ? '' : 'es'} into project`}
+                </button>
+              </div>
+            )}
           </div>
         )}
         {!isEmpty && !error && compact && (

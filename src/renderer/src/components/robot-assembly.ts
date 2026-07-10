@@ -5,6 +5,7 @@
  * (no DOM) so they're cheap to unit-test in a node env.
  */
 import type { PrimitiveKind, Vec3 } from './robot-build'
+import { isExternalMeshRef, resolveMeshPath } from './robot-mesh'
 
 /**
  * A minimal, VALID starter URDF: one `base_link` with a small box so the pose
@@ -77,6 +78,21 @@ export function meshFiles(urdf: string): string[] {
     }
   }
   return out
+}
+
+/** The mesh refs that live OUTSIDE the URDF's folder (#407), each paired with its
+ *  resolved absolute path so the caller can copy the file in. In first-seen order. */
+export function externalMeshes(urdf: string, baseDir: string): { ref: string; abs: string }[] {
+  return meshFiles(urdf)
+    .filter((ref) => isExternalMeshRef(ref, baseDir))
+    .map((ref) => ({ ref, abs: resolveMeshPath(baseDir, ref) }))
+}
+
+/** Rewrite every `<mesh filename="oldRef">` to `newRel` (mirrors addMeshLink's
+ *  attribute form). Used after copying an external mesh into the project (#407). */
+export function rewriteMeshFilename(urdf: string, oldRef: string, newRel: string): string {
+  const re = new RegExp(`(<mesh\\b[^>]*\\bfilename\\s*=\\s*")${escapeRe(oldRef)}(")`, 'gi')
+  return urdf.replace(re, `$1${newRel}$2`)
 }
 
 /** The root link — one that is never a joint `child` (falls back to the first
