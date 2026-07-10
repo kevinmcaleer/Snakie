@@ -60,6 +60,8 @@ import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
   INSTRUMENTS_LIB_DIR,
+  SNAKIE_LIB_PATH,
+  SNAKIE_ROOT_PATH,
   classifyPresentCopy,
   parseLibVersion,
   shouldShowBanner,
@@ -647,6 +649,14 @@ export function AppShell(): JSX.Element {
           .catch(() => false)
         if (rootShadow) {
           await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
+        }
+        // Install the `snakie.py` hardware umbrella beside it (best-effort — an
+        // older bundle without it just skips this), so `from snakie import Servo`
+        // works and a vendor `servo` module can't shadow ours.
+        const umbrella = await window.api.instruments.umbrellaSource().catch(() => '')
+        if (umbrella) {
+          await window.api.device.writeFile(SNAKIE_LIB_PATH, umbrella)
+          if (rootShadow) await window.api.device.writeFile(SNAKIE_ROOT_PATH, umbrella)
         }
         setLibState('present')
         // The device's files changed — tell every window so e.g. the Device
