@@ -16,6 +16,12 @@ import { useWorkspace } from '../store/workspace'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
 import './HelpPanel.css'
 
+/** The full online documentation, opened in the browser from the Help panel. */
+const DOCS_URL = 'https://docs.snakie.org'
+function openDocs(): void {
+  void window.api?.openExternal?.(DOCS_URL).catch(() => undefined)
+}
+
 /**
  * HELP LIBRARY — a TechNet/`.chm`-style document tree for the Help side view.
  *
@@ -272,6 +278,14 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
             </div>
           )}
           {body ? <Markdown source={body} /> : <p className="help__empty">No help written for this page yet.</p>}
+          <button
+            type="button"
+            className="help__docs help__docs--article"
+            onClick={openDocs}
+            title={DOCS_URL}
+          >
+            📚 More in the full documentation ↗
+          </button>
         </div>
       </div>
     )
@@ -301,6 +315,9 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
       <div className="help-tree" role="tree" aria-label="Help contents">
         {tree.map((n) => renderNode(n, 0))}
       </div>
+      <button type="button" className="help__docs" onClick={openDocs} title={DOCS_URL}>
+        📚 Full documentation at docs.snakie.org ↗
+      </button>
       <div className="help__legend" aria-hidden="true">
         <span className="help__legend-item" style={{ color: '#b8892b' }}>
           <ShelfIcon size={13} /> library

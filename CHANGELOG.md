@@ -60,6 +60,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **In-app Help links to the full online docs (#418).** The Help panel now has a
+  **"Full documentation at docs.snakie.org"** link in its contents view and after every
+  article, so you can jump to the complete, searchable docs in your browser.
 - **Robot View — poses ease smoothly everywhere (#399).** Selecting a saved pose now
   **eases** the robot from its current position to the new one (≈0.4 s) instead of snapping —
   not just in the docked mini viewer but also in the full pose tool's Poses list and the
