@@ -38,6 +38,9 @@ import {
   orientJoint,
   subtreeOf,
   setPrimitiveSize,
+  setLinkColor,
+  readLinkColor,
+  collectLinkColors,
   setVisualOrigin,
   type JointDef,
   type JointSpec,
@@ -435,6 +438,24 @@ export function RobotView({
     [content, editLink]
   )
   const allJointNames = useMemo(() => jointNames(content), [content])
+  // The edited link's colour + the palette of colours already on the robot (#405).
+  const editLinkColor = useMemo(
+    () => (editLink ? readLinkColor(content, editLink) ?? undefined : undefined),
+    [content, editLink]
+  )
+  const usedLinkColors = useMemo(
+    () => collectLinkColors(content, editLink ?? undefined),
+    [content, editLink]
+  )
+  // A link is recolourable if it's a primitive (has editable geometry) OR an STL mesh
+  // (no baked material, so the inline <material> shows). DAE/Collada keep their own
+  // materials — no colour control for those (#405).
+  const editColorable = useMemo(() => {
+    if (!editLink) return false
+    if (readPrimitive(content, editLink)) return true
+    const it = parseAssembly(content).find((i) => i.link === editLink)
+    return it?.kind === 'mesh' && /\.stl$/i.test(it.mesh ?? '')
+  }, [content, editLink])
   // Valid parents for the part being edited: every link EXCEPT itself and its own
   // descendants (attaching onto its own branch would loop) — the "Attaches to" picker.
   const parentOptions = useMemo(() => {
@@ -570,6 +591,11 @@ export function RobotView({
   }
   const handleSetSize = (link: string, dims: number[]): void => {
     commitUrdf(setPrimitiveSize(content, link, dims))
+  }
+  // Colour a link (#405) — an inline URDF <material>, so it round-trips + undoes like
+  // any other build edit; urdf-loader renders it, recolouring only this link.
+  const handleSetColor = (link: string, hex: string): void => {
+    commitUrdf(setLinkColor(content, link, hex))
   }
   const handleSetJoint = (link: string, spec: JointSpec): void => {
     commitUrdf(setJoint(content, link, spec))
@@ -2136,7 +2162,17 @@ export function RobotView({
               const origMat = mesh.material
               const mk = (m: THREE.Material): THREE.Material => {
                 const c = m.clone() as THREE.MeshStandardMaterial
-                if ('color' in c && c.color) c.color = HL_BLUE.clone()
+                // A real TINT (lerp the block's own colour 60% toward blue), not a flat
+                // replace — so a link's custom colour still reads through the highlight.
+                // That's what lets a live colour edit be visible while the part is still
+                // selected (#405), and is truer to "keep the material's shading". A subtle
+                // emissive blue glow keeps the selection legible even when the custom
+                // colour is ALREADY near HL_BLUE (where the lerp alone barely moves it).
+                if ('color' in c && c.color) c.color.lerp(HL_BLUE, 0.6)
+                if ('emissive' in c && c.emissive) {
+                  c.emissive = HL_BLUE.clone()
+                  c.emissiveIntensity = 0.2
+                }
                 return c
               }
               const tint = Array.isArray(origMat) ? origMat.map(mk) : [mk(origMat)]
@@ -3243,6 +3279,10 @@ export function RobotView({
             joint={editJoint}
             jointNames={allJointNames}
             onSetSize={handleSetSize}
+            linkColor={editLinkColor}
+            colorable={editColorable}
+            usedColors={usedLinkColors}
+            onSetColor={handleSetColor}
             onSetJoint={handleSetJoint}
             onSetJointOrigin={handleSetJointOrigin}
             onRollJoint={setJointRoll}

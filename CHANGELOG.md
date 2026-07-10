@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — colour an individual part (#399).** The link Properties panel gains a
+  **Colour** control — the same colour well + one-click "used colours" swatches as the Part
+  Editor — right beside **Size (mm)**. It works for **primitive** parts (box/cylinder/sphere)
+  **and imported STL meshes**, so a multi-part robot no longer has to be a flat grey blob —
+  colour it to match your real hardware. Pick a colour and only that part recolours, live;
+  every other part keeps its colour. The colour is stored in the model's URDF `<material>`,
+  so it round-trips on reload and is covered by undo/redo. (Selecting a part still tints it
+  blue, but now over its own colour, so the change is visible while it's selected. DAE/Collada
+  meshes keep their own baked-in materials, so they show the "grab a face in 3-D" note
+  instead.)
 - **Robot View — a hinge rotates about the mated normal, Fusion-style (#399).** A new
   Rotation/Linear joint now takes its **axis from the two faces you mated** — it turns (or
   slides) about the normal through the joint, the same axis its Roll uses — instead of a

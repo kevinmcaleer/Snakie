@@ -12,6 +12,7 @@ import {
   type JointMeta
 } from './robot-pose'
 import { SizeForm, JointForm } from './RobotBuildPanel'
+import { SwatchPicker } from './SwatchPicker'
 import './RobotPropertiesDialog.css'
 
 /**
@@ -50,6 +51,14 @@ export interface RobotPropertiesDialogProps {
   joint: JointDef | null
   jointNames: string[]
   onSetSize: (link: string, dims: number[]) => void
+  /** The edited link's colour (#rrggbb), or undefined for the default. */
+  linkColor?: string
+  /** Whether this link can be recoloured (a primitive, or an STL mesh — not DAE). */
+  colorable: boolean
+  /** Colours already used on the robot's links, for the quick-pick swatches. */
+  usedColors: string[]
+  /** Set a link's colour (#rrggbb) — recolours only that link, live + persisted. */
+  onSetColor: (link: string, hex: string) => void
   onSetJoint: (link: string, spec: JointSpec) => void
   /** Reposition the joint origin (offset, mm→m) and set its ABSOLUTE roll about its
    *  own normal axis (deg) — both applied live as the field changes. */
@@ -278,21 +287,47 @@ function LinkBody({
   parentOptions,
   currentParent,
   isBase,
-  onSetParent
+  onSetParent,
+  linkColor,
+  colorable,
+  usedColors,
+  onSetColor
 }: RobotPropertiesDialogProps & { context: PropsContext }): JSX.Element {
   // `link` = the block being edited, or the joint's child link (which carries it).
   const link = context.kind === 'joint' ? context.child : context.kind === 'link' ? context.link : ''
   return (
     <>
-      {context.kind === 'link' &&
-        (geom ? (
-          <section className="robotprops__section">
-            <div className="robotprops__label">Size (mm)</div>
-            <SizeForm geom={geom} onChange={(d) => onSetSize(link, d)} />
-          </section>
-        ) : (
-          <p className="robotprops__note">This is a mesh — grab a face in 3-D to move it.</p>
-        ))}
+      {context.kind === 'link' && (
+        <>
+          {geom && (
+            <section className="robotprops__section">
+              <div className="robotprops__label">Size (mm)</div>
+              <SizeForm geom={geom} onChange={(d) => onSetSize(link, d)} />
+            </section>
+          )}
+          {colorable ? (
+            // Primitives + STL meshes recolour via the inline URDF <material>. (DAE/
+            // Collada meshes carry their own materials, so they fall through to the note.)
+            <section className="robotprops__section">
+              <div className="robotprops__label">Colour</div>
+              <SwatchPicker
+                value={linkColor}
+                fallback="#9ea6b0"
+                used={usedColors}
+                onChange={(c) => onSetColor(link, c)}
+                ariaLabel={`Colour of ${link}`}
+              />
+              {!geom && (
+                <p className="robotprops__note">Recolours the mesh — grab a face in 3-D to move it.</p>
+              )}
+            </section>
+          ) : (
+            !geom && (
+              <p className="robotprops__note">This is a mesh — grab a face in 3-D to move it.</p>
+            )
+          )}
+        </>
+      )}
       {!isBase && parentOptions.length > 0 && (
         <section className="robotprops__section">
           <div className="robotprops__label" title="Which part this connects to in the chain">
