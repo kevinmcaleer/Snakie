@@ -86,6 +86,7 @@ import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
 import { RobotSequencer } from './RobotSequencer'
 import { RobotControls } from './RobotControls'
+import { RobotMotionDock } from './RobotMotionDock'
 import {
   autoMirrorPairs,
   deleteKey,
@@ -4223,74 +4224,97 @@ export function RobotView({
       </div>
       </div>
       {showTimeline && (
-        <RobotTimeline
-          timeline={timeline}
-          movableJoints={movableNames}
-          playhead={playhead}
-          playing={playing}
-          selected={selectedKey}
-          poses={poses}
-          canExport={bindings.length > 0}
-          canMirror={mirrorPairs.length > 0}
-          onPlayPause={handlePlayPause}
-          onStop={() => seek(0)}
-          onToggleLoop={() => commitTimeline({ ...timelineRef.current, loop: !timelineRef.current.loop })}
-          onScrub={seek}
-          onSetDuration={(d) =>
-            commitTimeline({ ...timelineRef.current, duration: Math.max(0.1, d) })
-          }
-          onSetEasing={(e: MotionEasing) => commitTimeline({ ...timelineRef.current, easing: e })}
-          onSetFps={(f) =>
-            commitTimeline({ ...timelineRef.current, fps: Math.max(1, Math.min(60, Math.round(f))) })
-          }
-          onCapture={handleCapture}
-          onImportPose={handleImportPose}
-          onMirror={handleMirror}
-          mirrorPairs={mirrorPairs}
-          onToggleInvert={handleToggleInvert}
-          onDuplicate={handleDuplicate}
-          onExport={handleExport}
-          onSelectKey={handleSelectKey}
-          onMoveKey={handleMoveKey}
-          onDeleteKey={handleDeleteKey}
-          onAddKey={handleAddKey}
-        />
-      )}
-      {showTimeline && (
-        <RobotSequencer
-          sequence={sequence}
-          poses={poses}
-          playing={seqPlaying}
-          playhead={seqPlayhead}
-          live={seqLive}
-          canLive={canSeqLive}
-          canExport={bindings.length > 0}
-          onPlayPause={handleSeqPlayPause}
-          onStop={() => seqSeek(0)}
-          onScrub={seqSeek}
-          onToggleLoop={() => commitSequence({ ...sequenceRef.current, loop: !sequenceRef.current.loop })}
-          onToggleLive={() => setSeqLive((v) => !v)}
-          onAddStep={handleAddStep}
-          onRemoveStep={handleRemoveStep}
-          onMoveStep={handleMoveStep}
-          onSetStepPose={(i, pose) => patchStep(i, { pose })}
-          onSetStepDuration={(i, seconds) => patchStep(i, { duration: Math.max(0, seconds) })}
-          onSetStepEasing={(i, easing) => patchStep(i, { easing })}
-          onExport={handleExport}
-        />
-      )}
-      {showTimeline && (
-        <RobotControls
-          controls={controls}
-          poses={poses}
-          values={controlVals}
-          live={controlsLive}
-          canLive={canSeqLive}
-          onToggleLive={() => setControlsLive((v) => !v)}
-          onChange={handleControlChange}
-          onCreate={handleCreateControl}
-          onRename={handleRenameControl}
-          onDelete={handleDeleteControl}
+        <RobotMotionDock
+          tabs={[
+            {
+              id: 'keyframes',
+              label: 'Keyframes',
+              badge: timeline.tracks.some((t) => t.keys.length > 0),
+              content: (
+                <RobotTimeline
+                  timeline={timeline}
+                  movableJoints={movableNames}
+                  playhead={playhead}
+                  playing={playing}
+                  selected={selectedKey}
+                  poses={poses}
+                  canExport={bindings.length > 0}
+                  canMirror={mirrorPairs.length > 0}
+                  onPlayPause={handlePlayPause}
+                  onStop={() => seek(0)}
+                  onToggleLoop={() =>
+                    commitTimeline({ ...timelineRef.current, loop: !timelineRef.current.loop })
+                  }
+                  onScrub={seek}
+                  onSetDuration={(d) =>
+                    commitTimeline({ ...timelineRef.current, duration: Math.max(0.1, d) })
+                  }
+                  onSetEasing={(e: MotionEasing) => commitTimeline({ ...timelineRef.current, easing: e })}
+                  onSetFps={(f) =>
+                    commitTimeline({ ...timelineRef.current, fps: Math.max(1, Math.min(60, Math.round(f))) })
+                  }
+                  onCapture={handleCapture}
+                  onImportPose={handleImportPose}
+                  onMirror={handleMirror}
+                  mirrorPairs={mirrorPairs}
+                  onToggleInvert={handleToggleInvert}
+                  onDuplicate={handleDuplicate}
+                  onExport={handleExport}
+                  onSelectKey={handleSelectKey}
+                  onMoveKey={handleMoveKey}
+                  onDeleteKey={handleDeleteKey}
+                  onAddKey={handleAddKey}
+                />
+              )
+            },
+            {
+              id: 'sequence',
+              label: 'Sequence',
+              badge: sequence.steps.length > 0,
+              content: (
+                <RobotSequencer
+                  sequence={sequence}
+                  poses={poses}
+                  playing={seqPlaying}
+                  playhead={seqPlayhead}
+                  live={seqLive}
+                  canLive={canSeqLive}
+                  canExport={bindings.length > 0}
+                  onPlayPause={handleSeqPlayPause}
+                  onStop={() => seqSeek(0)}
+                  onScrub={seqSeek}
+                  onToggleLoop={() => commitSequence({ ...sequenceRef.current, loop: !sequenceRef.current.loop })}
+                  onToggleLive={() => setSeqLive((v) => !v)}
+                  onAddStep={handleAddStep}
+                  onRemoveStep={handleRemoveStep}
+                  onMoveStep={handleMoveStep}
+                  onSetStepPose={(i, pose) => patchStep(i, { pose })}
+                  onSetStepDuration={(i, seconds) => patchStep(i, { duration: Math.max(0, seconds) })}
+                  onSetStepEasing={(i, easing) => patchStep(i, { easing })}
+                  onExport={handleExport}
+                />
+              )
+            },
+            {
+              id: 'controls',
+              label: 'Controls',
+              badge: controls.length > 0,
+              content: (
+                <RobotControls
+                  controls={controls}
+                  poses={poses}
+                  values={controlVals}
+                  live={controlsLive}
+                  canLive={canSeqLive}
+                  onToggleLive={() => setControlsLive((v) => !v)}
+                  onChange={handleControlChange}
+                  onCreate={handleCreateControl}
+                  onRename={handleRenameControl}
+                  onDelete={handleDeleteControl}
+                />
+              )
+            }
+          ]}
         />
       )}
     </div>

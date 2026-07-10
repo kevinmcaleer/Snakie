@@ -95,6 +95,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Robot View — Motion Studio tools share one collapsible dock (#403).** The keyframe timeline,
+  pose sequencer and puppet controls no longer stack as three full-width bars crowding the bottom
+  of the screen. They're now **tabs in a single dock** — pick **Keyframes / Sequence / Controls**,
+  and a chevron collapses the whole dock to just its tab strip so the 3-D stage goes full-height.
+  The dock remembers your last tab and open/closed state, and a tab shows a dot when that surface
+  already has content, so a populated-but-hidden tool advertises itself.
 - **In-app Help links to the full online docs (#418).** The Help panel now has a
   **"Full documentation at docs.snakie.org"** link in its contents view and after every
   article, so you can jump to the complete, searchable docs in your browser.
