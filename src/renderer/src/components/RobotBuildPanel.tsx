@@ -101,6 +101,8 @@ export interface RobotBuildPanelProps {
   active: PropsContext | null
   onEdit: (link: string | null) => void
   onOpenJoint: (child: string, joint: string) => void
+  /** Rename a joint (right-click a joint row) — cascades servo map + poses. */
+  onRenameJoint: (oldName: string, newName: string) => void
   onOpenServo: (pin: string) => void
   /** Bind a servo to the next free pin + open its editor. */
   onNewServo: () => void
@@ -489,25 +491,89 @@ function Section({
 
 const INDENT = 14 // px of indent per depth level in the chain tree
 
+// A distinct glyph per joint type (#): a lock (fixed), a rotation arrow (hinge /
+// revolute), a spoked wheel (continuous) and a slider track (prismatic).
+const JOINT_ICONS: Record<JointType, JSX.Element> = {
+  fixed: (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path d="M5 7V5.2a3 3 0 0 1 6 0V7" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="3.6" y="7" width="8.8" height="6" rx="1.1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  ),
+  revolute: (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path d="M12.6 8a4.6 4.6 0 1 1-1.5-3.4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <path d="M12.7 3.2v2.4h-2.4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  ),
+  continuous: (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <circle cx="8" cy="8" r="5.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="8" cy="8" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M8 2.8v2M8 11.2v2M2.8 8h2M11.2 8h2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" />
+    </svg>
+  ),
+  prismatic: (
+    <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+      <path d="M3 8h10M4.6 5.8v4.4M11.4 5.8v4.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+      <rect x="6.5" y="5.9" width="3" height="4.2" rx="0.9" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
+/** One JOINT row of the Chain tree (#): the connecting joint sits directly above its
+ *  child link at the same indent — a type icon, the (editable) joint NAME, and its
+ *  type badge. Click opens the joint dialog; right-click renames. */
+function JointRow({
+  node,
+  isActive,
+  onOpen,
+  onContextMenu
+}: {
+  node: ChainNode
+  isActive: boolean
+  onOpen: (child: string, joint: string) => void
+  onContextMenu: (e: React.MouseEvent, joint: string) => void
+}): JSX.Element | null {
+  if (!node.joint) return null
+  const j = node.joint
+  return (
+    <li className="robotbuild__joint-row" style={{ paddingLeft: node.depth * INDENT }}>
+      <span className="robotbuild__joint-elbow" aria-hidden="true">
+        ├
+      </span>
+      <span className="robotbuild__joint-icon" aria-hidden="true">
+        {JOINT_ICONS[j.type] ?? JOINT_ICONS.fixed}
+      </span>
+      <button
+        type="button"
+        className={`robotbuild__joint-name${isActive ? ' is-on' : ''}`}
+        title={`Joint “${j.name}” · ${jointTypeLabel(j.type)} · ${j.parent} → ${node.link} — click to edit, right-click to rename`}
+        onClick={() => onOpen(node.link, j.name)}
+        onContextMenu={(e) => onContextMenu(e, j.name)}
+      >
+        {j.name}
+      </button>
+      <span className="robotbuild__joint-badge">{jointTypeLabel(j.type)}</span>
+    </li>
+  )
+}
+
 /** One row of the kinematic Chain tree (#354): the part name (indented by depth), the
  *  joint type that connects it to its parent, and a "loose" flag for unconnected parts. */
 function ChainRow({
   node,
   isSel,
   isEdit,
-  activeJoint,
   onSelect,
   onEdit,
-  onOpenJoint,
   onContextMenu
 }: {
   node: ChainNode
   isSel: boolean
   isEdit: boolean
-  activeJoint: string | null
   onSelect: (link: string) => void
   onEdit: (link: string | null) => void
-  onOpenJoint: (child: string, joint: string) => void
   onContextMenu: (e: React.MouseEvent, link: string) => void
 }): JSX.Element {
   const geo = node.kind === 'mesh' ? node.mesh?.match(/\.(\w+)$/)?.[1]?.toLowerCase() ?? 'mesh' : node.kind
@@ -556,16 +622,7 @@ function ChainRow({
           <span className="robotbuild__part-label">{node.link}</span>
           <span className={`robotbuild__part-geo${node.kind === 'mesh' ? ' is-mesh' : ''}`}>{geo}</span>
         </button>
-        {node.joint ? (
-          <button
-            type="button"
-            className={`robotbuild__jtype${activeJoint === node.joint.name ? ' is-on' : ''}`}
-            title={`Joint “${node.joint.name}” · ${jointTypeLabel(node.joint.type)} · parent ${node.joint.parent} — click to edit`}
-            onClick={() => onOpenJoint(node.link, node.joint!.name)}
-          >
-            {node.joint.name}
-          </button>
-        ) : node.loose ? (
+        {node.loose ? (
           <span className="robotbuild__loose-tag" title="Not connected to the base — open it and pick a parent">
             ⚠ loose
           </span>
@@ -590,6 +647,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     active,
     onEdit,
     onOpenJoint,
+    onRenameJoint,
     onOpenServo,
     onNewServo,
     onOpenPose,
@@ -617,6 +675,26 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     e.stopPropagation()
     setMenu({ pos: { x: e.clientX, y: e.clientY }, link })
   }
+  // Right-click a joint row → rename the joint.
+  const [jmenu, setJmenu] = useState<{ pos: ContextMenuPosition; joint: string } | null>(null)
+  const openJointMenu = (e: React.MouseEvent, joint: string): void => {
+    if (!canEdit) return
+    e.preventDefault()
+    e.stopPropagation()
+    setJmenu({ pos: { x: e.clientX, y: e.clientY }, joint })
+  }
+  const jointMenuItems = (joint: string): ContextMenuItem[] => [
+    {
+      key: 'rename',
+      label: 'Rename joint…',
+      onSelect: () => {
+        void (async () => {
+          const to = await prompt('Rename joint', joint)
+          if (to && to.trim() && to.trim() !== joint) onRenameJoint(joint, to.trim())
+        })()
+      }
+    }
+  ]
   const menuItems = (link: string): ContextMenuItem[] => {
     const isBase = link === rootLink
     return [
@@ -721,14 +799,19 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                     Not connected
                   </li>
                 )}
+                {/* The connecting joint sits directly above its child link (#). */}
+                <JointRow
+                  node={node}
+                  isActive={!!node.joint && activeJoint === node.joint.name}
+                  onOpen={onOpenJoint}
+                  onContextMenu={openJointMenu}
+                />
                 <ChainRow
                   node={node}
                   isSel={node.link === selected}
                   isEdit={node.link === activeLink}
-                  activeJoint={activeJoint}
                   onSelect={onSelect}
                   onEdit={onEdit}
-                  onOpenJoint={onOpenJoint}
                   onContextMenu={openMenu}
                 />
               </Fragment>
@@ -827,6 +910,9 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
       </div>
       {menu && (
         <ContextMenu position={menu.pos} items={menuItems(menu.link)} onClose={() => setMenu(null)} />
+      )}
+      {jmenu && (
+        <ContextMenu position={jmenu.pos} items={jointMenuItems(jmenu.joint)} onClose={() => setJmenu(null)} />
       )}
     </aside>
   )

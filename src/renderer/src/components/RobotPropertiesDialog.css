@@ -116,6 +116,10 @@
   border-radius: 5px;
   padding: 0.2rem 0.3rem;
 }
+/* The joint-name field sits above the Joint form; a little gap below it. */
+.robotprops__jname {
+  margin-bottom: 0.35rem;
+}
 .robotprops__check {
   display: flex;
   align-items: center;

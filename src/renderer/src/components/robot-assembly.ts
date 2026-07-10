@@ -594,6 +594,28 @@ export function buildChainTree(
   return out
 }
 
+/**
+ * Rename a `<joint>` (#): rewrite its `name="…"` attribute and every `<mimic
+ * joint="…">` that follows it (mimic references a master joint by name). Sanitises
+ * to a URDF-safe token and de-duplicates against the other joint names. Returns the
+ * new URDF + the actual name used. Parent/child are LINK refs and are untouched.
+ * The caller cascades the non-URDF stores (servo map / poses / mirror / limits).
+ */
+export function renameJoint(urdf: string, from: string, to: string): { urdf: string; name: string } {
+  const safe = to.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'joint'
+  if (safe === from) return { urdf, name: from }
+  const taken = new Set(jointNames(urdf))
+  taken.delete(from)
+  let name = safe
+  let n = 2
+  while (taken.has(name)) name = `${safe}_${n++}`
+  const e = escapeRe(from)
+  const out = urdf
+    .replace(new RegExp(`(<joint\\b[^>]*\\bname\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
+    .replace(new RegExp(`(<mimic\\b[^>]*\\bjoint\\s*=\\s*")${e}(")`, 'g'), `$1${name}$2`)
+  return { urdf: out, name }
+}
+
 /** Names of every `<joint>` in the model (for the mimic master picker). */
 export function jointNames(urdf: string): string[] {
   const re = /<joint\b([^>]*)>/gi

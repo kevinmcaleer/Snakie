@@ -95,13 +95,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
-- **Robot View — clearer, self-sizing Build hierarchy.** Each row in the Chain tree now shows a
-  **type glyph** (a mesh triangle vs a primitive cube) between the tree connector and the pencil,
-  and the joint tag shows the **joint name** (e.g. `shoulder`) instead of just its type — so it
-  matches the joint names in the Servos list and the pose editor. The panel now **sizes to its
-  longest row** (name + indentation) and truncates anything past **a third of the screen**, and it
-  only grows down to the top of the bottom-left help hint — the **Open** / **+ STL / DAE** buttons
-  no longer sit over it; the list scrolls instead.
+- **Robot View — joints are first-class in the Build hierarchy.** Each connecting joint now has its
+  own row directly above the link it drives, showing a **type glyph** (a lock for fixed, a rotation
+  arrow for a hinge, a spoked wheel for continuous, a slider for prismatic), the **joint name** (so
+  it matches the Servos list and the pose editor), and its **type badge**. **Rename a joint** by
+  right-clicking its row or from the joint dialog's new **Name** field — the rename cascades through
+  the servo bindings, poses, timeline, mirror pairs and per-joint settings. Link rows also carry a
+  **mesh-vs-cube** glyph.
+- **Robot View — clearer, self-sizing Build hierarchy.** The panel now **sizes to its longest row**
+  (name + indentation) and truncates anything past **a third of the screen**, and it only grows down
+  to the top of the bottom-left help hint — the **Open** / **+ STL / DAE** buttons no longer sit
+  over it; the list scrolls instead.
 - **Robot View — Motion Studio tools share one collapsible dock (#403).** The keyframe timeline,
   pose sequencer and puppet controls no longer stack as three full-width bars crowding the bottom
   of the screen. They're now **tabs in a single dock** — pick **Keyframes / Sequence / Controls**,

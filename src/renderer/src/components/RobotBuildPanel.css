@@ -285,36 +285,74 @@
   font-size: 0.7rem;
   line-height: 1;
 }
-.robotbuild__jtype {
-  /* Shows the JOINT NAME (so it matches the servo/pose joint refs); can shrink +
-     ellipsis so a long joint name doesn't crowd out the link label. */
-  flex: 0 1 auto;
-  max-width: 8rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-left: 0.25rem;
-  padding: 0.05rem 0.32rem;
-  font-family: inherit;
-  font-size: 0.56rem;
-  color: var(--text-muted, #8b919b);
-  background: var(--bg-sunken, rgba(0, 0, 0, 0.22));
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 999px;
-  cursor: pointer;
-}
-.robotbuild__jtype:hover,
-.robotbuild__jtype.is-on {
-  color: var(--accent-contrast, #15161a);
-  background: var(--accent, #d6a23f);
-  border-color: var(--accent, #d6a23f);
-}
 .robotbuild__loose-tag {
   flex: 0 0 auto;
   white-space: nowrap;
   margin-left: 0.25rem;
   font-size: 0.56rem;
   color: var(--accent);
+}
+
+/* JOINT rows (#): the connector between a parent and its child link. Lighter than
+   the boxed part rows (no slab) so they read as the "edge" between parts — a type
+   icon, the editable joint name, and its type badge. */
+.robotbuild__joint-row {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.02rem 0.2rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotbuild__joint-elbow {
+  flex: 0 0 auto;
+  opacity: 0.5;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.robotbuild__joint-icon {
+  flex: 0 0 auto;
+  width: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #8b919b);
+}
+.robotbuild__joint-icon svg {
+  display: block;
+}
+.robotbuild__joint-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: none;
+  border: none;
+  padding: 0.05rem 0.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.robotbuild__joint-name:hover {
+  background: rgba(128, 128, 128, 0.14);
+}
+.robotbuild__joint-name.is-on {
+  color: var(--accent-ink);
+  background: rgba(200, 162, 74, 0.16);
+}
+.robotbuild__joint-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  padding: 0.02rem 0.32rem;
+  font-size: 0.52rem;
+  color: var(--text-muted, #8b919b);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.22));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 999px;
 }
 .robotbuild__chain--loose .robotbuild__part-label {
   font-style: italic;

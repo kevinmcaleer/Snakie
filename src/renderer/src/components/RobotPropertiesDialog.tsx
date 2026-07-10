@@ -60,6 +60,8 @@ export interface RobotPropertiesDialogProps {
   /** Set a link's colour (#rrggbb) — recolours only that link, live + persisted. */
   onSetColor: (link: string, hex: string) => void
   onSetJoint: (link: string, spec: JointSpec) => void
+  /** Rename the open joint — cascades the servo map + poses (#). */
+  onRenameJoint: (oldName: string, newName: string) => void
   /** Reposition the joint origin (offset, mm→m) and set its ABSOLUTE roll about its
    *  own normal axis (deg) — both applied live as the field changes. */
   onSetJointOrigin: (child: string, xyz: [number, number, number]) => void
@@ -296,6 +298,7 @@ function LinkBody({
   jointNames,
   onSetSize,
   onSetJoint,
+  onRenameJoint,
   onSetJointOrigin,
   onRollJoint,
   jointRoll,
@@ -374,6 +377,19 @@ function LinkBody({
       {joint ? (
         <section className="robotprops__section">
           <div className="robotprops__label">Joint</div>
+          <input
+            key={joint.name}
+            className="robotprops__text robotprops__jname"
+            defaultValue={joint.name}
+            placeholder="joint name"
+            aria-label="Joint name"
+            title="The joint name — matches the Servos list and the pose editor"
+            onBlur={(e) => {
+              const v = e.target.value.trim()
+              if (v && v !== joint.name) onRenameJoint(joint.name, v)
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+          />
           <JointForm
             joint={joint}
             names={jointNames}
