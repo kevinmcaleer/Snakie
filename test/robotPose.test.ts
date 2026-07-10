@@ -9,6 +9,9 @@ import {
   effectiveLimit,
   normPin,
   servoToJointNative,
+  capturePoseValues,
+  poseTargetNative,
+  uniquePoseName,
   CONTINUOUS_RANGE,
   type JointMeta,
   type RobotLike
@@ -144,5 +147,83 @@ describe('servoToJointNative — the code-driven pipe (#313)', () => {
     ]
     expect(servoToJointNative(bindings, meta, '99', 90)).toBeNull()
     expect(servoToJointNative([{ pin: '16', joint: 'ghost', jointMin: 0, jointMax: 1 }], meta, '16', 90)).toBeNull()
+  })
+})
+
+describe('capturePoseValues — Capture Pose incl. partial (#414)', () => {
+  const meta: JointMeta[] = [
+    { name: 'shoulder', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false },
+    { name: 'elbow', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false },
+    { name: 'slide', type: 'prismatic', lower: 0, upper: 0.1, isMimic: false },
+    // a mimic — never captured
+    { name: 'finger', type: 'revolute', lower: -1, upper: 1, isMimic: true, master: 'shoulder' }
+  ]
+  const native = { shoulder: Math.PI / 2, elbow: -Math.PI / 4, slide: 0.025, finger: 0.3 }
+
+  it('captures every non-mimic joint in display units (deg/mm), 2dp', () => {
+    const vals = capturePoseValues(meta, native)
+    expect(vals).toEqual({ shoulder: 90, elbow: -45, slide: 25 })
+    expect(vals).not.toHaveProperty('finger') // mimics excluded
+  })
+
+  it('captures ONLY the included joints for a partial pose', () => {
+    const vals = capturePoseValues(meta, native, ['shoulder'])
+    expect(vals).toEqual({ shoulder: 90 })
+    expect(vals).not.toHaveProperty('elbow')
+    expect(vals).not.toHaveProperty('slide')
+  })
+
+  it('a mimic can never be forced in via include', () => {
+    expect(capturePoseValues(meta, native, ['finger', 'elbow'])).toEqual({ elbow: -45 })
+  })
+
+  it('an empty include set captures nothing (callers must refuse a 0-joint pose)', () => {
+    // handleSavePose bails on an empty `include`; this locks in that [] ⇒ {} so a
+    // future caller can rely on it to detect "nothing ticked".
+    expect(capturePoseValues(meta, native, [])).toEqual({})
+  })
+
+  it('rounds to 2 decimals', () => {
+    const vals = capturePoseValues(
+      [{ name: 'j', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false }],
+      { j: 1 } // 1 rad = 57.2957…°
+    )
+    expect(vals.j).toBe(57.3)
+  })
+})
+
+describe('poseTargetNative — recall leaves partial-pose omissions alone (#414)', () => {
+  const meta: JointMeta[] = [
+    { name: 'shoulder', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false },
+    { name: 'elbow', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false }
+  ]
+  const current = { shoulder: 0.1, elbow: 0.2 }
+
+  it('applies listed joints (converting deg→rad) and clamps to limits', () => {
+    const t = poseTargetNative(meta, current, { shoulder: 90, elbow: -45 })
+    expect(t.shoulder).toBeCloseTo(Math.PI / 2)
+    expect(t.elbow).toBeCloseTo(-Math.PI / 4)
+  })
+
+  it('leaves a joint the partial pose omits at its CURRENT value', () => {
+    const t = poseTargetNative(meta, current, { shoulder: 90 }) // elbow omitted
+    expect(t.shoulder).toBeCloseTo(Math.PI / 2)
+    expect(t.elbow).toBe(0.2) // untouched
+  })
+
+  it('clamps an out-of-range stored value into the effective limit', () => {
+    const t = poseTargetNative(meta, current, { shoulder: 720 }, { shoulder: { min: -90, max: 90 } })
+    expect(t.shoulder).toBeCloseTo(Math.PI / 2) // clamped to +90°
+  })
+})
+
+describe('uniquePoseName — duplicate never clobbers (#414)', () => {
+  it('appends " copy" then numbers, skipping taken names', () => {
+    expect(uniquePoseName('Wave', ['Wave'])).toBe('Wave copy')
+    expect(uniquePoseName('Wave', ['Wave', 'Wave copy'])).toBe('Wave copy 2')
+    expect(uniquePoseName('Wave', ['Wave', 'Wave copy', 'Wave copy 2'])).toBe('Wave copy 3')
+  })
+  it('is stable for a name with no existing copy', () => {
+    expect(uniquePoseName('Rest', ['Wave', 'Sit'])).toBe('Rest copy')
   })
 })

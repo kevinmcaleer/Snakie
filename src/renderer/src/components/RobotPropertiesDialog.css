@@ -253,6 +253,51 @@
   justify-content: space-between;
   gap: 0.4rem;
 }
+/* "Live ●" — a running program's servos are driving the joints (#414). Green
+   reads on both the dark and the parchment (light) theme. */
+.robotprops__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #2f9e5b;
+}
+.robotprops__live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #34c46b;
+  box-shadow: 0 0 0 2px rgba(52, 196, 107, 0.28);
+  animation: robotprops-livepulse 1.1s ease-in-out infinite;
+}
+@keyframes robotprops-livepulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+/* Per-joint include checkbox in the capture list (#414). */
+.robotprops__poj-inc {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.robotprops__poj-inc input {
+  margin: 0;
+  accent-color: var(--accent, #d6a23f);
+  cursor: pointer;
+}
+/* An excluded joint is dimmed — it won't be written to the pose. */
+.robotprops__poj--excluded {
+  opacity: 0.45;
+}
 .robotprops__poses-joints {
   display: flex;
   flex-direction: column;

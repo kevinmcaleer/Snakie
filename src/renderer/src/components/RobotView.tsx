@@ -11,13 +11,16 @@ import { baseName, dirname, meshKind } from './robot-mesh'
 import {
   type JointMeta,
   type NamedPoseLike,
+  capturePoseValues,
   clamp,
   effectiveLimit,
   extractJoints,
   normPin,
+  poseTargetNative,
   servoToJointNative,
   toDisplay,
-  toNative
+  toNative,
+  uniquePoseName
 } from './robot-pose'
 import { solveCCD, type IkJoint } from './robot-ik'
 import {
@@ -202,6 +205,11 @@ export function RobotView({
   const [measureActive, setMeasureActive] = useState(false)
   const [measureDist, setMeasureDist] = useState<number | null>(null)
   const [savingLabel, setSavingLabel] = useState<string | null>(null)
+  // True while a running program's `SNK SERVO` telemetry is actively driving a
+  // mapped joint (#414) — so the pose editor can show a "Live ●" hint that a
+  // Capture reads the hardware/simulator posture. Clears ~1.2s after it stops.
+  const [poseLive, setPoseLive] = useState(false)
+  const poseLiveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Refs kept fresh for imperative handlers + the three.js pointer callbacks.
   const robotRef = useRef<URDFRobot | null>(null)
@@ -273,11 +281,14 @@ export function RobotView({
   }
 
 
-  const handleSavePose = (name: string): void => {
-    const vals: Record<string, number> = {}
-    for (const m of metaRef.current) {
-      if (!m.isMimic) vals[m.name] = Number(toDisplay(m.type, valuesRef.current[m.name] ?? 0).toFixed(2))
-    }
+  // Capture the live posture as a named pose (#414). `include` (when given) makes
+  // it a PARTIAL pose — only those joints are stored, so a face-only capture
+  // leaves the legs out of `values`. Works whether the sliders OR a running
+  // program's `SNK SERVO` telemetry are driving the joints (both update `values`).
+  const handleSavePose = (name: string, include?: string[]): void => {
+    // A partial capture with nothing ticked would persist a dead, empty pose — refuse it.
+    if (include && include.length === 0) return
+    const vals = capturePoseValues(metaRef.current, valuesRef.current, include)
     const next = [...poses.filter((p) => p.name !== name), { name, values: vals }]
     setPoses(next)
     void persist((m) => {
@@ -286,6 +297,20 @@ export function RobotView({
     // Advance the editor to the just-saved pose so it flips from "new" to edit mode
     // (Recall/Delete appear, the name locks in), instead of a stale new-pose draft.
     if (name) setDialogCtx({ kind: 'pose', name })
+  }
+
+  // Duplicate a pose under a unique "<name> copy" name, keeping the original and
+  // never clobbering an existing entry (#414). Opens the copy for editing.
+  const handleDuplicatePose = (name: string): void => {
+    const src = poses.find((p) => p.name === name)
+    if (!src) return
+    const copyName = uniquePoseName(name, poses.map((p) => p.name))
+    const next = [...poses, { name: copyName, values: { ...src.values } }]
+    setPoses(next)
+    void persist((m) => {
+      m.poses = next
+    })
+    setDialogCtx({ kind: 'pose', name: copyName })
   }
 
   // Recall a pose by smoothly EASING the model from its current joints to the saved
@@ -298,13 +323,8 @@ export function RobotView({
   const handleRecallPose = (pose: NamedPoseLike): void => {
     const r = robotRef.current
     if (!r) return
-    const target = { ...valuesRef.current }
-    for (const m of metaRef.current) {
-      if (!m.isMimic && typeof pose.values[m.name] === 'number') {
-        const lim = effectiveLimit(m, overridesRef.current[m.name])
-        target[m.name] = clamp(toNative(m.type, pose.values[m.name]), lim.lower, lim.upper)
-      }
-    }
+    // Partial poses leave omitted joints where they are (#414) — see poseTargetNative.
+    const target = poseTargetNative(metaRef.current, valuesRef.current, pose.values, overridesRef.current)
     const start: Record<string, number> = {}
     for (const m of metaRef.current) {
       if (m.isMimic) continue
@@ -1195,7 +1215,12 @@ export function RobotView({
     if (!res || !robotRef.current) return
     robotRef.current.setJointValue(res.joint, res.native)
     setValues((v) => (v[res.joint] === res.native ? v : { ...v, [res.joint]: res.native }))
+    // Flag "live" so the pose editor knows a Capture reads the hardware posture.
+    setPoseLive(true)
+    if (poseLiveTimer.current) clearTimeout(poseLiveTimer.current)
+    poseLiveTimer.current = setTimeout(() => setPoseLive(false), 1200)
   })
+  useEffect(() => () => void (poseLiveTimer.current && clearTimeout(poseLiveTimer.current)), [])
 
   // Round-trip managed Motion Studio blocks (#413): when the user focuses a local
   // .py carrying Snakie-managed blocks in the full Robot View, read its pose
@@ -3855,6 +3880,8 @@ export function RobotView({
             onRecallPose={handleRecallPose}
             onRenamePose={handleRenamePose}
             onDeletePose={handleDeletePose}
+            onDuplicatePose={handleDuplicatePose}
+            poseLive={poseLive}
             jointMeta={jointMeta}
             values={values}
             overrides={overrides}
