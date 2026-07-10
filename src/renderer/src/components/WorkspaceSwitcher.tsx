@@ -4,22 +4,25 @@ import './WorkspaceSwitcher.css'
 /**
  * WORKSPACE SWITCHER (epic #259, Phase 1) — one-click named layouts.
  *
- * A compact segmented control in the toolbar: **Code · Board · Lab · Data**.
- * Each workspace remembers its own geometry (sidebar view, panel sizes,
- * collapse states, instrument dock); switching restyles the SAME mounted tree
- * so nothing (editor, console scrollback, instruments) is lost. The ↺ button
- * restores the active workspace to its factory preset — the always-available
- * "Reset layout" escape hatch.
+ * A compact segmented control in the toolbar: **Code · Robot**. Each workspace
+ * remembers its own geometry (sidebar view, panel sizes, collapse states,
+ * instrument dock); switching restyles the SAME mounted tree so nothing (editor,
+ * console scrollback, instruments) is lost. The ↺ button restores the active
+ * workspace to its factory preset — the always-available "Reset layout" escape hatch.
  *
- * Reads the layout store directly (no prop threading through Toolbar).
+ * The Board + Data Lab workspaces are hidden from the switcher (the Board View is
+ * still reachable via its pop-out window and the Robot workspace); a follow-up issue
+ * tracks removing the underlying views. Reads the layout store directly.
  */
+const VISIBLE_WORKSPACES = WORKSPACE_IDS.filter((id) => id === 'code' || id === 'robot')
+
 export function WorkspaceSwitcher(): JSX.Element {
   const layout = useWorkspaceLayout()
 
   return (
     <div className="ws-switcher" role="group" aria-label="Workspace layout">
       <div className="ws-switcher__seg">
-        {WORKSPACE_IDS.map((id) => (
+        {VISIBLE_WORKSPACES.map((id) => (
           <button
             key={id}
             type="button"
