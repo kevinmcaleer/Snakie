@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — Add Joint previews the mate live (#399).** As soon as you pick the
+  second point, the child snaps onto the parent **in the 3-D view** — so you see the
+  result and can tell whether it needs a roll **before** pressing Add. Changing the type,
+  offset or roll updates the preview live; **Cancel** puts everything back exactly as it
+  was. (Debounced so it stays smooth on mesh-heavy robots.)
 - **Robot View — an explicit kinematic Chain view + a parent picker (#354).** The build
   panel now shows the robot as an indented **Chain** — `Base → Shoulder → Arm → Servo` —
   so the parent→child structure is always visible (a part nested under the wrong parent
