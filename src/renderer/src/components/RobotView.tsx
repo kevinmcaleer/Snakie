@@ -84,6 +84,7 @@ import { RobotPropertiesDialog, type PropsContext } from './RobotPropertiesDialo
 import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
+import { RobotSequencer } from './RobotSequencer'
 import {
   autoMirrorPairs,
   deleteKey,
@@ -93,7 +94,10 @@ import {
   generateMicroPython,
   mirrorTracks,
   moveKey,
+  poseSequenceToManagedSteps,
+  samplePoseSequence,
   sampleTimeline,
+  sequenceDuration,
   upsertKey
 } from '../../../shared/robot-timeline'
 import {
@@ -103,11 +107,15 @@ import {
   type ManagedServo,
   type ManagedSequenceStep
 } from '../../../shared/managed-blocks'
+import { jointToServo } from '../../../shared/krf'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
   MirrorPair,
   MotionEasing,
+  MotionSequence,
   MotionTimeline,
+  PoseStep,
   RobotDefinition,
   RobotModel,
   ServoJointBinding
@@ -116,6 +124,9 @@ import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
 const EMPTY_TIMELINE: MotionTimeline = { duration: 2, easing: 'easeInOut', loop: true, fps: 20, tracks: [] }
+
+/** An empty pose sequence (#415) — looping, no steps yet. */
+const EMPTY_SEQUENCE: MotionSequence = { name: 'sequence', loop: true, fps: 20, steps: [] }
 
 // Camera view per robot, kept at MODULE scope so it survives the RobotView unmounting
 // when you switch to a non-URDF editor tab — otherwise the orbit is lost and the view
@@ -1489,6 +1500,7 @@ export function RobotView({
         applyTimelineAt(playheadRef.current, true) // pausing → sync the sliders to the pose
         return false
       }
+      setSeqPlaying(false) // keyframe + sequence playback are mutually exclusive
       // Starting: rewind a FINISHED one-shot clip so it replays from the top.
       const tl = timelineRef.current
       if (!tl.loop && playheadRef.current >= tl.duration) {
@@ -1496,6 +1508,177 @@ export function RobotView({
         setPlayhead(0)
       }
       return true
+    })
+  }
+
+  // ── Pose-step sequences (#415) ─────────────────────────────────────────────
+  const [sequence, setSequence] = useState<MotionSequence>(EMPTY_SEQUENCE)
+  const [seqPlaying, setSeqPlaying] = useState(false)
+  const [seqPlayhead, setSeqPlayhead] = useState(0)
+  const [seqLive, setSeqLive] = useState(false)
+  const sequenceRef = useRef<MotionSequence>(EMPTY_SEQUENCE)
+  const seqPlayheadRef = useRef(0)
+  const lastSeqPush = useRef(0)
+  const lastLiveSend = useRef(0)
+  const seqSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingSeqSave = useRef<(() => Promise<void>) | null>(null)
+  const seqLoadedFolder = useRef<string | null>(null)
+  const seqLiveRef = useRef(false)
+  sequenceRef.current = sequence
+  seqLiveRef.current = seqLive
+  // Pose name → its saved DISPLAY values, for the sampler (kept fresh for rAF).
+  const posesByNameRef = useRef<Record<string, Record<string, number>>>({})
+  posesByNameRef.current = Object.fromEntries(poses.map((p) => [p.name, p.values]))
+
+  const deviceStatus = useDeviceStatus()
+  const canSeqLive = deviceStatus.state === 'connected' && bindings.length > 0
+  // Degrade gracefully: if the board disconnects (or its bindings vanish) while Live
+  // is on, drop back to preview-only rather than streaming into the void.
+  useEffect(() => {
+    if (!canSeqLive && seqLive) setSeqLive(false)
+  }, [canSeqLive, seqLive])
+
+  // Stream the current frame's servo angles to a connected board (#415). Uses the
+  // reverse SNKCMD control channel: one line per frame, "SNKCMD servos <pin>=<deg> …"
+  // (a program running `inst.control` mirrors it onto the physical servos). Throttled;
+  // best-effort — a disconnect / write error is swallowed so preview never breaks.
+  const pushLiveFrame = (sampledDisplay: Record<string, number>): void => {
+    const now = performance.now()
+    if (now - lastLiveSend.current < 55) return // ~18 Hz cap on serial writes
+    lastLiveSend.current = now
+    const parts: string[] = []
+    for (const b of bindingsRef.current) {
+      const disp = sampledDisplay[b.joint]
+      if (typeof disp !== 'number') continue
+      parts.push(`${b.pin}=${Math.round(jointToServo(b, disp))}`)
+    }
+    if (parts.length) void window.api.device.sendControl('servos', parts.join(' ')).catch(() => undefined)
+  }
+
+  // Apply a sampled sequence frame to the robot imperatively (mirrors auto-follow);
+  // `commitState` syncs the sliders (scrub/pause only). Streams to the board when Live.
+  const applySequenceAt = (t: number, commitState = false): void => {
+    const r = robotRef.current
+    if (!r) return
+    const sampled = samplePoseSequence(sequenceRef.current, posesByNameRef.current, t)
+    const patch: Record<string, number> = {}
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const disp = sampled[m.name]
+      if (typeof disp !== 'number') continue
+      const lim = effectiveLimit(m, overridesRef.current[m.name])
+      const native = clamp(toNative(m.type, disp), lim.lower, lim.upper)
+      r.setJointValue(m.name, native)
+      patch[m.name] = native
+    }
+    if (commitState) setValues((v) => ({ ...v, ...patch }))
+    if (seqLiveRef.current) pushLiveFrame(sampled)
+  }
+
+  // rAF playback loop (mirrors the timeline's at :1410) — drives setJointValue each
+  // frame; the scrubber state is throttled to ~20 Hz so it never re-renders per frame.
+  useEffect(() => {
+    if (!seqPlaying) return
+    let raf = 0
+    const start = performance.now() - seqPlayheadRef.current * 1000
+    const tick = (): void => {
+      const seq = sequenceRef.current
+      const total = sequenceDuration(seq)
+      const elapsed = (performance.now() - start) / 1000
+      let t: number
+      if (seq.loop) {
+        t = total > 0 ? elapsed % total : 0
+      } else {
+        t = Math.min(elapsed, total)
+        if (elapsed >= total) {
+          applySequenceAt(t, true)
+          seqPlayheadRef.current = t
+          setSeqPlayhead(t)
+          setSeqPlaying(false)
+          return
+        }
+      }
+      applySequenceAt(t)
+      seqPlayheadRef.current = t
+      const now = performance.now()
+      if (now - lastSeqPush.current > 50) {
+        lastSeqPush.current = now
+        setSeqPlayhead(t)
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry the rest
+  }, [seqPlaying])
+
+  // Update the sequence + debounced persist (folder-snapshotting like commitTimeline,
+  // so a fast folder switch can't write it into another project's robot.yml).
+  const commitSequence = (next: MotionSequence): void => {
+    sequenceRef.current = next
+    setSequence(next)
+    const folder = currentFolder || undefined
+    pendingSeqSave.current = async (): Promise<void> => {
+      pendingSeqSave.current = null
+      try {
+        const def = await window.api.robot.load(folder)
+        def.robot = { ...(def.robot ?? {}), sequences: [next] }
+        await window.api.robot.save(folder, def)
+      } catch {
+        // best-effort — a sequence save failing is non-fatal
+      }
+    }
+    if (seqSaveTimer.current) clearTimeout(seqSaveTimer.current)
+    seqSaveTimer.current = setTimeout(() => void pendingSeqSave.current?.(), 400)
+  }
+  // Flush a pending sequence save on unmount (and stop the timer firing after).
+  useEffect(
+    () => () => {
+      if (seqSaveTimer.current) clearTimeout(seqSaveTimer.current)
+      void pendingSeqSave.current?.()
+    },
+    []
+  )
+
+  const seqSeek = (t: number): void => {
+    setSeqPlaying(false)
+    const cl = Math.max(0, Math.min(sequenceDuration(sequenceRef.current), t))
+    seqPlayheadRef.current = cl
+    setSeqPlayhead(cl)
+    applySequenceAt(cl, true)
+  }
+  const handleSeqPlayPause = (): void => {
+    setSeqPlaying((p) => {
+      if (p) {
+        applySequenceAt(seqPlayheadRef.current, true)
+        return false
+      }
+      setPlaying(false) // sequence + keyframe playback are mutually exclusive (both drive setJointValue)
+      const seq = sequenceRef.current
+      if (!seq.loop && seqPlayheadRef.current >= sequenceDuration(seq)) {
+        seqPlayheadRef.current = 0
+        setSeqPlayhead(0)
+      }
+      return true
+    })
+  }
+  const handleAddStep = (pose: string): void => {
+    commitSequence({ ...sequenceRef.current, steps: [...sequenceRef.current.steps, { pose, duration: 0.5, easing: 'easeInOut' }] })
+  }
+  const handleRemoveStep = (index: number): void => {
+    commitSequence({ ...sequenceRef.current, steps: sequenceRef.current.steps.filter((_, i) => i !== index) })
+  }
+  const handleMoveStep = (index: number, dir: -1 | 1): void => {
+    const steps = [...sequenceRef.current.steps]
+    const j = index + dir
+    if (j < 0 || j >= steps.length) return
+    ;[steps[index], steps[j]] = [steps[j], steps[index]]
+    commitSequence({ ...sequenceRef.current, steps })
+  }
+  const patchStep = (index: number, patch: Partial<PoseStep>): void => {
+    commitSequence({
+      ...sequenceRef.current,
+      steps: sequenceRef.current.steps.map((s, i) => (i === index ? { ...s, ...patch } : s))
     })
   }
 
@@ -1527,21 +1710,31 @@ export function RobotView({
     })
   }
 
-  // The current pose library + servo map as managed-block data (#413), so an
-  // export carries a round-trippable source of truth the app can read back. Note:
-  // `sequences` is deliberately OMITTED (undefined) — there is no sequence editor
-  // yet (#415), so any hand-authored SNAKIE_SEQUENCES block is left untouched
-  // rather than wiped, instead of being rewritten to `{}`.
-  const buildManagedMotion = (): ManagedMotion => ({
-    poses: Object.fromEntries(posesRef.current.map((p) => [p.name, p.values])),
-    servos: bindingsRef.current.map((b) => {
-      const s: ManagedServo = { pin: b.pin, joint: b.joint, jointMin: b.jointMin, jointMax: b.jointMax }
-      if (typeof b.servoMin === 'number') s.servoMin = b.servoMin
-      if (typeof b.servoMax === 'number') s.servoMax = b.servoMax
-      if (b.invert) s.invert = true
-      return s
-    })
-  })
+  // The current pose library + servo map + sequence as managed-block data (#413/
+  // #415), so an export carries a round-trippable source of truth the app reads
+  // back. `sequences` is included when the editor has steps (or a hand-authored
+  // block was parsed on open); when there's nothing to write we OMIT the field so
+  // writeManagedBlocks leaves any existing SNAKIE_SEQUENCES block untouched.
+  const buildManagedMotion = (): ManagedMotion => {
+    const m: ManagedMotion = {
+      poses: Object.fromEntries(posesRef.current.map((p) => [p.name, p.values])),
+      servos: bindingsRef.current.map((b) => {
+        const s: ManagedServo = { pin: b.pin, joint: b.joint, jointMin: b.jointMin, jointMax: b.jointMax }
+        if (typeof b.servoMin === 'number') s.servoMin = b.servoMin
+        if (typeof b.servoMax === 'number') s.servoMax = b.servoMax
+        if (b.invert) s.invert = true
+        return s
+      })
+    }
+    const seq = sequenceRef.current
+    const carried = managedSequencesRef.current
+    if (seq.steps.length || Object.keys(carried).length) {
+      // Preserve any other hand-authored sequences; the editor's sequence wins on its name.
+      m.sequences = { ...carried }
+      if (seq.steps.length) m.sequences[seq.name || 'sequence'] = poseSequenceToManagedSteps(seq)
+    }
+    return m
+  }
 
   const handleExport = (): void => {
     const ex = generateMicroPython(timelineRef.current, bindingsRef.current, {
@@ -2306,6 +2499,17 @@ export function RobotView({
                     ? model.mirror
                     : autoMirrorPairs(movable)
                 )
+              }
+              // Pose sequence (#415) — seed once per folder alongside the timeline.
+              if (seqLoadedFolder.current !== folderKey) {
+                seqLoadedFolder.current = folderKey
+                const seq = Array.isArray(model.sequences) ? model.sequences[0] : undefined
+                const loadedSeq = seq && Array.isArray(seq.steps) ? (seq as MotionSequence) : EMPTY_SEQUENCE
+                sequenceRef.current = loadedSeq
+                setSequence(loadedSeq)
+                seqPlayheadRef.current = 0
+                setSeqPlayhead(0)
+                setSeqPlaying(false)
               }
             } catch {
               // No robot.yml (or unreadable) — keep the neutral pose.
@@ -3958,6 +4162,29 @@ export function RobotView({
           onMoveKey={handleMoveKey}
           onDeleteKey={handleDeleteKey}
           onAddKey={handleAddKey}
+        />
+      )}
+      {showTimeline && (
+        <RobotSequencer
+          sequence={sequence}
+          poses={poses}
+          playing={seqPlaying}
+          playhead={seqPlayhead}
+          live={seqLive}
+          canLive={canSeqLive}
+          canExport={bindings.length > 0}
+          onPlayPause={handleSeqPlayPause}
+          onStop={() => seqSeek(0)}
+          onScrub={seqSeek}
+          onToggleLoop={() => commitSequence({ ...sequenceRef.current, loop: !sequenceRef.current.loop })}
+          onToggleLive={() => setSeqLive((v) => !v)}
+          onAddStep={handleAddStep}
+          onRemoveStep={handleRemoveStep}
+          onMoveStep={handleMoveStep}
+          onSetStepPose={(i, pose) => patchStep(i, { pose })}
+          onSetStepDuration={(i, seconds) => patchStep(i, { duration: Math.max(0, seconds) })}
+          onSetStepEasing={(i, easing) => patchStep(i, { easing })}
+          onExport={handleExport}
         />
       )}
     </div>

@@ -77,6 +77,8 @@ export interface RobotModel {
   poses?: NamedPose[]
   /** The choreographed motion timeline (Phase 4, #314). */
   timeline?: MotionTimeline
+  /** Pose-to-pose sequences / walk cycles (#415) — sit beside `timeline`. */
+  sequences?: MotionSequence[]
   /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
   mirror?: MirrorPair[]
 }
@@ -138,6 +140,37 @@ export interface MotionTimeline {
   fps?: number
   /** One track per animated joint. */
   tracks: MotionTrack[]
+}
+
+/**
+ * One step of a pose-to-pose sequence (#415): the model eases FROM this step's
+ * pose TO the next step's pose (wrapping to the first step on a loop) over
+ * `duration` seconds, using `easing`. `pose` names a {@link NamedPose} in
+ * `RobotModel.poses`.
+ */
+export interface PoseStep {
+  /** The saved pose this step starts on (a `NamedPose.name`). */
+  pose: string
+  /** Seconds to transition to the NEXT step's pose (the loop seam uses the last). */
+  duration: number
+  /** Interpolation into the next pose (default easeInOut). */
+  easing?: MotionEasing
+}
+
+/**
+ * A pose-to-pose motion clip (#415) — how makers author a walk cycle: an ordered
+ * list of saved poses, each held for a duration. Sits BESIDE the per-joint
+ * keyframe {@link MotionTimeline}; a robot may have either, both, or neither.
+ */
+export interface MotionSequence {
+  /** Display name (also the key of its exported `SNAKIE_SEQUENCES` entry). */
+  name?: string
+  /** Loop the sequence (the last step eases back to the first). */
+  loop: boolean
+  /** Preview / export sample rate (default 20). */
+  fps?: number
+  /** The ordered pose steps. */
+  steps: PoseStep[]
 }
 
 /** A left↔right mirror pairing (`a` copies onto `b`), for symmetric gaits. */
