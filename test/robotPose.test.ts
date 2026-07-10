@@ -177,6 +177,12 @@ describe('capturePoseValues — Capture Pose incl. partial (#414)', () => {
     expect(capturePoseValues(meta, native, ['finger', 'elbow'])).toEqual({ elbow: -45 })
   })
 
+  it('an empty include set captures nothing (callers must refuse a 0-joint pose)', () => {
+    // handleSavePose bails on an empty `include`; this locks in that [] ⇒ {} so a
+    // future caller can rely on it to detect "nothing ticked".
+    expect(capturePoseValues(meta, native, [])).toEqual({})
+  })
+
   it('rounds to 2 decimals', () => {
     const vals = capturePoseValues(
       [{ name: 'j', type: 'revolute', lower: -Math.PI, upper: Math.PI, isMimic: false }],

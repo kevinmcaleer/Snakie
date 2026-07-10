@@ -576,8 +576,10 @@ function PoseBody({
   }
   // Footer OK: save a NEW pose (else it'd discard silently), or rename an EXISTING
   // pose whose name was changed. (Editing an existing pose's values is the Save button.)
+  // Mirror the Capture button's guard — never persist an empty (0-joint) pose.
   commitRef.current = () => {
-    if (!name && trimmed) onSavePose(trimmed, allIncluded ? undefined : includedNames)
+    if (!name && trimmed && includedNames.length > 0)
+      onSavePose(trimmed, allIncluded ? undefined : includedNames)
     else if (name && trimmed && trimmed !== name && !clash) onRenamePose(name, trimmed)
   }
   return (

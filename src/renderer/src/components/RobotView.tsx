@@ -286,6 +286,8 @@ export function RobotView({
   // leaves the legs out of `values`. Works whether the sliders OR a running
   // program's `SNK SERVO` telemetry are driving the joints (both update `values`).
   const handleSavePose = (name: string, include?: string[]): void => {
+    // A partial capture with nothing ticked would persist a dead, empty pose — refuse it.
+    if (include && include.length === 0) return
     const vals = capturePoseValues(metaRef.current, valuesRef.current, include)
     const next = [...poses.filter((p) => p.name !== name), { name, values: vals }]
     setPoses(next)
