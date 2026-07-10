@@ -102,6 +102,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Simpler workspace switcher + softer blueprint grid.** The workspace switcher now shows just
+  **Code · Robot** — the Board and Data Lab entries are hidden (the Board View is still reachable via
+  its pop-out window and the Robot workspace; deeper cleanup tracked in #447). The blueprint
+  breadboard's graph-paper grid lines are a touch softer so they read as a backdrop.
 - **Robot View — joints are first-class in the Build hierarchy.** Each connecting joint now has its
   own row directly above the link it drives, showing a **type glyph** (a lock for fixed, a rotation
   arrow for a hinge, a spoked wheel for continuous, a slider for prismatic), the **joint name** (so
