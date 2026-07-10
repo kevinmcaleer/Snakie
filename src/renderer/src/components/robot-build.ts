@@ -9,7 +9,7 @@ export type PrimitiveKind = 'box' | 'cylinder' | 'sphere'
 export type Vec3 = [number, number, number]
 
 /** The active builder tool (#335). */
-export type BuildTool = 'select' | 'pushpull' | 'move' | 'joint'
+export type BuildTool = 'select' | 'pushpull' | 'move' | 'joint' | 'ik'
 
 /** Which dimension a picked face resizes, and how. */
 export interface FaceEdit {

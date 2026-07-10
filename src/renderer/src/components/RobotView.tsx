@@ -19,6 +19,7 @@ import {
   toDisplay,
   toNative
 } from './robot-pose'
+import { solveCCD, type IkJoint } from './robot-ik'
 import {
   addMeshLink,
   addPrimitive,
@@ -2621,6 +2622,108 @@ export function RobotView({
             ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
           }
 
+          // ── Grab / IK tool (#410): grab a link + drag; the movable-joint chain from
+          // the base to it re-poses (CCD) so the grabbed point follows the cursor. ──
+          type Grab = {
+            link: string // the grabbed (end-effector) link
+            localOffset: THREE.Vector3 // grabbed point in that link's LOCAL frame
+            plane: THREE.Plane // camera-facing drag plane
+            joints: string[] // participating movable joints, NEAREST-to-effector first
+          }
+          let grab: Grab | null = null
+          // The non-mimic revolute/continuous joints on the chain from `endLink` up to
+          // the root, nearest-to-effector first — the joints IK is allowed to turn.
+          const ikChainJoints = (endLink: string): string[] => {
+            const byChild = new Map(readAllJoints(contentRef.current).map((j) => [j.child, j]))
+            const out: string[] = []
+            const seen = new Set<string>()
+            let cur: string | undefined = endLink
+            while (cur && !seen.has(cur)) {
+              seen.add(cur)
+              const j = byChild.get(cur) // the joint whose child is `cur` (its parent joint)
+              if (!j) break // reached a root (no parent joint)
+              const m = metaRef.current.find((x) => x.name === j.name)
+              if (m && !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')) out.push(j.name)
+              cur = j.parent
+            }
+            return out
+          }
+          const startGrab = (e: PointerEvent): void => {
+            const robot = robotRef.current
+            if (!robot) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const hit = buildRay.intersectObject(robot, true).find((h) => h.face)
+            if (!hit || !hit.face) return
+            const link = ownerLinkName(hit.object)
+            if (!link || !robot.links[link]) return
+            const joints = ikChainJoints(link)
+            if (!joints.length) return // the base, or no movable ancestor joint → no-op
+            setSelectedLink(link)
+            robot.updateMatrixWorld(true)
+            camera.getWorldDirection(camDir)
+            grab = {
+              link,
+              localOffset: robot.links[link].worldToLocal(hit.point.clone()),
+              plane: new THREE.Plane().setFromNormalAndCoplanarPoint(camDir, hit.point),
+              joints
+            }
+            controls.enabled = false
+            ;(e.target as HTMLElement).setPointerCapture?.(e.pointerId)
+          }
+          // Solve one drag frame: move the grabbed point toward the cursor's plane target.
+          const dragGrab = (e: PointerEvent): void => {
+            const robot = robotRef.current
+            if (!grab || !robot) return
+            buildNdcFrom(e)
+            buildRay.setFromCamera(buildNdc, camera)
+            const target = new THREE.Vector3()
+            if (!buildRay.ray.intersectPlane(grab.plane, target)) return
+            robot.updateMatrixWorld(true)
+            const eff = robot.links[grab.link].localToWorld(grab.localOffset.clone())
+            const p = new THREE.Vector3()
+            const ax = new THREE.Vector3()
+            const ikJoints: IkJoint[] = grab.joints.map((name) => {
+              const j = robot.joints[name]
+              j.getWorldPosition(p)
+              ax.copy(j.axis).transformDirection(j.matrixWorld).normalize()
+              const m = metaRef.current.find((x) => x.name === name)
+              const lim = m
+                ? effectiveLimit(m, overridesRef.current[name])
+                : { lower: -Math.PI, upper: Math.PI }
+              return {
+                pivot: [p.x, p.y, p.z],
+                axis: [ax.x, ax.y, ax.z],
+                angle: j.angle,
+                lower: lim.lower,
+                upper: lim.upper
+              }
+            })
+            const solved = solveCCD(ikJoints, [eff.x, eff.y, eff.z], [target.x, target.y, target.z], {
+              iterations: 6
+            })
+            grab.joints.forEach((name, i) => robot.setJointValue(name, solved[i]))
+            robot.updateMatrixWorld(true)
+          }
+          // Push the grabbed chain's final joint angles into React `values` so the pose
+          // sliders reflect the new pose and it's savable via Save Pose. No URDF write.
+          const finishGrab = (): void => {
+            const robot = robotRef.current
+            if (!grab) return
+            const joints = grab.joints
+            grab = null
+            controls.enabled = true
+            if (!robot) return
+            setValues((v) => {
+              const next = { ...v }
+              for (const name of joints) {
+                const a = robot.joints[name]?.angle
+                if (typeof a === 'number') next[name] = a
+              }
+              return next
+            })
+          }
+
           // ── Join tool (#354): click a point on two blocks to connect them ──
           // Markers are a CIRCLE laid flat on the picked face + an X/Y/Z axis triad
           // (Z = the face normal) so the pick reads accurately in 3-D from any angle.
@@ -2966,12 +3069,23 @@ export function RobotView({
             bDownX = e.clientX
             bDownY = e.clientY
             if (jointPickRef.current.active) return // pick mode owns clicks (no move/resize)
-            if (!buildActive() || !canEditRef.current || !robotRef.current) return
+            if (!buildActive() || !robotRef.current) return
+            // The Grab/IK tool only POSES (live joint values), so it needs a loaded robot
+            // but NOT a saved project file — unlike the geometry-editing tools below.
+            if (buildToolRef.current === 'ik') {
+              startGrab(e)
+              return
+            }
+            if (!canEditRef.current) return
             if (buildToolRef.current === 'pushpull') startResize(e)
             else if (buildToolRef.current === 'move') startMove(e)
           }
 
           const onBuildMove = (e: PointerEvent): void => {
+            if (grab) {
+              dragGrab(e)
+              return
+            }
             if (drag) {
               buildNdcFrom(e)
               buildRay.setFromCamera(buildNdc, camera)
@@ -3057,6 +3171,10 @@ export function RobotView({
               }
               return
             }
+            if (grab) {
+              finishGrab() // write the posed joint angles into `values`; restore controls
+              return
+            }
             if (drag) {
               const d = drag
               drag = null
@@ -3096,7 +3214,7 @@ export function RobotView({
           // (circle + axis, cross-hair over holes), and holding SHIFT LOCKS the snaps
           // so you can slide onto a hole centre (empty space) and click it.
           const onBuildHover = (e: PointerEvent): void => {
-            if (drag || move) return
+            if (drag || move || grab) return
             const jointActive = jointPickRef.current.active
             const wantHandles = buildToolRef.current === 'move' || jointActive
             if (!buildActive() || !wantHandles || !robotRef.current) {
@@ -3197,6 +3315,7 @@ export function RobotView({
             controls.enabled = true
             setBuildDim(null)
             clearHandles()
+            if (grab) finishGrab() // keep the live pose; sync it into `values` + restore controls
             if (drag) {
               applyPreview(drag.kind, drag.mesh, drag.group, drag.dims0, drag.origin0)
               drag = null
@@ -3520,6 +3639,7 @@ export function RobotView({
             tool={buildTool}
             onSetTool={onSetTool}
             canEdit={canEdit}
+            canPose={movableNames.length > 0}
             onAdd={handleAddPrimitive}
             measureActive={measureActive}
             onToggleMeasure={() => setMeasureActive((a) => !a)}
