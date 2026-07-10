@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — preview saved poses from the docked mini viewer (#399).** The compact Robot
+  View (above the instrument dock in Robot mode) gains a small **pose dropdown** (top-right,
+  beside the Home button) when the robot has saved poses. Pick one and the docked model
+  **eases smoothly** to that pose — a quick preview without opening the full pose tool. It's
+  view-only (never writes `robot.yml`), lists only poses that fit the displayed model, and
+  hides when there are none.
 - **Robot View — keep a robot's meshes with the project (#399).** When a `.urdf` points at
   STL/DAE meshes that live **outside** the project folder (an absolute path, or one that
   escapes via `..`), Robot View now shows a **"Copy N mesh(es) into project"** offer. Accepting
