@@ -857,7 +857,7 @@ function AddJointBody({
       ) : (
         <p className="robotprops__note">
           {!parent || !child
-            ? 'Pick a point on the PARENT first, then the CHILD (snaps to corners / edges / hole centres). Hold Shift to lock a snap onto a hole.'
+            ? 'Pick a point on the PARENT first, then the CHILD (snaps to corners / edges / hole centres). Hold Shift to LOCK the highlighted snap, then move over the hole and click it.'
             : type === 'revolute'
               ? 'The parent (1) stays put; the child (2) attaches onto it — use ⇅ swap to flip. After Add, pose the joint to preview the swing.'
               : 'The child (2) moves so its point meets the parent (1) — use ⇅ swap if you picked them the wrong way round.'}
