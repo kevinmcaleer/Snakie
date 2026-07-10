@@ -129,6 +129,42 @@ class MotionReadShapeTests(unittest.TestCase):
         self.assertEqual(res["servos"][0]["pin"], "GP1")
 
 
+class MotionReadRobustnessTests(unittest.TestCase):
+    def test_out_of_range_int_is_a_soft_drop_not_a_raise(self) -> None:
+        # A ~321-digit int passes ast.literal_eval but float() would OverflowError;
+        # the reader must drop it (never raise to the JSON-RPC loop).
+        huge = "1" + "0" * 320
+        for assign in (
+            'SNAKIE_POSES = { "p": { "j": ' + huge + " } }",
+            'SNAKIE_SEQUENCES = { "s": [ ["p", ' + huge + "] ] }",
+            'SNAKIE_SERVOS = [ { "pin": "GP0", "joint": "j", "jointMax": ' + huge + " } ]",
+        ):
+            res = read(
+                "# --- snakie:poses v1 ---\n" + assign + "\n# --- snakie:poses:end ---\n"
+            )
+            self.assertTrue(res["ok"], assign)  # soft-handled, not a crash
+
+    def test_out_of_range_pose_value_is_dropped(self) -> None:
+        huge = "1" + "0" * 320
+        res = read(
+            "# --- snakie:poses v1 ---\n"
+            'SNAKIE_POSES = { "p": { "good": 45, "bad": ' + huge + " } }\n"
+            "# --- snakie:poses:end ---\n"
+        )
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["poses"]["p"], {"good": 45.0})  # only the finite value
+
+    def test_boolean_values_are_rejected_not_coerced(self) -> None:
+        # bool subclasses int; True must NOT become 1.0 in a numeric slot.
+        res = read(
+            "# --- snakie:poses v1 ---\n"
+            'SNAKIE_POSES = { "p": { "j": True } }\n'
+            "# --- snakie:poses:end ---\n"
+        )
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["poses"]["p"], {})  # the boolean was dropped, not coerced
+
+
 class MotionCheckTests(unittest.TestCase):
     def test_check_reports_ok_and_schema_without_data(self) -> None:
         res = host._motion_check({"source": VALID})

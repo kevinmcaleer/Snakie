@@ -9,16 +9,20 @@
  * ```python
  * # --- snakie:poses v1 --- managed by Snakie Motion Studio — edit in the Robot View, not here
  * SNAKIE_POSES = { "wave": { "shoulder": 45.0, "elbow": -20.0 } }
- * SNAKIE_SEQUENCES = { "hello": [ ["wave", 500], ["rest", 500] ] }
  * # --- snakie:poses:end ---
+ * # --- snakie:sequences v1 --- managed by Snakie Motion Studio
+ * SNAKIE_SEQUENCES = { "hello": [ ["wave", 500], ["rest", 500] ] }
+ * # --- snakie:sequences:end ---
  * # --- snakie:servos v1 --- managed by Snakie Motion Studio
  * SNAKIE_SERVOS = [ { "pin": "GP0", "joint": "shoulder", "jointMin": 0.0, "jointMax": 180.0 } ]
  * # --- snakie:servos:end ---
  * ```
  *
- * {@link writeManagedBlocks} rewrites ONLY the bytes between a marker pair (every
- * other byte is preserved), inserting a missing block once after the module
- * docstring / import header. The companion reader is the Python host's
+ * Each dataset is its OWN block, so a caller can rewrite the blocks it manages
+ * (poses, servos) while a block it does NOT yet manage (sequences, until the
+ * sequence editor lands in #415) is left byte-for-byte alone rather than wiped.
+ * {@link writeManagedBlocks} rewrites ONLY the bytes between a marker pair, and
+ * only for the datasets it is given. The companion reader is the Python host's
  * `motion.read` (AST + `ast.literal_eval`); this module is the pure-TS writer +
  * block locator, dependency-free so the renderer and any test can import it.
  */
@@ -33,15 +37,19 @@ export type ManagedPose = Record<string, number>
 /** A sequence step: a pose name held for a duration in milliseconds. */
 export type ManagedSequenceStep = [pose: string, durationMs: number]
 
-/** The three managed datasets. Mirrors the app's `NamedPose` /
- *  `ServoJointBinding` shapes so the round-trip is loss-free. */
+/**
+ * The managed datasets. Every field is OPTIONAL: an absent field means "I don't
+ * manage this — leave any existing block untouched and don't create one." A
+ * present field (even `{}`/`[]`) is written. Mirrors the app's `NamedPose` /
+ * `ServoJointBinding` shapes so the round-trip is loss-free.
+ */
 export interface ManagedMotion {
   /** Pose library: pose name → { joint → value }. */
-  poses: Record<string, ManagedPose>
+  poses?: Record<string, ManagedPose>
   /** Sequences: name → ordered [poseName, durationMs] steps. */
-  sequences: Record<string, ManagedSequenceStep[]>
+  sequences?: Record<string, ManagedSequenceStep[]>
   /** Servo map: one entry per bound pin (camelCase, matching `ServoJointBinding`). */
-  servos: ManagedServo[]
+  servos?: ManagedServo[]
 }
 
 /** A servo↔joint binding as stored in a managed block (matches `ServoJointBinding`). */
@@ -55,8 +63,8 @@ export interface ManagedServo {
   invert?: boolean
 }
 
-/** The two managed blocks and the assignments each carries. */
-const BLOCKS = ['poses', 'servos'] as const
+/** The managed blocks, in the order they are inserted into a fresh file. */
+const BLOCKS = ['poses', 'sequences', 'servos'] as const
 export type ManagedBlockName = (typeof BLOCKS)[number]
 
 /** A located marker pair in some source. */
@@ -85,11 +93,11 @@ export interface WriteResult {
 // ── Python-literal serialisation ────────────────────────────────────────────
 
 /** Format a finite number the way Python would print the equivalent literal.
- *  Non-finite values collapse to `0` so the output always `literal_eval`s. */
+ *  Non-finite values collapse to `0` so the output always `literal_eval`s. An
+ *  integer-valued float prints without a fractional part (`45`, not `45.0`);
+ *  the value is identical through `literal_eval` (`45 == 45.0`). */
 function pyNumber(n: number): string {
   if (!Number.isFinite(n)) return '0'
-  // Integers print without a fractional part; everything else via the shortest
-  // round-tripping JS repr, which `ast.literal_eval` reads back identically.
   return Object.is(n, -0) ? '0' : String(n)
 }
 
@@ -106,8 +114,9 @@ function pyString(s: string): string {
 
 /**
  * Serialise a JS value to a `literal_eval`-safe Python literal (dict / list /
- * tuple / number / str / bool / None only — never a call or a bare name). Object
- * keys are emitted in insertion order; a 1-tuple gets its trailing comma.
+ * number / str / bool / None only — never a call or a bare name). Arrays become
+ * Python lists (the reader accepts a list or a tuple); object keys are emitted in
+ * insertion order.
  */
 export function pyLiteral(value: unknown): string {
   if (value === null || value === undefined) return 'None'
@@ -115,8 +124,7 @@ export function pyLiteral(value: unknown): string {
   if (typeof value === 'number') return pyNumber(value)
   if (typeof value === 'string') return pyString(value)
   if (Array.isArray(value)) {
-    const items = value.map(pyLiteral)
-    return `[${items.join(', ')}]`
+    return `[${value.map(pyLiteral).join(', ')}]`
   }
   if (typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
@@ -137,7 +145,30 @@ const END_RE = /^# --- snakie:([a-z]+):end ---/
 /** The trailing "managed by…" note on each opening marker. */
 const OPEN_NOTE: Record<ManagedBlockName, string> = {
   poses: 'managed by Snakie Motion Studio — edit in the Robot View, not here',
+  sequences: 'managed by Snakie Motion Studio',
   servos: 'managed by Snakie Motion Studio'
+}
+
+/** The single assignment each block carries. */
+const ASSIGNMENT: Record<ManagedBlockName, string> = {
+  poses: 'SNAKIE_POSES',
+  sequences: 'SNAKIE_SEQUENCES',
+  servos: 'SNAKIE_SERVOS'
+}
+
+/** The current dataset value for a block (defaults so a provided-but-empty
+ *  field still emits a valid literal). */
+function blockValue(name: ManagedBlockName, motion: ManagedMotion): unknown {
+  if (name === 'poses') return motion.poses ?? {}
+  if (name === 'sequences') return motion.sequences ?? {}
+  return motion.servos ?? []
+}
+
+/** Whether the caller supplied this block's dataset (present ⇒ write it). */
+function isProvided(name: ManagedBlockName, motion: ManagedMotion): boolean {
+  if (name === 'poses') return motion.poses !== undefined
+  if (name === 'sequences') return motion.sequences !== undefined
+  return motion.servos !== undefined
 }
 
 /** The opening-marker line for a block at the current schema version. */
@@ -150,28 +181,20 @@ function endMarker(name: ManagedBlockName): string {
   return `# --- snakie:${name}:end ---`
 }
 
-/** The BODY lines (assignments) of a managed block — no markers. */
-function blockBody(name: ManagedBlockName, motion: ManagedMotion): string[] {
-  if (name === 'poses') {
-    return [
-      `SNAKIE_POSES = ${pyLiteral(motion.poses ?? {})}`,
-      `SNAKIE_SEQUENCES = ${pyLiteral(motion.sequences ?? {})}`
-    ]
-  }
-  return [`SNAKIE_SERVOS = ${pyLiteral(motion.servos ?? [])}`]
-}
-
-/** A full managed block (markers + body) as lines. */
+/** A full managed block (markers + assignment) as lines. */
 function blockLines(name: ManagedBlockName, motion: ManagedMotion): string[] {
-  return [openMarker(name), ...blockBody(name, motion), endMarker(name)]
+  return [openMarker(name), `${ASSIGNMENT[name]} = ${pyLiteral(blockValue(name, motion))}`, endMarker(name)]
 }
 
 /**
- * Render both managed blocks as a standalone text fragment (poses first, then
- * servos), e.g. to seed a brand-new file. Ends without a trailing newline.
+ * Render the provided managed blocks as a standalone text fragment (in canonical
+ * poses → sequences → servos order), e.g. to seed a brand-new file. Only datasets
+ * present on `motion` are emitted. Ends without a trailing newline.
  */
 export function serializeManagedBlocks(motion: ManagedMotion): string {
-  return BLOCKS.flatMap((name) => blockLines(name, motion)).join('\n')
+  return BLOCKS.filter((name) => isProvided(name, motion))
+    .flatMap((name) => blockLines(name, motion))
+    .join('\n')
 }
 
 // ── Locating blocks ─────────────────────────────────────────────────────────
@@ -204,9 +227,9 @@ export function findManagedBlocks(source: string): FoundBlock[] {
   return found
 }
 
-/** Whether `source` carries any Snakie-managed block (used to gate the reader). */
+/** Whether `source` carries any Snakie-managed marker (gates the reader). */
 export function hasManagedBlocks(source: string): boolean {
-  return OPEN_RE.test(source) || source.split('\n').some((l) => OPEN_RE.test(l))
+  return source.split('\n').some((l) => OPEN_RE.test(l))
 }
 
 // ── Insertion point for a missing block ─────────────────────────────────────
@@ -218,8 +241,10 @@ function isImportLine(line: string): boolean {
 
 /**
  * The line index at which to insert a first managed block: after a shebang, an
- * encoding line, a module docstring, and the leading import run (with their
- * trailing blank lines) — i.e. "near the top, below the header" per the spec.
+ * encoding line, a module docstring, and the leading import run — i.e. "near the
+ * top, below the header" per the spec. If there is no import header but the file
+ * opens with a leading comment/blank run (e.g. a title comment), the block lands
+ * after that run; a file that starts straight into code gets the block at index 0.
  */
 export function headerInsertIndex(lines: string[]): number {
   let i = 0
@@ -229,19 +254,19 @@ export function headerInsertIndex(lines: string[]): number {
   const ds = /^\s*(?:[rRbBuUfF]*)("""|''')/.exec(lines[i] ?? '')
   if (ds) {
     const quote = ds[1]
-    // Single-line docstring (opens and closes on the same line)?
-    const rest = (lines[i] ?? '').slice((ds.index ?? 0) + (lines[i]!.indexOf(quote) + quote.length))
+    const rest = (lines[i] ?? '').slice((lines[i]!.indexOf(quote) ?? 0) + quote.length)
     if (rest.includes(quote)) {
-      i++
+      i++ // single-line docstring
     } else {
       i++
       while (i < lines.length && !lines[i].includes(quote)) i++
       if (i < lines.length) i++ // consume the closing line
     }
   }
-  // Leading run of imports / blanks / comments; remember the line AFTER the last
-  // import so the block lands below the import group but above real code.
-  let afterImports = i
+  // Leading run of imports / blanks / comments. Prefer the point AFTER the last
+  // import; failing any import, the point after a leading comment/blank run.
+  let afterImports = -1
+  let afterLeading = i
   let k = i
   while (k < lines.length) {
     const line = lines[k]
@@ -249,42 +274,58 @@ export function headerInsertIndex(lines: string[]): number {
       afterImports = k + 1
       k++
     } else if (line.trim() === '' || line.trimStart().startsWith('#')) {
+      if (afterImports === -1) afterLeading = k + 1
       k++
     } else {
       break
     }
   }
-  return afterImports
+  return afterImports !== -1 ? afterImports : afterLeading
 }
 
 // ── Writing (rewrite-only-our-block) ────────────────────────────────────────
 
+/** The file's dominant line ending (a true count, not "any CRLF wins"). */
+function dominantEol(source: string): string {
+  const crlf = (source.match(/\r\n/g) || []).length
+  const lf = (source.match(/(^|[^\r])\n/g) || []).length
+  return crlf > lf ? '\r\n' : '\n'
+}
+
 /**
- * Splice the managed blocks into `source`, rewriting ONLY the bytes between each
- * marker pair and byte-preserving everything else. A block that is absent is
- * inserted once after the header (see {@link headerInsertIndex}); a block whose
- * on-disk version is NEWER than {@link MANAGED_SCHEMA_VERSION} is left untouched.
+ * Splice the provided managed blocks into `source`, rewriting ONLY the bytes
+ * between each marker pair. A dataset NOT provided on `motion` (an absent field)
+ * is left completely alone — its existing block is byte-preserved and no block is
+ * created. A provided dataset that is absent from the file is inserted once after
+ * the header (see {@link headerInsertIndex}); a block whose on-disk version is
+ * NEWER than {@link MANAGED_SCHEMA_VERSION} is left untouched.
  *
- * Newlines are preserved: the input's dominant line ending (`\r\n` vs `\n`) is
- * used for any inserted lines, and a trailing newline is kept if the source had
- * one.
+ * Line endings: a UNIFORM-ending file is preserved exactly; a mixed-ending file
+ * is normalised to its dominant ending (rare for a Python file, and cosmetic).
+ * A trailing newline is preserved.
  */
 export function writeManagedBlocks(source: string, motion: ManagedMotion): WriteResult {
-  const eol = source.includes('\r\n') ? '\r\n' : '\n'
+  const eol = dominantEol(source)
   const hadTrailingNewline = /\r?\n$/.test(source)
-  // Normalise to `\n` lines for splicing; re-join with the detected EOL.
-  const lines = source.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n')
   const wasEmpty = source.length === 0
+  const lines = source.replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n')
 
+  const provided = BLOCKS.filter((name) => isProvided(name, motion))
   const existing = findManagedBlocks(source)
   const replaced: ManagedBlockName[] = []
   const inserted: ManagedBlockName[] = []
   const skipped: string[] = []
 
-  // Replace existing blocks in place. Process bottom-up so earlier line indices
-  // stay valid as we splice blocks of a different length.
+  // Replace existing blocks IN PLACE — only for datasets we were given, and only
+  // the FIRST pair per name (a hand-duplicated block is left as-is, not doubled).
+  // Bottom-up so earlier line indices stay valid as spliced blocks change length.
+  const seenName = new Set<string>()
   const toReplace = existing
-    .filter((b) => (BLOCKS as readonly string[]).includes(b.name))
+    .filter((b) => {
+      if (seenName.has(b.name)) return false
+      seenName.add(b.name)
+      return (provided as readonly string[]).includes(b.name)
+    })
     .sort((a, b) => b.openLine - a.openLine)
   for (const b of toReplace) {
     if (b.version > MANAGED_SCHEMA_VERSION) {
@@ -296,19 +337,18 @@ export function writeManagedBlocks(source: string, motion: ManagedMotion): Write
     replaced.push(name)
   }
 
-  // Insert any block that wasn't present (and wasn't a skipped future version).
+  // Insert any PROVIDED block that wasn't present (and wasn't a skipped future
+  // version). Datasets we don't manage are never inserted.
   const present = new Set(existing.map((b) => b.name))
-  const missing = BLOCKS.filter((name) => !present.has(name))
+  const missing = provided.filter((name) => !present.has(name))
   if (missing.length) {
     const at = wasEmpty ? 0 : headerInsertIndex(lines)
     const fresh: string[] = []
     for (const name of missing) {
-      if (fresh.length) fresh.push('') // blank line between inserted blocks
+      if (fresh.length) fresh.push('')
       fresh.push(...blockLines(name, motion))
       inserted.push(name)
     }
-    // Frame the insertion with a blank line above (if not at the very top) and
-    // below (if there's following content) so it reads cleanly.
     const above = at > 0 && lines[at - 1]?.trim() !== '' ? [''] : []
     const below = at < lines.length && lines[at]?.trim() !== '' ? [''] : []
     lines.splice(at, 0, ...above, ...fresh, ...below)
@@ -317,4 +357,44 @@ export function writeManagedBlocks(source: string, motion: ManagedMotion): Write
   let text = lines.join(eol)
   if (hadTrailingNewline || (wasEmpty && text.length > 0)) text += eol
   return { text, replaced: replaced.reverse(), inserted, skipped }
+}
+
+// ── Selecting the project's motion file (round-trip source) ─────────────────
+
+/** The minimal open-file shape {@link selectManagedMotionFile} needs. */
+export interface OpenFileLike {
+  source: string
+  name: string
+  path: string
+  content: string
+}
+
+/** Directory of a path (handles `/` and `\`); `''` for a bare/relative name. */
+function dirOf(p: string): string {
+  const i = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+  return i <= 0 ? '' : p.slice(0, i)
+}
+
+/**
+ * Pick the exported `motion.py` to round-trip FROM, scoped to the current
+ * project so a stale tab from another project can never bleed in (#413 review).
+ * A local `motion.py` that carries managed blocks and either is an unsaved
+ * in-session buffer (`path === ''`) or lives directly in `folder`. Returns the
+ * first match, or `undefined`.
+ *
+ * This is the reachable driver for the round-trip: the full Robot View is only
+ * mounted for a `.urdf` active file, so the motion source is a SEPARATE open
+ * buffer, not the active file — keying off `activeFile` would never fire.
+ */
+export function selectManagedMotionFile<T extends OpenFileLike>(
+  files: T[],
+  folder: string | null
+): T | undefined {
+  return files.find(
+    (f) =>
+      f.source === 'local' &&
+      f.name === 'motion.py' &&
+      hasManagedBlocks(f.content) &&
+      (f.path === '' || dirOf(f.path) === (folder ?? ''))
+  )
 }

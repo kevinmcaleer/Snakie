@@ -28,6 +28,7 @@ import ast
 import importlib
 import importlib.util
 import json
+import math
 import os
 import re
 import sys
@@ -307,9 +308,27 @@ _OPEN_MARKER_RE = re.compile(r"^# --- snakie:([a-z]+) v(\d+) ---", re.MULTILINE)
 # The managed assignment targets we recognise, and which block each belongs to.
 _ASSIGN_BLOCK = {
     "SNAKIE_POSES": "poses",
-    "SNAKIE_SEQUENCES": "poses",
+    "SNAKIE_SEQUENCES": "sequences",
     "SNAKIE_SERVOS": "servos",
 }
+
+
+def _as_finite_number(v: Any) -> Optional[float]:
+    """Coerce a managed value to a finite float, or ``None`` to drop it.
+
+    ``bool`` is excluded (it subclasses ``int``, so ``True`` would otherwise
+    become ``1.0`` — a silent type confusion). An out-of-range int literal makes
+    ``float()`` raise ``OverflowError``; a non-finite float is unusable — both
+    are treated as "drop with a warning" so the reader never raises on a
+    hand-edited value (the JSON-RPC contract is a soft ``{ok: False}``, never a
+    crash)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    try:
+        f = float(v)
+    except (OverflowError, ValueError, TypeError):
+        return None
+    return f if math.isfinite(f) else None
 
 
 def _block_versions(source: str) -> Dict[str, int]:
@@ -355,7 +374,13 @@ def _validate_poses(raw: Any, warnings: List[str]) -> Dict[str, Dict[str, float]
         if not isinstance(name, str) or not isinstance(joints, dict):
             warnings.append(f"pose {name!r} has a bad shape — ignored")
             continue
-        vals = {j: float(v) for j, v in joints.items() if isinstance(j, str) and isinstance(v, (int, float))}
+        vals: Dict[str, float] = {}
+        for j, v in joints.items():
+            if not isinstance(j, str):
+                continue
+            num = _as_finite_number(v)
+            if num is not None:
+                vals[j] = num
         out[name] = vals
     return out
 
@@ -372,13 +397,10 @@ def _validate_sequences(raw: Any, warnings: List[str]) -> Dict[str, List[List[An
             continue
         good: List[List[Any]] = []
         for step in steps:
-            if (
-                isinstance(step, (list, tuple))
-                and len(step) == 2
-                and isinstance(step[0], str)
-                and isinstance(step[1], (int, float))
-            ):
-                good.append([step[0], float(step[1])])
+            if isinstance(step, (list, tuple)) and len(step) == 2 and isinstance(step[0], str):
+                dur = _as_finite_number(step[1])
+                if dur is not None:
+                    good.append([step[0], dur])
         out[name] = good
     return out
 
@@ -395,8 +417,9 @@ def _validate_servos(raw: Any, warnings: List[str]) -> List[Dict[str, Any]]:
             continue
         binding: Dict[str, Any] = {"pin": str(entry["pin"]), "joint": str(entry["joint"])}
         for key in ("jointMin", "jointMax", "servoMin", "servoMax"):
-            if isinstance(entry.get(key), (int, float)):
-                binding[key] = float(entry[key])
+            num = _as_finite_number(entry.get(key))
+            if num is not None:
+                binding[key] = num
         if "invert" in entry:
             binding["invert"] = bool(entry["invert"])
         out.append(binding)
@@ -413,45 +436,49 @@ def _motion_read(params: Dict[str, Any]) -> Dict[str, Any]:
     ``{ok: False, error, warnings}`` so the caller suspends managed rewrite.
     """
     source = params.get("source") or ""
-    versions = _block_versions(source)
-
     warnings: List[str] = []
-    # Skip (and warn about) any block from a newer schema.
-    skip_targets = set()
-    for block, ver in versions.items():
-        if ver > MOTION_SCHEMA_VERSION:
-            warnings.append(
-                f"the '{block}' block is schema v{ver}, newer than this app "
-                f"(v{MOTION_SCHEMA_VERSION}) — left untouched; update Snakie to edit it"
-            )
-            for name, blk in _ASSIGN_BLOCK.items():
-                if blk == block:
-                    skip_targets.add(name)
-
     try:
-        values, lit_warnings = _managed_assignments(source)
-    except SyntaxError as exc:
+        versions = _block_versions(source)
+
+        # Skip (and warn about) any block from a newer schema.
+        skip_targets = set()
+        for block, ver in versions.items():
+            if ver > MOTION_SCHEMA_VERSION:
+                warnings.append(
+                    f"the '{block}' block is schema v{ver}, newer than this app "
+                    f"(v{MOTION_SCHEMA_VERSION}) — left untouched; update Snakie to edit it"
+                )
+                for name, blk in _ASSIGN_BLOCK.items():
+                    if blk == block:
+                        skip_targets.add(name)
+
+        try:
+            values, lit_warnings = _managed_assignments(source)
+        except SyntaxError as exc:
+            return {
+                "ok": False,
+                "error": f"the file has a Python syntax error (line {exc.lineno}): {exc.msg}",
+                "warnings": warnings,
+            }
+        warnings.extend(lit_warnings)
+        if lit_warnings:
+            return {"ok": False, "error": lit_warnings[0], "warnings": warnings}
+
+        for name in skip_targets:
+            values.pop(name, None)
+
+        known = [v for v in versions.values() if v <= MOTION_SCHEMA_VERSION]
+        schema = min([MOTION_SCHEMA_VERSION, *known]) if versions else MOTION_SCHEMA_VERSION
         return {
-            "ok": False,
-            "error": f"the file has a Python syntax error (line {exc.lineno}): {exc.msg}",
+            "ok": True,
+            "schema": schema,
+            "poses": _validate_poses(values.get("SNAKIE_POSES", {}), warnings),
+            "sequences": _validate_sequences(values.get("SNAKIE_SEQUENCES", {}), warnings),
+            "servos": _validate_servos(values.get("SNAKIE_SERVOS", []), warnings),
             "warnings": warnings,
         }
-    warnings.extend(lit_warnings)
-    if lit_warnings:
-        return {"ok": False, "error": lit_warnings[0], "warnings": warnings}
-
-    for name in skip_targets:
-        values.pop(name, None)
-
-    schema = min([MOTION_SCHEMA_VERSION, *[v for v in versions.values() if v <= MOTION_SCHEMA_VERSION]]) if versions else MOTION_SCHEMA_VERSION
-    return {
-        "ok": True,
-        "schema": schema,
-        "poses": _validate_poses(values.get("SNAKIE_POSES", {}), warnings),
-        "sequences": _validate_sequences(values.get("SNAKIE_SEQUENCES", {}), warnings),
-        "servos": _validate_servos(values.get("SNAKIE_SERVOS", []), warnings),
-        "warnings": warnings,
-    }
+    except Exception as exc:  # noqa: BLE001 - a hand-edited file must never crash the RPC
+        return {"ok": False, "error": f"could not read managed blocks: {exc}", "warnings": warnings}
 
 
 def _motion_check(params: Dict[str, Any]) -> Dict[str, Any]:
