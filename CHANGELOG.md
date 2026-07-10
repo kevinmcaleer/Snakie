@@ -102,6 +102,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Exported motion is plain-MicroPython pin → variable setup.** The Robot View's exported motion
+  code now sets each servo up as a pure `<joint>_servo = PWM(Pin(n))` followed by
+  `<joint> = Servo(<joint>_servo, pin=n)` — servos are named by the joint they drive, so the code
+  reads like the rig. It runs on hardware *and* in the Snakie simulator (a `try/except` import falls
+  back to CPython-safe stubs), and the `pin=` keeps each servo emitting `SNK SERVO`, so running the
+  exported code still moves the 3-D model. `instruments.Servo(pwm)` now sets the 50 Hz servo
+  frequency on a hand-built PWM.
 - **Simpler workspace switcher + softer blueprint grid.** The workspace switcher now shows just
   **Code · Robot** — the Board and Data Lab entries are hidden (the Board View is still reachable via
   its pop-out window and the Robot workspace; deeper cleanup tracked in #447). The blueprint

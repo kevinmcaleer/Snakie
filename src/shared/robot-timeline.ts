@@ -433,6 +433,13 @@ export function pinNumber(pin: string): number {
   return /^-?\d+$/.test(rest) ? Number(rest) : NaN
 }
 
+/** A safe Python identifier from a joint name, for naming the exported servo
+ *  variables (`base` → `base`, `l-arm` → `l_arm`, `2wheel` → `_2wheel`). */
+export function pyIdent(name: string): string {
+  const s = String(name).replace(/[^A-Za-z0-9_]/g, '_')
+  return !s || /^[0-9]/.test(s) ? `_${s}` : s
+}
+
 export interface MotionExport {
   code: string
   /** Non-fatal problems (unbound joints, non-numeric pins) for the UI. */
@@ -447,8 +454,9 @@ export interface MotionExport {
  * Generate runnable MicroPython that reproduces the timeline on hardware (#314).
  * Bakes the SAME eased samples the preview uses into a flat FRAMES table, maps
  * each joint value to a whole servo degree via {@link jointToServo}, and drives
- * `inst.servo_on(pin).angle()`. Iterates the BINDINGS (a joint on two pins drives
- * both). `DT = 1/FPS` is symbolic to avoid sleep drift; the loop seam is dropped.
+ * pure `PWM(Pin(n))` → `Servo(pwm, pin=n)` variables named by joint. Iterates the
+ * BINDINGS (a joint on two pins drives both). `DT = 1/FPS` is symbolic to avoid
+ * sleep drift; the loop seam is dropped.
  */
 export function generateMicroPython(
   tl: MotionTimeline,
@@ -488,7 +496,11 @@ export function generateMicroPython(
     `# ${name} — motion exported from Snakie Robot View (#314).`,
     `# ${servos.length} servo(s), ${tl.duration}s @ ${fps}fps, ${tl.easing}${tl.loop ? ', looping' : ''}.`,
     ...warnings.map((w) => `# ! ${w}`),
-    'import instruments as inst',
+    'try:',
+    '    from machine import Pin, PWM',
+    'except ImportError:  # Snakie simulator (CPython) — headless stubs',
+    '    from instruments import Pin, PWM',
+    'from instruments import Servo',
     'import time',
     '',
     `FPS = ${fps}`,
@@ -524,15 +536,29 @@ export function generateMicroPython(
     )
   }
 
-  const servoDecls = servos.map(
-    (s, i) => `s${i} = inst.servo_on(${s.pin})  # ${s.b.joint}`
-  )
+  // Pure pin → typed-variable setup: `<joint>_servo = PWM(Pin(n))` then
+  // `<joint> = Servo(<joint>_servo, pin=n)`. `pin=` lets each Servo emit SNK SERVO
+  // telemetry so running this code also drives the 3-D model. Names are the joint
+  // (a safe identifier), de-collided when a joint drives two pins.
+  const usedVars = new Set<string>()
+  const servoVars = servos.map((s) => {
+    const base = pyIdent(s.b.joint) || `servo_${s.pin}`
+    let v = base
+    let n = 2
+    while (usedVars.has(v)) v = `${base}_${n++}`
+    usedVars.add(v)
+    return v
+  })
+  const servoDecls = servos.flatMap((s, i) => [
+    `${servoVars[i]}_servo = PWM(Pin(${s.pin}))`,
+    `${servoVars[i]} = Servo(${servoVars[i]}_servo, pin=${s.pin})`
+  ])
   // A 1-element Python tuple needs a trailing comma, else `(90)` is just an int.
   const framesLit = rows.map((r) => `    (${r.join(', ')}${r.length === 1 ? ',' : ''}),`)
 
   const body = [
     ...servoDecls,
-    `SERVOS = (${servos.map((_, i) => `s${i}`).join(', ')}${servos.length === 1 ? ',' : ''})`,
+    `SERVOS = (${servoVars.join(', ')}${servos.length === 1 ? ',' : ''})`,
     '',
     '# Baked servo angles (degrees) — one row per frame, easing already applied.',
     'FRAMES = (',

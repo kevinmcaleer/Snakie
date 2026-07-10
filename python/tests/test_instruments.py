@@ -472,6 +472,22 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIsNone(inst.servo_command("wat", srv))
         self.assertIsNone(inst.servo_command("", srv))
 
+    def test_servo_from_pwm_sets_servo_freq(self):
+        # Exported `Servo(PWM(Pin(n)))` — the Servo sets the PWM to 50 Hz so a
+        # hand-built PWM works electrically.
+        pwm = _RecordingPWM()
+        inst.Servo(pwm)
+        self.assertIn(50, pwm.freqs)
+
+    def test_servo_from_pwm_with_pin_emits_servo_telemetry(self):
+        # `Servo(pwm, pin=n)` remembers the GPIO, so angle() emits SNK SERVO — the
+        # pin-keyed reading Robot View maps to a joint (code moves the 3-D model).
+        out = _emit(lambda: inst.Servo(_RecordingPWM(), pin=3).angle(90))
+        self.assertIn("SNK SERVO 3 90", out)
+        # Without a pin there's no SERVO telemetry (nothing to key the joint on).
+        out2 = _emit(lambda: inst.Servo(_RecordingPWM()).angle(90))
+        self.assertNotIn("SNK SERVO", out2)
+
     def test_servos_command_drives_several_pins(self):
         # #416 puppet slider: one `servos` payload moves many servos at once.
         calls = []

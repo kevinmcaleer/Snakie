@@ -215,8 +215,11 @@ describe('generateMicroPython — runnable export (#314)', () => {
   ]
   it('emits importable, servo-driving code with baked int frames', () => {
     const ex = generateMicroPython(tl(), bindings, { robotName: 'bot', fps: 4 })
-    expect(ex.code).toContain('import instruments as inst')
-    expect(ex.code).toContain('s0 = inst.servo_on(0)') // GP0 → 0 (not int("GP0")!)
+    expect(ex.code).toContain('from machine import Pin, PWM')
+    expect(ex.code).toContain('from instruments import Servo')
+    // Pure pin → typed variable, named by joint 'a': GP0 → 0 (not int("GP0")!).
+    expect(ex.code).toContain('a_servo = PWM(Pin(0))')
+    expect(ex.code).toContain('a = Servo(a_servo, pin=0)')
     expect(ex.code).toContain('DT = 1 / FPS')
     expect(ex.code).toMatch(/def play\(\):/)
     expect(ex.code).toContain('while True:')
@@ -232,7 +235,7 @@ describe('generateMicroPython — runnable export (#314)', () => {
   })
   it('warns + skips a non-numeric pin instead of emitting a crash', () => {
     const ex = generateMicroPython(tl(), [{ pin: 'SDA', joint: 'a', jointMin: 0, jointMax: 100 }])
-    expect(ex.code).not.toContain('servo_on(SDA)')
+    expect(ex.code).not.toContain('Pin(SDA') // the non-numeric pin is skipped, not emitted as code
     expect(ex.warnings.join(' ')).toMatch(/not a number/)
   })
   it('reports an animated joint with no binding as skipped', () => {
@@ -249,13 +252,16 @@ describe('generateMicroPython — runnable export (#314)', () => {
       { pin: '1', joint: 'a', jointMin: 0, jointMax: 100, invert: true }
     ]
     const ex = generateMicroPython(tl(), two)
-    expect(ex.code).toContain('s0 = inst.servo_on(0)')
-    expect(ex.code).toContain('s1 = inst.servo_on(1)')
-    expect(ex.code).toContain('SERVOS = (s0, s1)')
+    // Same joint 'a' on two pins → the second variable de-collides to a_2.
+    expect(ex.code).toContain('a_servo = PWM(Pin(0))')
+    expect(ex.code).toContain('a = Servo(a_servo, pin=0)')
+    expect(ex.code).toContain('a_2_servo = PWM(Pin(1))')
+    expect(ex.code).toContain('a_2 = Servo(a_2_servo, pin=1)')
+    expect(ex.code).toContain('SERVOS = (a, a_2)')
   })
   it('with no bindings emits valid, explanatory Python (no servos)', () => {
     const ex = generateMicroPython(tl(), [])
-    expect(ex.code).toContain('import instruments as inst')
+    expect(ex.code).toContain('from instruments import Servo')
     expect(ex.code).not.toContain('servo_on')
     expect(ex.code).toMatch(/bind pins to joints/i)
   })
