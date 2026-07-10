@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — keep a robot's meshes with the project (#399).** When a `.urdf` points at
+  STL/DAE meshes that live **outside** the project folder (an absolute path, or one that
+  escapes via `..`), Robot View now shows a **"Copy N mesh(es) into project"** offer. Accepting
+  copies each file into the project's `meshes/` folder (collision-safe — never overwrites) and
+  rewrites the URDF to the in-project path, in **one undo step**, so the robot is self-contained
+  and safe to move, zip, or commit. In-folder and `package://` refs are left alone. Fixes meshes
+  silently going missing when a project is shared or relocated.
 - **Robot View — colour an individual part (#399).** The link Properties panel gains a
   **Colour** control — the same colour well + one-click "used colours" swatches as the Part
   Editor — right beside **Size (mm)**. It works for **primitive** parts (box/cylinder/sphere)

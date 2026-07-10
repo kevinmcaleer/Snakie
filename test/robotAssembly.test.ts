@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   parseAssembly,
   meshFiles,
+  externalMeshes,
+  rewriteMeshFilename,
   rootLink,
   uniqueLinkName,
   addMeshLink,
@@ -459,5 +461,45 @@ describe('link colour — hardened edge cases (#405 review)', () => {
 </robot>`
     expect(collectLinkColors(u).sort()).toEqual(['#00ff00', '#ff0000'])
     expect(collectLinkColors(u, 'a')).toEqual(['#00ff00']) // a's own red excluded
+  })
+})
+
+describe('external meshes — copy-into-project helpers (#407)', () => {
+  const BASE = '/home/kev/proj'
+  const U = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="a"><visual><geometry><mesh filename="meshes/inside.stl"/></geometry></visual></link>
+  <link name="b"><visual><geometry><mesh filename="../shared/arm.stl"/></geometry></visual></link>
+  <link name="c"><visual><geometry><mesh filename="/opt/parts/servo.dae"/></geometry></visual></link>
+  <link name="d"><visual><geometry><mesh filename="package://r/meshes/x.stl"/></geometry></visual></link>
+  <link name="e"><visual><geometry><mesh filename="../weird/body.obj"/></geometry></visual></link>
+</robot>`
+  it('externalMeshes returns only the out-of-folder stl/dae refs, with resolved abs paths', () => {
+    expect(externalMeshes(U, BASE)).toEqual([
+      { ref: '../shared/arm.stl', abs: '/home/kev/shared/arm.stl' },
+      { ref: '/opt/parts/servo.dae', abs: '/opt/parts/servo.dae' }
+      // meshes/inside.stl (in-folder), package:// and .obj are all excluded
+    ])
+  })
+  it('externalMeshes is empty when every mesh is already in-folder', () => {
+    const inFolder = `<robot name="r"><link name="a"><visual><geometry><mesh filename="meshes/x.stl"/></geometry></visual></link></robot>`
+    expect(externalMeshes(inFolder, BASE)).toEqual([])
+  })
+  it('rewriteMeshFilename swaps every matching <mesh filename>, leaving others', () => {
+    const out = rewriteMeshFilename(U, '../shared/arm.stl', 'meshes/arm.stl')
+    expect(out).toContain('<mesh filename="meshes/arm.stl"/>')
+    expect(out).not.toContain('../shared/arm.stl')
+    // untouched refs stay put
+    expect(out).toContain('<mesh filename="meshes/inside.stl"/>')
+    expect(out).toContain('<mesh filename="/opt/parts/servo.dae"/>')
+  })
+  it('rewriteMeshFilename replaces ALL occurrences of a shared ref (collision-safe copy → one rel)', () => {
+    const dup = `<robot name="r">
+  <link name="a"><visual><geometry><mesh filename="../m/x.stl"/></geometry></visual></link>
+  <link name="b"><visual><geometry><mesh filename="../m/x.stl"/></geometry></visual></link>
+</robot>`
+    const out = rewriteMeshFilename(dup, '../m/x.stl', 'meshes/x.stl')
+    expect((out.match(/meshes\/x\.stl/g) || []).length).toBe(2)
+    expect(out).not.toContain('../m/x.stl')
   })
 })
