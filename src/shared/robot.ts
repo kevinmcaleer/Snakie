@@ -79,6 +79,8 @@ export interface RobotModel {
   timeline?: MotionTimeline
   /** Pose-to-pose sequences / walk cycles (#415) — sit beside `timeline`. */
   sequences?: MotionSequence[]
+  /** Puppet controls — sliders that blend 2+ poses live (#416). */
+  controls?: PuppetControl[]
   /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
   mirror?: MirrorPair[]
 }
@@ -171,6 +173,20 @@ export interface MotionSequence {
   fps?: number
   /** The ordered pose steps. */
   steps: PoseStep[]
+}
+
+/**
+ * A puppet control (#416): a named slider that blends 2+ saved poses. The poses
+ * sit at even parameter stops `i/(N-1)`; dragging the slider (0..1) linearly
+ * interpolates between the bracketing pair and drives the model + board live.
+ */
+export interface PuppetControl {
+  /** Stable id within the project. */
+  id: string
+  /** Display name (the slider label). */
+  name: string
+  /** The ordered saved-pose names to blend (≥2 to be usable). */
+  poses: string[]
 }
 
 /** A left↔right mirror pairing (`a` copies onto `b`), for symmetric gaits. */
