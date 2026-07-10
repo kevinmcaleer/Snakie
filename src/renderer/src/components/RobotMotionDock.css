@@ -5,12 +5,18 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Never let the dock eat the 3-D stage: cap it at HALF the Robot View pane (a
+     definite height), not a window-relative `vh` — the latter overflows a short
+     pane and, because the stage canvas is absolutely positioned, collapses the
+     3-D view entirely. The body flex-fills + scrolls within this cap. */
+  max-height: 50%;
   background: var(--bg-elevated, #202227);
   border-top: var(--border-w, 1px) solid var(--border, #2c2e33);
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
 }
 
 .robotdock__tabs {
+  flex: 0 0 auto;
   display: flex;
   align-items: stretch;
   gap: 0.1rem;
@@ -69,11 +75,9 @@
 }
 
 .robotdock__body {
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: 42vh;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
 }
 /* The nested panel (robottimeline / robotseq / robotctl) brings its own padding +
    matching background; drop its top border so the dock's tab strip is the ONLY
