@@ -17,3 +17,5 @@ vite.preview.config.mjs
 # Python bytecode (plugin SDK/host)
 __pycache__/
 *.pyc
+# TypeScript incremental build cache
+*.tsbuildinfo
