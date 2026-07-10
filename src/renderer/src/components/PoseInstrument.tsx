@@ -4,7 +4,9 @@ import { InstrumentWindow, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useWorkspaceOptional } from '../store/workspace'
 import { buildServosPayload } from '../../../shared/control'
-import { poseServoAngles } from './servo-bind'
+import { ease } from '../../../shared/robot-timeline'
+import { poseServoAngles, tweenServoAngles } from './servo-bind'
+import { emitServoDrive } from './servo-drive-bus'
 import { normPin } from './robot-pose'
 import type { NamedPose, ServoJointBinding } from '../../../shared/robot'
 import './PoseInstrument.css'
@@ -42,6 +44,8 @@ export interface PoseInstrumentProps {
 const SERVOS_TARGET = 'servos'
 /** Neutral servo angle for a freshly-loaded slider. */
 const NEUTRAL_DEG = 90
+/** How long a pose-button press takes to glide every servo into place. */
+const POSE_TWEEN_MS = 450
 
 function clampDeg(n: number): number {
   return !Number.isFinite(n) ? NEUTRAL_DEG : n < 0 ? 0 : n > 180 ? 180 : Math.round(n)
@@ -63,7 +67,11 @@ export function PoseInstrument({
   const [poses, setPoses] = useState<NamedPose[]>([])
   // Commanded angle per NUMERIC pin (optimistic) — keys match buildServosPayload.
   const [angles, setAngles] = useState<Record<string, number>>({})
+  // A ref mirror so a pose tween reads the LATEST angles at click time.
+  const anglesRef = useRef(angles)
+  anglesRef.current = angles
   const lastSent = useRef(0)
+  const tweenRef = useRef<number | null>(null)
 
   // Load the rig's servo map + poses, and follow live edits from the other views.
   useEffect(() => {
@@ -96,9 +104,14 @@ export function PoseInstrument({
     }
   }, [folder])
 
-  /** Fire a servos payload; throttle rapid streams (slider drags) like the servo panel. */
-  const send = useCallback((byPin: Record<string, number>, throttle = false): void => {
-    if (throttle) {
+  // Drive a servo batch: move the 3-D model live (board-free) via the drive bus
+  // AND — throttled while streaming — write the hardware control channel so a
+  // running program follows too. The model move is what makes a slider/pose
+  // press visible without a board (the previous version only wrote control that
+  // nothing consumed, so it looked dead).
+  const drive = useCallback((byPin: Record<string, number>, throttleHw = false): void => {
+    emitServoDrive(byPin)
+    if (throttleHw) {
       const now = Date.now()
       if (now - lastSent.current < 40) return
       lastSent.current = now
@@ -107,26 +120,47 @@ export function PoseInstrument({
     if (payload) void window.api.device.sendControl(SERVOS_TARGET, payload).catch(reporter('poses send'))
   }, [])
 
-  /** Jump every bound servo to a saved pose. */
+  const cancelTween = useCallback((): void => {
+    if (tweenRef.current !== null) {
+      cancelAnimationFrame(tweenRef.current)
+      tweenRef.current = null
+    }
+  }, [])
+
+  /** Glide every bound servo from where it is now into a saved pose (eased). */
   const recall = useCallback(
     (pose: NamedPose): void => {
-      const byPin = poseServoAngles(bindings, pose.values)
-      if (Object.keys(byPin).length === 0) return
-      setAngles((a) => ({ ...a, ...byPin }))
-      send(byPin)
+      const target = poseServoAngles(bindings, pose.values)
+      if (Object.keys(target).length === 0) return
+      cancelTween()
+      const from = { ...anglesRef.current }
+      let start: number | null = null
+      const step = (ts: number): void => {
+        if (start === null) start = ts
+        const u = Math.min(1, (ts - start) / POSE_TWEEN_MS)
+        const frame = tweenServoAngles(from, target, ease('easeInOut', u))
+        setAngles((a) => ({ ...a, ...frame }))
+        drive(frame, u < 1) // throttle the hardware mid-glide; final frame lands un-throttled
+        tweenRef.current = u < 1 ? requestAnimationFrame(step) : null
+      }
+      tweenRef.current = requestAnimationFrame(step)
     },
-    [bindings, send]
+    [bindings, drive, cancelTween]
   )
 
-  /** Nudge one servo live. */
+  /** Nudge one servo live (a manual grab cancels any in-flight pose glide). */
   const setServo = useCallback(
     (pin: string, deg: number, throttle = false): void => {
+      cancelTween()
       const d = clampDeg(deg)
       setAngles((a) => ({ ...a, [pin]: d }))
-      send({ [pin]: d }, throttle)
+      drive({ [pin]: d }, throttle)
     },
-    [send]
+    [drive, cancelTween]
   )
+
+  // Stop any running glide when the panel unmounts.
+  useEffect(() => cancelTween, [cancelTween])
 
   const hasServos = bindings.length > 0
   const source = hasServos

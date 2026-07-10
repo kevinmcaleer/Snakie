@@ -8,12 +8,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - **Poses instrument — a live servo test bench.** A new dock instrument reads your rig's
-  servo↔joint map and saved poses from `robot.yml` and gives two quick ways to drive the real
-  hardware while a program runs: **pose buttons** snap every bound servo into a saved pose (applying
-  each servo's calibration), and **per-servo sliders** nudge one servo by hand. Both send a single
-  `SNKCMD servos …` line, so a slider here also moves the on-screen 3-D model. It lights up
-  automatically once a servo is bound, reloads when you bind a servo or save a pose in either editor,
-  and guides you when nothing is bound yet.
+  servo↔joint map and saved poses from `robot.yml` and gives two quick ways to move the servos:
+  **pose buttons** glide every bound servo smoothly into a saved pose (eased, applying each servo's
+  calibration), and **per-servo sliders** nudge one servo by hand. Both drive the on-screen 3-D
+  model **live with no program running** (via an in-app servo-drive channel) *and* stream a
+  `SNKCMD servos …` line to the board, so a running program follows too. It lights up automatically
+  once a servo is bound, reloads when you bind a servo or save a pose in either editor, and guides
+  you when nothing is bound yet.
 - **Bind a servo to a 3-D joint — from either view.** Wire a **servo** on the breadboard and choose
   which URDF **joint** it moves; a running program's servo writes then drive the matching joint in
   the 3-D Robot View live. Bind it two ways: from the **Board View** (a servo's inspector gains a
