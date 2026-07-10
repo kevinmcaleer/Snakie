@@ -13,6 +13,7 @@ import { basename, dirname, extname, join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
+import { resolvePartAsset } from '../parts/library'
 
 /** Result of importing a mesh: the path relative to the URDF's folder, or a
  *  cancellation. */
@@ -23,6 +24,52 @@ export interface ImportMeshResult {
   rel?: string
   /** The copied file's base name, e.g. `wheel.stl`. */
   name?: string
+  /** For a copied STL: its largest bounding-box dimension in the file's own units,
+   *  so the renderer can guess a mm→m scale (#406). Undefined if not measurable. */
+  maxDim?: number
+}
+
+/** The largest bounding-box span of an STL (binary OR ASCII), in the file's own units
+ *  — a cheap DOM/three-free parse so the mm→m import heuristic works without the
+ *  renderer. Returns undefined for a malformed buffer (caller falls back to declared
+ *  units). Mirrors the reach of `handleImportStl`'s three.js STLLoader measure. */
+function stlMaxDim(buf: Buffer): number | undefined {
+  let minX = Infinity, minY = Infinity, minZ = Infinity
+  let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
+  const grow = (x: number, y: number, z: number): void => {
+    if (x < minX) minX = x
+    if (x > maxX) maxX = x
+    if (y < minY) minY = y
+    if (y > maxY) maxY = y
+    if (z < minZ) minZ = z
+    if (z > maxZ) maxZ = z
+  }
+  const tris = buf.length >= 84 ? buf.readUInt32LE(80) : 0
+  if (tris > 0 && buf.length === 84 + tris * 50) {
+    // BINARY STL: exactly 84 + 50·tris bytes. Each triangle: normal(12) + 3 verts(36) + attr(2).
+    for (let t = 0; t < tris; t++) {
+      const base = 84 + t * 50 + 12 // skip the facet normal
+      for (let v = 0; v < 3; v++) {
+        const o = base + v * 12
+        grow(buf.readFloatLE(o), buf.readFloatLE(o + 4), buf.readFloatLE(o + 8))
+      }
+    }
+  } else {
+    // ASCII STL: `vertex <x> <y> <z>` lines.
+    const text = buf.toString('utf-8')
+    if (!/^\s*solid\b/i.test(text)) return undefined
+    // The `-` inside the class is what lets a negative EXPONENT (e.g. 1.5e-3) match.
+    const re = /\bvertex\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/g
+    let m: RegExpExecArray | null
+    let found = false
+    while ((m = re.exec(text))) {
+      found = true
+      grow(Number(m[1]), Number(m[2]), Number(m[3]))
+    }
+    if (!found) return undefined
+  }
+  const span = Math.max(maxX - minX, maxY - minY, maxZ - minZ)
+  return Number.isFinite(span) ? span : undefined
 }
 
 /** Copy `src` into `<urdfDir>/meshes/`, never overwriting (appends -1, -2 …). */
@@ -130,6 +177,41 @@ export function registerRobotIpc(): void {
           : await dialog.showOpenDialog(opts)
         if (result.canceled || result.filePaths.length === 0) return { cancelled: true }
         return await copyIntoMeshes(args.urdfPath, result.filePaths[0])
+      } catch (err) {
+        return { error: (err as Error).message }
+      }
+    }
+  )
+
+  // Copy a Parts Library part's BUNDLED mesh into a project URDF's meshes/ folder
+  // (#406) — the drop bridge calls this when a mesh-linked part is added to a design.
+  // The part's mesh path is resolved + path-traversal guarded in the parts layer.
+  ipcMain.handle(
+    'robot:importPartMesh',
+    async (
+      _e,
+      args: { urdfPath: string; libraryId: string; partId: string; mesh: string }
+    ): Promise<ImportMeshResult> => {
+      try {
+        if (!args?.urdfPath || !args?.mesh) return { error: 'No robot file or mesh to import.' }
+        const src = resolvePartAsset(args.libraryId, args.partId, args.mesh)
+        if (!src) return { error: `Unsafe or unknown part mesh: ${args.mesh}` }
+        // Refuse a SYMLINKED mesh: copyFile dereferences it, so a community part could
+        // ship `model.stl -> ~/.ssh/id_rsa` and exfiltrate its bytes into the project.
+        // The lexical isContainedFile guard can't see a symlink's target (#406 review).
+        if ((await fsp.lstat(src)).isSymbolicLink()) {
+          return { error: `Refusing symlinked part mesh: ${args.mesh}` }
+        }
+        const { rel, name } = await copyIntoMeshes(args.urdfPath, src)
+        let maxDim: number | undefined
+        if (/\.stl$/i.test(name)) {
+          try {
+            maxDim = stlMaxDim(await fsp.readFile(join(dirname(args.urdfPath), 'meshes', name)))
+          } catch {
+            // Unmeasurable → the renderer falls back to declared units.
+          }
+        }
+        return { rel, name, maxDim }
       } catch (err) {
         return { error: (err as Error).message }
       }

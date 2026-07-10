@@ -7,7 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Robot View — preview saved poses from the docked mini viewer (#399).** The compact Robot
+- **Parts Library — a part can carry a 3-D mesh that drops into the Robot View (#399).** A
+  library part can now link an **STL** (a relative `mesh:` filename in its folder, with
+  `meshUnits: mm`/`m` or a `meshScale`) the way it already carries an image, driver and help
+  doc. When you drag a mesh-linked part onto a design, its part is added to `robot.yml` as
+  before **and** its STL is copied into the project's URDF `meshes/` folder and dropped into
+  the 3-D **Robot View** as a loose part — staggered beside the base, ready to place and join,
+  with no manual import. If the project has no URDF yet, a blank one is created and linked.
+  The bundled **SG90 servo** ships a `model.stl` as the first mesh-linked part. Parts without a
+  mesh drop exactly as before.
   View (above the instrument dock in Robot mode) gains a small **pose dropdown** (top-right,
   beside the Home button) when the robot has saved poses. Pick one and the docked model
   **eases smoothly** to that pose — a quick preview without opening the full pose tool. It's

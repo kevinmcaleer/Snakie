@@ -313,6 +313,10 @@ export function partToYaml(part: PartDefinition): string {
     imageLayer: part.imageLayer,
     // NB: `help` (the filename) is kept; `helpText` (the inlined markdown) is NOT.
     help: part.help,
+    // The linked mesh is a relative filename (never a blob), like `image`/`help`.
+    mesh: part.mesh,
+    meshUnits: part.meshUnits,
+    meshScale: part.meshScale,
     schematic: part.schematic,
     i2cAddresses: part.i2cAddresses,
     library: part.library,
@@ -522,6 +526,10 @@ export function partFromYaml(text: string): PartDefinition {
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
   assign('help', str(raw.help))
+  assign('mesh', str(raw.mesh))
+  const meshUnits = str(raw.meshUnits)
+  if (meshUnits === 'mm' || meshUnits === 'm') assign('meshUnits', meshUnits)
+  assign('meshScale', num(raw.meshScale))
   if (raw.imageLayer && typeof raw.imageLayer === 'object') {
     const il = raw.imageLayer as Record<string, unknown>
     const x = num(il.x)

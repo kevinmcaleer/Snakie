@@ -986,6 +986,16 @@ const robot = {
     src?: string
   ): Promise<{ cancelled?: boolean; error?: string; rel?: string; name?: string }> =>
     ipcRenderer.invoke('robot:importMesh', { urdfPath, src }),
+  /** Copy a Parts Library part's BUNDLED mesh into `<urdf-folder>/meshes/` (#406) —
+   *  used by the drop bridge when a mesh-linked part is added to a design. Resolves to
+   *  the mesh path relative to the URDF + (for an STL) its largest bbox dimension. */
+  importPartMesh: (
+    urdfPath: string,
+    libraryId: string,
+    partId: string,
+    mesh: string
+  ): Promise<{ error?: string; rel?: string; name?: string; maxDim?: number }> =>
+    ipcRenderer.invoke('robot:importPartMesh', { urdfPath, libraryId, partId, mesh }),
   /** Subscribe to robot.yml changes from ANOTHER window (e.g. the Board View
    *  adding/removing a part). Returns an unsubscribe. */
   onChanged: (cb: () => void): (() => void) => {

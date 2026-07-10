@@ -127,6 +127,23 @@ export function uniqueLinkName(urdf: string, base: string): string {
  * first link of an empty URDF becomes the root (no joint). `meshRel` is relative
  * to the URDF folder. Returns the new URDF text + the created link name.
  */
+/**
+ * The import scale for a mesh (#406): an explicit `meshScale` wins, then declared
+ * `meshUnits` (`mm` → 0.001, `m` → 1), then a bounding-box heuristic (a part more
+ * than ~3 URDF-metres across was surely authored in millimetres → 0.001), else 1.
+ * Mirrors `handleImportStl`'s mm→m guess so a library-dropped mesh loads sane.
+ */
+export function meshImportScale(
+  opts: { meshScale?: number; meshUnits?: 'mm' | 'm' },
+  maxDim?: number
+): number {
+  if (typeof opts.meshScale === 'number' && opts.meshScale > 0) return opts.meshScale
+  if (opts.meshUnits === 'mm') return 0.001
+  if (opts.meshUnits === 'm') return 1
+  if (typeof maxDim === 'number' && maxDim > 3) return 0.001
+  return 1
+}
+
 export function addMeshLink(
   urdf: string,
   opts: { meshRel: string; linkBase: string; scale?: number; parent?: string }
