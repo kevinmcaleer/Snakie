@@ -9,6 +9,7 @@ import {
   addMeshLink,
   looseLinks,
   renameLink,
+  renameJoint,
   blankUrdf,
   connectJoint,
   orientJoint,
@@ -126,6 +127,37 @@ describe('renameLink (#354)', () => {
     expect(renameLink(URDF, 'tip', 'my tip!').name).toBe('my_tip') // XML-safe
     expect(renameLink(URDF, 'tip', 'base_link').name).toBe('base_link_2') // collision bump
     expect(renameLink(URDF, 'tip', 'tip')).toEqual({ urdf: URDF, name: 'tip' }) // no-op
+  })
+})
+
+describe('renameJoint (#)', () => {
+  const MIMIC = `<?xml version="1.0"?>
+<robot name="m">
+  <joint name="shoulder" type="revolute"><parent link="a"/><child link="b"/></joint>
+  <joint name="finger" type="revolute"><parent link="b"/><child link="c"/>
+    <mimic joint="shoulder" multiplier="0.5"/>
+  </joint>
+</robot>`
+
+  it('renames the joint name attribute only (link refs untouched)', () => {
+    const { urdf, name } = renameJoint(URDF, 'j1', 'shoulder')
+    expect(name).toBe('shoulder')
+    expect(urdf).toContain('<joint name="shoulder" type="revolute">')
+    expect(urdf).not.toContain('name="j1"')
+    expect(urdf).toContain('<child link="upper"/>') // link refs preserved
+  })
+
+  it('follows a <mimic joint="…"> reference to the renamed master', () => {
+    const { urdf } = renameJoint(MIMIC, 'shoulder', 'sh')
+    expect(urdf).toContain('<joint name="sh" type="revolute">')
+    expect(urdf).toContain('<mimic joint="sh" multiplier="0.5"/>')
+    expect(urdf).not.toContain('joint="shoulder"')
+  })
+
+  it('sanitises + de-collides; same-name is a no-op', () => {
+    expect(renameJoint(URDF, 'j1', 'my joint!').name).toBe('my_joint')
+    expect(renameJoint(URDF, 'j1', 'j2').name).toBe('j2_2') // collides with the other joint
+    expect(renameJoint(URDF, 'j1', 'j1')).toEqual({ urdf: URDF, name: 'j1' })
   })
 })
 

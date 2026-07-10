@@ -39,6 +39,7 @@ import {
   removeJoint,
   removeLink,
   renameLink,
+  renameJoint,
   setJoint,
   setJointOrigin,
   orientJoint,
@@ -888,6 +889,38 @@ export function RobotView({
       return c
     })
   }
+  // Rename a JOINT (#): rewrite the URDF, then cascade every store that keys by joint
+  // NAME (servo map, poses, timeline tracks, mirror pairs, per-joint config/roll/
+  // normal, defaultPose) so the servo keeps driving it and its poses still apply.
+  const handleRenameJoint = (oldName: string, to: string): void => {
+    const { urdf, name } = renameJoint(content, oldName, to)
+    if (name === oldName) return
+    commitUrdf(urdf)
+    const rekey = <T,>(rec: Record<string, T> | undefined): Record<string, T> | undefined => {
+      if (!rec || !(oldName in rec)) return rec
+      const { [oldName]: v, ...rest } = rec
+      return { ...rest, [name]: v }
+    }
+    setBindings((bs) => bs.map((b) => (b.joint === oldName ? { ...b, joint: name } : b)))
+    setPoses((ps) => ps.map((p) => (oldName in p.values ? { ...p, values: rekey(p.values)! } : p)))
+    setTimeline((tl) => ({ ...tl, tracks: tl.tracks.map((t) => (t.joint === oldName ? { ...t, joint: name } : t)) }))
+    setMirrorPairs((ms) =>
+      ms.map((mp) => ({ ...mp, a: mp.a === oldName ? name : mp.a, b: mp.b === oldName ? name : mp.b }))
+    )
+    void persist((m) => {
+      if (m.servoJointMap) m.servoJointMap = m.servoJointMap.map((b) => (b.joint === oldName ? { ...b, joint: name } : b))
+      if (m.poses) m.poses = m.poses.map((p) => (oldName in p.values ? { ...p, values: rekey(p.values)! } : p))
+      m.defaultPose = rekey(m.defaultPose)
+      m.joints = rekey(m.joints)
+      m.jointRoll = rekey(m.jointRoll)
+      m.jointNormal = rekey(m.jointNormal)
+      if (m.timeline) m.timeline = { ...m.timeline, tracks: m.timeline.tracks.map((t) => (t.joint === oldName ? { ...t, joint: name } : t)) }
+      if (m.mirror) m.mirror = m.mirror.map((mp) => ({ ...mp, a: mp.a === oldName ? name : mp.a, b: mp.b === oldName ? name : mp.b }))
+    })
+    // Follow an open joint dialog to the new name.
+    setDialogCtx((c) => (c?.kind === 'joint' && c.joint === oldName ? { ...c, joint: name } : c))
+  }
+
   // Properties dialog (#352 / #353): clicking a node opens its context here. For a
   // block/mesh/joint we snapshot the URDF so Cancel can revert the live edits; OK
   // keeps them. Servo/pose contexts hold their own drafts (committed on OK).
@@ -4122,6 +4155,7 @@ export function RobotView({
             active={dialogCtx}
             onEdit={handleOpenProps}
             onOpenJoint={handleOpenJoint}
+            onRenameJoint={handleRenameJoint}
             onOpenServo={handleOpenServo}
             onNewServo={handleNewServo}
             onOpenPose={handleOpenPose}
@@ -4160,6 +4194,7 @@ export function RobotView({
             usedColors={usedLinkColors}
             onSetColor={handleSetColor}
             onSetJoint={handleSetJoint}
+            onRenameJoint={handleRenameJoint}
             onSetJointOrigin={handleSetJointOrigin}
             onRollJoint={setJointRoll}
             jointRoll={editJoint ? jointRollRef.current[editJoint.name] ?? 0 : 0}
