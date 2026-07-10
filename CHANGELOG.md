@@ -332,6 +332,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   or reopen any panel. Nothing about Robot mode is permanently changed.
 
 ### Fixed
+- **Robot View — the 3-D view keeps its camera when you switch editor tabs (#399).**
+  Flipping to another file tab and back used to reset the robot to the default framing,
+  losing your orbit. Two causes: orbiting/panning wasn't recorded (only the zoom/home/fit
+  buttons were), and the view fully unmounts when you leave its tab. Now every camera move
+  is remembered per-file in a cache that survives the unmount, so you come back to exactly
+  the view you left.
 - **Robot View — editing a joint's Roll turns it about the mating normal, not the
   wrong axis (#354).** The Roll field on an existing joint spun the part about the joint's
   local Z, which usually isn't the axis the two faces are joined on — so the part rotated
