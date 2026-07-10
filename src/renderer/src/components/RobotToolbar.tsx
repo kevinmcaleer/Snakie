@@ -11,6 +11,9 @@ export interface RobotToolbarProps {
   onSetTool: (t: BuildTool) => void
   /** Editing needs a saved project file — tools disable without one. */
   canEdit: boolean
+  /** Posing (the Grab/IK tool) only needs a loaded robot with movable joints —
+   *  NOT a saved file — so it gates separately from the editing tools. */
+  canPose: boolean
   /** Add a primitive at the workspace origin. */
   onAdd: (kind: PrimitiveKind) => void
   /** Point-to-point measure tool (toggle). */
@@ -65,13 +68,23 @@ const ICONS: Record<BuildTool, JSX.Element> = {
       <circle cx="12" cy="8" r="2.2" fill="currentColor" />
       <path d="M6 8h4" stroke="currentColor" strokeWidth="1.4" />
     </svg>
+  ),
+  // A little jointed arm with a grabbable end — grab it and the chain follows.
+  ik: (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <path d="M3 13L7 8l4-4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="3" cy="13" r="1.5" fill="currentColor" />
+      <circle cx="7" cy="8" r="1.3" fill="currentColor" />
+      <circle cx="11.5" cy="4" r="2" fill="none" stroke="currentColor" strokeWidth="1.3" />
+    </svg>
   )
 }
 
-const TOOLS: Array<{ id: BuildTool; label: string; soon?: boolean }> = [
+const TOOLS: Array<{ id: BuildTool; label: string; soon?: boolean; pose?: boolean }> = [
   { id: 'select', label: 'Pick a block' },
   { id: 'pushpull', label: 'Push & pull to resize' },
-  { id: 'move', label: 'Move a block' }
+  { id: 'move', label: 'Move a block' },
+  { id: 'ik', label: 'Grab & pose — drag a part and the chain follows', pose: true }
 ]
 
 const UNDO_ICON = (
@@ -89,6 +102,7 @@ export function RobotToolbar({
   tool,
   onSetTool,
   canEdit,
+  canPose,
   onAdd,
   measureActive,
   onToggleMeasure,
@@ -115,7 +129,13 @@ export function RobotToolbar({
       ))}
       <span className="robottool__sep" aria-hidden="true" />
       {TOOLS.map((t) => {
-        const disabled = t.soon || !canEdit
+        const gated = t.pose ? !canPose : !canEdit
+        const disabled = t.soon || gated
+        const title = gated && !t.soon
+          ? t.pose
+            ? 'Add movable joints to pose the robot'
+            : 'Save the robot to a folder first'
+          : t.label
         return (
           <button
             key={t.id}
@@ -123,7 +143,7 @@ export function RobotToolbar({
             className={`robottool__btn${tool === t.id ? ' is-active' : ''}`}
             aria-pressed={tool === t.id}
             disabled={disabled}
-            title={!canEdit && !t.soon ? 'Save the robot to a folder first' : t.label}
+            title={title}
             aria-label={t.label}
             onClick={() => onSetTool(t.id)}
           >
