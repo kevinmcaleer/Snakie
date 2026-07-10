@@ -16,10 +16,12 @@ import type {
   MirrorPair,
   MotionEasing,
   MotionKey,
+  MotionSequence,
   MotionTimeline,
   MotionTrack,
   ServoJointBinding
 } from './robot'
+import type { ManagedSequenceStep } from './managed-blocks'
 import { jointToServo } from './krf'
 
 /** Default preview / export sample rate. */
@@ -67,6 +69,122 @@ export function sampleTimeline(tl: MotionTimeline, t: number): Record<string, nu
 export function frameCount(tl: MotionTimeline, fps = tl.fps ?? DEFAULT_FPS): number {
   const n = Math.max(1, Math.round(tl.duration * fps))
   return tl.loop ? n : n + 1 // one-shot includes the final frame; a loop omits the seam
+}
+
+// ── Pose-to-pose sequences (#415) ────────────────────────────────────────────
+
+/**
+ * The per-SEGMENT durations of a pose sequence (seconds). Segment `i` transitions
+ * from `steps[i].pose` to the next pose using `steps[i].duration`/`easing`. A loop
+ * has one segment per step (the last wraps back to the first); a one-shot has
+ * `steps.length - 1` (the last step's duration is a no-op end hold). Negative /
+ * NaN durations are clamped to 0.
+ */
+export function sequenceSegments(seq: MotionSequence): number[] {
+  const n = seq.steps.length
+  const count = seq.loop ? n : Math.max(0, n - 1)
+  const out: number[] = []
+  for (let i = 0; i < count; i++) out.push(Math.max(0, seq.steps[i].duration || 0))
+  return out
+}
+
+/** Total play time of a sequence (seconds) — the scrubber's span. */
+export function sequenceDuration(seq: MotionSequence): number {
+  return sequenceSegments(seq).reduce((a, b) => a + b, 0)
+}
+
+/**
+ * Interpolate two poses joint-wise at eased progress `e` (0..1). A joint present
+ * in BOTH is lerped; a joint in only one pose takes that pose's value (a partial
+ * pose holds its specified joints and leaves the rest to the caller's model).
+ */
+export function lerpPoses(
+  a: Record<string, number>,
+  b: Record<string, number>,
+  e: number
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const j of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const av = a[j]
+    const bv = b[j]
+    if (typeof av === 'number' && typeof bv === 'number') out[j] = av + (bv - av) * e
+    else out[j] = typeof av === 'number' ? av : bv
+  }
+  return out
+}
+
+/**
+ * Sample a pose sequence at time `t` (seconds): the joint→display-value map of the
+ * posture between the bracketing steps' poses, eased by the from-step's easing.
+ * `posesByName` resolves a step's pose name to its stored joint values
+ * (`NamedPose.values`). A looping sequence wraps `t` over its total duration; a
+ * one-shot holds the first pose before `0` and the last pose after the end.
+ * Returns `{}` for an empty sequence.
+ */
+export function samplePoseSequence(
+  seq: MotionSequence,
+  posesByName: Record<string, Record<string, number>>,
+  t: number
+): Record<string, number> {
+  const steps = seq.steps
+  const n = steps.length
+  if (n === 0) return {}
+  const poseOf = (i: number): Record<string, number> => posesByName[steps[i].pose] ?? {}
+  if (n === 1) return { ...poseOf(0) }
+
+  const segs = sequenceSegments(seq)
+  const total = segs.reduce((a, b) => a + b, 0)
+  if (total <= 0) return { ...poseOf(0) }
+
+  let time: number
+  if (seq.loop) {
+    time = ((t % total) + total) % total // wrap into [0, total)
+  } else {
+    if (t <= 0) return { ...poseOf(0) }
+    if (t >= total) return { ...poseOf(n - 1) }
+    time = t
+  }
+
+  // Locate the segment containing `time`.
+  let i = 0
+  let acc = 0
+  while (i < segs.length - 1 && acc + segs[i] <= time) {
+    acc += segs[i]
+    i++
+  }
+  const segDur = segs[i]
+  const u = segDur <= 0 ? 1 : (time - acc) / segDur
+  const from = poseOf(i)
+  const to = poseOf(seq.loop ? (i + 1) % n : i + 1)
+  return lerpPoses(from, to, ease(steps[i].easing ?? 'easeInOut', u))
+}
+
+/**
+ * Convert a sequence's steps to the managed-block / runtime form (#413/#415):
+ * `[[poseName, durationMs, easing], …]`. The editor stores each step's duration as
+ * the OUTGOING segment (time to the next pose), but `snakie_motion.Rig.play`
+ * transitions INTO each step's pose over that step's duration. So each exported
+ * step's duration/easing is the PREVIOUS segment's — the one that reaches this
+ * pose — keeping hardware timing identical to the preview:
+ *  - one-shot: pose[0] is reached at 0 ms (start there); pose[k>0] over step[k-1].
+ *  - loop: pose[k] over step[k-1] (pose[0]'s incoming is the seam = the last step).
+ */
+export function poseSequenceToManagedSteps(seq: MotionSequence): ManagedSequenceStep[] {
+  const steps = seq.steps
+  const n = steps.length
+  if (n === 0) return []
+  const durMs = (s: number): number => Math.max(0, Math.round((s || 0) * 1000))
+  const easeOf = (i: number): MotionEasing => steps[i].easing ?? 'easeInOut'
+  if (n === 1) return [[steps[0].pose, 0, 'linear']]
+  if (seq.loop) {
+    return steps.map((s, i): ManagedSequenceStep => {
+      const prev = (i - 1 + n) % n
+      return [s.pose, durMs(steps[prev].duration), easeOf(prev)]
+    })
+  }
+  const out: ManagedSequenceStep[] = [[steps[0].pose, 0, 'linear']]
+  for (let i = 1; i < n; i++) out.push([steps[i].pose, durMs(steps[i - 1].duration), easeOf(i - 1)])
+  return out
 }
 
 // ── Editing ────────────────────────────────────────────────────────────────

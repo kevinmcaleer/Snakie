@@ -397,10 +397,15 @@ def _validate_sequences(raw: Any, warnings: List[str]) -> Dict[str, List[List[An
             continue
         good: List[List[Any]] = []
         for step in steps:
-            if isinstance(step, (list, tuple)) and len(step) == 2 and isinstance(step[0], str):
+            if isinstance(step, (list, tuple)) and len(step) in (2, 3) and isinstance(step[0], str):
                 dur = _as_finite_number(step[1])
-                if dur is not None:
-                    good.append([step[0], dur])
+                if dur is None:
+                    continue
+                item: List[Any] = [step[0], dur]
+                # An optional 3rd element is the easing (#415); keep it if it's a string.
+                if len(step) == 3 and isinstance(step[2], str):
+                    item.append(step[2])
+                good.append(item)
         out[name] = good
     return out
 
