@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot View — a hinge rotates about the mated normal, Fusion-style (#399).** A new
+  Rotation/Linear joint now takes its **axis from the two faces you mated** — it turns (or
+  slides) about the normal through the joint, the same axis its Roll uses — instead of a
+  guessed `Z`. So a servo horn spins on its mounting face without you hunting for the right
+  axis. (You can still override the axis in the joint editor.)
 - **Robot View — Add Joint previews the mate live (#399).** As soon as you pick the
   second point, the child snaps onto the parent **in the 3-D view** — so you see the
   result and can tell whether it needs a roll **before** pressing Add. Changing the type,
