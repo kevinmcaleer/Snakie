@@ -866,10 +866,19 @@ export function RobotView({
     let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
     if (next === base) return null // cycle / invalid
     const rad = (d: number): number => (d * Math.PI) / 180
+    // Fusion-style single axis (#399): a movable joint rotates/slides about the MATED
+    // NORMAL, so the user needn't guess. In the joint (child) frame that IS the child's
+    // picked face normal — the same axis the roll turns about. (Fixed joints have none.)
+    const cnv = new THREE.Vector3(child.normal[0], child.normal[1], child.normal[2])
+    if (cnv.lengthSq() > 1e-9) cnv.normalize()
+    else cnv.set(0, 0, 1)
+    const axis: [number, number, number] = [cnv.x, cnv.y, cnv.z]
     next =
-      rotation && type === 'revolute'
-        ? setJoint(next, child.link, { type, lower: rad(rotation.minDeg), upper: rad(rotation.maxDeg) })
-        : setJoint(next, child.link, { type })
+      type === 'fixed'
+        ? setJoint(next, child.link, { type })
+        : rotation && type === 'revolute'
+          ? setJoint(next, child.link, { type, axis, lower: rad(rotation.minDeg), upper: rad(rotation.maxDeg) })
+          : setJoint(next, child.link, { type, axis })
     next = setJointOrigin(next, child.link, xyz, rpy)
     // Re-origin the child onto its picked point so the geometry stays put while the link
     // origin (the pivot) lands on the mating point; shift its own sub-joints to match.
