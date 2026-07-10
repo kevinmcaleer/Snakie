@@ -166,6 +166,35 @@
   color: var(--accent-ink);
   border-color: var(--accent-ink);
 }
+/* Saved-pose preview dropdown in the compact/docked viewer (#409). Top-right, just
+   LEFT of the 24px Home button. Its width is capped so, growing leftward from the
+   right anchor, it can never reach the top-left New/Open/Pop-out action row on a
+   narrow dock. Mirrors the mini-home chrome: dark glass + skeuomorph parchment. */
+.robotview__minipose {
+  position: absolute;
+  top: 0.35rem;
+  right: calc(0.35rem + 24px + 0.3rem);
+  z-index: 2;
+  /* Reserve ~18rem at the left for the New/Open/Pop-out row (its emoji/symbol glyphs
+     render wide) + this control's right offset, so the dropdown's left edge stays
+     clear of the Pop-out button even on a narrow dock. */
+  max-width: min(9rem, calc(100% - 18rem));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.3rem;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotview__minipose {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__minipose:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
 /* The ViewCube's own canvas is appended here (2× — was 96px). */
 .robotview__viewcube {
   width: 144px;

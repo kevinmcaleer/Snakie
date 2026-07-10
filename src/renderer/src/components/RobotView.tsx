@@ -279,6 +279,56 @@ export function RobotView({
     setValues(nv)
   }
 
+  // Smoothly EASE the docked model from its current joints to a saved pose (#409),
+  // rather than snapping. Self-contained rAF (the scene renders every frame anyway),
+  // used only by the compact preview dropdown; the full pose tool's Recall stays
+  // instant. Re-picking mid-tween re-targets smoothly from the live joint angles.
+  const poseTweenRef = useRef<number | null>(null)
+  const smoothRecallPose = (pose: NamedPoseLike): void => {
+    const r = robotRef.current
+    if (!r) return
+    const target = { ...valuesRef.current }
+    for (const m of metaRef.current) {
+      if (!m.isMimic && typeof pose.values[m.name] === 'number') {
+        const lim = effectiveLimit(m, overridesRef.current[m.name])
+        target[m.name] = clamp(toNative(m.type, pose.values[m.name]), lim.lower, lim.upper)
+      }
+    }
+    const start: Record<string, number> = {}
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const a = (r.joints?.[m.name] as { angle?: number } | undefined)?.angle
+      start[m.name] = typeof a === 'number' ? a : valuesRef.current[m.name] ?? 0
+    }
+    if (poseTweenRef.current !== null) cancelAnimationFrame(poseTweenRef.current)
+    const DURATION = 380
+    const t0 = performance.now()
+    // easeInOutCubic
+    const ease = (x: number): number => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2)
+    const step = (): void => {
+      // Robot torn down / replaced (effect re-run or unmount) → abandon the tween.
+      if (robotRef.current !== r) {
+        poseTweenRef.current = null
+        return
+      }
+      const k = Math.min(1, (performance.now() - t0) / DURATION)
+      const e = ease(k)
+      for (const m of metaRef.current) {
+        if (m.isMimic) continue
+        const a = start[m.name] ?? 0
+        const b = target[m.name] ?? a
+        r.setJointValue(m.name, a + (b - a) * e)
+      }
+      if (k < 1) {
+        poseTweenRef.current = requestAnimationFrame(step)
+      } else {
+        poseTweenRef.current = null
+        setValues(target) // settle state so the next recall starts from the right base
+      }
+    }
+    poseTweenRef.current = requestAnimationFrame(step)
+  }
+
   const handleDeletePose = (name: string): void => {
     const next = poses.filter((p) => p.name !== name)
     setPoses(next)
@@ -1196,6 +1246,13 @@ export function RobotView({
   timelineRef.current = timeline
 
   const movableNames = jointMeta.filter((m) => !m.isMimic).map((m) => m.name)
+  // Poses that actually apply to the DISPLAYED robot — at least one of their joints
+  // exists here. Guards the compact dropdown against a robot.yml whose poses belong to
+  // a different model (e.g. RobotDockPanel's demo-arm fallback), where recall is a no-op
+  // and the list is confusing (#409). Empty ⇒ no dropdown.
+  const dockPoses = compact
+    ? poses.filter((p) => movableNames.some((n) => typeof p.values[n] === 'number'))
+    : []
 
   // Apply a sampled timeline frame to the robot IMPERATIVELY (mimics auto-follow).
   // `commitState` also pushes the sliders (only on scrub/stop — never per frame).
@@ -1996,6 +2053,36 @@ export function RobotView({
           links: Object.keys(robot.links).length
         })
         framePreservingCamera(robot) // frame a new robot; keep the camera on an edit
+
+        if (!poseUI) {
+          // DOCKED MINI VIEWER (#409): the pose-tool seeding below is gated to the full
+          // view, so seed the minimum the compact viewer needs to RECALL a saved pose —
+          // a live robot handle + movable-joint meta at a neutral rest — then load the
+          // saved poses for the dropdown. Preview-only: the compact view never writes
+          // robot.yml (create/rename/delete stay in the full pose tool).
+          const meta = extractJoints(robot)
+          robotRef.current = robot
+          const initial: Record<string, number> = {}
+          for (const m of meta) {
+            if (m.isMimic) continue
+            const v = clamp(0, m.lower, m.upper)
+            initial[m.name] = v
+            robot.setJointValue(m.name, v)
+          }
+          setJointMeta(meta)
+          setValues(initial)
+          setPoses([]) // clear synchronously so a model switch can't flash the old list
+          void (async () => {
+            try {
+              const def = await window.api.robot.load(currentFolder || undefined)
+              if (disposed || !robotRef.current) return
+              const ps = (def.robot ?? {}).poses
+              setPoses(Array.isArray(ps) ? ps : [])
+            } catch {
+              /* no robot.yml — nothing to recall */
+            }
+          })()
+        }
 
         if (poseUI) {
           // POSE TOOL (#312): expose the movable joints, seed a neutral pose, then
@@ -3200,6 +3287,29 @@ export function RobotView({
               />
             </svg>
           </button>
+        )}
+        {!isEmpty && !error && compact && dockPoses.length > 0 && (
+          // Saved-pose preview dropdown (#409). Controlled to "" so it resets to the
+          // placeholder after a pick — re-selecting the same pose re-applies it.
+          <select
+            className="robotview__minipose"
+            value=""
+            onChange={(e) => {
+              const p = dockPoses.find((x) => x.name === e.target.value)
+              if (p) smoothRecallPose(p)
+            }}
+            title="Preview a saved pose"
+            aria-label="Preview a saved pose"
+          >
+            <option value="" disabled>
+              Pose…
+            </option>
+            {dockPoses.map((p) => (
+              <option key={p.name} value={p.name}>
+                {p.name}
+              </option>
+            ))}
+          </select>
         )}
         {!isEmpty && !error && !compact && (
           <div className="robotview__navzone">
