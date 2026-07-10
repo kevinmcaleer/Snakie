@@ -93,6 +93,13 @@ import {
   sampleTimeline,
   upsertKey
 } from '../../../shared/robot-timeline'
+import {
+  writeManagedBlocks,
+  hasManagedBlocks,
+  type ManagedMotion,
+  type ManagedServo,
+  type ManagedSequenceStep
+} from '../../../shared/managed-blocks'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import type {
   MirrorPair,
@@ -182,6 +189,16 @@ export function RobotView({
   const [values, setValues] = useState<Record<string, number>>({}) // native (rad/m)
   const [overrides, setOverrides] = useState<Record<string, { min?: number; max?: number }>>({})
   const [poses, setPoses] = useState<NamedPoseLike[]>([])
+  const posesRef = useRef<NamedPoseLike[]>([])
+  posesRef.current = poses
+  // Managed sequences (#413) parsed from an opened motion.py — round-tripped
+  // losslessly on re-export even though the sequence editor UI (#415) is pending.
+  const managedSequencesRef = useRef<Record<string, ManagedSequenceStep[]>>({})
+  // Files whose managed blocks last failed to parse (a broken hand-edit): sync is
+  // paused so we neither re-read nor silently clobber their intentional edits.
+  const suspendedSyncRef = useRef<Set<string>>(new Set())
+  // Guards the one-time managed-block seed per focused file id.
+  const seededManagedRef = useRef<string>('')
   const [measureActive, setMeasureActive] = useState(false)
   const [measureDist, setMeasureDist] = useState<number | null>(null)
   const [savingLabel, setSavingLabel] = useState<string | null>(null)
@@ -1180,6 +1197,97 @@ export function RobotView({
     setValues((v) => (v[res.joint] === res.native ? v : { ...v, [res.joint]: res.native }))
   })
 
+  // Round-trip managed Motion Studio blocks (#413): when the user focuses a local
+  // .py carrying Snakie-managed blocks in the full Robot View, read its pose
+  // library + servo map back via the Python host and MERGE them into the live
+  // state (additive by pose name / pin), persisting so they stick. Seeds once per
+  // focused file. A broken/hand-edited block pauses sync + warns via the status
+  // bar; no Python skips the round-trip gracefully. The compact mini-viewer never
+  // seeds (it's preview-only).
+  useEffect(() => {
+    if (!poseUI || compact) return
+    const af = activeFile
+    if (!af || af.source !== 'local' || !af.path) return
+    if (seededManagedRef.current === af.id) return
+    const src = af.content
+    if (!hasManagedBlocks(src)) return
+    let live = true
+    void (async () => {
+      try {
+        const res = await window.api.plugins.motionRead(src)
+        if (!live) return
+        if (res.pythonFound === false) {
+          setSavingLabel('install Python to sync poses')
+          return
+        }
+        if (!res.ok) {
+          suspendedSyncRef.current.add(af.id)
+          window.dispatchEvent(
+            new CustomEvent('snakie:status', {
+              detail: {
+                text: `${af.name}: ${res.error ?? 'managed block broken'} — pose sync paused`,
+                priority: 6
+              }
+            })
+          )
+          return
+        }
+        seededManagedRef.current = af.id
+        suspendedSyncRef.current.delete(af.id)
+        managedSequencesRef.current = res.sequences ?? {}
+
+        const parsedPoses = res.poses ?? {}
+        const parsedServos = res.servos ?? []
+        let nextPoses: NamedPoseLike[] | null = null
+        let nextServos: ServoJointBinding[] | null = null
+
+        if (Object.keys(parsedPoses).length) {
+          const byName = new Map(posesRef.current.map((p) => [p.name, p]))
+          for (const [name, values] of Object.entries(parsedPoses)) byName.set(name, { name, values })
+          nextPoses = [...byName.values()]
+          setPoses(nextPoses)
+        }
+        if (parsedServos.length) {
+          const byPin = new Map(bindingsRef.current.map((b) => [normPin(b.pin), b]))
+          for (const s of parsedServos) {
+            byPin.set(normPin(s.pin), {
+              pin: s.pin,
+              joint: s.joint,
+              jointMin: s.jointMin ?? 0,
+              jointMax: s.jointMax ?? 180,
+              servoMin: s.servoMin ?? 0,
+              servoMax: s.servoMax ?? 180,
+              ...(s.invert ? { invert: true } : {})
+            })
+          }
+          nextServos = [...byPin.values()]
+          setBindings(nextServos)
+        }
+        if (nextPoses || nextServos) {
+          void persist((m) => {
+            if (nextPoses) m.poses = nextPoses
+            if (nextServos) m.servoJointMap = nextServos
+          })
+          const bits: string[] = []
+          if (nextPoses) bits.push(`${Object.keys(parsedPoses).length} pose${Object.keys(parsedPoses).length > 1 ? 's' : ''}`)
+          if (nextServos) bits.push(`${parsedServos.length} servo${parsedServos.length > 1 ? 's' : ''}`)
+          setSavingLabel(`synced ${bits.join(' + ')} from ${af.name}`)
+        }
+        if (res.warnings?.length) {
+          window.dispatchEvent(
+            new CustomEvent('snakie:status', { detail: { text: `${af.name}: ${res.warnings[0]}`, priority: 5 } })
+          )
+        }
+      } catch {
+        /* non-fatal — a failed round-trip must never disrupt the Robot View */
+      }
+    })()
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refs carry current poses/bindings; seed on focus only
+  }, [poseUI, compact, activeFile?.id])
+
   const handleAddBinding = (pin: string, joint: string): void => {
     const m = metaRef.current.find((j) => j.name === joint)
     const lim = m ? effectiveLimit(m, overridesRef.current[joint]) : null
@@ -1389,12 +1497,33 @@ export function RobotView({
     })
   }
 
+  // The current pose library + servo map as managed-block data (#413), so an
+  // export carries a round-trippable source of truth the app can read back.
+  const buildManagedMotion = (): ManagedMotion => ({
+    poses: Object.fromEntries(posesRef.current.map((p) => [p.name, p.values])),
+    sequences: managedSequencesRef.current,
+    servos: bindingsRef.current.map((b) => {
+      const s: ManagedServo = { pin: b.pin, joint: b.joint, jointMin: b.jointMin, jointMax: b.jointMax }
+      if (typeof b.servoMin === 'number') s.servoMin = b.servoMin
+      if (typeof b.servoMax === 'number') s.servoMax = b.servoMax
+      if (b.invert) s.invert = true
+      return s
+    })
+  })
+
   const handleExport = (): void => {
     const ex = generateMicroPython(timelineRef.current, bindingsRef.current, {
       robotName: info?.name,
       fps: timelineRef.current.fps
     })
-    openBuffer('motion.py', ex.code)
+    // Reuse an already-open motion.py so a re-export rewrites ONLY our managed
+    // blocks (the user's own code + the FRAMES runtime survive); otherwise seed a
+    // fresh buffer from the generated scaffold. writeManagedBlocks is byte-exact
+    // outside the guard markers.
+    const open = openFiles.find((f) => f.source === 'local' && f.name === 'motion.py')
+    const { text } = writeManagedBlocks(open ? open.content : ex.code, buildManagedMotion())
+    if (open) updateContent(open.id, text)
+    else openBuffer('motion.py', text)
     setSavingLabel(
       ex.warnings.length ? `exported (${ex.warnings.length} note${ex.warnings.length > 1 ? 's' : ''})` : 'exported motion.py'
     )

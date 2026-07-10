@@ -62,6 +62,8 @@ import type {
 } from '../main/git/types'
 import type {
   LintResult,
+  MotionCheckResult,
+  MotionReadResult,
   PluginContext,
   PluginListing,
   PluginStatus,
@@ -686,7 +688,18 @@ const plugins = {
   lint: (context: PluginContext): Promise<LintResult> =>
     unwrap(ipcRenderer.invoke('plugins:lint', context)),
   /** Kill + re-spawn the host, picking up newly added plugins. */
-  reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload'))
+  reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload')),
+  /**
+   * Read a `.py`'s managed Motion Studio blocks (#413) — poses, sequences and
+   * servo map — via the host's AST reader. `ok:false` with `pythonFound:false`
+   * means no interpreter (skip the round-trip); `ok:false` with an `error` means
+   * a broken/hand-edited block (suspend managed rewrite for the file).
+   */
+  motionRead: (source: string): Promise<MotionReadResult> =>
+    unwrap(ipcRenderer.invoke('plugins:motionRead', source)),
+  /** Probe whether a `.py`'s managed blocks still parse (validity + schema). */
+  motionCheck: (source: string): Promise<MotionCheckResult> =>
+    unwrap(ipcRenderer.invoke('plugins:motionCheck', source))
 }
 
 /**

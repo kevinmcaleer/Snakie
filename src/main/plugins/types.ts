@@ -134,6 +134,47 @@ export interface PluginListing {
   commands: CommandInfo[]
 }
 
+/**
+ * Result of the `motion.read` RPC (#413): the pose library, sequences and servo
+ * map parsed back out of a `.py`'s managed blocks. `ok:false` (a syntax error, a
+ * non-literal managed value, or no Python) carries an `error` and means managed
+ * rewrite should be suspended for the file. `pythonFound:false` distinguishes
+ * "no interpreter" (round-trip skipped) from a genuine parse failure.
+ */
+export interface MotionReadResult {
+  ok: boolean
+  /** The schema version understood from the file's markers. */
+  schema?: number
+  /** pose name → { joint → value } (display units). */
+  poses?: Record<string, Record<string, number>>
+  /** sequence name → [poseName, durationMs] steps. */
+  sequences?: Record<string, Array<[string, number]>>
+  /** Servo bindings (pin/joint required; camelCase like `ServoJointBinding`). */
+  servos?: Array<{
+    pin: string
+    joint: string
+    jointMin?: number
+    jointMax?: number
+    servoMin?: number
+    servoMax?: number
+    invert?: boolean
+  }>
+  /** Non-fatal notes (dropped mis-shaped entries, a newer-schema block skipped). */
+  warnings?: string[]
+  /** Failure reason when `ok:false`. */
+  error?: string
+  /** False when no Python interpreter was available (round-trip skipped, not broken). */
+  pythonFound?: boolean
+}
+
+/** Result of the lighter `motion.check` RPC — validity + schema, no data. */
+export interface MotionCheckResult {
+  ok: boolean
+  schema?: number
+  error?: string
+  pythonFound?: boolean
+}
+
 /** Whether a Python interpreter + host were found. */
 export interface PluginStatus {
   /** True when a Python interpreter was located and the host started. */

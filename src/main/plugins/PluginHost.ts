@@ -5,6 +5,8 @@ import { app } from 'electron'
 import type {
   CommandInfo,
   LintResult,
+  MotionCheckResult,
+  MotionReadResult,
   PluginContext,
   PluginInfo,
   PluginListing,
@@ -283,6 +285,33 @@ export class PluginHost {
     await this.start()
     if (!this.child) return { diagnostics: [] }
     return this.request<LintResult>('lint', { context })
+  }
+
+  /**
+   * Read a `.py`'s managed Motion Studio blocks (#413) via the host's AST
+   * reader. With no Python the round-trip is skipped gracefully:
+   * `{ ok:false, pythonFound:false }` (the caller keeps the block as opaque text
+   * and shows an "install Python to sync poses" note) rather than throwing.
+   */
+  async motionRead(source: string): Promise<MotionReadResult> {
+    await this.start()
+    if (!this.child) {
+      return {
+        ok: false,
+        pythonFound: false,
+        error: this.startError ?? 'Python not found — install Python to sync poses'
+      }
+    }
+    const res = await this.request<MotionReadResult>('motion.read', { source })
+    return { ...res, pythonFound: true }
+  }
+
+  /** Probe whether a `.py`'s managed blocks still parse (no data returned). */
+  async motionCheck(source: string): Promise<MotionCheckResult> {
+    await this.start()
+    if (!this.child) return { ok: false, pythonFound: false }
+    const res = await this.request<MotionCheckResult>('motion.check', { source })
+    return { ...res, pythonFound: true }
   }
 
   /** Kill and re-spawn the host (picks up newly added plugins). */

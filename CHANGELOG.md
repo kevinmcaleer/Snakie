@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Motion Studio — an exported `.py` round-trips its poses & servo map (#403, #413).** The
+  Robot View's exported motion file now carries Snakie's pose library, sequences and servo map
+  in **guarded, versioned managed blocks** (`# --- snakie:poses v1 ---` … `:end`), written as
+  `literal_eval`-safe assignments. Re-exporting rewrites **only** those blocks — your own code
+  and the `FRAMES` runtime are byte-preserved. Opening a `.py` that carries them reads the poses
+  and servos back (via the Python host's AST reader; no code is executed) and **merges** them
+  into the live Robot View — additive by pose name / pin. A hand-edit that breaks a block pauses
+  the sync and warns instead of clobbering it; a newer-schema block is left untouched; with no
+  Python the round-trip is skipped gracefully. Foundation plumbing for the Motion Studio epic —
+  the pose/sequence/puppet editors land in later issues.
 - **Parts Library — a part can carry a 3-D mesh that drops into the Robot View (#399).** A
   library part can now link an **STL** (a relative `mesh:` filename in its folder, with
   `meshUnits: mm`/`m` or a `meshScale`) the way it already carries an image, driver and help
