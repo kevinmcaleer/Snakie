@@ -104,6 +104,14 @@ export interface RobotPropertiesDialogProps {
     rotation?: { minDeg: number; maxDeg: number; defaultDeg: number },
     angleDeg?: number
   ) => boolean
+  /** Live-preview the mate (same params) as soon as both points are picked / when they
+   *  change, so the user sees the result before Add. Reverted on Cancel. */
+  onPreview: (
+    type: JointType,
+    offsetMm: [number, number, number],
+    rotation: { minDeg: number; maxDeg: number; defaultDeg: number } | undefined,
+    angleDeg: number
+  ) => void
   // footer
   onOk: () => void
   onCancel: () => void
@@ -632,6 +640,7 @@ function AddJointBody({
   onRepick,
   onSwapPicks,
   onConnectPicked,
+  onPreview,
   commitRef
 }: RobotPropertiesDialogProps & {
   commitRef: React.MutableRefObject<(() => void | boolean) | null>
@@ -671,6 +680,22 @@ function AddJointBody({
     }
     return true
   }
+  // Live preview: mate the child as soon as both points are picked, and re-mate whenever
+  // the type / offset / roll change — so the result is visible before Add. (onPreview is
+  // stable enough; excluded from deps so a preview commit doesn't re-trigger itself.)
+  useEffect(() => {
+    if (!parent || !child) return
+    const mm = (s: string): number => {
+      const v = Number(s)
+      return Number.isFinite(v) ? v / 1000 : 0
+    }
+    const rotation =
+      type === 'revolute'
+        ? { minDeg: Number(rot.min) || 0, maxDeg: Number(rot.max) || 0, defaultDeg: Number(rot.def) || 0 }
+        : undefined
+    onPreview(type, [mm(off.x), mm(off.y), mm(off.z)], rotation, Number(angle) || 0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [parent, child, type, off.x, off.y, off.z, angle, rot.min, rot.max, rot.def])
   const axis = (k: 'x' | 'y' | 'z'): JSX.Element => (
     <label className="robotprops__mm">
       <span>{k.toUpperCase()}</span>

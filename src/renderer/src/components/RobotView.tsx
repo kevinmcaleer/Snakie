@@ -784,8 +784,19 @@ export function RobotView({
     setMeasureActive(false) // picking + measuring both own clicks — don't double-fire
     jointPickApiRef.current?.clear()
     setJointPick({ step: 'parent', parent: null, child: null })
-    openContext({ kind: 'addjoint' }, null)
+    // Snapshot the PRE-mate URDF so the live preview always mates from a clean base
+    // (the mate re-origins the child, so it's not idempotent) and Cancel reverts it.
+    openContext({ kind: 'addjoint' }, contentRef.current)
     if (!buildOpen) setBuildOpen(true)
+  }
+  // The live-preview mate is debounced so rapid typing in the dialog doesn't thrash the
+  // (mesh-reloading) scene rebuild.
+  const previewTimerRef = useRef<number | null>(null)
+  const clearPreviewTimer = (): void => {
+    if (previewTimerRef.current != null) {
+      clearTimeout(previewTimerRef.current)
+      previewTimerRef.current = null
+    }
   }
   // A 3-D pick landed (the effect resolved the click → link + local snap point + face normal).
   const onJointPick = (
@@ -805,6 +816,12 @@ export function RobotView({
   onJointPickRef.current = onJointPick
   // Re-arm picking for one component (its 3-D marker is replaced on the next click).
   const handleRepick = (which: 'parent' | 'child'): void => {
+    clearPreviewTimer()
+    // Un-mate any live preview first, so the re-pick lands on the parts at their ORIGINAL
+    // positions (the preview moved + re-origined the child; picking it mated would capture
+    // points in the wrong frame).
+    const snap = editSnapshotRef.current
+    if (snap && snap !== contentRef.current) commitUrdf(snap)
     setJointPick((jp) =>
       jp
         ? which === 'parent'
@@ -818,92 +835,98 @@ export function RobotView({
   const handleSwapPicks = (): void => {
     setJointPick((jp) => (jp && jp.parent && jp.child ? { ...jp, parent: jp.child, child: jp.parent } : jp))
   }
-  // Add: mate the child's picked face against the parent's, re-parent it, set the
-  // type — and put the joint origin (the PIVOT) AT the mating point by re-origining
-  // the child link onto its picked point (so a hinge rotates about the joint, not the
-  // child's centre).
-  const handleConnectPicked = (
+  // The mate math (#354), PURE: from a base URDF + the two picks + params, return the
+  // mated URDF (child's picked face flush against the parent's, re-parented, typed, pivot
+  // re-origined onto the mating point) + the child + the mating normal. No commit/persist.
+  // It re-origins the child so it is NOT idempotent — always compute from the pre-mate
+  // snapshot. Shared by the live preview and the final Add.
+  const computeMate = (
+    base: string,
+    jp: { parent: JointPickPt | null; child: JointPickPt | null },
     type: JointType,
     offsetMm: [number, number, number],
-    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number },
-    angleDeg = 0
-  ): boolean => {
-    const jp = jointPick
-    if (!jp?.parent || !jp?.child) return false
-    const base = contentRef.current
-    // Parent/child (#354): orientJoint honours the pick order — Component 1 is the parent,
-    // Component 2 the child — and only swaps to avoid a loop. One safety override: the
-    // base's connected structure must NEVER be re-homed onto a part disconnected from the
-    // base (a stray separate-root import), which would float it off the base — if the
-    // chosen child is on the base but the parent isn't, flip so the loose part moves.
+    rotation: { minDeg: number; maxDeg: number; defaultDeg: number } | undefined,
+    angleDeg: number
+  ): { urdf: string; child: string; parentNormal: [number, number, number] } | null => {
+    if (!jp.parent || !jp.child) return null
+    // orientJoint honours pick order (Component 1 = parent); the base's connected structure
+    // is never re-homed onto a disconnected part (would float it off the base).
     const baseTree = effectiveBaseLink ? subtreeOf(base, effectiveBaseLink) : new Set<string>()
     let o = orientJoint(base, jp.parent.link, jp.child.link)
     if (o.child !== o.parent && baseTree.has(o.child) && !baseTree.has(o.parent)) {
       o = { parent: o.child, child: o.parent }
     }
     const [parent, child] = o.parent === jp.parent.link ? [jp.parent, jp.child] : [jp.child, jp.parent]
-    // The mating ROTATION (rotate the child so its picked face meets the parent's
-    // flush, then roll it about the joint normal by `angleDeg`). The origin is handled
-    // separately below so the pivot lands on the joint.
-    const { rpy } = jointFromPicks(
-      parent.local,
-      parent.normal,
-      child.local,
-      child.normal,
-      offsetMm,
-      angleDeg
-    )
-    // Joint origin — the PIVOT — at the mating point (parent's picked point + offset).
-    // Exact because we re-origin the child onto its picked point below.
+    const { rpy } = jointFromPicks(parent.local, parent.normal, child.local, child.normal, offsetMm, angleDeg)
     const xyz: [number, number, number] = [
       parent.local[0] + offsetMm[0],
       parent.local[1] + offsetMm[1],
       parent.local[2] + offsetMm[2]
     ]
     let next = connectJoint(base, { parent: parent.link, child: child.link, xyz })
-    if (next === base) return false // cycle / invalid — keep the dialog open
+    if (next === base) return null // cycle / invalid
     const rad = (d: number): number => (d * Math.PI) / 180
-    // A Rotation joint carries its min/max limits (native rad); else just the type.
     next =
       rotation && type === 'revolute'
         ? setJoint(next, child.link, { type, lower: rad(rotation.minDeg), upper: rad(rotation.maxDeg) })
         : setJoint(next, child.link, { type })
-    next = setJointOrigin(next, child.link, xyz, rpy) // xyz + the mating rotation
-    // Re-origin the child onto its picked point: shift its mesh (+ any of its own
-    // child-joints) by −childLocal so the geometry stays exactly put while the link
-    // origin (the pivot) lands on the mating point.
+    next = setJointOrigin(next, child.link, xyz, rpy)
+    // Re-origin the child onto its picked point so the geometry stays put while the link
+    // origin (the pivot) lands on the mating point; shift its own sub-joints to match.
     const cl = child.local
-    const shift = (v: readonly number[]): [number, number, number] => [
-      v[0] - cl[0],
-      v[1] - cl[1],
-      v[2] - cl[2]
-    ]
+    const shift = (v: readonly number[]): [number, number, number] => [v[0] - cl[0], v[1] - cl[1], v[2] - cl[2]]
     const ov = readVisualOrigin(base, child.link) ?? { xyz: [0, 0, 0], rpy: [0, 0, 0] }
     next = setVisualOrigin(next, child.link, shift(ov.xyz), ov.rpy as [number, number, number])
-    // Read the child's own sub-joints from `next` (connectJoint only re-parented the
-    // child itself, never these) and shift each so descendants stay put too.
     for (const j of readAllJoints(next)) {
       if (j.parent === child.link) next = setJointOrigin(next, j.child, shift(j.xyz), j.rpy)
     }
-    commitUrdf(next)
-    setSelectedLink(child.link)
-    const jn = readJoint(next, child.link)?.name
-    // Remember the roll baked in at creation, AND the mating normal it turns about (the
-    // parent's picked face normal, in the parent frame) — this axis can't be recovered
-    // from the finished rpy, so the joint editor's Roll uses it to spin the child about
-    // the SAME axis the mate did. Always overwrite, so a re-join replaces stale values.
+    return { urdf: next, child: child.link, parentNormal: parent.normal as [number, number, number] }
+  }
+  // Live preview: as soon as both points are picked (and whenever type/offset/roll change),
+  // mate the child so the user SEES the result before pressing Add — and can tell whether
+  // they need to roll it. Debounced + always from the pre-mate snapshot (no commit spam,
+  // no double-apply). Cancel/Add revert or finalize via editSnapshotRef.
+  const handleMatePreview = (
+    type: JointType,
+    offsetMm: [number, number, number],
+    rotation: { minDeg: number; maxDeg: number; defaultDeg: number } | undefined,
+    angleDeg: number
+  ): void => {
+    clearPreviewTimer()
+    previewTimerRef.current = window.setTimeout(() => {
+      previewTimerRef.current = null
+      const snap = editSnapshotRef.current
+      const jp = jointPickStateRef.current
+      if (!snap || !jp?.parent || !jp?.child) return
+      const r = computeMate(snap, jp, type, offsetMm, rotation, angleDeg)
+      if (r) commitUrdf(r.urdf) // preview only — no persist, keep the snapshot
+    }, 150)
+  }
+  // Add: finalize the mate from the pre-mate snapshot (so a live preview isn't applied
+  // twice), then persist the roll / mating-normal / default angle. handlePropsOk closes +
+  // clears the snapshot, so Cancel afterwards can't revert it.
+  const handleConnectPicked = (
+    type: JointType,
+    offsetMm: [number, number, number],
+    rotation?: { minDeg: number; maxDeg: number; defaultDeg: number },
+    angleDeg = 0
+  ): boolean => {
+    clearPreviewTimer()
+    const jp = jointPick
+    if (!jp?.parent || !jp?.child) return false
+    const r = computeMate(editSnapshotRef.current ?? contentRef.current, jp, type, offsetMm, rotation, angleDeg)
+    if (r === null) return false // cycle / invalid — keep the dialog open
+    commitUrdf(r.urdf)
+    setSelectedLink(r.child)
+    const jn = readJoint(r.urdf, r.child)?.name
     if (jn) {
-      const pn = parent.normal as [number, number, number]
       jointRollRef.current = { ...jointRollRef.current, [jn]: angleDeg }
-      jointNormalRef.current = { ...jointNormalRef.current, [jn]: pn }
+      jointNormalRef.current = { ...jointNormalRef.current, [jn]: r.parentNormal }
       void persist((m) => {
         m.jointRoll = { ...(m.jointRoll ?? {}), [jn]: angleDeg }
-        m.jointNormal = { ...(m.jointNormal ?? {}), [jn]: pn }
+        m.jointNormal = { ...(m.jointNormal ?? {}), [jn]: r.parentNormal }
       })
     }
-    // Rotation default angle: persist it to the robot.yml defaultPose (keyed by the
-    // joint's actual name, in display degrees) so the joint loads at that angle —
-    // and it seeds the pose slider for interactive preview of the swing.
     if (jn && rotation && type === 'revolute' && rotation.defaultDeg) {
       const dd = rotation.defaultDeg
       void persist((m) => {
@@ -978,6 +1001,7 @@ export function RobotView({
     setSelectedLink(child)
   }
   const handlePropsOk = (): void => {
+    clearPreviewTimer()
     editSnapshotRef.current = null
     poseRevertRef.current = null
     setDialogCtx(null)
@@ -985,6 +1009,7 @@ export function RobotView({
     jointPickApiRef.current?.clear()
   }
   const handlePropsCancel = (): void => {
+    clearPreviewTimer()
     const snap = editSnapshotRef.current
     editSnapshotRef.current = null
     if (snap != null && snap !== contentRef.current) commitUrdf(snap) // discard edits
@@ -3223,6 +3248,7 @@ export function RobotView({
             onRepick={handleRepick}
             onSwapPicks={handleSwapPicks}
             onConnectPicked={handleConnectPicked}
+            onPreview={handleMatePreview}
             onOk={handlePropsOk}
             onCancel={handlePropsCancel}
           />
