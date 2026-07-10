@@ -2704,6 +2704,7 @@ export function RobotView({
             dimLink(null) // un-fade the first block
             clearHoverMarker() // drop the on-surface hover target
             hoverSnaps = null
+            lockedIndex = null // a fresh Join session must not inherit a stale snap-lock
           }
           jointPickApiRef.current = { clear: clearJointMarkers, dim: dimLink }
           const setJointMarker = (world: THREE.Vector3, normal: THREE.Vector3, isChild: boolean): void => {
@@ -2805,6 +2806,10 @@ export function RobotView({
           // The last surface snaps — kept so SHIFT can LOCK them, letting the pick
           // land on a hole centre (empty space, no surface to raycast).
           let hoverSnaps: Snaps | null = null
+          // Fusion-style SHIFT snap-lock: the index (into hoverSnaps) frozen while SHIFT
+          // is held, so you can arm a snap (e.g. the centre of a holed face), then slide
+          // the cursor OVER the hole and click it without the target following the cursor.
+          let lockedIndex: number | null = null
 
           // While picking the CHILD the chosen parent is fixed AND faded — its
           // transparent geometry still hit-tests, so if it sits in front it would steal
@@ -2898,15 +2903,18 @@ export function RobotView({
             // WYSIWYG: a click lands on exactly the snap the hover cross-hair is
             // showing (its nearest snap on the last-hovered surface). This makes the
             // on-surface target — including a hole centre drawn over empty space —
-            // directly clickable, with no pixel-threshold gap and no need to hold
-            // SHIFT to reach it.
+            // directly clickable, with no pixel-threshold gap. Holding SHIFT commits the
+            // LOCKED snap regardless of where the cursor now sits (e.g. over the hole).
             if (hoverSnaps && hoverSnaps.pts.length && robot.links[hoverSnaps.link]) {
-              const near = nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e)
-              if (near.index >= 0) {
+              const locked =
+                e.shiftKey && lockedIndex !== null && lockedIndex < hoverSnaps.pts.length
+                  ? lockedIndex
+                  : nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e).index
+              if (locked >= 0) {
                 link = hoverSnaps.link
-                world = hoverSnaps.pts[near.index].clone()
+                world = hoverSnaps.pts[locked].clone()
                 worldNormal = hoverSnaps.worldNormal.clone()
-                role = hoverSnaps.roles[near.index]
+                role = hoverSnaps.roles[locked]
               }
             }
             if (!world) {
@@ -2945,6 +2953,7 @@ export function RobotView({
             // parent) can't reuse this surface's stale snap without a fresh hover —
             // absent a new hover it falls through to the raycast under the cursor.
             hoverSnaps = null
+            lockedIndex = null
             onJointPickRef.current?.(
               link,
               [local.x, local.y, local.z],
@@ -3094,6 +3103,7 @@ export function RobotView({
               clearHandles()
               clearHoverMarker()
               hoverSnaps = null
+              lockedIndex = null
               setBuildDim(null)
               return
             }
@@ -3101,17 +3111,34 @@ export function RobotView({
             buildRay.setFromCamera(buildNdc, camera)
 
             if (jointActive) {
+              const shift = e.shiftKey
+              // SHIFT snap-LOCK (Fusion-style): once a snap is armed, holding SHIFT
+              // freezes THAT point — the surface + snaps aren't recomputed, so you can
+              // slide the cursor over the hole (empty space) and click the locked centre.
+              if (shift && lockedIndex !== null && hoverSnaps && lockedIndex < hoverSnaps.pts.length) {
+                const role = hoverSnaps.roles[lockedIndex]
+                showHandles(hoverSnaps.pts, hoverSnaps.roles, lockedIndex, hoverSnaps.worldNormal)
+                setHoverMarker(hoverSnaps.pts[lockedIndex], hoverSnaps.worldNormal, role)
+                const rect = mount.getBoundingClientRect()
+                setBuildDim({
+                  x: e.clientX - rect.left + 14,
+                  y: e.clientY - rect.top + 14,
+                  text: `🔒 locked ${snapRoleLabel(role)}`
+                })
+                return
+              }
+              if (!shift) lockedIndex = null // released → the target follows the cursor again
+
               const hit = jointRayHit() // never the already-picked block
               if (hit) {
                 const s = computeSnaps(hit)
                 if (s) hoverSnaps = s
               } else if (hoverSnaps && hoverSnaps.pts.length) {
-                // Over empty space (e.g. inside a hole). Keep the last surface's
-                // snaps while one is still near the cursor so the hole cross-hair
-                // stays put — and stays clickable — as you move onto it. SHIFT
-                // force-locks them regardless of distance (large holes).
+                // Over empty space (e.g. inside a hole). Keep the last surface's snaps
+                // while one is still near the cursor so the target stays put — and stays
+                // clickable — as you move onto it. SHIFT keeps them at any distance.
                 const near = nearestScreen(hoverSnaps.pts, e)
-                if (!e.shiftKey && (near.index < 0 || near.distPx > SNAP_PX.keepAlive)) hoverSnaps = null
+                if (!shift && (near.index < 0 || near.distPx > SNAP_PX.keepAlive)) hoverSnaps = null
               } else {
                 hoverSnaps = null
               }
@@ -3119,20 +3146,25 @@ export function RobotView({
                 clearHandles()
                 clearHoverMarker()
                 setBuildDim(null)
+                lockedIndex = null
                 return
               }
               const near = nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e)
-              showHandles(hoverSnaps.pts, hoverSnaps.roles, near.index, hoverSnaps.worldNormal)
-              if (near.index >= 0) {
-                const role = hoverSnaps.roles[near.index]
-                setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, role)
-                // Name the armed target BEFORE the click (WYSIWYG) — same cursor
-                // tooltip the Move tool uses for its snap (#411).
+              // Pressing SHIFT with a candidate armed locks it; from the next move the
+              // branch above freezes it.
+              if (shift && near.index >= 0) lockedIndex = near.index
+              const armed =
+                lockedIndex !== null && lockedIndex < hoverSnaps.pts.length ? lockedIndex : near.index
+              showHandles(hoverSnaps.pts, hoverSnaps.roles, armed, hoverSnaps.worldNormal)
+              if (armed >= 0) {
+                const role = hoverSnaps.roles[armed]
+                setHoverMarker(hoverSnaps.pts[armed], hoverSnaps.worldNormal, role)
+                // Name the armed target BEFORE the click (WYSIWYG); SHIFT shows it's locked.
                 const rect = mount.getBoundingClientRect()
                 setBuildDim({
                   x: e.clientX - rect.left + 14,
                   y: e.clientY - rect.top + 14,
-                  text: `snap ✓ ${snapRoleLabel(role)}`
+                  text: lockedIndex !== null ? `🔒 locked ${snapRoleLabel(role)}` : `snap ✓ ${snapRoleLabel(role)}`
                 })
               } else {
                 clearHoverMarker()
@@ -3188,6 +3220,17 @@ export function RobotView({
           renderer.domElement.addEventListener('pointercancel', onBuildCancel)
           renderer.domElement.addEventListener('lostpointercapture', onBuildCancel)
           renderer.domElement.addEventListener('pointerleave', onHoverLeave)
+          // Releasing SHIFT drops the snap-lock at once — keyup fires no pointermove, so
+          // without this the frozen "🔒 locked" marker would linger (and a click with no
+          // intervening move would commit the nearest snap, not the shown one) (#411).
+          const onPickKeyUp = (ev: KeyboardEvent): void => {
+            if (ev.key !== 'Shift' || lockedIndex === null) return
+            lockedIndex = null
+            clearHandles()
+            clearHoverMarker()
+            setBuildDim(null)
+          }
+          window.addEventListener('keyup', onPickKeyUp)
           teardownPose = () => {
             renderer.domElement.removeEventListener('pointerdown', onDown)
             renderer.domElement.removeEventListener('pointerup', onUp)
@@ -3198,6 +3241,7 @@ export function RobotView({
             renderer.domElement.removeEventListener('pointercancel', onBuildCancel)
             renderer.domElement.removeEventListener('lostpointercapture', onBuildCancel)
             renderer.domElement.removeEventListener('pointerleave', onHoverLeave)
+            window.removeEventListener('keyup', onPickKeyUp)
             // Remove everything that references the shared discGeo / materials FIRST,
             // then dispose those shared resources.
             clearMeasure()

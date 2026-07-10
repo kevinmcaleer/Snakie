@@ -66,7 +66,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shows a live **"snap ✓ hole centre / corner / edge …"** tooltip at the cursor *before* you
   click. The hit tolerance is now a single set of tuned constants shared by hover and click, so
   what lights up under the cursor is exactly what a click lands on — and holes still magnetise
-  within a generous radius so they're easy to hit.
+  within a generous radius so they're easy to hit. **Hold Shift to lock** the highlighted snap
+  (Fusion-style), then slide the cursor over the hole and click — so you can land on the centre
+  of a face whose middle is empty (e.g. a servo cut-out) without the target following the cursor.
 - **Robot View — the Build (Chain) dock is a little wider (#399).** Bumped from `15.5rem`
   to `17.5rem` (capped `min(18rem, 42vw)`) so long STL-derived link names like
   `left_shoulder_bracket_v3` read in full in the Chain tree instead of being cut off by the
