@@ -28,6 +28,7 @@ import {
   type MotionTrack,
   type NamedPose,
   type PoseStep,
+  type PuppetControl,
   type RobotDefinition,
   type RobotModel,
   type ServoJointBinding
@@ -141,6 +142,23 @@ function sanitiseSequences(raw: unknown): MotionSequence[] | undefined {
   return out.length ? out : undefined
 }
 
+/** Validate the puppet controls (#416); `undefined` when none are usable. A
+ *  control needs an id/name and ≥2 pose names (fewer can't blend). */
+function sanitiseControls(raw: unknown): PuppetControl[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: PuppetControl[] = []
+  for (const c of raw) {
+    const r = (c ?? {}) as Record<string, unknown>
+    if (!isStr(r.id) || !r.id.trim()) continue
+    const poses = Array.isArray(r.poses)
+      ? r.poses.filter((p): p is string => isStr(p) && !!p.trim()).map((p) => p.trim())
+      : []
+    if (poses.length < 2) continue
+    out.push({ id: r.id.trim(), name: isStr(r.name) && r.name.trim() ? r.name.trim() : r.id.trim(), poses })
+  }
+  return out.length ? out : undefined
+}
+
 /** Validate the mirror pairs; `undefined` when none are usable. */
 function sanitiseMirror(raw: unknown): MirrorPair[] | undefined {
   if (!Array.isArray(raw)) return undefined
@@ -246,6 +264,9 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
 
   const sequences = sanitiseSequences(r.sequences)
   if (sequences) model.sequences = sequences
+
+  const controls = sanitiseControls(r.controls)
+  if (controls) model.controls = controls
 
   const mirror = sanitiseMirror(r.mirror)
   if (mirror) model.mirror = mirror

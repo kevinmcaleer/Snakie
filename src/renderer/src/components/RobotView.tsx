@@ -85,6 +85,7 @@ import { RobotToolbar } from './RobotToolbar'
 import { loadPin, savePin, PIN_KEYS } from './pin-overlay'
 import { RobotTimeline } from './RobotTimeline'
 import { RobotSequencer } from './RobotSequencer'
+import { RobotControls } from './RobotControls'
 import {
   autoMirrorPairs,
   deleteKey,
@@ -96,6 +97,7 @@ import {
   moveKey,
   poseSequenceToManagedSteps,
   samplePoseSequence,
+  sampleControl,
   sampleTimeline,
   sequenceDuration,
   upsertKey
@@ -108,6 +110,7 @@ import {
   type ManagedSequenceStep
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
+import { buildServosPayload } from '../../../shared/control'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
@@ -116,6 +119,7 @@ import type {
   MotionSequence,
   MotionTimeline,
   PoseStep,
+  PuppetControl,
   RobotDefinition,
   RobotModel,
   ServoJointBinding
@@ -374,8 +378,15 @@ export function RobotView({
   const handleDeletePose = (name: string): void => {
     const next = poses.filter((p) => p.name !== name)
     setPoses(next)
+    // Degrade any puppet control that referenced this pose: drop the ref (#416). A
+    // control that falls below 2 poses stays but is disabled in the UI, never throws.
+    const cur = controlsRef.current
+    const pruned = cur.map((c) => ({ ...c, poses: c.poses.filter((p) => p !== name) }))
+    const controlsChanged = pruned.some((c, i) => c.poses.length !== cur[i].poses.length)
+    if (controlsChanged) setControls(pruned)
     void persist((m) => {
       m.poses = next
+      if (controlsChanged) m.controls = pruned
     })
   }
 
@@ -392,8 +403,16 @@ export function RobotView({
     }
     const next = [...poses.filter((p) => p.name !== oldName), { name: target, values: pose.values }]
     setPoses(next)
+    // Cascade the rename into any puppet control that references the pose (#416).
+    const cur = controlsRef.current
+    const renamed = cur.map((c) =>
+      c.poses.includes(oldName) ? { ...c, poses: c.poses.map((p) => (p === oldName ? target : p)) } : c
+    )
+    const controlsChanged = renamed.some((c, i) => c !== cur[i])
+    if (controlsChanged) setControls(renamed)
     void persist((m) => {
       m.poses = next
+      if (controlsChanged) m.controls = renamed
     })
   }
 
@@ -1208,8 +1227,12 @@ export function RobotView({
         if (!live) return
         defRef.current = def // seed so persist() never clobbers an unloaded robot.yml
         setBindings(def.robot?.servoJointMap ?? [])
+        setControls(def.robot?.controls ?? []) // puppet controls (#416)
       } catch {
-        if (live) setBindings([])
+        if (live) {
+          setBindings([])
+          setControls([])
+        }
       }
     })()
     return () => {
@@ -1397,16 +1420,17 @@ export function RobotView({
     ? poses.filter((p) => movableNames.some((n) => typeof p.values[n] === 'number'))
     : []
 
-  // Apply a sampled timeline frame to the robot IMPERATIVELY (mimics auto-follow).
-  // `commitState` also pushes the sliders (only on scrub/stop — never per frame).
-  const applyTimelineAt = (t: number, commitState = false): void => {
+  // Drive the robot from a DISPLAY-unit pose IMPERATIVELY (mimics auto-follow), the
+  // shared inner loop of every motion source — timeline, sequence, and puppet
+  // control (#416). `commitState` also pushes the sliders (scrub/stop/drag; never
+  // per playback frame). Each joint is clamped to its effective limit.
+  const applyDisplayPose = (display: Record<string, number>, commitState = false): void => {
     const r = robotRef.current
     if (!r) return
-    const sampled = sampleTimeline(timelineRef.current, t)
     const patch: Record<string, number> = {}
     for (const m of metaRef.current) {
       if (m.isMimic) continue
-      const disp = sampled[m.name]
+      const disp = display[m.name]
       if (typeof disp !== 'number') continue
       const lim = effectiveLimit(m, overridesRef.current[m.name])
       const native = clamp(toNative(m.type, disp), lim.lower, lim.upper)
@@ -1414,6 +1438,11 @@ export function RobotView({
       patch[m.name] = native
     }
     if (commitState) setValues((v) => ({ ...v, ...patch }))
+  }
+
+  // Apply a sampled timeline frame (`commitState` on scrub/stop only).
+  const applyTimelineAt = (t: number, commitState = false): void => {
+    applyDisplayPose(sampleTimeline(timelineRef.current, t), commitState)
   }
 
   // Playback: a rAF loop drives setJointValue every frame; the scrubber/playhead
@@ -1539,6 +1568,13 @@ export function RobotView({
   const posesByNameRef = useRef<Record<string, Record<string, number>>>({})
   posesByNameRef.current = Object.fromEntries(poses.map((p) => [p.name, p.values]))
 
+  // ── Puppet controls (#416) ────────────────────────────────────────────────
+  const [controls, setControls] = useState<PuppetControl[]>([])
+  const controlsRef = useRef<PuppetControl[]>([])
+  controlsRef.current = controls
+  const [controlVals, setControlVals] = useState<Record<string, number>>({}) // id → t (0..1)
+  const controlIdSeq = useRef(0) // in-session counter for collision-free control ids
+
   const deviceStatus = useDeviceStatus()
   const canSeqLive = deviceStatus.state === 'connected' && bindings.length > 0
   // Degrade gracefully: if the board disconnects (or its bindings vanish) while Live
@@ -1547,41 +1583,31 @@ export function RobotView({
     if (!canSeqLive && seqLive) setSeqLive(false)
   }, [canSeqLive, seqLive])
 
-  // Stream the current frame's servo angles to a connected board (#415). Uses the
-  // reverse SNKCMD control channel: one line per frame, "SNKCMD servos <pin>=<deg> …"
-  // (a program running `inst.control` mirrors it onto the physical servos). Throttled;
-  // best-effort — a disconnect / write error is swallowed so preview never breaks.
-  const pushLiveFrame = (sampledDisplay: Record<string, number>): void => {
+  // Stream a DISPLAY-unit pose's servo angles to a connected board over the reverse
+  // SNKCMD control channel (#415/#416): one "SNKCMD servos <pin>:<deg> …" line — a
+  // program running `inst.control` (its `servos` handler) mirrors it onto the
+  // physical servos. Throttled (~25 Hz) + best-effort — a disconnect / write error
+  // is swallowed so preview never breaks. Shared by the sequence Live preview and
+  // the puppet-control drag.
+  const streamServos = (display: Record<string, number>): void => {
     const now = performance.now()
-    if (now - lastLiveSend.current < 55) return // ~18 Hz cap on serial writes
+    if (now - lastLiveSend.current < 40) return // ~25 Hz cap on serial writes
     lastLiveSend.current = now
-    const parts: string[] = []
+    const byPin: Record<string, number> = {}
     for (const b of bindingsRef.current) {
-      const disp = sampledDisplay[b.joint]
-      if (typeof disp !== 'number') continue
-      parts.push(`${b.pin}=${Math.round(jointToServo(b, disp))}`)
+      const disp = display[b.joint]
+      if (typeof disp === 'number') byPin[b.pin] = jointToServo(b, disp)
     }
-    if (parts.length) void window.api.device.sendControl('servos', parts.join(' ')).catch(() => undefined)
+    const payload = buildServosPayload(byPin)
+    if (payload) void window.api.device.sendControl('servos', payload).catch(() => undefined)
   }
 
-  // Apply a sampled sequence frame to the robot imperatively (mirrors auto-follow);
-  // `commitState` syncs the sliders (scrub/pause only). Streams to the board when Live.
+  // Apply a sampled sequence frame (mirrors auto-follow); `commitState` syncs the
+  // sliders (scrub/pause only). Streams to the board when Live.
   const applySequenceAt = (t: number, commitState = false): void => {
-    const r = robotRef.current
-    if (!r) return
     const sampled = samplePoseSequence(sequenceRef.current, posesByNameRef.current, t)
-    const patch: Record<string, number> = {}
-    for (const m of metaRef.current) {
-      if (m.isMimic) continue
-      const disp = sampled[m.name]
-      if (typeof disp !== 'number') continue
-      const lim = effectiveLimit(m, overridesRef.current[m.name])
-      const native = clamp(toNative(m.type, disp), lim.lower, lim.upper)
-      r.setJointValue(m.name, native)
-      patch[m.name] = native
-    }
-    if (commitState) setValues((v) => ({ ...v, ...patch }))
-    if (seqLiveRef.current) pushLiveFrame(sampled)
+    applyDisplayPose(sampled, commitState)
+    if (seqLiveRef.current) streamServos(sampled)
   }
 
   // rAF playback loop (mirrors the timeline's at :1410) — drives setJointValue each
@@ -1671,6 +1697,42 @@ export function RobotView({
     commitSequence({
       ...sequenceRef.current,
       steps: sequenceRef.current.steps.map((s, i) => (i === index ? { ...s, ...patch } : s))
+    })
+  }
+
+  // Drive a puppet control at slider position `t` (#416): blend its poses, drive
+  // the live model, and stream the servos to a connected board — all in real time.
+  const handleControlChange = (id: string, t: number): void => {
+    setControlVals((v) => ({ ...v, [id]: t }))
+    const c = controlsRef.current.find((x) => x.id === id)
+    if (!c) return
+    setPlaying(false) // a manual drag is exclusive with timeline / sequence playback
+    setSeqPlaying(false)
+    const display = sampleControl(c, posesByNameRef.current, t)
+    applyDisplayPose(display, true)
+    if (canSeqLive) streamServos(display)
+  }
+  const handleCreateControl = (name: string, posesSel: string[]): void => {
+    if (!name.trim() || posesSel.length < 2) return
+    const id = `ctl-${Date.now().toString(36)}-${controlIdSeq.current++}` // unique across reloads
+    const next = [...controlsRef.current, { id, name: name.trim(), poses: posesSel }]
+    setControls(next)
+    void persist((mm) => {
+      mm.controls = next
+    })
+  }
+  const handleRenameControl = (id: string, name: string): void => {
+    const next = controlsRef.current.map((c) => (c.id === id ? { ...c, name } : c))
+    setControls(next)
+    void persist((mm) => {
+      mm.controls = next
+    })
+  }
+  const handleDeleteControl = (id: string): void => {
+    const next = controlsRef.current.filter((c) => c.id !== id)
+    setControls(next)
+    void persist((mm) => {
+      mm.controls = next
     })
   }
 
@@ -4177,6 +4239,18 @@ export function RobotView({
           onSetStepDuration={(i, seconds) => patchStep(i, { duration: Math.max(0, seconds) })}
           onSetStepEasing={(i, easing) => patchStep(i, { easing })}
           onExport={handleExport}
+        />
+      )}
+      {showTimeline && (
+        <RobotControls
+          controls={controls}
+          poses={poses}
+          values={controlVals}
+          live={canSeqLive}
+          onChange={handleControlChange}
+          onCreate={handleCreateControl}
+          onRename={handleRenameControl}
+          onDelete={handleDeleteControl}
         />
       )}
     </div>

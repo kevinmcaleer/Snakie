@@ -86,3 +86,17 @@ export function buildTeleopPayload(
   }
   return toks.join(' ')
 }
+
+/**
+ * Build a multi-servo control payload (#416): `"<pin>:<deg> <pin>:<deg> …"`, so
+ * one slider can drive several servos in a single `SNKCMD servos …` line (the
+ * single-servo `servo` target can't). Degrees are rounded to whole numbers;
+ * non-finite angles are skipped. The device-side `servos_command` parses it.
+ */
+export function buildServosPayload(byPin: Record<string, number>): string {
+  const toks: string[] = []
+  for (const [pin, deg] of Object.entries(byPin)) {
+    if (Number.isFinite(deg)) toks.push(`${pin}:${Math.round(deg)}`)
+  }
+  return toks.join(' ')
+}

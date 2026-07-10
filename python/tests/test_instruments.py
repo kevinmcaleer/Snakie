@@ -472,6 +472,32 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIsNone(inst.servo_command("wat", srv))
         self.assertIsNone(inst.servo_command("", srv))
 
+    def test_servos_command_drives_several_pins(self):
+        # #416 puppet slider: one `servos` payload moves many servos at once.
+        calls = []
+
+        class _Fake:
+            def __init__(self, pin):
+                self.pin = pin
+
+            def angle(self, deg):
+                calls.append((self.pin, deg))
+
+        n = inst.servos_command("0:90 1:45 15:120", factory=_Fake)
+        self.assertEqual(n, 3)
+        self.assertEqual(calls, [(0, 90), (1, 45), (15, 120)])
+
+    def test_servos_command_accepts_equals_and_skips_bad_tokens(self):
+        calls = []
+        make = lambda pin: type("S", (), {"angle": lambda self, d: calls.append((pin, d))})()
+        # `2=30` (equals form) ok; `bad`, `:5`, `9:` skipped; float deg truncates.
+        n = inst.servos_command("2=30 bad :5 9: 3:44.9", factory=make)
+        self.assertEqual(n, 2)
+        self.assertEqual(sorted(calls), [(2, 30), (3, 44)])
+
+    def test_servos_command_empty_is_zero(self):
+        self.assertEqual(inst.servos_command("", factory=lambda p: None), 0)
+
     def test_servo_on_emits_pin_keyed_telemetry(self):
         # servo_on(pin).angle() prints both the legacy channel line AND a
         # pin-keyed SERVO line for Robot View (#313) — no `machine` needed.
@@ -633,7 +659,7 @@ class BackgroundService(unittest.TestCase):
     def test_ready_announces_default_caps(self):
         self.assertEqual(
             _emit(inst.ready),
-            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo watch",
+            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo servos watch",
         )
 
     def test_ready_includes_extra_caps(self):

@@ -160,6 +160,29 @@ export function samplePoseSequence(
 }
 
 /**
+ * Blend a puppet control's poses at slider position `t` (#416): the N poses sit at
+ * even stops `i/(N-1)`, `t` is clamped to 0..1, and the bracketing pair is
+ * linearly interpolated joint-wise (a joint present in only one neighbour holds —
+ * see {@link lerpPoses}). Returns the joint→display map to drive the model/board.
+ * `posesByName` resolves each pose name to its stored values (`NamedPose.values`).
+ */
+export function sampleControl(
+  control: { poses: string[] },
+  posesByName: Record<string, Record<string, number>>,
+  t: number
+): Record<string, number> {
+  const names = control.poses
+  const n = names.length
+  if (n === 0) return {}
+  const poseOf = (i: number): Record<string, number> => posesByName[names[i]] ?? {}
+  if (n === 1) return { ...poseOf(0) }
+  const u = t < 0 ? 0 : t > 1 ? 1 : t
+  const pos = u * (n - 1)
+  const i = Math.min(n - 2, Math.floor(pos)) // bracket lower index (clamped so i+1 exists)
+  return lerpPoses(poseOf(i), poseOf(i + 1), pos - i)
+}
+
+/**
  * Convert a sequence's steps to the managed-block / runtime form (#413/#415):
  * `[[poseName, durationMs, easing], …]`. The editor stores each step's duration as
  * the OUTGOING segment (time to the next pose), but `snakie_motion.Rig.play`

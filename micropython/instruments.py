@@ -598,7 +598,7 @@ control = Control()
 
 # What the board can do, announced to the IDE as ``SNK READY <caps...>`` so a
 # panel knows a Snakie program is live (and which triggers it services).
-READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen", "servo", "watch")
+READY_CAPS = ("scan:wifi", "scan:bt", "teleop", "led", "buzzer", "range", "screen", "servo", "servos", "watch")
 
 _service_running = False
 
@@ -687,6 +687,8 @@ def start(i2c=None, buzzer_pin=None, range_trig=None, range_echo=None,
     if servo_pin is not None:
         servo.set_pin(servo_pin)
     control.on("servo", lambda payload: servo_command(payload, servo))
+    # A Robot-View puppet slider drives many servos at once via `servos` (#416).
+    control.on("servos", lambda payload: servos_command(payload))
     # `watch` drives whatever objects the user registered with inst.watch(...).
     control.on("watch", lambda payload: watch_command(payload, _watched))
     control.on("ping", lambda payload: ready(extra))
@@ -1568,6 +1570,43 @@ def servo_command(payload, servo=None):
     except (ValueError, IndexError, TypeError):
         return None
     return verb
+
+
+def servos_command(payload, factory=None):
+    """Drive SEVERAL servos from one ``servos`` control payload (#416).
+
+    The payload is space-separated ``<pin>:<deg>`` (or ``<pin>=<deg>``) pairs, so a
+    Robot-View puppet slider can move a whole limb at once::
+
+        SNKCMD servos 0:90 1:45 15:120
+
+    Each pin is attached/reused via :func:`servo_on` (override with ``factory`` for
+    tests) and set to its angle. Never raises on a malformed token — the bad pair
+    is skipped. Returns the number of servos driven, so it is easy to unit-test.
+    """
+    if not payload:
+        return 0
+    make = factory if factory is not None else globals().get("servo_on")
+    if make is None:
+        return 0
+    driven = 0
+    for tok in payload.split():
+        sep = tok.find(":")
+        if sep == -1:
+            sep = tok.find("=")
+        if sep <= 0:
+            continue
+        try:
+            pin = int(tok[:sep])
+            deg = int(float(tok[sep + 1:]))
+        except (ValueError, IndexError):
+            continue
+        try:
+            make(pin).angle(deg)
+            driven += 1
+        except Exception:  # a bad pin / no PWM — skip, keep driving the rest
+            continue
+    return driven
 
 
 # ---------------------------------------------------------------------------

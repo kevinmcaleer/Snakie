@@ -131,6 +131,23 @@ describe('sanitiseRobotModel — corruption-safe (#310)', () => {
     expect(m!.sequences![0].steps[0].pose).toBe('a')
   })
 
+  it('sanitises puppet controls (#416): keeps id/name + ≥2 poses, drops the rest', () => {
+    const m = sanitiseRobotModel({
+      controls: [
+        { id: ' look ', name: '  Look  ', poses: [' left ', 'right', '', 5] },
+        { id: 'c2', poses: ['only-one'] }, // <2 poses → dropped
+        { name: 'no-id', poses: ['a', 'b'] }, // no id → dropped
+        'junk'
+      ]
+    })
+    expect(m!.controls).toEqual([{ id: 'look', name: 'Look', poses: ['left', 'right'] }])
+  })
+
+  it('a controls-only model round-trips (regression: never silently dropped)', () => {
+    const m = sanitiseRobotModel({ controls: [{ id: 'c', poses: ['a', 'b'] }] })
+    expect(m!.controls![0]).toEqual({ id: 'c', name: 'c', poses: ['a', 'b'] }) // name defaults to id
+  })
+
   it('sanitises mirror pairs (#314)', () => {
     const m = sanitiseRobotModel({
       urdf: 'a.urdf',
