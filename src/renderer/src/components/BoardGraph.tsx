@@ -112,6 +112,8 @@ export interface BoardGraphProps {
   robot?: RobotDefinition
   /** Persist a changed robot definition (writes robot.yml). */
   onChangeRobot?: (next: RobotDefinition) => void
+  /** The linked URDF's joint names — for a servo's "drives joint" picker (#). */
+  joints?: string[]
   /** Installed part libraries (to resolve placed parts' pins). */
   libraries?: PartLibraryWithParts[]
   /** Append a library part to the project. When set, the library dock shows. `pos`
@@ -316,6 +318,7 @@ export function BoardGraph({
   asWindow = false,
   robot,
   onChangeRobot,
+  joints,
   libraries,
   onAddToProject
 }: BoardGraphProps): JSX.Element {
@@ -879,6 +882,7 @@ export function BoardGraph({
               renderMode={effectiveView}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
+              joints={joints ?? []}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
