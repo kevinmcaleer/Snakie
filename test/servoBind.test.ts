@@ -4,10 +4,11 @@ import {
   endpointParts,
   servoBoardGpio,
   boundJoint,
-  bindServoJoint
+  bindServoJoint,
+  bindableServos
 } from '../src/renderer/src/components/servo-bind'
 import type { PartDefinition } from '../src/shared/part'
-import type { RobotConnection, ServoJointBinding } from '../src/shared/robot'
+import type { RobotConnection, RobotPart, ServoJointBinding } from '../src/shared/robot'
 
 const def = (over: Partial<PartDefinition>): PartDefinition =>
   ({ id: 'x', name: 'X', headers: [], ...over }) as PartDefinition
@@ -72,5 +73,31 @@ describe('boundJoint + bindServoJoint (#)', () => {
   })
   it('unbinds on an empty joint', () => {
     expect(bindServoJoint(map, '16', '')).toEqual([])
+  })
+})
+
+describe('bindableServos (#)', () => {
+  const parts: RobotPart[] = [
+    { id: 'sg90', lib: 'std', part: 'sg90', label: 'Left arm' },
+    { id: 'sg902', lib: 'std', part: 'sg90' },
+    { id: 'led1', lib: 'std', part: 'led' }
+  ]
+  const conns: RobotConnection[] = [
+    { id: 'a', from: 'sg90.Signal#0', to: 'board.GP16#5', net: 'signal' }
+    // sg902 has no signal wire yet
+  ]
+  const defs: Record<string, PartDefinition> = {
+    sg90: { id: 'sg90', name: 'SG90 Micro Servo', tags: ['servo'], headers: [] } as PartDefinition,
+    led: { id: 'led', name: 'LED', family: 'Output', headers: [] } as PartDefinition
+  }
+  const resolve = (p: RobotPart): PartDefinition | undefined => defs[p.part]
+
+  it('lists only servos, with their label + signal GPIO (null when unwired)', () => {
+    const list = bindableServos(parts, conns, resolve)
+    expect(list).toEqual([
+      { id: 'sg90', label: 'Left arm', pin: '16' }, // label wins
+      { id: 'sg902', label: 'SG90 Micro Servo', pin: null } // def name, not wired
+    ])
+    expect(list.some((s) => s.id === 'led1')).toBe(false) // not a servo
   })
 })

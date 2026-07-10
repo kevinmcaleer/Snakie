@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -113,6 +113,8 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { buildServosPayload } from '../../../shared/control'
+import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
+import type { PartLibraryWithParts } from '../../../preload/index.d'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
@@ -122,10 +124,13 @@ import type {
   MotionTimeline,
   PoseStep,
   PuppetControl,
+  RobotConnection,
   RobotDefinition,
   RobotModel,
+  RobotPart,
   ServoJointBinding
 } from '../../../shared/robot'
+import type { PartDefinition } from '../../../preload/index.d'
 import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
@@ -1254,6 +1259,27 @@ export function RobotView({
   const bindingsRef = useRef<ServoJointBinding[]>([])
   bindingsRef.current = bindings
 
+  // The breadboard servos + wiring (from robot.yml) and the installed libraries, for
+  // the "bindable servos" list (#) — servos placed on the board that this URDF editor
+  // can bind to a joint. Reloads when the Board window edits robot.yml.
+  const [placedParts, setPlacedParts] = useState<RobotPart[]>([])
+  const [placedConns, setPlacedConns] = useState<RobotConnection[]>([])
+  const [partLibs, setPartLibs] = useState<PartLibraryWithParts[]>([])
+  const [robotSyncNonce, setRobotSyncNonce] = useState(0)
+  useEffect(() => window.api.robot.onChanged(() => setRobotSyncNonce((n) => n + 1)), [])
+  useEffect(() => {
+    window.api.parts.listLibraries().then(setPartLibs).catch(() => setPartLibs([]))
+  }, [])
+  const resolvePartDef = useCallback(
+    (p: RobotPart): PartDefinition | undefined =>
+      partLibs.find((l) => l.id === p.lib)?.parts.find((d) => d.id === p.part),
+    [partLibs]
+  )
+  const servoList = useMemo<BindableServo[]>(
+    () => bindableServos(placedParts, placedConns, resolvePartDef),
+    [placedParts, placedConns, resolvePartDef]
+  )
+
   // Load the servo map whenever the project folder changes — for the docked mini
   // viewer too, so it animates on Run. (The full pose tool also refreshes it in
   // its model load below.)
@@ -1266,17 +1292,21 @@ export function RobotView({
         defRef.current = def // seed so persist() never clobbers an unloaded robot.yml
         setBindings(def.robot?.servoJointMap ?? [])
         setControls(def.robot?.controls ?? []) // puppet controls (#416)
+        setPlacedParts(def.parts ?? []) // breadboard parts (for the bindable-servos list)
+        setPlacedConns(def.connections ?? [])
       } catch {
         if (live) {
           setBindings([])
           setControls([])
+          setPlacedParts([])
+          setPlacedConns([])
         }
       }
     })()
     return () => {
       live = false
     }
-  }, [currentFolder])
+  }, [currentFolder, robotSyncNonce])
 
   // A running program's servo writes drive the mapped joints in real time. This
   // works headless: the simulator runs the Python and `inst.servo_on(pin).angle`
@@ -1429,6 +1459,16 @@ export function RobotView({
 
   const handleDeleteBinding = (pin: string): void => {
     const next = bindings.filter((b) => b.pin !== pin)
+    setBindings(next)
+    void persist((mm) => {
+      mm.servoJointMap = next
+    })
+  }
+
+  // Bind a breadboard servo's GPIO to a joint from the URDF editor (#) — the same
+  // servoJointMap the Board View writes; '' unbinds. Mirrors the board-side picker.
+  const handleBindServo = (pin: string, joint: string): void => {
+    const next = bindServoJoint(bindingsRef.current, pin, joint)
     setBindings(next)
     void persist((mm) => {
       mm.servoJointMap = next
@@ -4146,6 +4186,9 @@ export function RobotView({
             assembly={assembly}
             joints={joints}
             servos={bindings}
+            bindableServos={servoList}
+            jointOptions={movableNames}
+            onBindServo={handleBindServo}
             poses={poses}
             selected={selectedLink}
             onSelect={(link) => {
