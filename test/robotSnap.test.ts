@@ -6,6 +6,9 @@ import {
   worldDeltaToParent,
   movedJointOrigin,
   jointOriginForCoincident,
+  SNAP_PX,
+  catchPx,
+  snapRoleLabel,
   type Vec3
 } from '../src/renderer/src/components/robot-build'
 import { addPrimitive, readJoint, blankUrdf } from '../src/renderer/src/components/robot-assembly'
@@ -80,5 +83,23 @@ describe('readJoint (#335)', () => {
     expect(j.xyz).toEqual([0.06, 0, 0])
     expect(readJoint(u, 'base_link')).toBeNull() // root has no parent joint → move refused
     expect(readJoint(u, 'ghost')).toBeNull()
+  })
+})
+
+describe('snap tolerance + role labels (#411)', () => {
+  it('catchPx magnetises a hole regardless of surface, else keys off mesh vs primitive', () => {
+    expect(catchPx('hole', true)).toBe(SNAP_PX.hole)
+    expect(catchPx('hole', false)).toBe(SNAP_PX.hole)
+    expect(catchPx('edge', true)).toBe(SNAP_PX.mesh) // mesh face
+    expect(catchPx('corner', false)).toBe(SNAP_PX.primitive) // primitive face
+    expect(catchPx('outline', true)).toBe(SNAP_PX.mesh)
+  })
+  it('snapRoleLabel names every role for the live tooltip; unknown → point', () => {
+    expect(snapRoleLabel('hole')).toBe('hole centre')
+    expect(snapRoleLabel('outline')).toBe('face centre')
+    expect(snapRoleLabel('corner')).toBe('corner')
+    expect(snapRoleLabel('edge')).toBe('edge')
+    expect(snapRoleLabel('centre')).toBe('centre')
+    expect(snapRoleLabel('weird')).toBe('point')
   })
 })

@@ -85,6 +85,41 @@ export interface SnapPoint {
 }
 
 /**
+ * Snap hit tolerances in screen px, in ONE place (#411) so hover-highlight and
+ * click agree (WYSIWYG). `hole` is the generous magnetise radius; `primitive`/`mesh`
+ * gate the click fallback by geometry kind; `keepAlive` holds the last surface's snaps
+ * while a candidate is still near the cursor (e.g. moving onto a hole); `move` is the
+ * Move-tool snap-to-neighbour radius.
+ */
+export const SNAP_PX = { hole: 48, primitive: 24, mesh: 28, keepAlive: 90, move: 16 } as const
+
+/** The catch radius (px) for a snap candidate: a hole always uses the generous
+ *  `SNAP_PX.hole`; otherwise it depends on whether the surface is a mesh or a
+ *  primitive face. Keeps hover + click thresholds identical (#411). */
+export function catchPx(role: string, isMesh: boolean): number {
+  if (role === 'hole') return SNAP_PX.hole
+  return isMesh ? SNAP_PX.mesh : SNAP_PX.primitive
+}
+
+/** A short human label for a snap role, for the live "snap ✓ …" cursor tooltip (#411). */
+export function snapRoleLabel(role: string): string {
+  switch (role) {
+    case 'hole':
+      return 'hole centre'
+    case 'outline':
+      return 'face centre'
+    case 'centre':
+      return 'centre'
+    case 'corner':
+      return 'corner'
+    case 'edge':
+      return 'edge'
+    default:
+      return 'point'
+  }
+}
+
+/**
  * The snap handles of a picked face, in the LINK frame (metres): a box face gives
  * 4 corners + 4 edge-mids + centre; a cylinder cap gives a rim circle + centre;
  * anything else gives just the primitive centre. Reaches world via

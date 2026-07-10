@@ -60,6 +60,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Add Joint tool stays, now purely for geometry (where parts meet + orientation).
 
 ### Changed
+- **Robot View — clearer snap targets when joining parts (#399).** Adding a joint now draws
+  each snap candidate with a **role-distinct glyph** (corner = square, edge = diamond, centre =
+  dot, hole = ring) instead of identical dots, emphasises the one you're about to land on, and
+  shows a live **"snap ✓ hole centre / corner / edge …"** tooltip at the cursor *before* you
+  click. The hit tolerance is now a single set of tuned constants shared by hover and click, so
+  what lights up under the cursor is exactly what a click lands on — and holes still magnetise
+  within a generous radius so they're easy to hit.
 - **Robot View — the Build (Chain) dock is a little wider (#399).** Bumped from `15.5rem`
   to `17.5rem` (capped `min(18rem, 42vw)`) so long STL-derived link names like
   `left_shoulder_bracket_v3` read in full in the Chain tree instead of being cut off by the
