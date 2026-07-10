@@ -9,6 +9,13 @@ angle + pulse limits, blocking `sweep`, and eased motion (`ease`).
     s.sweep(0, 180)        # go end to end
     s.ease(0, 600)         # smooth glide to 0 over 600 ms
     s.detach()             # release (stop holding torque)
+
+You can also hand it a PWM you made yourself, so the wiring reads
+pin -> PWM -> Servo -> (joint in the model):
+
+    from machine import Pin, PWM
+    base_pwm = PWM(Pin(0))     # the GP0 signal
+    base = Servo(base_pwm)     # give the servo that PWM
 """
 
 from machine import Pin, PWM
@@ -21,7 +28,16 @@ def _clamp(n, lo, hi):
 
 class Servo:
     def __init__(self, pin, freq=50, min_us=500, max_us=2500, min_angle=0, max_angle=180):
-        self._pwm = PWM(Pin(pin))
+        # `pin` may be a GPIO number, a machine.Pin, OR an already-made machine.PWM
+        # — so `Servo(16)`, `Servo(Pin(16))` and `Servo(PWM(Pin(16)))` all work. This
+        # lets the code read pin -> PWM -> Servo -> joint: you make the PWM, then pass
+        # it in. A bare pin is wrapped for you; a PWM is used (and shared) as-is.
+        if isinstance(pin, PWM):
+            self._pwm = pin
+        elif isinstance(pin, Pin):
+            self._pwm = PWM(pin)
+        else:
+            self._pwm = PWM(Pin(pin))
         self._pwm.freq(freq)
         self._period_us = 1_000_000 // freq  # 20000 us @ 50 Hz
         self.min_us = min_us
