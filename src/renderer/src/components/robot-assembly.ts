@@ -300,6 +300,84 @@ export function setPrimitiveSize(urdf: string, link: string, dims: readonly numb
   return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
 }
 
+/** `#rrggbb` (or `#rgb`) → a URDF rgba float string `"r g b 1"` (0–1, ≤4 dp). */
+function hexToRgba(hex: string): string {
+  const h = hex.replace(/^#/, '')
+  const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const chan = (i: number): number => parseInt(n.slice(i, i + 2), 16) / 255
+  return `${fmtNum(chan(0))} ${fmtNum(chan(2))} ${fmtNum(chan(4))} 1`
+}
+/** A URDF rgba float string → `#rrggbb` (alpha ignored). null if unparseable. */
+function rgbaToHex(rgba: string): string | null {
+  const p = rgba.trim().split(/\s+/).map(Number)
+  if (p.length < 3 || p.slice(0, 3).some((x) => !Number.isFinite(x))) return null
+  const b = (x: number): string =>
+    Math.round(Math.min(1, Math.max(0, x)) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${b(p[0])}${b(p[1])}${b(p[2])}`
+}
+
+/** Colour a link by giving its (first) visual its OWN inline material (#rrggbb).
+ *  Scoped to the link like setPrimitiveSize; urdf-loader renders inline `<material>`
+ *  colours, so it round-trips in the `.urdf` with no separate metadata layer (#405). */
+export function setLinkColor(urdf: string, link: string, hex: string): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return urdf
+  const tag = `<material name="${link}__col"><color rgba="${hexToRgba(hex)}"/></material>`
+  const matRe = /<material\b[^>]*\/>|<material\b[^>]*>[\s\S]*?<\/material>/i
+  let visual = body.slice(vs.start, vs.end)
+  visual = matRe.test(visual)
+    ? visual.replace(matRe, tag)
+    : visual.replace(/<\/visual>/i, `  ${tag}\n    </visual>`)
+  const nextBody = body.slice(0, vs.start) + visual + body.slice(vs.end)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/** A link's visual colour as `#rrggbb` — its inline `<color>`, or the robot-scope
+ *  `<material name>` it references — or null when it has no visual / no colour. */
+export function readLinkColor(urdf: string, link: string): string | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vs = visualSlice(body)
+  if (!vs) return null
+  const visual = body.slice(vs.start, vs.end)
+  const block = /<material\b[^>]*>([\s\S]*?)<\/material>/i.exec(visual)
+  const inline = block && /<color\b[^>]*\brgba\s*=\s*"([^"]+)"/i.exec(block[1])?.[1]
+  if (inline) return rgbaToHex(inline)
+  const ref = /<material\b[^>]*\bname\s*=\s*"([^"]+)"/i.exec(visual)?.[1]
+  if (ref) {
+    // Resolve the robot-scope definition: it must be a real open+close `<material>`
+    // block (not self-closing, `(?<!/)>`) — an unresolved or self-closing reference has
+    // no colour of its own. Bound the colour search to that block's OWN `</material>`
+    // so a colourless definition yields null instead of grabbing a later link's colour.
+    const def = new RegExp(
+      `<material\\b[^>]*\\bname\\s*=\\s*"${escapeRe(ref)}"[^>]*(?<!/)>([\\s\\S]*?)</material>`,
+      'i'
+    ).exec(urdf)?.[1]
+    const rc = def ? /<color\b[^>]*\brgba\s*=\s*"([^"]+)"/i.exec(def)?.[1] : undefined
+    if (rc) return rgbaToHex(rc)
+  }
+  return null
+}
+
+/** Distinct link colours in the model, for the quick-pick swatches (#405).
+ *  `exclude` drops one link (the one being edited) so the picker offers the colours
+ *  of the OTHER links only. */
+export function collectLinkColors(urdf: string, exclude?: string): string[] {
+  const seen = new Set<string>()
+  for (const it of parseAssembly(urdf)) {
+    if (it.link === exclude) continue
+    const c = readLinkColor(urdf, it.link)
+    if (c) seen.add(c)
+  }
+  return [...seen]
+}
+
 /** Read a link's `<visual><origin>` (xyz + rpy), for ANY geometry (mesh included),
  *  or null when the link has no visual. */
 export function readVisualOrigin(

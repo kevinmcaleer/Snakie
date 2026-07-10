@@ -11,6 +11,9 @@ import {
   connectJoint,
   orientJoint,
   buildChainTree,
+  setLinkColor,
+  readLinkColor,
+  collectLinkColors,
   subtreeOf,
   readAllJoints,
   removeJoint,
@@ -394,5 +397,67 @@ describe('buildChainTree — the explicit chain view (#354)', () => {
     const { a, j } = parse(urdf)
     const tree = buildChainTree(a, j, null)
     expect(tree.every((n) => n.loose)).toBe(true)
+  })
+})
+
+describe('link colour — setLinkColor / readLinkColor / collectLinkColors (#405)', () => {
+  const U = `<?xml version="1.0"?>
+<robot name="r">
+  <material name="steel"><color rgba="0.62 0.65 0.69 1"/></material>
+  <link name="a"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="steel"/></visual></link>
+  <link name="b"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="steel"/></visual></link>
+</robot>`
+  it('resolves a robot-scope <material name> reference to its hex', () => {
+    expect(readLinkColor(U, 'a')).toBe('#9ea6b0') // steel 0.62/0.65/0.69
+    expect(readLinkColor(U, 'nope')).toBeNull()
+  })
+  it('sets an inline colour that round-trips, touching ONLY that link', () => {
+    const out = setLinkColor(U, 'a', '#ff8800')
+    expect(readLinkColor(out, 'a')).toBe('#ff8800')
+    expect(readLinkColor(out, 'b')).toBe('#9ea6b0') // b untouched (still steel)
+    expect(out).toContain('<color rgba="1 0.5333 0 1"/>')
+  })
+  it('re-colouring REPLACES the material (no duplicate <material> in the visual)', () => {
+    let out = setLinkColor(U, 'a', '#ff8800')
+    out = setLinkColor(out, 'a', '#00ff00')
+    expect(readLinkColor(out, 'a')).toBe('#00ff00')
+    const aVisual = /<link name="a">[\s\S]*?<\/link>/.exec(out)![0]
+    expect((aVisual.match(/<material\b/g) || []).length).toBe(1)
+  })
+  it('collects the distinct colours in use (for the swatch palette)', () => {
+    const out = setLinkColor(U, 'a', '#ff8800')
+    expect(collectLinkColors(out).sort()).toEqual(['#9ea6b0', '#ff8800'])
+  })
+})
+
+describe('link colour — hardened edge cases (#405 review)', () => {
+  it('readLinkColor returns null for an unresolved / self-closing material ref (no colour of its own)', () => {
+    // link a references a material that is never defined; link b later carries red.
+    // The ref search must NOT jump forward and grab b's colour.
+    const u = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="a"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="ghost"/></visual></link>
+  <link name="b"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="b__col"><color rgba="1 0 0 1"/></material></visual></link>
+</robot>`
+    expect(readLinkColor(u, 'a')).toBeNull()
+    expect(readLinkColor(u, 'b')).toBe('#ff0000')
+  })
+  it('readLinkColor returns null for a referenced-but-colourless material definition', () => {
+    const u = `<?xml version="1.0"?>
+<robot name="r">
+  <material name="plastic"></material>
+  <link name="a"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="plastic"/></visual></link>
+  <link name="b"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="b__col"><color rgba="1 0 0 1"/></material></visual></link>
+</robot>`
+    expect(readLinkColor(u, 'a')).toBeNull()
+  })
+  it('collectLinkColors(exclude) omits the given link, offering only the OTHER links’ colours', () => {
+    const u = `<?xml version="1.0"?>
+<robot name="r">
+  <link name="a"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="a__col"><color rgba="1 0 0 1"/></material></visual></link>
+  <link name="b"><visual><geometry><box size="0.1 0.1 0.1"/></geometry><material name="b__col"><color rgba="0 1 0 1"/></material></visual></link>
+</robot>`
+    expect(collectLinkColors(u).sort()).toEqual(['#00ff00', '#ff0000'])
+    expect(collectLinkColors(u, 'a')).toEqual(['#00ff00']) // a's own red excluded
   })
 })

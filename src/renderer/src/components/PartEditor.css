@@ -728,35 +728,7 @@
   resize: vertical;
 }
 
-/* --- Colour well + used-colour quick-pick swatches --- */
-.pe__swatchpick {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.pe__swatches {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.2rem;
-}
-
-.pe__swatch {
-  width: 1rem;
-  height: 1rem;
-  padding: 0;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-}
-
-.pe__swatch:hover {
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    0 0 0 2px var(--text-muted, #8b919b);
-}
+/* Colour well + swatches moved to the shared SwatchPicker component (#405). */
 
 /* --- Text-style toggle row (bold / italic / underline, align, wrap) --- */
 .pe__tbtns {

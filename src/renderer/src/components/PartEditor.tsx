@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
+import { SwatchPicker } from './SwatchPicker'
 import {
   PartCanvas,
   DEFAULT_LAYERS,
@@ -1399,48 +1400,6 @@ function SliderField({
         />
       </div>
     </label>
-  )
-}
-
-/** A native colour input plus a quick-pick grid of the colours already used in
- *  the part — shared by every colour well in the Properties panel. */
-function SwatchPicker({
-  value,
-  fallback,
-  used,
-  onChange,
-  ariaLabel
-}: {
-  value?: string
-  fallback: string
-  used: string[]
-  onChange: (c: string) => void
-  ariaLabel?: string
-}): JSX.Element {
-  return (
-    <div className="pe__swatchpick">
-      <input
-        type="color"
-        value={/^#[0-9a-f]{6}$/i.test(value ?? '') ? (value as string) : fallback}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={ariaLabel}
-      />
-      {used.length > 0 && (
-        <div className="pe__swatches">
-          {used.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className="pe__swatch"
-              style={{ background: c }}
-              title={c}
-              aria-label={`Use ${c}`}
-              onClick={() => onChange(c)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 
