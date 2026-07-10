@@ -65,6 +65,9 @@ import {
   faceSnapPoints,
   movedJointOrigin,
   resizeFromDrag,
+  SNAP_PX,
+  catchPx,
+  snapRoleLabel,
   type BuildTool,
   type FaceEdit,
   type PrimitiveKind,
@@ -2369,6 +2372,18 @@ export function RobotView({
           const snapGroup = new THREE.Group()
           scene.add(snapGroup)
           const discGeo = new THREE.CircleGeometry(1, 28) // unit disc in XY, +Z normal
+          // Role-distinct glyph geometries (#411), all unit-sized in the XY plane so
+          // they orient to the face normal + scale by `r` like the disc: a square for a
+          // corner, a diamond (square baked at 45°) for an edge, a ring for a hole.
+          const squareGeo = new THREE.PlaneGeometry(1.6, 1.6)
+          const diamondGeo = new THREE.PlaneGeometry(1.6, 1.6)
+          diamondGeo.rotateZ(Math.PI / 4)
+          const ringPts: THREE.Vector3[] = []
+          for (let a = 0; a < 32; a++) {
+            const t = (a / 32) * Math.PI * 2
+            ringPts.push(new THREE.Vector3(Math.cos(t), Math.sin(t), 0))
+          }
+          const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPts)
           const handleMat = new THREE.MeshBasicMaterial({
             color: 0xbfe0ff,
             transparent: true,
@@ -2385,24 +2400,62 @@ export function RobotView({
             depthTest: false,
             depthWrite: false
           })
+          const ringMat = new THREE.LineBasicMaterial({
+            color: 0xbfe0ff,
+            transparent: true,
+            opacity: 0.6,
+            depthTest: false,
+            depthWrite: false
+          })
+          const ringMatOn = new THREE.LineBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.95,
+            depthTest: false,
+            depthWrite: false
+          })
+          // Build the glyph for a snap role (#411). Meshes for filled glyphs, a line
+          // loop for the hole ring; the caller positions/orients/scales it.
+          const glyphFor = (role: string, active: boolean): THREE.Object3D => {
+            const fill = active ? handleMatOn : handleMat
+            switch (role) {
+              case 'hole':
+                return new THREE.LineLoop(ringGeo, active ? ringMatOn : ringMat)
+              case 'corner':
+                return new THREE.Mesh(squareGeo, fill)
+              case 'edge':
+                return new THREE.Mesh(diamondGeo, fill)
+              default: // 'centre' → small dot, 'outline'/fallback → disc
+                return new THREE.Mesh(discGeo, fill)
+            }
+          }
           const clearHandles = (): void => {
             snapGroup.clear()
           }
-          const showHandles = (pts: THREE.Vector3[], activeIdx: number, normal?: THREE.Vector3): void => {
+          const showHandles = (
+            pts: THREE.Vector3[],
+            roles: string[],
+            activeIdx: number,
+            normal?: THREE.Vector3
+          ): void => {
             snapGroup.clear()
             const r = halfView * 0.025
             const q = normal
               ? new THREE.Quaternion().setFromUnitVectors(zAxis, normal.clone().normalize())
               : null
             pts.forEach((p, i) => {
-              const s = new THREE.Mesh(discGeo, i === activeIdx ? handleMatOn : handleMat)
-              s.position.copy(p)
-              if (q) s.quaternion.copy(q) // lie flat on the face
-              else s.quaternion.copy(camera.quaternion) // billboard fallback
-              s.scale.setScalar(i === activeIdx ? r * 1.8 : r)
-              s.renderOrder = 998
-              s.raycast = () => {}
-              snapGroup.add(s)
+              const role = roles[i] ?? 'point'
+              const active = i === activeIdx
+              const g = glyphFor(role, active)
+              g.position.copy(p)
+              if (q) g.quaternion.copy(q) // lie flat on the face
+              else g.quaternion.copy(camera.quaternion) // billboard fallback
+              // A centre 'dot' is smaller so it doesn't read like the 'outline' disc.
+              const base = role === 'centre' ? r * 0.6 : r
+              g.scale.setScalar(active ? base * 1.8 : base)
+              g.renderOrder = 998
+              g.raycast = () => {}
+              snapGroup.add(g)
             })
           }
           const mmv = (m: number): number => Math.round(m * 1000)
@@ -2455,7 +2508,6 @@ export function RobotView({
           // the hole as you move to click it. Only role 'hole' is magnetised (NOT the
           // 'outline' = face centroid every mesh face has, which would swallow edge picks
           // on small faces). Falls back to the plain nearest.
-          const HOLE_CATCH_PX = 48
           const nearestSnap = (
             pts: THREE.Vector3[],
             roles: string[],
@@ -2476,7 +2528,7 @@ export function RobotView({
               if (d < best.distPx) best = { index: i, distPx: d }
               if (roles[i] === 'hole' && d < hole.distPx) hole = { index: i, distPx: d }
             })
-            return hole.index >= 0 && hole.distPx <= HOLE_CATCH_PX ? hole : best
+            return hole.index >= 0 && hole.distPx <= SNAP_PX.hole ? hole : best
           }
 
           // ── Resize (push/pull tool) ──
@@ -2872,8 +2924,7 @@ export function RobotView({
               const geom = readPrimitive(contentRef.current, link)
               const th = geom ? hitToHandles(hit, link, geom) : meshSnapCentres(hit)
               const near = nearestSnap(th.pts, th.roles, e)
-              const isHole = near.index >= 0 && th.roles[near.index] === 'hole'
-              if (near.index >= 0 && near.distPx < (isHole ? HOLE_CATCH_PX : geom ? 24 : 28)) {
+              if (near.index >= 0 && near.distPx < catchPx(th.roles[near.index], !geom)) {
                 world = th.pts[near.index].clone()
                 role = th.roles[near.index]
               }
@@ -2889,6 +2940,7 @@ export function RobotView({
             const linkNormal = worldNormal.clone().applyQuaternion(lq.invert()) // face normal, link-local
             setJointMarker(world, worldNormal, jr.step === 'child')
             clearHoverMarker()
+            setBuildDim(null) // the pick consumed the armed target — drop its "snap ✓" label (#411)
             // Drop the consumed snaps so the NEXT pick (e.g. the child after the
             // parent) can't reuse this surface's stale snap without a fresh hover —
             // absent a new hover it falls through to the raycast under the cursor.
@@ -2937,6 +2989,7 @@ export function RobotView({
             let snapWorld: THREE.Vector3 | null = null
             let snapRole: string | null = null
             let handles: THREE.Vector3[] = []
+            let handleRoles: string[] = []
             let handleNormal: THREE.Vector3 | undefined
             let activeIdx = -1
             const tHit = buildRay
@@ -2953,12 +3006,13 @@ export function RobotView({
               if (tGeom) {
                 const th = hitToHandles(tHit, tLink, tGeom)
                 handles = th.pts
+                handleRoles = th.roles
                 const near = nearestScreen(handles, e)
                 const gp = movedGrab.clone().project(camera)
                 const hp = near.index >= 0 ? handles[near.index].clone().project(camera) : gp
                 const rect = renderer.domElement.getBoundingClientRect()
                 const dpx = Math.hypot(((hp.x - gp.x) * rect.width) / 2, ((hp.y - gp.y) * rect.height) / 2)
-                if (near.index >= 0 && dpx < 16) {
+                if (near.index >= 0 && dpx < SNAP_PX.move) {
                   snapWorld = handles[near.index]
                   snapRole = th.roles[near.index]
                   activeIdx = near.index
@@ -2974,12 +3028,14 @@ export function RobotView({
             )
             move.newXyz.set(nx[0], nx[1], nx[2])
             move.jointObj.position.copy(move.newXyz)
-            showHandles(handles, activeIdx, handleNormal)
+            showHandles(handles, handleRoles, activeIdx, handleNormal)
             const rect = mount.getBoundingClientRect()
             setBuildDim({
               x: e.clientX - rect.left + 14,
               y: e.clientY - rect.top + 14,
-              text: snapRole ? `snap ✓ ${snapRole}` : `${mmv(nx[0])} · ${mmv(nx[1])} · ${mmv(nx[2])} mm`
+              text: snapRole
+                ? `snap ✓ ${snapRoleLabel(snapRole)}`
+                : `${mmv(nx[0])} · ${mmv(nx[1])} · ${mmv(nx[2])} mm`
             })
           }
 
@@ -3038,6 +3094,7 @@ export function RobotView({
               clearHandles()
               clearHoverMarker()
               hoverSnaps = null
+              setBuildDim(null)
               return
             }
             buildNdcFrom(e)
@@ -3054,23 +3111,37 @@ export function RobotView({
                 // stays put — and stays clickable — as you move onto it. SHIFT
                 // force-locks them regardless of distance (large holes).
                 const near = nearestScreen(hoverSnaps.pts, e)
-                if (!e.shiftKey && (near.index < 0 || near.distPx > 90)) hoverSnaps = null
+                if (!e.shiftKey && (near.index < 0 || near.distPx > SNAP_PX.keepAlive)) hoverSnaps = null
               } else {
                 hoverSnaps = null
               }
               if (!hoverSnaps || !hoverSnaps.pts.length) {
                 clearHandles()
                 clearHoverMarker()
+                setBuildDim(null)
                 return
               }
               const near = nearestSnap(hoverSnaps.pts, hoverSnaps.roles, e)
-              showHandles(hoverSnaps.pts, near.index, hoverSnaps.worldNormal)
+              showHandles(hoverSnaps.pts, hoverSnaps.roles, near.index, hoverSnaps.worldNormal)
               if (near.index >= 0) {
-                setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, hoverSnaps.roles[near.index])
-              } else clearHoverMarker()
+                const role = hoverSnaps.roles[near.index]
+                setHoverMarker(hoverSnaps.pts[near.index], hoverSnaps.worldNormal, role)
+                // Name the armed target BEFORE the click (WYSIWYG) — same cursor
+                // tooltip the Move tool uses for its snap (#411).
+                const rect = mount.getBoundingClientRect()
+                setBuildDim({
+                  x: e.clientX - rect.left + 14,
+                  y: e.clientY - rect.top + 14,
+                  text: `snap ✓ ${snapRoleLabel(role)}`
+                })
+              } else {
+                clearHoverMarker()
+                setBuildDim(null)
+              }
               return
             }
 
+            setBuildDim(null) // move-tool hover shows no snap-role label
             // Move tool: primitive face handles only.
             const hit = buildRay.intersectObject(robotRef.current, true).find((h) => h.face)
             const link = hit ? ownerLinkName(hit.object) : null
@@ -3085,7 +3156,7 @@ export function RobotView({
               .clone()
               .transformDirection((hit.object as THREE.Mesh).matrixWorld)
               .normalize()
-            showHandles(th.pts, near.distPx < 16 ? near.index : -1, nW)
+            showHandles(th.pts, th.roles, near.distPx < SNAP_PX.move ? near.index : -1, nW)
           }
 
           // A cancelled/interrupted drag must never strand OrbitControls disabled
@@ -3110,6 +3181,7 @@ export function RobotView({
           const onHoverLeave = (): void => {
             clearHandles()
             clearHoverMarker()
+            setBuildDim(null) // don't strand an armed "snap ✓ …" label off-canvas (#411)
           }
           renderer.domElement.addEventListener('pointermove', onBuildHover)
           renderer.domElement.addEventListener('pointerup', onBuildUp)
@@ -3133,8 +3205,13 @@ export function RobotView({
             clearJointMarkers() // disposes the pick + hover markers
             scene.remove(snapGroup)
             discGeo.dispose()
+            squareGeo.dispose()
+            diamondGeo.dispose()
+            ringGeo.dispose()
             handleMat.dispose()
             handleMatOn.dispose()
+            ringMat.dispose()
+            ringMatOn.dispose()
             markerMat.dispose()
             lineMat.dispose()
             jointMatParent.dispose()
