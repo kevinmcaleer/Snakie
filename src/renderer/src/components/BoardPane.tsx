@@ -4,6 +4,7 @@ import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
+import { jointNames } from './robot-assembly'
 import { attachPartMesh } from './robot-part-mesh'
 import { useWorkspace } from '../store/workspace'
 import { useEditorSettings } from '../store/settings'
@@ -102,6 +103,32 @@ export function BoardPane(): JSX.Element {
       live = false
     }
   }, [folder, robotNonce])
+
+  // The linked URDF's joint names, so a placed servo's inspector can offer a
+  // "drives joint" picker (#) — mirrors the floating Board View window, which
+  // loads these too. Read the `.urdf` pointed at by robot.yml; empty when there's
+  // no URDF link / folder yet (then the picker shows "no joints"). Without this
+  // the in-window board pane ALWAYS showed "no joints", even with a linked rig.
+  const [joints, setJoints] = useState<string[]>([])
+  const urdfPath = robot.robot?.urdf
+  useEffect(() => {
+    if (!folder || !urdfPath) {
+      setJoints([])
+      return
+    }
+    let live = true
+    window.api.fs
+      .readFile(`${folder}/${urdfPath}`)
+      .then((content) => {
+        if (live) setJoints(jointNames(content))
+      })
+      .catch(() => {
+        if (live) setJoints([])
+      })
+    return () => {
+      live = false
+    }
+  }, [folder, urdfPath, robotNonce])
 
   const saveRobot = useCallback(
     (next: RobotDefinition): void => {
@@ -215,6 +242,7 @@ export function BoardPane(): JSX.Element {
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}
+        joints={joints}
         onAddToProject={addToProject}
       />
       {editing && (
