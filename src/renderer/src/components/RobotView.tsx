@@ -98,6 +98,13 @@ import './RobotView.css'
 /** An empty motion clip (2 s, ease-in-out, looping). */
 const EMPTY_TIMELINE: MotionTimeline = { duration: 2, easing: 'easeInOut', loop: true, fps: 20, tracks: [] }
 
+// Camera view per robot, kept at MODULE scope so it survives the RobotView unmounting
+// when you switch to a non-URDF editor tab — otherwise the orbit is lost and the view
+// resets to the default framing on return (#399). Keyed by the same `frameKey` the
+// in-run preservation uses (the active file, or the base link for the compact viewer).
+type CamState = { pos: THREE.Vector3; target: THREE.Vector3; zoom: number; halfView: number }
+const cameraCache = new Map<string, CamState>()
+
 /**
  * ROBOT VIEW (#311, epic #309) — a 3D panel that renders a URDF robot.
  * =============================================================================
@@ -1573,16 +1580,28 @@ export function RobotView({
       camera.far = d + radius * 8 + 0.5
       camera.updateProjectionMatrix()
     }
-    // Snapshot the camera as the PRESERVED state so a later re-parse / async
-    // mesh-settle restores THIS view instead of re-framing the whole model. Called
-    // by manual camera actions (zoom, fit, home, focus-a-link, cube snap/orbit) so
-    // a click made while meshes are still loading isn't clobbered on settle.
+    // The camera-preservation key: the active file (or the base link for the compact
+    // dock viewer). Defined early so the orbit/record handlers can key the module cache.
+    const frameKey = compact ? effectiveBase : activeFile?.id ?? ''
+    // Snapshot the camera as the PRESERVED state so a later re-parse / async mesh-settle
+    // restores THIS view instead of re-framing the whole model — and stash it in the
+    // MODULE cache so it also survives the view unmounting on an editor-tab switch (#399).
+    // Called by manual camera actions (zoom, fit, home, focus, cube) AND on orbit/pan end.
     const recordCamera = (): void => {
-      cameraStateRef.current = {
+      const state: CamState = {
         pos: camera.position.clone(),
         target: controls.target.clone(),
         zoom: camera.zoom,
         halfView
+      }
+      cameraStateRef.current = state
+      if (frameKey) {
+        cameraCache.set(frameKey, {
+          pos: state.pos.clone(),
+          target: state.target.clone(),
+          zoom: state.zoom,
+          halfView: state.halfView
+        })
       }
     }
 
@@ -1710,7 +1729,13 @@ export function RobotView({
       },
       focusLink
     }
-    const onControlsChange = (): void => syncZoomPct()
+    // Every camera change (orbit / pan / wheel-zoom) updates the % readout AND records
+    // the view, so an orbited view survives an editor-tab switch (#399) — not just the
+    // discrete zoom/home/fit/cube actions.
+    const onControlsChange = (): void => {
+      syncZoomPct()
+      recordCamera()
+    }
     controls.addEventListener('change', onControlsChange)
     // A user grabbing the viewport cancels any in-flight camera animation (else
     // the tween and OrbitControls fight over the camera).
@@ -1754,12 +1779,9 @@ export function RobotView({
     }
 
     // Frame a NEW robot isometrically, but PRESERVE the camera when the same file
-    // is just re-parsed after a build edit (#315a must-fix — no view jump). The grid
-    // is refreshed to the new bounds either way. The mini/compact viewer's content
-    // comes from `urdfContent` (the dock's demo-arm → project robot), NOT the
-    // workspace's active file — so key it on the robot's base folder, else it keeps
-    // the demo-arm camera and the real robot loads tiny + off-centre.
-    const frameKey = compact ? effectiveBase : (activeFile?.id ?? '')
+    // is just re-parsed after a build edit (#315a must-fix — no view jump), or when the
+    // view remounts after an editor-tab switch (#399, via the module cache). The grid
+    // is refreshed to the new bounds either way. `frameKey` is defined above.
     const relayGrid = (robot: URDFRobot): void => {
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
@@ -1777,13 +1799,17 @@ export function RobotView({
         cameraStateRef.current = null
         return
       }
-      if (saved && framedKeyRef.current === frameKey) {
-        halfView = saved.halfView
-        camera.position.copy(saved.pos)
-        controls.target.copy(saved.target)
-        camera.zoom = saved.zoom
+      // Restore the preserved view — either the in-run snapshot (re-parse/mesh-settle),
+      // or, on a fresh mount after a tab switch, the module-cached view for this file.
+      const restore = saved && framedKeyRef.current === frameKey ? saved : cameraCache.get(frameKey)
+      if (restore) {
+        halfView = restore.halfView
+        camera.position.copy(restore.pos)
+        controls.target.copy(restore.target)
+        camera.zoom = restore.zoom
         camera.updateProjectionMatrix()
         controls.update()
+        framedKeyRef.current = frameKey
         relayGrid(robot)
         resize()
       } else {
