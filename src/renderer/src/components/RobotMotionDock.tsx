@@ -8,7 +8,7 @@ import './RobotMotionDock.css'
  * collapses the dock to just its tab strip (giving the full 3-D stage back). The
  * active tab + collapsed state persist across sessions, and a tab shows a dot when
  * that surface already has content, so a populated-but-hidden surface advertises
- * itself. Own `robotdock__` BEM prefix (instrument CSS is global).
+ * itself. Own `motiondock__` BEM prefix (instrument CSS is global).
  */
 
 export interface MotionTab {
@@ -67,25 +67,25 @@ export function RobotMotionDock({ tabs }: RobotMotionDockProps): JSX.Element {
   const activeTab = tabs.find((t) => t.id === active) ?? tabs[0]
 
   return (
-    <div className={`robotdock${collapsed ? ' is-collapsed' : ''}`}>
-      <div className="robotdock__tabs" role="tablist" aria-label="Motion tools">
+    <div className={`motiondock${collapsed ? ' is-collapsed' : ''}`}>
+      <div className="motiondock__tabs" role="tablist" aria-label="Motion tools">
         {tabs.map((t) => (
           <button
             key={t.id}
             type="button"
             role="tab"
             aria-selected={!collapsed && t.id === active}
-            className={`robotdock__tab${!collapsed && t.id === active ? ' is-active' : ''}`}
+            className={`motiondock__tab${!collapsed && t.id === active ? ' is-active' : ''}`}
             onClick={() => selectTab(t.id)}
           >
             {t.label}
-            {t.badge && <span className="robotdock__badge" title="has content" aria-hidden="true" />}
+            {t.badge && <span className="motiondock__badge" title="has content" aria-hidden="true" />}
           </button>
         ))}
-        <span className="robotdock__spacer" />
+        <span className="motiondock__spacer" />
         <button
           type="button"
-          className="robotdock__collapse"
+          className="motiondock__collapse"
           onClick={toggleCollapsed}
           title={collapsed ? 'Show motion tools' : 'Hide motion tools (reclaim the 3-D view)'}
           aria-label={collapsed ? 'Expand motion dock' : 'Collapse motion dock'}
@@ -93,7 +93,7 @@ export function RobotMotionDock({ tabs }: RobotMotionDockProps): JSX.Element {
           {collapsed ? '⌃' : '⌄'}
         </button>
       </div>
-      {!collapsed && <div className="robotdock__body">{activeTab?.content}</div>}
+      {!collapsed && <div className="motiondock__body">{activeTab?.content}</div>}
     </div>
   )
 }
