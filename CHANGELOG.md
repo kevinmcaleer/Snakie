@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-07-11
+
 ### Added
 - **`snakie` — a friendly hardware module.** Board code can now `from snakie import Servo, Buzzer,
   Led, Pin, PWM` — the *hardware* classes, under a clear, collision-proof name (a vendor `servo`
@@ -2282,7 +2284,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...HEAD
+[0.25.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...v0.23.1
