@@ -34,7 +34,11 @@
      bottom-left; the parts list scrolls if the robot has more blocks than fit. */
   max-height: calc(100% - 1rem);
   z-index: 4;
-  width: 15.5rem;
+  /* A little wider so STL-derived link names (e.g. left_shoulder_bracket_v3, plus
+     _2/_3 suffixes) read without the ellipsis; capped viewport-relative so on narrow
+     windows the floating dock still only claims a modest slice of the 3-D stage (#408). */
+  width: 17.5rem;
+  max-width: min(18rem, 42vw);
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
