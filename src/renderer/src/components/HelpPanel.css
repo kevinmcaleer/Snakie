@@ -318,3 +318,28 @@
 .help__example:hover {
   background: #f6efdb;
 }
+
+/* Link to the full online docs (docs.snakie.org): a footer in the contents view and
+   after each article. Green-tinted to match Snakie's brand + the parchment Help chrome. */
+.help__docs {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0.55rem 0 0;
+  padding: 0.42rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-align: center;
+  color: #21493d;
+  background: linear-gradient(180deg, #d8ecdf, #b7d8c4);
+  border: 1px solid #7fae94;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.help__docs:hover {
+  background: linear-gradient(180deg, #e4f3ea, #c6e3d1);
+}
+.help__docs--article {
+  margin-top: 1.2rem;
+}
