@@ -1,5 +1,6 @@
 import { createRequire } from 'module'
 import { reportError } from '../report-error'
+import { SIM_MACHINE_PY } from '../../shared/sim-machine'
 import type {
   LoadMicroPythonOptions,
   MicroPythonInstance
@@ -72,6 +73,13 @@ export class MicroPythonRuntime implements ReplRuntime {
     }
     const mp = await loadMicroPython(options)
     this.mp = mp
+    // The WASM port ships no `machine` module — install a simulated one so
+    // `from machine import Pin` (the first line of most lessons) works (#267).
+    try {
+      mp.runPython(SIM_MACHINE_PY)
+    } catch {
+      /* best-effort — without it, `import machine` just raises as before */
+    }
     // Stream buffered output on a short cadence so long-running programs show
     // progress instead of dumping everything when they finish.
     this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS)

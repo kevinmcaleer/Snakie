@@ -17,6 +17,7 @@
 import { loadMicroPython } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
+import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
 
 type InMsg =
   | { type: 'init' }
@@ -50,6 +51,13 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
       stderr: collect
     })
     setInterval(flush, 24)
+    // The WASM port has no `machine` module — install a simulated one so
+    // `from machine import Pin` (every lesson's first line) works.
+    try {
+      mp.runPython(SIM_MACHINE_PY)
+    } catch {
+      /* best-effort — a missing machine stub just means the ImportError returns */
+    }
     mp.replInit()
     flush()
     postMessage({ type: 'ready' })
