@@ -16,6 +16,10 @@
  */
 import { WorkerMicroPythonRuntime } from './worker-runtime'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
+import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../../shared/simulation'
+
+/** How often the simulated board "prints" a telemetry frame (matches the desktop sim). */
+const TELEMETRY_INTERVAL_MS = 120
 
 type ConnState = 'disconnected' | 'connecting' | 'connected'
 interface DeviceStatus {
@@ -55,8 +59,28 @@ export function createWebDeviceApi(): Record<string, unknown> {
   const statusSubs = new Set<(status: DeviceStatus) => void>()
   let state: ConnState = 'disconnected'
   let runtime: WorkerMicroPythonRuntime | null = null
+  // Synthetic-telemetry clock (drives the instruments + the Board Viewer probe),
+  // exactly like the desktop SimulatedDevice — so scope / meter / plotter / IMU /
+  // radar animate on the web sim with no hardware or running program.
+  let tick = 0
+  let telemetry: ReturnType<typeof setInterval> | null = null
 
   const emitData = (chunk: Uint8Array): void => dataSubs.forEach((cb) => cb(chunk))
+
+  const emitTelemetryFrame = (): void => {
+    if (state !== 'connected') return
+    const frame = simulatedTelemetryFrame(tick++)
+    if (frame.length > 0) emitData(enc.encode(frame.join('\r\n') + '\r\n'))
+  }
+  const startTelemetry = (): void => {
+    if (!telemetry) telemetry = setInterval(emitTelemetryFrame, TELEMETRY_INTERVAL_MS)
+  }
+  const stopTelemetry = (): void => {
+    if (telemetry) {
+      clearInterval(telemetry)
+      telemetry = null
+    }
+  }
   const status = (): DeviceStatus => ({ state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
   const setState = (s: ConnState): void => {
     state = s
@@ -85,9 +109,11 @@ export function createWebDeviceApi(): Record<string, unknown> {
         )
       }
       setState('connected')
+      startTelemetry()
     },
 
     disconnect: async () => {
+      stopTelemetry()
       runtime?.dispose()
       runtime = null
       if (state !== 'disconnected') setState('disconnected')
@@ -95,7 +121,12 @@ export function createWebDeviceApi(): Record<string, unknown> {
 
     getStatus: async () => status(),
 
-    exec: async (code: string) => ({ stdout: await capture(code), stderr: '' }),
+    exec: async (code: string) => {
+      // The Board Viewer's live-pin probe gets synthetic values (no hardware to
+      // read), like the desktop sim; everything else runs on the interpreter.
+      if (isProbeCode(code)) return { stdout: simulateProbeResponse(code, tick), stderr: '' }
+      return { stdout: await capture(code), stderr: '' }
+    },
 
     eval: async (code: string) => capture(code),
 

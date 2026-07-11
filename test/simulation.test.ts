@@ -4,7 +4,7 @@ import {
   PROBE_MARK,
   simulatedTelemetryFrame,
   simulateProbeResponse
-} from '../src/main/device/simulation'
+} from '../src/shared/simulation'
 import {
   isTelemetry,
   parseTelemetry
