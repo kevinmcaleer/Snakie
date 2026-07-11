@@ -24,6 +24,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
   base: '/',
+  // Statically flag the web build so `main.tsx` installs the WASM device backend.
+  define: {
+    'import.meta.env.VITE_SNAKIE_WEB': 'true'
+  },
   resolve: {
     alias: {
       '@renderer': resolve(__dirname, 'src/renderer/src')
@@ -32,6 +36,9 @@ export default defineConfig({
   build: {
     outDir: resolve(__dirname, 'dist-web'),
     emptyOutDir: true,
+    // The MicroPython WASM loader (micropython.mjs) uses TOP-LEVEL AWAIT, so the
+    // target must allow it (esnext); all Web-Serial-capable Chromium versions do.
+    target: 'esnext',
     // Monaco is a big, lazily-loaded, independently-cacheable chunk (mirrors the
     // electron build), so raise the warning limit past its size.
     chunkSizeWarningLimit: 4000,
@@ -50,5 +57,21 @@ export default defineConfig({
       }
     }
   },
-  plugins: [react()]
+  plugins: [
+    react(),
+    {
+      // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
+      // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and
+      // `font-src data:` lets Vite's inlined fonts load.
+      name: 'snakie-web-csp',
+      transformIndexHtml(html: string): string {
+        return html.replace(
+          /content="default-src 'self';[^"]*"/,
+          `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
+            `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
+            `font-src 'self' data:; connect-src 'self'"`
+        )
+      }
+    }
+  ]
 })
