@@ -5,7 +5,7 @@ import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useInstrumentWorkspace } from '../store/workspace'
 import { displayDemo, DISPLAY_DEMO_NAME, displaySpiDemo, DISPLAY_SPI_DEMO_NAME } from './display-demo'
 import {
   DISPLAY_GEOMETRIES,
@@ -98,7 +98,7 @@ export function DisplayInstrument({
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
   const { present } = useSnakiePresence()
-  const { openBuffer, openFiles, activeId, updateContent } = useWorkspace()
+  const { openBuffer, openFiles, activeId, updateContent } = useInstrumentWorkspace()
 
   // The active editor buffer (if any) — the target for the code-sync update + the
   // source we scan for declared SCREEN_SDA / SCREEN_SCL pins to warn on a mismatch.

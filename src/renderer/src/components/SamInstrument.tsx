@@ -4,7 +4,7 @@ import { InstrumentWindow, type FloatProps } from './InstrumentWindow'
 import { type InstrumentDef } from './instruments-registry'
 import { useBoards } from './use-boards'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useInstrumentWorkspace } from '../store/workspace'
 import { SAM_DEMO, SAM_DEMO_NAME } from './sam-demo'
 import './SamInstrument.css'
 
@@ -61,7 +61,7 @@ type SamState = 'idle' | 'installing' | 'speaking'
 export function SamInstrument({ def, onClose, docked = true, onToggleDock, float }: SamInstrumentProps): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
-  const { openBuffer } = useWorkspace()
+  const { openBuffer } = useInstrumentWorkspace()
   // The GPIO pins of the currently-selected board (the picker persists its id),
   // for the buzzer-pin dropdown.
   const boards = useBoards()

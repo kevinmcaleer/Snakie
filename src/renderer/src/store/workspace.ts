@@ -541,3 +541,32 @@ export function useWorkspace(): WorkspaceStore {
 export function useWorkspaceOptional(): WorkspaceStore | null {
   return useContext(WorkspaceContext)
 }
+
+/** Stable empty list so a detached instrument doesn't re-render on every read. */
+const EMPTY_OPEN_FILES: OpenFile[] = []
+const NOOP_WRITE = (): void => undefined
+
+/**
+ * Workspace access for an instrument that ALSO renders in a DETACHED OS window
+ * (which has no `WorkspaceProvider`). Returns the live workspace bits when docked,
+ * or safe no-ops / empties when detached — so the instrument renders instead of
+ * crashing on the throwing {@link useWorkspace} (a blank pop-out window). The
+ * workspace-backed extras (insert a demo file, edit the active file) simply become
+ * inert in the detached window; `detached` lets a caller hide/disable them.
+ */
+export function useInstrumentWorkspace(): {
+  openBuffer: (name: string, content: string) => void
+  updateContent: (id: string, content: string) => void
+  openFiles: OpenFile[]
+  activeId: string | null
+  detached: boolean
+} {
+  const ws = useWorkspaceOptional()
+  return {
+    openBuffer: ws?.openBuffer ?? NOOP_WRITE,
+    updateContent: ws?.updateContent ?? NOOP_WRITE,
+    openFiles: ws?.openFiles ?? EMPTY_OPEN_FILES,
+    activeId: ws?.activeId ?? null,
+    detached: !ws
+  }
+}
