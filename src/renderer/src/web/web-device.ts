@@ -3,19 +3,18 @@
  * =============================================================================
  *
  * Implements the `window.api.device` namespace in the browser, backed by the
- * {@link BrowserMicroPythonRuntime}. It's the web twin of the main-process
+ * {@link WorkerMicroPythonRuntime}. It's the web twin of the main-process
  * `SimulatedDevice`: connect boots the interpreter (its banner streams out via
  * `onData`), `sendData` feeds the REPL, `exec`/`eval` run captured snippets, and
  * the filesystem ops drive MicroPython's in-memory VFS with the SAME Python that
  * the desktop simulator uses. Presented as the reserved virtual port so the
  * shell's port dropdown + Connect button "just work" — no hardware.
  *
- * Not covered here (tracked on #464): synthetic `SNK` telemetry (instruments) and
- * running the interpreter in a Worker (a `while True:` loop currently blocks the
- * tab until interrupted — fine for short classroom programs; the Worker is the
- * follow-up).
+ * The interpreter runs in a Web Worker ({@link ./worker-runtime}), so a `while
+ * True:` loop churns off the UI thread and Stop reboots the worker to break it.
+ * Still tracked on #464: synthetic `SNK` telemetry so the instruments animate.
  */
-import { BrowserMicroPythonRuntime } from './mp-runtime'
+import { WorkerMicroPythonRuntime } from './worker-runtime'
 import { VIRTUAL_PORT_PATH, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
 
 type ConnState = 'disconnected' | 'connecting' | 'connected'
@@ -55,7 +54,7 @@ export function createWebDeviceApi(): Record<string, unknown> {
   const dataSubs = new Set<(chunk: Uint8Array) => void>()
   const statusSubs = new Set<(status: DeviceStatus) => void>()
   let state: ConnState = 'disconnected'
-  let runtime: BrowserMicroPythonRuntime | null = null
+  let runtime: WorkerMicroPythonRuntime | null = null
 
   const emitData = (chunk: Uint8Array): void => dataSubs.forEach((cb) => cb(chunk))
   const status = (): DeviceStatus => ({ state, path: VIRTUAL_PORT_PATH, baudRate: 115200 })
@@ -75,7 +74,7 @@ export function createWebDeviceApi(): Record<string, unknown> {
     connect: async () => {
       if (state === 'connected') return
       setState('connecting')
-      runtime = new BrowserMicroPythonRuntime()
+      runtime = new WorkerMicroPythonRuntime()
       try {
         await runtime.init(emitData)
       } catch (err) {
@@ -107,11 +106,12 @@ export function createWebDeviceApi(): Record<string, unknown> {
     sendControl: async () => undefined, // no telemetry consumer on the sim yet (#464)
 
     interrupt: async () => {
-      if (runtime) await runtime.feed('\x03') // Ctrl-C
+      // Ctrl-C when idle; reboot the worker to stop a running (maybe no-yield) loop.
+      if (runtime) await runtime.interrupt()
     },
 
     softReset: async () => {
-      if (runtime) await runtime.feed('\x04') // Ctrl-D
+      if (runtime) await runtime.feed('\x04') // Ctrl-D — soft reboot at the REPL
     },
 
     // ── In-memory filesystem (MicroPython VFS) — same snippets as the desktop sim ──
