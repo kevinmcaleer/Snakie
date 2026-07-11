@@ -28,6 +28,11 @@ export default defineConfig({
   define: {
     'import.meta.env.VITE_SNAKIE_WEB': 'true'
   },
+  // The sim runs in a module Worker that imports the WASM, so worker bundles need
+  // ES format (the default 'iife' can't code-split the dynamic WASM import).
+  worker: {
+    format: 'es'
+  },
   resolve: {
     alias: {
       '@renderer': resolve(__dirname, 'src/renderer/src')
