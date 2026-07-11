@@ -30,6 +30,7 @@ import {
   externalMeshes,
   rewriteMeshFilename,
   jointNames,
+  jointDisplayLimits,
   looseLinks,
   parseAssembly,
   readAllJoints,
@@ -570,6 +571,9 @@ export function RobotView({
     [content, editLink]
   )
   const allJointNames = useMemo(() => jointNames(content), [content])
+  // Each joint's real travel (deg / mm), to seed a new servo binding's joint range
+  // from the joint's limits instead of a flat 0…180 (which clamped the 3-D model).
+  const jointLimits = useMemo(() => jointDisplayLimits(content), [content])
   // The edited link's colour + the palette of colours already on the robot (#405).
   const editLinkColor = useMemo(
     () => (editLink ? readLinkColor(content, editLink) ?? undefined : undefined),
@@ -1489,7 +1493,7 @@ export function RobotView({
   // Bind a breadboard servo's GPIO to a joint from the URDF editor (#) — the same
   // servoJointMap the Board View writes; '' unbinds. Mirrors the board-side picker.
   const handleBindServo = (pin: string, joint: string): void => {
-    const next = bindServoJoint(bindingsRef.current, pin, joint)
+    const next = bindServoJoint(bindingsRef.current, pin, joint, jointLimits[joint])
     setBindings(next)
     void persist((mm) => {
       mm.servoJointMap = next

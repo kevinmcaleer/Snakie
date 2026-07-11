@@ -76,6 +76,24 @@ describe('boundJoint + bindServoJoint (#)', () => {
   it('unbinds on an empty joint', () => {
     expect(bindServoJoint(map, '16', '')).toEqual([])
   })
+  it('seeds a NEW binding\'s joint range from the joint limits when given', () => {
+    const b = bindServoJoint(map, '17', 'elbow', { min: -90, max: 90 }).find((x) => x.pin === '17')!
+    expect(b.jointMin).toBe(-90)
+    expect(b.jointMax).toBe(90)
+    expect(b.servoMin).toBe(0) // servo range stays the neutral 0..180
+    expect(b.servoMax).toBe(180)
+  })
+  it('defaults a new binding to 0..180 when no limits are given', () => {
+    const b = bindServoJoint(map, '17', 'elbow').find((x) => x.pin === '17')!
+    expect([b.jointMin, b.jointMax]).toEqual([0, 180])
+  })
+  it('ignores the range when RE-binding the same joint (keeps calibration)', () => {
+    const cal: ServoJointBinding[] = [
+      { pin: '16', joint: 'shoulder', servoMin: 10, servoMax: 170, jointMin: -45, jointMax: 45, invert: true }
+    ]
+    const next = bindServoJoint(cal, '16', 'shoulder', { min: -90, max: 90 })
+    expect(next[0]).toBe(cal[0]) // same object — existing calibration untouched
+  })
 })
 
 describe('bindableServos (#)', () => {

@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Binding a servo now takes the joint's real range, so the 3-D model doesn't clamp (#459).**
+  A new servo↔joint binding used to default the joint range to a flat `0…180`, ignoring the
+  joint's actual limits. On a joint limited to, say, `±90°` that made the on-screen model **stop
+  halfway** — the physical servo swept fully but the 3-D joint hit its limit and clamped for half
+  the travel. New bindings now seed the joint range from the joint's URDF `<limit>` (degrees for a
+  rotating joint, mm for a sliding one) in **both** the Board View and Robot View pickers. Existing
+  bindings are unchanged; fix one by setting its **Joint range** in the servo dialog.
+
 ## [0.25.0] - 2026-07-11
 
 ### Added

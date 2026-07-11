@@ -15,6 +15,7 @@ import {
   orientJoint,
   buildChainTree,
   meshImportScale,
+  jointDisplayLimits,
   setLinkColor,
   readLinkColor,
   collectLinkColors,
@@ -550,5 +551,32 @@ describe('meshImportScale — declared units vs bbox heuristic (#406)', () => {
     expect(meshImportScale({}, 40)).toBe(0.001)
     expect(meshImportScale({}, 0.5)).toBe(1)
     expect(meshImportScale({})).toBe(1) // nothing known ⇒ leave at 1
+  })
+})
+
+describe('jointDisplayLimits (#)', () => {
+  const urdf = `
+    <robot name="r">
+      <link name="base"/><link name="arm"/><link name="slide"/><link name="tip"/>
+      <joint name="shoulder" type="revolute">
+        <parent link="base"/><child link="arm"/>
+        <limit lower="-1.5708" upper="1.5708" effort="1" velocity="1"/>
+      </joint>
+      <joint name="lift" type="prismatic">
+        <parent link="arm"/><child link="slide"/>
+        <limit lower="0" upper="0.05" effort="1" velocity="1"/>
+      </joint>
+      <joint name="weld" type="fixed">
+        <parent link="slide"/><child link="tip"/>
+      </joint>
+    </robot>`
+
+  it('converts revolute limits rad → deg (rounded) and prismatic m → mm', () => {
+    const lim = jointDisplayLimits(urdf)
+    expect(lim.shoulder).toEqual({ min: -90, max: 90 }) // ±1.5708 rad → ±90° (not ±89.9954)
+    expect(lim.lift).toEqual({ min: 0, max: 50 }) // 0…0.05 m → 0…50 mm
+  })
+  it('skips joints without a <limit> (a fixed joint has no travel)', () => {
+    expect(jointDisplayLimits(urdf).weld).toBeUndefined()
   })
 })
