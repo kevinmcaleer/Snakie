@@ -42,6 +42,11 @@ export default defineConfig({
   },
   renderer: {
     root: 'src/renderer',
+    // Statically false in the desktop build so the web-only WASM device backend
+    // (epic #267) is tree-shaken out — Electron uses the real preload bridge.
+    define: {
+      'import.meta.env.VITE_SNAKIE_WEB': 'false'
+    },
     resolve: {
       alias: {
         '@renderer': resolve('src/renderer/src')
