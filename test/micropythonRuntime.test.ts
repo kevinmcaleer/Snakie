@@ -34,13 +34,16 @@ describe('MicroPythonRuntime (real WebAssembly)', () => {
     rt.dispose()
   }, 30000)
 
-  it('raises ImportError for hardware modules (no machine in the WASM port)', async () => {
+  it('installs a simulated machine module (the WASM port ships none) (#267)', async () => {
     const rt = new MicroPythonRuntime()
     const out: Buffer[] = []
     await rt.init((c) => out.push(c))
-    await rt.feed('import machine\r')
-    await new Promise((r) => setTimeout(r, 50))
-    expect(Buffer.concat(out).toString('utf8')).toContain('ImportError')
+    // `from machine import Pin` — the first line of most lessons — must work now.
+    await rt.feed('from machine import Pin\rp = Pin(25, Pin.OUT)\rp.on()\rprint("pinval", p.value())\r')
+    await new Promise((r) => setTimeout(r, 80))
+    const text = Buffer.concat(out).toString('utf8')
+    expect(text).toContain('pinval 1')
+    expect(text).not.toContain('ImportError')
     rt.dispose()
   }, 30000)
 })
