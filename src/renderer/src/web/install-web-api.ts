@@ -14,7 +14,9 @@
  */
 import { createWebDeviceApi } from './web-device'
 import { createWebFsApi } from './web-fs'
+import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
+import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
 export function installWebApi(): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
@@ -30,12 +32,39 @@ export function installWebApi(): void {
   w.api.instruments = instruments as unknown as Window['api']['instruments']
   // Local files via the File System Access API — only when the browser supports it
   // (Chromium); elsewhere the no-op fallback stays and "Open Folder" is inert.
+  // The robot.yml layer rides on the same backend (bindings/poses/urdf link), so
+  // it's gated with it — on other browsers the honest fallback stub remains.
   if ('showDirectoryPicker' in window) {
-    w.api.fs = createWebFsApi() as unknown as Window['api']['fs']
+    const fs = createWebFsApi()
+    w.api.fs = fs as unknown as Window['api']['fs']
+    w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs) as unknown as Window['api']['robot']
   }
   // eslint-disable-next-line no-console
   console.info(
     '[Snakie] Web backend ready — Connect the "Simulated device (offline)" to run Python; ' +
       'Open Folder to edit local files.'
   )
+}
+
+/**
+ * Auto-connect to the simulated device shortly after first render (#267). On the
+ * web the sim is the ONLY port, and the Connect control lives in the shell-panel
+ * header where first-time users don't find it — they type a program and see a
+ * greyed-out Run button ("I'm not able to run a program"). Connecting for them
+ * makes Run work out of the box. The delay lets the shell terminal mount its
+ * data subscription first so the MicroPython banner lands on screen; the status
+ * check keeps us from double-connecting if the user beat us to the button.
+ */
+export function autoConnectSimulator(delayMs = 400): void {
+  window.setTimeout(() => {
+    void (async () => {
+      try {
+        const device = window.api.device
+        const status = await device.getStatus()
+        if (status.state === 'disconnected') await device.connect(VIRTUAL_PORT_PATH)
+      } catch {
+        // Auto-connect is best-effort — the manual Connect button still works.
+      }
+    })()
+  }, delayMs)
 }

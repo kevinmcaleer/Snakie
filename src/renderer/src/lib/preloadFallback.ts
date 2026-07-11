@@ -159,7 +159,10 @@ if (!w.api) {
     },
     robot: {
       load: P({ parts: [], connections: [] }),
-      save: P({ ok: true }),
+      // ok:false so a genuinely-stubbed save shows "save failed" instead of a
+      // false "saved ✓" while writing nothing (the web build installs a real
+      // backend over this; see web/web-robot.ts).
+      save: P({ ok: false, error: 'Saving robot.yml is not available here.' }),
       importMesh: P({ cancelled: true }),
       importPartMesh: P({}),
       onChanged: unsub
@@ -222,7 +225,11 @@ if (!w.api) {
     plugins: {
       list: P([]),
       reload: P({ plugins: [] }),
-      runCommand: P({ ok: false })
+      runCommand: P({ ok: false }),
+      // pythonFound:false routes RobotView to the benign "install Python to sync
+      // poses" label; without this key the deepStub resolves [] and the view
+      // misreads it as a broken managed block (spurious warning).
+      motionRead: P({ ok: false, pythonFound: false })
     },
     git: {
       openRepo: P(null),
