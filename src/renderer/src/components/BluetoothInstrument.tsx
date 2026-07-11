@@ -4,7 +4,7 @@ import { type InstrumentDef } from './instruments-registry'
 import { useTelemetryStream } from './instrument-telemetry-subscribe'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useInstrumentWorkspace } from '../store/workspace'
 import { BT_SCAN_DEMO, BT_SCAN_DEMO_NAME } from './bt-scan-demo'
 import {
   MAX_SIGNAL_BARS,
@@ -60,7 +60,7 @@ export function BluetoothInstrument({
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
   const { present } = useSnakiePresence()
-  const { openBuffer } = useWorkspace()
+  const { openBuffer } = useInstrumentWorkspace()
 
   const [devices, setDevices] = useState<BluetoothTelemetry[]>([])
   const [scanning, setScanning] = useState(false)

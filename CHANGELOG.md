@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Popped-out instruments no longer open blank.** Undocking the Wi-Fi scanner (or the Bluetooth,
+  Buzzer, Display, SAM or Range instruments) into its own window showed an empty window: those
+  panels read the editor workspace with a hook that *throws* when there's no provider — and a
+  detached OS window has none, so the render crashed. They now read the workspace safely (the
+  workspace-only extras, like "insert a demo file", are simply inert in a detached window), so the
+  pop-out renders normally.
+
 ## [0.25.1] - 2026-07-11
 
 ### Fixed
