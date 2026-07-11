@@ -1,32 +1,36 @@
 name: Deploy Web App
 
-# Builds the browser build of the Snakie renderer (epic #267) and publishes it to
-# GitHub Pages at the custom domain app.snakie.org.
+# Builds the browser build of Snakie (epic #267, `npm run build:web`) and PUBLISHES
+# it to the separate `kevinmcaleer/app.snakie.org` repo, which serves it via GitHub
+# Pages at https://app.snakie.org.
 #
-# Manual for now (workflow_dispatch) so it never fails on a repo where Pages
-# isn't enabled yet, and so the first publish is deliberate. Once GitHub Pages is
-# enabled (Settings → Pages → Source: GitHub Actions) and the DNS CNAME for
-# app.snakie.org is in place, add `push: { branches: [master] }` here to keep it
-# fresh automatically.
+# Auth: an SSH deploy key — the PRIVATE key is the `ACTIONS_DEPLOY_KEY` secret here,
+# the PUBLIC key is a write deploy key on the app.snakie.org repo. So this repo can
+# push the built site there without a personal access token.
 on:
+  push:
+    branches: [master]
+    # Only rebuild when something that affects the web build changes.
+    paths:
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'vite.web.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/web-deploy.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# Only one Pages deploy at a time; a newer run supersedes an in-flight one.
+# Never let two deploys race; a newer push supersedes an in-flight one.
 concurrency:
-  group: pages
+  group: web-deploy
   cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,11 +39,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:web
-      # Keep the custom domain on every deploy (GitHub Pages reads dist/CNAME).
-      - run: echo 'app.snakie.org' > dist-web/CNAME
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - name: Publish to app.snakie.org
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: dist-web
-      - id: deploy
-        uses: actions/deploy-pages@v4
+          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          external_repository: kevinmcaleer/app.snakie.org
+          publish_branch: main
+          publish_dir: ./dist-web
+          # Keep the custom domain + skip Jekyll (peaceiris writes CNAME + .nojekyll).
+          cname: app.snakie.org
+          # A clean single-commit deploy branch (built assets don't bloat history).
+          force_orphan: true
+          commit_message: 'Deploy ${{ github.sha }} — Snakie for Web'
