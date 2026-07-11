@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-07-11
+
 ### Fixed
 - **Binding a servo now takes the joint's real range, so the 3-D model doesn't clamp (#459).**
   A new servo↔joint binding used to default the joint range to a flat `0…180`, ignoring the
@@ -2293,7 +2295,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.1...HEAD
+[0.25.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...v0.25.0
 [0.24.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.1...v0.23.2
