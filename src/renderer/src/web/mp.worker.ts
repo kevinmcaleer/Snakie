@@ -18,6 +18,7 @@ import { loadMicroPython } from '@micropython/micropython-webassembly-pyscript/m
 import type { MicroPythonInstance } from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
 import mpWasmUrl from '@micropython/micropython-webassembly-pyscript/micropython.wasm?url'
 import { SIM_MACHINE_PY } from '../../../shared/sim-machine'
+import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 
 type InMsg =
   | { type: 'init' }
@@ -25,6 +26,33 @@ type InMsg =
   | { type: 'run'; id: number; code: string }
 
 const enc = new TextEncoder()
+
+/**
+ * Write a text file into the sim's in-memory VFS via a hex-encoded snippet
+ * (MicroPython has no bulk file API from JS). The hex + paths are all ASCII, so
+ * `JSON.stringify` yields valid Python string literals.
+ */
+const writeVfsFile = (mpi: MicroPythonInstance, path: string, source: string): void => {
+  const hex = Array.from(enc.encode(source))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+  const dir = path.slice(0, path.lastIndexOf('/')) || '/'
+  mpi.runPython(
+    `import os\ntry:\n    os.mkdir(${JSON.stringify(dir)})\nexcept OSError:\n    pass\n` +
+      `_d = bytes.fromhex(${JSON.stringify(hex)})\n` +
+      `_f = open(${JSON.stringify(path)}, 'wb')\n_f.write(_d)\n_f.close()\ndel _d, _f`
+  )
+}
+
+/**
+ * Seed `/lib/instruments.py` + `/lib/snakie.py` so `import instruments` /
+ * `from snakie import Servo` work with no install step. The RAM VFS resets on a
+ * worker reboot (Stop), so this re-runs on every init — exactly like a reconnect.
+ */
+const installLibrary = (mpi: MicroPythonInstance): void => {
+  writeVfsFile(mpi, '/lib/instruments.py', INSTRUMENTS_PY)
+  writeVfsFile(mpi, '/lib/snakie.py', SNAKIE_PY)
+}
 let mp: MicroPythonInstance | null = null
 let pending: number[] = []
 let capturing: number[] | null = null
@@ -57,6 +85,13 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
       mp.runPython(SIM_MACHINE_PY)
     } catch {
       /* best-effort — a missing machine stub just means the ImportError returns */
+    }
+    // Seed the bundled `instruments` + `snakie` libraries into the VFS so the
+    // demos' `from snakie import Servo` / `import instruments` just work (#267).
+    try {
+      installLibrary(mp)
+    } catch {
+      /* best-effort — the install banner can still write them on demand */
     }
     mp.replInit()
     flush()
