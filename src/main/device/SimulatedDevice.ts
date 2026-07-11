@@ -2,7 +2,7 @@ import { EventEmitter } from 'events'
 import { VIRTUAL_PORT_PATH } from '../../shared/virtual-device'
 import { INSTALL_START, INSTALL_ERR } from '../packages/install'
 import { MicroPythonRuntime, type ReplRuntime } from './MicroPythonRuntime'
-import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from './simulation'
+import { isProbeCode, simulateProbeResponse, simulatedTelemetryFrame } from '../../shared/simulation'
 import type {
   ConnectionState,
   DeviceStatus,
