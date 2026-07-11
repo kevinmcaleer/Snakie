@@ -114,6 +114,8 @@ export interface BoardGraphProps {
   onChangeRobot?: (next: RobotDefinition) => void
   /** The linked URDF's joint names — for a servo's "drives joint" picker (#). */
   joints?: string[]
+  /** Each joint's real travel (deg / mm) — seeds a new binding's joint range (#). */
+  jointLimits?: Record<string, { min: number; max: number }>
   /** Installed part libraries (to resolve placed parts' pins). */
   libraries?: PartLibraryWithParts[]
   /** Append a library part to the project. When set, the library dock shows. `pos`
@@ -319,6 +321,7 @@ export function BoardGraph({
   robot,
   onChangeRobot,
   joints,
+  jointLimits,
   libraries,
   onAddToProject
 }: BoardGraphProps): JSX.Element {
@@ -883,6 +886,7 @@ export function BoardGraph({
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
               joints={joints ?? []}
+              jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
               onDropPart={onAddToProject ? handleAddToProject : undefined}

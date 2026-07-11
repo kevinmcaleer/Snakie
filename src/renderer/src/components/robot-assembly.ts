@@ -528,6 +528,27 @@ export function readAllJoints(urdf: string): JointFull[] {
   return out
 }
 
+/**
+ * Each movable joint's limit in DISPLAY units — degrees for a rotating joint,
+ * millimetres for a sliding one — keyed by joint name (`{ base_joint: { min: -90,
+ * max: 90 } }`). Only joints that declare a `<limit>` are included. Used to seed a
+ * new servo↔joint binding's joint range from the joint's REAL travel, so the servo
+ * maps onto exactly what the model can do (a hard-coded 0…180 default made the
+ * 3-D model clamp when the joint was limited to, say, ±90°).
+ */
+export function jointDisplayLimits(urdf: string): Record<string, { min: number; max: number }> {
+  const out: Record<string, { min: number; max: number }> = {}
+  for (const j of readAllJoints(urdf)) {
+    if (!j.limit || !j.name) continue
+    // rad → deg for revolute/continuous; m → mm for prismatic. (Fixed joints have
+    // no meaningful travel, but they carry no `<limit>` anyway.)
+    const scale = j.type === 'prismatic' ? 1000 : 180 / Math.PI
+    const round2 = (n: number): number => Math.round(n * 100) / 100 // 1.5708 rad → 90, not 89.9954
+    out[j.name] = { min: round2(j.limit.lower * scale), max: round2(j.limit.upper * scale) }
+  }
+  return out
+}
+
 /** One row of the kinematic chain view (#354): a link, its depth in the tree, and
  *  the joint that attaches it to its parent (null for the base / a loose root). */
 export interface ChainNode {

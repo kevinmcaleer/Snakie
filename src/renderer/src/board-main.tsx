@@ -32,7 +32,7 @@ import { PartEditor } from './components/PartEditor'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import { readRobotModel } from '../../shared/krf'
 import { attachPartMesh } from './components/robot-part-mesh'
-import { jointNames } from './components/robot-assembly'
+import { jointNames, jointDisplayLimits } from './components/robot-assembly'
 import type {
   BoardDefinition,
   BoardSourcePayload,
@@ -217,20 +217,29 @@ function BoardWindowApp(): JSX.Element {
   // The URDF's joint names — read the linked `.urdf` so a servo's inspector can
   // offer a "drives joint" picker (#). Empty when there's no URDF / no folder yet.
   const [joints, setJoints] = useState<string[]>([])
+  // Each joint's real travel (deg / mm) — seeds a new binding's joint range so the
+  // 3-D model doesn't clamp (a flat 0…180 default did).
+  const [jointLimits, setJointLimits] = useState<Record<string, { min: number; max: number }>>({})
   const urdfPath = robot.robot?.urdf
   useEffect(() => {
     if (!folder || !urdfPath) {
       setJoints([])
+      setJointLimits({})
       return
     }
     let live = true
     window.api.fs
       .readFile(`${folder}/${urdfPath}`)
       .then((content) => {
-        if (live) setJoints(jointNames(content))
+        if (!live) return
+        setJoints(jointNames(content))
+        setJointLimits(jointDisplayLimits(content))
       })
       .catch(() => {
-        if (live) setJoints([])
+        if (live) {
+          setJoints([])
+          setJointLimits({})
+        }
       })
     return () => {
       live = false
@@ -322,6 +331,7 @@ function BoardWindowApp(): JSX.Element {
         robot={robot}
         onChangeRobot={saveRobot}
         joints={joints}
+        jointLimits={jointLimits}
         libraries={libraries}
         onAddToProject={addToProject}
       />

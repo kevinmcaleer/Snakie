@@ -55,23 +55,29 @@ export function boundJoint(map: ServoJointBinding[] | undefined, gpio: string): 
 
 /**
  * Return an updated servo map that binds `gpio` → `joint` (replacing any existing
- * binding on that pin). An empty `joint` UNBINDS the pin. New bindings get a neutral
- * 0…180 servo + joint range; the Robot View's servo editor tunes it against the
- * joint's real limits.
+ * binding on that pin). An empty `joint` UNBINDS the pin. A NEW binding takes a
+ * neutral 0…180 servo range and, when `jointRange` (the joint's real limits in
+ * deg / mm) is given, that joint range — so the full servo sweep maps onto exactly
+ * what the joint can do. Without it we fell back to a flat 0…180, which made the
+ * 3-D model CLAMP on a joint limited to, say, ±90° (the servo moved, the model
+ * stopped halfway). Re-binding a pin to the SAME joint keeps its existing calibration.
  */
 export function bindServoJoint(
   map: ServoJointBinding[] | undefined,
   gpio: string,
-  joint: string
+  joint: string,
+  jointRange?: { min: number; max: number }
 ): ServoJointBinding[] {
   const rest = (map ?? []).filter((x) => normPin(x.pin) !== normPin(gpio))
   if (!joint) return rest
   const prev = (map ?? []).find((x) => normPin(x.pin) === normPin(gpio))
+  const jointMin = jointRange ? jointRange.min : 0
+  const jointMax = jointRange ? jointRange.max : 180
   return [
     ...rest,
     prev && prev.joint === joint
       ? prev
-      : { pin: gpio, joint, servoMin: 0, servoMax: 180, jointMin: 0, jointMax: 180 }
+      : { pin: gpio, joint, servoMin: 0, servoMax: 180, jointMin, jointMax }
   ]
 }
 

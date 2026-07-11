@@ -4,7 +4,7 @@ import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
-import { jointNames } from './robot-assembly'
+import { jointNames, jointDisplayLimits } from './robot-assembly'
 import { attachPartMesh } from './robot-part-mesh'
 import { useWorkspace } from '../store/workspace'
 import { useEditorSettings } from '../store/settings'
@@ -110,20 +110,29 @@ export function BoardPane(): JSX.Element {
   // no URDF link / folder yet (then the picker shows "no joints"). Without this
   // the in-window board pane ALWAYS showed "no joints", even with a linked rig.
   const [joints, setJoints] = useState<string[]>([])
+  // Each joint's real travel (deg / mm) — seeds a new binding's joint range so the
+  // 3-D model doesn't clamp (a flat 0…180 default did).
+  const [jointLimits, setJointLimits] = useState<Record<string, { min: number; max: number }>>({})
   const urdfPath = robot.robot?.urdf
   useEffect(() => {
     if (!folder || !urdfPath) {
       setJoints([])
+      setJointLimits({})
       return
     }
     let live = true
     window.api.fs
       .readFile(`${folder}/${urdfPath}`)
       .then((content) => {
-        if (live) setJoints(jointNames(content))
+        if (!live) return
+        setJoints(jointNames(content))
+        setJointLimits(jointDisplayLimits(content))
       })
       .catch(() => {
-        if (live) setJoints([])
+        if (live) {
+          setJoints([])
+          setJointLimits({})
+        }
       })
     return () => {
       live = false
@@ -243,6 +252,7 @@ export function BoardPane(): JSX.Element {
         onChangeRobot={saveRobot}
         libraries={libraries}
         joints={joints}
+        jointLimits={jointLimits}
         onAddToProject={addToProject}
       />
       {editing && (

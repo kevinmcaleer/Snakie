@@ -530,6 +530,9 @@ export interface WiringCanvasProps {
   onChange: (next: RobotDefinition) => void
   /** The linked URDF's joint names — lets a servo's inspector bind to a joint (#). */
   joints?: string[]
+  /** Each joint's real travel (deg / mm), to seed a new binding's joint range from
+   *  the joint's limits instead of a flat 0…180 (which clamped the 3-D model). */
+  jointLimits?: Record<string, { min: number; max: number }>
   /** Installed libraries (to resolve a placed part's pins). */
   libraries: PartLibraryWithParts[]
   /** The microcontroller to show as the board (the board view's selection). */
@@ -579,7 +582,7 @@ interface Drag {
   cy?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
@@ -1444,7 +1447,7 @@ export function WiringCanvas({ robot, onChange, joints = [], libraries, boardDef
       ...robot,
       robot: {
         ...(robot.robot ?? {}),
-        servoJointMap: bindServoJoint(robot.robot?.servoJointMap, selServoGpio, joint)
+        servoJointMap: bindServoJoint(robot.robot?.servoJointMap, selServoGpio, joint, jointLimits[joint])
       }
     })
   }
