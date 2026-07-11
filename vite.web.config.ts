@@ -38,6 +38,13 @@ export default defineConfig({
       '@renderer': resolve(__dirname, 'src/renderer/src')
     }
   },
+  // The web sim inlines `micropython/instruments.py` + `snakie.py` via `?raw`, and
+  // that folder sits ABOVE the renderer root — allow the dev server to read it.
+  server: {
+    fs: {
+      allow: [resolve(__dirname)]
+    }
+  },
   build: {
     outDir: resolve(__dirname, 'dist-web'),
     emptyOutDir: true,

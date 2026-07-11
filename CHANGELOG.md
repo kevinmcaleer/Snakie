@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Web app: the instruments library now installs, and `from snakie import …` just works (#267).**
+  On app.snakie.org the "Install library" banner failed with _"library source unavailable"_ and
+  the demos' first line (`from snakie import Servo` / `import instruments`) raised `ImportError`,
+  because the web build had no source for the bundled MicroPython library. The web sim now inlines
+  `instruments.py` + `snakie.py` (via `?raw`), auto-seeds them into its in-memory `/lib` on connect
+  (so imports work with no install step), and serves them to the banner + its version check.
+
 ## [0.25.2] - 2026-07-11
 
 ### Fixed
