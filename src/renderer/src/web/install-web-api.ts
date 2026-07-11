@@ -13,13 +13,20 @@
  * MicroPython WASM.
  */
 import { createWebDeviceApi } from './web-device'
+import { createWebFsApi } from './web-fs'
 
 export function installWebApi(): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
   if (!w.api) return // the fallback runs first and sets this; guard defensively
   w.api.device = createWebDeviceApi() as unknown as Window['api']['device']
+  // Local files via the File System Access API — only when the browser supports it
+  // (Chromium); elsewhere the no-op fallback stays and "Open Folder" is inert.
+  if ('showDirectoryPicker' in window) {
+    w.api.fs = createWebFsApi() as unknown as Window['api']['fs']
+  }
   // eslint-disable-next-line no-console
   console.info(
-    '[Snakie] Web simulated device ready — pick "Simulated device (offline)" and Connect to run Python.'
+    '[Snakie] Web backend ready — Connect the "Simulated device (offline)" to run Python; ' +
+      'Open Folder to edit local files.'
   )
 }
