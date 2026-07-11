@@ -1,0 +1,45 @@
+name: Deploy Web App
+
+# Builds the browser build of the Snakie renderer (epic #267) and publishes it to
+# GitHub Pages at the custom domain app.snakie.org.
+#
+# Manual for now (workflow_dispatch) so it never fails on a repo where Pages
+# isn't enabled yet, and so the first publish is deliberate. Once GitHub Pages is
+# enabled (Settings → Pages → Source: GitHub Actions) and the DNS CNAME for
+# app.snakie.org is in place, add `push: { branches: [master] }` here to keep it
+# fresh automatically.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deploy at a time; a newer run supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+      # Keep the custom domain on every deploy (GitHub Pages reads dist/CNAME).
+      - run: echo 'app.snakie.org' > dist-web/CNAME
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist-web
+      - id: deploy
+        uses: actions/deploy-pages@v4
