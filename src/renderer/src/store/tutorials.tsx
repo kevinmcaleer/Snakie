@@ -1,28 +1,27 @@
 /**
- * Tutorials store (#479) — the Projects gallery + floating lesson dialog state.
+ * Tutorials store (#479) — state for the Learn side panel.
  * =============================================================================
  *
- * Holds which course is open and which lesson you're on. `lessonIndex === -1` is
- * the course SPLASH (intro card); `0..n-1` are the lessons. Kept separate from
- * the editor: the {@link ../components/TutorialDialog} seeds the editor buffer
- * from the lesson's starter `code` when the lesson changes.
+ * Holds which course is open and which lesson you're on. `course === null` shows
+ * the course gallery; with a course, `lessonIndex === -1` is the SPLASH (intro
+ * card) and `0..n-1` are the lessons. Kept separate from the editor: the
+ * {@link ../components/TutorialPanel} seeds the editor buffer from the lesson's
+ * starter `code` when the lesson changes.
  */
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { loadCourses, type Course } from '../lib/courses'
 
 interface TutorialsApi {
   courses: Course[]
-  galleryOpen: boolean
   course: Course | null
   /** -1 = splash, 0..n-1 = a lesson. */
   lessonIndex: number
-  openGallery: () => void
-  closeGallery: () => void
   openCourse: (course: Course) => void
   start: () => void
   next: () => void
   prev: () => void
   goto: (i: number) => void
+  /** Return to the course gallery (clears the open course). */
   close: () => void
 }
 
@@ -30,16 +29,12 @@ const Ctx = createContext<TutorialsApi | null>(null)
 
 export function TutorialsProvider({ children }: { children: ReactNode }): JSX.Element {
   const courses = useMemo(() => loadCourses(), [])
-  const [galleryOpen, setGalleryOpen] = useState(false)
   const [course, setCourse] = useState<Course | null>(null)
   const [lessonIndex, setLessonIndex] = useState(-1)
 
-  const openGallery = useCallback(() => setGalleryOpen(true), [])
-  const closeGallery = useCallback(() => setGalleryOpen(false), [])
   const openCourse = useCallback((c: Course) => {
     setCourse(c)
     setLessonIndex(-1) // splash first
-    setGalleryOpen(false)
   }, [])
   const start = useCallback(() => setLessonIndex(0), [])
   const goto = useCallback(
@@ -54,8 +49,8 @@ export function TutorialsProvider({ children }: { children: ReactNode }): JSX.El
   }, [])
 
   const api = useMemo<TutorialsApi>(
-    () => ({ courses, galleryOpen, course, lessonIndex, openGallery, closeGallery, openCourse, start, next, prev, goto, close }),
-    [courses, galleryOpen, course, lessonIndex, openGallery, closeGallery, openCourse, start, next, prev, goto, close]
+    () => ({ courses, course, lessonIndex, openCourse, start, next, prev, goto, close }),
+    [courses, course, lessonIndex, openCourse, start, next, prev, goto, close]
   )
   return <Ctx.Provider value={api}>{children}</Ctx.Provider>
 }

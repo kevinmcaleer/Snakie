@@ -4,7 +4,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
-import { useTutorials } from '../store/tutorials'
+import { isVirtualPort } from '../../../shared/virtual-device'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -161,10 +161,12 @@ export function Toolbar({
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const { markRun } = useConsole()
-  const { openGallery } = useTutorials()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
-  const canRun = connected && activeFile != null
+  // Run is clickable whenever a file is open — if nothing is connected we boot
+  // the simulator first (see handleRun), so Run never silently no-ops.
+  const [connecting, setConnecting] = useState(false)
+  const canRun = activeFile != null && !connecting
 
   /**
    * Execute the active file on the device using MicroPython paste mode:
@@ -182,8 +184,26 @@ export function Toolbar({
     if (!connected) setRunning(false)
   }, [connected])
 
-  const handleRun = useCallback(() => {
-    if (!connected || !activeFile) return
+  const handleRun = useCallback(async (): Promise<void> => {
+    if (!activeFile) return
+    // Nothing connected? (e.g. a page reload dropped the simulated device, or the
+    // user hasn't pressed Connect yet.) Boot the simulator and run on it, so Run
+    // never silently does nothing. A real board the user already connected wins —
+    // `connected` is true then and we skip straight to sending the program.
+    if (!connected) {
+      try {
+        setConnecting(true)
+        const ports = await window.api.device.listPorts()
+        const target = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
+        if (!target) throw new Error('No device is available to run on.')
+        await window.api.device.connect(target.path)
+      } catch (err) {
+        reporter('connect', { notify: "Couldn't connect a device to run your program." })(err)
+        return
+      } finally {
+        setConnecting(false)
+      }
+    }
     // Record the console position so "send console to chat" / the composer's
     // attach-console control grab only this run's output (issue #78).
     markRun()
@@ -257,14 +277,16 @@ export function Toolbar({
         <button
           type="button"
           className="btn btn--primary"
-          onClick={handleRun}
+          onClick={() => void handleRun()}
           disabled={!canRun}
           title={
-            !connected
-              ? 'Connect to a device to run'
-              : !activeFile
-                ? 'Open a file to run'
-                : `Run ${activeFile.name} on the device`
+            !activeFile
+              ? 'Open a file to run'
+              : connecting
+                ? 'Connecting…'
+                : !connected
+                  ? 'Run on the simulator'
+                  : `Run ${activeFile.name} on the device`
           }
           aria-label="Run active file on device"
         >
@@ -323,17 +345,6 @@ export function Toolbar({
       </div>
 
       <div className="toolbar__spacer" />
-
-      {/* Learn (#479): open the Projects gallery of guided tutorials. */}
-      <button
-        type="button"
-        className="btn btn--ghost"
-        onClick={openGallery}
-        title="Guided tutorials — learn Snakie step by step"
-        aria-label="Open tutorials"
-      >
-        📚 Learn
-      </button>
 
       {/* Workspace layouts (epic #259): Code / Board / Lab / Data + reset. */}
       <WorkspaceSwitcher />

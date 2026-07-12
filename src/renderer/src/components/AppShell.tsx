@@ -47,8 +47,7 @@ import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { PartsImportBanner } from './PartsImportBanner'
-import { ProjectsGallery } from './ProjectsGallery'
-import { TutorialDialog } from './TutorialDialog'
+import { TutorialPanel } from './TutorialPanel'
 import {
   requiredPartModules,
   missingImports as computeMissingImports,
@@ -139,6 +138,14 @@ function LeftView({
       return (
         <LeftRegion title="Report Bug">
           <BugReportPanel />
+        </LeftRegion>
+      )
+    case 'learn':
+      // The Learn panel (tutorials, #479) brings its own gallery/course header,
+      // so drop the region title bar.
+      return (
+        <LeftRegion title="Learn" showHeader={false}>
+          <TutorialPanel />
         </LeftRegion>
       )
     case 'help':
@@ -1151,9 +1158,6 @@ export function AppShell(): JSX.Element {
         />
       )}
 
-      {/* Tutorials (#479): the Projects gallery + the floating lesson dialog. */}
-      <ProjectsGallery />
-      <TutorialDialog />
     </div>
   )
 }

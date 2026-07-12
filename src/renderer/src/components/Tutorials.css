@@ -1,277 +1,266 @@
-/* Projects gallery + tutorial dialog (#479). Uses theme tokens so it reads in
-   both the dark and light (skeuomorph) skins. */
+/* Learn side panel (#479). Docked in the activity-bar "Learn" view — the course
+   gallery, the course splash, and the lesson walkthrough all live here. Uses the
+   theme tokens throughout so it reads in both the dark and light (skeuomorph)
+   skins; the panel scrolls via its host `.region__body`. */
 
-/* ── Projects gallery (full-window overlay) ─────────────────────────────── */
-.pg__overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(3px);
-}
-.pg__panel {
-  width: min(1040px, 94vw);
-  height: min(760px, 90vh);
+.tp {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
-  background: var(--bg, #1b1f26);
-  color: var(--text, #e6edf3);
-  border: 1px solid var(--border, #333a44);
-  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
+  min-height: 100%;
+  color: var(--text);
+  font-size: 13px;
 }
-.pg__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: 22px 26px 14px;
-  border-bottom: 1px solid var(--border, #333a44);
+
+/* ── Gallery ─────────────────────────────────────────────────────────────── */
+.tp__intro {
+  padding: 16px 14px 6px;
 }
-.pg__title {
+.tp__title {
   margin: 0;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 800;
 }
-.pg__sub {
+.tp__sub {
   margin: 6px 0 0;
-  font-size: 14px;
-  opacity: 0.75;
-  max-width: 640px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
 }
-.pg__close {
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: 18px;
-  cursor: pointer;
-  opacity: 0.7;
-  padding: 4px 8px;
-  border-radius: 8px;
+.tp__empty {
+  padding: 0 14px;
+  color: var(--text-muted);
 }
-.pg__close:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
+.tp__section {
+  padding: 10px 14px 4px;
 }
-.pg__scroll {
-  overflow-y: auto;
-  padding: 18px 26px 30px;
-}
-.pg__empty {
-  opacity: 0.7;
-}
-.pg__section {
-  margin-top: 18px;
-}
-.pg__section-title {
-  margin: 0 0 12px;
-  font-size: 13px;
+.tp__section-title {
+  margin: 0 0 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  opacity: 0.6;
+  color: var(--text-muted);
 }
-.pg__grid {
+.tp__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
-.pg__card {
+.tp__card {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: stretch;
   text-align: left;
-  padding: 16px;
-  border-radius: 14px;
+  padding: 12px;
+  border-radius: 12px;
   cursor: pointer;
   color: inherit;
-  background: var(--bg-elevated, #232a33);
-  border: 1px solid var(--border, #333a44);
-  border-left: 5px solid var(--accent, #34ad4f);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--accent);
   transition: transform 0.08s ease, box-shadow 0.12s ease;
 }
-.pg__card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.55);
+.tp__card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.5);
 }
-.pg__card-emoji {
-  font-size: 40px;
+.tp__card-emoji {
+  font-size: 30px;
   line-height: 1;
   align-self: center;
 }
-.pg__card-title {
-  font-size: 16px;
-  font-weight: 700;
-}
-.pg__card-desc {
-  font-size: 13px;
-  opacity: 0.78;
-  margin-top: 4px;
-  line-height: 1.4;
-}
-.pg__card-meta {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-ink, #34ad4f);
-  margin-top: 8px;
-}
-
-/* ── Floating tutorial dialog ───────────────────────────────────────────── */
-.td {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 1100;
-  width: 380px;
-  max-width: calc(100vw - 40px);
-  max-height: min(70vh, 640px);
+.tp__card-body {
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
-  background: var(--bg, #1b1f26);
-  color: var(--text, #e6edf3);
-  border: 1px solid var(--border, #333a44);
-  border-top: 4px solid var(--accent, #34ad4f);
-  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.6);
-  overflow: hidden;
+  min-width: 0;
 }
-.td__head {
+.tp__card-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.tp__card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.tp__card-meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  margin-top: 6px;
+}
+
+/* ── Course bar (sticky header when a course is open) ─────────────────────── */
+.tp__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--border, #333a44);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
 }
-.td__emoji {
+.tp__bar-emoji {
   font-size: 18px;
 }
-.td__course {
+.tp__bar-title {
+  flex: 1;
   font-weight: 700;
   font-size: 14px;
-  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.td__icon {
-  border: none;
+.tp__all {
+  border: 1px solid var(--border);
   background: transparent;
-  color: inherit;
+  color: var(--text-muted);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  opacity: 0.65;
-  font-size: 14px;
-  padding: 3px 6px;
-  border-radius: 6px;
 }
-.td__icon:hover {
-  opacity: 1;
-  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
+.tp__all:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
-.td__body {
-  overflow-y: auto;
-  padding: 14px 16px;
-}
-.td__lesson-title {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-.td__md {
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-.td__md pre {
-  overflow-x: auto;
-}
-.td__splash {
-  padding: 26px 20px;
+
+/* ── Splash ──────────────────────────────────────────────────────────────── */
+.tp__splash {
+  padding: 30px 20px;
   text-align: center;
 }
-.td__splash-emoji {
-  font-size: 52px;
+.tp__splash-emoji {
+  font-size: 48px;
 }
-.td__splash-title {
+.tp__splash-title {
   margin: 12px 0 6px;
-  font-size: 19px;
+  font-size: 18px;
 }
-.td__splash-desc {
-  font-size: 13.5px;
-  opacity: 0.8;
+.tp__splash-desc {
+  font-size: 13px;
+  color: var(--text-muted);
   line-height: 1.5;
 }
-.td__splash-meta {
+.tp__splash-meta {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent-ink, #34ad4f);
+  color: var(--accent-ink);
   margin: 10px 0 18px;
 }
-.td__start,
-.td__nav--next {
-  background: var(--accent, #34ad4f);
-  color: var(--accent-contrast, #fff);
+.tp__start {
+  background: var(--accent);
+  color: var(--accent-contrast);
   border: none;
-  border-radius: 20px;
+  border-radius: 18px;
   padding: 8px 20px;
   font-weight: 700;
   cursor: pointer;
 }
-.td__tip {
+
+/* ── Lesson ──────────────────────────────────────────────────────────────── */
+.tp__lesson {
+  flex: 1;
+  padding: 14px 16px;
+}
+.tp__md {
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.tp__md :first-child {
+  margin-top: 0;
+}
+.tp__md pre {
+  overflow-x: auto;
+  background: var(--bg-sunken);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.tp__md a {
+  color: var(--accent-ink);
+}
+.tp__tip {
   display: flex;
   gap: 8px;
-  margin: 0 12px 8px;
+  margin: 12px 0 0;
   padding: 10px 12px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--accent, #34ad4f) 14%, transparent);
-  border: 1px solid color-mix(in srgb, var(--accent, #34ad4f) 40%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
   font-size: 13px;
 }
-.td__tip-bulb {
+.tp__tip-bulb {
   flex: none;
 }
-.td__foot {
+
+/* ── Lesson footer (sticky nav) ──────────────────────────────────────────── */
+.tp__foot {
+  position: sticky;
+  bottom: 0;
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  border-top: 1px solid var(--border, #333a44);
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
 }
-.td__nav {
+.tp__nav {
   background: transparent;
   color: inherit;
-  border: 1px solid var(--border, #333a44);
-  border-radius: 18px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
   padding: 6px 12px;
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
 }
-.td__nav:hover {
-  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
+.tp__nav:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
 }
-.td__dots {
+.tp__nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* The primary "Next / Finish" action is accent-filled. It also carries .tp__nav
+   for sizing, so this must come AFTER .tp__nav to win the equal-specificity tie
+   (otherwise the base transparent nav style would override the accent fill). */
+.tp__nav--next {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
+  font-weight: 700;
+}
+.tp__nav--next:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+.tp__dots {
   flex: 1;
   display: flex;
-  gap: 6px;
+  gap: 5px;
   justify-content: center;
   flex-wrap: wrap;
 }
-.td__dot {
+.tp__dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   border: none;
   padding: 0;
   cursor: pointer;
-  background: var(--border, #4a5260);
+  background: var(--border);
 }
-.td__dot--on {
-  background: var(--accent, #34ad4f);
+.tp__dot--on {
+  background: var(--accent);
   transform: scale(1.25);
 }
-.td__tipbtn {
-  border: 1px solid var(--border, #333a44);
+.tp__tipbtn {
+  border: 1px solid var(--border);
   background: transparent;
   border-radius: 50%;
   width: 30px;
@@ -280,7 +269,7 @@
   font-size: 15px;
   line-height: 1;
 }
-.td__tipbtn--on {
-  background: color-mix(in srgb, var(--accent, #34ad4f) 22%, transparent);
-  border-color: var(--accent, #34ad4f);
+.tp__tipbtn--on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
 }

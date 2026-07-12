@@ -6,7 +6,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Tutorials now live in a dedicated "Learn" side panel.** The 📚 Learn button
+  moved from the toolbar into the left activity-bar shelf (just above Help). Clicking
+  it opens the Learn panel, which hosts the whole tutorial experience inline — the
+  course gallery, the course splash, and each lesson's walkthrough (Back / Next, the
+  position dots and the 💡 tip) — replacing the old floating dialog + full-window
+  overlay.
+
 ### Fixed
+- **Run no longer silently does nothing on the web app.** If no device was connected
+  (e.g. a page reload had dropped the simulator), pressing Run did nothing but leave a
+  tooltip. Run now auto-connects the simulator first so it always works; a real board
+  you've already connected still takes precedence.
+- **Tutorial lesson titles aren't shown twice.** Each lesson repeated its title (a
+  header plus the lesson's own Markdown heading); the redundant header is gone.
 - **Tutorials (📚 Learn) UI is readable in light mode.** The Projects gallery and
   floating tutorial dialog referenced CSS variables that don't exist in the theme
   (`--fg`, `--panel`, `--hover`), so they fell back to dark-only literals — in the
