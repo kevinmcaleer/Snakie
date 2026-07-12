@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The web app is now an installable PWA that works offline (#464).** app.snakie.org
+  can be installed to the ChromeOS shelf / your dock (name, icons, standalone window),
+  and a Workbox service worker precaches the whole app shell — including the MicroPython
+  WASM — so after the first visit it keeps working with no network. Completes Phase W1.
+
 ## [0.27.0] - 2026-07-12
 
 ### Fixed

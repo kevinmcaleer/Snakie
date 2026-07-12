@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
 
 /**
@@ -73,6 +74,38 @@ export default defineConfig({
   plugins: [
     react(),
     standardPartsPlugin(),
+    // PWA (#464): installable to the ChromeOS shelf + offline via a Workbox
+    // precache of the built app shell (incl. the MicroPython WASM). Web build
+    // only — the plugin lives here, so the Electron build is untouched.
+    // `injectRegister: 'script'` emits an external registerSW.js (no inline
+    // script) so it passes the strict web CSP (`script-src 'self' …`).
+    VitePWA({
+      registerType: 'autoUpdate',
+      injectRegister: 'script',
+      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2,wasm}'],
+        // The MicroPython WASM + Monaco chunks are large; precache them so the
+        // classroom app truly works offline after the first visit.
+        maximumFileSizeToCacheInBytes: 12 * 1024 * 1024
+      },
+      manifest: {
+        name: 'Snakie — MicroPython IDE',
+        short_name: 'Snakie',
+        description:
+          'Write MicroPython, run it on a simulated (or real) board, watch the instruments, and build robots in 3-D — right in your browser.',
+        theme_color: '#10b981',
+        background_color: '#e7e5df',
+        display: 'standalone',
+        start_url: '/',
+        scope: '/',
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+        ]
+      }
+    }),
     {
       // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
       // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and
