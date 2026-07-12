@@ -9,4 +9,6 @@ declare module 'virtual:snakie-standard-parts' {
   import type { PartLibraryWithParts } from '../../../shared/part'
   const libraries: PartLibraryWithParts[]
   export default libraries
+  /** Bundled part driver file contents, keyed `<partId>/<source>`. */
+  export const driverSources: Record<string, string>
 }
