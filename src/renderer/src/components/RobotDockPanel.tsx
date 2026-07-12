@@ -67,7 +67,28 @@ export function RobotDockPanel(): JSX.Element {
     setFocus(true)
   }
 
-  // Open an existing robot model (.urdf) via the native picker, full-screen.
+  const nameOf = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p
+  const normSlash = (p: string): string => p.replace(/\\/g, '/').replace(/\/$/, '')
+  // The path of `p` relative to project folder `dir`, or null when it's outside it.
+  const relInside = (p: string, dir: string): string | null => {
+    const np = normSlash(p)
+    const nd = normSlash(dir)
+    return np !== nd && np.startsWith(nd + '/') ? np.slice(nd.length + 1) : null
+  }
+
+  // Link a URDF (path RELATIVE to the project folder) as THE project robot in
+  // robot.yml — preserving any existing wiring/poses — then refresh the tree + dock.
+  const linkRobot = async (dir: string, rel: string): Promise<void> => {
+    const def = await window.api.robot.load(dir)
+    def.robot = { ...(def.robot ?? {}), version: 1, urdf: rel }
+    await window.api.robot.save(dir, def)
+    announceSaved('local', `${dir}/robot.yml`, '') // refresh the Files list (#491)
+    setReloadNonce((n) => n + 1) // re-resolve so the dock tracks the linked robot
+  }
+
+  // Open an existing robot model (.urdf) full-screen AND, when it lives inside the
+  // open project folder, LINK it as the project robot (robot.yml `urdf`). Picking a
+  // file outside the project just opens it (there's no folder to link it into).
   const openRobot = async (): Promise<void> => {
     const path = await window.api.fs.openFileDialog({
       filters: [
@@ -76,6 +97,25 @@ export function RobotDockPanel(): JSX.Element {
       ]
     })
     if (!path) return
+    const dir = currentFolder ? currentFolder.replace(/[/\\]$/, '') : null
+    const rel = dir ? relInside(path, dir) : null
+    const already = !!urdfPath && normSlash(urdfPath) === normSlash(path)
+    if (dir && rel && !already) {
+      // Confirm only when this REPLACES a different linked robot.
+      const ok =
+        !urdfPath ||
+        window.confirm(
+          `Link "${nameOf(rel)}" as this project's robot?\n\n` +
+            `This replaces the current robot (${nameOf(urdfPath)}). The old file stays on disk.`
+        )
+      if (ok) {
+        try {
+          await linkRobot(dir, rel)
+        } catch {
+          // best-effort link — the file still opens below
+        }
+      }
+    }
     await openFile('local', path)
     setFocus(true)
   }
@@ -85,6 +125,17 @@ export function RobotDockPanel(): JSX.Element {
   // always uses this file, and STL import + poses persist alongside it. With no
   // folder open we ask for one first (a robot needs a home on disk).
   const newRobot = async (): Promise<void> => {
+    // A project robot is already linked → confirm before replacing the link.
+    if (
+      urdfPath &&
+      !window.confirm(
+        `This project already has a robot linked (${nameOf(urdfPath)}).\n\n` +
+          `Create a new blank robot and make it the project robot instead? The current ` +
+          `robot file stays on disk — reopen it any time with "Open…".`
+      )
+    ) {
+      return
+    }
     let folder = currentFolder
     if (!folder) {
       folder = await window.api.fs.openFolderDialog()
@@ -105,18 +156,14 @@ export function RobotDockPanel(): JSX.Element {
     const content = blankUrdf('my_robot')
     try {
       await window.api.fs.writeFile(path, content)
-      // Link the URDF in robot.yml (preserving any wiring) so this IS the robot.
+      // Refresh the local file tree so the new .urdf + robot.yml appear (#491).
+      announceSaved('local', path, content)
       try {
-        const def = await window.api.robot.load(dir)
-        def.robot = { ...(def.robot ?? {}), version: 1, urdf: name }
-        await window.api.robot.save(dir, def)
+        await linkRobot(dir, name) // preserve any wiring; this IS the robot now
       } catch {
         // best-effort link — the file still opens
       }
       await openFile('local', path)
-      // Refresh the local file tree so the new .urdf + robot.yml appear (#491).
-      announceSaved('local', path, content)
-      setReloadNonce((n) => n + 1) // re-resolve so the dock tracks the new robot
       setFocus(true)
     } catch {
       // write failed — nothing opened

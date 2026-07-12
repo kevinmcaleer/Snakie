@@ -65,6 +65,13 @@ export function robotToYaml(def: RobotDefinition): string {
   if (str(def.board)) obj.board = def.board
   if (typeof def.boardX === 'number') obj.boardX = def.boardX
   if (typeof def.boardY === 'number') obj.boardY = def.boardY
+  // The KRF robot MODEL section (URDF link + servo↔joint map + limits + poses,
+  // epic #309), emitted near the TOP of robot.yml — before the (potentially long)
+  // parts/connections lists — so the linked `.urdf` is prominent. Round-trip
+  // through the sanitiser so only clean, non-empty fields are written (and a
+  // legacy wiring-only robot.yml stays untouched).
+  const model = sanitiseRobotModel(def.robot)
+  if (model) obj.robot = model
   obj.parts = (def.parts ?? []).map((p) => {
     const o: Record<string, unknown> = { id: p.id, lib: p.lib, part: p.part }
     if (p.label) o.label = p.label
@@ -79,11 +86,6 @@ export function robotToYaml(def: RobotDefinition): string {
     if (c.color) o.color = c.color
     return o
   })
-  // The KRF robot MODEL section (URDF + servo↔joint map + limits + poses, epic
-  // #309). Round-trip it through the sanitiser so only clean, non-empty fields
-  // are written and a legacy wiring-only robot.yml stays untouched.
-  const model = sanitiseRobotModel(def.robot)
-  if (model) obj.robot = model
   return stringify(obj, { lineWidth: 0 })
 }
 

@@ -217,9 +217,11 @@ function sanitiseVec3Map(raw: unknown): Record<string, [number, number, number]>
 export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
   if (!raw || typeof raw !== 'object') return undefined
   const r = raw as Record<string, unknown>
-  const model: RobotModel = { version: KRF_VERSION }
-
+  // `urdf` first (before version) so the linked model file is the first, most
+  // prominent field in the robot block when robot.yml is read/edited by hand.
+  const model: RobotModel = {}
   if (isStr(r.urdf) && r.urdf.trim()) model.urdf = r.urdf.trim()
+  model.version = KRF_VERSION
   if (isStr(r.baseLink) && r.baseLink.trim()) model.baseLink = r.baseLink.trim()
 
   if (Array.isArray(r.servoJointMap)) {

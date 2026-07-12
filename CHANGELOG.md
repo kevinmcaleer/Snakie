@@ -14,12 +14,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   glance.
 - **The Help panel shows the app version** (`Snakie vX.Y.Z`) at its foot — handy to
   include in a bug screenshot. The web app reports the build version too.
+- **Link any URDF to the project from the Robot dock.** The mini 3-D viewer's "Open…"
+  button now also LINKS the picked `.urdf` as the project robot (repoints `robot.yml`'s
+  `urdf`) when it lives in the open folder — an easy way to point the current code +
+  breadboard at a specific robot model.
 
 ### Changed
 - **The web app hides desktop-only controls.** The pop-out Board View button and the
   LLM chat (its toggle button + the chat pane) are hidden on app.snakie.org — pop-out
   windows and the chat backend aren't available in the browser, so those buttons did
   nothing there.
+- **"New robot" confirms before replacing a linked robot.** If the project already has
+  a robot linked, creating a new one now asks first (the previous file stays on disk).
+- **robot.yml surfaces the linked URDF at the top.** The `robot:` block — with `urdf:`
+  as its first field — is now written near the top of `robot.yml` (above the parts /
+  connections lists), so the linked model file is easy to find and edit.
 
 ### Fixed
 - **The local file tree refreshes after creating a new robot (#491).** Creating a new
