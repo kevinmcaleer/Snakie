@@ -15,6 +15,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   overlay.
 
 ### Fixed
+- **Switching editor tabs no longer stops a running program.** With a board/live
+  view polling the device, changing the active file changed the pin count, which
+  re-armed the poll and fired an immediate raw-mode `exec()` probe — and that
+  interrupts a program you're running. The live poll now re-arms only when it turns
+  on/off or crosses empty↔non-empty, reading the latest pins on its normal tick, so
+  a tab switch never pre-empts a run (BoardGraph + InstrumentHost).
 - **Run no longer silently does nothing on the web app.** If no device was connected
   (e.g. a page reload had dropped the simulator), pressing Run did nothing but leave a
   tooltip. Run now auto-connects the simulator first so it always works; a real board

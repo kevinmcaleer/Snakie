@@ -160,9 +160,10 @@ function useInstrumentValues(conns: UsedPins[], active: boolean): Map<number, Li
   const [values, setValues] = useState<Map<number, LiveValue>>(new Map())
   const connsRef = useRef(conns)
   connsRef.current = conns
+  const hasConns = conns.length > 0
 
   useEffect(() => {
-    if (!active || conns.length === 0) {
+    if (!active || !hasConns) {
       setValues(new Map())
       return
     }
@@ -200,9 +201,13 @@ function useInstrumentValues(conns: UsedPins[], active: boolean): Map<number, Li
       cancelled = true
       window.clearInterval(id)
     }
-    // Re-arm only when active flips or the connection COUNT changes; per-edit
-    // content changes ride `connsRef` without restarting the interval.
-  }, [active, conns.length])
+    // Re-arm ONLY when `active` flips or we cross the empty↔non-empty boundary —
+    // NOT on the exact count. Re-arming fires an immediate `exec()` probe, and a
+    // raw-mode probe interrupts a program the user is running; depending on the
+    // precise count meant opening/closing an instrument (or a file switch that
+    // changed the pin count) pre-empted a live run. The interval reads the latest
+    // pins via `connsRef`, so counts still update on the next tick.
+  }, [active, hasConns])
 
   return values
 }

@@ -253,10 +253,11 @@ function useLiveValues(conns: UsedPins[], enabled: boolean): LiveState {
   // Latest connections, read inside the interval without re-arming it each edit.
   const connsRef = useRef(conns)
   connsRef.current = conns
+  const hasConns = conns.length > 0
 
   useEffect(() => {
     // OFF, or nothing to read → never touch the device; show idle placeholders.
-    if (!enabled || conns.length === 0) {
+    if (!enabled || !hasConns) {
       setValues(new Map())
       setConnected(false)
       return
@@ -304,10 +305,14 @@ function useLiveValues(conns: UsedPins[], enabled: boolean): LiveState {
       cancelled = true
       window.clearInterval(id)
     }
-    // Re-arm only when the toggle flips or the connection COUNT changes (so the
-    // empty/non-empty branch is correct); per-edit content changes ride
-    // `connsRef` without restarting the interval.
-  }, [enabled, conns.length])
+    // Re-arm ONLY when the toggle flips or we cross the empty↔non-empty boundary
+    // (that's the only thing the guard above depends on). We deliberately do NOT
+    // depend on the exact `conns.length`: switching editor tabs changes the pin
+    // COUNT, which used to re-arm the interval and fire an immediate `exec()` —
+    // and that raw-mode probe interrupts a program the user is running (#…). The
+    // running interval already reads the latest pins via `connsRef`, so a tab
+    // switch now updates values on the next tick without pre-empting a run.
+  }, [enabled, hasConns])
 
   return { values, connected }
 }
