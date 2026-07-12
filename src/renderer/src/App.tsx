@@ -7,6 +7,7 @@ import { SettingsProvider } from './store/settings'
 import { ConsoleProvider } from './store/console'
 import { SyncProvider } from './store/sync'
 import { LayoutProvider } from './store/layout'
+import { TutorialsProvider } from './store/tutorials'
 
 function App(): JSX.Element {
   return (
@@ -17,8 +18,10 @@ function App(): JSX.Element {
             <SyncProvider>
               <DiagnosticsProvider>
                 <ConsoleProvider>
-                  <AppShell />
-                  <UpdateNotifier />
+                  <TutorialsProvider>
+                    <AppShell />
+                    <UpdateNotifier />
+                  </TutorialsProvider>
                 </ConsoleProvider>
               </DiagnosticsProvider>
             </SyncProvider>

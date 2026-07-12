@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Learn Snakie — guided tutorials in the app (#479).** A new **📚 Learn** button
+  opens a MakeCode-style **Projects gallery** of tutorial courses. A floating
+  tutorial dialog walks you through each lesson with **Back / Next**, position
+  **dots** and a **💡 tip**; opening a lesson drops its starter code straight into
+  the editor so you can press **Run**. Ships **three courses × 10 lessons** — *First
+  Steps with MicroPython*, *Build a Robot on the Breadboard*, and *Build a Robot in
+  3-D*. Courses are plain `course.yml` + Markdown, bundled into the app (web + desktop).
+
+### Added
 - **Export a clean URDF from the Robot View (#315).** An **Export URDF** button (in
   the build panel, beside Import STL) writes a tidy, consistently-indented copy of
   the robot's URDF into the project's `urdf/` folder — a clean artifact to share or

@@ -1,0 +1,286 @@
+/* Projects gallery + tutorial dialog (#479). Uses theme tokens so it reads in
+   both the dark and light (skeuomorph) skins. */
+
+/* ── Projects gallery (full-window overlay) ─────────────────────────────── */
+.pg__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+}
+.pg__panel {
+  width: min(1040px, 94vw);
+  height: min(760px, 90vh);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: var(--bg, #1b1f26);
+  color: var(--fg, #e6edf3);
+  border: 1px solid var(--border, #333a44);
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.pg__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 22px 26px 14px;
+  border-bottom: 1px solid var(--border, #333a44);
+}
+.pg__title {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+}
+.pg__sub {
+  margin: 6px 0 0;
+  font-size: 14px;
+  opacity: 0.75;
+  max-width: 640px;
+}
+.pg__close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  opacity: 0.7;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.pg__close:hover {
+  opacity: 1;
+  background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+.pg__scroll {
+  overflow-y: auto;
+  padding: 18px 26px 30px;
+}
+.pg__empty {
+  opacity: 0.7;
+}
+.pg__section {
+  margin-top: 18px;
+}
+.pg__section-title {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.6;
+}
+.pg__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+.pg__card {
+  display: flex;
+  gap: 14px;
+  align-items: stretch;
+  text-align: left;
+  padding: 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  color: inherit;
+  background: var(--panel, #232a33);
+  border: 1px solid var(--border, #333a44);
+  border-left: 5px solid var(--accent, #34ad4f);
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+.pg__card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px -12px rgba(0, 0, 0, 0.55);
+}
+.pg__card-emoji {
+  font-size: 40px;
+  line-height: 1;
+  align-self: center;
+}
+.pg__card-title {
+  font-size: 16px;
+  font-weight: 700;
+}
+.pg__card-desc {
+  font-size: 13px;
+  opacity: 0.78;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+.pg__card-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent, #34ad4f);
+  margin-top: 8px;
+}
+
+/* ── Floating tutorial dialog ───────────────────────────────────────────── */
+.td {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 1100;
+  width: 380px;
+  max-width: calc(100vw - 40px);
+  max-height: min(70vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: var(--bg, #1b1f26);
+  color: var(--fg, #e6edf3);
+  border: 1px solid var(--border, #333a44);
+  border-top: 4px solid var(--accent, #34ad4f);
+  box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.td__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border, #333a44);
+}
+.td__emoji {
+  font-size: 18px;
+}
+.td__course {
+  font-weight: 700;
+  font-size: 14px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.td__icon {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+  font-size: 14px;
+  padding: 3px 6px;
+  border-radius: 6px;
+}
+.td__icon:hover {
+  opacity: 1;
+  background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+.td__body {
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+.td__lesson-title {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.td__md {
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.td__md pre {
+  overflow-x: auto;
+}
+.td__splash {
+  padding: 26px 20px;
+  text-align: center;
+}
+.td__splash-emoji {
+  font-size: 52px;
+}
+.td__splash-title {
+  margin: 12px 0 6px;
+  font-size: 19px;
+}
+.td__splash-desc {
+  font-size: 13.5px;
+  opacity: 0.8;
+  line-height: 1.5;
+}
+.td__splash-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent, #34ad4f);
+  margin: 10px 0 18px;
+}
+.td__start,
+.td__nav--next {
+  background: var(--accent, #34ad4f);
+  color: #fff;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.td__tip {
+  display: flex;
+  gap: 8px;
+  margin: 0 12px 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent, #34ad4f) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #34ad4f) 40%, transparent);
+  font-size: 13px;
+}
+.td__tip-bulb {
+  flex: none;
+}
+.td__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border, #333a44);
+}
+.td__nav {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border, #333a44);
+  border-radius: 18px;
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.td__nav:hover {
+  background: var(--hover, rgba(255, 255, 255, 0.08));
+}
+.td__dots {
+  flex: 1;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.td__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--border, #4a5260);
+}
+.td__dot--on {
+  background: var(--accent, #34ad4f);
+  transform: scale(1.25);
+}
+.td__tipbtn {
+  border: 1px solid var(--border, #333a44);
+  background: transparent;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.td__tipbtn--on {
+  background: color-mix(in srgb, var(--accent, #34ad4f) 22%, transparent);
+  border-color: var(--accent, #34ad4f);
+}
