@@ -58,7 +58,7 @@
 }
 
 .upload-controls__feedback--info {
-  color: var(--muted, #888);
+  color: var(--text-muted, #888);
 }
 
 .upload-controls__spinner {

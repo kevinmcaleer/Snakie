@@ -19,7 +19,7 @@
   flex-direction: column;
   border-radius: 16px;
   background: var(--bg, #1b1f26);
-  color: var(--fg, #e6edf3);
+  color: var(--text, #e6edf3);
   border: 1px solid var(--border, #333a44);
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.6);
   overflow: hidden;
@@ -54,7 +54,7 @@
 }
 .pg__close:hover {
   opacity: 1;
-  background: var(--hover, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
 }
 .pg__scroll {
   overflow-y: auto;
@@ -88,7 +88,7 @@
   border-radius: 14px;
   cursor: pointer;
   color: inherit;
-  background: var(--panel, #232a33);
+  background: var(--bg-elevated, #232a33);
   border: 1px solid var(--border, #333a44);
   border-left: 5px solid var(--accent, #34ad4f);
   transition: transform 0.08s ease, box-shadow 0.12s ease;
@@ -115,7 +115,7 @@
 .pg__card-meta {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent, #34ad4f);
+  color: var(--accent-ink, #34ad4f);
   margin-top: 8px;
 }
 
@@ -132,7 +132,7 @@
   flex-direction: column;
   border-radius: 14px;
   background: var(--bg, #1b1f26);
-  color: var(--fg, #e6edf3);
+  color: var(--text, #e6edf3);
   border: 1px solid var(--border, #333a44);
   border-top: 4px solid var(--accent, #34ad4f);
   box-shadow: 0 18px 44px -14px rgba(0, 0, 0, 0.6);
@@ -168,7 +168,7 @@
 }
 .td__icon:hover {
   opacity: 1;
-  background: var(--hover, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
 }
 .td__body {
   overflow-y: auto;
@@ -204,13 +204,13 @@
 .td__splash-meta {
   font-size: 12px;
   font-weight: 700;
-  color: var(--accent, #34ad4f);
+  color: var(--accent-ink, #34ad4f);
   margin: 10px 0 18px;
 }
 .td__start,
 .td__nav--next {
   background: var(--accent, #34ad4f);
-  color: #fff;
+  color: var(--accent-contrast, #fff);
   border: none;
   border-radius: 20px;
   padding: 8px 20px;
@@ -248,7 +248,7 @@
   cursor: pointer;
 }
 .td__nav:hover {
-  background: var(--hover, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--text, #fff) 12%, transparent);
 }
 .td__dots {
   flex: 1;

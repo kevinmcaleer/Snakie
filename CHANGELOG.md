@@ -7,11 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Tutorials (📚 Learn) UI is readable in light mode.** The Projects gallery and
+  floating tutorial dialog referenced CSS variables that don't exist in the theme
+  (`--fg`, `--panel`, `--hover`), so they fell back to dark-only literals — in the
+  light (skeuomorph) skin that put near-white text on the parchment background. They
+  now use the real theme tokens (`--text`, `--bg-elevated`, `--accent-ink`,
+  `--accent-contrast`), so they read correctly in both skins.
+- **Swept the whole renderer for the same undefined-token bug.** The context menu,
+  upload/robot controls and the Problems panel referenced tokens that were never
+  defined (`--color-*`, `--muted`, `--warning`) and so silently rendered a wrong-theme
+  fallback; they now point at the real theme tokens. Added a unit test that fails if
+  any `var(--token)` reference isn't a defined token (or an explicitly-blessed
+  override hook), so this class of light/dark parity bug can't ship silently again.
 - **Source Control panel text is readable again.** The muted text on the green-felt
   Source Control panel was a low-contrast sage grey; it's now a near-white that
   reads clearly on the green in both the dark and skeuomorph themes.
-
-### Fixed
 - **Web Serial: the port dropdown now shows the connected board, and unplugging is
   handled gracefully (#465).** After picking a real USB board it was still showing
   "Simulated device (offline)" (the just-granted port wasn't in the list yet, so the

@@ -31,7 +31,7 @@
   position: relative;
   font-family: inherit;
   font-size: 0.64rem;
-  color: var(--muted, #8a8f96);
+  color: var(--text-muted, #8a8f96);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -64,7 +64,7 @@
   font-family: inherit;
   font-size: 0.8rem;
   line-height: 1;
-  color: var(--muted, #8a8f96);
+  color: var(--text-muted, #8a8f96);
   background: none;
   border: none;
   padding: 0.2rem 0.45rem;

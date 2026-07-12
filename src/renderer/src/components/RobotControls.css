@@ -34,7 +34,7 @@
   font-size: 0.58rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--muted, #8a8f96);
+  color: var(--text-muted, #8a8f96);
   cursor: pointer;
 }
 .robotctl__live input {
