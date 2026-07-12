@@ -14,6 +14,10 @@ export default defineConfig({
   test: {
     globals: false,
     environment: 'node',
-    include: ['test/**/*.test.ts']
+    include: ['test/**/*.test.ts'],
+    // Compile the sim's worker_threads worker once, and point the runtime at it
+    // (integration tests spawn a real MicroPython interpreter in that worker).
+    globalSetup: ['./test/setup/globalSetup.ts'],
+    setupFiles: ['./test/setup/setupFile.ts']
   }
 })

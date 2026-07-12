@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The offline simulator no longer freezes on a `while True:` loop.** Running a
+  program with a perpetual loop (e.g. the Buddy Jr pose demo) locked up the whole
+  app and spewed `OSError` in the console, because the interpreter ran on the main
+  thread and a loop that only yields via `time.sleep` starves the event loop. The
+  sim now runs the MicroPython interpreter in a worker thread (like the web build),
+  so the app stays responsive, a running program's output/telemetry streams live,
+  and **Stop** reliably halts even a tight loop (it restarts the interpreter, so
+  the RAM filesystem resets — exactly like a reconnect).
 - **Web: installing a part's driver now works (#475).** On the web, installing a
   part driver from the banner (e.g. sg90 → `servo.py`) failed with "Could not read
   driver file" because the driver source wasn't available in the browser. The
