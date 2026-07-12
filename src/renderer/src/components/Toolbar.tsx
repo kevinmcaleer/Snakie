@@ -4,6 +4,7 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
+import { useTutorials } from '../store/tutorials'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -160,6 +161,7 @@ export function Toolbar({
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const { markRun } = useConsole()
+  const { openGallery } = useTutorials()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
   const canRun = connected && activeFile != null
@@ -321,6 +323,17 @@ export function Toolbar({
       </div>
 
       <div className="toolbar__spacer" />
+
+      {/* Learn (#479): open the Projects gallery of guided tutorials. */}
+      <button
+        type="button"
+        className="btn btn--ghost"
+        onClick={openGallery}
+        title="Guided tutorials — learn Snakie step by step"
+        aria-label="Open tutorials"
+      >
+        📚 Learn
+      </button>
 
       {/* Workspace layouts (epic #259): Code / Board / Lab / Data + reset. */}
       <WorkspaceSwitcher />

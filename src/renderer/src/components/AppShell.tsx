@@ -47,6 +47,8 @@ import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { PartsImportBanner } from './PartsImportBanner'
+import { ProjectsGallery } from './ProjectsGallery'
+import { TutorialDialog } from './TutorialDialog'
 import {
   requiredPartModules,
   missingImports as computeMissingImports,
@@ -1148,6 +1150,10 @@ export function AppShell(): JSX.Element {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
+      {/* Tutorials (#479): the Projects gallery + the floating lesson dialog. */}
+      <ProjectsGallery />
+      <TutorialDialog />
     </div>
   )
 }
