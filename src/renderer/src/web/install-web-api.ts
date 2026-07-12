@@ -26,6 +26,11 @@ export function installWebApi(): void {
   // the status bar shows it — the fallback returns '' (no Electron `app.getVersion`).
   const version = (import.meta.env as unknown as { VITE_SNAKIE_VERSION?: string }).VITE_SNAKIE_VERSION ?? ''
   w.api.appVersion = (async () => version) as unknown as Window['api']['appVersion']
+  // External links (docs.snakie.org, etc.) open in a new browser tab — the Electron
+  // `shell.openExternal` has no web equivalent, so the fallback was a silent no-op.
+  w.api.openExternal = (async (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }) as unknown as Window['api']['openExternal']
   // The device namespace multiplexes the WASM simulator + real Web Serial boards.
   w.api.device = createWebDeviceRouter() as unknown as Window['api']['device']
   // Serve the bundled MicroPython library sources so the "Install library" banner

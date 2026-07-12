@@ -68,6 +68,17 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [cursorLine, setCursorLine] = useState('')
 
+  // App version — shown at the foot of the panel so it's easy to include in a bug
+  // screenshot. Desktop reports Electron's version; the web build injects it from
+  // package.json (see install-web-api.ts).
+  const [appVersion, setAppVersion] = useState('')
+  useEffect(() => {
+    void window.api
+      ?.appVersion?.()
+      .then((v) => setAppVersion(v))
+      .catch(() => undefined)
+  }, [])
+
   // Installed libraries (for the part-aware section); refresh on save.
   useEffect(() => {
     const load = (): void => {
@@ -318,6 +329,11 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
       <button type="button" className="help__docs" onClick={openDocs} title={DOCS_URL}>
         📚 Full documentation at docs.snakie.org ↗
       </button>
+      {appVersion && (
+        <div className="help__version" title="App version">
+          Snakie v{appVersion}
+        </div>
+      )}
       <div className="help__legend" aria-hidden="true">
         <span className="help__legend-item" style={{ color: '#b8892b' }}>
           <ShelfIcon size={13} /> library

@@ -12,6 +12,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Wires are labelled with their variable name in the board view (#498).** Each
   connection's variable name is drawn over its wire, so a wired-up board reads at a
   glance.
+- **The Help panel shows the app version** (`Snakie vX.Y.Z`) at its foot — handy to
+  include in a bug screenshot. The web app reports the build version too.
 
 ### Changed
 - **The web app hides desktop-only controls.** The pop-out Board View button and the
@@ -24,6 +26,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   robot writes the `.urdf` + `robot.yml`, and the Files list now updates to show them
   immediately (it also refreshes on any local file save) instead of needing a manual
   Refresh.
+- **The "New robot" button is readable in light mode.** On the mini 3-D Robot dock its
+  CTA label was white on the light parchment background (a specificity clash dropped
+  its accent fill) — it now has a solid dark-brass fill so the label reads.
+- **External links work on the web app.** "Full documentation at docs.snakie.org" (and
+  other external links) did nothing on app.snakie.org — the browser has no Electron
+  `openExternal`, so they now open in a new tab.
 
 ## [0.29.0] - 2026-07-12
 

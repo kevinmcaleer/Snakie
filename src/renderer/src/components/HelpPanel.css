@@ -343,3 +343,14 @@
 .help__docs--article {
   margin-top: 1.2rem;
 }
+
+/* App version at the foot of the panel — small + muted, but readable in both
+   themes (handy to include in a bug screenshot). */
+.help__version {
+  margin-top: 0.5rem;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  user-select: text;
+}

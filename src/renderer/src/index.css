@@ -2196,6 +2196,16 @@ body {
   background: var(--accent, #c8a24a);
   filter: brightness(1.08);
 }
+/* In the skeuomorph skin the base `:root[data-theme='skeuomorph'] .robotdock__btn`
+   rule (higher specificity than .robotdock__btn--cta) flips the button to a LIGHT
+   parchment background — which left the white CTA label illegible (white-on-light).
+   Restore a solid DARK-brass fill so the white "New robot" label reads clearly. */
+:root[data-theme='skeuomorph'] .robotdock__btn--cta,
+:root[data-theme='skeuomorph'] .robotdock__btn--cta:hover {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: var(--accent-contrast);
+}
 
 .activitybar {
   display: flex;
