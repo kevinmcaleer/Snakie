@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Web Serial: the port dropdown now shows the connected board, and unplugging is
+  handled gracefully (#465).** After picking a real USB board it was still showing
+  "Simulated device (offline)" (the just-granted port wasn't in the list yet, so the
+  dropdown fell back to the first entry) — it now refreshes and shows the board's
+  name. And physically unplugging the board is detected: the connection drops to
+  *disconnected* and the console prints a "board disconnected" notice instead of
+  hanging on a dead port.
+
 ## [0.28.0] - 2026-07-12
 
 ### Added

@@ -41,9 +41,14 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
   }, [refreshPorts])
 
   // Keep the dropdown showing the active port while connected.
+  // Keep the dropdown showing the active port while connected. A board picked via
+  // Web Serial's chooser isn't in the list yet (it was only just granted), so pull
+  // the ports again — otherwise the <select> falls back to showing the first option.
   useEffect(() => {
-    if (connected && status.path) setSelected(status.path)
-  }, [connected, status.path])
+    if (!connected || !status.path) return
+    setSelected(status.path)
+    void refreshPorts()
+  }, [connected, status.path, refreshPorts])
 
   const handleToggle = useCallback(async (): Promise<void> => {
     setError(null)
@@ -82,9 +87,14 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
             )
           }
           const detail = p.friendlyName ?? p.manufacturer
+          // A Web Serial board's `webserial://n` path is a synthetic index, not a
+          // real device node — show just its USB name. OS serial paths (e.g.
+          // /dev/ttyACM0) DO identify the port, so keep those.
+          const isWebSerial = p.path.startsWith('webserial://')
+          const label = isWebSerial ? detail || 'USB board' : detail ? `${p.path} — ${detail}` : p.path
           return (
             <option key={p.path} value={p.path}>
-              {detail ? `${p.path} — ${detail}` : p.path}
+              {label}
             </option>
           )
         })}
