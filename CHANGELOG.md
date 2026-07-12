@@ -37,8 +37,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   showed the demo arm until you left focus). Open/New now link + update the mini viewer
   in place (use "⤢ Pop out" for full-screen), and a status-bar message reports the
   outcome — *Linked "X"*, *Opened "X" (outside the project — not linked)*, *Created "X"* —
-  so the linking, otherwise invisible, is clear. (Also hardened the in-project path check
-  for Windows drive-letter casing.)
+  so the linking, otherwise invisible, is clear. On the **web app**, "Open…" returns
+  just a filename (a File System Access pick with no folder path), which defeated the
+  in-project check so nothing ever linked — the linker now recognises a picked file
+  that matches a file in the open project and links it project-relative. (Also hardened
+  the in-project path check for Windows drive-letter casing.)
 - **The local file tree refreshes after creating a new robot (#491).** Creating a new
   robot writes the `.urdf` + `robot.yml`, and the Files list now updates to show them
   immediately (it also refreshes on any local file save) instead of needing a manual

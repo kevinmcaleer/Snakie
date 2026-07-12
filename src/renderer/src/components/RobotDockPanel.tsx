@@ -122,8 +122,24 @@ export function RobotDockPanel(): JSX.Element {
     if (!path) return
     const name = nameOf(path)
     const dir = currentFolder ? currentFolder.replace(/[/\\]$/, '') : null
-    const rel = dir ? relInside(path, dir) : null
-    const already = !!urdfPath && normSlash(urdfPath) === normSlash(path)
+    // Resolve the picked file to a path RELATIVE to the project folder:
+    //  - desktop: an absolute path inside the folder → strip the prefix (relInside)
+    //  - web: `openFileDialog` returns just a FILENAME (a loose File System Access
+    //    pick, with no folder relationship). If a file of that name exists in the
+    //    open project, link it project-relative — that's the robot the user means.
+    let rel = dir ? relInside(path, dir) : null
+    if (!rel && dir && !/[/\\]/.test(path)) {
+      try {
+        await window.api.fs.readFile(`${dir}/${path}`) // a project file with this name?
+        rel = path
+      } catch {
+        rel = null // not in the project — treat as an outside pick below
+      }
+    }
+    // Compare against the RESOLVED link so "already linked" is correct on both
+    // platforms (urdfPath is `<folder>/<rel>`).
+    const wouldBe = dir && rel ? normSlash(`${dir}/${rel}`) : null
+    const already = !!urdfPath && wouldBe != null && wouldBe === normSlash(urdfPath)
     if (already) {
       notify(`"${name}" is already this project's robot`)
     } else if (dir && rel) {
