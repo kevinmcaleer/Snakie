@@ -39,6 +39,7 @@ export const webSerialSupported = (): boolean => navSerial() !== null
 export class WebSerialTransport implements SerialTransport {
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null
   private dataCb: ((c: Uint8Array) => void) | null = null
+  private closeCb: (() => void) | null = null
   private closed = false
 
   constructor(private readonly port: WebSerialPort) {}
@@ -58,14 +59,21 @@ export class WebSerialTransport implements SerialTransport {
           if (value && value.length) this.dataCb?.(value)
         }
       } catch {
-        /* stream broke (unplug) — fall through; close() flips `closed` */
+        /* stream broke (unplug) — fall through */
       } finally {
         reader.releaseLock()
       }
     }
+    // The loop only ends when we close() OR the device vanished (readable → null,
+    // read() rejects). If we didn't close it ourselves, the board was unplugged.
+    if (!this.closed) this.closeCb?.()
   }
   onData(cb: (c: Uint8Array) => void): void {
     this.dataCb = cb
+  }
+  /** Called when the stream ends WITHOUT an explicit close() — i.e. an unplug. */
+  onClose(cb: () => void): void {
+    this.closeCb = cb
   }
   async write(data: Uint8Array): Promise<void> {
     if (!this.port.writable) throw new Error('Serial port is not writable')
@@ -104,6 +112,8 @@ interface DeviceStatus {
 export const WEBSERIAL_PREFIX = 'webserial://'
 export const WEBSERIAL_PICK = 'webserial://pick'
 
+const enc = new TextEncoder()
+
 /**
  * Build the Web Serial device backend. Returns the `window.api.device` method
  * surface (a subset — the {@link ./web-device-router} routes to it when a real
@@ -116,6 +126,7 @@ export function createWebSerialBackend(): Record<string, unknown> {
   let path = ''
   let transport: WebSerialTransport | null = null
   let client: RawReplClient | null = null
+  let activePort: WebSerialPort | null = null
   // Synthetic path → granted port, so the dropdown can re-select one.
   const known = new Map<string, WebSerialPort>()
 
@@ -131,9 +142,30 @@ export function createWebSerialBackend(): Record<string, unknown> {
     return client
   }
 
+  // The board vanished (unplugged, or the stream died) while we were connected:
+  // tear down and tell the shell so the console/port dropdown recover gracefully.
+  const handleLost = (): void => {
+    if (state === 'disconnected') return
+    transport = null
+    client = null
+    activePort = null
+    emitData(enc.encode('\r\n[board disconnected — USB unplugged]\r\n'))
+    setState('disconnected', '')
+  }
+
+  // A granted device being physically removed fires `disconnect` on navigator.serial.
+  const serial = navSerial()
+  serial &&
+    (serial as unknown as EventTarget).addEventListener?.('disconnect', (e: Event) => {
+      const gone = (e as unknown as { target?: WebSerialPort }).target
+      if (activePort && gone === activePort) handleLost()
+    })
+
   const openPort = async (port: WebSerialPort, p: string): Promise<void> => {
     setState('connecting', p)
+    activePort = port
     transport = new WebSerialTransport(port)
+    transport.onClose(handleLost) // stream ended without our close() → unplug
     await transport.open(115200)
     client = new RawReplClient(transport, emitData)
     setState('connected', p)
@@ -176,6 +208,7 @@ export function createWebSerialBackend(): Record<string, unknown> {
       await transport?.close()
       transport = null
       client = null
+      activePort = null
       if (state !== 'disconnected') setState('disconnected', '')
     },
 
