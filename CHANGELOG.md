@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The Standard Parts library ships with the web app (#475).** On the web, placed
+  parts (servos, sensors, boards) had no library to resolve against, so a wired-up
+  servo in the board view rendered as just its title. The build now inlines the
+  bundled `snakie-standard` library (part geometry as JSON, images as served
+  assets), so `parts.listLibraries` returns real definitions and the board draws
+  parts as authored. Read-only — authoring/registry writes stay desktop-only.
+- **The web app remembers your folder across reloads (#476).** The picked folder's
+  handle is stored in IndexedDB; on the next visit it's rehydrated automatically
+  when the browser still grants access, and otherwise the Files panel offers a
+  one-click **Reopen &lt;folder&gt;** (browsers require a click to re-grant access).
+
 ## [0.26.0] - 2026-07-12
 
 ### Added

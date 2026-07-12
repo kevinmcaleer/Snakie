@@ -15,6 +15,7 @@
 import { createWebDeviceApi } from './web-device'
 import { createWebFsApi } from './web-fs'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
+import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
@@ -30,6 +31,12 @@ export function installWebApi(): void {
   instruments.librarySource = async (): Promise<string> => INSTRUMENTS_PY
   instruments.umbrellaSource = async (): Promise<string> => SNAKIE_PY
   w.api.instruments = instruments as unknown as Window['api']['instruments']
+  // Serve the bundled Standard Parts library (read-only) so the board view can
+  // resolve a placed part's shapes/pins — otherwise a wired servo shows only its
+  // title (#475). Authoring/registry writes keep the honest fallback stub.
+  const parts = (w.api.parts ?? {}) as Record<string, unknown>
+  Object.assign(parts, createWebPartsApi())
+  w.api.parts = parts as unknown as Window['api']['parts']
   // Local files via the File System Access API — only when the browser supports it
   // (Chromium); elsewhere the no-op fallback stays and "Open Folder" is inert.
   // The robot.yml layer rides on the same backend (bindings/poses/urdf link), so

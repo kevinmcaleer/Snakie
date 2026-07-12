@@ -15,6 +15,7 @@
  * exported for unit tests (the interactive picker itself can't be automated).
  */
 import { splitRelSegments, childPath } from './web-fs-paths'
+import { saveFolderHandle, loadFolderHandle, clearFolderHandle } from './web-idb'
 
 interface FsEntry {
   name: string
@@ -29,12 +30,15 @@ interface FsStat {
 
 // The File System Access types aren't in every TS DOM lib version, so treat the
 // handles structurally.
+type PermState = 'granted' | 'denied' | 'prompt'
 type DirHandle = {
   name: string
   getDirectoryHandle(name: string, opts?: { create?: boolean }): Promise<DirHandle>
   getFileHandle(name: string, opts?: { create?: boolean }): Promise<FileHandleLike>
   removeEntry(name: string, opts?: { recursive?: boolean }): Promise<void>
   entries(): AsyncIterableIterator<[string, DirHandle | FileHandleLike]>
+  queryPermission?(opts?: { mode?: string }): Promise<PermState>
+  requestPermission?(opts?: { mode?: string }): Promise<PermState>
   kind: 'directory'
 }
 type FileHandleLike = {
@@ -54,8 +58,41 @@ export function createWebFsApi(): Record<string, unknown> {
   let root: DirHandle | null = null
   let rootPath = ''
   const loose = new Map<string, FileHandleLike>()
+  // A folder handle rehydrated from IndexedDB (#476) that still needs a user
+  // gesture to re-grant permission. Held here so the empty-state "Reopen" button
+  // can promote it to `root` without re-navigating the picker.
+  let pending: DirHandle | null = null
+
+  const adopt = (handle: DirHandle): string => {
+    root = handle
+    rootPath = handle.name
+    pending = null
+    loose.clear()
+    void saveFolderHandle(handle) // persist for next visit
+    return rootPath
+  }
+
+  // Kick off silent restore immediately (before render). fs ops await this so the
+  // first stat/readDir sees a rehydrated root when permission was already granted.
+  const ready = (async () => {
+    try {
+      const handle = (await loadFolderHandle()) as DirHandle | null
+      if (!handle) return
+      // No queryPermission (e.g. always-usable handles) → treat as granted.
+      const perm = (await handle.queryPermission?.({ mode: 'readwrite' })) ?? 'granted'
+      if (perm === 'granted') {
+        root = handle
+        rootPath = handle.name
+      } else {
+        pending = handle // needs a gesture — offered via reopenFolderName/reopenFolder
+      }
+    } catch {
+      /* nothing persisted / IDB blocked */
+    }
+  })()
 
   const dirAt = async (path: string, create = false): Promise<DirHandle> => {
+    await ready
     if (!root) throw new Error('No folder is open')
     let h = root
     for (const seg of splitRelSegments(rootPath, path)) h = await h.getDirectoryHandle(seg, { create })
@@ -63,6 +100,7 @@ export function createWebFsApi(): Record<string, unknown> {
   }
   const fileAt = async (path: string, create = false): Promise<FileHandleLike> => {
     if (loose.has(path)) return loose.get(path)!
+    await ready
     if (!root) throw new Error('No folder is open')
     const segs = splitRelSegments(rootPath, path)
     const name = segs.pop()
@@ -110,13 +148,36 @@ export function createWebFsApi(): Record<string, unknown> {
     openFolderDialog: async (): Promise<string | null> => {
       if (!w.showDirectoryPicker) return null
       try {
-        const handle = await w.showDirectoryPicker({ mode: 'readwrite' })
-        root = handle
-        rootPath = handle.name
-        loose.clear()
-        return rootPath
+        return adopt(await w.showDirectoryPicker({ mode: 'readwrite' }))
       } catch {
         return null // user cancelled / denied
+      }
+    },
+    // #476: the name of a folder rehydrated from IndexedDB that needs a click to
+    // re-grant permission (null when none pending or already restored). The file
+    // tree's empty state uses this to offer a one-click "Reopen <name>".
+    reopenFolderName: async (): Promise<string | null> => {
+      await ready
+      return pending?.name ?? null
+    },
+    // #476: promote the pending handle to the open root, requesting permission.
+    // MUST be called from a user gesture (button click) — Chromium requires one
+    // to re-grant a persisted directory handle. Returns the root path or null.
+    reopenFolder: async (): Promise<string | null> => {
+      await ready
+      if (!pending) return null
+      try {
+        const perm = (await pending.requestPermission?.({ mode: 'readwrite' })) ?? 'granted'
+        if (perm !== 'granted') {
+          if (perm === 'denied') {
+            pending = null
+            void clearFolderHandle() // stop offering a folder the user won't grant
+          }
+          return null
+        }
+        return adopt(pending)
+      } catch {
+        return null
       }
     },
     openFileDialog: async (): Promise<string | null> => {

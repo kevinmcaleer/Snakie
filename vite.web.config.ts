@@ -1,6 +1,7 @@
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { standardPartsPlugin } from './vite-plugin-standard-parts'
 
 /**
  * STANDALONE WEB BUILD of the Snakie renderer — epic #267 (Snakie for Web), Phase W0.
@@ -71,6 +72,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    standardPartsPlugin(),
     {
       // Relax the renderer CSP for the WEB build ONLY (Electron keeps its strict
       // one): `'wasm-unsafe-eval'` lets the MicroPython WASM instantiate, and
