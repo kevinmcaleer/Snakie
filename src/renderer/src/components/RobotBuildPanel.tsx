@@ -123,6 +123,8 @@ export interface RobotBuildPanelProps {
   onDelete: (link: string) => void
   onImportStl: () => void
   canImport: boolean
+  onExportUrdf: () => void
+  canExport: boolean
   importing: boolean
   /** Editing needs a saved project file — disables add/edit with a hint. */
   canEdit: boolean
@@ -668,6 +670,8 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     onDelete,
     onImportStl,
     canImport,
+    onExportUrdf,
+    canExport,
     importing,
     canEdit,
     onOpenRobot
@@ -978,6 +982,19 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           title={canImport ? 'Import an STL / DAE mesh' : 'Save the robot to a project folder to import meshes'}
         >
           {importing ? 'Importing…' : '+ STL / DAE'}
+        </button>
+        <button
+          type="button"
+          className="robotbuild__stl"
+          disabled={!canExport}
+          onClick={onExportUrdf}
+          title={
+            canExport
+              ? 'Write a clean, tidy copy of this URDF into the project’s urdf/ folder'
+              : 'Open the robot from a project folder to export it'
+          }
+        >
+          ⬇ Export URDF
         </button>
       </div>
       {menu && (
