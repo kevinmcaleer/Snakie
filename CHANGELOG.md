@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-07-12
+
 ### Fixed
 - **The offline simulator no longer freezes on a `while True:` loop.** Running a
   program with a perpetual loop (e.g. the Buddy Jr pose demo) locked up the whole
@@ -2369,7 +2371,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...HEAD
+[0.27.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...v0.26.0
 [0.25.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...v0.25.1
