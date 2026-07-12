@@ -32,6 +32,10 @@ class FakeRuntime implements ReplRuntime {
     this.capturedCalls.push(code)
     return this.nextCaptured
   }
+  interrupts = 0
+  async interrupt(): Promise<void> {
+    this.interrupts += 1
+  }
   dispose(): void {}
 }
 
@@ -87,10 +91,11 @@ describe('SimulatedDevice lifecycle', () => {
     expect(runtime.feeds).toContain('\x05print("hi")\x04')
     expect(data.join('')).toContain('echo:')
 
-    // interrupt / softReset feed the control bytes too.
+    // interrupt goes to the runtime (a queued Ctrl-C would deadlock behind a
+    // running program's feed); softReset still feeds Ctrl-D.
     await dev.interrupt()
     await dev.softReset()
-    expect(runtime.feeds).toContain('\x03')
+    expect(runtime.interrupts).toBe(1)
     expect(runtime.feeds).toContain('\x04')
 
     await dev.dispose()

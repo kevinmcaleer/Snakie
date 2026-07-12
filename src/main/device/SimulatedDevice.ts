@@ -183,9 +183,13 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     this.control.set(target, payload)
   }
 
-  /** Ctrl-C — interrupt the running program in the real REPL. */
+  /** Stop the running program. Goes to the runtime (not through `sendData`): the
+   *  sim runs the interpreter in a worker, and a `while True:` can only be broken
+   *  by rebooting it — a queued Ctrl-C would never be read. When idle it's a
+   *  gentle Ctrl-C that keeps state. */
   async interrupt(): Promise<void> {
-    await this.sendData('\x03')
+    if (this.state !== 'connected') return
+    await this.runtime.interrupt()
   }
 
   /** Ctrl-D — soft-reset the real REPL. */

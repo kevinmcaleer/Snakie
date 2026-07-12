@@ -18,7 +18,14 @@ export default defineConfig({
     build: {
       rollupOptions: {
         input: {
-          index: resolve(__dirname, 'src/main/index.ts')
+          index: resolve(__dirname, 'src/main/index.ts'),
+          // The simulated device runs the MicroPython WASM in a worker_threads
+          // worker so a `while True:` can't freeze the main process. It's loaded
+          // by filename from out/main, so keep entry names unhashed.
+          'mp-node-worker': resolve(__dirname, 'src/main/device/mp-node-worker.ts')
+        },
+        output: {
+          entryFileNames: '[name].js'
         }
       }
     }
