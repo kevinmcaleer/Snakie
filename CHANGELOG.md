@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Source Control panel text is readable again.** The muted text on the green-felt
+  Source Control panel was a low-contrast sage grey; it's now a near-white that
+  reads clearly on the green in both the dark and skeuomorph themes.
+
+### Fixed
 - **Web Serial: the port dropdown now shows the connected board, and unplugging is
   handled gracefully (#465).** After picking a real USB board it was still showing
   "Simulated device (offline)" (the just-granted port wasn't in the list yet, so the

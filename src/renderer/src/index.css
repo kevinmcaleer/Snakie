@@ -378,7 +378,9 @@
   background-color: #2f5d44;
   background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 3px 3px;
-  color: #e8f1ea;
+  color: #f2f8f4;
+  /* Muted text must stay readable on the green felt — near-white, not grey. */
+  --text-muted: #d8e8de;
   border-left: 3px solid #1c3b2a;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 }
@@ -410,7 +412,7 @@
 :root[data-theme='skeuomorph'] .git__notice,
 :root[data-theme='skeuomorph'] .git__file-dir,
 :root[data-theme='skeuomorph'] .git__repo-path {
-  color: #bcd4c4;
+  color: #d8e8de;
 }
 
 :root[data-theme='skeuomorph'] .git__branch-select,
@@ -1092,7 +1094,9 @@
   background-color: #1a3326;
   background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 3px 3px;
-  color: #cfe0d4;
+  color: #eef6f0;
+  /* Muted text must stay readable on the dark green felt — near-white, not grey. */
+  --text-muted: #cfe4d8;
   border-left: 3px solid #0c1c14;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
 }
@@ -1124,7 +1128,7 @@
 :root[data-theme='dark'] .git__notice,
 :root[data-theme='dark'] .git__file-dir,
 :root[data-theme='dark'] .git__repo-path {
-  color: #9bbfa6;
+  color: #cfe4d8;
 }
 
 :root[data-theme='dark'] .git__branch-select,
