@@ -5,6 +5,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { isVirtualPort } from '../../../shared/virtual-device'
+import { IS_WEB } from '../lib/env'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -318,6 +319,9 @@ export function Toolbar({
 
       <span className="toolbar__divider" aria-hidden="true" />
 
+      {/* Board View pops out into its own OS window — desktop only (no pop-out
+          windows on the web build, where the button would do nothing). */}
+      {!IS_WEB && (
       <div className="toolbar__group">
         <button
           type="button"
@@ -343,6 +347,7 @@ export function Toolbar({
           </svg>
         </button>
       </div>
+      )}
 
       <div className="toolbar__spacer" />
 
@@ -370,16 +375,19 @@ export function Toolbar({
         >
           {PANEL_BOTTOM_ICON}
         </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!rightCollapsed}
-          onClick={onToggleRight}
-          title="Toggle Chat panel"
-          aria-label="Toggle Chat panel"
-        >
-          {PANEL_RIGHT_ICON}
-        </button>
+        {/* Chat panel — hidden on the web build (the LLM chat is desktop-only). */}
+        {!IS_WEB && (
+          <button
+            type="button"
+            className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
+            aria-pressed={!rightCollapsed}
+            onClick={onToggleRight}
+            title="Toggle Chat panel"
+            aria-label="Toggle Chat panel"
+          >
+            {PANEL_RIGHT_ICON}
+          </button>
+        )}
         <button
           type="button"
           className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}

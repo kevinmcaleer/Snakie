@@ -72,8 +72,13 @@ export interface FileSavedDetail {
   content: string
 }
 
-/** Announce a successful save so listeners (e.g. file sync, #178) can react. */
-function announceSaved(source: FileSource, path: string, content: string): void {
+/**
+ * Announce a successful save so listeners react — file sync (#178) auto-uploads
+ * tagged files, and the local file tree refreshes its listing (#491). Exported so
+ * code that writes files outside `saveFile` (e.g. "New robot") can trigger the
+ * same refresh.
+ */
+export function announceSaved(source: FileSource, path: string, content: string): void {
   window.dispatchEvent(
     new CustomEvent<FileSavedDetail>(FILE_SAVED_EVENT, { detail: { source, path, content } })
   )

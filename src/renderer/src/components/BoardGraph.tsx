@@ -1071,6 +1071,38 @@ export function BoardGraph({
                     <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
                   ))}
                 </g>
+                {/* Variable-name labels over each wire (#498) — haloed so they
+                    read over the wires + board in both themes. */}
+                <g>
+                  {rows.map((r, i) => {
+                    const label = r.conn.variable
+                    if (!label) return null
+                    const mx = (dotXFor(r.side) + r.pad.x) / 2
+                    const my = (r.y + r.pad.y) / 2
+                    return (
+                      <text
+                        key={`wlabel-${i}`}
+                        x={mx}
+                        y={my}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fill: 'var(--text)',
+                          stroke: 'var(--bg)',
+                          strokeWidth: 3.5,
+                          strokeLinejoin: 'round',
+                          paintOrder: 'stroke',
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        {label}
+                      </text>
+                    )
+                  })}
+                </g>
               </svg>
 
               {/* Node cards (HTML, over the SVG) — one per connection. PWM/ADC

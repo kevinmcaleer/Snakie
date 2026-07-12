@@ -41,6 +41,7 @@ import { type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
+import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
@@ -1090,20 +1091,25 @@ export function AppShell(): JSX.Element {
             </>
           )}
 
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+          {/* The Chat right-pane is desktop-only — hidden on the web build. */}
+          {!IS_WEB && (
+            <>
+              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
-          <Panel
-            ref={rightRef}
-            order={4}
-            collapsible
-            collapsedSize={0}
-            defaultSize={initialSizes.current.h[3]}
-            minSize={14}
-            onCollapse={() => layout.setCollapsed('right', true)}
-            onExpand={() => layout.setCollapsed('right', false)}
-          >
-            <RightPanel />
-          </Panel>
+              <Panel
+                ref={rightRef}
+                order={4}
+                collapsible
+                collapsedSize={0}
+                defaultSize={initialSizes.current.h[3]}
+                minSize={14}
+                onCollapse={() => layout.setCollapsed('right', true)}
+                onExpand={() => layout.setCollapsed('right', false)}
+              >
+                <RightPanel />
+              </Panel>
+            </>
+          )}
         </PanelGroup>
 
         {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region

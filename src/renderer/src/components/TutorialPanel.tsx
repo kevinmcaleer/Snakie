@@ -113,6 +113,16 @@ export function TutorialPanel(): JSX.Element {
           <h2 className="tp__splash-title">{course.title}</h2>
           <p className="tp__splash-desc">{course.description}</p>
           <p className="tp__splash-meta">{course.lessons.length} lessons</p>
+          <ol className="tp__toc" aria-label="Lessons in this course">
+            {course.lessons.map((l, i) => (
+              <li key={i}>
+                <button className="tp__toc-item" onClick={() => goto(i)}>
+                  <span className="tp__toc-num">{i + 1}</span>
+                  <span className="tp__toc-name">{l.title}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
           <button className="tp__start" onClick={start}>
             Start →
           </button>

@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Course splash lists its lessons.** Opening a course in the Learn panel now shows
+  the lesson titles (each one clickable to jump straight to it) above the Start button.
+- **Wires are labelled with their variable name in the board view (#498).** Each
+  connection's variable name is drawn over its wire, so a wired-up board reads at a
+  glance.
+
+### Changed
+- **The web app hides desktop-only controls.** The pop-out Board View button and the
+  LLM chat (its toggle button + the chat pane) are hidden on app.snakie.org — pop-out
+  windows and the chat backend aren't available in the browser, so those buttons did
+  nothing there.
+
+### Fixed
+- **The local file tree refreshes after creating a new robot (#491).** Creating a new
+  robot writes the `.urdf` + `robot.yml`, and the Files list now updates to show them
+  immediately (it also refreshes on any local file save) instead of needing a manual
+  Refresh.
+
 ## [0.29.0] - 2026-07-12
 
 ### Changed

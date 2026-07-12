@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { RobotView } from './RobotView'
 import { dirname } from './robot-mesh'
 import { blankUrdf } from './robot-assembly'
-import { useWorkspace } from '../store/workspace'
+import { useWorkspace, announceSaved } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
 import demoArm from '../assets/demo-arm.urdf?raw'
@@ -102,8 +102,9 @@ export function RobotDockPanel(): JSX.Element {
       }
     }
     const path = `${dir}/${name}`
+    const content = blankUrdf('my_robot')
     try {
-      await window.api.fs.writeFile(path, blankUrdf('my_robot'))
+      await window.api.fs.writeFile(path, content)
       // Link the URDF in robot.yml (preserving any wiring) so this IS the robot.
       try {
         const def = await window.api.robot.load(dir)
@@ -113,6 +114,8 @@ export function RobotDockPanel(): JSX.Element {
         // best-effort link — the file still opens
       }
       await openFile('local', path)
+      // Refresh the local file tree so the new .urdf + robot.yml appear (#491).
+      announceSaved('local', path, content)
       setReloadNonce((n) => n + 1) // re-resolve so the dock tracks the new robot
       setFocus(true)
     } catch {

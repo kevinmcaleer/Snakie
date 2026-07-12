@@ -165,6 +165,52 @@
   cursor: pointer;
 }
 
+/* Lesson list on the course splash — left-aligned inside the centred splash;
+   each row jumps to that lesson. */
+.tp__toc {
+  list-style: none;
+  margin: 4px 0 20px;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp__toc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.tp__toc-item:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.tp__toc-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 11px;
+}
+.tp__toc-name {
+  min-width: 0;
+}
+
 /* ── Lesson ──────────────────────────────────────────────────────────────── */
 .tp__lesson {
   flex: 1;

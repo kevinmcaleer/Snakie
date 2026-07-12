@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { useSync } from '../store/sync'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
@@ -244,6 +244,18 @@ export function LocalFileTree(): JSX.Element {
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  // Re-read the listing when a local file is saved or created elsewhere (a manual
+  // save, or "New robot" writing a .urdf + robot.yml) so new files appear without
+  // a manual Refresh (#491). `refresh` preserves selection + expansion state.
+  useEffect(() => {
+    const onSaved = (e: Event): void => {
+      const detail = (e as CustomEvent<FileSavedDetail>).detail
+      if (detail?.source === 'local') void refresh()
+    }
+    window.addEventListener(FILE_SAVED_EVENT, onSaved)
+    return () => window.removeEventListener(FILE_SAVED_EVENT, onSaved)
   }, [refresh])
 
   // When the working folder changes (e.g. opened from the toolbar), reset the
