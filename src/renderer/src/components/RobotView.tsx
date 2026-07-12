@@ -113,6 +113,7 @@ import {
   type ManagedSequenceStep
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
+import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -1988,6 +1989,27 @@ export function RobotView({
     if (!m || m.isMimic) return
     commitTimeline(upsertKey(timelineRef.current, joint, t, toDisplay(m.type, valuesRef.current[joint] ?? 0)))
     setSelectedKey({ joint, t })
+  }
+
+  // Export a clean, tidy copy of the current URDF into the project's `urdf/`
+  // folder (#315). Re-loads unchanged in the viewer; just consistently formatted.
+  const canExport = !!activeFile && activeFile.source === 'local' && !!activeFile.path && !!content.trim()
+  const handleExportUrdf = async (): Promise<void> => {
+    if (!activeFile || activeFile.source !== 'local' || !activeFile.path) return
+    const name = robotNameOf(content)
+    const path = urdfExportPath(dirname(activeFile.path), name)
+    const dir = path.slice(0, path.lastIndexOf('/'))
+    try {
+      await window.api.fs.mkdir(dir)
+    } catch {
+      /* already exists — fine */
+    }
+    try {
+      await window.api.fs.writeFile(path, prettyUrdf(content))
+      setSavingLabel(`exported → urdf/${name}.urdf`)
+    } catch (err) {
+      setSavingLabel(`export failed: ${err instanceof Error ? err.message : String(err)}`)
+    }
   }
 
   const handleImportStl = async (): Promise<void> => {
@@ -4234,6 +4256,8 @@ export function RobotView({
             onDelete={handleDeleteLink}
             onImportStl={() => void handleImportStl()}
             canImport={!!canImport}
+            onExportUrdf={() => void handleExportUrdf()}
+            canExport={canExport}
             importing={importing}
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}

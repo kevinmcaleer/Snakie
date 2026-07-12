@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Export a clean URDF from the Robot View (#315).** An **Export URDF** button (in
+  the build panel, beside Import STL) writes a tidy, consistently-indented copy of
+  the robot's URDF into the project's `urdf/` folder — a clean artifact to share or
+  version. It re-loads unchanged in the viewer (same tags, just formatted). Closes
+  out epic #309 Phase 5.
+
+### Added
 - **Connect a real board over Web Serial, in the browser (#465).** On a Chromium
   browser (Chrome, Edge, a Chromebook), app.snakie.org can now talk to a real
   Pico / ESP over USB — the REPL, Run/Stop, the device file tree, module installs
