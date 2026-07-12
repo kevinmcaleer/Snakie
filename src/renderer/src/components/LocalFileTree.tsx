@@ -261,6 +261,36 @@ export function LocalFileTree(): JSX.Element {
     }
   }, [openFolder])
 
+  // Web only (#476): a folder persisted from a previous visit that needs a click
+  // to re-grant permission. `reopenFolderName` is absent on desktop, so this
+  // stays null there and the "Reopen" button never renders.
+  const [reopenName, setReopenName] = useState<string | null>(null)
+  useEffect(() => {
+    if (root) {
+      setReopenName(null)
+      return
+    }
+    const fsx = window.api.fs as unknown as { reopenFolderName?: () => Promise<string | null> }
+    if (!fsx.reopenFolderName) return
+    let live = true
+    void fsx.reopenFolderName().then((n) => live && setReopenName(n)).catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [root])
+
+  const handleReopenFolder = useCallback(async (): Promise<void> => {
+    const fsx = window.api.fs as unknown as { reopenFolder?: () => Promise<string | null> }
+    if (!fsx.reopenFolder) return
+    try {
+      const path = await fsx.reopenFolder()
+      if (path) openFolderPath(path)
+      else setReopenName(null) // denied/dismissed — drop the offer
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [openFolderPath])
+
   const handleSelect = useCallback((path: string, isDir: boolean): void => {
     setSelectedPath(path)
     setSelectedIsDir(isDir)
@@ -554,7 +584,19 @@ export function LocalFileTree(): JSX.Element {
       ) : (
         <div className="localtree__empty">
           {error && <div className="localtree__error">{error}</div>}
-          <button className="btn btn--primary" onClick={handleOpenFolder}>
+          {reopenName && (
+            <button
+              className="btn btn--primary"
+              onClick={() => void handleReopenFolder()}
+              title={`Reopen ${reopenName} from your last visit`}
+            >
+              <span aria-hidden>{'↻'}</span> Reopen {reopenName}
+            </button>
+          )}
+          <button
+            className={reopenName ? 'btn btn--ghost' : 'btn btn--primary'}
+            onClick={handleOpenFolder}
+          >
             <span aria-hidden>{'▸'}</span> Open Folder
           </button>
         </div>
