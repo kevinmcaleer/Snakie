@@ -24,6 +24,15 @@ describe('splitRelSegments', () => {
     // "RootX/f" must NOT be treated as under root "Root".
     expect(splitRelSegments('Root', 'RootX/f')).toEqual(['RootX', 'f'])
   })
+  it('normalises "." segments (URDF mesh refs arrive as ./meshes/x.stl)', () => {
+    expect(splitRelSegments('bot', 'bot/./meshes/arm.stl')).toEqual(['meshes', 'arm.stl'])
+  })
+  it('resolves ".." segments against the parent', () => {
+    expect(splitRelSegments('bot', 'bot/urdf/../meshes/arm.stl')).toEqual(['meshes', 'arm.stl'])
+  })
+  it('clamps ".." at the picked root (the sandbox boundary)', () => {
+    expect(splitRelSegments('bot', 'bot/../../etc/passwd')).toEqual(['etc', 'passwd'])
+  })
 })
 
 describe('childPath', () => {

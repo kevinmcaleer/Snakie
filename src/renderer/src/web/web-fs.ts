@@ -156,6 +156,14 @@ export function createWebFsApi(): Record<string, unknown> {
       await ws.write(contents)
       await ws.close()
     },
+    // Not part of the preload `fs` namespace — a web-only extra the web robot
+    // backend uses to copy binary meshes (STL) without UTF-8 mangling.
+    writeFileBytes: async (path: string, bytes: Uint8Array): Promise<void> => {
+      const fh = await fileAt(path, true)
+      const ws = await fh.createWritable()
+      await ws.write(bytes)
+      await ws.close()
+    },
     mkdir: async (path: string): Promise<void> => {
       await dirAt(path, true)
     },

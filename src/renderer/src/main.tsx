@@ -17,11 +17,19 @@ const render = (): void =>
 // In the WEB build (epic #267), swap the fallback's inert `device` stub for the
 // real MicroPython WASM simulator before rendering. Dynamic import so the Electron
 // bundle never pulls in the WASM; a failure still renders the (device-inert) shell.
+// After render, auto-connect the sim — it's the only port on the web, and Run
+// stays greyed out until connected, which reads as "the app can't run programs".
 if (import.meta.env.VITE_SNAKIE_WEB) {
   import('./web/install-web-api')
-    .then((m) => m.installWebApi())
-    .catch((err) => console.error('[Snakie] web backend install failed', err))
-    .finally(render)
+    .then((m) => {
+      m.installWebApi()
+      render()
+      m.autoConnectSimulator()
+    })
+    .catch((err) => {
+      console.error('[Snakie] web backend install failed', err)
+      render()
+    })
 } else {
   render()
 }

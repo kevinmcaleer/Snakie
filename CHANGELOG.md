@@ -6,7 +6,28 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Robot mode works on the web (#267).** `window.api.robot` now has a real browser
+  backend: `robot.yml` loads and saves through the File System Access folder using the
+  same shared YAML pipeline as the desktop — so servo↔joint bindings, poses, the
+  timeline and the project-URDF link all round-trip. Open a robot project folder on
+  app.snakie.org, open its `.urdf`, and the 3-D robot renders with its STL meshes;
+  run a servo program on the simulator and `SNK SERVO` telemetry animates the joints.
+  Import STL also works (browser file picker → `meshes/`); with no folder open,
+  robot.yml persists to browser storage.
+- **The web app auto-connects to the simulated device on load (#267).** The sim is the
+  only port on the web, and the Connect control (shell-panel header) was easy to miss —
+  first-time users typed a program and found Run greyed out. Run now works out of the box.
+
 ### Fixed
+- **Files-panel "New file" is no longer dead without a folder.** With no folder open it
+  now creates an untitled buffer (same as the toolbar), instead of a disabled button.
+- **URDF mesh refs with `./` or `../` now load on the web** (path segments are
+  normalised before walking the picked folder's handles; `..` clamps at the root).
+- **Honest fallbacks when a backend is missing:** a stubbed robot save now reports
+  "save failed" instead of a false "saved ✓", and a missing motion plugin shows the
+  benign "install Python to sync poses" label instead of a spurious
+  "managed block broken" warning.
 - **Web app: the instruments library now installs, and `from snakie import …` just works (#267).**
   On app.snakie.org the "Install library" banner failed with _"library source unavailable"_ and
   the demos' first line (`from snakie import Servo` / `import instruments`) raised `ImportError`,

@@ -214,7 +214,7 @@ interface MenuState {
 }
 
 export function LocalFileTree(): JSX.Element {
-  const { openFile, currentFolder, openFolder, openFolderPath } = useWorkspace()
+  const { openFile, currentFolder, openFolder, openFolderPath, newFile } = useWorkspace()
   const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
@@ -473,10 +473,12 @@ export function LocalFileTree(): JSX.Element {
           </button>
           <button
             className="btn btn--ghost btn--icon"
-            onClick={() => newFileIn(null)}
-            title="New file"
+            // With no folder open this used to be a dead button; fall back to an
+            // untitled buffer (same as the toolbar's New file) so "create a file
+            // and run it" always works — on the web there may be no folder at all.
+            onClick={() => (root ? newFileIn(null) : newFile())}
+            title={root ? 'New file' : 'New untitled file'}
             aria-label="New file"
-            disabled={!root}
           >
             <NewFileIcon />
           </button>
