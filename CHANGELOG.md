@@ -6,18 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-07-12
+
 ### Added
-- **Robot mode works on the web (#267).** `window.api.robot` now has a real browser
-  backend: `robot.yml` loads and saves through the File System Access folder using the
-  same shared YAML pipeline as the desktop — so servo↔joint bindings, poses, the
-  timeline and the project-URDF link all round-trip. Open a robot project folder on
-  app.snakie.org, open its `.urdf`, and the 3-D robot renders with its STL meshes;
-  run a servo program on the simulator and `SNK SERVO` telemetry animates the joints.
-  Import STL also works (browser file picker → `meshes/`); with no folder open,
-  robot.yml persists to browser storage.
-- **The web app auto-connects to the simulated device on load (#267).** The sim is the
-  only port on the web, and the Connect control (shell-panel header) was easy to miss —
-  first-time users typed a program and found Run greyed out. Run now works out of the box.
+- **Snakie runs in the browser at [app.snakie.org](https://app.snakie.org) — epic #267.**
+  The same editor, now a zero-install web app (great for Chromebooks and classrooms):
+  - The **MicroPython simulator runs in a Web Worker** (#467, #469), so a `while True:`
+    loop churns off the UI thread and **Stop** reboots it — the tab never freezes.
+  - A **simulated `machine` module** (#472) means `from machine import Pin` — the first
+    line of most lessons — works on the sim (the WASM port ships none); `Pin`, `PWM`,
+    `ADC`, `I2C`/`SPI`/`UART`, `Timer` and friends behave plausibly.
+  - The **instruments library auto-loads** (#473): `import instruments` /
+    `from snakie import Servo` just work, and the "Install library" banner is functional.
+  - **Open, edit and save real local files** via the File System Access API (#470) —
+    genuine on-disk persistence, no server.
+  - **Instrument telemetry animates** on the web sim (#471) — scope, meter, plotter, IMU
+    and radar move without hardware. The app **auto-connects** to the simulated device
+    on load, so typing a program and pressing **Run** works out of the box.
+- **Robot mode works on the web (#267).** `window.api.robot` has a real browser backend:
+  `robot.yml` loads and saves through the open folder using the same shared YAML pipeline
+  as the desktop — so servo↔joint bindings, poses, the timeline and the project-URDF link
+  all round-trip. Open a robot project folder, open its `.urdf`, and the 3-D robot renders
+  with its STL meshes; run a servo program on the simulator and `SNK SERVO` telemetry
+  animates the joints. Import STL works (browser file picker → `meshes/`); with no folder
+  open, `robot.yml` persists to browser storage.
+- **Auto-publish to app.snakie.org** (#468): every push to `master` rebuilds the web app
+  and deploys it.
 
 ### Fixed
 - **Files-panel "New file" is no longer dead without a folder.** With no folder open it
@@ -28,12 +42,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   "save failed" instead of a false "saved ✓", and a missing motion plugin shows the
   benign "install Python to sync poses" label instead of a spurious
   "managed block broken" warning.
-- **Web app: the instruments library now installs, and `from snakie import …` just works (#267).**
-  On app.snakie.org the "Install library" banner failed with _"library source unavailable"_ and
-  the demos' first line (`from snakie import Servo` / `import instruments`) raised `ImportError`,
-  because the web build had no source for the bundled MicroPython library. The web sim now inlines
-  `instruments.py` + `snakie.py` (via `?raw`), auto-seeds them into its in-memory `/lib` on connect
-  (so imports work with no install step), and serves them to the banner + its version check.
 
 ## [0.25.2] - 2026-07-11
 
@@ -2334,7 +2342,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...HEAD
+[0.26.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...v0.26.0
 [0.25.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.1...v0.25.2
 [0.25.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...v0.25.1
 [0.25.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...v0.25.0

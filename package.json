@@ -1,6 +1,6 @@
 {
   "name": "snakie",
-  "version": "0.25.2",
+  "version": "0.26.0",
   "description": "A modern, cross-platform MicroPython editor.",
   "productName": "Snakie",
   "main": "./out/main/index.js",
