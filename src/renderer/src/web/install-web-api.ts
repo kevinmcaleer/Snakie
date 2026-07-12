@@ -12,7 +12,7 @@
  * `main.tsx`, via a dynamic import), so the Electron bundle never pulls in the
  * MicroPython WASM.
  */
-import { createWebDeviceApi } from './web-device'
+import { createWebDeviceRouter } from './web-device-router'
 import { createWebFsApi } from './web-fs'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
@@ -22,7 +22,8 @@ import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 export function installWebApi(): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
   if (!w.api) return // the fallback runs first and sets this; guard defensively
-  w.api.device = createWebDeviceApi() as unknown as Window['api']['device']
+  // The device namespace multiplexes the WASM simulator + real Web Serial boards.
+  w.api.device = createWebDeviceRouter() as unknown as Window['api']['device']
   // Serve the bundled MicroPython library sources so the "Install library" banner
   // + its version check work on the web (the fallback returns '' → the install
   // failed with "library source unavailable"). The sim also auto-seeds these into

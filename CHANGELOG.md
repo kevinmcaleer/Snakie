@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Connect a real board over Web Serial, in the browser (#465).** On a Chromium
+  browser (Chrome, Edge, a Chromebook), app.snakie.org can now talk to a real
+  Pico / ESP over USB — the REPL, Run/Stop, the device file tree, module installs
+  and the instruments all work over Web Serial, right alongside the offline
+  simulator. Pick a board with the new **＋ Connect a USB board** entry (filtered
+  to known board/bridge chips); already-granted boards show up in the port list.
+  The raw-REPL protocol is shared with the desktop, so a board behaves identically.
+
+### Added
 - **The web app is now an installable PWA that works offline (#464).** app.snakie.org
   can be installed to the ChromeOS shelf / your dock (name, icons, standalone window),
   and a Workbox service worker precaches the whole app shell — including the MicroPython
