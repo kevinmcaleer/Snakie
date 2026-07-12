@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-07-12
+
 ### Added
 - **Learn Snakie — guided tutorials in the app (#479).** A new **📚 Learn** button
   opens a MakeCode-style **Projects gallery** of tutorial courses. A floating
@@ -2402,7 +2404,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...HEAD
+[0.28.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...v0.26.0
 [0.25.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.1...v0.25.2
