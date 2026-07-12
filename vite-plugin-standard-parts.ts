@@ -68,6 +68,9 @@ export function standardPartsPlugin(): Plugin {
 
       const parts: Record<string, unknown>[] = []
       const emitted: EmittedImage[] = []
+      // Driver file contents keyed `<partId>/<source>`, served by the web
+      // readDriverSource so the "install driver" banner works (e.g. sg90 → servo.py).
+      const driverSources: Record<string, string> = {}
 
       for (const partId of partDirs) {
         const partDir = join(libRoot, partId)
@@ -90,6 +93,21 @@ export function standardPartsPlugin(): Plugin {
           }
         }
 
+        // Bundle each declared driver file's source (a bundled filename, not a
+        // `mip:` spec or URL) so readDriverSource can serve it on the web.
+        if (Array.isArray(part.drivers)) {
+          for (const d of part.drivers as { source?: string }[]) {
+            const src = d?.source
+            if (typeof src === 'string' && !src.includes(':') && !src.startsWith('http')) {
+              try {
+                driverSources[`${partId}/${src}`] = readFileSync(join(partDir, src), 'utf-8')
+              } catch {
+                /* unreadable driver — install will report it can't be read */
+              }
+            }
+          }
+        }
+
         // Emit the raster image (if any) as a hashed asset; reference by URL.
         if (typeof part.image === 'string' && IMAGE_EXTS.some((e) => (part.image as string).toLowerCase().endsWith('.' + e))) {
           try {
@@ -103,9 +121,7 @@ export function standardPartsPlugin(): Plugin {
             /* unreadable image — part still renders from shapes */
           }
         }
-        // Drop fields the board view never needs (keep the payload lean).
-        delete part.drivers
-        delete part.help
+        delete part.help // helpText carries it now
         parts.push(part)
       }
 
@@ -134,6 +150,7 @@ for (const p of PARTS) {
   const u = IMAGE_URLS[p.id]
   if (u) p.imageData = u
 }
+export const driverSources = ${JSON.stringify(driverSources)}
 export default [{ ...${JSON.stringify(libMeta)}, parts: PARTS }]
 `
     }

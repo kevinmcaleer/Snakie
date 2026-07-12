@@ -6,6 +6,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Web: installing a part's driver now works (#475).** On the web, installing a
+  part driver from the banner (e.g. sg90 → `servo.py`) failed with "Could not read
+  driver file" because the driver source wasn't available in the browser. The
+  bundled driver files are now inlined at build time and served to the installer,
+  so `import servo` works after one click.
+
 ### Added
 - **The Standard Parts library ships with the web app (#475).** On the web, placed
   parts (servos, sensors, boards) had no library to resolve against, so a wired-up

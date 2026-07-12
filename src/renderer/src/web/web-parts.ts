@@ -13,14 +13,33 @@
  * (listLibraries + a no-op update check); authoring/registry writes stay stubbed
  * (no per-user library storage on the web yet).
  */
-import standardLibraries from 'virtual:snakie-standard-parts'
+import standardLibraries, { driverSources } from 'virtual:snakie-standard-parts'
 import type { PartLibraryWithParts } from '../../../shared/part'
+
+interface DriverSourceResult {
+  ok: boolean
+  contents?: string
+  error?: string
+}
 
 /** Build the read-only `parts` Api object (merged onto `window.api.parts`). */
 export function createWebPartsApi(): Record<string, unknown> {
   const libraries = standardLibraries as PartLibraryWithParts[]
   return {
     listLibraries: async (): Promise<PartLibraryWithParts[]> => libraries,
+    // Serve a bundled part's driver file (e.g. sg90 → servo.py) so the
+    // "install driver" banner works on the web (#475/#476 follow-up). The
+    // desktop reads it off disk past the CSP; here it's inlined at build time.
+    readDriverSource: async (
+      _libraryId: string,
+      partId: string,
+      source: string
+    ): Promise<DriverSourceResult> => {
+      const contents = (driverSources as Record<string, string>)[`${partId}/${source}`]
+      return contents != null
+        ? { ok: true, contents }
+        : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
+    },
     // Read-only on the web: no per-user library storage, nothing to update.
     checkUpdates: async () => [],
     cachedUpdates: async () => []
