@@ -34,6 +34,7 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/nunito-sans": "^5.2.7",
     "@micropython/micropython-webassembly-pyscript": "^1.28.0-6",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",

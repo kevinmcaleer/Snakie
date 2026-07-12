@@ -5,6 +5,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import '@fontsource/jetbrains-mono'
+// Nunito Sans — the learning system's prose font (see --font-learn). Weights:
+// 400 body, 600/700 emphasis, 800 lesson headings.
+import '@fontsource/nunito-sans/400.css'
+import '@fontsource/nunito-sans/600.css'
+import '@fontsource/nunito-sans/700.css'
+import '@fontsource/nunito-sans/800.css'
 import './index.css'
 
 const render = (): void =>

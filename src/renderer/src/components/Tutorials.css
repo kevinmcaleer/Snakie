@@ -8,7 +8,10 @@
   flex-direction: column;
   min-height: 100%;
   color: var(--text);
-  font-size: 13px;
+  /* The learning system reads in a friendly, legible SANS (the rest of the app
+     stays retro-mono); code blocks below switch back to mono so they stand out. */
+  font-family: var(--font-learn);
+  font-size: 13.5px;
 }
 
 /* ── Gallery ─────────────────────────────────────────────────────────────── */
@@ -167,21 +170,19 @@
   flex: 1;
   padding: 14px 16px;
 }
-.tp__md {
-  font-size: 13.5px;
-  line-height: 1.55;
+/* The base `.md` rules (Markdown.css) already style headings, the inline-code
+   chips and the fenced-code slabs in the monospace font — now that the prose
+   above is sans (.tp), that mono code stands out on its own. Here we only bump
+   the body size + line-spacing for legibility, and keep <pre> mono. The higher
+   specificity (`.tp .tp__md`) wins over `.md` regardless of stylesheet order. */
+.tp .tp__md {
+  font-size: 14px;
+  line-height: 1.7;
 }
-.tp__md :first-child {
-  margin-top: 0;
+.tp .tp__md pre {
+  font-family: var(--font-mono);
 }
-.tp__md pre {
-  overflow-x: auto;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
-}
-.tp__md a {
+.tp .tp__md a {
   color: var(--accent-ink);
 }
 .tp__tip {
