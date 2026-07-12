@@ -31,6 +31,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   connections lists), so the linked model file is easy to find and edit.
 
 ### Fixed
+- **The mini 3-D viewer updates when you link a robot, and now tells you what happened.**
+  Opening/creating a robot from the dock used to force full-screen focus mode, which
+  *unmounted* the mini viewer — so it looked like the robot never changed (it still
+  showed the demo arm until you left focus). Open/New now link + update the mini viewer
+  in place (use "⤢ Pop out" for full-screen), and a status-bar message reports the
+  outcome — *Linked "X"*, *Opened "X" (outside the project — not linked)*, *Created "X"* —
+  so the linking, otherwise invisible, is clear. (Also hardened the in-project path check
+  for Windows drive-letter casing.)
 - **The local file tree refreshes after creating a new robot (#491).** Creating a new
   robot writes the `.urdf` + `robot.yml`, and the Files list now updates to show them
   immediately (it also refreshes on any local file save) instead of needing a manual

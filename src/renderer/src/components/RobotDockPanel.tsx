@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RobotView } from './RobotView'
 import { dirname } from './robot-mesh'
 import { blankUrdf } from './robot-assembly'
@@ -26,6 +26,25 @@ export function RobotDockPanel(): JSX.Element {
   const [urdfPath, setUrdfPath] = useState<string | null>(null)
   // Bumped after we create/link a robot, to re-resolve the project URDF.
   const [reloadNonce, setReloadNonce] = useState(0)
+
+  // Show a transient message in the status bar so linking/creating a robot — which
+  // is otherwise invisible — is clear to the user. Auto-clears after a few seconds
+  // (the shared `snakie:status` seam is sticky, so the caller schedules the clear).
+  const statusTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const notify = (text: string): void => {
+    window.dispatchEvent(new CustomEvent('snakie:status', { detail: { text, priority: 4 } }))
+    if (statusTimer.current) clearTimeout(statusTimer.current)
+    statusTimer.current = setTimeout(
+      () => window.dispatchEvent(new CustomEvent('snakie:status', { detail: { text: '' } })),
+      4000
+    )
+  }
+  useEffect(
+    () => () => {
+      if (statusTimer.current != null) clearTimeout(statusTimer.current)
+    },
+    []
+  )
 
   useEffect(() => {
     let live = true
@@ -68,7 +87,11 @@ export function RobotDockPanel(): JSX.Element {
   }
 
   const nameOf = (p: string): string => p.replace(/[/\\]+$/, '').split(/[/\\]/).pop() ?? p
-  const normSlash = (p: string): string => p.replace(/\\/g, '/').replace(/\/$/, '')
+  // Forward slashes, no trailing slash, and a lower-cased Windows drive letter (the
+  // file dialog can return `C:\…` while the remembered folder is `c:\…`, which would
+  // otherwise defeat the prefix test and silently skip linking).
+  const normSlash = (p: string): string =>
+    p.replace(/\\/g, '/').replace(/\/$/, '').replace(/^([a-zA-Z]):/, (_m, d) => `${d.toLowerCase()}:`)
   // The path of `p` relative to project folder `dir`, or null when it's outside it.
   const relInside = (p: string, dir: string): string | null => {
     const np = normSlash(p)
@@ -97,27 +120,38 @@ export function RobotDockPanel(): JSX.Element {
       ]
     })
     if (!path) return
+    const name = nameOf(path)
     const dir = currentFolder ? currentFolder.replace(/[/\\]$/, '') : null
     const rel = dir ? relInside(path, dir) : null
     const already = !!urdfPath && normSlash(urdfPath) === normSlash(path)
-    if (dir && rel && !already) {
+    if (already) {
+      notify(`"${name}" is already this project's robot`)
+    } else if (dir && rel) {
       // Confirm only when this REPLACES a different linked robot.
       const ok =
         !urdfPath ||
         window.confirm(
-          `Link "${nameOf(rel)}" as this project's robot?\n\n` +
+          `Link "${name}" as this project's robot?\n\n` +
             `This replaces the current robot (${nameOf(urdfPath)}). The old file stays on disk.`
         )
       if (ok) {
         try {
           await linkRobot(dir, rel)
+          notify(`Linked "${name}" — now this project's robot`)
         } catch {
-          // best-effort link — the file still opens below
+          notify(`Opened "${name}" — couldn't link it to the project`)
         }
+      } else {
+        notify(`Opened "${name}" (not linked)`)
       }
+    } else {
+      // Outside the open project folder (or no folder) → can't link, just view it.
+      notify(`Opened "${name}" — it's outside the project, so it wasn't linked`)
     }
+    // Open in the editor (this mounts the full Robot View) WITHOUT entering focus
+    // mode, so the mini 3-D dock stays on screen and updates to the linked robot.
+    // Use "⤢ Pop out" for the full-screen pose tool.
     await openFile('local', path)
-    setFocus(true)
   }
 
   // Create a new blank robot as a REAL FILE in the selected project folder, and
@@ -160,13 +194,15 @@ export function RobotDockPanel(): JSX.Element {
       announceSaved('local', path, content)
       try {
         await linkRobot(dir, name) // preserve any wiring; this IS the robot now
+        notify(`Created "${name}" — now this project's robot`)
       } catch {
-        // best-effort link — the file still opens
+        notify(`Created "${name}" (couldn't link it to the project)`)
       }
+      // Open in the editor (mounts the full Robot View) WITHOUT focus mode, so the
+      // mini 3-D dock stays visible and updates. Use "⤢ Pop out" for full-screen.
       await openFile('local', path)
-      setFocus(true)
     } catch {
-      // write failed — nothing opened
+      notify('Couldn’t create the new robot file')
     }
   }
 
