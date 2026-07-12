@@ -1029,7 +1029,7 @@ export function AppShell(): JSX.Element {
             collapsible
             collapsedSize={0}
             defaultSize={initialSizes.current.h[0]}
-            minSize={24}
+            minSize={30}
             onCollapse={() => layout.setCollapsed('files', true)}
             onExpand={() => layout.setCollapsed('files', false)}
           >

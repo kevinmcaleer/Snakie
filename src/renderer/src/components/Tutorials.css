@@ -187,7 +187,7 @@
 .tp__tip {
   display: flex;
   gap: 8px;
-  margin: 12px 0 0;
+  margin: 8px 8px 0;
   padding: 10px 12px;
   border-radius: 10px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
@@ -198,16 +198,18 @@
   flex: none;
 }
 
-/* ── Lesson footer (sticky nav) ──────────────────────────────────────────── */
-.tp__foot {
+/* ── Lesson footer (tip + nav, pinned to the panel bottom) ───────────────── */
+.tp__bottom {
   position: sticky;
   bottom: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+}
+.tp__foot {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 9px 12px;
-  background: var(--bg-elevated);
-  border-top: 1px solid var(--border);
 }
 .tp__nav {
   background: transparent;
@@ -239,12 +241,18 @@
   background: var(--accent);
   filter: brightness(1.08);
 }
+/* One row only — dots that don't fit are clipped rather than wrapping. */
 .tp__dots {
   flex: 1;
+  min-width: 0;
   display: flex;
   gap: 5px;
   justify-content: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.tp__dot {
+  flex: none;
 }
 .tp__dot {
   width: 8px;

@@ -122,6 +122,11 @@ export function TutorialPanel(): JSX.Element {
         <>
           <div className="tp__lesson">
             <Markdown source={lesson?.body ?? ''} className="tp__md" />
+          </div>
+
+          {/* Tip + nav are pinned to the bottom of the panel so the 💡 tip is
+              always visible when toggled (not stranded below the scroll fold). */}
+          <div className="tp__bottom">
             {tipOpen && lesson?.tip && (
               <div className="tp__tip" role="note">
                 <span className="tp__tip-bulb" aria-hidden>
@@ -130,41 +135,40 @@ export function TutorialPanel(): JSX.Element {
                 <Markdown source={lesson.tip} className="tp__tip-md" />
               </div>
             )}
-          </div>
-
-          <footer className="tp__foot">
-            <button className="tp__nav" onClick={prev} title="Previous" disabled={lessonIndex <= -1}>
-              ‹ Back
-            </button>
-            <div className="tp__dots" role="tablist" aria-label="Lesson">
-              {course.lessons.map((_, i) => (
-                <button
-                  key={i}
-                  className={`tp__dot${i === lessonIndex ? ' tp__dot--on' : ''}`}
-                  onClick={() => goto(i)}
-                  aria-label={`Lesson ${i + 1}`}
-                  aria-selected={i === lessonIndex}
-                />
-              ))}
-            </div>
-            {lesson?.tip && (
-              <button
-                className={`tp__tipbtn${tipOpen ? ' tp__tipbtn--on' : ''}`}
-                onClick={() => setTipOpen((v) => !v)}
-                title="Tip"
-                aria-label="Show a tip"
-                aria-pressed={tipOpen}
-              >
-                💡
+            <footer className="tp__foot">
+              <button className="tp__nav" onClick={prev} title="Previous" disabled={lessonIndex <= -1}>
+                ‹ Back
               </button>
-            )}
-            <button
-              className="tp__nav tp__nav--next"
-              onClick={lessonIndex >= lastLesson ? close : next}
-            >
-              {lessonIndex >= lastLesson ? 'Finish ✓' : 'Next ›'}
-            </button>
-          </footer>
+              <div className="tp__dots" role="tablist" aria-label="Lesson">
+                {course.lessons.map((_, i) => (
+                  <button
+                    key={i}
+                    className={`tp__dot${i === lessonIndex ? ' tp__dot--on' : ''}`}
+                    onClick={() => goto(i)}
+                    aria-label={`Lesson ${i + 1}`}
+                    aria-selected={i === lessonIndex}
+                  />
+                ))}
+              </div>
+              {lesson?.tip && (
+                <button
+                  className={`tp__tipbtn${tipOpen ? ' tp__tipbtn--on' : ''}`}
+                  onClick={() => setTipOpen((v) => !v)}
+                  title="Tip"
+                  aria-label="Show a tip"
+                  aria-pressed={tipOpen}
+                >
+                  💡
+                </button>
+              )}
+              <button
+                className="tp__nav tp__nav--next"
+                onClick={lessonIndex >= lastLesson ? close : next}
+              >
+                {lessonIndex >= lastLesson ? 'Finish ✓' : 'Next ›'}
+              </button>
+            </footer>
+          </div>
         </>
       )}
     </div>
