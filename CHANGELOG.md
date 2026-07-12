@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-07-12
+
 ### Changed
 - **Tutorials now live in a dedicated "Learn" side panel.** The 📚 Learn button
   moved from the toolbar into the left activity-bar shelf (just above Help). Clicking
@@ -13,6 +15,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   course gallery, the course splash, and each lesson's walkthrough (Back / Next, the
   position dots and the 💡 tip) — replacing the old floating dialog + full-window
   overlay.
+- **Tutorial text uses a friendly, legible sans (Nunito Sans).** The learning
+  system's prose now reads in a bundled open-source sans instead of the app's retro
+  monospace — clearer for beginners, and code blocks stand out because only the code
+  stays monospace. Line-spacing bumped for readability. (The rest of the app keeps
+  its monospace identity.)
+- **The web app shows its version.** app.snakie.org now displays the build version
+  in the status bar, injected from `package.json` at build time (the web build has
+  no Electron `app.getVersion()`).
 
 ### Fixed
 - **Switching editor tabs no longer stops a running program.** With a board/live
@@ -2448,7 +2458,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.29.0...HEAD
+[0.29.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...v0.28.0
 [0.27.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...v0.27.0
 [0.26.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...v0.26.0

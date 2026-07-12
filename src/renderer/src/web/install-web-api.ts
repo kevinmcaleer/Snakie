@@ -22,6 +22,10 @@ import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 export function installWebApi(): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
   if (!w.api) return // the fallback runs first and sets this; guard defensively
+  // Report the real app version (injected from package.json by vite.web.config) so
+  // the status bar shows it — the fallback returns '' (no Electron `app.getVersion`).
+  const version = (import.meta.env as unknown as { VITE_SNAKIE_VERSION?: string }).VITE_SNAKIE_VERSION ?? ''
+  w.api.appVersion = (async () => version) as unknown as Window['api']['appVersion']
   // The device namespace multiplexes the WASM simulator + real Web Serial boards.
   w.api.device = createWebDeviceRouter() as unknown as Window['api']['device']
   // Serve the bundled MicroPython library sources so the "Install library" banner

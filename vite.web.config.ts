@@ -1,8 +1,14 @@
+import { readFileSync } from 'fs'
 import { resolve } from 'path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { standardPartsPlugin } from './vite-plugin-standard-parts'
+
+// The desktop app reads its version from Electron's `app.getVersion()`; the web
+// build has no Electron, so inject package.json's version at build time and serve
+// it from the web `appVersion()` (install-web-api.ts) so the status bar shows it.
+const pkgVersion = (JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf8')) as { version: string }).version
 
 /**
  * STANDALONE WEB BUILD of the Snakie renderer — epic #267 (Snakie for Web), Phase W0.
@@ -28,7 +34,8 @@ export default defineConfig({
   base: '/',
   // Statically flag the web build so `main.tsx` installs the WASM device backend.
   define: {
-    'import.meta.env.VITE_SNAKIE_WEB': 'true'
+    'import.meta.env.VITE_SNAKIE_WEB': 'true',
+    'import.meta.env.VITE_SNAKIE_VERSION': JSON.stringify(pkgVersion)
   },
   // The sim runs in a module Worker that imports the WASM, so worker bundles need
   // ES format (the default 'iife' can't code-split the dynamic WASM import).
