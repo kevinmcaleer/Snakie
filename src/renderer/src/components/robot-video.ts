@@ -108,3 +108,63 @@ export async function recordCanvasMp4(
     return null
   }
 }
+
+import { GIFEncoder, quantize, applyPalette } from 'gifenc'
+
+/**
+ * Universal fallback (#499): record the animation as an animated GIF — the one
+ * format that renders on ALL platforms (macOS QuickTime/Finder can't open webm,
+ * and Electron can't encode H.264, so desktop needs this). Frames come
+ * compositor-side (captureStream + MediaStreamTrackProcessor → VideoFrame
+ * RGBA readback), sampled at ~15 fps and palette-quantised per frame.
+ */
+export async function recordCanvasGif(
+  canvas: HTMLCanvasElement & { captureStream?: (fps?: number) => MediaStream },
+  startAnim: (onDone: () => void) => void,
+  fps = 15
+): Promise<Blob | null> {
+  if (typeof MediaStreamTrackProcessor === 'undefined' || !canvas.captureStream) return null
+  const stream = canvas.captureStream(30)
+  const track = stream.getVideoTracks()[0]
+  const processor = new MediaStreamTrackProcessor({ track })
+  const reader = processor.readable.getReader()
+  const gif = GIFEncoder()
+  const frameGapUs = 1_000_000 / fps
+  let nextStamp = -1
+  let frames = 0
+  let stopped = false
+  const pump = (async (): Promise<void> => {
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done || stopped) {
+        value?.close()
+        return
+      }
+      try {
+        if (value.timestamp >= nextStamp) {
+          nextStamp = value.timestamp + frameGapUs
+          const w = value.displayWidth
+          const h = value.displayHeight
+          const buf = new Uint8ClampedArray(value.allocationSize({ format: 'RGBA' }))
+          await value.copyTo(buf, { format: 'RGBA' })
+          const palette = quantize(buf, 256)
+          const index = applyPalette(buf, palette)
+          gif.writeFrame(index, w, h, { palette, delay: Math.round(1000 / fps) })
+          frames++
+        }
+      } catch {
+        /* an unconvertible frame — skip it */
+      } finally {
+        value.close()
+      }
+    }
+  })()
+  await new Promise<void>((res) => startAnim(res))
+  stopped = true
+  await reader.cancel().catch(() => undefined)
+  await pump.catch(() => undefined)
+  track.stop()
+  if (frames === 0) return null
+  gif.finish()
+  return new Blob([gif.bytes()], { type: 'image/gif' })
+}

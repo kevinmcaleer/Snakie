@@ -13,8 +13,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   optional full-orbit camera move that ends where it started, and a single smooth
   zoom-to-fit so nothing jitters), and 🎬 records the animation straight off the
   canvas to a **proper progressive mp4** (WebCodecs + mp4-muxer, faststart moov —
-  opens in QuickTime/Finder), falling back to a codec-probed MediaRecorder capture
-  (.webm) where H.264 encoding isn't available. Parts travel **straight
+  opens in QuickTime/Finder), falling back to an **animated GIF** — the one
+  format that renders on macOS, Windows, Linux AND the web — where H.264 encoding
+  isn't available (Electron), with a codec-probed .webm as last resort. Parts travel **straight
   world-space lines along their original joint normals** (falling back to the joint's
   origin direction, then centre-out) — nested links compensate for their moving
   parents so nothing drifts diagonally, and the base stays anchored. Separation is

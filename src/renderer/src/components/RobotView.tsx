@@ -115,7 +115,7 @@ import {
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
 import { explodeDirections, explodeProgress, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
-import { recordCanvasMp4 } from './robot-video'
+import { recordCanvasMp4, recordCanvasGif } from './robot-video'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2667,7 +2667,16 @@ export function RobotView({
         download(mp4, 'mp4')
         return true
       }
-      // FALLBACK (no H.264 encoder, e.g. stock Electron): MediaRecorder, but only
+      // FALLBACK: animated GIF — renders on ALL four platforms (macOS Quick
+      // Time can't open webm; Electron can't encode H.264 for mp4).
+      const gif = await recordCanvasGif(canvas, (onDone) =>
+        animateExplode(target, orbit, 5200, () => window.setTimeout(onDone, 150))
+      )
+      if (gif && gif.size > 2048) {
+        download(gif, 'gif')
+        return true
+      }
+      // LAST RESORT: MediaRecorder, but only
       // with a codec PROVEN to encode here — isTypeSupported alone lies, which
       // produced empty "not a valid file" downloads.
       const mime = await probeRecorderMime(canvas)

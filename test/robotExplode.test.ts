@@ -164,3 +164,24 @@ describe('video container validation', () => {
     expect(RECORD_MIME_CANDIDATES).not.toContain('video/mp4')
   })
 })
+
+import { GIFEncoder, quantize, applyPalette } from 'gifenc'
+
+describe('gif fallback encoder', () => {
+  it('produces a real GIF89a file from RGBA frames', () => {
+    const gif = GIFEncoder()
+    const w = 8, h = 8
+    for (let f = 0; f < 3; f++) {
+      const rgba = new Uint8ClampedArray(w * h * 4)
+      for (let i = 0; i < w * h; i++) {
+        rgba[i * 4] = f * 80; rgba[i * 4 + 1] = 120; rgba[i * 4 + 2] = 200; rgba[i * 4 + 3] = 255
+      }
+      const palette = quantize(rgba, 256)
+      gif.writeFrame(applyPalette(rgba, palette), w, h, { palette, delay: 66 })
+    }
+    gif.finish()
+    const bytes = gif.bytes()
+    expect(String.fromCharCode(...bytes.slice(0, 6))).toBe('GIF89a')
+    expect(bytes[bytes.length - 1]).toBe(0x3b) // GIF trailer
+  })
+})
