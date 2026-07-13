@@ -121,10 +121,10 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc'
 export async function recordCanvasGif(
   canvas: HTMLCanvasElement & { captureStream?: (fps?: number) => MediaStream },
   startAnim: (onDone: () => void) => void,
-  fps = 15
+  fps = 30
 ): Promise<Blob | null> {
   if (typeof MediaStreamTrackProcessor === 'undefined' || !canvas.captureStream) return null
-  const stream = canvas.captureStream(30)
+  const stream = canvas.captureStream(fps)
   const track = stream.getVideoTracks()[0]
   const processor = new MediaStreamTrackProcessor({ track })
   const reader = processor.readable.getReader()
@@ -133,6 +133,14 @@ export async function recordCanvasGif(
   let nextStamp = -1
   let frames = 0
   let stopped = false
+  // VideoFrame native pixel formats vary (often BGRA from the compositor, which
+  // showed red as blue when read as RGBA). Rasterising through a 2D canvas lets
+  // the browser do the colour conversion — getImageData is ALWAYS RGBA.
+  let scratch: OffscreenCanvas | null = null
+  let scratchCtx: OffscreenCanvasRenderingContext2D | null = null
+  // ONE palette for the whole clip (from the first frame): per-frame palettes
+  // flicker as colours re-quantise every frame, which read as jitter.
+  let palette: number[][] | null = null
   const pump = (async (): Promise<void> => {
     for (;;) {
       const { value, done } = await reader.read()
@@ -145,10 +153,15 @@ export async function recordCanvasGif(
           nextStamp = value.timestamp + frameGapUs
           const w = value.displayWidth
           const h = value.displayHeight
-          const buf = new Uint8ClampedArray(value.allocationSize({ format: 'RGBA' }))
-          await value.copyTo(buf, { format: 'RGBA' })
-          const palette = quantize(buf, 256)
-          const index = applyPalette(buf, palette)
+          if (!scratch || scratch.width !== w || scratch.height !== h) {
+            scratch = new OffscreenCanvas(w, h)
+            scratchCtx = scratch.getContext('2d', { willReadFrequently: true })
+          }
+          if (!scratchCtx) continue
+          scratchCtx.drawImage(value, 0, 0)
+          const rgba = scratchCtx.getImageData(0, 0, w, h).data
+          if (!palette) palette = quantize(rgba, 256)
+          const index = applyPalette(rgba, palette)
           gif.writeFrame(index, w, h, { palette, delay: Math.round(1000 / fps) })
           frames++
         }

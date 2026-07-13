@@ -15,7 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   canvas to a **proper progressive mp4** (WebCodecs + mp4-muxer, faststart moov —
   opens in QuickTime/Finder), falling back to an **animated GIF** — the one
   format that renders on macOS, Windows, Linux AND the web — where H.264 encoding
-  isn't available (Electron), with a codec-probed .webm as last resort. Parts travel **straight
+  isn't available (Electron), with a codec-probed .webm as last resort. GIF frames
+  rasterise through a 2D canvas (correct colours on every pixel format — no more
+  red-as-blue) at 30 fps with one shared palette, so playback is smooth and stable. Parts travel **straight
   world-space lines along their original joint normals** (falling back to the joint's
   origin direction, then centre-out) — nested links compensate for their moving
   parents so nothing drifts diagonally, and the base stays anchored. Separation is
