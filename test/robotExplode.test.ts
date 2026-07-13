@@ -143,3 +143,24 @@ describe('resolveOverlaps', () => {
     expect(t.get('arm')).toBeGreaterThan(0)
   })
 })
+
+import { videoBytesLookValid, extForMime, RECORD_MIME_CANDIDATES } from '../src/renderer/src/components/robot-explode'
+
+describe('video container validation', () => {
+  const pad = (head: number[], len = 4096): Uint8Array => {
+    const b = new Uint8Array(len)
+    b.set(head)
+    return b
+  }
+  it('accepts real containers, rejects empty/garbage output', () => {
+    expect(videoBytesLookValid(pad([0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70]), 'video/mp4;codecs=avc1')).toBe(true)
+    expect(videoBytesLookValid(pad([0x1a, 0x45, 0xdf, 0xa3]), 'video/webm;codecs=vp9')).toBe(true)
+    expect(videoBytesLookValid(pad([0, 0, 0, 0, 0, 0, 0, 0]), 'video/mp4')).toBe(false)
+    expect(videoBytesLookValid(new Uint8Array(100), 'video/webm')).toBe(false) // near-empty
+  })
+  it('extensions follow the mime; no bare video/mp4 candidate', () => {
+    expect(extForMime('video/mp4;codecs=avc1.42E01E')).toBe('mp4')
+    expect(extForMime('video/webm;codecs=vp9')).toBe('webm')
+    expect(RECORD_MIME_CANDIDATES).not.toContain('video/mp4')
+  })
+})

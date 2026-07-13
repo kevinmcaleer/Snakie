@@ -184,3 +184,73 @@ export function resolveOverlaps(parts: PartBox[], margin: number, maxIter = 80):
   }
   return travel
 }
+
+/** Candidate recording mimes, best first. Bare `video/mp4` is deliberately
+ *  absent: engines can accept it while lacking a working encoder (Electron has
+ *  no H.264), yielding empty/invalid files — codecs must be explicit. */
+export const RECORD_MIME_CANDIDATES: readonly string[] = [
+  'video/mp4;codecs=avc1.42E01E',
+  'video/mp4;codecs=avc1.4D401E',
+  'video/webm;codecs=h264',
+  'video/webm;codecs=vp9',
+  'video/webm;codecs=vp8',
+  'video/webm'
+]
+
+/** File extension for a (negotiated) recorder mime. */
+export const extForMime = (mime: string): string => (mime.includes('mp4') ? 'mp4' : 'webm')
+
+/** Container sanity check: mp4 must carry `ftyp` at offset 4; webm/mkv the
+ *  EBML magic. Empty/near-empty output (a codec that silently failed) → false. */
+export function videoBytesLookValid(bytes: Uint8Array, mime: string): boolean {
+  if (bytes.length < 2048) return false
+  if (mime.includes('mp4')) {
+    return bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70 // 'ftyp'
+  }
+  return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3 // EBML
+}
+
+/**
+ * Prove a mime actually RECORDS on this engine: a short silent capture of the
+ * canvas (frames forced via requestFrame so a static scene still yields data),
+ * validated by {@link videoBytesLookValid}. `isTypeSupported` alone lies —
+ * it can accept a container whose encoder is missing.
+ */
+export async function probeRecorderMime(
+  canvas: HTMLCanvasElement & { captureStream?: (fps?: number) => MediaStream },
+  candidates: readonly string[] = RECORD_MIME_CANDIDATES,
+  probeMs = 350
+): Promise<string | null> {
+  if (typeof MediaRecorder === 'undefined' || !canvas.captureStream) return null
+  for (const mime of candidates) {
+    try {
+      if (!MediaRecorder.isTypeSupported(mime)) continue
+      const stream = canvas.captureStream(30)
+      const track = stream.getVideoTracks()[0] as MediaStreamTrack & { requestFrame?: () => void }
+      const rec = new MediaRecorder(stream, { mimeType: mime })
+      const chunks: Blob[] = []
+      rec.ondataavailable = (e): void => {
+        if (e.data.size) chunks.push(e.data)
+      }
+      const done = new Promise<void>((res) => {
+        rec.onstop = (): void => res()
+        rec.onerror = (): void => res()
+      })
+      rec.start()
+      const kick = window.setInterval(() => track.requestFrame?.(), 40)
+      await new Promise((res) => window.setTimeout(res, probeMs))
+      window.clearInterval(kick)
+      rec.stop()
+      await done
+      stream.getTracks().forEach((t) => t.stop())
+      const blob = new Blob(chunks, { type: mime })
+      if (blob.size > 0) {
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        if (videoBytesLookValid(bytes, mime)) return mime
+      }
+    } catch {
+      /* constructor/encoder rejected this combo — try the next */
+    }
+  }
+  return null
+}

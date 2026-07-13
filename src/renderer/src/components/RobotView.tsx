@@ -114,7 +114,8 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
-import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors, hierarchyDepths, resolveOverlaps, type PartBox } from './robot-explode'
+import { explodeDirections, explodeProgress, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
+import { recordCanvasMp4 } from './robot-video'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2626,37 +2627,58 @@ export function RobotView({
     }
     // Record the animation straight off the WebGL canvas. Prefers a real .mp4
     // (Chromium ≥126 muxes mp4 in MediaRecorder); falls back to .webm.
-    const recordExplode = (target: number, orbit: boolean): Promise<boolean> =>
-      new Promise((res) => {
-        const canvas = renderer.domElement as HTMLCanvasElement & {
-          captureStream?: (fps?: number) => MediaStream
-        }
-        const mimeInfo = pickVideoMime(
-          (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
-        )
-        if (!mimeInfo || !canvas.captureStream) {
-          res(false)
-          return
-        }
-        const stream = canvas.captureStream(30)
-        const rec = new MediaRecorder(stream, { mimeType: mimeInfo.mime, videoBitsPerSecond: 8_000_000 })
+    const recordExplode = async (target: number, orbit: boolean): Promise<boolean> => {
+      const canvas = renderer.domElement as HTMLCanvasElement & {
+        captureStream?: (fps?: number) => MediaStream
+      }
+      const download = (blob: Blob, ext: string): void => {
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = `robot-explode.${ext}`
+        a.click()
+        window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+      }
+      // PRIMARY: a proper progressive mp4 via WebCodecs + mp4-muxer (faststart
+      // moov up front — QuickTime/Finder-friendly, unlike MediaRecorder's
+      // fragmented mp4 which players report as "not a valid file").
+      const mp4 = await recordCanvasMp4(canvas, (onDone) =>
+        animateExplode(target, orbit, 5200, () => window.setTimeout(onDone, 150))
+      )
+      if (mp4 && videoBytesLookValid(new Uint8Array(await mp4.arrayBuffer()), 'video/mp4')) {
+        download(mp4, 'mp4')
+        return true
+      }
+      // FALLBACK (no H.264 encoder, e.g. stock Electron): MediaRecorder, but only
+      // with a codec PROVEN to encode here — isTypeSupported alone lies, which
+      // produced empty "not a valid file" downloads.
+      const mime = await probeRecorderMime(canvas)
+      if (!mime || !canvas.captureStream) return false
+      return new Promise<boolean>((res) => {
+        const stream = canvas.captureStream!(30)
+        const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 })
+        // Name the file from the recorder's ACTUAL negotiated type, not the ask.
+        const actualMime = rec.mimeType || mime
         const chunks: Blob[] = []
         rec.ondataavailable = (e): void => {
           if (e.data.size) chunks.push(e.data)
         }
         rec.onstop = (): void => {
           stream.getTracks().forEach((tr) => tr.stop())
-          const blob = new Blob(chunks, { type: mimeInfo.mime })
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(blob)
-          a.download = `robot-explode.${mimeInfo.ext}`
-          a.click()
-          window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
-          res(true)
+          const blob = new Blob(chunks, { type: actualMime })
+          void blob.arrayBuffer().then((buf) => {
+            // Final sanity check — never hand the user a broken file.
+            if (!videoBytesLookValid(new Uint8Array(buf), actualMime)) {
+              res(false)
+              return
+            }
+            download(blob, extForMime(actualMime))
+            res(true)
+          })
         }
         rec.start()
         animateExplode(target, orbit, 5200, () => window.setTimeout(() => rec.stop(), 150))
       })
+    }
 
     zoomApiRef.current = {
       in: () => applyZoom(camera.zoom * 1.2),
