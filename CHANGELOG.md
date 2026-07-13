@@ -21,7 +21,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   **depth-weighted** — parts nearest the root move least, parts at the end of the
   hierarchy move most — so chains that share a direction still pull apart. A
   build-time **overlap solve** nudges any parts that would clash at the final
-  position further along their own lines until everything is clear.
+  position further along their own lines until everything is clear. The camera
+  backs off to a zoom-to-fit computed from the **actual fully-exploded bounds**
+  (and re-fits when you release the slider), so parts never leave the shot.
 - **Course splash lists its lessons.** Opening a course in the Learn panel now shows
   the lesson titles (each one clickable to jump straight to it) above the Start button.
 - **Wires are labelled with their variable name in the board view (#498).** Each

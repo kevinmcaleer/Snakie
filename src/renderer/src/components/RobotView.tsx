@@ -2434,6 +2434,7 @@ export function RobotView({
     type ExplodeEntry = { obj: THREE.Object3D; base: THREE.Vector3; dir: THREE.Vector3 }
     let explodeEntries: ExplodeEntry[] | null = null
     let explodeScale = 0.5
+    let explodeFitRadius = 0 // world radius of the FULLY exploded bounds (for framing)
     let explodeRaf = 0
     const buildExplode = (): ExplodeEntry[] => {
       const r = robotRef.current
@@ -2548,6 +2549,21 @@ export function RobotView({
           z: (pb.dir.z * t) / explodeScale
         })
       }
+      // Exact FINAL bounds (post-solve): union of each part's AABB translated to
+      // its full-explode position — drives the camera fit so nothing leaves shot.
+      const fitBox = new THREE.Box3()
+      for (const pb of partBoxes) {
+        const t = solvedTravel.get(pb.name) ?? 0
+        const cx = pb.centre.x + pb.dir.x * t
+        const cy = pb.centre.y + pb.dir.y * t
+        const cz = pb.centre.z + pb.dir.z * t
+        fitBox.expandByPoint(new THREE.Vector3(cx - pb.half.x, cy - pb.half.y, cz - pb.half.z))
+        fitBox.expandByPoint(new THREE.Vector3(cx + pb.half.x, cy + pb.half.y, cz + pb.half.z))
+      }
+      if (!fitBox.isEmpty()) {
+        const fs = fitBox.getSize(new THREE.Vector3())
+        explodeFitRadius = Math.max(fs.x, fs.y, fs.z, 0.1) * 0.5
+      }
       // Straight world-space paths: subtract each link's nearest exploded
       // ancestor's direction so nested links don't diagonally track a moving parent.
       const net = compensateAncestors(desired, parentOf)
@@ -2585,7 +2601,10 @@ export function RobotView({
       const r0 = robotRef.current ? new THREE.Box3().setFromObject(robotRef.current).getSize(new THREE.Vector3()) : null
       const baseR = r0 ? Math.max(r0.x, r0.y, r0.z, 0.1) * 0.5 : 1
       if (!explodeEntries) explodeEntries = buildExplode()
-      const k = (baseR + target * explodeScale * 0.9) / baseR // fit factor for full explode
+      // Fit factor from the REAL final exploded bounds (overlap solve can push
+      // parts well past the nominal travel), lerped to the slider target + padding.
+      const fullR = explodeFitRadius > 0 ? explodeFitRadius : baseR + explodeScale
+      const k = Math.max(1, ((baseR + (fullR - baseR) * target) / baseR) * 1.12)
       const startZoom = camera.zoom
       const t0 = performance.now()
       const step = (): void => {
@@ -4505,6 +4524,7 @@ export function RobotView({
                     setExplodeF(f)
                     zoomApiRef.current?.setExplode(f)
                   }}
+                  onPointerUp={() => zoomApiRef.current?.fit()}
                   aria-label="Explosion separation"
                   title="Separation"
                 />
