@@ -12,6 +12,19 @@
  */
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 
+/** Small bottom-left watermark drawn onto every recorded frame (#499). */
+const WATERMARK = 'Made with https://app.snakie.org'
+function drawWatermark(ctx: OffscreenCanvasRenderingContext2D, w: number, h: number): void {
+  const size = Math.max(11, Math.round(w / 60))
+  ctx.font = `${size}px system-ui, sans-serif`
+  ctx.textBaseline = 'bottom'
+  ctx.lineWidth = Math.max(2, size / 5)
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)' // halo so it reads on any background
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
+  ctx.strokeText(WATERMARK, 10, h - 8)
+  ctx.fillText(WATERMARK, 10, h - 8)
+}
+
 type TrackProcessor = { readable: ReadableStream<VideoFrame> }
 declare const MediaStreamTrackProcessor:
   | (new (init: { track: MediaStreamTrack }) => TrackProcessor)
@@ -75,6 +88,9 @@ export async function recordCanvasMp4(
 
   let stopped = false
   let frameIndex = 0
+  // Frames re-composite through a 2D canvas so the watermark rides every frame.
+  const scratch = new OffscreenCanvas(width, height)
+  const sctx = scratch.getContext('2d')
   const pump = (async (): Promise<void> => {
     for (;;) {
       const { value, done } = await reader.read()
@@ -83,13 +99,17 @@ export async function recordCanvasMp4(
         return
       }
       // Backpressure: drop frames rather than ballooning the encode queue.
-      if (encoder.encodeQueueSize > 8) {
+      if (encoder.encodeQueueSize > 8 || !sctx) {
         value.close()
         continue
       }
-      encoder.encode(value, { keyFrame: frameIndex % (fps * 2) === 0 })
-      frameIndex++
+      sctx.drawImage(value, 0, 0, width, height)
+      drawWatermark(sctx, width, height)
+      const stamped = new VideoFrame(scratch, { timestamp: value.timestamp ?? 0 })
       value.close()
+      encoder.encode(stamped, { keyFrame: frameIndex % (fps * 2) === 0 })
+      frameIndex++
+      stamped.close()
     }
   })()
 
@@ -180,4 +200,47 @@ export async function recordCanvasGif(
   if (frames === 0) return null
   gif.finish()
   return new Blob([gif.bytes()], { type: 'image/gif' })
+}
+
+/**
+ * Incremental GIF sink for DETERMINISTIC (offline) frame-by-frame rendering —
+ * the caller steps the animation math itself and pushes each rendered canvas.
+ * Uniform time steps are what make the GIF read as smooth: live sampling drops
+ * frames unevenly (rAF beats vs the sample rate + encode stalls) → judder.
+ * Frames are downscaled to ≤`maxWidth` and share one first-frame palette.
+ * NOTE: 30 ms is GIF's practical minimum delay — browsers clamp <20 ms to
+ * 100 ms, so "60 fps" GIFs actually play at 10 fps.
+ */
+export function createGifSink(
+  delayMs = 30,
+  maxWidth = 960
+): { addCanvasFrame: (src: HTMLCanvasElement) => void; finish: () => Blob | null } {
+  const gif = GIFEncoder()
+  let scratch: OffscreenCanvas | null = null
+  let ctx: OffscreenCanvasRenderingContext2D | null = null
+  let palette: number[][] | null = null
+  let frames = 0
+  return {
+    addCanvasFrame(src: HTMLCanvasElement): void {
+      const scale = Math.min(1, maxWidth / Math.max(1, src.width))
+      const w = Math.max(2, Math.round(src.width * scale))
+      const h = Math.max(2, Math.round(src.height * scale))
+      if (!scratch || scratch.width !== w || scratch.height !== h) {
+        scratch = new OffscreenCanvas(w, h)
+        ctx = scratch.getContext('2d', { willReadFrequently: true })
+      }
+      if (!ctx) return
+      ctx.drawImage(src, 0, 0, w, h)
+      drawWatermark(ctx, w, h)
+      const rgba = ctx.getImageData(0, 0, w, h).data
+      if (!palette) palette = quantize(rgba, 256)
+      gif.writeFrame(applyPalette(rgba, palette), w, h, { palette, delay: delayMs })
+      frames++
+    },
+    finish(): Blob | null {
+      if (!frames) return null
+      gif.finish()
+      return new Blob([gif.bytes()], { type: 'image/gif' })
+    }
+  }
 }

@@ -115,7 +115,7 @@ import {
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
 import { explodeDirections, explodeProgress, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
-import { recordCanvasMp4, recordCanvasGif } from './robot-video'
+import { recordCanvasMp4, createGifSink } from './robot-video'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2590,47 +2590,78 @@ export function RobotView({
       if (explodeRaf) cancelAnimationFrame(explodeRaf)
       explodeRaf = 0
     }
+    // One frame of the explode animation at progress t — shared by the LIVE
+    // rAF animation and the DETERMINISTIC offline GIF renderer.
+    type ExplodeCamCtx = { startPos: THREE.Vector3; startTarget: THREE.Vector3; startZoom: number; k: number }
+    const stepExplodeFrame = (t: number, target: number, orbit: boolean, c: ExplodeCamCtx): void => {
+      applyExplode(target * explodeProgress(t))
+      // Smooth fit: ease the zoom-out over the first 12% and back over the last 12%.
+      const leg = 0.12
+      const fitT = t < leg ? t / leg : t > 1 - leg ? (1 - t) / leg : 1
+      const s = 1 + (c.k - 1) * fitT
+      if (camera instanceof THREE.PerspectiveCamera) {
+        const dir = c.startPos.clone().sub(c.startTarget)
+        const base = orbit ? orbitPosition(t, c.startPos, c.startTarget) : null
+        if (base) {
+          const bp = new THREE.Vector3(base.x, base.y, base.z).sub(c.startTarget).multiplyScalar(s).add(c.startTarget)
+          camera.position.copy(bp)
+        } else {
+          camera.position.copy(c.startTarget).addScaledVector(dir.normalize(), dir.length() * s)
+        }
+      } else {
+        if (orbit) {
+          const p = orbitPosition(t, c.startPos, c.startTarget)
+          camera.position.set(p.x, p.y, p.z)
+        }
+        applyZoom(c.startZoom / s)
+      }
+      camera.lookAt(c.startTarget)
+    }
+    const explodeCamCtx = (target: number): ExplodeCamCtx => {
+      const startPos = camera.position.clone()
+      const startTarget = controls.target.clone()
+      const r0 = robotRef.current ? new THREE.Box3().setFromObject(robotRef.current).getSize(new THREE.Vector3()) : null
+      const baseR = r0 ? Math.max(r0.x, r0.y, r0.z, 0.1) * 0.5 : 1
+      if (!explodeEntries) explodeEntries = buildExplode()
+      const fullR = explodeFitRadius > 0 ? explodeFitRadius : baseR + explodeScale
+      const k = Math.max(1, ((baseR + (fullR - baseR) * target) / baseR) * 1.12)
+      return { startPos, startTarget, startZoom: camera.zoom, k }
+    }
+    // DETERMINISTIC GIF render (#499): step the animation math at perfectly
+    // uniform intervals, render + capture each frame synchronously. Immune to
+    // rAF beats / encode stalls, so playback is even — live sampling judders.
+    const renderExplodeGif = async (target: number, orbit: boolean): Promise<Blob | null> => {
+      stopExplodeAnim()
+      anim = null
+      const c = explodeCamCtx(target)
+      const DELAY_MS = 30 // GIF's practical minimum — browsers clamp <20ms to 100ms
+      const n = Math.round(5200 / DELAY_MS)
+      const sink = createGifSink(DELAY_MS)
+      for (let i = 0; i < n; i++) {
+        stepExplodeFrame(i / (n - 1), target, orbit, c)
+        renderer.render(scene, camera)
+        sink.addCanvasFrame(renderer.domElement)
+        // Keep the UI alive — yield between bursts of frames.
+        if (i % 6 === 5) await new Promise((res) => window.setTimeout(res, 0))
+      }
+      applyExplode(0)
+      camera.position.copy(c.startPos)
+      if (!(camera instanceof THREE.PerspectiveCamera)) applyZoom(c.startZoom)
+      camera.lookAt(c.startTarget)
+      return sink.finish()
+    }
     // Animate 0→f→0 (eased out-and-back). One smooth pre-fit zoom (scaled to the
     // fully-exploded radius) instead of per-frame re-fitting, so there's no
     // zoom jitter; the optional orbit is a full 2π turn ending at the start.
     const animateExplode = (target: number, orbit: boolean, durationMs = 4200, onDone?: () => void): void => {
       stopExplodeAnim()
       anim = null // cancel any in-flight flyTo — we own the camera now
-      const startPos = camera.position.clone()
-      const startTarget = controls.target.clone()
-      const r0 = robotRef.current ? new THREE.Box3().setFromObject(robotRef.current).getSize(new THREE.Vector3()) : null
-      const baseR = r0 ? Math.max(r0.x, r0.y, r0.z, 0.1) * 0.5 : 1
-      if (!explodeEntries) explodeEntries = buildExplode()
-      // Fit factor from the REAL final exploded bounds (overlap solve can push
-      // parts well past the nominal travel), lerped to the slider target + padding.
-      const fullR = explodeFitRadius > 0 ? explodeFitRadius : baseR + explodeScale
-      const k = Math.max(1, ((baseR + (fullR - baseR) * target) / baseR) * 1.12)
-      const startZoom = camera.zoom
+      const ctx = explodeCamCtx(target)
+      const { startPos, startTarget, startZoom } = ctx
       const t0 = performance.now()
       const step = (): void => {
         const t = Math.min(1, (performance.now() - t0) / durationMs)
-        applyExplode(target * explodeProgress(t))
-        // Smooth fit: ease the zoom-out over the first 12% and back over the last 12%.
-        const leg = 0.12
-        const fitT = t < leg ? t / leg : t > 1 - leg ? (1 - t) / leg : 1
-        const s = 1 + (k - 1) * fitT
-        if (camera instanceof THREE.PerspectiveCamera) {
-          const dir = startPos.clone().sub(startTarget)
-          const base = orbit ? orbitPosition(t, startPos, startTarget) : null
-          if (base) {
-            const bp = new THREE.Vector3(base.x, base.y, base.z).sub(startTarget).multiplyScalar(s).add(startTarget)
-            camera.position.copy(bp)
-          } else {
-            camera.position.copy(startTarget).addScaledVector(dir.normalize(), dir.length() * s)
-          }
-        } else {
-          if (orbit) {
-            const p = orbitPosition(t, startPos, startTarget)
-            camera.position.set(p.x, p.y, p.z)
-          }
-          applyZoom(startZoom / s)
-        }
-        camera.lookAt(startTarget)
+        stepExplodeFrame(t, target, orbit, ctx)
         if (t < 1) {
           explodeRaf = requestAnimationFrame(step)
         } else {
@@ -2669,9 +2700,7 @@ export function RobotView({
       }
       // FALLBACK: animated GIF — renders on ALL four platforms (macOS Quick
       // Time can't open webm; Electron can't encode H.264 for mp4).
-      const gif = await recordCanvasGif(canvas, (onDone) =>
-        animateExplode(target, orbit, 5200, () => window.setTimeout(onDone, 150))
-      )
+      const gif = await renderExplodeGif(target, orbit)
       if (gif && gif.size > 2048) {
         download(gif, 'gif')
         return true
