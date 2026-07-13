@@ -114,7 +114,7 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
-import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors, hierarchyDepths } from './robot-explode'
+import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors, hierarchyDepths, resolveOverlaps, type PartBox } from './robot-explode'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2516,6 +2516,36 @@ export function RobotView({
         dir.normalize()
         const w = maxDepth > 0 ? Math.max(0.3, (depths.get(name) ?? 1) / maxDepth) : 1
         desired.set(name, { x: dir.x * w, y: dir.y * w, z: dir.z * w })
+      }
+      // Overlap solve (#499): at the FINAL exploded position no two parts may
+      // intersect — any clashing pair pushes the deeper part further along its
+      // own line until clear. Solved on rest-pose world AABBs (translate-only).
+      const partBoxes: PartBox[] = []
+      for (const [name, obj] of objs) {
+        const c = centroids.get(name)
+        const d = desired.get(name)
+        if (!c || !d) continue
+        const box = new THREE.Box3().setFromObject(obj)
+        const half = box.getSize(new THREE.Vector3()).multiplyScalar(0.5)
+        const len = Math.hypot(d.x, d.y, d.z)
+        partBoxes.push({
+          name,
+          centre: c,
+          half: { x: half.x, y: half.y, z: half.z },
+          dir: len > 1e-9 ? { x: d.x / len, y: d.y / len, z: d.z / len } : { x: 0, y: 0, z: 0 },
+          travel: len * explodeScale,
+          depth: depths.get(name) ?? 0
+        })
+      }
+      const solvedTravel = resolveOverlaps(partBoxes, Math.max(size.x, size.y, size.z) * 0.015)
+      for (const pb of partBoxes) {
+        const t = solvedTravel.get(pb.name)
+        if (t === undefined) continue
+        desired.set(pb.name, {
+          x: (pb.dir.x * t) / explodeScale,
+          y: (pb.dir.y * t) / explodeScale,
+          z: (pb.dir.z * t) / explodeScale
+        })
       }
       // Straight world-space paths: subtract each link's nearest exploded
       // ancestor's direction so nested links don't diagonally track a moving parent.

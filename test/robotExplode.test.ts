@@ -114,3 +114,32 @@ describe('hierarchyDepths', () => {
     expect(net.get('hand')!.x).toBeCloseTo(0.5, 6) // > 0 → hand pulls AWAY from arm
   })
 })
+
+import { resolveOverlaps, type PartBox } from '../src/renderer/src/components/robot-explode'
+
+describe('resolveOverlaps', () => {
+  const box = (name: string, cx: number, dirx: number, travel: number, depth: number): PartBox => ({
+    name,
+    centre: { x: cx, y: 0, z: 0 },
+    half: { x: 1, y: 1, z: 1 },
+    dir: { x: dirx, y: 0, z: 0 },
+    travel,
+    depth
+  })
+  it('pushes the deeper part further until clear; leaves clear pairs alone', () => {
+    // Both travel +x the same amount → they'd land overlapping; hand (deeper) must go further.
+    const parts = [box('arm', 0, 1, 2, 1), box('hand', 1, 1, 2, 2)]
+    const t = resolveOverlaps(parts, 0.1)
+    expect(t.get('arm')).toBe(2) // untouched
+    expect(t.get('hand')! - t.get('arm')!).toBeGreaterThanOrEqual(1) // separated by ≥ half sums
+    // final gap check
+    const gap = Math.abs(1 + t.get('hand')! - (0 + t.get('arm')!))
+    expect(gap).toBeGreaterThanOrEqual(2) // half.x + half.x
+  })
+  it('never moves anchored parts', () => {
+    const parts = [box('base', 0, 0, 0, 0), box('arm', 0.5, 1, 0, 1)]
+    const t = resolveOverlaps(parts, 0.1)
+    expect(t.get('base')).toBe(0)
+    expect(t.get('arm')).toBeGreaterThan(0)
+  })
+})

@@ -132,3 +132,55 @@ export function hierarchyDepths(parentOf: Map<string, string | null>): Map<strin
   for (const n of parentOf.keys()) depth(n, new Set())
   return out
 }
+
+/** A part's rest-pose world AABB + its straight explode line. */
+export interface PartBox {
+  name: string
+  centre: Vec3
+  half: Vec3
+  dir: Vec3 // unit direction (zero for anchored parts)
+  travel: number // world-units travel at full explode
+  depth: number
+}
+
+/**
+ * Nudge travels so no two parts overlap at the FINAL exploded position: for
+ * each intersecting pair, the deeper part is pushed further along its own
+ * (fixed) line. AABBs are world-aligned at rest and only translate, so the
+ * test is exact; iteration is bounded.
+ */
+export function resolveOverlaps(parts: PartBox[], margin: number, maxIter = 80): Map<string, number> {
+  const travel = new Map(parts.map((p) => [p.name, p.travel]))
+  const pos = (p: PartBox): Vec3 => {
+    const t = travel.get(p.name) ?? 0
+    return { x: p.centre.x + p.dir.x * t, y: p.centre.y + p.dir.y * t, z: p.centre.z + p.dir.z * t }
+  }
+  const overlaps = (a: PartBox, b: PartBox): boolean => {
+    const pa = pos(a)
+    const pb = pos(b)
+    return (
+      Math.abs(pa.x - pb.x) < a.half.x + b.half.x + margin &&
+      Math.abs(pa.y - pb.y) < a.half.y + b.half.y + margin &&
+      Math.abs(pa.z - pb.z) < a.half.z + b.half.z + margin
+    )
+  }
+  const movable = (p: PartBox): boolean => Math.hypot(p.dir.x, p.dir.y, p.dir.z) > 1e-9
+  const step = Math.max(margin, 1e-6) * 2
+  for (let it = 0; it < maxIter; it++) {
+    let bumped = false
+    for (let i = 0; i < parts.length; i++) {
+      for (let j = i + 1; j < parts.length; j++) {
+        const a = parts[i]
+        const b = parts[j]
+        if (!overlaps(a, b)) continue
+        // Push the deeper movable part further out (tie → the second one).
+        const cand = [a, b].filter(movable).sort((x, y) => y.depth - x.depth)[0]
+        if (!cand) continue // both anchored — nothing to do
+        travel.set(cand.name, (travel.get(cand.name) ?? 0) + step)
+        bumped = true
+      }
+    }
+    if (!bumped) break
+  }
+  return travel
+}
