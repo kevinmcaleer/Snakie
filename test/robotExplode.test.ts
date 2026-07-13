@@ -64,3 +64,25 @@ describe('robot-explode', () => {
     expect(pickVideoMime(() => false)).toBeNull()
   })
 })
+
+import { compensateAncestors } from '../src/renderer/src/components/robot-explode'
+
+describe('compensateAncestors', () => {
+  it('children subtract their nearest exploded ancestor so world paths stay straight', () => {
+    const desired = new Map([
+      ['base', { x: 0, y: 0, z: 0 }],
+      ['arm', { x: 1, y: 0, z: 0 }],
+      ['hand', { x: 1, y: 1, z: 0 }]
+    ])
+    const parentOf = new Map<string, string | null>([
+      ['base', null],
+      ['arm', 'base'],
+      ['hand', 'arm']
+    ])
+    const net = compensateAncestors(desired, parentOf)
+    expect(net.get('base')).toEqual({ x: 0, y: 0, z: 0 })
+    expect(net.get('arm')).toEqual({ x: 1, y: 0, z: 0 })
+    // hand's own world displacement = arm(1,0,0) + net(0,1,0) = desired (1,1,0) ✓
+    expect(net.get('hand')).toEqual({ x: 0, y: 1, z: 0 })
+  })
+})

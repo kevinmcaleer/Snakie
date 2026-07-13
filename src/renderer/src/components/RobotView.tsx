@@ -114,7 +114,7 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
-import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime } from './robot-explode'
+import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors } from './robot-explode'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2454,10 +2454,70 @@ export function RobotView({
         centroids.set(name, { x: c.x, y: c.y, z: c.z })
         objs.set(name, link)
       }
-      const dirs = explodeDirections(centroids, { x: centre.x, y: centre.y, z: centre.z })
+      const fallback = explodeDirections(centroids, { x: centre.x, y: centre.y, z: centre.z })
+      // Reverse map + nearest exploded ANCESTOR per link (for the straight-line
+      // compensation — see compensateAncestors in robot-explode.ts).
+      const nameByObj = new Map<THREE.Object3D, string>()
+      for (const [name, obj] of objs) nameByObj.set(obj, name)
+      const parentOf = new Map<string, string | null>()
       for (const [name, obj] of objs) {
-        const d = dirs.get(name)
+        let p = obj.parent
+        let found: string | null = null
+        while (p && p !== (r as unknown as THREE.Object3D)) {
+          const pn = nameByObj.get(p)
+          if (pn) {
+            found = pn
+            break
+          }
+          p = p.parent
+        }
+        parentOf.set(name, found)
+      }
+      // DESIRED world direction per link, frozen at build time: the KRF joint
+      // normal (the face the part was joined on) → the joint's origin offset →
+      // centroid-from-centre fallback. The base link stays anchored so parts
+      // read as coming OFF the chassis in straight lines.
+      const desired = new Map<string, { x: number; y: number; z: number }>()
+      for (const [name, obj] of objs) {
+        if (parentOf.get(name) === null && obj.parent === (r as unknown as THREE.Object3D)) {
+          desired.set(name, { x: 0, y: 0, z: 0 })
+          continue
+        }
+        let dir: THREE.Vector3 | null = null
+        const joint = obj.parent as (THREE.Object3D & { isURDFJoint?: boolean }) | null
+        if (joint?.isURDFJoint) {
+          const parentLink = joint.parent
+          const q = new THREE.Quaternion()
+          parentLink?.getWorldQuaternion(q)
+          const n = jointNormalRef.current[joint.name]
+          if (n) dir = new THREE.Vector3(n[0], n[1], n[2]).applyQuaternion(q)
+          else if (joint.position.lengthSq() > 1e-10) dir = joint.position.clone().applyQuaternion(q)
+          // A normal/origin can point either way — flip toward "away from the
+          // parent part" so exploding always separates.
+          if (dir && dir.lengthSq() > 1e-10) {
+            const pName = parentOf.get(name)
+            const c = centroids.get(name)
+            const pc = pName ? centroids.get(pName) : undefined
+            if (c && pc) {
+              const away = new THREE.Vector3(c.x - pc.x, c.y - pc.y, c.z - pc.z)
+              if (away.lengthSq() > 1e-10 && dir.dot(away) < 0) dir.negate()
+            }
+          }
+        }
+        if (!dir || dir.lengthSq() < 1e-10) {
+          const f = fallback.get(name)
+          dir = f ? new THREE.Vector3(f.x, f.y, f.z) : new THREE.Vector3(0, 1, 0)
+        }
+        dir.normalize()
+        desired.set(name, { x: dir.x, y: dir.y, z: dir.z })
+      }
+      // Straight world-space paths: subtract each link's nearest exploded
+      // ancestor's direction so nested links don't diagonally track a moving parent.
+      const net = compensateAncestors(desired, parentOf)
+      for (const [name, obj] of objs) {
+        const d = net.get(name)
         if (!d) continue
+        if (Math.hypot(d.x, d.y, d.z) < 1e-9 && parentOf.get(name) === null) continue // anchored base
         const q = new THREE.Quaternion()
         obj.parent?.getWorldQuaternion(q)
         const localDir = new THREE.Vector3(d.x, d.y, d.z).applyQuaternion(q.invert())

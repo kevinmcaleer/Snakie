@@ -12,7 +12,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   drives the separation, ▶ plays an eased out-and-back explosion animation (with an
   optional full-orbit camera move that ends where it started, and a single smooth
   zoom-to-fit so nothing jitters), and 🎬 records the animation straight off the
-  canvas to an mp4 (webm where mp4 muxing isn't available).
+  canvas to an mp4 (webm where mp4 muxing isn't available). Parts travel **straight
+  world-space lines along their original joint normals** (falling back to the joint's
+  origin direction, then centre-out) — nested links compensate for their moving
+  parents so nothing drifts diagonally, and the base stays anchored.
 - **Course splash lists its lessons.** Opening a course in the Learn panel now shows
   the lesson titles (each one clickable to jump straight to it) above the Start button.
 - **Wires are labelled with their variable name in the board view (#498).** Each

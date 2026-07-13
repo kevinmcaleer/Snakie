@@ -89,3 +89,24 @@ export function pickVideoMime(
   }
   return null
 }
+
+/**
+ * Make every part travel a STRAIGHT world-space line along its own direction.
+ * Links are nested in the URDF tree, so a child's local offset rides on top of
+ * its (moving) ancestors — uncompensated, its world path bends diagonally as it
+ * tracks the exploding parent. Subtracting the nearest exploded ancestor's
+ * desired direction from each link's own yields the local direction whose
+ * accumulated world displacement is exactly `desired · f` for every link.
+ */
+export function compensateAncestors(
+  desired: Map<string, Vec3>,
+  parentOf: Map<string, string | null>
+): Map<string, Vec3> {
+  const out = new Map<string, Vec3>()
+  for (const [name, d] of desired) {
+    const p = parentOf.get(name) ?? null
+    const pd = p != null ? desired.get(p) : undefined
+    out.set(name, pd ? { x: d.x - pd.x, y: d.y - pd.y, z: d.z - pd.z } : { ...d })
+  }
+  return out
+}
