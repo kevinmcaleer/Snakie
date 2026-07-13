@@ -110,3 +110,25 @@ export function compensateAncestors(
   }
   return out
 }
+
+/**
+ * Tree depth per link (root = 0). Explode magnitudes scale with depth so parts
+ * nearest the root move least and leaves move most — which also guarantees that
+ * a chain sharing one direction still SEPARATES (the child always travels
+ * further than its parent along the same line).
+ */
+export function hierarchyDepths(parentOf: Map<string, string | null>): Map<string, number> {
+  const out = new Map<string, number>()
+  const depth = (n: string, seen: Set<string>): number => {
+    const memo = out.get(n)
+    if (memo !== undefined) return memo
+    if (seen.has(n)) return 0 // cycle guard — malformed trees stay finite
+    seen.add(n)
+    const p = parentOf.get(n) ?? null
+    const d = p == null ? 0 : depth(p, seen) + 1
+    out.set(n, d)
+    return d
+  }
+  for (const n of parentOf.keys()) depth(n, new Set())
+  return out
+}

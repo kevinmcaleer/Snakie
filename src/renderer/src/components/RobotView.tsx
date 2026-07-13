@@ -114,7 +114,7 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
-import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors } from './robot-explode'
+import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime, compensateAncestors, hierarchyDepths } from './robot-explode'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -2473,6 +2473,11 @@ export function RobotView({
         }
         parentOf.set(name, found)
       }
+      // Depth-scaled magnitudes: parts nearest the root move least, leaves move
+      // most — so a chain sharing one direction still separates part-from-part.
+      const depths = hierarchyDepths(parentOf)
+      let maxDepth = 0
+      for (const dv of depths.values()) maxDepth = Math.max(maxDepth, dv)
       // DESIRED world direction per link, frozen at build time: the KRF joint
       // normal (the face the part was joined on) → the joint's origin offset →
       // centroid-from-centre fallback. The base link stays anchored so parts
@@ -2509,7 +2514,8 @@ export function RobotView({
           dir = f ? new THREE.Vector3(f.x, f.y, f.z) : new THREE.Vector3(0, 1, 0)
         }
         dir.normalize()
-        desired.set(name, { x: dir.x, y: dir.y, z: dir.z })
+        const w = maxDepth > 0 ? Math.max(0.3, (depths.get(name) ?? 1) / maxDepth) : 1
+        desired.set(name, { x: dir.x * w, y: dir.y * w, z: dir.z * w })
       }
       // Straight world-space paths: subtract each link's nearest exploded
       // ancestor's direction so nested links don't diagonally track a moving parent.

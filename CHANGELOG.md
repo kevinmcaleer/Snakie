@@ -15,7 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   canvas to an mp4 (webm where mp4 muxing isn't available). Parts travel **straight
   world-space lines along their original joint normals** (falling back to the joint's
   origin direction, then centre-out) — nested links compensate for their moving
-  parents so nothing drifts diagonally, and the base stays anchored.
+  parents so nothing drifts diagonally, and the base stays anchored. Separation is
+  **depth-weighted** — parts nearest the root move least, parts at the end of the
+  hierarchy move most — so chains that share a direction still pull apart.
 - **Course splash lists its lessons.** Opening a course in the Learn panel now shows
   the lesson titles (each one clickable to jump straight to it) above the Start button.
 - **Wires are labelled with their variable name in the board view (#498).** Each

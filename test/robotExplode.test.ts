@@ -86,3 +86,31 @@ describe('compensateAncestors', () => {
     expect(net.get('hand')).toEqual({ x: 0, y: 1, z: 0 })
   })
 })
+
+import { hierarchyDepths } from '../src/renderer/src/components/robot-explode'
+
+describe('hierarchyDepths', () => {
+  it('roots are 0, each level deeper +1', () => {
+    const d = hierarchyDepths(
+      new Map([
+        ['base', null],
+        ['arm', 'base'],
+        ['hand', 'arm'],
+        ['leg', 'base']
+      ])
+    )
+    expect(d.get('base')).toBe(0)
+    expect(d.get('arm')).toBe(1)
+    expect(d.get('hand')).toBe(2)
+    expect(d.get('leg')).toBe(1)
+  })
+  it('depth-weighted same-direction chains still separate after compensation', () => {
+    // arm + hand explode along the SAME direction; weights 0.5 / 1.0.
+    const desired = new Map([
+      ['arm', { x: 0.5, y: 0, z: 0 }],
+      ['hand', { x: 1, y: 0, z: 0 }]
+    ])
+    const net = compensateAncestors(desired, new Map([['arm', null], ['hand', 'arm']]))
+    expect(net.get('hand')!.x).toBeCloseTo(0.5, 6) // > 0 → hand pulls AWAY from arm
+  })
+})
