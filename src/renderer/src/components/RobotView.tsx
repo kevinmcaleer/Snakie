@@ -114,6 +114,7 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
+import { explodeDirections, explodeProgress, orbitPosition, pickVideoMime } from './robot-explode'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
 import { onServoDrive } from './servo-drive-bus'
@@ -257,8 +258,19 @@ export function RobotView({
     toggle: () => void
     home: () => void
     focusLink: (name: string) => void
+    /** Exploded view (#499): set the separation factor (0 = assembled). */
+    setExplode: (f: number) => void
+    /** Animate 0→f→0 with easing; optionally orbit the camera one full turn. */
+    animateExplode: (f: number, orbit: boolean, onDone?: () => void) => void
+    /** Record the explode animation off the canvas → downloads an mp4/webm. */
+    recordExplode: (f: number, orbit: boolean) => Promise<boolean>
   } | null>(null)
   const [zoomPct, setZoomPct] = useState(100)
+  // Exploded view UI (#499): popover open, separation slider, orbit toggle, busy.
+  const [explodeOpen, setExplodeOpen] = useState(false)
+  const [explodeF, setExplodeF] = useState(0.6)
+  const [explodeOrbit, setExplodeOrbit] = useState(true)
+  const [explodeBusy, setExplodeBusy] = useState(false)
   // Camera projection — PERSPECTIVE is the default view (the ViewCube dropdown
   // toggles it). Changing it rebuilds the 3-D effect + re-frames.
   const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
@@ -2414,6 +2426,142 @@ export function RobotView({
       const wholeRadius = Math.max(whole.x, whole.y, whole.z, radius) * 0.5
       flyTo(centre.clone().addScaledVector(dir, dist), centre, 1, radius * 1.6, wholeRadius * 2)
     }
+    // ── Exploded view (#499) ──────────────────────────────────────────────
+    // Each link is translated outward from the assembly centre along its own
+    // world-space direction (converted into its parent's local space so joint
+    // hierarchies don't skew it). f=0 restores the assembled pose exactly.
+    type ExplodeEntry = { obj: THREE.Object3D; base: THREE.Vector3; dir: THREE.Vector3 }
+    let explodeEntries: ExplodeEntry[] | null = null
+    let explodeScale = 0.5
+    let explodeRaf = 0
+    const buildExplode = (): ExplodeEntry[] => {
+      const r = robotRef.current
+      const entries: ExplodeEntry[] = []
+      if (!r) return entries
+      r.updateMatrixWorld(true)
+      const whole = new THREE.Box3().setFromObject(r)
+      if (whole.isEmpty() || !Number.isFinite(whole.min.x)) return entries
+      const centre = whole.getCenter(new THREE.Vector3())
+      const size = whole.getSize(new THREE.Vector3())
+      explodeScale = Math.max(size.x, size.y, size.z, 0.1) * 0.55
+      const links = (r as unknown as { links?: Record<string, THREE.Object3D> }).links ?? {}
+      const centroids = new Map<string, { x: number; y: number; z: number }>()
+      const objs = new Map<string, THREE.Object3D>()
+      for (const [name, link] of Object.entries(links)) {
+        const box = new THREE.Box3().setFromObject(link)
+        if (box.isEmpty() || !Number.isFinite(box.min.x)) continue
+        const c = box.getCenter(new THREE.Vector3())
+        centroids.set(name, { x: c.x, y: c.y, z: c.z })
+        objs.set(name, link)
+      }
+      const dirs = explodeDirections(centroids, { x: centre.x, y: centre.y, z: centre.z })
+      for (const [name, obj] of objs) {
+        const d = dirs.get(name)
+        if (!d) continue
+        const q = new THREE.Quaternion()
+        obj.parent?.getWorldQuaternion(q)
+        const localDir = new THREE.Vector3(d.x, d.y, d.z).applyQuaternion(q.invert())
+        entries.push({ obj, base: obj.position.clone(), dir: localDir })
+      }
+      return entries
+    }
+    const applyExplode = (f: number): void => {
+      if (f > 0 && !explodeEntries) explodeEntries = buildExplode()
+      if (!explodeEntries) return
+      for (const e of explodeEntries) {
+        e.obj.position.copy(e.base).addScaledVector(e.dir, f * explodeScale)
+      }
+      if (f === 0) explodeEntries = null // re-measure next time (pose may change)
+    }
+    const stopExplodeAnim = (): void => {
+      if (explodeRaf) cancelAnimationFrame(explodeRaf)
+      explodeRaf = 0
+    }
+    // Animate 0→f→0 (eased out-and-back). One smooth pre-fit zoom (scaled to the
+    // fully-exploded radius) instead of per-frame re-fitting, so there's no
+    // zoom jitter; the optional orbit is a full 2π turn ending at the start.
+    const animateExplode = (target: number, orbit: boolean, durationMs = 4200, onDone?: () => void): void => {
+      stopExplodeAnim()
+      anim = null // cancel any in-flight flyTo — we own the camera now
+      const startPos = camera.position.clone()
+      const startTarget = controls.target.clone()
+      const r0 = robotRef.current ? new THREE.Box3().setFromObject(robotRef.current).getSize(new THREE.Vector3()) : null
+      const baseR = r0 ? Math.max(r0.x, r0.y, r0.z, 0.1) * 0.5 : 1
+      if (!explodeEntries) explodeEntries = buildExplode()
+      const k = (baseR + target * explodeScale * 0.9) / baseR // fit factor for full explode
+      const startZoom = camera.zoom
+      const t0 = performance.now()
+      const step = (): void => {
+        const t = Math.min(1, (performance.now() - t0) / durationMs)
+        applyExplode(target * explodeProgress(t))
+        // Smooth fit: ease the zoom-out over the first 12% and back over the last 12%.
+        const leg = 0.12
+        const fitT = t < leg ? t / leg : t > 1 - leg ? (1 - t) / leg : 1
+        const s = 1 + (k - 1) * fitT
+        if (camera instanceof THREE.PerspectiveCamera) {
+          const dir = startPos.clone().sub(startTarget)
+          const base = orbit ? orbitPosition(t, startPos, startTarget) : null
+          if (base) {
+            const bp = new THREE.Vector3(base.x, base.y, base.z).sub(startTarget).multiplyScalar(s).add(startTarget)
+            camera.position.copy(bp)
+          } else {
+            camera.position.copy(startTarget).addScaledVector(dir.normalize(), dir.length() * s)
+          }
+        } else {
+          if (orbit) {
+            const p = orbitPosition(t, startPos, startTarget)
+            camera.position.set(p.x, p.y, p.z)
+          }
+          applyZoom(startZoom / s)
+        }
+        camera.lookAt(startTarget)
+        if (t < 1) {
+          explodeRaf = requestAnimationFrame(step)
+        } else {
+          explodeRaf = 0
+          applyExplode(0)
+          camera.position.copy(startPos)
+          if (!(camera instanceof THREE.PerspectiveCamera)) applyZoom(startZoom)
+          camera.lookAt(startTarget)
+          onDone?.()
+        }
+      }
+      explodeRaf = requestAnimationFrame(step)
+    }
+    // Record the animation straight off the WebGL canvas. Prefers a real .mp4
+    // (Chromium ≥126 muxes mp4 in MediaRecorder); falls back to .webm.
+    const recordExplode = (target: number, orbit: boolean): Promise<boolean> =>
+      new Promise((res) => {
+        const canvas = renderer.domElement as HTMLCanvasElement & {
+          captureStream?: (fps?: number) => MediaStream
+        }
+        const mimeInfo = pickVideoMime(
+          (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
+        )
+        if (!mimeInfo || !canvas.captureStream) {
+          res(false)
+          return
+        }
+        const stream = canvas.captureStream(30)
+        const rec = new MediaRecorder(stream, { mimeType: mimeInfo.mime, videoBitsPerSecond: 8_000_000 })
+        const chunks: Blob[] = []
+        rec.ondataavailable = (e): void => {
+          if (e.data.size) chunks.push(e.data)
+        }
+        rec.onstop = (): void => {
+          stream.getTracks().forEach((tr) => tr.stop())
+          const blob = new Blob(chunks, { type: mimeInfo.mime })
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(blob)
+          a.download = `robot-explode.${mimeInfo.ext}`
+          a.click()
+          window.setTimeout(() => URL.revokeObjectURL(a.href), 10_000)
+          res(true)
+        }
+        rec.start()
+        animateExplode(target, orbit, 5200, () => window.setTimeout(() => rec.stop(), 150))
+      })
+
     zoomApiRef.current = {
       in: () => applyZoom(camera.zoom * 1.2),
       out: () => applyZoom(camera.zoom / 1.2),
@@ -2424,7 +2572,10 @@ export function RobotView({
       home: () => {
         if (robotRef.current) frameModel(robotRef.current, true)
       },
-      focusLink
+      focusLink,
+      setExplode: applyExplode,
+      animateExplode: (f, orbit, onDone) => animateExplode(f, orbit, undefined, onDone),
+      recordExplode
     }
     // Every camera change (orbit / pan / wheel-zoom) updates the % readout AND records
     // the view, so an orbited view survives an editor-tab switch (#399) — not just the
@@ -4009,6 +4160,7 @@ export function RobotView({
       themeObserver.disconnect()
       controls.removeEventListener('change', onControlsChange)
       controls.removeEventListener('start', onControlsStart)
+      stopExplodeAnim()
       zoomApiRef.current = null
       if (viewCube) {
         viewCube.dom.remove()
@@ -4204,6 +4356,82 @@ export function RobotView({
                 />
               </svg>
             </button>
+            <span className="robotview__zsep" aria-hidden="true" />
+            {/* Exploded view (#499): separation slider + eased animation + video. */}
+            <button
+              type="button"
+              className={`robotview__zbtn${explodeOpen ? ' is-active' : ''}`}
+              onClick={() =>
+                setExplodeOpen((v) => {
+                  if (v) zoomApiRef.current?.setExplode(0) // closing re-assembles
+                  return !v
+                })
+              }
+              title="Exploded view"
+              aria-label="Exploded view"
+              aria-pressed={explodeOpen}
+            >
+              💥
+            </button>
+            {explodeOpen && (
+              <div className="robotview__explode" role="group" aria-label="Exploded view controls">
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={explodeF}
+                  disabled={explodeBusy}
+                  onChange={(e) => {
+                    const f = Number(e.target.value)
+                    setExplodeF(f)
+                    zoomApiRef.current?.setExplode(f)
+                  }}
+                  aria-label="Explosion separation"
+                  title="Separation"
+                />
+                <label className="robotview__explode-orbit" title="Orbit the camera during the animation">
+                  <input
+                    type="checkbox"
+                    checked={explodeOrbit}
+                    disabled={explodeBusy}
+                    onChange={(e) => setExplodeOrbit(e.target.checked)}
+                  />
+                  orbit
+                </label>
+                <button
+                  type="button"
+                  className="robotview__zbtn"
+                  disabled={explodeBusy}
+                  onClick={() => {
+                    setExplodeBusy(true)
+                    zoomApiRef.current?.animateExplode(explodeF || 0.6, explodeOrbit, () => setExplodeBusy(false))
+                  }}
+                  title="Animate the explosion (eased, out and back)"
+                  aria-label="Animate explosion"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  className="robotview__zbtn"
+                  disabled={explodeBusy}
+                  onClick={() => {
+                    setExplodeBusy(true)
+                    void zoomApiRef.current
+                      ?.recordExplode(explodeF || 0.6, explodeOrbit)
+                      .then((ok) => {
+                        setExplodeBusy(false)
+                        setSavingLabel(ok ? 'explosion video saved' : "couldn't record a video here")
+                      })
+                  }}
+                  title="Save the explosion animation as a video (mp4/webm)"
+                  aria-label="Save explosion video"
+                >
+                  🎬
+                </button>
+              </div>
+            )}
           </div>
         )}
         {showPanel && buildOpen && (

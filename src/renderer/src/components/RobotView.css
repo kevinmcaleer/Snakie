@@ -383,3 +383,29 @@
   color: #2c2a24;
   background: rgba(246, 242, 232, 0.85);
 }
+
+/* Exploded view (#499) — inline cluster on the zoom toolbar. Theme tokens only
+   so it reads in both the dark and light (skeuomorph) skins. */
+.robotview__explode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+.robotview__explode input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+.robotview__explode-orbit {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.robotview__zbtn.is-active {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
