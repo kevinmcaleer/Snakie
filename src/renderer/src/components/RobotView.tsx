@@ -2606,7 +2606,11 @@ export function RobotView({
           const bp = new THREE.Vector3(base.x, base.y, base.z).sub(c.startTarget).multiplyScalar(s).add(c.startTarget)
           camera.position.copy(bp)
         } else {
-          camera.position.copy(c.startTarget).addScaledVector(dir.normalize(), dir.length() * s)
+          // Read the length BEFORE normalize() — it mutates the vector, which
+          // left length()=1 and teleported the camera ~1 unit from the target
+          // (the robot vanished when orbit was unticked).
+          const dist = dir.length()
+          camera.position.copy(c.startTarget).addScaledVector(dir.normalize(), dist * s)
         }
       } else {
         if (orbit) {
