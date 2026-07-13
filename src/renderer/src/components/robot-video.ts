@@ -18,10 +18,8 @@ function drawWatermark(ctx: OffscreenCanvasRenderingContext2D, w: number, h: num
   const size = Math.max(11, Math.round(w / 60))
   ctx.font = `${size}px system-ui, sans-serif`
   ctx.textBaseline = 'bottom'
-  ctx.lineWidth = Math.max(2, size / 5)
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)' // halo so it reads on any background
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)'
-  ctx.strokeText(WATERMARK, 10, h - 8)
+  // Plain black text — no stroke/halo (the outlined version read oddly).
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'
   ctx.fillText(WATERMARK, 10, h - 8)
 }
 
