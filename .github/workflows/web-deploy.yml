@@ -39,6 +39,9 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build:web
+        env:
+          # Bakes the post-only feedback key into the bundle so web bug reports work.
+          SNAKIE_FEEDBACK_KEY: ${{ secrets.SNAKIE_FEEDBACK_KEY }}
       - name: Publish to app.snakie.org
         uses: peaceiris/actions-gh-pages@v4
         with:

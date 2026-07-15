@@ -17,6 +17,7 @@ import { createWebFsApi } from './web-fs'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
+import { createWebFeedbackApi } from './web-feedback'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
 export function installWebApi(): void {
@@ -26,6 +27,15 @@ export function installWebApi(): void {
   // the status bar shows it — the fallback returns '' (no Electron `app.getVersion`).
   const version = (import.meta.env as unknown as { VITE_SNAKIE_VERSION?: string }).VITE_SNAKIE_VERSION ?? ''
   w.api.appVersion = (async () => version) as unknown as Window['api']['appVersion']
+  // Real bug reporting (#513): submissions post straight to the feedback API
+  // (key baked in at build time; CSP allowlists the endpoint), and diagnostics
+  // report the web build — no more "Snakie undefined · undefined undefined".
+  const fb = createWebFeedbackApi(version)
+  w.api.feedback = fb.feedback as unknown as Window['api']['feedback']
+  w.api.diagnostics = fb.diagnostics as unknown as Window['api']['diagnostics']
+  // Window capture needs the Electron main process — return "no windows" so the
+  // Report Bug panel degrades cleanly instead of hitting the deep stub.
+  w.api.captureScreenshot = (async () => []) as unknown as Window['api']['captureScreenshot']
   // External links (docs.snakie.org, etc.) open in a new browser tab — the Electron
   // `shell.openExternal` has no web equivalent, so the fallback was a silent no-op.
   w.api.openExternal = (async (url: string) => {

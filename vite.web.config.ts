@@ -35,7 +35,11 @@ export default defineConfig({
   // Statically flag the web build so `main.tsx` installs the WASM device backend.
   define: {
     'import.meta.env.VITE_SNAKIE_WEB': 'true',
-    'import.meta.env.VITE_SNAKIE_VERSION': JSON.stringify(pkgVersion)
+    'import.meta.env.VITE_SNAKIE_VERSION': JSON.stringify(pkgVersion),
+    // Shared feedback app key (same CI secret as the desktop builds) so the web
+    // app can post bug reports. Post-only + rate-limited + Cloudflare-fronted on
+    // the server, so shipping it in the bundle is an accepted trade-off (#513).
+    'import.meta.env.VITE_SNAKIE_FEEDBACK_KEY': JSON.stringify(process.env.SNAKIE_FEEDBACK_KEY || '')
   },
   // The sim runs in a module Worker that imports the WASM, so worker bundles need
   // ES format (the default 'iife' can't code-split the dynamic WASM import).
@@ -123,7 +127,7 @@ export default defineConfig({
           /content="default-src 'self';[^"]*"/,
           `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
             `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
-            `font-src 'self' data:; connect-src 'self'"`
+            `font-src 'self' data:; connect-src 'self' https://projects.kevsrobots.com"`
         )
       }
     }

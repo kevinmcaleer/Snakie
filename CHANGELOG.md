@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Bug reporting works on the web app (#513).** The Report Bug panel on
+  app.snakie.org now posts real reports to the feedback service (the same
+  endpoint, message format and size caps as the desktop app), and its
+  diagnostics line shows the web build's version + browser instead of
+  "Snakie undefined · undefined undefined". The post-only app key is baked in
+  at deploy time; the endpoint is rate-limited and Cloudflare-fronted.
+
 ## [0.30.0] - 2026-07-13
 
 ### Added
