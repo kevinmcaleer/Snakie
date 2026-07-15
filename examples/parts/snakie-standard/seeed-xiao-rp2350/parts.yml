@@ -3,11 +3,16 @@ name: Seeed Studio XIAO RP2350
 description: RP2350 dual Cortex-M33 @150MHz — XIAO form factor
 manufacturer: Seeed Studio
 family: Microcontroller
-mcu: RP2350
+tags:
+  - rp2350
+  - xiao
+  - seeed
+  - microcontroller
 package: SMD
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.0
+version: 0.1.3
+mcu: RP2350
 pcbColor: "#101216"
 aspect: 0.848
 dimensions:
@@ -15,38 +20,270 @@ dimensions:
   height: 21
 shape:
   kind: rect
-  cornerRadius: 1.5
-tags:
-  - rp2350
-  - xiao
-  - seeed
-  - microcontroller
-# XIAO form factor (21 x 17.8 mm): USB-C at top, 7 castellated pads down each
-# long edge. Header GPIO map is shared across XIAO RP2040/RP2350 (Seeed keeps
-# them pin-compatible): D4/D5 = I2C1, D6/D7 = UART0, D8/D9/D10 = SPI0, D0-D3 =
-# ADC0-3. Silkscreen/permission: imagery courtesy of Seeed Studio.
-onboardLeds:
-  - { kind: neopixel, gpio: 22, x: 0.5, y: 0.42 }
-ledLabel: "25"
-shapes:
-  - { kind: rect, x: 0.30, y: 0.02, w: 0.40, h: 0.11, fill: '#b8bcc4', label: 'USB-C' }
-  - { kind: rect, x: 0.30, y: 0.34, w: 0.40, h: 0.20, fill: '#1c2227', label: 'RP2350' }
+  cornerRadius: 0
 headers:
   - edge: left
     pins:
-      - { name: D0, type: io, number: 1, gpio: 26, capabilities: [digital, pwm, adc], signals: { pwm: A, adc: 0 }, buses: { adc: 0 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.26 }
-      - { name: D1, type: io, number: 2, gpio: 27, capabilities: [digital, pwm, adc], signals: { pwm: B, adc: 1 }, buses: { adc: 1 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.3667 }
-      - { name: D2, type: io, number: 3, gpio: 28, capabilities: [digital, pwm, adc], signals: { pwm: A, adc: 2 }, buses: { adc: 2 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.4733 }
-      - { name: D3, type: io, number: 4, gpio: 29, capabilities: [digital, pwm, adc], signals: { pwm: B, adc: 3 }, buses: { adc: 3 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.58 }
-      - { name: D4, type: io, number: 5, gpio: 6, capabilities: [digital, pwm, i2c], signals: { pwm: A, i2c: SDA }, buses: { i2c: 1 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.6867 }
-      - { name: D5, type: io, number: 6, gpio: 7, capabilities: [digital, pwm, i2c], signals: { pwm: B, i2c: SCL }, buses: { i2c: 1 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.7933 }
-      - { name: D6, type: io, number: 7, gpio: 0, capabilities: [digital, pwm, uart], signals: { pwm: A, uart: TX }, buses: { uart: 0 }, shape: castellated, castellated: true, rotation: 180, x: 0.09, y: 0.9 }
+      - name: D0
+        type: io
+        number: 1
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: A
+        buses:
+          adc: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.215619093951057
+      - name: D1
+        type: io
+        number: 2
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: B
+        buses:
+          adc: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.32800393533145683
+      - name: D2
+        type: io
+        number: 3
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: A
+        buses:
+          adc: 2
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.43748422061695774
+      - name: D3
+        type: io
+        number: 4
+        gpio: 29
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: B
+        buses:
+          adc: 3
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.5459318003934972
+      - name: D4
+        type: io
+        number: 5
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        signals:
+          i2c: SDA
+          pwm: A
+        buses:
+          i2c: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.6536304428998162
+      - name: D5
+        type: io
+        number: 6
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+        signals:
+          i2c: SCL
+          pwm: B
+        buses:
+          i2c: 1
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.7647140948127298
+      - name: D6
+        type: io
+        number: 7
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: TX
+          pwm: A
+        buses:
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 180
+        x: 0.12587355553828086
+        y: 0.8685716516831342
   - edge: right
     pins:
-      - { name: 5V, type: pwr, number: 8, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.26 }
-      - { name: GND, type: gnd, number: 9, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.3667 }
-      - { name: 3V3, type: pwr, number: 10, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.4733 }
-      - { name: D10, type: io, number: 11, gpio: 3, capabilities: [digital, pwm, spi], signals: { pwm: B, spi: TX }, buses: { spi: 0 }, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.58 }
-      - { name: D9, type: io, number: 12, gpio: 4, capabilities: [digital, pwm, spi], signals: { pwm: A, spi: RX }, buses: { spi: 0 }, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.6867 }
-      - { name: D8, type: io, number: 13, gpio: 2, capabilities: [digital, pwm, spi], signals: { pwm: A, spi: SCK }, buses: { spi: 0 }, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.7933 }
-      - { name: D7, type: io, number: 14, gpio: 1, capabilities: [digital, pwm, spi, uart], signals: { pwm: B, spi: CSn, uart: RX }, buses: { spi: 0, uart: 0 }, shape: castellated, castellated: true, rotation: 0, x: 0.91, y: 0.9 }
+      - name: 5V
+        type: pwr
+        number: 8
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.21612967996036306
+      - name: GND
+        type: gnd
+        number: 9
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.32800393533145683
+      - name: 3V3
+        type: pwr
+        number: 10
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.43748422061695774
+      - name: D10
+        type: io
+        number: 11
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: TX
+          pwm: B
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.5459318003934972
+      - name: D9
+        type: io
+        number: 12
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: RX
+          pwm: A
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.6536304428998162
+      - name: D8
+        type: io
+        number: 13
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: SCK
+          pwm: A
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.7647140948127298
+      - name: D7
+        type: io
+        number: 14
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - uart
+        signals:
+          spi: CSn
+          uart: RX
+          pwm: B
+        buses:
+          spi: 0
+          uart: 0
+        castellated: true
+        shape: castellated
+        rotation: 0
+        x: 0.897801248634878
+        y: 0.8685716516831342
+shapes:
+  - kind: rect
+    x: 0.3
+    y: 0.02
+    label: USB-C
+    fill: "#b8bcc4"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    w: 0.4
+    h: 0.11
+  - kind: rect
+    x: 0.182273969631359
+    y: 0.35850769042968766
+    label: RP2350
+    fill: "#1c2227"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    w: 0.635452060737282
+    h: 0.546341256534352
+onboardLeds:
+  - kind: neopixel
+    x: 0.8170988104316627
+    y: 0.14613188799689797
+    gpio: 22
+  - kind: single
+    x: 0.2142065140244509
+    y: 0.13346391565659466
+ledLabel: "25"
+image: image.png
+imageLayer:
+  x: -0.6344096863892246
+  y: -0.24575128695544057
+  w: 2.3168637369613494
+  h: 1.4728633756397151
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: false
