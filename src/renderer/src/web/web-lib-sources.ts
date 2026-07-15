@@ -25,3 +25,19 @@ export const INSTRUMENTS_PY: string = instrumentsPy
 
 /** The `snakie` hardware umbrella that re-exports the classes (shadow-proof imports). */
 export const SNAKIE_PY: string = snakiePy
+
+/**
+ * Bundled module STUBS (`micropython/modules/*.py`) — the desktop packages this
+ * folder as an app resource for the Modules panel's `bundled`-kind installs;
+ * the web inlines the same files so hcsr04/mpu6050/neopixel_ws2812/rotary/
+ * buzzer/teleop install on app.snakie.org too (#522). Keyed by file basename.
+ */
+const stubModules = import.meta.glob('../../../../micropython/modules/*.py', {
+  query: '?raw',
+  import: 'default',
+  eager: true
+}) as Record<string, string>
+
+export const MODULE_STUBS: Record<string, string> = Object.fromEntries(
+  Object.entries(stubModules).map(([path, contents]) => [path.split('/').pop() ?? path, contents])
+)

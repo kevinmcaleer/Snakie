@@ -22,6 +22,7 @@ import {
   buildInstallSnippet
 } from '../../../main/packages/install'
 import { driverSources } from 'virtual:snakie-standard-parts'
+import { MODULE_STUBS } from './web-lib-sources'
 import { githubRawUrl } from '../lib/board-packages'
 
 const LIB_DIR = '/lib'
@@ -48,8 +49,11 @@ interface InstallResult {
   notes: string[]
 }
 
-/** Bundled driver contents by file basename (keys are `<partId>/<file>`). */
+/** Bundled contents by file basename: the `micropython/modules/` stubs (#522)
+ *  first — the same files the desktop packages — then the part-driver sources
+ *  (keys are `<partId>/<file>`). */
 function bundledSource(file: string): string | null {
+  if (MODULE_STUBS[file]) return MODULE_STUBS[file]
   for (const [key, contents] of Object.entries(driverSources)) {
     if (key.endsWith(`/${file}`) || key === file) return contents
   }

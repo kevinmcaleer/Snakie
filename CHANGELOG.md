@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **All catalog modules install on the web app (#522).** The six bundled module
+  stubs (`hcsr04`, `mpu6050`, `neopixel_ws2812`, `rotary`, `buzzer`, `teleop`)
+  are now inlined into the web build — they used to fail with *"isn't bundled
+  in the web build yet"* because only part-driver sources were carried.
+
 ## [0.32.0] - 2026-07-15
 
 ### Added
