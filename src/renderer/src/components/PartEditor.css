@@ -1224,6 +1224,82 @@
   background: var(--bg-sunken);
 }
 
+/* Background-removal popup — like the add menu but wide enough for the slider. */
+.pe__bgmenu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 12rem;
+  padding: 0.25rem;
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) + 2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.pe__bgmenu > button {
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+}
+
+.pe__bgmenu > button:hover:not(:disabled) {
+  background: var(--bg-sunken);
+}
+
+.pe__bgmenu > button.is-active {
+  color: #fff;
+  background: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pe__bgmenu > button.is-active {
+  background: #e6ab30;
+  color: #5a3d0e;
+}
+
+.pe__bgmenu > button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Tolerance slider row inside the BG popup. */
+.pe__bgtol {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.pe__bgtol input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent, #2f6b2a);
+}
+
+:root[data-theme='skeuomorph'] .pe__bgtol input[type='range'] {
+  accent-color: #9a6b1e;
+}
+
+.pe__bgtol-val {
+  flex: 0 0 auto;
+  min-width: 1.6rem;
+  text-align: right;
+  color: var(--text);
+}
+
 /* The flat list itself. */
 .pe__flat {
   list-style: none;

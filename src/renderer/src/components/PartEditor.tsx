@@ -12,6 +12,7 @@ import {
   type LayerLocks
 } from './PartCanvas'
 import { pinOutwardDir } from './part-body'
+import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
@@ -341,6 +342,10 @@ export function PartEditor({
   // locked resize keeps its true proportions. Null until known / no image.
   const [imageNativeAspect, setImageNativeAspect] = useState<number | null>(null)
   const [snap, setSnap] = useState(false)
+  // Background-removal tolerance (Euclidean RGB distance) + the pristine image so
+  // "Reset image" can undo every erase back to what was loaded this session.
+  const [bgTol, setBgTol] = useState(32)
+  const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
   const [fitSignal, setFitSignal] = useState(0)
@@ -389,6 +394,13 @@ export function PartEditor({
     }
   }, [part.imageData])
 
+  // Snapshot the pristine image the first time one is present (a re-opened part
+  // or a fresh upload), so background erasing has an original to reset to. Once
+  // captured it isn't overwritten by erases (which also patch `imageData`).
+  useEffect(() => {
+    if (part.imageData && imageOriginal === undefined) setImageOriginal(part.imageData)
+  }, [part.imageData, imageOriginal])
+
   /** The board outline aspect (w/h) — dimensions first, like the canvas. */
   const boardAspectOf = (p: PartDefinition): number =>
     p.dimensions && p.dimensions.width > 0 && p.dimensions.height > 0
@@ -424,6 +436,7 @@ export function PartEditor({
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         patch({ imageData: reader.result })
+        setImageOriginal(reader.result) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
@@ -442,8 +455,72 @@ export function PartEditor({
       delete next.imageLayer
       return next
     })
+    setImageOriginal(undefined)
+    if (tool === 'erasebg') setTool('select')
     if (selection?.type === 'image') setSelection(null)
   }
+
+  // --- background removal (#132) --------------------------------------------
+  /** Load a data-URL image, hand its pixels to `mutate`, and return a new PNG
+   *  data URL (or null on any failure). All the flood-fill ops go through this. */
+  const processImage = (
+    dataUrl: string,
+    mutate: (img: { data: Uint8ClampedArray; width: number; height: number }) => void
+  ): Promise<string | null> =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(null)
+        ctx.drawImage(img, 0, 0)
+        let data: ImageData
+        try {
+          data = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        } catch {
+          return resolve(null) // e.g. a tainted canvas
+        }
+        mutate(data)
+        ctx.putImageData(data, 0, 0)
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.onerror = () => resolve(null)
+      img.src = dataUrl
+    })
+  /** Auto: knock out the connected border background from every edge. */
+  const autoRemoveBg = async (): Promise<void> => {
+    if (!part.imageData) return
+    const out = await processImage(part.imageData, (img) => removeBackgroundFromEdges(img, bgTol))
+    if (out) {
+      patch({ imageData: out })
+      setStatus({ kind: 'info', text: 'Removed the background from the image edges. Click leftover patches to erase them.' })
+    } else setStatus({ kind: 'error', text: 'Could not process that image.' })
+  }
+  /** Click-to-erase: flood-fill the background at a clicked board point. */
+  const eraseBgAt = async (nx: number, ny: number): Promise<void> => {
+    const src = part.imageData
+    if (!src) return
+    const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
+    const v = (ny - layer.y) / (layer.h || 1)
+    if (u < 0 || u > 1 || v < 0 || v > 1) return
+    const out = await processImage(src, (img) => {
+      const px = Math.min(img.width - 1, Math.max(0, Math.round(u * img.width)))
+      const py = Math.min(img.height - 1, Math.max(0, Math.round(v * img.height)))
+      floodFillTransparent(img, [[px, py]], bgTol)
+    })
+    if (out) patch({ imageData: out })
+  }
+  /** Restore the pristine image captured on load/upload. */
+  const resetBg = (): void => {
+    if (imageOriginal) {
+      patch({ imageData: imageOriginal })
+      setStatus({ kind: 'info', text: 'Restored the original image.' })
+    }
+  }
+  const canResetBg = imageOriginal !== undefined && part.imageData !== undefined && part.imageData !== imageOriginal
   const setImageLayer = (p: Partial<ImageLayer>): void => {
     const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
     patch({ imageLayer: { ...cur, ...p } })
@@ -733,6 +810,7 @@ export function PartEditor({
                   onChange={setPart}
                   onSelect={setSelection}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
+                  onEraseImageAt={eraseBgAt}
                   onToggleGrid={() => setShowGrid((g) => !g)}
                   onToggleSnap={() => setSnap((s) => !s)}
                   resetSignal={fitSignal}
@@ -767,6 +845,11 @@ export function PartEditor({
                 onPickImage={onPickImage}
                 patch={patch}
                 removeImage={removeImage}
+                onAutoRemoveBg={autoRemoveBg}
+                onResetBg={resetBg}
+                canResetBg={canResetBg}
+                bgTol={bgTol}
+                setBgTol={setBgTol}
               />
               <Inspector
                 part={part}
@@ -805,6 +888,11 @@ export function PartEditor({
                 onPickImage={onPickImage}
                 patch={patch}
                 removeImage={removeImage}
+                onAutoRemoveBg={autoRemoveBg}
+                onResetBg={resetBg}
+                canResetBg={canResetBg}
+                bgTol={bgTol}
+                setBgTol={setBgTol}
               />
             </div>
           </>
@@ -846,6 +934,12 @@ interface LayersPanelProps {
   patch: (p: Partial<PartDefinition>) => void
   /** Remove the background image (only used by the 'layers' variant's bg row). */
   removeImage: () => void
+  /** Background-removal controls (the 'layers' variant's bg row). */
+  onAutoRemoveBg: () => void
+  onResetBg: () => void
+  canResetBg: boolean
+  bgTol: number
+  setBgTol: (v: number) => void
   /** Which sections to show: 'layers' = Components + Pins; 'board' = Mounting holes
    *  + PCB + Image. Lets the board layers sit BELOW the selection inspector. */
   variant?: 'layers' | 'board'
@@ -871,9 +965,15 @@ function LayersPanel({
   onPickImage,
   patch,
   removeImage,
+  onAutoRemoveBg,
+  onResetBg,
+  canResetBg,
+  bgTol,
+  setBgTol,
   variant = 'layers'
 }: LayersPanelProps): JSX.Element {
   const [addOpen, setAddOpen] = useState(false)
+  const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [dragRow, setDragRow] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -1154,13 +1254,79 @@ function LayersPanel({
       </div>
 
       {/* Background image — PINNED to the bottom of the stack (painted under every
-          part). Pick / replace + a remover live here (#132). */}
+          part). Pick / replace, a background eraser + a remover live here (#132). */}
       <div className="pe__layer pe__layer--bg">
         <div className="pe__layer-head">
           {eye('image')}
           <span className="pe__layer-name">Background image</span>
           <span className="pe__flathelp pe__flathelp--bg">{part.imageData ? 'photo' : 'none'}</span>
           <span className="pe__flatspacer" />
+          {part.imageData && (
+            <div className="pe__addwrap">
+              <button
+                type="button"
+                className={`pe__chip${bgMenuOpen || tool === 'erasebg' ? ' is-active' : ''}`}
+                onClick={() => setBgMenuOpen((o) => !o)}
+                aria-expanded={bgMenuOpen}
+                aria-haspopup="menu"
+                title="Remove the photo's background"
+              >
+                BG ▾
+              </button>
+              {bgMenuOpen && (
+                <>
+                  <div className="pe__addback" onClick={() => setBgMenuOpen(false)} aria-hidden />
+                  <div className="pe__bgmenu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onAutoRemoveBg()
+                      }}
+                      title="Flood-fill the background inward from every edge"
+                    >
+                      Auto remove (from edges)
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={tool === 'erasebg' ? 'is-active' : ''}
+                      onClick={() => {
+                        setTool(tool === 'erasebg' ? 'select' : 'erasebg')
+                        setBgMenuOpen(false) // close so the canvas is clickable for erasing
+                      }}
+                      title="Then click a background patch on the image to erase it"
+                    >
+                      {tool === 'erasebg' ? '✓ Click to erase (on)' : 'Click to erase a spot'}
+                    </button>
+                    <label className="pe__bgtol">
+                      <span>Tolerance</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={120}
+                        step={1}
+                        value={bgTol}
+                        onChange={(e) => setBgTol(Number(e.target.value))}
+                      />
+                      <span className="pe__bgtol-val">{bgTol}</span>
+                    </label>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={!canResetBg}
+                      onClick={() => {
+                        onResetBg()
+                      }}
+                      title="Restore the original image (undo all erasing)"
+                    >
+                      Reset image
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title={part.imageData ? 'Replace the board photo' : 'Add a board photo'}>
             {part.imageData ? 'Replace' : '＋'}
           </button>
@@ -1170,6 +1336,7 @@ function LayersPanel({
             </button>
           )}
         </div>
+        {tool === 'erasebg' && <p className="pe__hint pe__hint--muted">Erase mode: click a background patch on the image. Adjust Tolerance if it takes too much / too little.</p>}
         <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
 

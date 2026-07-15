@@ -95,6 +95,7 @@ export type CanvasTool =
   | 'rect'
   | 'circle'
   | 'cpoly'
+  | 'erasebg'
 
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
@@ -156,6 +157,10 @@ export interface PartCanvasProps {
   onSelect?: (sel: CanvasSelection) => void
   /** Surface a transient message (e.g. "can't place a pin in a hole"). */
   onNotify?: (msg: string) => void
+  /** Erase-background click: the pointer landed on the image at normalised board
+   *  coords (nx, ny) while the `erasebg` tool is active. The editor maps it to an
+   *  image pixel and flood-fills the background there. */
+  onEraseImageAt?: (nx: number, ny: number) => void
   /** Toggle the pin-spacing grid (the zoom-overlay grid button). */
   onToggleGrid?: () => void
   /** Toggle snap-to-grid (the zoom-overlay snap button). */
@@ -295,6 +300,7 @@ export function PartCanvas({
   onChange,
   onSelect,
   onNotify,
+  onEraseImageAt,
   onToggleGrid,
   onToggleSnap,
   resetSignal
@@ -1360,6 +1366,15 @@ export function PartCanvas({
 
     if (tool === 'move') {
       dragRef.current = { kind: 'pan', sel: null, startNX: nx, startNY: ny, ox: 0, oy: 0, panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
+      return
+    }
+    // Erase-background: clicking on the image flood-fills the backdrop there.
+    if (tool === 'erasebg') {
+      if (locked.image || !part.imageData) return
+      const inX = nx >= layer.x && nx <= layer.x + layer.w
+      const inY = ny >= layer.y && ny <= layer.y + layer.h
+      if (inX && inY) onEraseImageAt?.(nx, ny)
+      else onNotify?.('Click on the image to erase its background there.')
       return
     }
     // Creation tools no-op on a locked layer.
