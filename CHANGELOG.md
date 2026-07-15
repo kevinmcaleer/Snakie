@@ -18,6 +18,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   The ON BOARD list also refreshes when anything *else* installs to the board —
   a driver banner, the instruments-library update, another window — and that
   broadcast now works on the web app too (it was a silent no-op there).
+- **The Modules panel installs drivers for real on the web app (#513).** Every
+  install used to fail into a Retry button (the web backend was a stub).
+  Bundled drivers now write straight to the board's `/lib`; mip-sourced modules
+  run mip on the board itself (works on network-capable hardware over Web
+  Serial, and fails with an honest explanation on the simulator).
 
 ### Fixed
 - **Data-loss protections (#504, #505, #514).** Renaming a file to an existing

@@ -18,6 +18,7 @@ import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
+import { createWebModulesApi } from './web-modules'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
 export function installWebApi(): void {
@@ -39,6 +40,9 @@ export function installWebApi(): void {
   // Bridge it with a window event — same-window is all the web build needs.
   const MODULES_EVENT = 'snakie:modules-changed'
   const modules = (w.api.modules ?? {}) as Record<string, unknown>
+  // Real driver/library installs (#513): catalog + probe + install over the web
+  // device — the fallback stub made every Modules-panel install fail silently.
+  Object.assign(modules, createWebModulesApi())
   modules.notifyChanged = (): void => {
     window.dispatchEvent(new CustomEvent(MODULES_EVENT))
   }
