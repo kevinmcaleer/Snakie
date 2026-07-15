@@ -1020,6 +1020,7 @@ export function BoardGraph({
                     boxedPins
                     pinVariables={pinVars}
                     rotation={rotation}
+                    pinLabels="hidden"
                   />
                 ) : (
                   <Board
@@ -1071,8 +1072,25 @@ export function BoardGraph({
                     <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
                   ))}
                 </g>
-                {/* Variable-name labels over each wire (#498) — haloed so they
-                    read over the wires + board in both themes. */}
+                {/* Pin labels + variable names OVER the wires (#…): the board body
+                    was drawn under the wires with its labels hidden; re-draw ONLY
+                    the labels here so a wire never obscures a pin name/variable. */}
+                {boardPart && (
+                  <PartBody
+                    part={boardPart}
+                    box={box}
+                    boxedPins
+                    pinVariables={pinVars}
+                    rotation={rotation}
+                    pinLabels="only"
+                  />
+                )}
+                {/* Variable-name labels over each wire (#498) — haloed so they read
+                    over the wires + board in both themes. Only for the stylised
+                    fallback board: an authored part draws the variable at its pad
+                    (over the wires) via the pinLabels="only" pass above, so this
+                    would double it. */}
+                {!boardPart && (
                 <g>
                   {rows.map((r, i) => {
                     const label = r.conn.variable
@@ -1103,6 +1121,7 @@ export function BoardGraph({
                     )
                   })}
                 </g>
+                )}
               </svg>
 
               {/* Node cards (HTML, over the SVG) — one per connection. PWM/ADC

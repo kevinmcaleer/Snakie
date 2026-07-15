@@ -733,6 +733,14 @@ export interface PartBodyProps {
   capsPins?: 'all' | ReadonlySet<number>
   /** The hovered pin's flat-index — the other pins' chips dim to 40%. */
   capsHoverPin?: number | null
+  /** Which of the two paint layers to render (SVG has no z-index, so the caller
+   *  paints the body under an overlay and the labels over it):
+   *  - `'all'` (default): body + pads + pin labels + shapes, one pass.
+   *  - `'hidden'`: everything EXCEPT the pin labels/variables — the board body.
+   *  - `'only'`: ONLY the pin labels/variables — nothing else.
+   *  The node-graph draws `'hidden'` under the wires and `'only'` over them so
+   *  the wires never obscure a pin label / variable name. */
+  pinLabels?: 'all' | 'hidden' | 'only'
 }
 
 /** On-board push-button size (viewBox units) — the tactile-switch cap + base. */
@@ -897,8 +905,13 @@ export function PartBody({
   boxedPins = false,
   pinVariables,
   capsPins,
-  capsHoverPin
+  capsHoverPin,
+  pinLabels = 'all'
 }: PartBodyProps): JSX.Element {
+  // Two-layer split so a caller (the node-graph) can paint the board body under
+  // its wires and the pin labels over them.
+  const bodyOnly = pinLabels === 'hidden' // draw the board, skip the pin labels
+  const labelsOnly = pinLabels === 'only' // draw only the pin labels
   // Text-orientation/size correction for a rotated/scaled body (#180): counter the
   // caller's rotation so text is never upside down, and (pin labels only) counter
   // the scale so they read at a consistent size across parts. No-ops in the editor.
@@ -986,6 +999,8 @@ export function PartBody({
 
   return (
     <g>
+      {!labelsOnly && (
+      <>
       <defs>
         {/* Clip the image to the board outline (image sits ON the PCB). */}
         <clipPath id={clipId}>{shapeEl({})}</clipPath>
@@ -1045,8 +1060,11 @@ export function PartBody({
             strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
           />
         ))}
+      </>
+      )}
 
-      {/* Layer 3: pins (square / round / castellated / header) */}
+      {/* Layer 3: pins — pads (body layer) + their labels (overlay layer). The
+          pinLabels mode paints the pads with the body and the labels on top. */}
       {visible.pins &&
         pins.map((rp: ResolvedPin, i) => {
           // `true` boxes every pin; a Set boxes only those indices (mini board:
@@ -1106,7 +1124,8 @@ export function PartBody({
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
-              {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
+              {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
+              {!bodyOnly && (
               <g transform={labelShift}>
               {boxThis ? (
                 <g transform={boxedCounter}>
@@ -1166,12 +1185,13 @@ export function PartBody({
                   )
                 })()}
               </g>
+              )}
             </g>
           )
         })}
 
       {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
-      {visible.components &&
+      {!labelsOnly && visible.components &&
         features.map((f, i) => (
           <g key={`f${i}`} style={{ pointerEvents: 'none' }}>
             <rect x={px(f.x)} y={py(f.y)} width={f.w * box.w} height={f.h * box.h} rx={3} fill="#1c2227" stroke="#0006" />
@@ -1187,7 +1207,7 @@ export function PartBody({
         ))}
 
       {/* Layer 4b/4c: shapes + text labels in one unified z-order (so they stack). */}
-      {visible.components &&
+      {!labelsOnly && visible.components &&
         orderedComponents(part).map((c) => {
           if (c.kind === 'label') {
             const i = c.index
@@ -1264,7 +1284,7 @@ export function PartBody({
         })}
 
       {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + silk label. */}
-      {visible.components &&
+      {!labelsOnly && visible.components &&
         buttons.map((b, i) => {
           const cx = px(b.x)
           const cy = py(b.y)
@@ -1287,7 +1307,7 @@ export function PartBody({
 
       {/* Layer 4e: onboard indicator LEDs (single / RGB) — a glowing glyph + a
           "LED · GP25" / "RGB · GP18 GP19 GP20" silk label. */}
-      {visible.components &&
+      {!labelsOnly && visible.components &&
         onboardLeds.map((led, i) => {
           const cx = px(led.x)
           const cy = py(led.y)
@@ -1309,7 +1329,7 @@ export function PartBody({
         })}
 
       {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — a JST housing + label. */}
-      {visible.components &&
+      {!labelsOnly && visible.components &&
         connectors.map((conn, i) => {
           const cx = px(conn.x)
           const cy = py(conn.y)
