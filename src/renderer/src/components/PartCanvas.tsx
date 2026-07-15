@@ -21,7 +21,7 @@ import {
   nearestCenter,
   nearestPolygonEdge,
   nextComponentZ,
-  orderedComponents,
+  orderedItems,
   pasteStyle,
   pinShapeOf,
   resolvedPins,
@@ -1322,20 +1322,22 @@ export function PartCanvas({
     // component glyphs before shapes so clicking an LED selects the LED.
     // A locked layer is skipped entirely — its items can't be picked up.
     if (visible.components && !locked.components) {
-      for (let i = connectors.length - 1; i >= 0; i--)
-        if (dist(nx, ny, connectors[i].x, connectors[i].y) < HIT) return { type: 'connector', index: i }
-      for (let i = onboardLeds.length - 1; i >= 0; i--)
-        if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
-      for (let i = buttons.length - 1; i >= 0; i--)
-        if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
-      // Shapes + labels interleave by their own unified `z`; walk top-most first.
-      const ord = orderedComponents(part)
-      for (let k = ord.length - 1; k >= 0; k--) {
-        const c = ord[k]
-        if (c.kind === 'label') {
-          if (dist(nx, ny, labels[c.index].x, labels[c.index].y) < HIT * 1.4) return { type: 'label', index: c.index }
-        } else if (inShape(shapes[c.index], nx, ny)) {
-          return { type: 'shape', index: c.index }
+      // Walk the unified item z-order top-most FIRST, so a click always selects
+      // what's visually on top (an LED reordered above a shape wins, and vice
+      // versa) — the render paints this same order.
+      const items = orderedItems(part)
+      for (let k = items.length - 1; k >= 0; k--) {
+        const it = items[k]
+        if (it.kind === 'connector') {
+          if (dist(nx, ny, connectors[it.index].x, connectors[it.index].y) < HIT) return { type: 'connector', index: it.index }
+        } else if (it.kind === 'led') {
+          if (dist(nx, ny, onboardLeds[it.index].x, onboardLeds[it.index].y) < HIT) return { type: 'led', index: it.index }
+        } else if (it.kind === 'button') {
+          if (dist(nx, ny, buttons[it.index].x, buttons[it.index].y) < HIT) return { type: 'button', index: it.index }
+        } else if (it.kind === 'label') {
+          if (dist(nx, ny, labels[it.index].x, labels[it.index].y) < HIT * 1.4) return { type: 'label', index: it.index }
+        } else if (inShape(shapes[it.index], nx, ny)) {
+          return { type: 'shape', index: it.index }
         }
       }
     }
@@ -2280,7 +2282,54 @@ export function PartCanvas({
         {/* Layer 4b/4c: shapes + text labels, drawn in one unified z-order so they
             can be stacked (top of the Components list = highest z = drawn last). */}
         {visible.components &&
-          orderedComponents(part).map((c) => {
+          orderedItems(part).map((c) => {
+            if (c.kind === 'button') {
+              const i = c.index
+              const b = buttons[i]
+              const cx = px(b.x)
+              const cy = py(b.y)
+              const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
+              return (
+                <g key={`btn${i}`}>
+                  {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
+                  {b.label &&
+                    styledText({
+                      text: b.label,
+                      cx,
+                      cy: labelY,
+                      fontSize: 9,
+                      fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
+                    })}
+                </g>
+              )
+            }
+            if (c.kind === 'led') {
+              const i = c.index
+              const led = onboardLeds[i]
+              const cx = px(led.x)
+              const cy = py(led.y)
+              const sel = isSel({ type: 'led', index: i })
+              return (
+                <g key={`led${i}`}>
+                  {onboardLedGlyph(cx, cy, led, sel)}
+                  {styledText({ text: onboardLedLabel(led), cx, cy: cy + 18, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                </g>
+              )
+            }
+            if (c.kind === 'connector') {
+              const i = c.index
+              const conn = connectors[i]
+              const cx = px(conn.x)
+              const cy = py(conn.y)
+              const { h: connH } = connectorSize(conn, connPxPerMm)
+              const sel = isSel({ type: 'connector', index: i })
+              return (
+                <g key={`conn${i}`}>
+                  {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+                  {styledText({ text: connectorLabel(conn), cx, cy: cy + connH / 2 + 11, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                </g>
+              )
+            }
             if (c.kind === 'label') {
               const i = c.index
               const l = labels[i]
@@ -2354,67 +2403,8 @@ export function PartCanvas({
             )
           })}
 
-        {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + label. */}
-        {visible.components &&
-          buttons.map((b, i) => {
-            const cx = px(b.x)
-            const cy = py(b.y)
-            const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
-            return (
-              <g key={`btn${i}`}>
-                {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
-                {b.label &&
-                  styledText({
-                    text: b.label,
-                    cx,
-                    cy: labelY,
-                    fontSize: 9,
-                    fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
-                  })}
-              </g>
-            )
-          })}
-
-        {/* Layer 4e: onboard indicator LEDs (single / RGB) — glow glyph + label. */}
-        {visible.components &&
-          onboardLeds.map((led, i) => {
-            const cx = px(led.x)
-            const cy = py(led.y)
-            const sel = isSel({ type: 'led', index: i })
-            return (
-              <g key={`led${i}`}>
-                {onboardLedGlyph(cx, cy, led, sel)}
-                {styledText({
-                  text: onboardLedLabel(led),
-                  cx,
-                  cy: cy + 18,
-                  fontSize: 9,
-                  fill: sel ? '#fff' : '#cfd6dd'
-                })}
-              </g>
-            )
-          })}
-
-        {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — housing + label. */}
-        {visible.components &&
-          connectors.map((conn, i) => {
-            const cx = px(conn.x)
-            const cy = py(conn.y)
-            const { h: connH } = connectorSize(conn, connPxPerMm)
-            const sel = isSel({ type: 'connector', index: i })
-            return (
-              <g key={`conn${i}`}>
-                {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
-                {styledText({
-                  text: connectorLabel(conn),
-                  cx,
-                  cy: cy + connH / 2 + 11,
-                  fontSize: 9,
-                  fill: sel ? '#fff' : '#cfd6dd'
-                })}
-              </g>
-            )
-          })}
+        {/* Buttons / LEDs / connectors now interleave with shapes+labels in the
+            single z-ordered loop above (#130). */}
 
         {/* Selection chrome: image box + handles */}
         {interactive && selection?.type === 'image' && visible.image && !locked.image && part.imageData && (

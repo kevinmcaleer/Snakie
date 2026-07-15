@@ -142,6 +142,9 @@ export interface PartHeader {
  * `i2c` capability/signal/bus just like any other pin, alongside 3V3 / GND.
  */
 export interface PartConnector {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   /** `qwiic` (STEMMA QT — a 4-pin JST-SH I2C socket) or a generic `jst` header. */
   kind: 'qwiic' | 'jst'
   /** Silk label (defaults to `"QWIIC"` / `"JST"`). */
@@ -165,6 +168,9 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   /** Silk label (e.g. `"BOOT"`, `"RESET"`, `"USR"`). */
   label: string
   /** Normalised X within the board outline. */
@@ -184,6 +190,9 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   kind: 'single' | 'rgb' | 'neopixel'
   /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"`). */
   label?: string
