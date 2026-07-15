@@ -22,7 +22,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   install used to fail into a Retry button (the web backend was a stub).
   Bundled drivers now write straight to the board's `/lib`; mip-sourced modules
   run mip on the board itself (works on network-capable hardware over Web
-  Serial, and fails with an honest explanation on the simulator).
+  Serial, and fails with an honest explanation on the simulator). When the board
+  has no mip (the simulator), single-file GitHub modules are fetched **by the
+  browser** instead and written to `/lib` — so ssd1306/sh1106 install on the sim
+  too.
 
 ### Fixed
 - **Data-loss protections (#504, #505, #514).** Renaming a file to an existing

@@ -40,3 +40,18 @@ describe('board-packages', () => {
     expect(missing).toEqual(['mqtt', 'ssd1306'])
   })
 })
+
+import { githubRawUrl } from '../src/renderer/src/lib/board-packages'
+
+describe('githubRawUrl', () => {
+  it('resolves single-file github specs (with and without @ref)', () => {
+    expect(githubRawUrl('github:stlehmann/micropython-ssd1306/ssd1306.py')).toBe(
+      'https://raw.githubusercontent.com/stlehmann/micropython-ssd1306/HEAD/ssd1306.py'
+    )
+    expect(githubRawUrl('github:robert-hh/SH1106/sh1106.py@v1.2')).toBe(
+      'https://raw.githubusercontent.com/robert-hh/SH1106/v1.2/sh1106.py'
+    )
+    expect(githubRawUrl('umqtt.simple')).toBeNull() // index package — mip only
+    expect(githubRawUrl('github:owner/repo')).toBeNull() // whole-repo spec
+  })
+})

@@ -127,7 +127,7 @@ export default defineConfig({
           /content="default-src 'self';[^"]*"/,
           `content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; ` +
             `style-src 'self' 'unsafe-inline'; img-src 'self' data:; ` +
-            `font-src 'self' data:; connect-src 'self' https://projects.kevsrobots.com"`
+            `font-src 'self' data:; connect-src 'self' https://projects.kevsrobots.com https://raw.githubusercontent.com"`
         )
       }
     }

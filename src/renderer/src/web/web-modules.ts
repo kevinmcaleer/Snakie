@@ -22,6 +22,7 @@ import {
   buildInstallSnippet
 } from '../../../main/packages/install'
 import { driverSources } from 'virtual:snakie-standard-parts'
+import { githubRawUrl } from '../lib/board-packages'
 
 const LIB_DIR = '/lib'
 
@@ -31,8 +32,10 @@ interface InstallPlan {
   mechanism: 'writeFile' | 'mip'
   writeFile?: { path: string; contents: string }
   snippet?: string
+  mipSpec?: string
   notes: string[]
 }
+
 interface InstallProgress {
   id: string
   state: 'started' | 'note' | 'running' | 'done' | 'error'
@@ -76,7 +79,8 @@ function planFor(id: string): InstallPlan {
     importName: def.importName,
     mechanism: 'mip',
     snippet: buildInstallSnippet(def.source.spec),
-    notes: ['Installs with mip on the board itself — it needs network access (the simulator has none).']
+    mipSpec: def.source.spec,
+    notes: []
   }
 }
 
@@ -152,14 +156,55 @@ export function createWebModulesApi(): Record<string, unknown> {
           .filter((l) => l.length > 0)
           .join('\n')
           .trim()
-        emit({ id, state: ok ? 'done' : 'error', message: ok ? `Installed ${id}` : `Failed to install ${id}` })
-        if (ok) window.api.modules.notifyChanged()
-        return { id, ok, log: log || out, notes: plan.notes }
+        if (ok) {
+          emit({ id, state: 'done', message: `Installed ${id}` })
+          window.api.modules.notifyChanged()
+          return { id, ok, log: log || out, notes: plan.notes }
+        }
+        // The board has no mip / no network (e.g. the SIMULATOR) — the browser
+        // still has network, so fetch single-file GitHub specs ourselves and
+        // write them to /lib.
+        const fetched = await browserFetchInstall(plan, emit)
+        if (fetched) return fetched
+        emit({ id, state: 'error', message: `Failed to install ${id}` })
+        return { id, ok: false, log: log || out, notes: plan.notes }
       } catch (err) {
+        const fetched = await browserFetchInstall(plan, emit)
+        if (fetched) return fetched
         const msg = err instanceof Error ? err.message : String(err)
         emit({ id, state: 'error', message: `Failed to install ${id}` })
         return { id, ok: false, log: msg, notes: plan.notes }
       }
     }
+  }
+}
+
+/** Fetch a single-file GitHub mip spec in the browser and write it to /lib. */
+async function browserFetchInstall(
+  plan: InstallPlan,
+  emit: (p: InstallProgress) => void
+): Promise<InstallResult | null> {
+  const url = plan.mipSpec ? githubRawUrl(plan.mipSpec) : null
+  if (!url) return null
+  const file = url.split('/').pop() ?? `${plan.importName}.py`
+  try {
+    emit({ id: plan.id, state: 'running', message: `Board has no mip — fetching ${file} in the browser…` })
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) })
+    if (!res.ok) throw new Error(`GitHub returned HTTP ${res.status}`)
+    const contents = await res.text()
+    await window.api.device.mkdir(LIB_DIR).catch(() => undefined)
+    await window.api.device.writeFile(`${LIB_DIR}/${file}`, contents)
+    emit({ id: plan.id, state: 'done', message: `Installed ${plan.id}` })
+    window.api.modules.notifyChanged()
+    return {
+      id: plan.id,
+      ok: true,
+      log: `Board has no mip/network — fetched ${url} in the browser and wrote ${LIB_DIR}/${file}`,
+      notes: plan.notes
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    emit({ id: plan.id, state: 'note', message: `Browser fetch fallback failed: ${msg}` })
+    return null
   }
 }
