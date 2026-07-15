@@ -111,6 +111,11 @@ function PackagesTab(): JSX.Element {
   const [missing, setMissing] = useState<string[] | null>(null)
   const [scanBusy, setScanBusy] = useState(false)
 
+  // ANY surface that writes modules to the board — the driver banners, the
+  // instruments-library update flow, another window — fires the modules
+  // broadcast. Re-read /lib so ON BOARD reflects installs we didn't make.
+  useEffect(() => window.api.modules.onChanged(() => setBoardNonce((n) => n + 1)), [])
+
   const uninstall = useCallback(async (pkg: BoardPackage): Promise<void> => {
     setUninstalling((u) => ({ ...u, [pkg.name]: true }))
     try {

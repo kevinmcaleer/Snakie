@@ -15,6 +15,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   project's `.py` files and lists any import that nothing satisfies — not
   firmware built-ins, not on the board, not your own modules — with one-click
   installs. Works on the desktop, Web Serial hardware and the simulator alike.
+  The ON BOARD list also refreshes when anything *else* installs to the board —
+  a driver banner, the instruments-library update, another window — and that
+  broadcast now works on the web app too (it was a silent no-op there).
 
 ### Fixed
 - **Data-loss protections (#504, #505, #514).** Renaming a file to an existing

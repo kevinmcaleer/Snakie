@@ -33,6 +33,21 @@ export function installWebApi(): void {
   const fb = createWebFeedbackApi(version)
   w.api.feedback = fb.feedback as unknown as Window['api']['feedback']
   w.api.diagnostics = fb.diagnostics as unknown as Window['api']['diagnostics']
+  // The modules-changed broadcast is Electron IPC on desktop; on the web the
+  // fallback stubs made it a silent no-op, so a driver/instruments install
+  // never refreshed the Packages panel's ON BOARD list or the device tree.
+  // Bridge it with a window event — same-window is all the web build needs.
+  const MODULES_EVENT = 'snakie:modules-changed'
+  const modules = (w.api.modules ?? {}) as Record<string, unknown>
+  modules.notifyChanged = (): void => {
+    window.dispatchEvent(new CustomEvent(MODULES_EVENT))
+  }
+  modules.onChanged = (cb: () => void): (() => void) => {
+    const h = (): void => cb()
+    window.addEventListener(MODULES_EVENT, h)
+    return () => window.removeEventListener(MODULES_EVENT, h)
+  }
+  w.api.modules = modules as unknown as Window['api']['modules']
   // Screenshots come from the Screen Capture API (browser tab picker) — the
   // Electron multi-window composite doesn't exist here.
   w.api.captureScreenshot = captureTabScreenshot as unknown as Window['api']['captureScreenshot']
