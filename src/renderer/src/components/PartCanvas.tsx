@@ -1315,10 +1315,20 @@ export function PartCanvas({
     return inside
   }
   const hitTest = (nx: number, ny: number): CanvasSelection => {
+    // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
+    // The SVG paints connectors → LEDs → buttons ON TOP of shapes/labels, which
+    // sit on top of pins → holes → image. Testing shapes first (the old order)
+    // let a shape UNDERNEATH an LED steal the click; test the free-placed
+    // component glyphs before shapes so clicking an LED selects the LED.
     // A locked layer is skipped entirely — its items can't be picked up.
     if (visible.components && !locked.components) {
-      // Walk the unified z-order top-most first so a click selects what's visually
-      // on top (shapes and labels interleave by `z`).
+      for (let i = connectors.length - 1; i >= 0; i--)
+        if (dist(nx, ny, connectors[i].x, connectors[i].y) < HIT) return { type: 'connector', index: i }
+      for (let i = onboardLeds.length - 1; i >= 0; i--)
+        if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
+      for (let i = buttons.length - 1; i >= 0; i--)
+        if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
+      // Shapes + labels interleave by their own unified `z`; walk top-most first.
       const ord = orderedComponents(part)
       for (let k = ord.length - 1; k >= 0; k--) {
         const c = ord[k]
@@ -1335,15 +1345,6 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
-    if (visible.components && !locked.components)
-      for (let i = buttons.length - 1; i >= 0; i--)
-        if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
-    if (visible.components && !locked.components)
-      for (let i = onboardLeds.length - 1; i >= 0; i--)
-        if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
-    if (visible.components && !locked.components)
-      for (let i = connectors.length - 1; i >= 0; i--)
-        if (dist(nx, ny, connectors[i].x, connectors[i].y) < HIT) return { type: 'connector', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
