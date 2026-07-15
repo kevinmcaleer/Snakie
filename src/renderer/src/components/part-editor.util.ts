@@ -465,6 +465,28 @@ export function orderedItems(part: PartDefinition): OrderedItem[] {
     .map(({ c }) => c)
 }
 
+/** Write sequential z back to every component array so the canvas paints +
+ *  hit-tests match a desired TOP-FIRST order (0 = bottom). Returns the patched
+ *  arrays for `patch()`. Used by the Layers panel's drag-to-reorder (#130). */
+export function applyItemOrder(
+  part: PartDefinition,
+  topFirst: OrderedItem[]
+): Pick<PartDefinition, 'shapes' | 'labels' | 'buttons' | 'onboardLeds' | 'connectors'> {
+  const shapes = [...(part.shapes ?? [])]
+  const labels = [...(part.labels ?? [])]
+  const buttons = [...(part.buttons ?? [])]
+  const leds = [...(part.onboardLeds ?? [])]
+  const connectors = [...(part.connectors ?? [])]
+  ;[...topFirst].reverse().forEach((it, z) => {
+    if (it.kind === 'shape') shapes[it.index] = { ...shapes[it.index], z }
+    else if (it.kind === 'label') labels[it.index] = { ...labels[it.index], z }
+    else if (it.kind === 'button') buttons[it.index] = { ...buttons[it.index], z }
+    else if (it.kind === 'led') leds[it.index] = { ...leds[it.index], z }
+    else connectors[it.index] = { ...connectors[it.index], z }
+  })
+  return { shapes, labels, buttons, onboardLeds: leds, connectors }
+}
+
 /** The z a newly-created ITEM (any kind) should take to land on top. */
 export function nextItemZ(part: PartDefinition): number {
   const ord = orderedItems(part)
