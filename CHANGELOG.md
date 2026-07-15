@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   before the app could ever save over it. Edits typed while a save is in flight
   stay marked *Unsaved* (they used to be silently marked clean), and Ctrl+S
   failures now surface an error instead of vanishing.
+- **Web saves can't land in the wrong file anymore (#511, #512).** Files picked
+  from outside the project are now tracked by a unique token instead of their
+  bare filename — picking a second file with the same name no longer redirects
+  the first tab's saves into it, and Open Folder no longer disconnects
+  previously-picked files. "Download to computer" uses a per-file save picker
+  instead of a folder picker that silently re-rooted the whole web workspace.
 - **Simulator robustness (#500, #501).** A sim worker that fails to boot now
   fails the connection cleanly instead of pretending to connect with a dead
   REPL (desktop resolved the error as success; the web had no error path at

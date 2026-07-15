@@ -57,7 +57,17 @@ export function createWebFsApi(): Record<string, unknown> {
 
   let root: DirHandle | null = null
   let rootPath = ''
+  // Files picked OUTSIDE the open folder, keyed by a unique `loose://<n>/<name>`
+  // token (the token IS the tab's path). Keying by bare basename let a second
+  // same-named pick silently redirect the first tab's saves into the wrong
+  // file (#511); the trailing real name keeps baseName()/tab titles correct.
   const loose = new Map<string, FileHandleLike>()
+  let looseSeq = 0
+  const adoptLoose = (fh: FileHandleLike): string => {
+    const token = `loose://${++looseSeq}/${fh.name}`
+    loose.set(token, fh)
+    return token
+  }
   // A folder handle rehydrated from IndexedDB (#476) that still needs a user
   // gesture to re-grant permission. Held here so the empty-state "Reopen" button
   // can promote it to `root` without re-navigating the picker.
@@ -67,7 +77,8 @@ export function createWebFsApi(): Record<string, unknown> {
     root = handle
     rootPath = handle.name
     pending = null
-    loose.clear()
+    // Loose handles survive Open Folder — clearing them silently re-pointed
+    // open tabs' saves at `<newRoot>/<name>` instead of the picked file (#511).
     void saveFolderHandle(handle) // persist for next visit
     return rootPath
   }
@@ -100,6 +111,9 @@ export function createWebFsApi(): Record<string, unknown> {
   }
   const fileAt = async (path: string, create = false): Promise<FileHandleLike> => {
     if (loose.has(path)) return loose.get(path)!
+    // A loose token that misses the map (page reload dropped the handle) must
+    // NOT navigate the root — that would create `loose:` folders in the project.
+    if (path.startsWith('loose://')) throw new Error('That file is no longer available — open it again.')
     await ready
     if (!root) throw new Error('No folder is open')
     const segs = splitRelSegments(rootPath, path)
@@ -184,8 +198,7 @@ export function createWebFsApi(): Record<string, unknown> {
       if (!w.showOpenFilePicker) return null
       try {
         const [fh] = await w.showOpenFilePicker()
-        loose.set(fh.name, fh)
-        return fh.name
+        return adoptLoose(fh)
       } catch {
         return null
       }
@@ -194,8 +207,7 @@ export function createWebFsApi(): Record<string, unknown> {
       if (!w.showSaveFilePicker) return null
       try {
         const fh = await w.showSaveFilePicker({ suggestedName: defaultName })
-        loose.set(fh.name, fh)
-        return fh.name
+        return adoptLoose(fh)
       } catch {
         return null
       }
