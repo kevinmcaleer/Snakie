@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-07-15
+
 ### Added
 - **Bug reporting works on the web app (#513).** The Report Bug panel on
   app.snakie.org now posts real reports to the feedback service (the same
@@ -2541,7 +2543,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.30.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...HEAD
+[0.31.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...v0.29.0
 [0.28.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...v0.28.0
