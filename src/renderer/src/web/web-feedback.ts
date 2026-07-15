@@ -156,6 +156,28 @@ export async function captureTabScreenshot(): Promise<{ title: string; dataUrl: 
         window.setTimeout(() => rej(new Error('capture timed out')), 5000)
       })
     }
+    // The FIRST composited frames often miss accelerated layers (the 3-D WebGL
+    // canvas showed blank/black while the DOM looked fine) — the compositor
+    // re-renders them a beat after capture starts. Wait for a few REAL frames
+    // of the capture stream before grabbing, with a hard timeout so a paused
+    // stream can't hang the button.
+    await new Promise<void>((res) => {
+      const v = video as HTMLVideoElement & {
+        requestVideoFrameCallback?: (cb: () => void) => number
+      }
+      const cap = window.setTimeout(res, 1500)
+      if (!v.requestVideoFrameCallback) return // settle via the timeout alone
+      let left = 4
+      const tick = (): void => {
+        if (--left <= 0) {
+          window.clearTimeout(cap)
+          res()
+        } else {
+          v.requestVideoFrameCallback?.(tick)
+        }
+      }
+      v.requestVideoFrameCallback(tick)
+    })
     const scale = Math.min(1, 1600 / Math.max(1, video.videoWidth))
     const w = Math.max(2, Math.round(video.videoWidth * scale))
     const h = Math.max(2, Math.round(video.videoHeight * scale))
