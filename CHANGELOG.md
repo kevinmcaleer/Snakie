@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Package manager: on-board packages, uninstall, upgrades and an import scanner
+  (#131).** The Packages panel now reads the board's real `/lib` — every installed
+  package is listed with its version (read from the file, never imported, so
+  drivers can't twitch hardware), an **Uninstall** button, and an **Upgrade**
+  offer when the registry has a newer version. **⌕ Scan imports** walks the
+  project's `.py` files and lists any import that nothing satisfies — not
+  firmware built-ins, not on the board, not your own modules — with one-click
+  installs. Works on the desktop, Web Serial hardware and the simulator alike.
+
 ### Fixed
 - **Data-loss protections (#504, #505, #514).** Renaming a file to an existing
   name no longer silently destroys the other file (desktop + web; case-only

@@ -355,3 +355,72 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* On-board packages + import scan (#131) */
+.pkgs__tag--board {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.pkgs__ver {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.pkgs__spacer {
+  flex: 1;
+}
+.pkgs__act {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: 5px;
+  padding: 0.16rem 0.5rem;
+  cursor: pointer;
+}
+.pkgs__act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pkgs__act--uninstall:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.pkgs__act--upgrade {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.pkgs__scanrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.5rem 0;
+}
+.pkgs__scan-ok {
+  font-size: 0.72rem;
+  color: var(--success);
+}
+.pkgs__scan-missing {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.pkgs__chip {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent-ink);
+  background: transparent;
+  border: var(--border-w) solid var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.pkgs__chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

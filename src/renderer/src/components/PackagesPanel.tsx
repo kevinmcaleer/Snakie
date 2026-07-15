@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import './PackagesPanel.css'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useWorkspace } from '../store/workspace'
+import { parsePyImports } from './part-imports'
+import { isNewerVersion } from '../../../shared/version-compare'
+import {
+  libEntryToPackage,
+  buildVersionProbe,
+  parseVersionProbe,
+  missingProjectImports,
+  type BoardPackage
+} from '../lib/board-packages'
 import { ModulesPanel } from './ModulesPanel'
 import type { InstallProgress, PackageInfo } from '../../../preload/index.d'
 
@@ -91,6 +101,62 @@ export function PackagesPanel(): JSX.Element {
 function PackagesTab(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
+  const { currentFolder } = useWorkspace()
+
+  // ── On-board packages (#131): the REAL installed list, read from /lib ──────
+  const [boardPkgs, setBoardPkgs] = useState<BoardPackage[] | null>(null)
+  const [uninstalling, setUninstalling] = useState<Record<string, boolean>>({})
+  const [boardNonce, setBoardNonce] = useState(0)
+  // Import scan (#131): project imports with nothing to satisfy them.
+  const [missing, setMissing] = useState<string[] | null>(null)
+  const [scanBusy, setScanBusy] = useState(false)
+
+  const uninstall = useCallback(async (pkg: BoardPackage): Promise<void> => {
+    setUninstalling((u) => ({ ...u, [pkg.name]: true }))
+    try {
+      await window.api.device.remove(pkg.path) // recursive on every backend
+      window.api.modules.notifyChanged() // device tree + banners refresh
+    } catch {
+      /* surfaced by the list simply still containing the package */
+    } finally {
+      setUninstalling((u) => ({ ...u, [pkg.name]: false }))
+      setBoardNonce((n) => n + 1)
+    }
+  }, [])
+
+  // Scan every project .py for imports and diff against builtins + /lib + the
+  // project's own modules (a local servo.py satisfies `import servo`).
+  const scanImports = useCallback(async (): Promise<void> => {
+    if (!currentFolder) return
+    setScanBusy(true)
+    try {
+      const imports = new Set<string>()
+      const projectModules = new Set<string>()
+      const walk = async (dir: string, depth: number): Promise<void> => {
+        if (depth > 3) return
+        const entries = await window.api.fs.readDir(dir)
+        for (const e of entries) {
+          if (e.isDir) {
+            if (!/^(\.|__pycache__|node_modules|lib$)/.test(e.name)) await walk(e.path, depth + 1)
+          } else if (e.name.endsWith('.py')) {
+            projectModules.add(e.name.replace(/\.py$/, ''))
+            try {
+              for (const imp of parsePyImports(await window.api.fs.readFile(e.path))) imports.add(imp)
+            } catch {
+              /* unreadable file — skip */
+            }
+          }
+        }
+      }
+      await walk(currentFolder, 0)
+      const onBoard = (boardPkgs ?? []).map((b) => b.name)
+      setMissing(missingProjectImports(imports, onBoard, projectModules))
+    } catch {
+      setMissing(null)
+    } finally {
+      setScanBusy(false)
+    }
+  }, [currentFolder, boardPkgs])
 
   // Discovery (curated top packages), loaded once on mount.
   const [top, setTop] = useState<PackageInfo[]>([])
@@ -162,6 +228,39 @@ function PackagesTab(): JSX.Element {
       active = false
     }
   }, [connected, installCount])
+
+  // Read the board's real /lib listing + versions. Re-runs on connect, after
+  // each install (installCount) and after uninstalls (boardNonce).
+  useEffect(() => {
+    if (!connected) {
+      setBoardPkgs(null)
+      return
+    }
+    let active = true
+    void (async () => {
+      try {
+        const entries = await window.api.device.listDir('/lib')
+        const pkgs = entries
+          .map((e) => libEntryToPackage(e))
+          .filter((x): x is BoardPackage => x !== null)
+        if (pkgs.length > 0) {
+          try {
+            const out = await window.api.device.eval(buildVersionProbe(pkgs))
+            const versions = parseVersionProbe(out)
+            for (const p of pkgs) if (versions[p.name]) p.version = versions[p.name]
+          } catch {
+            /* version probe is best-effort */
+          }
+        }
+        if (active) setBoardPkgs(pkgs.sort((a, b) => a.name.localeCompare(b.name)))
+      } catch {
+        if (active) setBoardPkgs([]) // no /lib yet — an empty board list
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [connected, installCount, boardNonce])
 
   const runSearch = useCallback(async (): Promise<void> => {
     const q = query.trim()
@@ -250,6 +349,44 @@ function PackagesTab(): JSX.Element {
   const flashReadout = flash
     ? `FLASH ${flash.usedKb} / ${flash.totalKb} KB`
     : 'FLASH — / — KB'
+
+  // Latest registry version for an on-board package (search results or the
+  // curated list), for the Upgrade affordance.
+  const registryVersion = (name: string): string | undefined =>
+    listToShow.find((p) => p.name.toLowerCase() === name.toLowerCase())?.version
+
+  const renderBoardTag = (pkg: BoardPackage): JSX.Element => {
+    const latest = registryVersion(pkg.name)
+    const upgradable = !!(pkg.version && latest && isNewerVersion(latest, pkg.version))
+    const busy = !!uninstalling[pkg.name] || installs[pkg.name]?.status === 'installing'
+    return (
+      <li key={pkg.path} className="pkgs__tag pkgs__tag--board" role="listitem">
+        <span className="pkgs__tag-name">{pkg.name}</span>
+        {pkg.version && <span className="pkgs__ver">v{pkg.version}</span>}
+        <span className="pkgs__spacer" />
+        {upgradable && (
+          <button
+            type="button"
+            className="pkgs__act pkgs__act--upgrade"
+            disabled={busy}
+            onClick={() => void install(pkg.name)}
+            title={`Upgrade to v${latest}`}
+          >
+            ⬆ v{latest}
+          </button>
+        )}
+        <button
+          type="button"
+          className="pkgs__act pkgs__act--uninstall"
+          disabled={busy}
+          onClick={() => void uninstall(pkg)}
+          title={`Delete ${pkg.path} from the board`}
+        >
+          {uninstalling[pkg.name] ? 'Removing…' : 'Uninstall'}
+        </button>
+      </li>
+    )
+  }
 
   const renderTag = (pkg: PackageInfo): JSX.Element => {
     const st = installs[pkg.name]
@@ -408,13 +545,61 @@ function PackagesTab(): JSX.Element {
 
       {searchError != null && <p className="pkgs__error">{searchError}</p>}
 
-      {installed.length > 0 && (
+      {/* Import scan (#131): project imports with nothing to satisfy them. */}
+      {connected && currentFolder && (
+        <div className="pkgs__scanrow">
+          <button
+            type="button"
+            className="pkgs__act"
+            disabled={scanBusy}
+            onClick={() => void scanImports()}
+            title="Scan the project's .py files and list imports that nothing satisfies"
+          >
+            {scanBusy ? 'Scanning…' : '⌕ Scan imports'}
+          </button>
+          {missing !== null &&
+            (missing.length === 0 ? (
+              <span className="pkgs__scan-ok">All imports satisfied ✓</span>
+            ) : (
+              <span className="pkgs__scan-missing">
+                Missing:{' '}
+                {missing.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className="pkgs__chip"
+                    disabled={installs[name]?.status === 'installing'}
+                    onClick={() => void install(name)}
+                    title={`Install ${name} with mip`}
+                  >
+                    {installs[name]?.status === 'installing' ? `${name}…` : `+ ${name}`}
+                  </button>
+                ))}
+              </span>
+            ))}
+        </div>
+      )}
+
+      {connected && boardPkgs !== null ? (
         <>
-          <div className="pkgs__group-head">INSTALLED — {installed.length}</div>
-          <ul className="pkgs__list" role="list">
-            {installed.map(renderTag)}
-          </ul>
+          <div className="pkgs__group-head">ON BOARD (/lib) — {boardPkgs.length}</div>
+          {boardPkgs.length > 0 ? (
+            <ul className="pkgs__list" role="list">
+              {boardPkgs.map(renderBoardTag)}
+            </ul>
+          ) : (
+            <p className="pkgs__hint">Nothing in /lib yet — install something below.</p>
+          )}
         </>
+      ) : (
+        installed.length > 0 && (
+          <>
+            <div className="pkgs__group-head">INSTALLED — {installed.length}</div>
+            <ul className="pkgs__list" role="list">
+              {installed.map(renderTag)}
+            </ul>
+          </>
+        )
       )}
 
       <div className="pkgs__group-head">REGISTRY</div>
