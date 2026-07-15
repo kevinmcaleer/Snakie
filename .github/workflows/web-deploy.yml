@@ -14,6 +14,11 @@ on:
     paths:
       - 'src/renderer/**'
       - 'src/shared/**'
+      # The Standard parts library is inlined into the web bundle by
+      # vite-plugin-standard-parts, so a part edit (parts.yml / image / driver)
+      # must rebuild + redeploy too — otherwise it silently never ships.
+      - 'examples/parts/**'
+      - 'vite-plugin-standard-parts.ts'
       - 'vite.web.config.ts'
       - 'package.json'
       - 'package-lock.json'
