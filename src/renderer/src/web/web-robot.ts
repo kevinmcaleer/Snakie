@@ -75,14 +75,27 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
 
   return {
     load: async (folder?: string): Promise<RobotDefinition> => {
+      let text: string
       try {
-        const text = hasFolder(folder)
+        text = hasFolder(folder)
           ? await fs.readFile(robotYmlPath(folder))
           : (window.localStorage.getItem(LS_KEY) ?? '')
-        return robotFromYaml(text)
       } catch {
         // Missing robot.yml / no folder open / unreadable — a blank definition,
         // exactly like the desktop handler.
+        return blankRobot()
+      }
+      try {
+        return robotFromYaml(text)
+      } catch {
+        // Malformed robot.yml (#505): preserve the original before any save can
+        // overwrite it — mirrors the desktop handler's .bak backup.
+        try {
+          if (hasFolder(folder)) await fs.writeFile(`${robotYmlPath(folder)}.bak`, text)
+          else window.localStorage.setItem(`${LS_KEY}.bak`, text)
+        } catch {
+          /* best-effort backup */
+        }
         return blankRobot()
       }
     },

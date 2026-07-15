@@ -61,7 +61,16 @@ const collect = (bytes: Uint8Array): void => {
   if (sawNewline || pending.length >= FLUSH_BYTES) flush()
 }
 
+// Messages that arrive while the WASM is still loading (the handler is async,
+// so a feed/run can interleave with init's awaits — e.g. typing right after a
+// Stop reboot). Dropping them hung the caller's promise forever and leaked the
+// runtime's busy count, turning every later Stop into a VFS wipe (#501).
+const queuedEarly: InMsg[] = []
 port.on('message', async (msg: InMsg): Promise<void> => {
+  if (msg.type !== 'init' && !mp) {
+    queuedEarly.push(msg)
+    return
+  }
   if (msg.type === 'init') {
     const { loadMicroPython } = await import(MP_MJS)
     const loaded: MicroPythonInstance = await loadMicroPython({
@@ -83,6 +92,8 @@ port.on('message', async (msg: InMsg): Promise<void> => {
     loaded.replInit()
     flush()
     port.postMessage({ type: 'ready' })
+    // Drain anything that raced the load — order preserved.
+    while (queuedEarly.length > 0) port.emit('message', queuedEarly.shift())
     return
   }
   const instance = mp

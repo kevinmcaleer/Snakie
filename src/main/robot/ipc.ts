@@ -123,11 +123,26 @@ function queuedWrite(path: string, data: string): Promise<void> {
 
 export function registerRobotIpc(): void {
   ipcMain.handle('robot:load', async (_e, folder?: string): Promise<RobotDefinition> => {
+    const path = await robotPath(folder)
+    let raw: string
     try {
-      const raw = await fsp.readFile(await robotPath(folder), 'utf-8')
-      return robotFromYaml(raw)
+      raw = await fsp.readFile(path, 'utf-8')
     } catch {
       // No file yet → a fresh, empty definition.
+      return blankRobot()
+    }
+    try {
+      return robotFromYaml(raw)
+    } catch (err) {
+      // MALFORMED robot.yml (bad hand-edit, merge-conflict markers). Returning a
+      // blank here used to let the very next save WIPE the user's parts/wiring
+      // (#505) — preserve the original alongside before that can happen.
+      try {
+        await fsp.writeFile(`${path}.bak`, raw, 'utf-8')
+        console.warn(`robot.yml is not valid YAML — backed up to robot.yml.bak (${String(err)})`)
+      } catch {
+        /* best-effort backup */
+      }
       return blankRobot()
     }
   })

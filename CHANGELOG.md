@@ -6,6 +6,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **Data-loss protections (#504, #505, #514).** Renaming a file to an existing
+  name no longer silently destroys the other file (desktop + web; case-only
+  renames still work). A malformed `robot.yml` is backed up to `robot.yml.bak`
+  before the app could ever save over it. Edits typed while a save is in flight
+  stay marked *Unsaved* (they used to be silently marked clean), and Ctrl+S
+  failures now surface an error instead of vanishing.
+- **Simulator robustness (#500, #501).** A sim worker that fails to boot now
+  fails the connection cleanly instead of pretending to connect with a dead
+  REPL (desktop resolved the error as success; the web had no error path at
+  all, wedging "connecting" forever). Keystrokes/Run that race a Stop-restart
+  are queued instead of dropped — they used to hang forever and silently turn
+  every later Stop into a full simulator reset.
+
 ## [0.31.0] - 2026-07-15
 
 ### Added

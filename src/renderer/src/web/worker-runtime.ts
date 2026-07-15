@@ -23,6 +23,7 @@ export class WorkerMicroPythonRuntime {
   private nextId = 1
   private readonly pending = new Map<number, Pending>()
   private readyResolve: (() => void) | null = null
+  private readyReject: ((err: Error) => void) | null = null
   /** In-flight feed/run count — >0 means the interpreter is running. */
   private busy = 0
 
@@ -32,12 +33,28 @@ export class WorkerMicroPythonRuntime {
   }
 
   private spawn(): Promise<void> {
-    this.worker = new Worker(new URL('./mp.worker.ts', import.meta.url), { type: 'module' })
-    this.worker.onmessage = (e: MessageEvent<OutMsg>): void => this.handle(e.data)
-    const ready = new Promise<void>((res) => {
+    const worker = new Worker(new URL('./mp.worker.ts', import.meta.url), { type: 'module' })
+    this.worker = worker
+    worker.onmessage = (e: MessageEvent<OutMsg>): void => this.handle(e.data)
+    // Without this, a worker that failed to load (asset missing / CSP / offline
+    // cache miss) never sent 'ready' and connect() hung at "connecting" forever
+    // (#500) — reject the boot + in-flight requests instead.
+    worker.onerror = (e: ErrorEvent): void => {
+      const err = new Error(e.message || 'MicroPython worker failed to load')
+      for (const p of this.pending.values()) p.reject(err)
+      this.pending.clear()
+      this.busy = 0
+      this.readyReject?.(err)
+      this.readyResolve = null
+      this.readyReject = null
+      if (this.worker === worker) this.worker = null
+      worker.terminate()
+    }
+    const ready = new Promise<void>((res, rej) => {
       this.readyResolve = res
+      this.readyReject = rej
     })
-    this.worker.postMessage({ type: 'init' })
+    worker.postMessage({ type: 'init' })
     return ready
   }
 
@@ -49,6 +66,7 @@ export class WorkerMicroPythonRuntime {
     if (msg.type === 'ready') {
       this.readyResolve?.()
       this.readyResolve = null
+      this.readyReject = null
       return
     }
     // 'done' (feed) or 'result' (run) — settle the matching request.

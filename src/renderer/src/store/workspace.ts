@@ -168,8 +168,8 @@ type Action =
   | { type: 'setActive'; id: string }
   | { type: 'close'; id: string }
   | { type: 'updateContent'; id: string; content: string }
-  | { type: 'markSaved'; id: string }
-  | { type: 'savedAs'; id: string; path: string; name: string }
+  | { type: 'markSaved'; id: string; content: string }
+  | { type: 'savedAs'; id: string; path: string; name: string; content: string }
   | { type: 'add'; file: OpenFile }
   | { type: 'revealLine'; line: number }
   | { type: 'setFolder'; folder: string | null }
@@ -225,10 +225,13 @@ function reducer(state: State, action: Action): State {
         )
       }
     case 'markSaved':
+      // Clear dirty ONLY if the buffer still matches what was written — edits
+      // typed while the write was in flight must stay dirty (#514), else the
+      // tab claims "Saved" while the buffer differs from disk.
       return {
         ...state,
         openFiles: state.openFiles.map((f) =>
-          f.id === action.id ? { ...f, dirty: false } : f
+          f.id === action.id && f.content === action.content ? { ...f, dirty: false } : f
         )
       }
     case 'savedAs':
@@ -238,7 +241,9 @@ function reducer(state: State, action: Action): State {
         ...state,
         openFiles: state.openFiles.map((f) =>
           f.id === action.id
-            ? { ...f, path: action.path, name: action.name, dirty: false }
+            ? // Same in-flight-edit race as markSaved (#514): keep dirty when the
+              // buffer moved on while the Save As dialog/write was pending.
+              { ...f, path: action.path, name: action.name, dirty: f.content !== action.content }
             : f
         )
       }
@@ -310,7 +315,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         const chosen = await window.api.fs.saveFileDialog(file.name)
         if (!chosen) return
         await window.api.fs.writeFile(chosen, file.content)
-        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen) })
+        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen), content: file.content })
         announceSaved('local', chosen, file.content)
         return
       }
@@ -320,7 +325,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       } else {
         await window.api.device.writeFile(file.path, file.content)
       }
-      dispatch({ type: 'markSaved', id })
+      dispatch({ type: 'markSaved', id, content: file.content })
       announceSaved(file.source, file.path, file.content)
     },
     [state.openFiles]

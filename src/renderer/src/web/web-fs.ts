@@ -229,6 +229,27 @@ export function createWebFsApi(): Record<string, unknown> {
       await dirAt(path, true)
     },
     rename: async (from: string, to: string): Promise<void> => {
+      // Refuse to overwrite an existing destination (#504) — mirrors the
+      // desktop guard; copyPath would silently truncate the sibling file.
+      // isSameEntry keeps case-only renames working on case-insensitive disks.
+      if (from !== to) {
+        let clash = false
+        try {
+          const dest = (await fileAt(to)) as FileHandleLike & {
+            isSameEntry?: (o: unknown) => Promise<boolean>
+          }
+          const src = await fileAt(from)
+          clash = !(await dest.isSameEntry?.(src))
+        } catch {
+          try {
+            await dirAt(to)
+            clash = true
+          } catch {
+            clash = false
+          }
+        }
+        if (clash) throw new Error(`"${to.split('/').pop()}" already exists.`)
+      }
       await copyPath(from, to)
       await removePath(from)
     },

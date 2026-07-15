@@ -59,6 +59,7 @@ export class MicroPythonRuntime implements ReplRuntime {
   private nextId = 1
   private readonly pending = new Map<number, Pending>()
   private readyResolve: (() => void) | null = null
+  private readyReject: ((err: Error) => void) | null = null
   /** In-flight feed/run count — >0 means the interpreter is busy/running. */
   private busy = 0
   private readonly workerPath: string
@@ -80,17 +81,23 @@ export class MicroPythonRuntime implements ReplRuntime {
     this.worker = worker
     worker.on('message', (m: OutMsg) => this.handle(m))
     // A worker-level error rejects the boot / any in-flight request rather than
-    // hanging the device layer.
+    // hanging the device layer. (This used to RESOLVE the boot — connect then
+    // "succeeded" with a dead worker installed and every request hung, #500.)
     worker.on('error', (err) => {
       const e = err instanceof Error ? err : new Error(String(err))
       for (const p of this.pending.values()) p.reject(e)
       this.pending.clear()
       this.busy = 0
-      this.readyResolve?.()
+      this.readyReject?.(e)
       this.readyResolve = null
+      this.readyReject = null
+      // Tear the dead worker down so later requests fail fast, not silently.
+      if (this.worker === worker) this.worker = null
+      void worker.terminate()
     })
-    const ready = new Promise<void>((res) => {
+    const ready = new Promise<void>((res, rej) => {
       this.readyResolve = res
+      this.readyReject = rej
     })
     worker.postMessage({ type: 'init' })
     return ready
@@ -104,6 +111,7 @@ export class MicroPythonRuntime implements ReplRuntime {
     if (msg.type === 'ready') {
       this.readyResolve?.()
       this.readyResolve = null
+      this.readyReject = null
       return
     }
     // 'done' (feed) or 'result' (run) — settle the matching request.

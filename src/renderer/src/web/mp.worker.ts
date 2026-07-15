@@ -69,7 +69,14 @@ const flush = (): void => {
   postMessage({ type: 'out', bytes: chunk })
 }
 
+// Pre-ready messages are queued, not dropped — dropping hung the caller's
+// promise and leaked the busy count (Stop became a VFS wipe) (#501).
+const queuedEarly: InMsg[] = []
 self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
+  if (e.data?.type !== 'init' && !mp) {
+    queuedEarly.push(e.data)
+    return
+  }
   const msg = e.data
   if (msg.type === 'init') {
     mp = await loadMicroPython({
@@ -96,6 +103,8 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
     mp.replInit()
     flush()
     postMessage({ type: 'ready' })
+    // Drain anything that raced the load — order preserved.
+    while (queuedEarly.length > 0) void self.onmessage?.(new MessageEvent('message', { data: queuedEarly.shift() }))
     return
   }
   if (!mp) return
