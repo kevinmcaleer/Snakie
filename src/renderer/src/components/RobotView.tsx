@@ -114,7 +114,7 @@ import {
 } from '../../../shared/managed-blocks'
 import { jointToServo } from '../../../shared/krf'
 import { prettyUrdf, robotNameOf, urdfExportPath } from '../../../shared/urdf-export'
-import { explodeDirections, explodeProgress, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
+import { explodeDirections, explodeProgress, easeInOutCubic, orbitPosition, compensateAncestors, hierarchyDepths, resolveOverlaps, probeRecorderMime, extForMime, videoBytesLookValid, type PartBox } from './robot-explode'
 import { recordCanvasMp4, createGifSink } from './robot-video'
 import { buildServosPayload } from '../../../shared/control'
 import { bindableServos, bindServoJoint, type BindableServo } from './servo-bind'
@@ -2595,13 +2595,18 @@ export function RobotView({
     type ExplodeCamCtx = { startPos: THREE.Vector3; startTarget: THREE.Vector3; startZoom: number; k: number }
     const stepExplodeFrame = (t: number, target: number, orbit: boolean, c: ExplodeCamCtx): void => {
       applyExplode(target * explodeProgress(t))
-      // Smooth fit: ease the zoom-out over the first 12% and back over the last 12%.
+      // Speed-ramped orbit: ease the angle so the camera accelerates out of the
+      // start and glides into the finish instead of turning at constant speed.
+      // ease(0)=0 and ease(1)=1, so it still ends exactly where it began.
+      const orbitT = easeInOutCubic(t)
+      // Smooth fit: ease the zoom-out over the first 12% and back over the last
+      // 12% — cubic-eased within each leg so the zoom ramps gently, no hard hit.
       const leg = 0.12
-      const fitT = t < leg ? t / leg : t > 1 - leg ? (1 - t) / leg : 1
+      const fitT = easeInOutCubic(t < leg ? t / leg : t > 1 - leg ? (1 - t) / leg : 1)
       const s = 1 + (c.k - 1) * fitT
       if (camera instanceof THREE.PerspectiveCamera) {
         const dir = c.startPos.clone().sub(c.startTarget)
-        const base = orbit ? orbitPosition(t, c.startPos, c.startTarget) : null
+        const base = orbit ? orbitPosition(orbitT, c.startPos, c.startTarget) : null
         if (base) {
           const bp = new THREE.Vector3(base.x, base.y, base.z).sub(c.startTarget).multiplyScalar(s).add(c.startTarget)
           camera.position.copy(bp)
@@ -2614,7 +2619,7 @@ export function RobotView({
         }
       } else {
         if (orbit) {
-          const p = orbitPosition(t, c.startPos, c.startTarget)
+          const p = orbitPosition(orbitT, c.startPos, c.startTarget)
           camera.position.set(p.x, p.y, p.z)
         }
         applyZoom(c.startZoom / s)
