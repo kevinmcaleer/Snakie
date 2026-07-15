@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-07-15
+
 ### Added
 - **Package manager: on-board packages, uninstall, upgrades and an import scanner
   (#131).** The Packages panel now reads the board's real `/lib` — every installed
@@ -28,6 +30,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   too.
 
 ### Fixed
+- **Exploded-view polish (#499).** The orbit is speed-ramped (eases out of the
+  start, glides into the finish) and the zoom-to-fit legs are eased too — one
+  smooth camera gesture instead of mechanical constant-rate moves. Also fixed
+  the web bug-report screenshot occasionally catching the 3-D canvas blank
+  (capture now waits for the compositor to deliver real frames).
 - **Data-loss protections (#504, #505, #514).** Renaming a file to an existing
   name no longer silently destroys the other file (desktop + web; case-only
   renames still work). A malformed `robot.yml` is backed up to `robot.yml.bak`
@@ -2590,7 +2597,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.29.0...v0.30.0
 [0.29.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...v0.29.0
