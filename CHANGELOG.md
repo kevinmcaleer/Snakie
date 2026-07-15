@@ -19,6 +19,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the first tab's saves into it, and Open Folder no longer disconnects
   previously-picked files. "Download to computer" uses a per-file save picker
   instead of a folder picker that silently re-rooted the whole web workspace.
+- **The Git panel works from repo subfolders (#506).** Staging/discarding used
+  root-relative paths against the opened subfolder — the service now rebinds to
+  the discovered repository root.
+- **Check for Updates no longer offers downgrades (#507).** Any version
+  *difference* used to count as "newer"; a real numeric compare (with
+  pre-release handling) means only genuinely newer releases prompt.
 - **Simulator robustness (#500, #501).** A sim worker that fails to boot now
   fails the connection cleanly instead of pretending to connect with a dead
   REPL (desktop resolved the error as success; the web had no error path at
