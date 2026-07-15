@@ -17,7 +17,7 @@ import { createWebFsApi } from './web-fs'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
-import { createWebFeedbackApi } from './web-feedback'
+import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
 export function installWebApi(): void {
@@ -33,9 +33,9 @@ export function installWebApi(): void {
   const fb = createWebFeedbackApi(version)
   w.api.feedback = fb.feedback as unknown as Window['api']['feedback']
   w.api.diagnostics = fb.diagnostics as unknown as Window['api']['diagnostics']
-  // Window capture needs the Electron main process — return "no windows" so the
-  // Report Bug panel degrades cleanly instead of hitting the deep stub.
-  w.api.captureScreenshot = (async () => []) as unknown as Window['api']['captureScreenshot']
+  // Screenshots come from the Screen Capture API (browser tab picker) — the
+  // Electron multi-window composite doesn't exist here.
+  w.api.captureScreenshot = captureTabScreenshot as unknown as Window['api']['captureScreenshot']
   // External links (docs.snakie.org, etc.) open in a new browser tab — the Electron
   // `shell.openExternal` has no web equivalent, so the fallback was a silent no-op.
   w.api.openExternal = (async (url: string) => {

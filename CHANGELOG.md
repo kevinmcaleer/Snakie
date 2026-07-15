@@ -12,7 +12,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   endpoint, message format and size caps as the desktop app), and its
   diagnostics line shows the web build's version + browser instead of
   "Snakie undefined · undefined undefined". The post-only app key is baked in
-  at deploy time; the endpoint is rate-limited and Cloudflare-fronted.
+  at deploy time; the endpoint is rate-limited and Cloudflare-fronted. The
+  "Attach screenshot" button works too — it uses the browser's screen-capture
+  picker (grabbing one frame of the tab) in place of the desktop window capture.
 
 ## [0.30.0] - 2026-07-13
 
