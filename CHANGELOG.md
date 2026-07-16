@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **"New robot" / "Open Folder" now work on iPad (part of #525).** iPadOS
+  Safari has no folder picker (`showDirectoryPicker`), so the web fs backend
+  never installed and both buttons silently did nothing. Where the pickers are
+  missing but OPFS is usable (feature-detected incl. `createWritable`), the
+  same fs api is now backed by an origin-private `Projects/` folder in browser
+  storage: Open Folder adopts it with no dialog, it re-adopts silently on every
+  visit, and the robot.yml layer rides along — so New robot creates and links a
+  real `robot.urdf` that survives reloads.
 - **All catalog modules install on the web app (#522).** The six bundled module
   stubs (`hcsr04`, `mpu6050`, `neopixel_ws2812`, `rotary`, `buzzer`, `teleop`)
   are now inlined into the web build — they used to fail with *"isn't bundled

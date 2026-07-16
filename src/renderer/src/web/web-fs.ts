@@ -10,9 +10,19 @@
  * files opened via `openFileDialog` / `saveFileDialog` are tracked by name.
  *
  * The picker needs a user gesture, so `openFolderDialog` must be called from a
- * click (it is — the "Open Folder" button). Where the API is unavailable the
- * methods return empty/null and the UI degrades. The pure path helpers are
- * exported for unit tests (the interactive picker itself can't be automated).
+ * click (it is — the "Open Folder" button). The pure path helpers are exported
+ * for unit tests (the interactive picker itself can't be automated).
+ *
+ * **No picker (iPadOS Safari — #525): fall back to OPFS.** WebKit ships no
+ * `showDirectoryPicker`, which used to leave this whole backend uninstalled and
+ * made "Open Folder" / "New robot" silently do nothing. Where the pickers are
+ * missing but the origin-private file system is available (and its file handles
+ * support `createWritable`), we back the SAME api with an OPFS `Projects/`
+ * directory instead: `openFolderDialog` adopts it without any dialog, and it is
+ * silently re-adopted on every visit so the file tree survives reloads. Files
+ * then live in browser storage rather than on disk — real persistence on an
+ * iPad, same path/token semantics everywhere else. Loose-file pickers
+ * (`openFileDialog`/`saveFileDialog`) still return null there.
  */
 import { splitRelSegments, childPath } from './web-fs-paths'
 import { saveFolderHandle, loadFolderHandle, clearFolderHandle } from './web-idb'
@@ -48,11 +58,43 @@ type FileHandleLike = {
   createWritable(): Promise<{ write(data: Uint8Array | string): Promise<void>; close(): Promise<void> }>
 }
 
+/** The OPFS folder that plays the role of the picked project folder. Its name
+ *  is what users see as the file-tree root (and what path tokens start with). */
+const OPFS_PROJECTS_DIR = 'Projects'
+
+/**
+ * True when the OPFS fallback can back the fs api: no folder picker (so there
+ * is nothing better), but `navigator.storage.getDirectory` exists AND file
+ * handles support `createWritable` (WebKit gained it well after OPFS itself —
+ * without it every save would fail).
+ */
+export function opfsFallbackAvailable(): boolean {
+  if ('showDirectoryPicker' in window) return false // real folders win
+  const FileHandle = (globalThis as { FileSystemFileHandle?: { prototype: object } })
+    .FileSystemFileHandle
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.storage?.getDirectory === 'function' &&
+    !!FileHandle &&
+    'createWritable' in FileHandle.prototype
+  )
+}
+
 export function createWebFsApi(): Record<string, unknown> {
   const w = window as unknown as {
     showDirectoryPicker?: (o?: unknown) => Promise<DirHandle>
     showOpenFilePicker?: (o?: unknown) => Promise<FileHandleLike[]>
     showSaveFilePicker?: (o?: unknown) => Promise<FileHandleLike>
+  }
+
+  /** Get (create) the OPFS projects directory. Only called when
+   *  {@link opfsFallbackAvailable} said the pieces exist. */
+  const opfsProjects = async (): Promise<DirHandle> => {
+    const opfsRoot = (await navigator.storage.getDirectory()) as unknown as DirHandle
+    // Ask the browser to exempt this origin from storage eviction (Safari can
+    // otherwise clear it after periods of disuse). Best-effort, no gesture needed.
+    void navigator.storage.persist?.().catch(() => undefined)
+    return opfsRoot.getDirectoryHandle(OPFS_PROJECTS_DIR, { create: true })
   }
 
   let root: DirHandle | null = null
@@ -86,6 +128,18 @@ export function createWebFsApi(): Record<string, unknown> {
   // Kick off silent restore immediately (before render). fs ops await this so the
   // first stat/readDir sees a rehydrated root when permission was already granted.
   const ready = (async () => {
+    // OPFS mode: the projects folder needs no picker and no permission, so
+    // re-adopt it on every visit — the file tree and the persisted open-folder
+    // token ('Projects') work from the first frame.
+    if (opfsFallbackAvailable()) {
+      try {
+        root = await opfsProjects()
+        rootPath = root.name
+      } catch {
+        /* storage blocked (e.g. private mode with OPFS disabled) — stay degraded */
+      }
+      return
+    }
     try {
       const handle = (await loadFolderHandle()) as DirHandle | null
       if (!handle) return
@@ -160,7 +214,19 @@ export function createWebFsApi(): Record<string, unknown> {
 
   return {
     openFolderDialog: async (): Promise<string | null> => {
-      if (!w.showDirectoryPicker) return null
+      if (!w.showDirectoryPicker) {
+        // No picker (iPad) → "open" the OPFS projects folder instead. No dialog
+        // to cancel; null only when OPFS is unusable too (stay degraded).
+        if (!opfsFallbackAvailable()) return null
+        try {
+          await ready // don't race the silent re-adopt above
+          root = await opfsProjects()
+          rootPath = root.name
+          return rootPath
+        } catch {
+          return null
+        }
+      }
       try {
         return adopt(await w.showDirectoryPicker({ mode: 'readwrite' }))
       } catch {
