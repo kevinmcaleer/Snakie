@@ -13,7 +13,7 @@
  * MicroPython WASM.
  */
 import { createWebDeviceRouter } from './web-device-router'
-import { createWebFsApi } from './web-fs'
+import { createWebFsApi, opfsFallbackAvailable } from './web-fs'
 import { createWebRobotApi, type WebRobotFs } from './web-robot'
 import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
@@ -81,11 +81,12 @@ export function installWebApi(kind: WebWindowKind = 'main'): void {
   const parts = (w.api.parts ?? {}) as Record<string, unknown>
   Object.assign(parts, createWebPartsApi())
   w.api.parts = parts as unknown as Window['api']['parts']
-  // Local files via the File System Access API — only when the browser supports it
-  // (Chromium); elsewhere the no-op fallback stays and "Open Folder" is inert.
-  // The robot.yml layer rides on the same backend (bindings/poses/urdf link), so
-  // it's gated with it — on other browsers the honest fallback stub remains.
-  if ('showDirectoryPicker' in window) {
+  // Local files via the File System Access API (Chromium), or — where the picker
+  // doesn't exist but OPFS does (iPadOS Safari, #525) — an origin-private
+  // `Projects/` folder in browser storage, so Open Folder / New robot work there
+  // too. The robot.yml layer rides on the same backend (bindings/poses/urdf
+  // link), so it's gated with it — elsewhere the honest fallback stub remains.
+  if ('showDirectoryPicker' in window || opfsFallbackAvailable()) {
     const fs = createWebFsApi()
     w.api.fs = fs as unknown as Window['api']['fs']
     w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs) as unknown as Window['api']['robot']
