@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Board View on the web app — pops out into its own browser window.** The
+  toolbar's board icon (previously desktop-only) now works on app.snakie.org:
+  `board.html` ships as a second web entry and a `BroadcastChannel` relay
+  replaces the Electron IPC layer, streaming the active file, board selection,
+  instrument launches and robot.yml changes between the windows. Toggle, Esc
+  and re-adopt-after-reload semantics match the desktop.
+
 ### Fixed
 - **All catalog modules install on the web app (#522).** The six bundled module
   stubs (`hcsr04`, `mpu6050`, `neopixel_ws2812`, `rotary`, `buzzer`, `teleop`)

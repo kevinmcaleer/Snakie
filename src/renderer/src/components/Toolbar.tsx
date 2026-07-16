@@ -319,9 +319,8 @@ export function Toolbar({
 
       <span className="toolbar__divider" aria-hidden="true" />
 
-      {/* Board View pops out into its own OS window — desktop only (no pop-out
-          windows on the web build, where the button would do nothing). */}
-      {!IS_WEB && (
+      {/* Board View pops out into its own window — an OS BrowserWindow on the
+          desktop, a browser popup on the web (see web/web-board.ts). */}
       <div className="toolbar__group">
         <button
           type="button"
@@ -347,7 +346,6 @@ export function Toolbar({
           </svg>
         </button>
       </div>
-      )}
 
       <div className="toolbar__spacer" />
 

@@ -19,9 +19,14 @@ import { createWebPartsApi } from './web-parts'
 import { INSTRUMENTS_PY, SNAKIE_PY } from './web-lib-sources'
 import { createWebFeedbackApi, captureTabScreenshot } from './web-feedback'
 import { createWebModulesApi } from './web-modules'
+import { installWebBoardMain, installWebBoardWindow } from './web-board'
 import { VIRTUAL_PORT_PATH } from '../../../shared/virtual-device'
 
-export function installWebApi(): void {
+/** Which renderer entry is installing: the main editor (`main.tsx`) or the
+ *  popped-out Board View window (`board-main.tsx`). */
+export type WebWindowKind = 'main' | 'board'
+
+export function installWebApi(kind: WebWindowKind = 'main'): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
   if (!w.api) return // the fallback runs first and sets this; guard defensively
   // Report the real app version (injected from package.json by vite.web.config) so
@@ -85,6 +90,11 @@ export function installWebApi(): void {
     w.api.fs = fs as unknown as Window['api']['fs']
     w.api.robot = createWebRobotApi(fs as unknown as WebRobotFs) as unknown as Window['api']['robot']
   }
+  // Board View popup (the desktop's floating BrowserWindow, as a browser window):
+  // each side gets its half of the BroadcastChannel relay. AFTER the robot api
+  // above, so the relay can wrap `robot.save` with the cross-window notify.
+  if (kind === 'board') installWebBoardWindow()
+  else installWebBoardMain()
   // eslint-disable-next-line no-console
   console.info(
     '[Snakie] Web backend ready — Connect the "Simulated device (offline)" to run Python; ' +

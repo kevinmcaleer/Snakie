@@ -353,4 +353,22 @@ function BoardWindowApp(): JSX.Element {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<BoardWindowApp />)
+const render = (): void =>
+  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<BoardWindowApp />)
+
+// In the WEB build this window is a browser popup (no preload): install the web
+// backends (parts / fs / robot) + the BroadcastChannel relay to the main window
+// BEFORE rendering, mirroring main.tsx. A failure still renders the bare viewer.
+if (import.meta.env.VITE_SNAKIE_WEB) {
+  import('./web/install-web-api')
+    .then((m) => {
+      m.installWebApi('board')
+      render()
+    })
+    .catch((err) => {
+      console.error('[Snakie] web backend install failed', err)
+      render()
+    })
+} else {
+  render()
+}
