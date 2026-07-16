@@ -175,6 +175,8 @@ if (!w.api) {
       onSource: unsub,
       onClosed: unsub,
       onOpened: unsub,
+      selectBoard: noop,
+      onSelectBoard: unsub,
       listUserBoards: P([]),
       openBoardsFolder: P(undefined),
       saveUserBoard: P({ ok: true }),

@@ -68,11 +68,13 @@ export default defineConfig({
     // electron build), so raise the warning limit past its size.
     chunkSizeWarningLimit: 4000,
     rollupOptions: {
-      // Only the main app entry for the web MVP. The Electron detached windows
-      // (board / find / instrument / console) become in-page panes on the web
-      // (Phase W1/dockview), so they are not separate HTML entries here.
+      // The main app entry plus the Board View, which pops out as a browser
+      // window (`window.open('board.html')` + a BroadcastChannel relay — see
+      // src/renderer/src/web/web-board.ts). The other Electron detached windows
+      // (find / instrument / console) remain in-page panes on the web.
       input: {
-        index: resolve(__dirname, 'src/renderer/index.html')
+        index: resolve(__dirname, 'src/renderer/index.html'),
+        board: resolve(__dirname, 'src/renderer/board.html')
       },
       output: {
         manualChunks(id: string) {
