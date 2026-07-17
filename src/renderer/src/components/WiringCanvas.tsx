@@ -288,6 +288,11 @@ function WiringGrid({
 // top-left) so a fit places the leftmost item to the RIGHT of it, not under it.
 const BROWSER_INSET = 300
 const DOT_R = 5
+/** Pin grab radius (screen px, divided by zoom): the mouse one hugs the dot; the
+ *  touch one is finger-sized (#525) — `dotAt` picks the NEAREST dot, so a fat
+ *  radius can't mis-wire dense footprints, it just wins over pan/box-drag. */
+const DOT_TOL = DOT_R + 5
+const TOUCH_DOT_TOL = DOT_R + 15
 
 // Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
 const WC_MIN_ZOOM = 0.35
@@ -561,7 +566,7 @@ export interface WiringCanvasProps {
 }
 
 interface Drag {
-  kind: 'box' | 'pan' | 'wire'
+  kind: 'box' | 'pan' | 'wire' | 'pinch'
   /** box drag */
   boxKey?: string
   startX?: number
@@ -580,6 +585,11 @@ interface Drag {
   from?: string
   cx?: number
   cy?: number
+  /** pinch (two-finger touch, #525): starting finger distance + view snapshot */
+  pinchDist?: number
+  pinchScale?: number
+  pinchWX?: number
+  pinchWY?: number
 }
 
 export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
@@ -917,8 +927,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    *  The tolerance is divided by the zoom so the grab radius stays ~constant on
    *  screen, and we pick the closest dot so dense footprints don't mis-select by
    *  iteration order. */
-  const dotAt = (wx: number, wy: number): { endpoint: string } | null => {
-    const tol = (DOT_R + 5) / view.scale
+  const dotAt = (wx: number, wy: number, tolPx: number = DOT_TOL): { endpoint: string } | null => {
+    // tolPx is SCREEN pixels: divide out the zoom AND the svg's viewBox-fit
+    // scale, so the grab radius doesn't shrink when the pane is narrow (#525).
+    const ctmScale = svgRef.current?.getScreenCTM()?.a || 1
+    const tol = tolPx / (view.scale * ctmScale)
     let bestEp: string | null = null
     let bestD = tol
     for (const s of subjects) {
@@ -1061,28 +1074,92 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     })
 
   // --- pointer handlers -----------------------------------------------------
+  // Live touch points (by pointerId, client coords) — a second finger turns the
+  // gesture into a pinch-zoom (#525); pointer events fire per-finger so this map
+  // is the only way to see both at once.
+  const touchPtsRef = useRef(new Map<number, { x: number; y: number }>())
+
+  /** Client → svg viewBox coordinates (view transform NOT applied — the pinch
+   *  math needs the fixed frame that `view` maps world space into). */
+  const toLocal = (p: { clientX: number; clientY: number }): { x: number; y: number } => {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM()
+    if (!svg || !ctm) return { x: 0, y: 0 }
+    const pt = svg.createSVGPoint()
+    pt.x = p.clientX
+    pt.y = p.clientY
+    const local = pt.matrixTransform(ctm.inverse())
+    return { x: local.x, y: local.y }
+  }
+
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    const touch = e.pointerType === 'touch'
+    if (touch) {
+      touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      // A SECOND finger: whatever the first was doing becomes a pinch-zoom
+      // (any in-flight box/wire drag is discarded — nothing has committed yet).
+      if (touchPtsRef.current.size === 2) {
+        const [a, b] = [...touchPtsRef.current.values()]
+        const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }
+        const l = toLocal(mid)
+        dragRef.current = {
+          kind: 'pinch',
+          pinchDist: Math.hypot(a.x - b.x, a.y - b.y),
+          pinchScale: view.scale,
+          pinchWX: (l.x - view.tx) / view.scale,
+          pinchWY: (l.y - view.ty) / view.scale
+        }
+        force((n) => n + 1)
+        return
+      }
+    }
     const w = toWorld(e)
-    const dot = dotAt(w.x, w.y)
+    // Fingers are far less precise than a mouse — grow the pin grab radius (#525).
+    const dot = dotAt(w.x, w.y, touch ? TOUCH_DOT_TOL : DOT_TOL)
     if (dot) {
       dragRef.current = { kind: 'wire', from: dot.endpoint, cx: w.x, cy: w.y }
+      // Touch has no hover — surface the grabbed pin's chips like a mouse-over
+      // would (persists after the tap; see the touch guard on pointerleave).
+      if (touch) {
+        const ep = parseEndpoint(dot.endpoint)
+        setHover({ key: ep.key, pin: ep.index })
+      }
       force((n) => n + 1)
       return
     }
     // A subject under the pointer? → drag it (topmost first).
     const hit = [...subjects].reverse().find((s) => w.x >= s.hit.x && w.x <= s.hit.x + s.hit.w && w.y >= s.hit.y && w.y <= s.hit.y + s.hit.h)
     if (hit) {
+      // Tapping a part/board reveals its pin capability chips (#525) — the touch
+      // analogue of hovering it.
+      if (touch) setHover({ key: hit.key, pin: null })
       dragRef.current = { kind: 'box', boxKey: hit.key, startX: w.x, startY: w.y, ox: hit.x, oy: hit.y }
       return
     }
     // Empty space → pan.
+    if (touch) setHover(null)
     dragRef.current = { kind: 'pan', panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
   }
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>): void => {
+    if (e.pointerType === 'touch' && touchPtsRef.current.has(e.pointerId)) {
+      touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    }
     const d = dragRef.current
     if (!d) return
+    if (d.kind === 'pinch') {
+      if (touchPtsRef.current.size < 2) return
+      const [a, b] = [...touchPtsRef.current.values()]
+      const scale = clampScale(
+        (d.pinchScale ?? 1) * (Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, d.pinchDist ?? 1))
+      )
+      // Keep the world point that started under the fingers' midpoint pinned to
+      // the CURRENT midpoint — zoom about the pinch, and two-finger pan for free.
+      const l = toLocal({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 })
+      setView({ scale, tx: l.x - (d.pinchWX ?? 0) * scale, ty: l.y - (d.pinchWY ?? 0) * scale })
+      return
+    }
     if (d.kind === 'pan') {
       // Only count as a real pan past a small dead-zone, so a jittered click on
       // empty space still deselects rather than being treated as a pan.
@@ -1115,6 +1192,18 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>): void => {
+    if (e.pointerType === 'touch') {
+      touchPtsRef.current.delete(e.pointerId)
+      // Lifting a finger out of a pinch: the gesture is over (the remaining
+      // finger must not resume as a stray pan/drag from wherever it sits).
+      if (dragRef.current?.kind === 'pinch') {
+        if (touchPtsRef.current.size === 0) {
+          dragRef.current = null
+          force((n) => n + 1)
+        }
+        return
+      }
+    }
     const d = dragRef.current
     dragRef.current = null
     if (d?.kind === 'box' && d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
@@ -1127,16 +1216,20 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
       setSelectedKey(renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null)
       setRenameText(null)
+      // A touch tap set `hover` while dragRef still suppressed the chips — make
+      // sure the tap's end repaints even when the selection didn't change (#525).
+      force((n) => n + 1)
       return
     }
     if (d?.kind === 'pan' && !d.moved) {
       setSelectedKey(null)
       setRenameText(null)
+      force((n) => n + 1)
       return
     }
     if (d?.kind === 'wire' && d.from) {
       const w = toWorld(e)
-      const target = dotAt(w.x, w.y)
+      const target = dotAt(w.x, w.y, e.pointerType === 'touch' ? TOUCH_DOT_TOL : DOT_TOL)
       if (target && target.endpoint !== d.from) addConnection(d.from, target.endpoint)
       force((n) => n + 1)
     }
@@ -2224,7 +2317,9 @@ function SubjectBody({
       // which clears the chips. (Handlers here don't stop pointerdown, so dragging
       // via the svg-level hit-test still works.)
       onPointerEnter={onHoverPart ? () => onHoverPart(true) : undefined}
-      onPointerLeave={onHoverPart ? () => onHoverPart(false) : undefined}
+      // Touch "leaves" the instant the finger lifts — keep the chips up so a tap
+      // actually shows the pins (#525); tapping elsewhere clears them instead.
+      onPointerLeave={onHoverPart ? (e) => e.pointerType !== 'touch' && onHoverPart(false) : undefined}
     >
       {/* Transparent fill over the whole body box so the part-level hover also
           registers over the margins around the drawn body (not just its shapes). */}
@@ -2324,7 +2419,7 @@ function SubjectBody({
               r={DOT_R}
               className={`wc__dot wc__dot--${p.net}`}
               onPointerEnter={onHoverPin ? () => onHoverPin(p.index) : undefined}
-              onPointerLeave={onHoverPin ? () => onHoverPin(null) : undefined}
+              onPointerLeave={onHoverPin ? (e) => e.pointerType !== 'touch' && onHoverPin(null) : undefined}
             />
           )
         })}
