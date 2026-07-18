@@ -54,6 +54,50 @@
   text-overflow: ellipsis;
 }
 
+/* Discovery tip (#434) — a 💡 hint filling the otherwise-empty message area.
+ * Fades in/out over ~1s (opacity transition; TIP_FADE_MS in status-tips.ts
+ * must match) so rotation is gentle rather than blinky. Linked tips read as
+ * quiet links and open the docs article externally. */
+.statusbar__tip {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  opacity: 1;
+  transition: opacity 1s ease;
+}
+
+.statusbar__tip--faded {
+  opacity: 0;
+}
+
+.statusbar__tip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.statusbar__tip--link {
+  background: transparent;
+  border: none;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.statusbar__tip--link .statusbar__tip-text {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.statusbar__tip--link:hover {
+  color: var(--accent);
+}
+
+.statusbar__tip--link:focus-visible {
+  outline: var(--border-w) solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* Connection indicator. */
 .statusbar__conn {
   color: var(--text-muted);

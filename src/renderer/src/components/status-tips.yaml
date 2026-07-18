@@ -1,0 +1,43 @@
+# Status-bar discovery tips (issue #434).
+# =======================================
+# Shown one at a time in the status bar — ONLY while the bar has nothing real
+# to say — prefixed with a 💡 by the renderer (don't add the emoji here).
+#
+# Format: a flat list of items, each with a required `text` and an optional
+# `href` (a docs.snakie.org / app.snakie.org link, opened in the external
+# browser when the tip is clicked). Parsed by `parseTipsYaml` in
+# status-tips.ts — keep it to this simple `- text:` / `href:` shape (plain
+# one-line scalars, no `: ` inside a value; a parity unit test checks the file
+# still reads identically under a full YAML parser).
+
+- text: No board handy? Connect the built-in simulated device and run MicroPython entirely offline.
+- text: Click the version number at the right of this bar to check for a Snakie update.
+- text: The ⚡ Flash firmware button installs MicroPython for you — Pico (UF2), ESP boards (esptool) and the BBC micro:bit.
+- text: Snakie can warn you when a newer MicroPython exists for the connected board — toggle the check in Settings → Editor.
+- text: New to Snakie? The 📚 Learn panel has guided, hands-on tutorials right inside the app.
+  href: https://docs.snakie.org/tutorials/
+- text: Drag parts from the library straight onto the breadboard in the Board View.
+- text: Hover a pin on the breadboard to see everything it can do — PWM, ADC, I²C, SPI and more.
+- text: Wires in the Board View are labelled with the variable names from your code, so a wired board reads at a glance.
+- text: The Board View can generate project docs for you — a bill of materials plus pin-by-pin wiring tables.
+- text: Export the breadboard as an image from the Board View's zoom toolbar — handy for sharing wiring diagrams.
+- text: Open the Oscilloscope or Multimeter any time from the instrument dock — no code changes needed.
+- text: The I²C scanner instrument sweeps the bus and suggests which chip each found address probably is.
+- text: The Data Logger instrument prints readings like a vintage dot-matrix printer — and logged CSV files open as a table in the Data View.
+- text: Build a robot from blocks and joints in the Robot View, then export it as a clean URDF file.
+- text: Try the 💥 exploded view in the 3-D Robot View — it can even record the animation to mp4 or GIF.
+- text: Motion Studio lets you pose your robot, sequence keyframes into walk cycles and export the motion as plain MicroPython.
+- text: ⌕ Scan imports in the Packages panel finds libraries your code imports but the board is missing — with one-click installs.
+- text: Tick the sync checkbox next to a local file to copy it to the board every time you save.
+- text: Prefer ruled lines, dots or plain paper behind your code? Pick your notebook paper in Settings → Editor.
+- text: Right-click a symbol in the editor and choose Help for symbol for instant MicroPython help.
+- text: Pop the console out into its own window — there's a pop-out button at the top of the shell.
+- text: Instruments undock into real OS windows, so you can spread your bench across monitors.
+- text: Found a bug? The Report Bug button in the activity bar sends a report straight from the app, screenshot included.
+- text: Snakie also runs in your browser — installable, works offline, and talks to real boards over Web Serial.
+  href: https://app.snakie.org
+- text: from snakie import Servo, Buzzer — the bundled snakie module wraps everyday hobby hardware in friendly classes.
+- text: Design your own parts in the Part Editor — pins, shapes, labels, even a 3-D mesh — with undo/redo throughout.
+- text: The device files panel has a flash-usage gauge, so you always know how much room is left on the board.
+- text: The full Snakie documentation lives at docs.snakie.org.
+  href: https://docs.snakie.org/

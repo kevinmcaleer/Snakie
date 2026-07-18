@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Discovery tips in the status bar (#434).** When the status bar has nothing
+  real to say, it now shows a rotating 💡 tip about a Snakie feature — fading
+  in/out over a second, changing every 5–10 minutes, and always giving way to
+  actual warnings and status messages. Some tips link to docs.snakie.org
+  articles (opened in your browser). The list lives in a plain YAML file so
+  it's easy to extend, and a **Settings → Appearance** toggle turns tips off.
 - **ESP32/ESP8266 firmware flashing in the browser (Web W3, #284, epic #267).**
   Outside the Electron desktop app — e.g. a future web build — the Flash
   MicroPython firmware dialog now flashes ESP32/ESP8266 boards entirely
