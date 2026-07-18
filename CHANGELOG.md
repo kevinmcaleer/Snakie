@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`snakie_ik.py` — on-device IK runtime (#539, epic #533 §4).** New
+  MicroPython module `micropython/snakie_ik.py` that mirrors the shared
+  TypeScript solver step-for-step and passes the SAME 35 language-neutral
+  vectors (`test/fixtures/ik-vectors.json`), so a goal posed in the browser and
+  a goal posed in code on a Pico produce identical joint angles. Provides a pure
+  planar `solve_ik` (law-of-cosines for 1/2-bone chains, FABRIK + CCD + analytic
+  two-group fallback + perturbed-seed retry for 3+ bones, joint-limit clamping,
+  `reached` / `out_of_reach` / `blocked_by_limits` status) plus a `Skeleton`
+  helper: `Skeleton.load("skeleton.json")` parses the #537 schema into bones,
+  limits and servo bindings, `solve(chain, target_xyz)` turns a named joint
+  chain into angles, and `apply(angles)` drives the bound servos through the
+  `snakie_motion` rig (degrading gracefully when none is present). Runs
+  unmodified on CPython (all hardware behind `snakie_motion`/`instruments`'
+  `machine` guard) and uses only `math`/`json`, so it's Pico-friendly.
 - **Community parts install fallback when `git` isn't available (Web W3,
   #284, epic #267).** Installing/updating a library from the Community Parts
   registry normally does a shallow `git clone`; Snakie now probes once
