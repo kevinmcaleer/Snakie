@@ -28,6 +28,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `setBuildDim`'s `text` widened from `string` to `ReactNode` so the label can
   carry an inline padlock icon.
 
+## [0.33.0] - 2026-07-18
+
 ### Added
 - **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**
   A new 🎯 toggle drops a draggable end-effector goal on the selected chain;
