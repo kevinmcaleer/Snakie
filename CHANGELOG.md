@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Board View works by touch — iPad-friendly wiring (part of #525).** On a
+  touchscreen, tapping the board or a part now reveals its pin capability
+  chips (they stay up until you tap elsewhere — touch has no hover), wires can
+  be dragged from pin to pin by finger (with a finger-sized grab radius, and
+  one that no longer shrinks when the board pane is narrow), and a two-finger
+  pinch zooms the canvas about the gesture (a second finger safely cancels any
+  in-flight drag). One-finger pan, part dragging and tap-to-select were
+  already pointer-based and keep working; mouse behaviour is unchanged.
 - **Board View on the web app — pops out into its own browser window.** The
   toolbar's board icon (previously desktop-only) now works on app.snakie.org:
   `board.html` ships as a second web entry and a `BroadcastChannel` relay
