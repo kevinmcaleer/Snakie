@@ -1,4 +1,5 @@
 import { app, dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
+import { isNewerVersion } from '../shared/version-compare'
 import electronUpdater from 'electron-updater'
 
 const { autoUpdater } = electronUpdater
@@ -140,7 +141,9 @@ export function registerUpdater(getWindow: () => BrowserWindow | undefined): voi
       // (the `update-available` event has, in that case, already pushed an
       // `available` status). Decide what to tell the user from that comparison.
       const latest = result?.updateInfo?.version
-      const isNewer = latest != null && latest !== app.getVersion()
+      // Strict semver compare (#507): a plain != offered DOWNGRADES to anyone
+      // running a build newer than the latest published release.
+      const isNewer = latest != null && isNewerVersion(latest, app.getVersion())
       if (isNewer) {
         // Prompt the user to download. Choosing "Download" drives the same
         // `downloadUpdate()` path the status bar / notifier Download button use.

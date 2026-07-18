@@ -142,6 +142,9 @@ export interface PartHeader {
  * `i2c` capability/signal/bus just like any other pin, alongside 3V3 / GND.
  */
 export interface PartConnector {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   /** `qwiic` (STEMMA QT — a 4-pin JST-SH I2C socket) or a generic `jst` header. */
   kind: 'qwiic' | 'jst'
   /** Silk label (defaults to `"QWIIC"` / `"JST"`). */
@@ -165,6 +168,9 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   /** Silk label (e.g. `"BOOT"`, `"RESET"`, `"USR"`). */
   label: string
   /** Normalised X within the board outline. */
@@ -184,6 +190,9 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
+   *  category default; set explicitly when reordered in the Layers panel. */
+  z?: number
   kind: 'single' | 'rgb' | 'neopixel'
   /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"`). */
   label?: string
@@ -479,6 +488,27 @@ export interface PartDefinition {
    * folders as needed) or `mip`-installing a spec. Absent / empty ⇒ no driver.
    */
   drivers?: DriverFile[]
+
+  // --- 3-D mesh (Robot View, #406) -----------------------------------------
+  /**
+   * A 3-D mesh (STL) linked to this part. On disk this is a **relative filename**
+   * within the part folder (e.g. `"model.stl"`). Unlike `image`/`help` it is NOT
+   * inlined into the renderer; when the part is dropped onto a design the main
+   * process copies the file into the project URDF's `meshes/` folder and it's
+   * added as a loose link in the 3-D Robot View. Absent ⇒ no mesh.
+   */
+  mesh?: string
+  /**
+   * The units the linked {@link mesh} is authored in, so it loads at a sane size in
+   * the URDF world (which is metres; STLs are commonly millimetres). `'mm'` ⇒ a
+   * 0.001 scale. Absent ⇒ fall back to a bounding-box heuristic on import.
+   */
+  meshUnits?: 'mm' | 'm'
+  /**
+   * An explicit uniform scale for the linked {@link mesh}, overriding
+   * {@link meshUnits}. Absent ⇒ use `meshUnits` (or the bbox heuristic).
+   */
+  meshScale?: number
 
   // --- Editor display state (persisted) ------------------------------------
   /**

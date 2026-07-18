@@ -1,0 +1,49 @@
+flowchart LR
+  %% ============ DESIGN & WIRE (Board View) ============
+  subgraph BENCH["🛠️ &nbsp;Design and wire — Board View"]
+    direction TB
+    A["✍️ &nbsp;Write MicroPython<br/>in the editor"]
+    B["🔌 &nbsp;Add components<br/>to the breadboard"]
+    C["⚙️ &nbsp;Load part drivers"]
+    A --> B --> C
+  end
+
+  %% ============ ROBOT MODE ============
+  subgraph ROBOT["🤖 &nbsp;Robot Mode"]
+    direction TB
+    D["🦾 &nbsp;Add servos"]
+    E["🧭 &nbsp;Map each servo<br/>to your code"]
+    F["📦 &nbsp;Import STL meshes"]
+    G["🔗 &nbsp;Link STLs into an<br/>IK chain (URDF joints)"]
+    H["▶️ &nbsp;Simulate movement<br/>from your code"]
+    D --> E --> F --> G --> H
+  end
+
+  C ==>|enter Robot Mode| D
+
+  %% ============ SELF-DOCUMENTING OUTPUTS ============
+  subgraph DOCS["📚 &nbsp;The project documents itself"]
+    direction TB
+    S["📐 &nbsp;Schematic"]
+    W["🍞 &nbsp;Breadboard image<br/>+ pinout table"]
+    K["🐍 &nbsp;MicroPython code"]
+    M["🧊 &nbsp;3D model"]
+  end
+
+  C -.-> S
+  C -.-> W
+  A -.-> K
+  G -.-> M
+
+  H --> DONE(["✅ &nbsp;A complete robot,<br/>simulated in a virtual<br/>environment — all inside Snakie"])
+
+  %% ============ STYLING ============
+  classDef bench fill:#12352b,stroke:#37884a,stroke-width:1.5px,color:#e8f5ee;
+  classDef robot fill:#1b2a3a,stroke:#4ea1ff,stroke-width:1.5px,color:#eaf3ff;
+  classDef docs fill:#2a2416,stroke:#b8892b,stroke-width:1.5px,color:#f6ecd6;
+  classDef done fill:#0f5132,stroke:#3ddc84,stroke-width:2px,color:#eafff3;
+
+  class A,B,C bench;
+  class D,E,F,G,H robot;
+  class S,W,K,M docs;
+  class DONE done;

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { reporter } from '../lib/report-error'
 // Import only the editor core API rather than the full `monaco-editor` barrel,
 // then opt in to just the languages we render. This keeps the renderer bundle
 // small instead of pulling in all ~80 bundled languages.
@@ -302,7 +303,9 @@ export function MonacoEditor(): JSX.Element {
     // never fires.
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
       const id = activeIdRef.current
-      if (id) void saveFileRef.current(id)
+      // Surface failures like the Toolbar save button does — a silent unhandled
+      // rejection left the user thinking the file saved (#514).
+      if (id) saveFileRef.current(id).catch(reporter('save file', { notify: "Couldn't save the file." }))
     })
 
     // Ctrl/Cmd-F + Ctrl/Cmd-H -> the custom Find & Replace panel (issue #92).

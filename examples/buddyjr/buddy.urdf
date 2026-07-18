@@ -1,0 +1,355 @@
+<?xml version="1.0" ?>
+<robot name="Buddy_UDRF" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+<xacro:include filename="$(find Buddy_UDRF_description)/urdf/materials.xacro" />
+<xacro:include filename="$(find Buddy_UDRF_description)/urdf/Buddy_UDRF.trans" />
+<xacro:include filename="$(find Buddy_UDRF_description)/urdf/Buddy_UDRF.gazebo" />
+<link name="base_link">
+  <inertial>
+    <origin xyz="-0.0072846148487682215 1.7452781361018958e-09 0.01330287493232974" rpy="0 0 0"/>
+    <mass value="0.24756893074382022"/>
+    <inertia ixx="0.000119" iyy="0.000229" izz="0.000317" ixy="-0.0" iyz="0.0" ixz="-1.1e-05"/>
+  </inertial>
+  <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/base_link.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_v2_1">
+  <inertial>
+    <origin xyz="-0.011890761216483671 7.108861913397494e-08 -0.004194412181102707" rpy="0 0 0"/>
+    <mass value="0.059421514137175474"/>
+    <inertia ixx="4e-06" iyy="6e-06" izz="4e-06" ixy="0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.018 -0.0 -0.026169" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.018 -0.0 -0.026169" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_Horn_v7_1">
+  <inertial>
+    <origin xyz="0.0001285958439191802 0.002108807459190156 -0.05803309229866653" rpy="0 0 0"/>
+    <mass value="0.09635005695952946"/>
+    <inertia ixx="0.000114" iyy="0.000118" izz="5e-06" ixy="0.0" iyz="0.0" ixz="-1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0011 -0.0 -0.040369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0011 -0.0 -0.040369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="buddy_jr_basic_base_pivot_v9_1">
+  <inertial>
+    <origin xyz="-0.0008363443835275113 2.941735697320796e-07 0.007744489630777479" rpy="0 0 0"/>
+    <mass value="0.11993016063988789"/>
+    <inertia ixx="4.5e-05" iyy="3e-05" izz="4.6e-05" ixy="0.0" iyz="0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0011 -0.0 -0.040369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_base_pivot_v9_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0011 -0.0 -0.040369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_base_pivot_v9_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_Horn_v7__1__1">
+  <inertial>
+    <origin xyz="0.05803331480560046 0.0021094484738274468 0.00012881834829028826" rpy="0 0 0"/>
+    <mass value="0.09635005695952946"/>
+    <inertia ixx="5e-06" iyy="0.000118" izz="0.000114" ixy="-0.0" iyz="0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0001 -0.0 -0.062369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0001 -0.0 -0.062369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_v2__1__1">
+  <inertial>
+    <origin xyz="0.018394651551812306 4.341607822053037e-07 0.005009478152774242" rpy="0 0 0"/>
+    <mass value="0.059421514137175474"/>
+    <inertia ixx="4e-06" iyy="6e-06" izz="4e-06" ixy="-0.0" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0001 -0.0 -0.062369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0001 -0.0 -0.062369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="buddy_jr_basic_arm_v6_1">
+  <inertial>
+    <origin xyz="0.003120927560176172 7.318701784598946e-07 0.04819628729516187" rpy="0 0 0"/>
+    <mass value="0.05170803809064468"/>
+    <inertia ixx="3e-05" iyy="2.9e-05" izz="1e-06" ixy="0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0143 -0.0 -0.056269" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_arm_v6_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0143 -0.0 -0.056269" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_arm_v6_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_Horn_v7__2__1">
+  <inertial>
+    <origin xyz="-0.05803331480560063 0.0021090869367632 -0.0001283733421008626" rpy="0 0 0"/>
+    <mass value="0.09635005695952946"/>
+    <inertia ixx="5e-06" iyy="0.000118" izz="0.000114" ixy="0.0" iyz="-0.0" ixz="1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0163 -1e-06 -0.142469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__2__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0163 -1e-06 -0.142469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__2__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_v2__2__1">
+  <inertial>
+    <origin xyz="-0.0183946515518124 7.468035556101141e-08 0.005009478150213298" rpy="0 0 0"/>
+    <mass value="0.059421514137175474"/>
+    <inertia ixx="4e-06" iyy="6e-06" izz="4e-06" ixy="0.0" iyz="-0.0" ixz="0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0163 -1e-06 -0.142469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__2__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0163 -1e-06 -0.142469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__2__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="buddy_jr_basic_arm_v6__1__1">
+  <inertial>
+    <origin xyz="-0.0031209275601762573 3.6210372378075405e-07 0.024196287292651164" rpy="0 0 0"/>
+    <mass value="0.05170803809064468"/>
+    <inertia ixx="3e-05" iyy="2.9e-05" izz="1e-06" ixy="-0.0" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0021 -1e-06 -0.159369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_arm_v6__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0021 -1e-06 -0.159369" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_arm_v6__1__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_Horn_v7__3__1">
+  <inertial>
+    <origin xyz="0.05803331480560046 -0.0021093872223655833 -0.0001283396145439486" rpy="0 0 0"/>
+    <mass value="0.09635005695952946"/>
+    <inertia ixx="5e-06" iyy="0.000118" izz="0.000114" ixy="0.0" iyz="0.0" ixz="-1e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0001 -2e-06 -0.221569" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__3__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0001 -2e-06 -0.221569" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_Horn_v7__3__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="Servo_v2__3__1">
+  <inertial>
+    <origin xyz="0.01839465155181231 -2.927965791770614e-07 0.005009478147684321" rpy="0 0 0"/>
+    <mass value="0.059421514137175474"/>
+    <inertia ixx="4e-06" iyy="6e-06" izz="4e-06" ixy="-0.0" iyz="-0.0" ixz="-0.0"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0001 -2e-06 -0.221569" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__3__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0001 -2e-06 -0.221569" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/Servo_v2__3__1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<link name="buddy_jr_basic_camera_holder_v6_1">
+  <inertial>
+    <origin xyz="-0.0056542117525868255 -3.902197127736895e-05 -0.0009666564131448341" rpy="0 0 0"/>
+    <mass value="0.03067310813764409"/>
+    <inertia ixx="7e-06" iyy="7e-06" izz="4e-06" ixy="-0.0" iyz="0.0" ixz="2e-06"/>
+  </inertial>
+  <visual>
+    <origin xyz="-0.0143 -2e-06 -0.238469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_camera_holder_v6_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+    <material name="silver"/>
+  </visual>
+  <collision>
+    <origin xyz="-0.0143 -2e-06 -0.238469" rpy="0 0 0"/>
+    <geometry>
+      <mesh filename="package://Buddy_UDRF_description/meshes/buddy_jr_basic_camera_holder_v6_1.stl" scale="0.001 0.001 0.001"/>
+    </geometry>
+  </collision>
+</link>
+
+<joint name="Rigid 1" type="fixed">
+  <origin xyz="0.018 0.0 0.026169" rpy="0 0 0"/>
+  <parent link="base_link"/>
+  <child link="Servo_v2_1"/>
+</joint>
+
+<joint name="Revolute 13" type="continuous">
+  <origin xyz="-0.0169 0.0 0.0142" rpy="0 0 0"/>
+  <parent link="Servo_v2_1"/>
+  <child link="Servo_Horn_v7_1"/>
+  <axis xyz="0.0 8e-06 1.0"/>
+</joint>
+
+<joint name="Rigid 14" type="fixed">
+  <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  <parent link="Servo_Horn_v7_1"/>
+  <child link="buddy_jr_basic_base_pivot_v9_1"/>
+</joint>
+
+<joint name="Rigid 15" type="fixed">
+  <origin xyz="-0.001 0.0 0.022" rpy="0 0 0"/>
+  <parent link="buddy_jr_basic_base_pivot_v9_1"/>
+  <child link="Servo_Horn_v7__1__1"/>
+</joint>
+
+<joint name="Revolute 16" type="continuous">
+  <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  <parent link="Servo_Horn_v7__1__1"/>
+  <child link="Servo_v2__1__1"/>
+  <axis xyz="-1.0 0.0 0.0"/>
+</joint>
+
+<joint name="Rigid 17" type="fixed">
+  <origin xyz="0.0142 0.0 -0.0061" rpy="0 0 0"/>
+  <parent link="Servo_v2__1__1"/>
+  <child link="buddy_jr_basic_arm_v6_1"/>
+</joint>
+
+<joint name="Rigid 18" type="fixed">
+  <origin xyz="0.002 1e-06 0.0862" rpy="0 0 0"/>
+  <parent link="buddy_jr_basic_arm_v6_1"/>
+  <child link="Servo_Horn_v7__2__1"/>
+</joint>
+
+<joint name="Rigid 19" type="fixed">
+  <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  <parent link="Servo_Horn_v7__2__1"/>
+  <child link="Servo_v2__2__1"/>
+</joint>
+
+<joint name="Rigid 20" type="fixed">
+  <origin xyz="-0.0142 0.0 0.0169" rpy="0 0 0"/>
+  <parent link="Servo_v2__2__1"/>
+  <child link="buddy_jr_basic_arm_v6__1__1"/>
+</joint>
+
+<joint name="Rigid 21" type="fixed">
+  <origin xyz="-0.002 1e-06 0.0622" rpy="0 0 0"/>
+  <parent link="buddy_jr_basic_arm_v6__1__1"/>
+  <child link="Servo_Horn_v7__3__1"/>
+</joint>
+
+<joint name="Revolute 22" type="continuous">
+  <origin xyz="0.0 0.0 0.0" rpy="0 0 0"/>
+  <parent link="Servo_Horn_v7__3__1"/>
+  <child link="Servo_v2__3__1"/>
+  <axis xyz="-1.0 0.0 -0.0"/>
+</joint>
+
+<joint name="Rigid 23" type="fixed">
+  <origin xyz="0.0142 0.0 0.0169" rpy="0 0 0"/>
+  <parent link="Servo_v2__3__1"/>
+  <child link="buddy_jr_basic_camera_holder_v6_1"/>
+</joint>
+
+</robot>

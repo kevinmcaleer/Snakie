@@ -26,6 +26,14 @@ export const INSTRUMENTS_ROOT_PATH = '/instruments.py'
 export const INSTRUMENTS_LIB_DIR = '/lib'
 
 /**
+ * The `snakie.py` hardware umbrella is installed beside `instruments.py` (it
+ * re-exports its hardware classes), so `from snakie import Servo, …` resolves on
+ * the board and can't be shadowed by a vendor `servo` module.
+ */
+export const SNAKIE_LIB_PATH = '/lib/snakie.py'
+export const SNAKIE_ROOT_PATH = '/snakie.py'
+
+/**
  * Install detection, cached per connection so we don't re-poll the raw REPL on
  * every dock open:
  *  - `'unknown'`   — not probed yet (or reset on disconnect); a probe is due.

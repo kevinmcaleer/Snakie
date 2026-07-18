@@ -1,0 +1,6 @@
+parts:
+  - id: icm20948
+    lib: snakie-standard
+    part: icm20948
+    label: ICM20948 Breakout
+connections: []

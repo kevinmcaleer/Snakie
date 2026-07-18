@@ -1,20 +1,11 @@
-import { createRequire } from 'module'
-import { reportError } from '../report-error'
-import type {
-  LoadMicroPythonOptions,
-  MicroPythonInstance
-} from '@micropython/micropython-webassembly-pyscript/micropython.mjs'
+import { Worker } from 'worker_threads'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 
-// The main bundle is ESM, so reconstruct a `require` for resolving the package's
-// `.wasm` file path (works in dev, in the packaged asar, and under vitest).
-const require = createRequire(import.meta.url)
-
-/** Specifier of the MicroPython WebAssembly ESM loader + its binary. */
-const MP_MJS = '@micropython/micropython-webassembly-pyscript/micropython.mjs'
-const MP_WASM = '@micropython/micropython-webassembly-pyscript/micropython.wasm'
-
-/** How often buffered interpreter output is flushed to the consumer (ms). */
-const FLUSH_INTERVAL_MS = 16
+// The worker file is emitted alongside this bundle (electron.vite builds
+// `mp-node-worker` as a second main entry → out/main/mp-node-worker.js).
+const WORKER_FILE = 'mp-node-worker.js'
+const defaultWorkerPath = join(dirname(fileURLToPath(import.meta.url)), WORKER_FILE)
 
 /**
  * A REPL backend the {@link SimulatedDevice} drives. Abstracted so the device
@@ -32,119 +23,157 @@ export interface ReplRuntime {
    * snippet raises a Python exception.
    */
   runCaptured(code: string): Promise<string>
+  /**
+   * Stop whatever's running (Stop button). When idle this is a gentle Ctrl-C
+   * that keeps REPL state; when a program is running it reboots the interpreter
+   * (the only way to break a no-yield / tight loop), resetting the RAM VFS —
+   * exactly like a reconnect.
+   */
+  interrupt(): Promise<void>
   /** Tear the runtime down. */
   dispose(): void
 }
 
+type Pending = { resolve: (v: string) => void; reject: (e: Error) => void; kind: 'feed' | 'run' }
+type OutMsg =
+  | { type: 'out'; bytes: Uint8Array }
+  | { type: 'ready' }
+  | { type: 'done'; id: number; error?: string }
+  | { type: 'result'; id: number; value?: string; error?: string }
+
 /**
- * REAL MicroPython interpreter, compiled to WebAssembly (issue #135).
+ * REAL MicroPython interpreter (WebAssembly, issue #135), run in a Node
+ * worker_threads worker so a perpetual `while True:` loop can't freeze the
+ * Electron main process. This is the main-thread proxy — the twin of the web
+ * build's `WorkerMicroPythonRuntime` — driving {@link ./mp-node-worker} over
+ * messages: `init` boots the interpreter (+ the simulated `machine` module),
+ * `feed` streams REPL/paste-mode input, `run` executes a captured snippet.
  *
- * Wraps the official `@micropython/micropython-webassembly-pyscript` build so the
- * simulated device runs ACTUAL Python: `init()` boots the interpreter and prints
- * the friendly banner + prompt, and `feed()` pushes input bytes through the
- * genuine MicroPython REPL — so interactive typing, **paste mode** (how the Run
- * button ships a file: Ctrl-E … Ctrl-D), Ctrl-C and Ctrl-D all work natively.
- *
- * Output arrives one byte at a time from Emscripten; we buffer it and flush on a
- * short timer so a running program streams without firing an IPC message per
- * character. Hardware modules (`machine`, etc.) don't exist in the WASM port, so
- * importing them raises `ImportError` — exactly like a board with no such device.
+ * `interrupt()` is smart: idle → a queued Ctrl-C (keeps the VFS); running → a
+ * worker reboot (the only way to break a loop that never yields to JS), which
+ * resets the RAM filesystem like a reconnect.
  */
 export class MicroPythonRuntime implements ReplRuntime {
-  private mp: MicroPythonInstance | null = null
+  private worker: Worker | null = null
   private onOutput: ((chunk: Buffer) => void) | null = null
-  private pending: number[] = []
-  /** When set, interpreter output is diverted here instead of the console. */
-  private capturing: number[] | null = null
-  private flushTimer: ReturnType<typeof setInterval> | null = null
-  /** Serializes input so bytes are processed strictly in order. */
-  private queue: Promise<unknown> = Promise.resolve()
+  private nextId = 1
+  private readonly pending = new Map<number, Pending>()
+  private readyResolve: (() => void) | null = null
+  private readyReject: ((err: Error) => void) | null = null
+  /** In-flight feed/run count — >0 means the interpreter is busy/running. */
+  private busy = 0
+  private readonly workerPath: string
+
+  /** `workerFile` overrides the bundled worker path. Falls back to
+   *  `SNAKIE_MP_WORKER` (set by the vitest setup, which compiles the worker to a
+   *  temp file since tests have no built `out/main`), then the bundled path. */
+  constructor(workerFile?: string) {
+    this.workerPath = workerFile ?? process.env.SNAKIE_MP_WORKER ?? defaultWorkerPath
+  }
 
   async init(onOutput: (chunk: Buffer) => void): Promise<void> {
     this.onOutput = onOutput
-    const wasmPath = require.resolve(MP_WASM)
-    const { loadMicroPython } = await import(MP_MJS)
-    const options: LoadMicroPythonOptions = {
-      url: wasmPath,
-      linebuffer: false,
-      stdout: (bytes) => this.collect(bytes),
-      stderr: (bytes) => this.collect(bytes)
-    }
-    const mp = await loadMicroPython(options)
-    this.mp = mp
-    // Stream buffered output on a short cadence so long-running programs show
-    // progress instead of dumping everything when they finish.
-    this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS)
-    this.flushTimer.unref?.()
-    // Print the banner + first prompt.
-    mp.replInit()
-    this.flush()
+    await this.spawn()
   }
 
-  feed(data: string): Promise<void> {
-    const op = this.queue.then(async () => {
-      const mp = this.mp
-      if (!mp) return
-      for (const byte of Buffer.from(data, 'utf8')) {
-        await mp.replProcessCharWithAsyncify(byte)
-      }
-      this.flush()
+  private spawn(): Promise<void> {
+    const worker = new Worker(this.workerPath)
+    this.worker = worker
+    worker.on('message', (m: OutMsg) => this.handle(m))
+    // A worker-level error rejects the boot / any in-flight request rather than
+    // hanging the device layer. (This used to RESOLVE the boot — connect then
+    // "succeeded" with a dead worker installed and every request hung, #500.)
+    worker.on('error', (err) => {
+      const e = err instanceof Error ? err : new Error(String(err))
+      for (const p of this.pending.values()) p.reject(e)
+      this.pending.clear()
+      this.busy = 0
+      this.readyReject?.(e)
+      this.readyResolve = null
+      this.readyReject = null
+      // Tear the dead worker down so later requests fail fast, not silently.
+      if (this.worker === worker) this.worker = null
+      void worker.terminate()
     })
-    // Keep the queue alive even if one feed rejects — but log it (#225) so a
-    // silently-failing REPL feed isn't invisible.
-    this.queue = op.catch((err) => reportError('sim runtime feed', err))
-    return op
+    const ready = new Promise<void>((res, rej) => {
+      this.readyResolve = res
+      this.readyReject = rej
+    })
+    worker.postMessage({ type: 'init' })
+    return ready
+  }
+
+  private handle(msg: OutMsg): void {
+    if (msg.type === 'out') {
+      this.onOutput?.(Buffer.from(msg.bytes))
+      return
+    }
+    if (msg.type === 'ready') {
+      this.readyResolve?.()
+      this.readyResolve = null
+      this.readyReject = null
+      return
+    }
+    // 'done' (feed) or 'result' (run) — settle the matching request.
+    this.busy = Math.max(0, this.busy - 1)
+    const p = this.pending.get(msg.id)
+    if (!p) return
+    this.pending.delete(msg.id)
+    if (msg.error) p.reject(new Error(msg.error))
+    else p.resolve(msg.type === 'result' ? (msg.value ?? '') : '')
+  }
+
+  private request(payload: { type: 'feed'; data: string } | { type: 'run'; code: string }): Promise<string> {
+    const worker = this.worker
+    if (!worker) return Promise.reject(new Error('MicroPython runtime is not running'))
+    const id = this.nextId++
+    this.busy += 1
+    return new Promise<string>((resolve, reject) => {
+      this.pending.set(id, { resolve, reject, kind: payload.type })
+      worker.postMessage({ ...payload, id })
+    })
+  }
+
+  async feed(data: string): Promise<void> {
+    await this.request({ type: 'feed', data })
   }
 
   runCaptured(code: string): Promise<string> {
-    const op = this.queue.then(() => {
-      const mp = this.mp
-      if (!mp) throw new Error('MicroPython runtime is not running')
-      // Emit any console output buffered so far, then divert this snippet's
-      // output into a private buffer so it stays off the console.
-      this.flush()
-      this.capturing = []
-      try {
-        // Run SYNCHRONOUSLY (mp_js_do_exec), NOT the Asyncify path. The FS
-        // helpers (listdir/read/write/stat/…) are plain synchronous Python, and
-        // the sync exec avoids the Asyncify reentrancy that can make a nested
-        // call return a NULL object — surfaced as "NULL object" on the simulated
-        // device's file ops and the instruments-library install. Output is
-        // captured the same way; a Python exception throws (rejecting the op).
-        mp.runPython(code)
-        return Buffer.from(this.capturing).toString('utf8')
-      } finally {
-        this.capturing = null
-      }
-    })
-    this.queue = op.catch((err) => reportError('sim runtime exec', err))
-    return op
+    return this.request({ type: 'run', code })
+  }
+
+  async interrupt(): Promise<void> {
+    // Idle → a gentle Ctrl-C keeps REPL + VFS state. Busy (a program is running,
+    // possibly a no-yield loop) → reboot the worker: the only way to break it.
+    if (this.busy <= 0) {
+      await this.feed('\x03').catch(() => undefined)
+      return
+    }
+    await this.reboot()
+  }
+
+  private async reboot(): Promise<void> {
+    // The in-flight FEED is the running program itself (the Run) — stopping it is
+    // a normal completion, so RESOLVE it (rejecting would surface a spurious
+    // "couldn't send your program" from the Run button's catch). In-flight RUNs
+    // (FS ops / probes) genuinely didn't complete — reject so callers can retry.
+    for (const p of this.pending.values()) {
+      if (p.kind === 'feed') p.resolve('')
+      else p.reject(new Error('interrupted'))
+    }
+    this.pending.clear()
+    this.busy = 0
+    await this.worker?.terminate()
+    this.worker = null
+    this.onOutput?.(Buffer.from('\r\n[stopped — simulator restarted]\r\n', 'utf8'))
+    await this.spawn()
   }
 
   dispose(): void {
-    if (this.flushTimer) {
-      clearInterval(this.flushTimer)
-      this.flushTimer = null
-    }
-    this.flush()
-    this.mp = null
+    void this.worker?.terminate()
+    this.worker = null
     this.onOutput = null
-    this.pending = []
-    this.capturing = null
-  }
-
-  /** Accumulate interpreter output — into the capture buffer if one is active
-   * (a `runCaptured` snippet), otherwise the console-bound pending buffer. */
-  private collect(bytes: Uint8Array): void {
-    const sink = this.capturing ?? this.pending
-    for (const b of bytes) sink.push(b)
-  }
-
-  /** Emit any buffered output as a single chunk. */
-  private flush(): void {
-    if (this.pending.length === 0 || !this.onOutput) return
-    const chunk = Buffer.from(this.pending)
-    this.pending = []
-    this.onOutput(chunk)
+    this.pending.clear()
+    this.busy = 0
   }
 }

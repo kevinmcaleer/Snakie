@@ -17,3 +17,9 @@ vite.preview.config.mjs
 # Python bytecode (plugin SDK/host)
 __pycache__/
 *.pyc
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Web build (epic #267 — Snakie for Web)
+dist-web/
+.mp-node-worker.built.mjs

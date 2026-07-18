@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<!--
+  BIPED (#314) — two legs so the motion timeline's Mirror (left↔right) works.
+  robot.yml binds hip_left→GP0, hip_right→GP1 and pairs them. Keyframe hip_left,
+  press "Mirror ½" for a walk, Play, then Export .py.
+-->
+<robot name="biped">
+  <material name="steel"><color rgba="0.62 0.65 0.69 1"/></material>
+  <material name="amber"><color rgba="0.85 0.55 0.18 1"/></material>
+  <material name="blue"><color rgba="0.34 0.55 0.82 1"/></material>
+  <link name="torso">
+    <visual><geometry><box size="0.10 0.08 0.12"/></geometry><material name="steel"/></visual>
+  </link>
+  <link name="thigh_left">
+    <visual><origin xyz="0 0 -0.09"/><geometry><box size="0.04 0.04 0.18"/></geometry><material name="amber"/></visual>
+  </link>
+  <joint name="hip_left" type="revolute">
+    <parent link="torso"/><child link="thigh_left"/>
+    <origin xyz="0.03 0 -0.06"/><axis xyz="0 1 0"/>
+    <limit lower="-0.9" upper="0.9" effort="1" velocity="1"/>
+  </joint>
+  <link name="thigh_right">
+    <visual><origin xyz="0 0 -0.09"/><geometry><box size="0.04 0.04 0.18"/></geometry><material name="blue"/></visual>
+  </link>
+  <joint name="hip_right" type="revolute">
+    <parent link="torso"/><child link="thigh_right"/>
+    <origin xyz="-0.03 0 -0.06"/><axis xyz="0 1 0"/>
+    <limit lower="-0.9" upper="0.9" effort="1" velocity="1"/>
+  </joint>
+</robot>

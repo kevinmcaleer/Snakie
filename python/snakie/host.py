@@ -24,14 +24,17 @@ stdout is redirected to stderr so it cannot corrupt the channel.
 from __future__ import annotations
 
 import argparse
+import ast
 import importlib
 import importlib.util
 import json
+import math
 import os
+import re
 import sys
 import traceback
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure the SDK package is importable when run directly as a script (not just
 # as ``-m snakie.host``): add this file's parent dir (the one containing the
@@ -288,6 +291,212 @@ def _run_lint(params: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# Motion Studio managed blocks (#413) — read the guarded, versioned pose /
+# sequence / servo assignments back out of an exported ``.py`` so the Robot View
+# can round-trip them. The TS side ({@link src/shared/managed-blocks.ts}) writes;
+# this reads. ``ast.literal_eval`` keeps it exec-safe: NO user code runs.
+# ---------------------------------------------------------------------------
+
+# The schema version this build understands; a block tagged higher is left to a
+# newer app (mirrors ``MANAGED_SCHEMA_VERSION`` in managed-blocks.ts).
+MOTION_SCHEMA_VERSION = 1
+
+# The guard-comment markers. Comments are stripped by ``ast.parse``, so the
+# per-block schema version is recovered from the raw source with these.
+_OPEN_MARKER_RE = re.compile(r"^# --- snakie:([a-z]+) v(\d+) ---", re.MULTILINE)
+
+# The managed assignment targets we recognise, and which block each belongs to.
+_ASSIGN_BLOCK = {
+    "SNAKIE_POSES": "poses",
+    "SNAKIE_SEQUENCES": "sequences",
+    "SNAKIE_SERVOS": "servos",
+}
+
+
+def _as_finite_number(v: Any) -> Optional[float]:
+    """Coerce a managed value to a finite float, or ``None`` to drop it.
+
+    ``bool`` is excluded (it subclasses ``int``, so ``True`` would otherwise
+    become ``1.0`` — a silent type confusion). An out-of-range int literal makes
+    ``float()`` raise ``OverflowError``; a non-finite float is unusable — both
+    are treated as "drop with a warning" so the reader never raises on a
+    hand-edited value (the JSON-RPC contract is a soft ``{ok: False}``, never a
+    crash)."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    try:
+        f = float(v)
+    except (OverflowError, ValueError, TypeError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def _block_versions(source: str) -> Dict[str, int]:
+    """Map each managed block name → the schema version on its opening marker."""
+    return {m.group(1): int(m.group(2)) for m in _OPEN_MARKER_RE.finditer(source)}
+
+
+def _managed_assignments(source: str) -> Tuple[Dict[str, Any], List[str]]:
+    """Return ``{name: literal_eval(value)}`` for every top-level managed
+    assignment, plus a list of warnings for any that isn't a safe literal.
+
+    Only the recognised ``SNAKIE_*`` module-level names are evaluated, and each
+    via ``ast.literal_eval`` — a non-literal value (a call, a name, an f-string)
+    is skipped with a warning rather than executed.
+    """
+    tree = ast.parse(source)  # raises SyntaxError on a hand-broken file
+    values: Dict[str, Any] = {}
+    warnings: List[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if not isinstance(target, ast.Name) or target.id not in _ASSIGN_BLOCK:
+                continue
+            try:
+                values[target.id] = ast.literal_eval(node.value)
+            except (ValueError, SyntaxError):
+                warnings.append(
+                    f"{target.id} is not a plain literal — a hand-edit broke it; "
+                    "managed sync is paused for this file until it parses again"
+                )
+    return values, warnings
+
+
+def _validate_poses(raw: Any, warnings: List[str]) -> Dict[str, Dict[str, float]]:
+    """Coerce ``SNAKIE_POSES`` into ``{pose: {joint: number}}``, dropping (with a
+    warning) anything the wrong shape rather than failing the whole read."""
+    out: Dict[str, Dict[str, float]] = {}
+    if not isinstance(raw, dict):
+        warnings.append("SNAKIE_POSES is not a dict — ignored")
+        return out
+    for name, joints in raw.items():
+        if not isinstance(name, str) or not isinstance(joints, dict):
+            warnings.append(f"pose {name!r} has a bad shape — ignored")
+            continue
+        vals: Dict[str, float] = {}
+        for j, v in joints.items():
+            if not isinstance(j, str):
+                continue
+            num = _as_finite_number(v)
+            if num is not None:
+                vals[j] = num
+        out[name] = vals
+    return out
+
+
+def _validate_sequences(raw: Any, warnings: List[str]) -> Dict[str, List[List[Any]]]:
+    """Coerce ``SNAKIE_SEQUENCES`` into ``{name: [[pose, durationMs], …]}``."""
+    out: Dict[str, List[List[Any]]] = {}
+    if not isinstance(raw, dict):
+        warnings.append("SNAKIE_SEQUENCES is not a dict — ignored")
+        return out
+    for name, steps in raw.items():
+        if not isinstance(name, str) or not isinstance(steps, (list, tuple)):
+            warnings.append(f"sequence {name!r} has a bad shape — ignored")
+            continue
+        good: List[List[Any]] = []
+        for step in steps:
+            if isinstance(step, (list, tuple)) and len(step) in (2, 3) and isinstance(step[0], str):
+                dur = _as_finite_number(step[1])
+                if dur is None:
+                    continue
+                item: List[Any] = [step[0], dur]
+                # An optional 3rd element is the easing (#415); keep it if it's a string.
+                if len(step) == 3 and isinstance(step[2], str):
+                    item.append(step[2])
+                good.append(item)
+        out[name] = good
+    return out
+
+
+def _validate_servos(raw: Any, warnings: List[str]) -> List[Dict[str, Any]]:
+    """Coerce ``SNAKIE_SERVOS`` into a list of binding dicts (pin/joint required)."""
+    out: List[Dict[str, Any]] = []
+    if not isinstance(raw, (list, tuple)):
+        warnings.append("SNAKIE_SERVOS is not a list — ignored")
+        return out
+    for entry in raw:
+        if not isinstance(entry, dict) or "pin" not in entry or "joint" not in entry:
+            warnings.append("a servo entry is missing pin/joint — ignored")
+            continue
+        binding: Dict[str, Any] = {"pin": str(entry["pin"]), "joint": str(entry["joint"])}
+        for key in ("jointMin", "jointMax", "servoMin", "servoMax"):
+            num = _as_finite_number(entry.get(key))
+            if num is not None:
+                binding[key] = num
+        if "invert" in entry:
+            binding["invert"] = bool(entry["invert"])
+        out.append(binding)
+    return out
+
+
+def _motion_read(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Parse the managed motion blocks out of ``params['source']``.
+
+    Returns ``{ok, schema, poses, sequences, servos, warnings}`` on success.
+    A block whose on-disk version is NEWER than we understand is left out of the
+    result and flagged (don't clobber a future format). A hand-edit that breaks
+    the Python syntax, or a managed value that isn't a plain literal, yields
+    ``{ok: False, error, warnings}`` so the caller suspends managed rewrite.
+    """
+    source = params.get("source") or ""
+    warnings: List[str] = []
+    try:
+        versions = _block_versions(source)
+
+        # Skip (and warn about) any block from a newer schema.
+        skip_targets = set()
+        for block, ver in versions.items():
+            if ver > MOTION_SCHEMA_VERSION:
+                warnings.append(
+                    f"the '{block}' block is schema v{ver}, newer than this app "
+                    f"(v{MOTION_SCHEMA_VERSION}) — left untouched; update Snakie to edit it"
+                )
+                for name, blk in _ASSIGN_BLOCK.items():
+                    if blk == block:
+                        skip_targets.add(name)
+
+        try:
+            values, lit_warnings = _managed_assignments(source)
+        except SyntaxError as exc:
+            return {
+                "ok": False,
+                "error": f"the file has a Python syntax error (line {exc.lineno}): {exc.msg}",
+                "warnings": warnings,
+            }
+        warnings.extend(lit_warnings)
+        if lit_warnings:
+            return {"ok": False, "error": lit_warnings[0], "warnings": warnings}
+
+        for name in skip_targets:
+            values.pop(name, None)
+
+        known = [v for v in versions.values() if v <= MOTION_SCHEMA_VERSION]
+        schema = min([MOTION_SCHEMA_VERSION, *known]) if versions else MOTION_SCHEMA_VERSION
+        return {
+            "ok": True,
+            "schema": schema,
+            "poses": _validate_poses(values.get("SNAKIE_POSES", {}), warnings),
+            "sequences": _validate_sequences(values.get("SNAKIE_SEQUENCES", {}), warnings),
+            "servos": _validate_servos(values.get("SNAKIE_SERVOS", []), warnings),
+            "warnings": warnings,
+        }
+    except Exception as exc:  # noqa: BLE001 - a hand-edited file must never crash the RPC
+        return {"ok": False, "error": f"could not read managed blocks: {exc}", "warnings": warnings}
+
+
+def _motion_check(params: Dict[str, Any]) -> Dict[str, Any]:
+    """A light validity probe: does this file's managed blocks still parse?
+
+    Returns ``{ok, schema, error}`` — used to decide whether managed rewrite is
+    safe (a broken hand-edit disables it until fixed) without shipping the data.
+    """
+    res = _motion_read(params)
+    return {"ok": res["ok"], "schema": res.get("schema"), "error": res.get("error")}
+
+
+# ---------------------------------------------------------------------------
 # JSON-RPC loop
 # ---------------------------------------------------------------------------
 
@@ -316,6 +525,10 @@ class Host:
         if method == "lint":
             self._ensure_discovered()
             return _run_lint(params)
+        if method == "motion.read":
+            return _motion_read(params)
+        if method == "motion.check":
+            return _motion_check(params)
         if method == "shutdown":
             return {"ok": True}
         raise ValueError(f"unknown method: {method!r}")

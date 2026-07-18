@@ -55,6 +55,20 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
     })
   )
 
+  ipcMain.handle(
+    'fs:openFileDialog',
+    (_e, opts?: { filters?: { name: string; extensions: string[] }[] }) =>
+      wrap(async () => {
+        const win = getWindow()
+        const options = { properties: ['openFile' as const], filters: opts?.filters }
+        const result = win
+          ? await dialog.showOpenDialog(win, options)
+          : await dialog.showOpenDialog(options)
+        if (result.canceled || result.filePaths.length === 0) return null
+        return result.filePaths[0]
+      })
+  )
+
   ipcMain.handle('fs:saveFileDialog', (_e, defaultPath?: string) =>
     wrap(async () => {
       const win = getWindow()
@@ -71,6 +85,12 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
 
   ipcMain.handle('fs:readFile', (_e, path: string) => wrap(() => fs.readFile(path, 'utf-8')))
 
+  // Binary read (base64) — for meshes (binary STL etc.) that a utf-8 read would
+  // corrupt. Robot View decodes it back to an ArrayBuffer (#319).
+  ipcMain.handle('fs:readFileBase64', (_e, path: string) =>
+    wrap(async () => (await fs.readFile(path)).toString('base64'))
+  )
+
   ipcMain.handle('fs:writeFile', (_e, path: string, contents: string) =>
     wrap(async () => {
       await fs.writeFile(path, contents, 'utf-8')
@@ -85,6 +105,20 @@ export function registerFsIpc(getWindow: () => BrowserWindow | undefined): void 
 
   ipcMain.handle('fs:rename', (_e, from: string, to: string) =>
     wrap(async () => {
+      // POSIX rename silently REPLACES an existing destination — renaming a file
+      // to a sibling's name would destroy that sibling (#504). Refuse unless the
+      // "destination" is the SAME file (inode identity), which keeps case-only
+      // renames working on case-insensitive filesystems (macOS/Windows).
+      if (from !== to) {
+        try {
+          const [a, b] = await Promise.all([fs.stat(from), fs.stat(to)])
+          if (!(a.ino === b.ino && a.dev === b.dev)) {
+            throw new Error(`"${to.split(/[/\\]/).pop()}" already exists.`)
+          }
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err
+        }
+      }
       await fs.rename(from, to)
     })
   )

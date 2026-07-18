@@ -1,0 +1,182 @@
+/* Motion timeline dock (#314) — bottom of the pose tool. Theme-aware tokens. */
+.robottimeline {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  padding: 0.35rem 0.5rem 0.5rem;
+  background: var(--bg-elevated, #202227);
+  border-top: var(--border-w, 1px) solid var(--border, #2c2e33);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  color: var(--text, #cdd2d9);
+  font-size: 0.66rem;
+}
+
+.robottimeline__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.robottimeline__btn {
+  font-family: inherit;
+  font-size: 0.66rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, #2a2d33);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.robottimeline__btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+.robottimeline__btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.robottimeline__btn.is-on {
+  color: #191a1d;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.robottimeline__btn--del:hover:not(:disabled) {
+  border-color: #b4544e;
+  color: #b4544e;
+}
+.robottimeline__btn--export {
+  color: #191a1d;
+  background: #6fae6f;
+  border-color: #6fae6f;
+  font-weight: 700;
+}
+.robottimeline__btn--export:hover:not(:disabled) {
+  background: #7cbe7c;
+}
+
+.robottimeline__loop {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robottimeline__scrub {
+  flex: 1 1 auto;
+  min-width: 4rem;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.robottimeline__time {
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+  min-width: 3.2rem;
+  text-align: right;
+}
+.robottimeline__field {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robottimeline__field input {
+  width: 2.8rem;
+}
+.robottimeline__bar input[type='number'],
+.robottimeline__easing,
+.robottimeline__pose {
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, #24262b);
+  border: 1px solid var(--border, #34373d);
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}
+.robottimeline__spacer {
+  flex: 1 1 auto;
+}
+/* Mirror-pair invert toggles (#332). */
+.robottimeline__mirpairs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.robottimeline__mirpair {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.58rem;
+  color: var(--text-muted, #9aa0a6);
+  cursor: pointer;
+}
+.robottimeline__mirpair input {
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.robottimeline__tracks {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 26vh;
+  overflow-y: auto;
+  padding-top: 0.1rem;
+}
+.robottimeline__playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  margin-left: 6.5rem; /* line up with the track start (after the name column) */
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 3;
+}
+.robottimeline__row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.15rem;
+}
+.robottimeline__row-name {
+  flex: 0 0 6rem;
+  width: 6rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.6rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robottimeline__track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 100%;
+  background: var(--bg-sunken, #191a1d);
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 4px;
+  cursor: copy;
+}
+.robottimeline__key {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  background: var(--accent);
+  border: 1px solid #191a1d;
+  border-radius: 2px;
+  padding: 0;
+  cursor: grab;
+}
+.robottimeline__key.is-sel {
+  background: #fff;
+  box-shadow: 0 0 5px rgba(200, 162, 74, 0.9);
+}
+.robottimeline__empty {
+  color: var(--text-muted, #7d838d);
+  font-size: 0.64rem;
+  margin: 0.2rem 0;
+}

@@ -1,0 +1,19 @@
+name: Servo Arm
+parts: []
+connections: []
+robot:
+  version: 1
+  urdf: arm.urdf
+  servoJointMap:
+    - pin: "0"
+      joint: shoulder
+      jointMin: -90
+      jointMax: 90
+      servoMin: 0
+      servoMax: 180
+    - pin: "1"
+      joint: elbow
+      jointMin: -90
+      jointMax: 90
+      servoMin: 0
+      servoMax: 180

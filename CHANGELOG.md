@@ -29,55 +29,991 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   new shared `isElectron()`/`hasWebSerial()`/`hasWebUSB()`/
   `hasFileSystemAccess()` capability-detection module, reused by the ESP
   browser-flashing work above and by upcoming micro:bit/Pico web flashing.
-- **Data View — open a logged CSV as a table (#274, epic #272).** Opening a
-  `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text:
-  it auto-detects the delimiter (comma / tab / semicolon / whitespace) and the
-  header row, infers each column's type (number / timestamp / text), and
-  tolerates the mess real device logs carry — ragged rows, blank lines and a
-  torn final row (board unplugged mid-write) are handled, never fatal, with a
-  data-quality "ragged" count and null markers for dropped readings. Rendering
-  is **virtualised**, so a 24-hour log (~86k rows) scrolls smoothly with only
-  the visible rows in the DOM. This is the foundation of the Data View epic
-  (#272); sort/filter, the column-summary panel, pull-from-board, graphing and
-  export build on the same parsed model.
-- **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
-  remembers the open local files (and which tab was active) and reopens them
-  next time — alongside the working folder it already restored (#177). A
-  **crash-guard** protects startup: if a file broke the app last launch, Snakie
-  opens clean, drops that session so it can't loop, and shows a "Opened without
-  restoring files" note — no keystroke or admin needed, which matters on a
-  locked-down school machine. Session state lives in the per-user `userData`
-  store (writable without elevation).
+- **Board View works by touch — iPad-friendly wiring (part of #525).** On a
+  touchscreen, tapping the board or a part now reveals its pin capability
+  chips (they stay up until you tap elsewhere — touch has no hover), wires can
+  be dragged from pin to pin by finger (with a finger-sized grab radius, and
+  one that no longer shrinks when the board pane is narrow), and a two-finger
+  pinch zooms the canvas about the gesture (a second finger safely cancels any
+  in-flight drag). One-finger pan, part dragging and tap-to-select were
+  already pointer-based and keep working; mouse behaviour is unchanged.
+- **Board View on the web app — pops out into its own browser window.** The
+  toolbar's board icon (previously desktop-only) now works on app.snakie.org:
+  `board.html` ships as a second web entry and a `BroadcastChannel` relay
+  replaces the Electron IPC layer, streaming the active file, board selection,
+  instrument launches and robot.yml changes between the windows. Toggle, Esc
+  and re-adopt-after-reload semantics match the desktop.
 
-### Changed
-- **Three focused modes: Code · Board · Data Lab (modes review).** The
-  four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
-  Lab** (instrument bench + a tall console/plotter); existing layouts migrate
-  automatically, including a stale active workspace. **Board mode now gives the
-  board every pixel**: the parts **library** became an Obsidian-style pinnable
-  overlay (open it from its edge tab; it slides away when it loses focus unless
-  you pin it — the pin sits top-left of its header), the **connections table**
-  starts collapsed to a bottom bar with the same pin behaviour, the floating
-  **components browser** starts collapsed, the driver banner is height-capped,
-  and the redundant chrome (the drag grip, the BOARD VIEW title, the dock's
-  mini board) is hidden while the board lives in the main window. Also fixes
-  the Board pane opening at the wrong size (a panel-mount race) and the board
-  column not filling its pane (a collapsed connections table used to strand
-  dead space below itself).
-- **Board View chrome slimmed further.** The "New board" and "open boards
-  folder" header buttons are gone from both the Board mode and the floating
-  window — the Library panel owns part/board authoring and library management
-  now. And in Board MODE, part mini-help opens in the main **Help Library**
-  (which now also lists board-placed parts under "In This Project") instead of
-  the pane's own drawer — one help surface, not two. The floating window keeps
-  its built-in help drawer.
-- **The Board toolbar knob now pops the board out — like undocking an
-  instrument.** Opening the Board window while Board mode is active hands the
-  board to its own OS window and returns the main split to Code; closing that
-  window brings Board back as a mode; picking Board mode while the window is
-  open re-docks it. One board, two homes, never both.
+### Fixed
+- **CODE→ROBOT workspace switch no longer throws on the web app (#528).** The
+  layout store always keeps four horizontal panel shares (files, centre,
+  board, chat) but the chat pane doesn't exist on the web build, so applying a
+  workspace pushed a stray fourth value into a three-panel group —
+  react-resizable-panels rejected it (`Invalid 3 panel layout`) and dragged
+  sizes were never recorded on the web. Layouts are now mapped to exactly the
+  rendered panels in both directions (apply + record).
+- **"New robot" / "Open Folder" now work on iPad (part of #525).** iPadOS
+  Safari has no folder picker (`showDirectoryPicker`), so the web fs backend
+  never installed and both buttons silently did nothing. Where the pickers are
+  missing but OPFS is usable (feature-detected incl. `createWritable`), the
+  same fs api is now backed by an origin-private `Projects/` folder in browser
+  storage: Open Folder adopts it with no dialog, it re-adopts silently on every
+  visit, and the robot.yml layer rides along — so New robot creates and links a
+  real `robot.urdf` that survives reloads.
+- **All catalog modules install on the web app (#522).** The six bundled module
+  stubs (`hcsr04`, `mpu6050`, `neopixel_ws2812`, `rotary`, `buzzer`, `teleop`)
+  are now inlined into the web build — they used to fail with *"isn't bundled
+  in the web build yet"* because only part-driver sources were carried.
+
+## [0.32.0] - 2026-07-15
 
 ### Added
+- **Package manager: on-board packages, uninstall, upgrades and an import scanner
+  (#131).** The Packages panel now reads the board's real `/lib` — every installed
+  package is listed with its version (read from the file, never imported, so
+  drivers can't twitch hardware), an **Uninstall** button, and an **Upgrade**
+  offer when the registry has a newer version. **⌕ Scan imports** walks the
+  project's `.py` files and lists any import that nothing satisfies — not
+  firmware built-ins, not on the board, not your own modules — with one-click
+  installs. Works on the desktop, Web Serial hardware and the simulator alike.
+  The ON BOARD list also refreshes when anything *else* installs to the board —
+  a driver banner, the instruments-library update, another window — and that
+  broadcast now works on the web app too (it was a silent no-op there).
+- **The Modules panel installs drivers for real on the web app (#513).** Every
+  install used to fail into a Retry button (the web backend was a stub).
+  Bundled drivers now write straight to the board's `/lib`; mip-sourced modules
+  run mip on the board itself (works on network-capable hardware over Web
+  Serial, and fails with an honest explanation on the simulator). When the board
+  has no mip (the simulator), single-file GitHub modules are fetched **by the
+  browser** instead and written to `/lib` — so ssd1306/sh1106 install on the sim
+  too.
+
+### Fixed
+- **Exploded-view polish (#499).** The orbit is speed-ramped (eases out of the
+  start, glides into the finish) and the zoom-to-fit legs are eased too — one
+  smooth camera gesture instead of mechanical constant-rate moves. Also fixed
+  the web bug-report screenshot occasionally catching the 3-D canvas blank
+  (capture now waits for the compositor to deliver real frames).
+- **Data-loss protections (#504, #505, #514).** Renaming a file to an existing
+  name no longer silently destroys the other file (desktop + web; case-only
+  renames still work). A malformed `robot.yml` is backed up to `robot.yml.bak`
+  before the app could ever save over it. Edits typed while a save is in flight
+  stay marked *Unsaved* (they used to be silently marked clean), and Ctrl+S
+  failures now surface an error instead of vanishing.
+- **Web saves can't land in the wrong file anymore (#511, #512).** Files picked
+  from outside the project are now tracked by a unique token instead of their
+  bare filename — picking a second file with the same name no longer redirects
+  the first tab's saves into it, and Open Folder no longer disconnects
+  previously-picked files. "Download to computer" uses a per-file save picker
+  instead of a folder picker that silently re-rooted the whole web workspace.
+- **The Git panel works from repo subfolders (#506).** Staging/discarding used
+  root-relative paths against the opened subfolder — the service now rebinds to
+  the discovered repository root.
+- **Check for Updates no longer offers downgrades (#507).** Any version
+  *difference* used to count as "newer"; a real numeric compare (with
+  pre-release handling) means only genuinely newer releases prompt.
+- **Simulator robustness (#500, #501).** A sim worker that fails to boot now
+  fails the connection cleanly instead of pretending to connect with a dead
+  REPL (desktop resolved the error as success; the web had no error path at
+  all, wedging "connecting" forever). Keystrokes/Run that race a Stop-restart
+  are queued instead of dropped — they used to hang forever and silently turn
+  every later Stop into a full simulator reset.
+
+## [0.31.0] - 2026-07-15
+
+### Added
+- **Bug reporting works on the web app (#513).** The Report Bug panel on
+  app.snakie.org now posts real reports to the feedback service (the same
+  endpoint, message format and size caps as the desktop app), and its
+  diagnostics line shows the web build's version + browser instead of
+  "Snakie undefined · undefined undefined". The post-only app key is baked in
+  at deploy time; the endpoint is rate-limited and Cloudflare-fronted. The
+  "Attach screenshot" button works too — it uses the browser's screen-capture
+  picker (grabbing one frame of the tab) in place of the desktop window capture.
+
+## [0.30.0] - 2026-07-13
+
+### Added
+- **Exploded view in the 3-D Robot View (#499).** A new 💥 control on the zoom
+  toolbar separates the robot's parts outward from the assembly centre — a slider
+  drives the separation, ▶ plays an eased out-and-back explosion animation (with an
+  optional full-orbit camera move that ends where it started, and a single smooth
+  zoom-to-fit so nothing jitters), and 🎬 records the animation straight off the
+  canvas to a **proper progressive mp4** (WebCodecs + mp4-muxer, faststart moov —
+  opens in QuickTime/Finder), falling back to an **animated GIF** — the one
+  format that renders on macOS, Windows, Linux AND the web — where H.264 encoding
+  isn't available (Electron), with a codec-probed .webm as last resort. GIF frames
+  rasterise through a 2D canvas (correct colours on every pixel format — no more
+  red-as-blue). The GIF is now rendered **deterministically frame-by-frame** at
+  perfectly uniform ~33 fps steps (GIF's real ceiling — browsers clamp faster
+  delays to 10 fps) with one shared palette, so playback is buttery instead of
+  sampling-judder. Every recording carries a small *"Made with
+  https://app.snakie.org"* watermark bottom-left. Parts travel **straight
+  world-space lines along their original joint normals** (falling back to the joint's
+  origin direction, then centre-out) — nested links compensate for their moving
+  parents so nothing drifts diagonally, and the base stays anchored. Separation is
+  **depth-weighted** — parts nearest the root move least, parts at the end of the
+  hierarchy move most — so chains that share a direction still pull apart. A
+  build-time **overlap solve** nudges any parts that would clash at the final
+  position further along their own lines until everything is clear. The camera
+  backs off to a zoom-to-fit computed from the **actual fully-exploded bounds**
+  (and re-fits when you release the slider), so parts never leave the shot.
+- **Course splash lists its lessons.** Opening a course in the Learn panel now shows
+  the lesson titles (each one clickable to jump straight to it) above the Start button.
+- **Wires are labelled with their variable name in the board view (#498).** Each
+  connection's variable name is drawn over its wire, so a wired-up board reads at a
+  glance.
+- **The Help panel shows the app version** (`Snakie vX.Y.Z`) at its foot — handy to
+  include in a bug screenshot. The web app reports the build version too.
+- **Link any URDF to the project from the Robot dock.** The mini 3-D viewer's "Open…"
+  button now also LINKS the picked `.urdf` as the project robot (repoints `robot.yml`'s
+  `urdf`) when it lives in the open folder — an easy way to point the current code +
+  breadboard at a specific robot model.
+
+### Changed
+- **The web app hides desktop-only controls.** The pop-out Board View button and the
+  LLM chat (its toggle button + the chat pane) are hidden on app.snakie.org — pop-out
+  windows and the chat backend aren't available in the browser, so those buttons did
+  nothing there.
+- **"New robot" confirms before replacing a linked robot.** If the project already has
+  a robot linked, creating a new one now asks first (the previous file stays on disk).
+- **robot.yml surfaces the linked URDF at the top.** The `robot:` block — with `urdf:`
+  as its first field — is now written near the top of `robot.yml` (above the parts /
+  connections lists), so the linked model file is easy to find and edit.
+
+### Fixed
+- **The mini 3-D viewer updates when you link a robot, and now tells you what happened.**
+  Opening/creating a robot from the dock used to force full-screen focus mode, which
+  *unmounted* the mini viewer — so it looked like the robot never changed (it still
+  showed the demo arm until you left focus). Open/New now link + update the mini viewer
+  in place (use "⤢ Pop out" for full-screen), and a status-bar message reports the
+  outcome — *Linked "X"*, *Opened "X" (outside the project — not linked)*, *Created "X"* —
+  so the linking, otherwise invisible, is clear. On the **web app**, "Open…" returns
+  just a filename (a File System Access pick with no folder path), which defeated the
+  in-project check so nothing ever linked — the linker now recognises a picked file
+  that matches a file in the open project and links it project-relative. (Also hardened
+  the in-project path check for Windows drive-letter casing.)
+- **The local file tree refreshes after creating a new robot (#491).** Creating a new
+  robot writes the `.urdf` + `robot.yml`, and the Files list now updates to show them
+  immediately (it also refreshes on any local file save) instead of needing a manual
+  Refresh.
+- **The "New robot" button is readable in light mode.** On the mini 3-D Robot dock its
+  CTA label was white on the light parchment background (a specificity clash dropped
+  its accent fill) — it now has a solid dark-brass fill so the label reads.
+- **External links work on the web app.** "Full documentation at docs.snakie.org" (and
+  other external links) did nothing on app.snakie.org — the browser has no Electron
+  `openExternal`, so they now open in a new tab.
+
+## [0.29.0] - 2026-07-12
+
+### Changed
+- **Tutorials now live in a dedicated "Learn" side panel.** The 📚 Learn button
+  moved from the toolbar into the left activity-bar shelf (just above Help). Clicking
+  it opens the Learn panel, which hosts the whole tutorial experience inline — the
+  course gallery, the course splash, and each lesson's walkthrough (Back / Next, the
+  position dots and the 💡 tip) — replacing the old floating dialog + full-window
+  overlay.
+- **Tutorial text uses a friendly, legible sans (Nunito Sans).** The learning
+  system's prose now reads in a bundled open-source sans instead of the app's retro
+  monospace — clearer for beginners, and code blocks stand out because only the code
+  stays monospace. Line-spacing bumped for readability. (The rest of the app keeps
+  its monospace identity.)
+- **The web app shows its version.** app.snakie.org now displays the build version
+  in the status bar, injected from `package.json` at build time (the web build has
+  no Electron `app.getVersion()`).
+
+### Fixed
+- **Switching editor tabs no longer stops a running program.** With a board/live
+  view polling the device, changing the active file changed the pin count, which
+  re-armed the poll and fired an immediate raw-mode `exec()` probe — and that
+  interrupts a program you're running. The live poll now re-arms only when it turns
+  on/off or crosses empty↔non-empty, reading the latest pins on its normal tick, so
+  a tab switch never pre-empts a run (BoardGraph + InstrumentHost).
+- **Run no longer silently does nothing on the web app.** If no device was connected
+  (e.g. a page reload had dropped the simulator), pressing Run did nothing but leave a
+  tooltip. Run now auto-connects the simulator first so it always works; a real board
+  you've already connected still takes precedence.
+- **Tutorial lesson titles aren't shown twice.** Each lesson repeated its title (a
+  header plus the lesson's own Markdown heading); the redundant header is gone.
+- **Tutorials (📚 Learn) UI is readable in light mode.** The Projects gallery and
+  floating tutorial dialog referenced CSS variables that don't exist in the theme
+  (`--fg`, `--panel`, `--hover`), so they fell back to dark-only literals — in the
+  light (skeuomorph) skin that put near-white text on the parchment background. They
+  now use the real theme tokens (`--text`, `--bg-elevated`, `--accent-ink`,
+  `--accent-contrast`), so they read correctly in both skins.
+- **Swept the whole renderer for the same undefined-token bug.** The context menu,
+  upload/robot controls and the Problems panel referenced tokens that were never
+  defined (`--color-*`, `--muted`, `--warning`) and so silently rendered a wrong-theme
+  fallback; they now point at the real theme tokens. Added a unit test that fails if
+  any `var(--token)` reference isn't a defined token (or an explicitly-blessed
+  override hook), so this class of light/dark parity bug can't ship silently again.
+- **Source Control panel text is readable again.** The muted text on the green-felt
+  Source Control panel was a low-contrast sage grey; it's now a near-white that
+  reads clearly on the green in both the dark and skeuomorph themes.
+- **Web Serial: the port dropdown now shows the connected board, and unplugging is
+  handled gracefully (#465).** After picking a real USB board it was still showing
+  "Simulated device (offline)" (the just-granted port wasn't in the list yet, so the
+  dropdown fell back to the first entry) — it now refreshes and shows the board's
+  name. And physically unplugging the board is detected: the connection drops to
+  *disconnected* and the console prints a "board disconnected" notice instead of
+  hanging on a dead port.
+
+## [0.28.0] - 2026-07-12
+
+### Added
+- **Learn Snakie — guided tutorials in the app (#479).** A new **📚 Learn** button
+  opens a MakeCode-style **Projects gallery** of tutorial courses. A floating
+  tutorial dialog walks you through each lesson with **Back / Next**, position
+  **dots** and a **💡 tip**; opening a lesson drops its starter code straight into
+  the editor so you can press **Run**. Ships **three courses × 10 lessons** — *First
+  Steps with MicroPython*, *Build a Robot on the Breadboard*, and *Build a Robot in
+  3-D*. Courses are plain `course.yml` + Markdown, bundled into the app (web + desktop).
+
+### Added
+- **Export a clean URDF from the Robot View (#315).** An **Export URDF** button (in
+  the build panel, beside Import STL) writes a tidy, consistently-indented copy of
+  the robot's URDF into the project's `urdf/` folder — a clean artifact to share or
+  version. It re-loads unchanged in the viewer (same tags, just formatted). Closes
+  out epic #309 Phase 5.
+
+### Added
+- **Connect a real board over Web Serial, in the browser (#465).** On a Chromium
+  browser (Chrome, Edge, a Chromebook), app.snakie.org can now talk to a real
+  Pico / ESP over USB — the REPL, Run/Stop, the device file tree, module installs
+  and the instruments all work over Web Serial, right alongside the offline
+  simulator. Pick a board with the new **＋ Connect a USB board** entry (filtered
+  to known board/bridge chips); already-granted boards show up in the port list.
+  The raw-REPL protocol is shared with the desktop, so a board behaves identically.
+
+### Added
+- **The web app is now an installable PWA that works offline (#464).** app.snakie.org
+  can be installed to the ChromeOS shelf / your dock (name, icons, standalone window),
+  and a Workbox service worker precaches the whole app shell — including the MicroPython
+  WASM — so after the first visit it keeps working with no network. Completes Phase W1.
+
+## [0.27.0] - 2026-07-12
+
+### Fixed
+- **The offline simulator no longer freezes on a `while True:` loop.** Running a
+  program with a perpetual loop (e.g. the Buddy Jr pose demo) locked up the whole
+  app and spewed `OSError` in the console, because the interpreter ran on the main
+  thread and a loop that only yields via `time.sleep` starves the event loop. The
+  sim now runs the MicroPython interpreter in a worker thread (like the web build),
+  so the app stays responsive, a running program's output/telemetry streams live,
+  and **Stop** reliably halts even a tight loop (it restarts the interpreter, so
+  the RAM filesystem resets — exactly like a reconnect).
+- **Web: installing a part's driver now works (#475).** On the web, installing a
+  part driver from the banner (e.g. sg90 → `servo.py`) failed with "Could not read
+  driver file" because the driver source wasn't available in the browser. The
+  bundled driver files are now inlined at build time and served to the installer,
+  so `import servo` works after one click.
+
+### Added
+- **The Standard Parts library ships with the web app (#475).** On the web, placed
+  parts (servos, sensors, boards) had no library to resolve against, so a wired-up
+  servo in the board view rendered as just its title. The build now inlines the
+  bundled `snakie-standard` library (part geometry as JSON, images as served
+  assets), so `parts.listLibraries` returns real definitions and the board draws
+  parts as authored. Read-only — authoring/registry writes stay desktop-only.
+- **The web app remembers your folder across reloads (#476).** The picked folder's
+  handle is stored in IndexedDB; on the next visit it's rehydrated automatically
+  when the browser still grants access, and otherwise the Files panel offers a
+  one-click **Reopen &lt;folder&gt;** (browsers require a click to re-grant access).
+
+## [0.26.0] - 2026-07-12
+
+### Added
+- **Snakie runs in the browser at [app.snakie.org](https://app.snakie.org) — epic #267.**
+  The same editor, now a zero-install web app (great for Chromebooks and classrooms):
+  - The **MicroPython simulator runs in a Web Worker** (#467, #469), so a `while True:`
+    loop churns off the UI thread and **Stop** reboots it — the tab never freezes.
+  - A **simulated `machine` module** (#472) means `from machine import Pin` — the first
+    line of most lessons — works on the sim (the WASM port ships none); `Pin`, `PWM`,
+    `ADC`, `I2C`/`SPI`/`UART`, `Timer` and friends behave plausibly.
+  - The **instruments library auto-loads** (#473): `import instruments` /
+    `from snakie import Servo` just work, and the "Install library" banner is functional.
+  - **Open, edit and save real local files** via the File System Access API (#470) —
+    genuine on-disk persistence, no server.
+  - **Instrument telemetry animates** on the web sim (#471) — scope, meter, plotter, IMU
+    and radar move without hardware. The app **auto-connects** to the simulated device
+    on load, so typing a program and pressing **Run** works out of the box.
+- **Robot mode works on the web (#267).** `window.api.robot` has a real browser backend:
+  `robot.yml` loads and saves through the open folder using the same shared YAML pipeline
+  as the desktop — so servo↔joint bindings, poses, the timeline and the project-URDF link
+  all round-trip. Open a robot project folder, open its `.urdf`, and the 3-D robot renders
+  with its STL meshes; run a servo program on the simulator and `SNK SERVO` telemetry
+  animates the joints. Import STL works (browser file picker → `meshes/`); with no folder
+  open, `robot.yml` persists to browser storage.
+- **Auto-publish to app.snakie.org** (#468): every push to `master` rebuilds the web app
+  and deploys it.
+
+### Fixed
+- **Files-panel "New file" is no longer dead without a folder.** With no folder open it
+  now creates an untitled buffer (same as the toolbar), instead of a disabled button.
+- **URDF mesh refs with `./` or `../` now load on the web** (path segments are
+  normalised before walking the picked folder's handles; `..` clamps at the root).
+- **Honest fallbacks when a backend is missing:** a stubbed robot save now reports
+  "save failed" instead of a false "saved ✓", and a missing motion plugin shows the
+  benign "install Python to sync poses" label instead of a spurious
+  "managed block broken" warning.
+
+## [0.25.2] - 2026-07-11
+
+### Fixed
+- **Popped-out instruments no longer open blank.** Undocking the Wi-Fi scanner (or the Bluetooth,
+  Buzzer, Display, SAM or Range instruments) into its own window showed an empty window: those
+  panels read the editor workspace with a hook that *throws* when there's no provider — and a
+  detached OS window has none, so the render crashed. They now read the workspace safely (the
+  workspace-only extras, like "insert a demo file", are simply inert in a detached window), so the
+  pop-out renders normally.
+
+## [0.25.1] - 2026-07-11
+
+### Fixed
+- **Binding a servo now takes the joint's real range, so the 3-D model doesn't clamp (#459).**
+  A new servo↔joint binding used to default the joint range to a flat `0…180`, ignoring the
+  joint's actual limits. On a joint limited to, say, `±90°` that made the on-screen model **stop
+  halfway** — the physical servo swept fully but the 3-D joint hit its limit and clamped for half
+  the travel. New bindings now seed the joint range from the joint's URDF `<limit>` (degrees for a
+  rotating joint, mm for a sliding one) in **both** the Board View and Robot View pickers. Existing
+  bindings are unchanged; fix one by setting its **Joint range** in the servo dialog.
+
+## [0.25.0] - 2026-07-11
+
+### Added
+- **`snakie` — a friendly hardware module.** Board code can now `from snakie import Servo, Buzzer,
+  Led, Pin, PWM` — the *hardware* classes, under a clear, collision-proof name (a vendor `servo`
+  module, e.g. Pimoroni's frozen one, can't shadow it). It's a thin re-export of the on-device
+  runtime, so `snakie.Servo` *is* `instruments.Servo`; the measurement tools (scope/meter/plotter)
+  stay in `instruments`. Snakie installs `/lib/snakie.py` alongside `instruments.py` when you install
+  or update the board library, so `from snakie import …` just works.
+- **Poses instrument — a live servo test bench.** A new dock instrument reads your rig's
+  servo↔joint map and saved poses from `robot.yml` and gives two quick ways to move the servos:
+  **pose buttons** glide every bound servo smoothly into a saved pose (eased, applying each servo's
+  calibration), and **per-servo sliders** nudge one servo by hand. Both drive the on-screen 3-D
+  model **live with no program running** (via an in-app servo-drive channel) *and* stream a
+  `SNKCMD servos …` line to the board, so a running program follows too. It lights up automatically
+  once a servo is bound, reloads when you bind a servo or save a pose in either editor, and guides
+  you when nothing is bound yet.
+- **Bind a servo to a 3-D joint — from either view.** Wire a **servo** on the breadboard and choose
+  which URDF **joint** it moves; a running program's servo writes then drive the matching joint in
+  the 3-D Robot View live. Bind it two ways: from the **Board View** (a servo's inspector gains a
+  "drives joint" picker) or from the **URDF editor** (the Robot View's **Servos** list now shows
+  every breadboard servo — its label, the GPIO its signal is wired to, and a joint picker; unwired
+  servos are flagged). Both write the one pin↔joint map in `robot.yml`, so the two views stay in
+  step, and the existing telemetry pipe drives the model with no extra setup.
+- **Motion Studio — puppet controls (#403, #416).** A Controls panel in the Robot View lets you
+  build a named **slider** from two or more saved poses. Dragging it smoothly blends between the
+  ordered poses and drives the live 3-D model in real time — one slider can sweep the eyes, morph
+  a smile→frown, or play a stride. Arm **Live** (board connected + a servo bound) and the same drag
+  streams to the physical servos too. Create a control by naming it and picking its poses in order;
+  rename or delete controls, and pose renames/deletes cascade through them safely. Completes the
+  Motion Studio epic (runtime · round-trip · pose authoring · sequences · controls).
+- **Motion Studio — pose-step sequencer / walk cycles (#403, #415).** A new sequencer at the
+  bottom of the Robot View authors motion as an ordered list of **saved poses** — stand → lift
+  → step → plant — each with its own **duration** and **easing**, plus a **loop** toggle, instead
+  of a grid of per-joint keyframes (the keyframe timeline stays, unchanged). Play/pause, stop and
+  scrub against the 3-D model; add/reorder/remove steps inline. With a board connected and a servo
+  bound, a **Live** toggle streams each frame to the hardware so the physical robot mirrors the
+  preview (disconnect drops back to preview-only). Export writes the sequence into the managed
+  `SNAKIE_SEQUENCES` block (#413) — timed to match the `snakie_motion` runtime so hardware plays
+  exactly what you previewed.
+- **Motion Studio — Capture Pose, duplicate, and partial poses (#403, #414).** The Robot View
+  pose editor becomes a proper authoring surface. **Capture Pose** snapshots the current live
+  posture into a named pose — whether you posed it with the sliders **or** a running program's
+  servos are driving the model (`SNK SERVO` telemetry back-drives the joints, and a **Live ●**
+  hint shows when they are). **Duplicate** copies a pose under a unique "*name* copy" without
+  touching the original. And poses can now be **partial**: tick only the joints a pose should
+  capture (e.g. a face-only wave) and the rest are left exactly where they are when you recall
+  it. The pose library keeps its rename / delete / preview. `NamedPose[]` stays the single
+  source the managed-block round-trip (#413) reads.
+- **Motion Studio — an exported `.py` round-trips its poses & servo map (#403, #413).** The
+  Robot View's exported motion file now carries Snakie's pose library, sequences and servo map
+  in **guarded, versioned managed blocks** (`# --- snakie:poses v1 ---` … `:end`), written as
+  `literal_eval`-safe assignments. Re-exporting rewrites **only** those blocks — your own code
+  and the `FRAMES` runtime are byte-preserved. Opening a `.py` that carries them reads the poses
+  and servos back (via the Python host's AST reader; no code is executed) and **merges** them
+  into the live Robot View — additive by pose name / pin. A hand-edit that breaks a block pauses
+  the sync and warns instead of clobbering it; a newer-schema block is left untouched; with no
+  Python the round-trip is skipped gracefully. Foundation plumbing for the Motion Studio epic —
+  the pose/sequence/puppet editors land in later issues.
+- **Parts Library — a part can carry a 3-D mesh that drops into the Robot View (#399).** A
+  library part can now link an **STL** (a relative `mesh:` filename in its folder, with
+  `meshUnits: mm`/`m` or a `meshScale`) the way it already carries an image, driver and help
+  doc. When you drag a mesh-linked part onto a design, its part is added to `robot.yml` as
+  before **and** its STL is copied into the project's URDF `meshes/` folder and dropped into
+  the 3-D **Robot View** as a loose part — staggered beside the base, ready to place and join,
+  with no manual import. If the project has no URDF yet, a blank one is created and linked.
+  The bundled **SG90 servo** ships a `model.stl` as the first mesh-linked part. Parts without a
+  mesh drop exactly as before.
+  View (above the instrument dock in Robot mode) gains a small **pose dropdown** (top-right,
+  beside the Home button) when the robot has saved poses. Pick one and the docked model
+  **eases smoothly** to that pose — a quick preview without opening the full pose tool. It's
+  view-only (never writes `robot.yml`), lists only poses that fit the displayed model, and
+  hides when there are none.
+- **Robot View — keep a robot's meshes with the project (#399).** When a `.urdf` points at
+  STL/DAE meshes that live **outside** the project folder (an absolute path, or one that
+  escapes via `..`), Robot View now shows a **"Copy N mesh(es) into project"** offer. Accepting
+  copies each file into the project's `meshes/` folder (collision-safe — never overwrites) and
+  rewrites the URDF to the in-project path, in **one undo step**, so the robot is self-contained
+  and safe to move, zip, or commit. In-folder and `package://` refs are left alone. Fixes meshes
+  silently going missing when a project is shared or relocated.
+- **Robot View — colour an individual part (#399).** The link Properties panel gains a
+  **Colour** control — the same colour well + one-click "used colours" swatches as the Part
+  Editor — right beside **Size (mm)**. It works for **primitive** parts (box/cylinder/sphere)
+  **and imported STL meshes**, so a multi-part robot no longer has to be a flat grey blob —
+  colour it to match your real hardware. Pick a colour and only that part recolours, live;
+  every other part keeps its colour. The colour is stored in the model's URDF `<material>`,
+  so it round-trips on reload and is covered by undo/redo. (Selecting a part still tints it
+  blue, but now over its own colour, so the change is visible while it's selected. DAE/Collada
+  meshes keep their own baked-in materials, so they show the "grab a face in 3-D" note
+  instead.)
+- **Robot View — a hinge rotates about the mated normal, Fusion-style (#399).** A new
+  Rotation/Linear joint now takes its **axis from the two faces you mated** — it turns (or
+  slides) about the normal through the joint, the same axis its Roll uses — instead of a
+  guessed `Z`. So a servo horn spins on its mounting face without you hunting for the right
+  axis. (You can still override the axis in the joint editor.)
+- **Robot View — Add Joint previews the mate live (#399).** As soon as you pick the
+  second point, the child snaps onto the parent **in the 3-D view** — so you see the
+  result and can tell whether it needs a roll **before** pressing Add. Changing the type,
+  offset or roll updates the preview live; **Cancel** puts everything back exactly as it
+  was. (Debounced so it stays smooth on mesh-heavy robots.)
+- **Robot View — an explicit kinematic Chain view + a parent picker (#354).** The build
+  panel now shows the robot as an indented **Chain** — `Base → Shoulder → Arm → Servo` —
+  so the parent→child structure is always visible (a part nested under the wrong parent
+  is obvious at a glance), with the connecting joint type on each row and a **⚠ loose**
+  tag for parts not yet in the chain. Editing a part now has an **"Attaches to"** dropdown:
+  pick its parent explicitly from the existing structure instead of relying on 3-D
+  pick-order. Re-parenting **keeps the part exactly where it is** (world pose preserved) and
+  can't form a loop — so you can build a chain reliably, and repair a tangled one (move the
+  arm under the shoulder, the servo under the arm) without deleting and re-mating. The 3-D
+  Add Joint tool stays, now purely for geometry (where parts meet + orientation).
+
+### Changed
+- **`Servo` accepts a PWM you made yourself.** The bundled SG90 driver's `Servo(...)` now takes a
+  GPIO number, a `Pin`, **or** an already-made `PWM` — so `base_pwm = PWM(Pin(0)); base = Servo(base_pwm)`
+  works and the code reads `pin → PWM → Servo → joint`, mirroring how a servo connects to the model.
+  A bare pin is still wrapped for you; a PWM is used (and shared) as-is.
+- **Exported motion is plain-MicroPython pin → variable setup.** The Robot View's exported motion
+  code now sets each servo up as a pure `<joint>_servo = PWM(Pin(n))` followed by
+  `<joint> = Servo(<joint>_servo, pin=n)` — servos are named by the joint they drive, so the code
+  reads like the rig. It runs on hardware *and* in the Snakie simulator (a `try/except` import falls
+  back to CPython-safe stubs), and the `pin=` keeps each servo emitting `SNK SERVO`, so running the
+  exported code still moves the 3-D model. `instruments.Servo(pwm)` now sets the 50 Hz servo
+  frequency on a hand-built PWM.
+- **Simpler workspace switcher + softer blueprint grid.** The workspace switcher now shows just
+  **Code · Robot** — the Board and Data Lab entries are hidden (the Board View is still reachable via
+  its pop-out window and the Robot workspace; deeper cleanup tracked in #447). The blueprint
+  breadboard's graph-paper grid lines are a touch softer so they read as a backdrop.
+- **Fainter blueprint grid (#452).** The blueprint breadboard's graph-paper lines are now ~50%
+  more transparent again, so they sit further back as a subtle backdrop behind the parts.
+- **Robot View — joints are first-class in the Build hierarchy.** Each connecting joint now has its
+  own row directly above the link it drives, showing a **type glyph** (a lock for fixed, a rotation
+  arrow for a hinge, a spoked wheel for continuous, a slider for prismatic), the **joint name** (so
+  it matches the Servos list and the pose editor), and its **type badge**. **Rename a joint** by
+  right-clicking its row or from the joint dialog's new **Name** field — the rename cascades through
+  the servo bindings, poses, timeline, mirror pairs and per-joint settings. Link rows also carry a
+  **mesh-vs-cube** glyph.
+- **Robot View — clearer, self-sizing Build hierarchy.** The panel now **sizes to its longest row**
+  (name + indentation) and truncates anything past **a third of the screen**, and it only grows down
+  to the top of the bottom-left help hint — the **Open** / **+ STL / DAE** buttons no longer sit
+  over it; the list scrolls instead.
+- **Robot View — Motion Studio tools share one collapsible dock (#403).** The keyframe timeline,
+  pose sequencer and puppet controls no longer stack as three full-width bars crowding the bottom
+  of the screen. They're now **tabs in a single dock** — pick **Keyframes / Sequence / Controls**,
+  and a chevron collapses the whole dock to just its tab strip so the 3-D stage goes full-height.
+  The dock remembers your last tab and open/closed state, and a tab shows a dot when that surface
+  already has content, so a populated-but-hidden tool advertises itself.
+- **In-app Help links to the full online docs (#418).** The Help panel now has a
+  **"Full documentation at docs.snakie.org"** link in its contents view and after every
+  article, so you can jump to the complete, searchable docs in your browser.
+- **Robot View — poses ease smoothly everywhere (#399).** Selecting a saved pose now
+  **eases** the robot from its current position to the new one (≈0.4 s) instead of snapping —
+  not just in the docked mini viewer but also in the full pose tool's Poses list and the
+  pose dialog's **Recall**. Re-picking mid-transition re-targets smoothly.
+- **Robot View — clearer snap targets when joining parts (#399).** Adding a joint now draws
+  each snap candidate with a **role-distinct glyph** (corner = square, edge = diamond, centre =
+  dot, hole = ring) instead of identical dots, emphasises the one you're about to land on, and
+  shows a live **"snap ✓ hole centre / corner / edge …"** tooltip at the cursor *before* you
+  click. The hit tolerance is now a single set of tuned constants shared by hover and click, so
+  what lights up under the cursor is exactly what a click lands on — and holes still magnetise
+  within a generous radius so they're easy to hit. **Hold Shift to lock** the highlighted snap
+  (Fusion-style), then slide the cursor over the hole and click — so you can land on the centre
+  of a face whose middle is empty (e.g. a servo cut-out) without the target following the cursor.
+- **Robot View — the Build (Chain) dock is a little wider (#399).** Bumped from `15.5rem`
+  to `17.5rem` (capped `min(18rem, 42vw)`) so long STL-derived link names like
+  `left_shoulder_bracket_v3` read in full in the Chain tree instead of being cut off by the
+  ellipsis. It still floats over the 3-D stage and never claims more than a modest slice on
+  narrow windows.
+- **Robot View — the pose sidebar is retired; posing moves to a popup (#312).** The
+  old right-hand pose panel duplicated the build panel (assembly, servos, poses). It's
+  gone: **pose the robot in a popup** — the build panel's **Poses → ＋ New pose** (or
+  clicking a pose) opens an editor with a **full-width slider per joint** (its own row,
+  no longer squashed beside the joint name) and a **directly-editable value** so you can
+  type an exact angle; drag to pose, name it, **Save**. Servos got a **＋ Bind a servo**
+  in the build panel, and the save-status / measure readouts moved to small floating
+  pills. The Timeline still animates.
+- **Robot View — a cleaner, Fusion-style build hierarchy (#354).** The panel is
+  **wider** so long STL names have room, and it drops its solid slab — each line now
+  sits on its own **subtle off-white card** so it reads over the 3-D canvas. Per-row
+  clutter is gone: the base is marked with an **anchor** (not a star), and **Rename /
+  Make base / Delete** moved to a **right-click menu** (renaming a part updates it
+  everywhere it's referenced). Mesh rows show a compact `stl`/`dae` tag instead of
+  repeating the filename.
+
+### Added
+- **Robot View — Join tool: a roll angle on every joint type (#354).** The Add Joint
+  dialog now has a **roll (°)** field alongside the X/Y/Z offset — for **Static** joints
+  too — that spins the child about the joint's normal axis while keeping the mated faces
+  flush, so you can orient a bracket/part however you like at the connection.
+- **Robot View — edit an existing joint's offset + roll, live (#354).** Clicking a
+  joint in the build panel's **Joints** list now shows an **Offset (X/Y/Z, mm)** and a
+  **Roll (°)** control in the joint editor — for **Static** joints too, not just when
+  first adding them. Both apply **immediately** as you type or nudge the spinner (no
+  Enter needed), and the **roll is an absolute value that's remembered** — reopen the
+  joint and it still reads the angle you set (instead of snapping back to 0), so you can
+  fine-tune it or return it to 0 yourself. Nudge a connection into place or spin a part
+  about its normal without deleting and re-joining.
+- **Robot View — import parts, pick a base, articulate them into a chain (#354).**
+  Imported STLs no longer stack on top of the first part at the origin. Each import
+  now attaches to the base with a **movable joint** at a **staggered** position, so it
+  lands beside the base as its **own** part — drag it to place, then use **Add Joint**
+  to articulate the kinematic chain. You **pick which part is the base** (right-click →
+  **Make base** — the anchor everything hangs off, remembered in `robot.yml`). Every
+  part is independently selectable + movable (a part with no joint of its own would
+  collapse into the base's scene node and co-select — so each gets its own joint).
+- **Robot View — the build hierarchy hides empty sections.** Blocks / Meshes / Joints
+  / Servos / Poses only appear when they actually have something in them, so the tree
+  stays focused on what your robot has.
+- **Robot View — Join tool: SHIFT-lock snapping + an on-surface target (#354).**
+  While picking a joint point, an accurate **target** is drawn on the surface (a
+  circle + X/Y/Z axis triad; a **cross-hair** over a hole / loop centre) so you can
+  see exactly where it will land. Sliding the cursor onto a hole used to lose the
+  snap (there's no surface at the centre to hover) — now **hold Shift** to lock the
+  snaps in place and click the hole centre.
+- **Robot View — rotation joints get min/max + a default angle (#354).** When you
+  choose **Rotation** in the Add Joint dialog, min / max angle limits and a default
+  angle (degrees) appear; **Add** writes the joint's `<limit>` and saves the default
+  to the robot's default pose. The joint is then movable — drag it in the pose
+  panel to preview the swing, and it loads at the default angle.
+- **Robot View — Join tool fades the first-picked block (#354).** After you pick a
+  point on the first block, that block goes semi-transparent (Fusion-style) so it's
+  obviously chosen — and can't be picked as the second component. It restores when
+  the joint is added or cancelled.
+- **Robot View — Join tool mates faces by their normals + on-face markers (#354).**
+  Picking a point now captures the **face normal**, drawn as a **circle laid flat on
+  the face** with an **X/Y/Z axis triad** (blue = parent, green = child) — it sits in
+  3-D on the surface instead of facing the camera, so it reads accurately from any
+  angle. The joint is oriented from those **local** face normals: the child rotates
+  so its face meets the parent's flush (its normal anti-parallel to the parent's) and
+  the two picked points coincide.
+- **Robot View — delete a joint (#354).** Clicking a joint in the **Joints** branch
+  already opened its editor (type / axis / limits); it now also has a **Delete**
+  button that removes the joint and re-attaches the block to the base, keeping its
+  current position so it doesn't jump.
+- **Robot View — Join tool: smart parent/child + multi-joint chains (#354).** You
+  no longer have to pick the two blocks in the "right" order — if the chosen order
+  would form a loop but the reverse wouldn't, the tool **swaps** parent and child
+  for you. Building a chain of joints works (each new joint keeps the earlier ones);
+  note that a joined child snaps to meet its parent, so it visibly moves.
+- **Robot View — Join tool snaps to hole centres (#354).** When you pick a joint
+  point on an imported mesh (STL), the tool detects **hole centres** on the clicked
+  face — an STL is just triangles, so it finds the coplanar rim-edge loops, and a
+  roughly-circular loop's centre becomes a snap point (plus the face outline centre
+  and midpoints of long edges as alignment guides). Hover reveals the snaps.
+- **Robot View — Join tool (#354).** A new **Add Joint** button on the build
+  toolbar opens a floating dialog, then you **click a point on each block in 3-D**
+  to connect them: Component 1 (parent) then Component 2 (child), each snapping to a
+  face corner / edge / centre. Choose the joint type (**Static / Rotation / Linear**)
+  and an optional X/Y/Z offset, then **Add** — the child snaps so its picked point
+  meets the parent's, is re-parented under it, and the new joint appears in the
+  **Joints** branch. Refuses a connection that would form a loop.
+- **Robot View — open a different robot (.urdf).** The docked mini viewer gains an
+  **📂 Open…** button (alongside New robot / Pop out) and the pose tool's Build
+  panel gains one too, so you can pick and open another robot model via the native
+  file dialog — including when the view is popped out full-screen.
+- **Robot View — hierarchy is now a node tree with context dialogs (#353).** The
+  Build panel groups the model into collapsible branches — **Blocks**, **Meshes**,
+  **Joints**, **Servos** and **Poses** — each with a count. Clicking a node opens
+  a Fusion-style floating dialog on the right tailored to it: a **joint** shows its
+  type/axis/limits/mimic; a **servo** shows its joint mapping, servo/joint ranges,
+  invert and a delete; a **pose** shows rename, **Recall** and delete; a
+  **block/mesh** (edit pencil) shows size + joint. Block/joint edits apply live and
+  **Cancel** reverts them; servo/pose edits are held until **OK**.
+- **Robot View — Fusion-style Properties dialog (#352).** Clicking a block's
+  **edit pencil** now opens a floating, **draggable** properties dialog on the
+  right (size + joint) instead of expanding the hierarchy row. Edits apply live to
+  the 3-D preview; **OK** keeps them, **Cancel** discards them (the URDF is
+  snapshotted on open and restored on cancel) — both close the dialog. Delete
+  moved onto the hierarchy row.
+- **Robot View — animated camera moves.** Clicking a nav-cube face/edge/corner,
+  focusing a block from the hierarchy, **Home** and **Fit** now **glide** the
+  camera to the destination (eased ~0.3s) instead of jumping, so you can see where
+  the view came from and went to. Grabbing the viewport cancels the glide. The
+  zoom **%** now also tracks scroll-zoom in **perspective** mode (dolly distance),
+  and focusing one block no longer clips the others.
+- **Robot View — themed background + a richer navigation cube.** The 3-D viewer
+  background now follows the theme (**white** in light, **black** in dark). The
+  ViewCube is **brass**, always drawn in **perspective** (independent of the view's
+  projection), sits tight in the top-right, shows **X/Y/Z axes** (red/green/blue
+  with labels) along its base, and uses a pointer cursor so corner picks aren't
+  hidden by the hand cursor.
+- **Robot View — orthographic / perspective toggle.** A dropdown beneath the
+  navigation cube switches the camera between **Orthographic** (default, no
+  distortion — best for building) and **Perspective** (a natural, lens-like view).
+  Switching re-frames the model; zoom / orbit / snap all work in both.
+- **Robot View — undo / redo for builder actions (#338).** Every builder edit
+  (add / push-pull / move / delete / joint change / mesh import / re-root) is now
+  an undo step: **⌘Z / Ctrl+Z** to undo, **⇧⌘Z / Ctrl+Y** to redo, plus undo/redo
+  buttons on the build toolbar. A drag is a single step; undoing a delete restores
+  the block + its sub-tree; the camera doesn't jump. (History is per-file.)
+- **Robot View — timeline: duplicate keyframes + mirror-invert toggle (#332).**
+  The motion timeline gains a **⧉ Duplicate** control (copies the selected
+  keyframe — or the whole pose at the playhead — to a free slot, growing the clip
+  if it lands past the end, never overwriting an existing key), and a per-pair
+  **mirror-invert** checkbox so a reversed-axis left↔right joint mirrors correctly
+  in one click (persists to `robot.yml`).
+- **Robot View — navigation cube.** A large CAD-style **ViewCube** at the
+  top-right of the 3-D viewer, mirroring the camera as you orbit and lit from the
+  lower-front so it reads as a solid block. **Click a face, edge or corner** (26
+  orientations) to snap the view, **drag the cube** to orbit, and the region under
+  the pointer highlights with a brass overlay (a plate on a face, a bar on an edge,
+  a cube on a corner). A **Home** button (revealed on hover) resets to the default
+  isometric view. Runs in its own canvas so it never fights the viewer's orbit/zoom.
+- **Robot View — new blocks & meshes arrive at the origin, not stuck to the
+  selection.** Adding a block or importing an STL/DAE now drops it at the
+  **workspace origin** (attached to the base), **selects it**, and **reframes** so
+  it's actually in view — instead of auto-joining it to the selected part with an
+  offset (a placement that can't be guessed). Selecting a block in the Build list
+  highlights it in 3-D, meshes included (re-applied once an async mesh loads).
+- **Robot View — zoom controls + a consistent pin.** The 3-D viewer gains the
+  usual floating **zoom cluster** bottom-right (−, a live **%** readout, +, and a
+  **zoom-to-fit** button), styled identically to the node-graph control;
+  **double-click the %** toggles 100% ↔ fit. The Build panel's pin button now uses
+  the app's standard **pushpin** icon (outline when loose, filled when pinned) and
+  accent colour, instead of a one-off gold star.
+- **Robot View — "Make base" + base protection (#309 builder).** A URDF hangs off
+  its **base** link, so deleting the base used to leave an empty, unusable file.
+  Now the base **can't be deleted** (its ✕ is disabled with a hint, and it shows a
+  "★ This is the base" badge), and every other block gains a **★ Make base** button
+  that re-roots the whole model onto it — reversing the joint chain up to the old
+  base (origins inverted exactly, off-path sub-trees left untouched). So you can
+  bless a new base mid-build and then delete the old one. Fixed joints re-root
+  perfectly; a movable joint that happens to sit on the reversed path keeps its
+  axis/limits (best effort).
+- **Robot View — joint editor: hinges, sliders, wheels + mimic (#315, epic #309
+  Phase 5).** Editing a block in the Build panel now also sets **how it moves**
+  relative to its parent: pick **Fixed / Hinge / Slider / Wheel** (URDF
+  fixed / revolute / prismatic / continuous), choose the **axis** (X / Y / Z) and
+  set **limits** (degrees for a hinge, mm for a slider). A **Copies** dropdown
+  makes the joint **mimic** another with a gear ratio (× multiplier + offset) —
+  e.g. a gripper's two fingers, or a geared pair. Every change rewrites the URDF
+  and shows up **live** in the pose tool and the motion timeline, so you can
+  build a 2-link arm from blocks, make the elbow a hinge and pose it straight
+  away. Completes the #315 builder scope (primitives + push/pull + move + joints).
+- **Robot View — builder tools: a toolbar + move-with-snap (#335, epic #309
+  Phase 5).** The block builder gains a floating **tool toolbar** (top-centre of
+  the stage): **Pick** (select), **Push & pull** (resize a face), **Move** a
+  block, and **Join** (coming soon). The new **Move** tool slides a block around
+  with a live mm read-out and a 5 mm grid (hold **Shift** for 1 mm); hover a face
+  and Fusion-style **snap handles** appear on its corners, edge-midpoints and
+  centre, so you can drop a block with its face point landing exactly on another
+  block's corner / edge / centre (the read-out shows **snap ✓**). Moves rewrite
+  the block's fixed-joint origin in the linked URDF, and the camera never jumps.
+- **Robot View — kid-friendly block builder (#315a, epic #309 Phase 5).** Build a
+  robot from blocks: a floating, transparent, pinnable **Build** panel on the left
+  (like the breadboard's library dock) lists your components with a per-item edit
+  pencil (view by default). **＋ Box / Tube / Ball** adds a primitive that sticks
+  to the selected part (a fixed joint — no jargon). Grab a **face and pull** to
+  resize it — Fusion-style, with the **live measurement** shown and the opposite
+  face held put — or type exact mm. Edits save straight into the linked project
+  URDF, and the camera never jumps. (Revolute/prismatic joints + a mimic editor
+  are the follow-up #315b.)
+- **Robot View — motion timeline → MicroPython (#314, epic #309 Phase 4).** A
+  keyframe timeline docks under the pose tool: a track per joint, **play / loop /
+  scrub** with **linear or ease-in-out** easing, snapshot the pose as a keyframe
+  or **import a saved pose**, and **mirror** a track onto its left↔right partner
+  (**Mirror ½** offsets half a cycle — a walk). **Export .py** bakes the eased
+  motion into runnable MicroPython that drives the servos from the servo↔joint
+  map — the *same* clip plays in the simulator and on a board. Persists in
+  `robot.yml` (`timeline` + `mirror`). Try `examples/biped/`. The generated code
+  is proven runnable by an end-to-end test that executes it on the real
+  MicroPython interpreter and checks the servo stream.
+- **New blank robot (.urdf) from Robot mode.** The docked mini-viewer gains a
+  **＋ New robot** button (highlighted when there's no robot yet) that creates a
+  minimal starter `.urdf` (one `base_link`) and opens it in the pose tool — a
+  real file in the project folder (so STL import + persistence work immediately),
+  or an untitled buffer when no folder is open. Import meshes from the Assembly
+  panel to build it up.
+- **Robot View — servo↔joint binding & code-driven simulation (#313, epic #309
+  Phase 3).** The keystone: a running MicroPython program's servo writes now
+  animate the 3-D robot, **headless** (no board — it runs in the simulator).
+  Bind a servo pin to a URDF joint in the pose tool's new **Servos** panel, with
+  angle-range calibration (servo 0–180° ↔ joint min–max, plus invert); the map
+  persists in `robot.yml` (`servoJointMap`). `inst.servo_on(pin).angle(...)`
+  emits pin-keyed telemetry that drives the bound joint in real time — try
+  `examples/servo-arm/` (open `arm.urdf`, Run `sweep.py`). Works tethered too
+  (same telemetry path on a real board).
+- **Robot View — pop-out, assembly panel & one-click STL import (#324, epic
+  #309).** The docked mini 3-D viewer gains a **⤢ Pop out** button that opens the
+  robot full-screen (Code mode) with the pose tool. The full-screen view now
+  shows an **Assembly** panel — every link + the STL/mesh file it uses — and a
+  **+ STL** button: pick a mesh and it's copied into the robot's KRF
+  `urdf/meshes/` folder (collision-safe) and wired into the `.urdf` as a new link
+  + fixed joint, so it appears in the model and the assembly immediately.
+- **Robot View — Pose tool (#312, epic #309 Phase 2).** Opening a `.urdf`
+  full-screen now gives a **pose tool**: a joint sidebar with a slider per joint
+  (degrees for revolute, mm for prismatic) that moves the robot live, respecting
+  the URDF limits. `<mimic>` joints follow their master (multiplier + offset),
+  shown read-only. Edit a joint's min/max inline; save & recall **named poses**;
+  and a **measure tool** reports the point-to-point distance between two clicks.
+  Limit overrides + poses persist to `robot.yml` (KRF), and the docked Robot-mode
+  panel gains an **⤢ Pose** button to open the robot full-screen. Also fixes the
+  `robot.yml` (de)serialiser to round-trip the KRF `robot:` section.
+- **Robot View — STL & DAE meshes (#319, epic #309).** Robot View now renders
+  real robots: a URDF's `.stl` / `.dae` (Collada) meshes load straight from the
+  project folder — no web server. Relative (`meshes/link.stl`) and `package://`
+  paths both resolve against the URDF's folder, the URDF `<material>` colour is
+  applied to meshes that carry none, and the camera reframes once they arrive. A
+  mesh that can't load degrades to a small placeholder + a panel note (the rest
+  of the robot still shows) instead of a blank model or a crash. Try
+  `examples/mesh-demo/mesh-demo.urdf`. The mesh loaders stay code-split in the
+  Robot View chunk.
+- **Robot workspace mode (#320, epic #309).** A new **Robot** tab joins Code ·
+  Board · Data Lab: files collapsed, your code on the left (~⅓), the Board View
+  in the middle, and on the right a **mini 3-D Robot panel over the instrument
+  dock** — code, wiring, the robot and live instruments in one glance. The 3-D
+  view now defaults to an **isometric** (orthographic) camera, and the docked
+  panel finds the project's URDF via the KRF `robot.yml` (falling back to the
+  bundled demo arm). The 3-D engine stays code-split (only loads in Robot mode).
+
+- **Robot View — 3D URDF viewer (#311, epic #309 Phase 1).** Opening a `.urdf`
+  file now shows the robot model in a three.js scene with orbit / pan / zoom.
+  URDF primitives render with no external meshes (the bundled
+  `examples/demo-arm.urdf` is zero-setup), the camera auto-frames the model on a
+  ground grid, and a malformed URDF shows a graceful error instead of a blank
+  panel. The 3D engine is code-split, so it only loads when you open a robot.
+  Built on the KRF format (#310); the pose tool, servo↔joint binding and motion
+  timeline follow.
+
+### Changed
+- **Robot View — Join tool: the snap target is now directly clickable (#354).** The
+  on-surface cross-hair showed exactly where a joint would land — but a click still
+  measured its own pixel distance and often dropped a raw surface point instead, so
+  the hole centre you were aiming at was frustratingly un-clickable. A click now
+  lands on **exactly the snap the cross-hair is showing** (what-you-see-is-what-you
+  -get), and the cross-hair **stays put as you move onto a hole** without needing to
+  hold Shift (Shift still force-locks for large holes). A side effect: on a
+  primitive block a joint pick always snaps to the nearest face handle
+  (corner/edge/centre) — the exact point the target marker previews.
+- **Robot View — a clearer selection highlight.** The selected block was outlined
+  with a brass wireframe of every edge, which read as a see-through cage. It's now
+  tinted **light blue**, keeping the material's shading (so the sides still shade
+  rather than going flat). Clicking a part in the build hierarchy highlights it, and
+  only **one** part is ever highlighted — even when parts are joined into a chain.
+- **Robot View — Join tool: on-surface, colour-coded pick markers (#354).** The
+  pick guides now read as painted onto the face: the **hover target** is a
+  translucent **blue** disc, every **snap point** is a small translucent disc laid
+  flat on the surface, and the committed picks are filled discs — **green** for
+  component 1, **blue** for component 2 — each with a bright ring + axis triad, drawn
+  on top so they're always visible.
+- **Robot View — default view is the perspective "home" corner.** The viewer now
+  opens in **perspective**, framed from the cube's **top-right-front corner**
+  (+X/+Y/+Z), zoomed to fit — and that's exactly where the **Home** button returns.
+- **Robot View — blueprint-style ground grid.** The grid is now much **lighter**
+  and theme-aware (subtle on both white and black backgrounds), with **major +
+  minor** subdivision lines, plus **red-X / blue-Z origin lines** through the
+  centre. It re-colours live when the theme changes.
+- **Robot View polish.** The **build menu defaults to pinned-open**; the
+  navigation cube is **brighter brass** with its X/Y/Z labels **occluded** by the
+  cube (no longer showing through); and the ortho/perspective dropdown collapses to
+  just its ▾ arrow, revealed (like the Home button) only when the pointer is over
+  the top-right nav zone.
+- **Robot View — clearer measure tool.** Measuring now draws a **dashed line**
+  between the two picked points with the distance shown in a **floating pill on
+  the model** (mm / m), so you read it in context. Clears on re-measure or when
+  the tool is turned off.
+- **Robot View builder — tidier toolbar + panel.** The **add Box / Tube / Ball**
+  buttons and the **Measure** tool moved onto the floating build toolbar (with the
+  select / push-pull / move / join tools and undo/redo). The left panel keeps the
+  hierarchy; **★ Make base** is now a one-click star on each block's row (no longer
+  hidden in edit mode). The collapsed **Build** tab is squared off and reads
+  top-to-bottom. Accent text in the builder (headings, the STL filename) uses a
+  **darker brass** (`--accent-ink`) so it's readable on the parchment theme, and
+  the toolbar's active-tool highlight is a neutral fill instead of hard-to-see gold.
+- **Robot pop-out now keeps you in Robot mode.** Instead of switching to Code
+  mode, popping the robot out (or creating a new one) enters a transient *focus*:
+  it hides the board, instruments and console so the URDF fills the editor, and
+  restores your Robot layout the moment you switch modes, re-click the Robot tab,
+  or reopen any panel. Nothing about Robot mode is permanently changed.
+
+### Fixed
+- **Servo "drives joint" picker works in the in-window board pane.** In the main window's
+  breadboard view, clicking a servo always showed "GPn · no joints" even when the linked rig had
+  joints — because that pane never loaded the URDF's joint names (only the pop-out Board *window*
+  did). It now reads the linked `.urdf`'s joints like the pop-out, so you can bind a servo to a
+  joint from either place. The picker also keeps showing a servo's current joint even if that
+  joint was renamed/removed from the URDF (an orphan binding), instead of silently blanking —
+  matching the URDF editor's servo list.
+- **Robot View — the 3-D view keeps its camera when you switch editor tabs (#399).**
+  Flipping to another file tab and back used to reset the robot to the default framing,
+  losing your orbit. Two causes: orbiting/panning wasn't recorded (only the zoom/home/fit
+  buttons were), and the view fully unmounts when you leave its tab. Now every camera move
+  is remembered per-file in a cache that survives the unmount, so you come back to exactly
+  the view you left.
+- **Robot View — editing a joint's Roll turns it about the mating normal, not the
+  wrong axis (#354).** The Roll field on an existing joint spun the part about the joint's
+  local Z, which usually isn't the axis the two faces are joined on — so the part rotated
+  the wrong way. Roll now turns about the **mating normal** (the same axis the Add-Joint
+  mate used), which is captured + remembered per joint (it can't be recovered from a
+  finished joint afterward). Joints mated before this update fall back to the old axis —
+  **re-run Add Joint on them once** to capture their normal.
+- **Robot View — the Join tool is now predictable: you control the hierarchy (#354).**
+  The tool used to *guess* which of the two picked parts was the parent, using descendant
+  count — so joining a part that already had something attached (e.g. an arm with a servo)
+  would wrongly make **it** the parent and flip your chain, and you could never build
+  `base → shoulder → arm → servo`. Now **Component 1 is the parent (the anchor that stays
+  put) and Component 2 is the child (it attaches onto Component 1)** — the tool only
+  auto-swaps to prevent a loop, and never re-homes the base. A **⇅ swap** button in the
+  Add Joint dialog flips parent ↔ child if you picked them the wrong way round, and the
+  labels/hints spell out which part moves. Build a chain by picking parent-then-child.
+- **Robot View — removing a joint no longer fuses the freed part into the base (#354).**
+  Deleting a joint used to leave its part *rootless*, and the loader collapses every
+  rootless part into the base's single scene node — so the base and every freed part
+  **highlighted together** and you couldn't pick just one to re-join it (which also made
+  a follow-up joint look "ignored"). Deleting a joint now **re-attaches the part to the
+  base as a loose part**, nudged to a clear spot beside the base (like a fresh import)
+  so it's off its old parent and easy to pick — its sub-assembly relocates with it — and
+  each part stays independently selectable so you can articulate a new chain from it.
+- **Robot View — adding a joint no longer blanks the view (#354).** After a joint was
+  added the selected block's highlight was re-applied during the scene rebuild, but the
+  helper it needed was declared *later* in the same setup — a temporal-dead-zone crash
+  that blanked the whole Robot View (intermittent, since it only fired once the block's
+  mesh had finished loading — which is why "the 3rd joint vanished"). The helper is now
+  declared before it's used, so chaining any number of joints is solid.
+- **Robot View — the Add Joint dialog's buttons are always clickable (#354).** The
+  properties dialog sat *below* the zoom controls, so when it grew tall enough to reach
+  the bottom-right the zoom toolbar covered its **Add** button — clicks landed on "Zoom
+  to fit" and the joint was silently not added (looked like the 3rd joint "vanished").
+  The dialog now floats above the 3-D chrome and caps its height so the footer stays
+  reachable.
+- **Robot View — the mini 3-D viewer zooms to fit the robot on load (#320).** The dock
+  viewer starts on the demo arm and swaps to your project robot once it resolves, but it
+  kept the demo arm's camera — so your robot loaded tiny and off-centre. It now re-frames
+  when the robot changes, filling the mini view.
+- **Robot View — Join tool: holes are easier to grab (#354).** Snapping a joint point
+  onto a hole was fiddly — an edge that was a touch closer would win, so the cross-hair
+  flicked off the hole as you moved to click. A **hole / loop centre now sticks** when
+  the cursor is within a generous radius (it wins over a marginally-closer edge), so the
+  cross-hair stays on the hole and the click lands there.
+- **Robot View — Join tool: the hinge pivots at the joint, not the part's middle (#354).**
+  A rotation joint rotated the child about its *own centre* instead of the point you
+  picked, so a hinge ended up "halfway along the part". The joint origin now sits **on
+  the mating point**, and the child is re-origined onto its picked point (its mesh — and
+  any parts hanging off it — stay exactly put), so a hinge swings about the joint.
+- **Robot View — Join tool: the second block is now always selectable (#354).**
+  After picking Component 1 it fades — but the faded mesh still hit-tested, so when it
+  sat in front of the camera it stole every click and Component 2 "went dark and
+  wouldn't select". The picker now **excludes the already-picked block** from the ray
+  (and the selection highlight no longer draws a black outline that made the block
+  look dark), so you can always click the other part.
+- **Robot View — Join tool: only the first block fades.** Picking Component 1 faded
+  the whole robot, because its material is usually shared (everything uses "steel");
+  the fade now swaps in a transparent clone for just that block's mesh, so every
+  other object stays solid and pickable as Component 2.
+- **Robot View — the properties / Add-Joint dialog drags in place.** It jumped down
+  and right on the first drag because the pointer's viewport coordinates were applied
+  as `left`/`top` relative to the 3-D stage; the drag now converts by the stage offset.
+- **Robot View — Pop-out opens in the home view.** Popping the robot out full-screen
+  reused a preserved camera, so it wasn't fit/oriented; it now re-frames to home
+  (as if you clicked the Home button) when it goes full-screen.
+- **Robot View — deleting a joint now actually removes it (#354).** Delete used to
+  re-attach the block to the base, which is a no-op for a joint that's already off
+  the base — so those joints (e.g. the two fixed joints in a fresh robot) couldn't
+  be removed. Delete now strips the joint outright; the block becomes free-standing
+  and stays where it was (its position is baked into its visual origin so it doesn't
+  jump).
+- **Robot View — nav + mini-viewer polish.** The projection dropdown under the
+  navigation cube no longer vanishes when you reach for it (it sat just outside the
+  nav zone's hover box, so moving the pointer down dropped the hover; the zone now
+  extends to contain it, and the target is a touch larger). The docked mini-viewer's
+  **New robot** / **Pop out** buttons are readable in the light skin (they hard-coded
+  a dark fill, so the dark label was dark-on-dark) and now use theme tokens. The mini
+  viewer also gains a **Home** button (top-right) that flies back to the fitted
+  default view.
+- **Robot View — hierarchy dialog follow-ups (#353).** Renaming a pose onto an
+  existing pose's name no longer silently destroys that pose (the rename is refused
+  with an inline warning). The servo dialog's number fields hold raw text while you
+  type, so you can clear a field or type a leading `-` (a negative joint range)
+  without it snapping to 0. Switching hierarchy nodes mid-edit keeps the previous
+  block's live edits (Fusion-style, still ⌘Z-undoable) and each node's **Cancel**
+  now only reverts that node's own edits.
+- **Robot View — a batch of navigation / layout fixes.** The **Home** button now
+  responds to clicks (it sat under the cube canvas — it's raised above it and only
+  captures clicks while the nav zone is hovered, so the cube corner stays pickable)
+  and orients to the **top-left-front** corner. The first **Fit / 100%** no longer
+  clips the model (the near plane was bracketed off the *far* end of the glide;
+  it now uses the nearer end). The Properties dialog opens **comfortably below the
+  nav cube** instead of behind it. In the Build hierarchy, the ☆/✎/✕ icons moved to
+  the **left of the block name** so they no longer overlap long titles, and the
+  panel now **sizes to its contents** (scrolling if needed) so it no longer covers
+  the Help hint in the bottom-left.
+- **Robot View — the Move tool now moves imported meshes.** It bailed on any link
+  without primitive geometry, so STL/DAE parts couldn't be dragged; meshes now
+  move (grabbing the hit point; primitives still get the face snap points). The
+  Build hierarchy text is also a little larger (matching the breadboard browser).
+- **Robot View readouts are readable in light mode.** The 3-D viewer's info/hint
+  HUD (also the docked mini-viewer's text) used a dark pill, so its text was
+  dark-on-dark on the parchment theme; it now uses a parchment pill with brass
+  emphasis in light mode.
+- **Robot View — imported meshes no longer render massive / clipped.** STLs
+  authored in millimetres loaded 1000× too big (a huge mesh pushed the camera past
+  the fixed far-plane, so only a "letterbox" sliver rendered). Imports now measure
+  the mesh and normalise the scale (mm→m via `<mesh scale>`); the camera's near/far
+  planes are also bracketed dynamically around the framed model so nothing clips at
+  any size/offset.
+- **Robot View — clicking a block in the hierarchy zooms to fit it**, and the
+  navigation cube: **lighter brass**, 25% smaller, **longer X/Y/Z axes**, a
+  **primary-button-only** guard (right/middle click no longer snaps the view), and
+  a `pointercancel`/`lostpointercapture` reset so a stolen drag can't leave it
+  orbiting on hover. A manual camera move (zoom / fit / home / focus / cube) is now
+  preserved when async meshes finish loading (previously the settle re-frame wiped it).
+- **Local Files refresh now updates expanded sub-folders too.** The refresh button
+  re-read only the root listing, so files added/removed inside an already-expanded
+  sub-folder didn't show up. Refresh now signals every expanded folder to re-read
+  its children.
+- **Robot View accent text is readable on the parchment theme.** The Robot-View
+  panels hard-coded a light gold (`#c8a24a`) for highlight/active text, which
+  didn't darken for the skeuomorph (parchment) theme — gold-on-cream was hard to
+  read. They now use the theme-aware `var(--accent)` brass token (dark-brass on
+  parchment, gold on dark), like the rest of the app. (3-D selection outlines /
+  snap handles stay gold — the canvas is always dark.)
+- **Files panel now always reopens from the toolbar button / activity icon.** A
+  workspace switch (or the Robot pop-out) could leave the panel visually
+  collapsed while the store thought it was open, so the next toggle click called
+  collapse() and it stayed shut. The toggle now reads the panel's actual state
+  and the switch syncs both ways, so it's self-healing.
+- **Robot pose/servo panel is now legible in the light skin.** The panel used an
+  undefined colour token, so it rendered dark-on-dark in the parchment theme; it
+  now uses the theme surface tokens (parchment ⇄ charcoal) like the file panel.
+
+## [0.24.0] - 2026-07-08
+
+### Added
+- **Data View — inspect logged CSV/TXT data as a table (epic #272).** Opening a
+  `.csv` / `.tsv` file now shows a spreadsheet-like viewer instead of raw text.
+  It auto-detects the delimiter (comma / tab / semicolon / whitespace) and header
+  row, infers each column's type (number / timestamp / text), and tolerates the
+  mess real device logs carry — ragged rows, blank lines and a torn final row
+  (board unplugged mid-write) are handled, never fatal — with a "ragged" count
+  and null markers for dropped readings. Rendering is **virtualised**, so a
+  24-hour log (~86k rows) scrolls smoothly (#274). Click a header to **sort**
+  (type-aware; nulls last), open a **filter** row (min–max ranges / text
+  contains-equals, composable, with an "N of M rows" count + Clear), and a
+  **summary strip** profiles each column and recomputes against the filtered
+  set (#275). A **Columns** side panel (DuckDB Column Explorer style) profiles
+  every column — histograms + min/max/mean/median for numbers, top values for
+  text, and the null/gap % — glance-then-expand, recomputing live (#276).
 - **Data Logger instrument — a vintage dot-matrix printer (#242).** Hit
   **RECORD** and every numeric `SNK` reading (meter, plot, distance, IMU,
   environment…) is captured with a timestamp and "printed" onto tractor-feed
@@ -85,93 +1021,82 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   printhead style. **TEAR OFF** downloads the session as a spreadsheet-ready
   wide CSV (`time_s` + one column per series) and starts a fresh sheet. Works
   fully offline against the Simulated device, so a hardware-free classroom gets
-  real data logging — a £4 Pico doing a £100 classroom logger's job. The
-  session/CSV/paper geometry is pure and unit-tested; RECORD is always
-  reachable (arm before any telemetry arrives).
+  real data logging — a £4 Pico doing a £100 classroom logger's job.
+- **Workspace layouts (epic #259).** A toolbar switcher restyles the whole shell
+  in one click; each workspace remembers its own sidebar view, panel sizes,
+  collapse states and instrument-dock visibility. Switching never remounts, so
+  the editor, console scrollback and running instruments all survive. A **↺
+  reset** restores the active workspace to its preset. All layout state moved
+  into one versioned, corruption-safe store that migrates your existing layout
+  on first run.
+- **Open the Oscilloscope / Multimeter any time — with in-instrument help
+  (#256).** The scope and meter no longer stay locked out until your program
+  declares a PWM/ADC pin: toggle them on and, with no source yet, they show a
+  built-in "how to use me" panel (a runnable `inst.watch(scope=pwm)` snippet +
+  a Learn-more link), adopting the file's pin or live `SNK` telemetry the moment
+  one appears. The **Barometer, IMU and Range** instruments explain themselves
+  the same way (#258).
+- **Reopen your files on launch, with crash-safe recovery (#266).** Snakie now
+  remembers the open local files (and the active tab) and reopens them next
+  time, alongside the working folder (#177). A crash-guard protects startup: if
+  a file broke the app last launch it opens clean and drops that session so it
+  can't loop — no keystroke or admin needed, which matters on a locked-down
+  school machine.
+- **Seven new Getting Started help articles (#231)** covering Files & sync,
+  Flash MicroPython firmware, Install packages (mip), Problems & validation,
+  Version control (Git), AI chat & autocomplete, and Keeping Snakie up to date;
+  plus **mini-help for every standard-library part** (#213) — all 16 parts now
+  ship a `help.md` (pinout + wiring + a runnable MicroPython snippet).
+- **Pimoroni Motor 2040 + Servo 2040 in the Standard parts library (#224).**
 
 ### Changed
-- **Three focused modes: Code · Board · Data Lab (modes review).** The
-  four-workspace switcher slims to three — *Lab* and *Data* merged into **Data
-  Lab** (instrument bench + a tall console/plotter); existing layouts migrate
-  automatically, including a stale active workspace. **Board mode now gives the
-  board every pixel**: the parts **library** became an Obsidian-style pinnable
-  overlay (open it from its edge tab; it slides away when it loses focus unless
-  you pin it — the pin sits top-left of its header), the **connections table**
-  starts collapsed to a bottom bar with the same pin behaviour, the floating
-  **components browser** starts collapsed, the driver banner is height-capped,
-  and the redundant chrome (the drag grip, the BOARD VIEW title, the dock's
-  mini board) is hidden while the board lives in the main window. Also fixes
-  the Board pane opening at the wrong size (a panel-mount race) and the board
-  column not filling its pane (a collapsed connections table used to strand
-  dead space below itself).
-- **Board View chrome slimmed further.** The "New board" and "open boards
-  folder" header buttons are gone from both the Board mode and the floating
-  window — the Library panel owns part/board authoring and library management
-  now. And in Board MODE, part mini-help opens in the main **Help Library**
-  (which now also lists board-placed parts under "In This Project") instead of
-  the pane's own drawer — one help surface, not two. The floating window keeps
-  its built-in help drawer.
-- **The Board toolbar knob now pops the board out — like undocking an
-  instrument.** Opening the Board window while Board mode is active hands the
-  board to its own OS window and returns the main split to Code; closing that
-  window brings Board back as a mode; picking Board mode while the window is
-  open re-docks it. One board, two homes, never both.
-
-### Added
-- **Workspace layouts (epic #259, phases 0+1).** A new **Code · Board · Lab ·
-  Data** switcher in the toolbar restyles the whole shell in one click: each
-  workspace remembers its own sidebar view, panel sizes, collapse states and
-  instrument-dock visibility — *Code* is today's editor-first default, *Lab*
-  maximises the instrument bench, *Data* gives the console/plotter the tall
-  half, and ***Board* is a true tri-split for the classroom: your code on the
-  left, the full Board View (breadboard · schematic · node graph, with the
-  parts library and wiring) embedded on the right, and the instrument dock at
-  the far right — code, wiring and live instruments all visible at once.** The
-  embedded Board View loads lazily (code-split) and stays in sync with the
-  floating Board View window via robot.yml. Switching
-  never remounts anything, so the editor, console scrollback and running
-  instruments all survive. A **↺ reset** button restores the active workspace to
-  its factory preset. Under the hood, all layout state moved out of AppShell
-  into one versioned, corruption-safe store (phase 0 of #259) that migrates your
-  existing layout on first run.
-- **Open the Oscilloscope / Multimeter any time — with in-instrument help.**
-  The scope and meter no longer stay locked out until your program declares a
-  PWM/ADC pin: toggle them on from the dock and, when there's no source yet, they
-  show a built-in "how to use me" panel (what's needed + a runnable
-  `inst.watch(scope=pwm)` snippet + a Learn-more link) instead of a blank screen.
-  They adopt the file's PWM/ADC pin — or live `SNK` telemetry — the moment one
-  appears. Backed by a reusable `InstrumentRequirement` panel for conditional
-  instruments.
-- **The Barometer, IMU and Range instruments now explain themselves too.**
-  Opened with no telemetry, they show the same "how to use me" panel (with a
-  runnable snippet + Learn-more) instead of a dead dial, a frozen neutral pose or
-  an empty gauge — and swap to the live view the moment `SNK ENV` / `IMU` /
-  `DIST` data arrives. The Range instrument keeps its HC-SR04 pin pickers and
-  "Run range demo" prompt visible below the panel.
-- **Seven new Getting Started help articles (#231).** The Help Library now
-  covers every advertised feature: **Files & sync** (the two file trees, the
-  transfer bridge, and keeping tagged files in sync on save), **Flash MicroPython
-  firmware** (auto-detect, the MicroPython.org catalog, BOOTSEL, the micro:bit
-  maintenance-mode warning), **Install packages (mip)**, **Problems & validation**
-  (squiggles, the Problems tab, YAML/JSON autofix, board-aware bus checks),
-  **Version control (Git)**, **AI chat & autocomplete** (provider setup, keys,
-  inline suggestions), and **Keeping Snakie up to date**.
+- **Three focused modes: Code · Board · Data Lab (#268).** The four-workspace
+  switcher slims to three — *Lab* and *Data* merged into **Data Lab**; existing
+  layouts migrate automatically. **Board mode now gives the board every pixel**:
+  the parts **library** is an Obsidian-style pinnable overlay, the **connections
+  table** collapses to a pinnable bottom bar, the floating **components browser**
+  starts collapsed, and redundant chrome (the drag grip, the BOARD VIEW title,
+  the New-board / boards-folder buttons, the dock's mini board) is hidden while
+  the board is embedded. Part mini-help routes to the main **Help Library** (one
+  help surface). The **Board toolbar knob pops the board out** into its own
+  window (and closing it returns Board as a mode). Instrument dock defaults per
+  mode: **closed** in Board + Code, **open** in Data Lab.
+- **The breadboard is now graph paper.** The wiring background scales and pans
+  WITH the parts like paper they're placed on: the smallest square is the real
+  **2.54 mm** pin pitch (pads land on grid lines), 1-inch major lines anchor the
+  view, and a finer grid fades in as you zoom (#297); it fills the whole stage
+  and replaces the old static blueprint/schematic grids (#298). **Blueprint is
+  the default background** and carries a subtle **procedural paper texture** —
+  a fractal-noise mottle (SVG `feTurbulence`, no image) that pans/scales with the
+  grid (#300, #301) — and the grid lines pick up that paper fibre so they wobble
+  a hair like ink on paper instead of being machine-perfect (#307). The
+  schematic view is a clean, grid-free sheet (#302).
+- **Board View toolbar: snap-to-grid, a clickable zoom readout, cleaner
+  framing (#299).** A **magnet** toggle snaps a dragged part's top-left pin to
+  the nearest 2.54 mm intersection (remembered across sessions). The zoom
+  percentage is a button toggling 100% / fit-all. Opening the components browser
+  no longer jumps the zoom (only picking a component zooms to fit it).
+- **Image/PDF/SVG exports match what's on screen and include everything.** They
+  bake in the on-screen sheet colour (blueprint blue / schematic sheet), draw
+  the grid + paper (and its wobble) to the edges, and always save the
+  **zoom-to-fit** view so every placed item is included, uncropped (#302, #303,
+  #304, #308).
 
 ### Fixed
 - **Failures are no longer silently swallowed (#225).** A shared `reportError`
-  helper replaces the `.catch(() => {})` sites that made failures invisible: it
-  always logs with a `[context]` tag, and for user-visible actions surfaces a
-  message in the status bar via the existing `snakie:status` seam, so the board
-  never merely *appears* unresponsive. Wired into Run / Stop / Reset / open /
-  save (Toolbar → status bar), the servo / LED / buzzer / gamepad / range /
-  display instrument sends (which previously had no rejection handler at all),
-  and the simulated-runtime queue + parts/firmware cleanup in the main process.
-- **Device-event broadcast survives a window closing mid-stream (#226).** The
-  broadcaster that mirrors the live device stream to the main, instrument,
-  console and Board View windows only guarded the main window against being
-  destroyed; a secondary window closing mid-broadcast could throw "Object has
-  been destroyed" and kill the loop. Every send is now guarded (and wrapped) so
-  one closing window can't stop the stream reaching the others.
+  helper replaces the `.catch(() => {})` sites that made failures invisible — it
+  logs with a `[context]` tag and surfaces user-visible actions in the status
+  bar, so the board never merely *appears* unresponsive.
+- **Device-event broadcast survives a window closing mid-stream (#226).** Every
+  send to the main / instrument / console / Board View windows is now guarded, so
+  one window closing mid-broadcast can't stop the stream reaching the others.
+- **Board-mode Help button opens the Help panel (#271)** — it expands the
+  collapsed sidebar first — and the panel's minimum width was doubled.
+- **Export no longer crops parts (#305)** — the frame now accounts for each
+  translated part group's transform.
+- **Session restore survives fast relaunches / dev HMR reloads (#266, #306)** —
+  the crash-guard disarms on the next painted frame instead of after 4 s, so a
+  quick reload can't strand its marker and wipe the session.
 
 ## [0.23.2] - 2026-07-04
 
@@ -1731,7 +2656,18 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...HEAD
+[0.32.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...v0.32.0
+[0.31.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.30.0...v0.31.0
+[0.30.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.29.0...v0.30.0
+[0.29.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.28.0...v0.29.0
+[0.28.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.27.0...v0.28.0
+[0.27.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.26.0...v0.27.0
+[0.26.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.2...v0.26.0
+[0.25.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.1...v0.25.2
+[0.25.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.25.0...v0.25.1
+[0.25.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.24.0...v0.25.0
+[0.24.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.2...v0.24.0
 [0.23.2]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.1...v0.23.2
 [0.23.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.23.0...v0.23.1
 [0.23.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.22.0...v0.23.0

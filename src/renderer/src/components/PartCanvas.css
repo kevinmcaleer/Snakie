@@ -454,6 +454,9 @@
 .pcv__svg--interactive.pcv__tool-shape {
   cursor: crosshair;
 }
+.pcv__svg--interactive.pcv__tool-erasebg {
+  cursor: cell;
+}
 
 .pcv__pin-label {
   font-family: var(--font-mono);

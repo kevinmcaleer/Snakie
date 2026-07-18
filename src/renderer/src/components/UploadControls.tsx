@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useWorkspace } from '../store/workspace'
+import { IS_WEB } from '../lib/env'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { usePrompt } from './PromptModal'
 import './UploadControls.css'
@@ -103,6 +104,21 @@ export function UploadControls(): JSX.Element {
     setBusy(true)
     setFeedback(null)
     try {
+      if (IS_WEB) {
+        // A per-file save picker — the folder dialog would ADOPT the picked
+        // directory as the workspace root and silently re-point every open
+        // tab's saves at it (#512).
+        const dest = await window.api.fs.saveFileDialog(activeFile.name)
+        if (!dest) {
+          setBusy(false)
+          return // cancelled
+        }
+        setFeedback({ kind: 'info', message: `Saving ${activeFile.name}…` })
+        await window.api.fs.writeFile(dest, activeFile.content)
+        setFeedback({ kind: 'success', message: `Saved ${activeFile.name}.` })
+        setBusy(false)
+        return
+      }
       const folder = await window.api.fs.openFolderDialog()
       if (!folder) {
         setBusy(false)

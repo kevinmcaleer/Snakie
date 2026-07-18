@@ -472,6 +472,68 @@ class BuzzerDevice(unittest.TestCase):
         self.assertIsNone(inst.servo_command("wat", srv))
         self.assertIsNone(inst.servo_command("", srv))
 
+    def test_servo_from_pwm_sets_servo_freq(self):
+        # Exported `Servo(PWM(Pin(n)))` — the Servo sets the PWM to 50 Hz so a
+        # hand-built PWM works electrically.
+        pwm = _RecordingPWM()
+        inst.Servo(pwm)
+        self.assertIn(50, pwm.freqs)
+
+    def test_servo_from_pwm_with_pin_emits_servo_telemetry(self):
+        # `Servo(pwm, pin=n)` remembers the GPIO, so angle() emits SNK SERVO — the
+        # pin-keyed reading Robot View maps to a joint (code moves the 3-D model).
+        out = _emit(lambda: inst.Servo(_RecordingPWM(), pin=3).angle(90))
+        self.assertIn("SNK SERVO 3 90", out)
+        # Without a pin there's no SERVO telemetry (nothing to key the joint on).
+        out2 = _emit(lambda: inst.Servo(_RecordingPWM()).angle(90))
+        self.assertNotIn("SNK SERVO", out2)
+
+    def test_servos_command_drives_several_pins(self):
+        # #416 puppet slider: one `servos` payload moves many servos at once.
+        calls = []
+
+        class _Fake:
+            def __init__(self, pin):
+                self.pin = pin
+
+            def angle(self, deg):
+                calls.append((self.pin, deg))
+
+        n = inst.servos_command("0:90 1:45 15:120", factory=_Fake)
+        self.assertEqual(n, 3)
+        self.assertEqual(calls, [(0, 90), (1, 45), (15, 120)])
+
+    def test_servos_command_accepts_equals_and_skips_bad_tokens(self):
+        calls = []
+        make = lambda pin: type("S", (), {"angle": lambda self, d: calls.append((pin, d))})()
+        # `2=30` (equals form) ok; `bad`, `:5`, `9:` skipped; float deg truncates.
+        n = inst.servos_command("2=30 bad :5 9: 3:44.9", factory=make)
+        self.assertEqual(n, 2)
+        self.assertEqual(sorted(calls), [(2, 30), (3, 44)])
+
+    def test_servos_command_empty_is_zero(self):
+        self.assertEqual(inst.servos_command("", factory=lambda p: None), 0)
+
+    def test_servo_on_emits_pin_keyed_telemetry(self):
+        # servo_on(pin).angle() prints both the legacy channel line AND a
+        # pin-keyed SERVO line for Robot View (#313) — no `machine` needed.
+        srv = inst.servo_on(5)
+        self.assertEqual(srv.pin, 5)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            srv.angle(90)
+        lines = buf.getvalue().strip().splitlines()
+        self.assertIn("SNK SERVO 5 90", lines)
+        # the legacy channel line is still emitted for the Servo panel/scope
+        self.assertTrue(any(ln.startswith("SNK PWM servo ") for ln in lines))
+
+    def test_plain_servo_without_pin_omits_servo_line(self):
+        # A pin-less Servo (legacy singleton) emits no SERVO line.
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            inst.Servo().angle(45)
+        self.assertNotIn("SNK SERVO", buf.getvalue())
+
     def test_buzzer_receiver_via_control_feed(self):
         # Feed real SNKCMD buzzer lines through a Control wired to a fake-PWM
         # Buzzer — the registered handler must actuate it (end-to-end protocol).
@@ -613,7 +675,7 @@ class BackgroundService(unittest.TestCase):
     def test_ready_announces_default_caps(self):
         self.assertEqual(
             _emit(inst.ready),
-            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo watch",
+            "SNK READY scan:wifi scan:bt teleop led buzzer range screen servo servos watch",
         )
 
     def test_ready_includes_extra_caps(self):

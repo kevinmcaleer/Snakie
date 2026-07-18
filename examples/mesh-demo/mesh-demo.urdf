@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<!--
+  MESH DEMO (#319) — a robot whose links are STL *meshes* loaded from this folder,
+  proving Robot View's mesh loading. `base_link` uses a plain relative mesh path
+  (meshes/base.stl); `upper_link` uses a package:// path (package://mesh-demo/…),
+  so both resolution styles are exercised. Open this file in Snakie's Robot View,
+  or point a robot.yml `model.urdf` at it.
+-->
+<robot name="mesh_demo">
+  <material name="steel"><color rgba="0.62 0.65 0.69 1"/></material>
+  <material name="amber"><color rgba="0.85 0.55 0.18 1"/></material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <mesh filename="meshes/base.stl"/>
+      </geometry>
+      <material name="steel"/>
+    </visual>
+  </link>
+
+  <link name="upper_link">
+    <visual>
+      <geometry>
+        <mesh filename="package://mesh-demo/meshes/link.stl"/>
+      </geometry>
+      <material name="amber"/>
+    </visual>
+  </link>
+
+  <joint name="shoulder" type="revolute">
+    <parent link="base_link"/>
+    <child link="upper_link"/>
+    <origin xyz="0 0 0.04" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-1.57" upper="1.57" effort="1" velocity="1"/>
+  </joint>
+</robot>

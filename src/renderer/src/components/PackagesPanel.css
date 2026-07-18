@@ -355,3 +355,98 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* On-board packages + import scan (#131) */
+.pkgs__tag--board {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.pkgs__ver {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+.pkgs__spacer {
+  flex: 1;
+}
+.pkgs__act {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: 5px;
+  padding: 0.16rem 0.5rem;
+  cursor: pointer;
+}
+.pkgs__act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.pkgs__act--uninstall:hover:not(:disabled) {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+.pkgs__act--upgrade {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+.pkgs__scanrow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  /* Match the group heads' horizontal inset so the row sits INSIDE the felt
+     panel's stitched (dashed) frame, not flush against the edge. */
+  margin: 0.5rem 0.85rem;
+}
+.pkgs__scan-ok {
+  font-size: 0.72rem;
+  color: var(--success);
+}
+.pkgs__scan-missing {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+.pkgs__chip {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent-ink);
+  background: transparent;
+  border: var(--border-w) solid var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.pkgs__chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+
+/* The manila tag is a FIXED material (same kraft gradient in both themes), so
+   its text is fixed dark ink — inheriting var(--text) rendered near-white on
+   manila in the dark theme. Same precedent as the paper inputs. */
+.pkgs__tag--board {
+  color: #2f2a1a;
+}
+.pkgs__tag--board .pkgs__ver {
+  color: #6b5f3e;
+}
+.pkgs__tag--board .pkgs__act {
+  color: #2f2a1a;
+  background: rgba(255, 255, 255, 0.4);
+  border-color: #9c8d5e;
+}
+.pkgs__tag--board .pkgs__act--upgrade {
+  color: #5c3f0c;
+  border-color: #8a6d1f;
+}
+.pkgs__tag--board .pkgs__act--uninstall:hover:not(:disabled) {
+  color: #a03024;
+  border-color: #a03024;
+}

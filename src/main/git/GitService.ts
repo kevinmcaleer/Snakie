@@ -32,7 +32,13 @@ export class GitService {
   async openRepo(path: string): Promise<string | null> {
     this.dir = path
     this.git = simpleGit({ baseDir: path })
-    return this.repoRoot()
+    const root = await this.repoRoot()
+    // Rebind to the repo ROOT (#506): `git status --porcelain` paths are
+    // root-relative, so add/reset/checkout run from a subfolder resolved them
+    // against the wrong directory — the Git panel broke whenever the opened
+    // folder wasn't the repo root.
+    if (root && root !== path) this.git = simpleGit({ baseDir: root })
+    return root
   }
 
   /** The directory currently targeted (the user's chosen folder). */

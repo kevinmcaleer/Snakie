@@ -9,6 +9,7 @@ import {
   type PointerEvent as ReactPointerEvent,
   type WheelEvent
 } from 'react'
+import { flushSync } from 'react-dom'
 import { loadPin, savePin, shouldAutoHide, PIN_KEYS } from './pin-overlay'
 import {
   connectionColor,
@@ -19,6 +20,7 @@ import {
   type RobotNet,
   type RobotPart
 } from '../../../shared/robot'
+import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo-bind'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
@@ -55,10 +57,242 @@ export type WiringRenderMode = 'lifelike' | 'schematic'
 
 const VIEW_W = 1180
 const VIEW_H = 720
+
+/** The breadboard "paper" grid pitch: the 2.54 mm (0.1") standard pin pitch. */
+const GRID_PITCH_MM = 2.54
+
+/** localStorage key for the snap-to-grid toggle. */
+const SNAP_GRID_KEY = 'snakie.board.snapGrid'
+
+/**
+ * The WORLD-coordinate rectangle currently visible across the whole stage. The
+ * SVG uses viewBox 1180×720 with `preserveAspectRatio=meet`, so the viewBox is
+ * fitted + centred and leaves letterbox margins where user-space coords fall
+ * outside [0,VIEW_W]×[0,VIEW_H] — this accounts for them so world-space layers
+ * (grid, paper) fill the entire stage, not just the viewBox.
+ */
+function visibleWorldBounds(
+  view: { tx: number; ty: number; scale: number },
+  stageW: number,
+  stageH: number,
+  /** Extra world-unit overscan on every side — so the grid/paper fill past the
+   *  viewport edges (and past an export's frame margin) with no bare band. */
+  padWorld = 0
+): { minX: number; maxX: number; minY: number; maxY: number } {
+  const { tx, ty, scale } = view
+  const fit = stageW > 0 && stageH > 0 ? Math.min(stageW / VIEW_W, stageH / VIEW_H) : 1
+  const uW = fit > 0 ? stageW / fit : VIEW_W
+  const uH = fit > 0 ? stageH / fit : VIEW_H
+  const uMinX = (VIEW_W - uW) / 2
+  const uMaxX = (VIEW_W + uW) / 2
+  const uMinY = (VIEW_H - uH) / 2
+  const uMaxY = (VIEW_H + uH) / 2
+  return {
+    minX: (uMinX - tx) / scale - padWorld,
+    maxX: (uMaxX - tx) / scale + padWorld,
+    minY: (uMinY - ty) / scale - padWorld,
+    maxY: (uMaxY - ty) / scale + padWorld
+  }
+}
+
+/** Overscan (world units) for the grid/paper so they fill past the viewport +
+ *  any export frame margin — comfortably beyond the 24-unit export margin. */
+const GRID_OVERSCAN = 90
+
+interface WorldRect {
+  minX: number
+  minY: number
+  maxX: number
+  maxY: number
+}
+
+/**
+ * The world rect the grid/paper should COVER: the visible area (overscanned)
+ * UNION the placed content's bounds. The union means an EXPORT — which frames to
+ * all parts regardless of the on-screen zoom — always has grid/paper to its
+ * edges, even for parts currently scrolled off-screen. Off-screen coverage is
+ * clipped by the viewport on screen, so it's free visually.
+ */
+function coverBounds(
+  view: { tx: number; ty: number; scale: number },
+  stageW: number,
+  stageH: number,
+  content: WorldRect | null
+): WorldRect {
+  const v = visibleWorldBounds(view, stageW, stageH, GRID_OVERSCAN)
+  if (!content) return v
+  return {
+    minX: Math.min(v.minX, content.minX - GRID_OVERSCAN),
+    minY: Math.min(v.minY, content.minY - GRID_OVERSCAN),
+    maxX: Math.max(v.maxX, content.maxX + GRID_OVERSCAN),
+    maxY: Math.max(v.maxY, content.maxY + GRID_OVERSCAN)
+  }
+}
+
+/**
+ * PROCEDURAL PAPER (blueprint mode): a whisper-subtle fractal-noise mottle drawn
+ * INSIDE the pan/zoom content group so it pans + scales with the grid + parts,
+ * like real paper. Generated with `feTurbulence` (no image asset) and tiled via
+ * a `stitchTiles` pattern so the filter runs once on a small tile — cheap. The
+ * grain is greyscale + alpha-solid; CSS (soft-light blend, low opacity, scoped
+ * to blueprint) turns it into the faint light/dark undulation of drawing paper.
+ */
+function WiringPaper({
+  view,
+  stageW,
+  stageH,
+  content
+}: {
+  view: { tx: number; ty: number; scale: number }
+  stageW: number
+  stageH: number
+  content: WorldRect | null
+}): JSX.Element | null {
+  if (!(view.scale > 0)) return null
+  const { minX, maxX, minY, maxY } = coverBounds(view, stageW, stageH, content)
+  if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null
+  return (
+    <>
+      <defs>
+        <filter id="wc-paper-fx" x="0%" y="0%" width="100%" height="100%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.55"
+            numOctaves={2}
+            seed={11}
+            stitchTiles="stitch"
+            result="n"
+          />
+          <feColorMatrix in="n" type="saturate" values="0" result="g" />
+          <feComponentTransfer in="g">
+            <feFuncA type="linear" slope="0" intercept="1" />
+          </feComponentTransfer>
+        </filter>
+        {/* Tiled in world units so the grain pans/scales with the content. */}
+        <pattern id="wc-paper" patternUnits="userSpaceOnUse" width="90" height="90">
+          <rect width="90" height="90" filter="url(#wc-paper-fx)" />
+        </pattern>
+        {/* Roughen filter (applied to the grid via CSS in blueprint mode): the
+            same paper fibre displaces the lines a hair, so they wobble like ink
+            on textured paper instead of being machine-perfect. Low frequency +
+            small scale keeps it a subtle undulation. */}
+        <filter id="wc-grid-rough" x="-5%" y="-5%" width="110%" height="110%">
+          <feTurbulence
+            type="fractalNoise"
+            baseFrequency="0.028"
+            numOctaves={2}
+            seed={11}
+            stitchTiles="stitch"
+            result="warp"
+          />
+          <feDisplacementMap
+            in="SourceGraphic"
+            in2="warp"
+            scale={3}
+            xChannelSelector="R"
+            yChannelSelector="G"
+          />
+        </filter>
+      </defs>
+      <rect
+        className="wc__paper"
+        x={minX}
+        y={minY}
+        width={maxX - minX}
+        height={maxY - minY}
+        fill="url(#wc-paper)"
+      />
+    </>
+  )
+}
+
+/**
+ * The graph-paper background grid (#…): drawn INSIDE the pan/zoom content group
+ * (in world coordinates) so it moves + scales with the parts like paper they're
+ * placed on, with `non-scaling-stroke` keeping the lines crisp at any zoom. The
+ * smallest square is the real 2.54 mm pin pitch; a finer half-pitch grid fades
+ * IN as you zoom in, and the minor grid fades OUT as you zoom out, leaving the
+ * 1-inch major lines as the anchor. Rendered as one `<path>` per level (cheap).
+ */
+function WiringGrid({
+  view,
+  pxPerMm,
+  stageW,
+  stageH,
+  content
+}: {
+  view: { tx: number; ty: number; scale: number }
+  pxPerMm: number
+  /** The SVG element's pixel size, to fill the letterbox margins too. */
+  stageW: number
+  stageH: number
+  /** Placed-content bounds — covered too, so exports fill to the edges. */
+  content: WorldRect | null
+}): JSX.Element | null {
+  const { scale } = view
+  if (!(scale > 0) || !(pxPerMm > 0)) return null
+
+  const { minX: wMinX, maxX: wMaxX, minY: wMinY, maxY: wMaxY } = coverBounds(
+    view,
+    stageW,
+    stageH,
+    content
+  )
+
+  // Levels: [mm spacing, class, base opacity, fade-in start/full in viewBox px].
+  // A fadeFull of 0 means "always on" (the major anchor lines).
+  const levels: Array<{
+    mm: number
+    cls: string
+    base: number
+    fadeStart: number
+    fadeFull: number
+  }> = [
+    { mm: GRID_PITCH_MM / 2, cls: 'wc__grid--fine', base: 0.14, fadeStart: 12, fadeFull: 26 },
+    { mm: GRID_PITCH_MM, cls: 'wc__grid--minor', base: 0.3, fadeStart: 5, fadeFull: 14 },
+    { mm: GRID_PITCH_MM * 10, cls: 'wc__grid--major', base: 0.42, fadeStart: 0, fadeFull: 0 }
+  ]
+
+  const paths: JSX.Element[] = []
+  for (const lvl of levels) {
+    const worldStep = lvl.mm * pxPerMm
+    const viewStep = worldStep * scale // spacing in viewBox units
+    const opacity =
+      lvl.fadeFull > 0
+        ? Math.max(0, Math.min(1, (viewStep - lvl.fadeStart) / (lvl.fadeFull - lvl.fadeStart))) *
+          lvl.base
+        : lvl.base
+    if (opacity < 0.012) continue
+    // Safety cap: never emit an absurd number of lines (a level this dense has
+    // already faded to ~0 above, but guard the fully-opaque major just in case).
+    if ((wMaxX - wMinX) / worldStep > 1200 || (wMaxY - wMinY) / worldStep > 1200) continue
+
+    let d = ''
+    const kx0 = Math.ceil(wMinX / worldStep)
+    const kx1 = Math.floor(wMaxX / worldStep)
+    for (let k = kx0; k <= kx1; k++) {
+      const x = k * worldStep
+      d += `M${x.toFixed(1)} ${wMinY.toFixed(1)}L${x.toFixed(1)} ${wMaxY.toFixed(1)}`
+    }
+    const ky0 = Math.ceil(wMinY / worldStep)
+    const ky1 = Math.floor(wMaxY / worldStep)
+    for (let k = ky0; k <= ky1; k++) {
+      const y = k * worldStep
+      d += `M${wMinX.toFixed(1)} ${y.toFixed(1)}L${wMaxX.toFixed(1)} ${y.toFixed(1)}`
+    }
+    if (d) paths.push(<path key={lvl.cls} className={`wc__grid ${lvl.cls}`} d={d} strokeOpacity={opacity} />)
+  }
+  return <g className="wc__grid-layer" aria-hidden="true">{paths}</g>
+}
 // Left inset (viewBox units) reserved for the floating BROWSER (14rem, pinned
 // top-left) so a fit places the leftmost item to the RIGHT of it, not under it.
 const BROWSER_INSET = 300
 const DOT_R = 5
+/** Pin grab radius (screen px, divided by zoom): the mouse one hugs the dot; the
+ *  touch one is finger-sized (#525) — `dotAt` picks the NEAREST dot, so a fat
+ *  radius can't mis-wire dense footprints, it just wins over pan/box-drag. */
+const DOT_TOL = DOT_R + 5
+const TOUCH_DOT_TOL = DOT_R + 15
 
 // Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
 const WC_MIN_ZOOM = 0.35
@@ -299,6 +533,11 @@ function partSchematicPins(def: PartDefinition): { w: number; h: number; placed:
 export interface WiringCanvasProps {
   robot: RobotDefinition
   onChange: (next: RobotDefinition) => void
+  /** The linked URDF's joint names — lets a servo's inspector bind to a joint (#). */
+  joints?: string[]
+  /** Each joint's real travel (deg / mm), to seed a new binding's joint range from
+   *  the joint's limits instead of a flat 0…180 (which clamped the 3-D model). */
+  jointLimits?: Record<string, { min: number; max: number }>
   /** Installed libraries (to resolve a placed part's pins). */
   libraries: PartLibraryWithParts[]
   /** The microcontroller to show as the board (the board view's selection). */
@@ -327,7 +566,7 @@ export interface WiringCanvasProps {
 }
 
 interface Drag {
-  kind: 'box' | 'pan' | 'wire'
+  kind: 'box' | 'pan' | 'wire' | 'pinch'
   /** box drag */
   boxKey?: string
   startX?: number
@@ -346,12 +585,49 @@ interface Drag {
   from?: string
   cx?: number
   cy?: number
+  /** pinch (two-finger touch, #525): starting finger distance + view snapshot */
+  pinchDist?: number
+  pinchScale?: number
+  pinchWX?: number
+  pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
+  // The SVG's pixel size, so the graph-paper grid fills the letterbox margins
+  // (the viewBox is fitted + centred; the visible region is wider/taller).
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 })
+  useEffect(() => {
+    const el = svgRef.current
+    if (!el) return
+    const measure = (): void => setStageSize({ w: el.clientWidth, h: el.clientHeight })
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Snap-to-grid: when on, a dragged part's TOP-LEFT PIN lands on the nearest
+  // 2.54 mm grid intersection. Persisted across sessions.
+  const [snapEnabled, setSnapEnabledState] = useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(SNAP_GRID_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleSnap = (): void =>
+    setSnapEnabledState((prev) => {
+      const next = !prev
+      try {
+        window.localStorage.setItem(SNAP_GRID_KEY, next ? '1' : '0')
+      } catch {
+        // storage off — the toggle just won't persist
+      }
+      return next
+    })
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
   // Focused chrome (Board mode) starts it collapsed so the canvas gets the room.
@@ -651,8 +927,11 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
    *  The tolerance is divided by the zoom so the grab radius stays ~constant on
    *  screen, and we pick the closest dot so dense footprints don't mis-select by
    *  iteration order. */
-  const dotAt = (wx: number, wy: number): { endpoint: string } | null => {
-    const tol = (DOT_R + 5) / view.scale
+  const dotAt = (wx: number, wy: number, tolPx: number = DOT_TOL): { endpoint: string } | null => {
+    // tolPx is SCREEN pixels: divide out the zoom AND the svg's viewBox-fit
+    // scale, so the grab radius doesn't shrink when the pane is narrow (#525).
+    const ctmScale = svgRef.current?.getScreenCTM()?.a || 1
+    const tol = tolPx / (view.scale * ctmScale)
     let bestEp: string | null = null
     let bestD = tol
     for (const s of subjects) {
@@ -683,7 +962,42 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     }
   }
 
+  /** When snap is on, nudge a proposed body origin so the subject's TOP-LEFT
+   *  pin lands on the nearest 2.54 mm grid intersection (world 0 is a grid line,
+   *  matching the drawn paper grid). No-op when snap is off / no pins. */
+  const snapOrigin = (key: string, x: number, y: number): { x: number; y: number } => {
+    if (!snapEnabled) return { x, y }
+    const s = subjByKey.get(key)
+    const step = GRID_PITCH_MM * pxPerMm
+    if (!s || !(step > 0)) return { x, y }
+    // The top-left pin anchor (smallest x + y, tie-broken by x), in subject-local
+    // coords — pins live on `PlacedPin.anchors`.
+    let tlx = Infinity
+    let tly = Infinity
+    let best = Infinity
+    for (const p of s.pins) {
+      for (const a of p.anchors) {
+        const sum = a.x + a.y
+        if (sum < best - 1e-6 || (Math.abs(sum - best) < 1e-6 && a.x < tlx)) {
+          best = sum
+          tlx = a.x
+          tly = a.y
+        }
+      }
+    }
+    if (!Number.isFinite(best)) return { x, y }
+    const pinX = x + tlx
+    const pinY = y + tly
+    return {
+      x: x + (Math.round(pinX / step) * step - pinX),
+      y: y + (Math.round(pinY / step) * step - pinY)
+    }
+  }
+
   const moveBox = (key: string, x: number, y: number): void => {
+    const snapped = snapOrigin(key, x, y)
+    x = snapped.x
+    y = snapped.y
     if (key === 'board') persist({ ...robot, boardX: x, boardY: y })
     else persist({ ...robot, parts: robot.parts.map((p) => (p.id === key ? { ...p, x, y } : p)) })
   }
@@ -760,28 +1074,92 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     })
 
   // --- pointer handlers -----------------------------------------------------
+  // Live touch points (by pointerId, client coords) — a second finger turns the
+  // gesture into a pinch-zoom (#525); pointer events fire per-finger so this map
+  // is the only way to see both at once.
+  const touchPtsRef = useRef(new Map<number, { x: number; y: number }>())
+
+  /** Client → svg viewBox coordinates (view transform NOT applied — the pinch
+   *  math needs the fixed frame that `view` maps world space into). */
+  const toLocal = (p: { clientX: number; clientY: number }): { x: number; y: number } => {
+    const svg = svgRef.current
+    const ctm = svg?.getScreenCTM()
+    if (!svg || !ctm) return { x: 0, y: 0 }
+    const pt = svg.createSVGPoint()
+    pt.x = p.clientX
+    pt.y = p.clientY
+    const local = pt.matrixTransform(ctm.inverse())
+    return { x: local.x, y: local.y }
+  }
+
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    const touch = e.pointerType === 'touch'
+    if (touch) {
+      touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+      // A SECOND finger: whatever the first was doing becomes a pinch-zoom
+      // (any in-flight box/wire drag is discarded — nothing has committed yet).
+      if (touchPtsRef.current.size === 2) {
+        const [a, b] = [...touchPtsRef.current.values()]
+        const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }
+        const l = toLocal(mid)
+        dragRef.current = {
+          kind: 'pinch',
+          pinchDist: Math.hypot(a.x - b.x, a.y - b.y),
+          pinchScale: view.scale,
+          pinchWX: (l.x - view.tx) / view.scale,
+          pinchWY: (l.y - view.ty) / view.scale
+        }
+        force((n) => n + 1)
+        return
+      }
+    }
     const w = toWorld(e)
-    const dot = dotAt(w.x, w.y)
+    // Fingers are far less precise than a mouse — grow the pin grab radius (#525).
+    const dot = dotAt(w.x, w.y, touch ? TOUCH_DOT_TOL : DOT_TOL)
     if (dot) {
       dragRef.current = { kind: 'wire', from: dot.endpoint, cx: w.x, cy: w.y }
+      // Touch has no hover — surface the grabbed pin's chips like a mouse-over
+      // would (persists after the tap; see the touch guard on pointerleave).
+      if (touch) {
+        const ep = parseEndpoint(dot.endpoint)
+        setHover({ key: ep.key, pin: ep.index })
+      }
       force((n) => n + 1)
       return
     }
     // A subject under the pointer? → drag it (topmost first).
     const hit = [...subjects].reverse().find((s) => w.x >= s.hit.x && w.x <= s.hit.x + s.hit.w && w.y >= s.hit.y && w.y <= s.hit.y + s.hit.h)
     if (hit) {
+      // Tapping a part/board reveals its pin capability chips (#525) — the touch
+      // analogue of hovering it.
+      if (touch) setHover({ key: hit.key, pin: null })
       dragRef.current = { kind: 'box', boxKey: hit.key, startX: w.x, startY: w.y, ox: hit.x, oy: hit.y }
       return
     }
     // Empty space → pan.
+    if (touch) setHover(null)
     dragRef.current = { kind: 'pan', panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
   }
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>): void => {
+    if (e.pointerType === 'touch' && touchPtsRef.current.has(e.pointerId)) {
+      touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    }
     const d = dragRef.current
     if (!d) return
+    if (d.kind === 'pinch') {
+      if (touchPtsRef.current.size < 2) return
+      const [a, b] = [...touchPtsRef.current.values()]
+      const scale = clampScale(
+        (d.pinchScale ?? 1) * (Math.hypot(a.x - b.x, a.y - b.y) / Math.max(1, d.pinchDist ?? 1))
+      )
+      // Keep the world point that started under the fingers' midpoint pinned to
+      // the CURRENT midpoint — zoom about the pinch, and two-finger pan for free.
+      const l = toLocal({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 })
+      setView({ scale, tx: l.x - (d.pinchWX ?? 0) * scale, ty: l.y - (d.pinchWY ?? 0) * scale })
+      return
+    }
     if (d.kind === 'pan') {
       // Only count as a real pan past a small dead-zone, so a jittered click on
       // empty space still deselects rather than being treated as a pan.
@@ -814,6 +1192,18 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   }
 
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>): void => {
+    if (e.pointerType === 'touch') {
+      touchPtsRef.current.delete(e.pointerId)
+      // Lifting a finger out of a pinch: the gesture is over (the remaining
+      // finger must not resume as a stray pan/drag from wherever it sits).
+      if (dragRef.current?.kind === 'pinch') {
+        if (touchPtsRef.current.size === 0) {
+          dragRef.current = null
+          force((n) => n + 1)
+        }
+        return
+      }
+    }
     const d = dragRef.current
     dragRef.current = null
     if (d?.kind === 'box' && d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
@@ -826,16 +1216,20 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
       setSelectedKey(renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null)
       setRenameText(null)
+      // A touch tap set `hover` while dragRef still suppressed the chips — make
+      // sure the tap's end repaints even when the selection didn't change (#525).
+      force((n) => n + 1)
       return
     }
     if (d?.kind === 'pan' && !d.moved) {
       setSelectedKey(null)
       setRenameText(null)
+      force((n) => n + 1)
       return
     }
     if (d?.kind === 'wire' && d.from) {
       const w = toWorld(e)
-      const target = dotAt(w.x, w.y)
+      const target = dotAt(w.x, w.y, e.pointerType === 'touch' ? TOUCH_DOT_TOL : DOT_TOL)
       if (target && target.endpoint !== d.from) addConnection(d.from, target.endpoint)
       force((n) => n + 1)
     }
@@ -868,6 +1262,23 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
       const wy = (cy - v.ty) / v.scale
       return { scale, tx: cx - wx * scale, ty: cy - wy * scale }
     })
+  }
+
+  /** Jump to exactly 100%, keeping the viewport centre fixed. */
+  const setZoom100 = (): void => {
+    setView((v) => {
+      const cx = VIEW_W / 2
+      const cy = VIEW_H / 2
+      const wx = (cx - v.tx) / v.scale
+      const wy = (cy - v.ty) / v.scale
+      return { scale: 1, tx: cx - wx, ty: cy - wy }
+    })
+  }
+
+  /** The clickable zoom readout toggles between 100% and fit-all. */
+  const toggleZoom = (): void => {
+    if (Math.abs(view.scale - 1) < 0.005) fitView()
+    else setZoom100()
   }
 
   /** Frame a bounding box (viewBox coords) centred within the DRAWABLE area,
@@ -923,7 +1334,25 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     setExportOpen(false)
     const svg = svgRef.current
     if (!svg) return
-    const res = serializeLiveSvg(svg, '.wc__content', { background: '#161719', margin: 24, exclude: ['.wc__sel-ring'] })
+    // Always export the ZOOM-TO-FIT view so every item is included AND fully
+    // backed by the grid/paper (which are view-derived). flushSync applies the
+    // fit + restores the previous view WITHIN this call, so the serialise reads
+    // the fit-state DOM while the user never sees the intermediate frame paint.
+    const prev = { ...view }
+    flushSync(() => fitView())
+    // The sheet colour lives in CSS on the stage (blueprint blue / schematic
+    // white / dark mat) — read the LIVE computed value so the export matches
+    // exactly what's on screen, whatever the mode/theme.
+    const stageBg = svg.parentElement ? getComputedStyle(svg.parentElement).backgroundColor : ''
+    const background = stageBg && !/rgba?\([^)]*,\s*0\s*\)/.test(stageBg) ? stageBg : '#161719'
+    const res = serializeLiveSvg(svg, '.wc__content', {
+      background,
+      margin: 24,
+      exclude: ['.wc__sel-ring'],
+      // Frame to the parts, not the full-canvas grid/paper — they just fill it.
+      bboxExclude: ['.wc__grid-layer', '.wc__paper']
+    })
+    flushSync(() => setView(prev))
     if (!res) return
     const base =
       (robot.name?.trim() || 'board').replace(/[^\w.-]+/g, '-').replace(/^[-.]+|[-.]+$/g, '').toLowerCase() || 'board'
@@ -963,7 +1392,11 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // Auto fit-to-view when the CONTENT changes (view toggle, board change, a part
   // added/removed) — keyed on a signature that excludes positions/pan, so it
   // never yanks the view during a drag, pan or wire pull.
-  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${browserOpen}|${subjects.map((s) => s.key).join(',')}`
+  // NOTE: `browserOpen` is deliberately NOT in this signature. Opening/closing
+  // the floating browser must not re-fit (that made clicking the browser jump
+  // the zoom); only a mode/board/part-set change auto-fits. Individual browser
+  // rows still zoom-to-fit their component via `fitToKey`.
+  const fitSig = `${renderMode}|${boardDef?.id ?? ''}|${subjects.map((s) => s.key).join(',')}`
   useEffect(() => {
     fitView()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1090,6 +1523,27 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
   // parts in the breadboard view are selectable/rotatable.
   const selSubject = renderMode === 'lifelike' && selectedKey ? subjByKey.get(selectedKey) : undefined
   const selPart = selSubject?.kind === 'part' ? selSubject : undefined
+  // Servo → joint binding (#): if the selected part is a servo, which board GPIO its
+  // signal is wired to and the URDF joint it currently drives (via robot.yml's map).
+  const selIsServo = !!selPart && isServoPart(selPart.partDef)
+  const selServoGpio = selIsServo && selPart ? servoBoardGpio(selPart.key, robot.connections) : null
+  const selServoJoint = selServoGpio ? boundJoint(robot.robot?.servoJointMap, selServoGpio) : null
+  // The joints the picker offers: the URDF's joints, plus the current binding if
+  // it's an ORPHAN (a saved joint the URDF no longer has), so a bound servo always
+  // shows its joint — matching the URDF editor's servo list (avoids the "editor
+  // shows base_joint, board shows nothing" disconnect).
+  const selServoJointChoices =
+    selServoJoint && !joints.includes(selServoJoint) ? [selServoJoint, ...joints] : joints
+  const setServoJoint = (joint: string): void => {
+    if (!selServoGpio) return
+    onChange({
+      ...robot,
+      robot: {
+        ...(robot.robot ?? {}),
+        servoJointMap: bindServoJoint(robot.robot?.servoJointMap, selServoGpio, joint, jointLimits[joint])
+      }
+    })
+  }
   const selToolbar = (() => {
     const svg = svgRef.current
     if (!selPart || !svg) return null
@@ -1110,6 +1564,21 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
     const y = below ? toScreen(selPart.hit.y + selPart.hit.h).y - rect.top : aboveTop
     return { left: top.x - rect.left, top: y, below }
   })()
+
+  // The placed content's world bounds (all subjects) — the grid/paper cover this
+  // too, so an EXPORT (which frames to all parts) always fills to its edges even
+  // for parts scrolled off-screen. Null when nothing is placed.
+  const partsBounds: WorldRect | null = subjects.length
+    ? subjects.reduce<WorldRect>(
+        (b, s) => ({
+          minX: Math.min(b.minX, s.hit.x),
+          minY: Math.min(b.minY, s.hit.y),
+          maxX: Math.max(b.maxX, s.hit.x + s.hit.w),
+          maxY: Math.max(b.maxY, s.hit.y + s.hit.h)
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+      )
+    : null
 
   return (
     <div
@@ -1136,6 +1605,22 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
               must be in scope for the life-like board body to paint. */}
           {boardDef && renderMode === 'lifelike' && <BoardDefs def={boardDef} />}
           <g className="wc__content" transform={`translate(${view.tx} ${view.ty}) scale(${view.scale})`}>
+            {/* Paper + grid are the BREADBOARD's graph paper only — the schematic
+                is a clean sheet with no grid. Both are world-space (pan/scale). */}
+            {renderMode === 'lifelike' && (
+              <>
+                {/* Procedural paper mottle (blueprint mode only, via CSS). */}
+                <WiringPaper view={view} stageW={stageSize.w} stageH={stageSize.h} content={partsBounds} />
+                {/* Graph-paper grid at true 2.54 mm pitch, behind the parts. */}
+                <WiringGrid
+                  view={view}
+                  pxPerMm={pxPerMm}
+                  stageW={stageSize.w}
+                  stageH={stageSize.h}
+                  content={partsBounds}
+                />
+              </>
+            )}
             {/* Subjects (the MCU + placed parts) FIRST — wires draw on top (#182). */}
             {subjects.map((s) => {
               const capsOn = renderMode === 'lifelike' && !dragRef.current && hover?.key === s.key
@@ -1295,6 +1780,44 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                     </svg>
                   </button>
                 )}
+                {/* Servo → joint binding (#): pick the URDF joint this servo drives.
+                    The signal must be wired to a GPIO first; joints come from the
+                    3-D model. Writing the pin↔joint map lets live code move the model. */}
+                {selIsServo &&
+                  (selServoGpio == null ? (
+                    <span className="wc__parttb-note" title="Wire this servo's signal pin to a microcontroller GPIO to bind it to a joint">
+                      ⚡ wire signal
+                    </span>
+                  ) : selServoJointChoices.length === 0 ? (
+                    <span className="wc__parttb-note" title="No joints yet — add them in the 3-D Robot View">
+                      GP{selServoGpio} · no joints
+                    </span>
+                  ) : (
+                    <label className="wc__parttb-joint" title={`GP${selServoGpio} drives this URDF joint`}>
+                      <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <path
+                          d="M6.5 9.5l3-3M5.5 10.5a2 2 0 0 1 0-2.8l1.4-1.4M10.5 5.5a2 2 0 0 1 0 2.8L9.1 9.7"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={1.3}
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                      <select
+                        className="wc__parttb-select"
+                        value={selServoJoint ?? ''}
+                        aria-label={`Joint driven by GP${selServoGpio}`}
+                        onChange={(e) => setServoJoint(e.target.value)}
+                      >
+                        <option value="">GP{selServoGpio} → (none)</option>
+                        {selServoJointChoices.map((j) => (
+                          <option key={j} value={j}>
+                            {j}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
                 <button type="button" className="wc__parttb-btn" title="Rotate 90°" aria-label="Rotate 90 degrees" onClick={() => rotatePart(selPart.key)}>
                   <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" fill="currentColor" />
@@ -1353,9 +1876,15 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
             >
               −
             </button>
-            <span className="wc__zoom-pct" aria-label={`Zoom ${Math.round(view.scale * 100)} percent`}>
+            <button
+              type="button"
+              className="wc__zoom-pct wc__zoom-pct--btn"
+              onClick={toggleZoom}
+              title={Math.abs(view.scale - 1) < 0.005 ? 'Zoom to fit all items' : 'Zoom to 100%'}
+              aria-label={`Zoom ${Math.round(view.scale * 100)} percent — click to toggle 100% / fit`}
+            >
               {Math.round(view.scale * 100)}%
-            </span>
+            </button>
             <button
               type="button"
               className="wc__zoom-btn"
@@ -1408,6 +1937,28 @@ export function WiringCanvas({ robot, onChange, libraries, boardDef, boardPart, 
                 </div>
               )}
             </div>
+            {/* Snap-to-grid (magnet): align a dragged part's top-left pin to the
+                nearest 2.54 mm grid intersection. Right of the export button. */}
+            <button
+              type="button"
+              className={`wc__zoom-btn${snapEnabled ? ' is-on' : ''}`}
+              onClick={toggleSnap}
+              title="Snap to grid — align the top-left pin to the nearest grid intersection"
+              aria-label="Snap to grid"
+              aria-pressed={snapEnabled}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                {/* Horseshoe magnet: a U-body with two poles at the top. */}
+                <path
+                  d="M6 3v9a6 6 0 0 0 12 0V3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="butt"
+                />
+                <path d="M4.8 3h4.2v3.2H4.8zM15 3h4.2v3.2H15z" fill="currentColor" />
+              </svg>
+            </button>
           </div>
         </div>
 
@@ -1766,7 +2317,9 @@ function SubjectBody({
       // which clears the chips. (Handlers here don't stop pointerdown, so dragging
       // via the svg-level hit-test still works.)
       onPointerEnter={onHoverPart ? () => onHoverPart(true) : undefined}
-      onPointerLeave={onHoverPart ? () => onHoverPart(false) : undefined}
+      // Touch "leaves" the instant the finger lifts — keep the chips up so a tap
+      // actually shows the pins (#525); tapping elsewhere clears them instead.
+      onPointerLeave={onHoverPart ? (e) => e.pointerType !== 'touch' && onHoverPart(false) : undefined}
     >
       {/* Transparent fill over the whole body box so the part-level hover also
           registers over the margins around the drawn body (not just its shapes). */}
@@ -1866,7 +2419,7 @@ function SubjectBody({
               r={DOT_R}
               className={`wc__dot wc__dot--${p.net}`}
               onPointerEnter={onHoverPin ? () => onHoverPin(p.index) : undefined}
-              onPointerLeave={onHoverPin ? () => onHoverPin(null) : undefined}
+              onPointerLeave={onHoverPin ? (e) => e.pointerType !== 'touch' && onHoverPin(null) : undefined}
             />
           )
         })}

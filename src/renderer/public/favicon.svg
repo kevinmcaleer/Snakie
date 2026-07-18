@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="0.55" stop-color="#10b981"/>
+      <stop offset="1" stop-color="#0d9488"/>
+    </linearGradient>
+    <linearGradient id="body" x1="320" y1="240" x2="700" y2="780" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#fde68a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App-icon squircle background -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="url(#bg)"/>
+
+  <!-- soft inner highlight -->
+  <rect x="0" y="0" width="1024" height="1024" rx="232" fill="#ffffff" opacity="0.06"/>
+
+  <!-- snake shadow -->
+  <path d="M 668 372 C 668 286 408 268 380 392 C 352 516 700 532 668 654 C 640 762 414 778 360 694"
+        stroke="#064e3b" stroke-opacity="0.25" stroke-width="138" fill="none"
+        stroke-linecap="round" stroke-linejoin="round" transform="translate(0,16)"/>
+
+  <!-- snake body (S) -->
+  <path d="M 668 372 C 668 286 408 268 380 392 C 352 516 700 532 668 654 C 640 762 414 778 360 694"
+        stroke="url(#body)" stroke-width="130" fill="none"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- head -->
+  <circle cx="668" cy="372" r="86" fill="url(#body)"/>
+  <!-- eye -->
+  <circle cx="700" cy="348" r="17" fill="#0f3d2e"/>
+  <!-- tongue -->
+  <path d="M 724 408 L 762 452 M 762 452 L 792 440 M 762 452 L 788 470"
+        stroke="#ef4444" stroke-width="13" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

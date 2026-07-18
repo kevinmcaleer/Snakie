@@ -1,0 +1,33 @@
+name: Biped
+parts: []
+connections: []
+robot:
+  version: 1
+  urdf: biped.urdf
+  servoJointMap:
+    - pin: "0"
+      joint: hip_left
+      jointMin: -51
+      jointMax: 51
+      servoMin: 0
+      servoMax: 180
+    - pin: "1"
+      joint: hip_right
+      jointMin: -51
+      jointMax: 51
+      servoMin: 0
+      servoMax: 180
+  mirror:
+    - a: hip_left
+      b: hip_right
+  timeline:
+    duration: 1.2
+    easing: easeInOut
+    loop: true
+    fps: 20
+    tracks:
+      - joint: hip_left
+        keys:
+          - { t: 0, value: -30 }
+          - { t: 0.6, value: 30 }
+          - { t: 1.2, value: -30 }
