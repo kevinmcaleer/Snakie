@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import type {
   BoardCandidate,
   BoardType,
@@ -7,6 +7,8 @@ import type {
   FlashProgress
 } from '../../../preload/index.d'
 import { useFocusTrap } from '../hooks/useFocusTrap'
+import { isElectron } from '../lib/platform'
+import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
 import './FirmwareFlasher.css'
 
 interface FirmwareFlasherProps {
@@ -54,7 +56,7 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
 }
 
 /**
- * FIRMWARE FLASHER MODAL (issues #14, #64, #125).
+ * FIRMWARE FLASHER MODAL (issues #14, #64, #125; Web W3 issue #284).
  *
  * Lets the user flash MicroPython firmware to a device without leaving Snakie:
  *  - auto-detects board candidates (serial VID/PID for ESP, RPI-RP2 UF2 drive),
@@ -72,8 +74,15 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
  * {@link flashTargetForFamily}, so the right inputs (port/offset for ESP, boot
  * drive for RP2040) surface automatically.
  *
- * All heavy lifting happens in the main process via `window.api.firmware`; this
- * component is purely presentational state + orchestration.
+ * In Electron, all heavy lifting happens in the main process via
+ * `window.api.firmware`. Outside Electron (a browser tab — Web W3, issue
+ * #284) there's no process to shell out to `esptool`, so ESP32/ESP8266
+ * flashing instead runs entirely in the renderer over the Web Serial API via
+ * `esptool-js` (see `lib/webFirmware/espFlash.ts`); the board picker is
+ * narrowed to ESP boards only and the firmware-catalog download is hidden
+ * (RP2040/micro:bit browser flashing and a browser-native catalog fetch are
+ * follow-up work). `isElectron()` from `lib/platform` decides which path a
+ * given render takes.
  */
 export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
@@ -82,6 +91,10 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
   const [firmwarePath, setFirmwarePath] = useState<string>('')
+  // The picked firmware's raw bytes, for the browser (Web Serial) flash path,
+  // which has no filesystem path to hand to esptool — only a `File` (Web W3).
+  const [webFirmwareBytes, setWebFirmwareBytes] = useState<Uint8Array | null>(null)
+  const webFileInputRef = useRef<HTMLInputElement>(null)
   const [esptool, setEsptool] = useState<EsptoolInfo | null>(null)
   // Generation of a detected micro:bit (v1/v2), to pre-select the right firmware.
   const [detectedMicrobit, setDetectedMicrobit] = useState<'v1' | 'v2' | undefined>(undefined)
@@ -105,18 +118,23 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const isEsp = board === 'esp32' || board === 'esp8266'
 
-  // Subscribe to streamed progress for the lifetime of the modal.
-  useEffect(() => {
-    const unsubscribe = window.api.firmware.onProgress((p) => {
-      setLog((prev) => [...prev, p])
-      if (typeof p.percent === 'number') setPercent(p.percent)
-      if (p.kind === 'done') {
-        setFlashing(false)
-        setOutcome(p.ok ? 'success' : 'error')
-      }
-    })
-    return unsubscribe
+  // A single handler for a streamed progress line, shared by BOTH the
+  // Electron IPC subscription below AND the browser (Web Serial) flash path,
+  // which calls this directly instead of going through `window.api`.
+  const handleProgress = useCallback((p: FlashProgress): void => {
+    setLog((prev) => [...prev, p])
+    if (typeof p.percent === 'number') setPercent(p.percent)
+    if (p.kind === 'done') {
+      setFlashing(false)
+      setOutcome(p.ok ? 'success' : 'error')
+    }
   }, [])
+
+  // Subscribe to streamed progress for the lifetime of the modal (Electron only).
+  useEffect(() => {
+    const unsubscribe = window.api.firmware.onProgress(handleProgress)
+    return unsubscribe
+  }, [handleProgress])
 
   // Auto-scroll the log to the latest line.
   useEffect(() => {
@@ -179,11 +197,33 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   }, [])
 
   const handlePickFile = useCallback(async (): Promise<void> => {
+    // Outside Electron there's no filesystem-path picker IPC to call — open a
+    // regular `<input type=file>` instead and read the bytes directly (Web W3).
+    if (!isElectron()) {
+      webFileInputRef.current?.click()
+      return
+    }
     try {
       const picked = await window.api.firmware.pickFirmwareFile()
       if (picked) setFirmwarePath(picked)
     } catch {
       // Cancelled / unavailable — keep the current selection.
+    }
+  }, [])
+
+  // Handles the hidden browser file input's change event: reads the picked
+  // file into bytes for `flashEspInBrowser` and shows its name in the
+  // existing (read-only) "firmware file" text field for display purposes.
+  const handleWebFileChange = useCallback(async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // allow re-selecting the same file later
+    if (!file) return
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      setWebFirmwareBytes(bytes)
+      setFirmwarePath(file.name)
+    } catch {
+      // Ignore unreadable files; keep the previous selection.
     }
   }, [])
 
@@ -288,6 +328,13 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const canFlash = useMemo(() => {
     if (flashing) return false
+    if (!isElectron() && isEsp) {
+      // Browser (Web Serial) flashing reads bytes picked via `<input type=file>`
+      // directly — there's no IPC firmwarePath/esptool-availability check to
+      // make, and the serial port itself is only requested once Flash is
+      // clicked (Web W3, issue #284).
+      return webFirmwareBytes !== null && webFirmwareBytes.length > 0
+    }
     if (!haveFirmware) return false
     if (isEsp) {
       // ESP needs a serial port + esptool, whether the `.bin` is local or from
@@ -297,7 +344,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     // A drive board (RP2040 / micro:bit) needs the boot drive to copy onto, and a
     // micro:bit must NOT be in maintenance mode.
     return mountPath.length > 0 && !selectedMaintenance
-  }, [flashing, haveFirmware, isEsp, port, esptool, mountPath, selectedMaintenance])
+  }, [flashing, isEsp, webFirmwareBytes, haveFirmware, port, esptool, mountPath, selectedMaintenance])
 
   const resetRun = useCallback((): void => {
     setLog([])
@@ -309,6 +356,19 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const handleFlash = useCallback(async (): Promise<void> => {
     resetRun()
     try {
+      if (!isElectron() && isEsp) {
+        // Browser (Web Serial) ESP flash: no main process to shell out to
+        // esptool, so flash entirely in-renderer via esptool-js. The port is
+        // requested here — inside this click handler — because
+        // `navigator.serial.requestPort()` requires a user gesture (Web W3,
+        // issue #284).
+        if (!webFirmwareBytes) {
+          throw new Error('Choose a firmware .bin file first.')
+        }
+        const serialPort = await requestEspPort()
+        await flashEspInBrowser(serialPort, { firmware: webFirmwareBytes, offset }, handleProgress)
+        return
+      }
       if (usingCatalog) {
         // Derive the flash target from the selected family (authoritative for a
         // catalog flash); the user may have edited the offset, so prefer the
@@ -343,15 +403,17 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     }
   }, [
     resetRun,
+    isEsp,
+    webFirmwareBytes,
+    offset,
+    handleProgress,
     usingCatalog,
     selFamily,
     selVersionUrl,
     board,
     mountPath,
     firmwarePath,
-    isEsp,
-    port,
-    offset
+    port
   ])
 
   const finished = outcome === 'success' || outcome === 'error'
@@ -400,21 +462,28 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 disabled={flashing || usingCatalog}
                 onChange={(e) => handleBoardChange(e.target.value as BoardType)}
               >
-                {(Object.keys(BOARD_LABELS) as BoardType[]).map((b) => (
-                  <option key={b} value={b}>
-                    {BOARD_LABELS[b]}
-                  </option>
-                ))}
+                {(Object.keys(BOARD_LABELS) as BoardType[])
+                  // Outside Electron, only ESP32/ESP8266 flash today (Web
+                  // Serial via esptool-js) — RP2040/micro:bit browser flashing
+                  // is follow-up work (Web W3, issue #284).
+                  .filter((b) => isElectron() || isEspBoard(b))
+                  .map((b) => (
+                    <option key={b} value={b}>
+                      {BOARD_LABELS[b]}
+                    </option>
+                  ))}
               </select>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm"
-                onClick={() => void refreshDetection()}
-                disabled={flashing}
-                title="Re-scan for connected boards"
-              >
-                ⟳ Detect
-              </button>
+              {isElectron() && (
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--sm"
+                  onClick={() => void refreshDetection()}
+                  disabled={flashing}
+                  title="Re-scan for connected boards"
+                >
+                  ⟳ Detect
+                </button>
+              )}
             </div>
             {usingCatalog && (
               <p className="firmware-hint">
@@ -426,32 +495,45 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 Detected: {candidates.map((c) => c.label).join('; ')}
               </p>
             )}
+            {!isElectron() && (
+              <p className="firmware-hint">
+                micro:bit and Pico flashing in the browser are coming soon — use the desktop app for
+                those boards today.
+              </p>
+            )}
           </div>
 
           {isEsp ? (
             <>
-              <div className="firmware-field">
-                <label className="firmware-field__label" htmlFor="firmware-port">
-                  Serial port
-                </label>
-                <select
-                  id="firmware-port"
-                  className="firmware-select"
-                  value={port}
-                  disabled={flashing}
-                  onChange={(e) => setPort(e.target.value)}
-                >
-                  <option value="">Select a port…</option>
-                  {serialCandidates.map((c) => (
-                    <option key={c.port} value={c.port}>
-                      {c.label}
-                    </option>
-                  ))}
-                  {port && !serialCandidates.some((c) => c.port === port) && (
-                    <option value={port}>{port}</option>
-                  )}
-                </select>
-              </div>
+              {isElectron() ? (
+                <div className="firmware-field">
+                  <label className="firmware-field__label" htmlFor="firmware-port">
+                    Serial port
+                  </label>
+                  <select
+                    id="firmware-port"
+                    className="firmware-select"
+                    value={port}
+                    disabled={flashing}
+                    onChange={(e) => setPort(e.target.value)}
+                  >
+                    <option value="">Select a port…</option>
+                    {serialCandidates.map((c) => (
+                      <option key={c.port} value={c.port}>
+                        {c.label}
+                      </option>
+                    ))}
+                    {port && !serialCandidates.some((c) => c.port === port) && (
+                      <option value={port}>{port}</option>
+                    )}
+                  </select>
+                </div>
+              ) : (
+                <p className="firmware-hint">
+                  Clicking Flash will prompt you to pick the board&apos;s serial port (Web Serial —
+                  Chrome or Edge only).
+                </p>
+              )}
 
               <div className="firmware-field">
                 <label className="firmware-field__label" htmlFor="firmware-offset">
@@ -468,20 +550,21 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 />
               </div>
 
-              {esptool && !esptool.available && (
+              {isElectron() && esptool && !esptool.available && (
                 <p className="firmware-banner firmware-banner--warn">
                   esptool was not found on PATH. Install it with{' '}
                   <code>pip install esptool</code> (or <code>pipx install esptool</code>) to flash
                   ESP boards. Snakie does not bundle esptool.
                 </p>
               )}
-              {esptool?.available && (
+              {isElectron() && esptool?.available && (
                 <p className="firmware-hint">
                   esptool found{esptool.version ? `: ${esptool.version}` : ''}.
                 </p>
               )}
             </>
           ) : (
+
             <div className="firmware-field">
               <label className="firmware-field__label" htmlFor="firmware-mount">
                 {board === 'microbit' ? 'micro:bit drive (MICROBIT)' : 'RP2040 boot drive (RPI-RP2)'}
@@ -526,32 +609,37 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
           {/* Firmware source: download from the catalog or browse a local file.
               Available for every board — ESP (`.bin`) and RP2040 (`.uf2`) alike
-              (issue #125). */}
-          <div className="firmware-field">
-            <span className="firmware-field__label">Firmware source</span>
-            <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">
-              <button
-                type="button"
-                role="radio"
-                aria-checked={source === 'catalog'}
-                className={`firmware-source-tab ${source === 'catalog' ? 'is-active' : ''}`}
-                onClick={() => setSource('catalog')}
-                disabled={flashing}
-              >
-                Download from MicroPython.org
-              </button>
-              <button
-                type="button"
-                role="radio"
-                aria-checked={source === 'local'}
-                className={`firmware-source-tab ${source === 'local' ? 'is-active' : ''}`}
-                onClick={() => setSource('local')}
-                disabled={flashing}
-              >
-                Local file
-              </button>
+              (issue #125). Outside Electron the catalog download goes through
+              `window.api.firmware.fetchCatalog`/`downloadAndFlash`, which have
+              no browser implementation yet (Web W3, issue #284) — only Local
+              file is offered there. */}
+          {isElectron() && (
+            <div className="firmware-field">
+              <span className="firmware-field__label">Firmware source</span>
+              <div className="firmware-source-toggle" role="radiogroup" aria-label="Firmware source">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={source === 'catalog'}
+                  className={`firmware-source-tab ${source === 'catalog' ? 'is-active' : ''}`}
+                  onClick={() => setSource('catalog')}
+                  disabled={flashing}
+                >
+                  Download from MicroPython.org
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={source === 'local'}
+                  className={`firmware-source-tab ${source === 'local' ? 'is-active' : ''}`}
+                  onClick={() => setSource('local')}
+                  disabled={flashing}
+                >
+                  Local file
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
           {usingCatalog ? (
             <div className="firmware-field">
@@ -683,6 +771,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   Browse…
                 </button>
               </div>
+              {/* Hidden browser file input backing "Browse…" outside Electron
+                  (Web W3, issue #284) — there's no filesystem-path IPC to call. */}
+              <input
+                ref={webFileInputRef}
+                type="file"
+                accept={isEsp ? '.bin' : board === 'microbit' ? '.hex' : '.uf2'}
+                style={{ display: 'none' }}
+                onChange={(e) => void handleWebFileChange(e)}
+              />
             </div>
           )}
 
