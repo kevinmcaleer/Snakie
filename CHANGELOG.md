@@ -15,6 +15,80 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the parts library); "write your robot app" and "run it on the simulator"
   latch on when observed (an open servo-driving `.py`; a Simulated-device
   connection) with a manual checkbox fallback, remembered per project.
+- **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
+  planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
+  deps): an exact law-of-cosines 2-bone solver that picks between both elbow
+  configurations (limits first, then closest to the current pose), a FABRIK
+  solver for 3+ bone chains with CCD refinement, an analytic two-group
+  fallback and a perturbed-seed retry for the classic slow-convergence
+  singularities, joint-limit clamping throughout (poses never fold through a
+  limit), and a status that distinguishes `reached` / `out_of_reach` /
+  `blocked_by_limits`. Ships 35 language-neutral test vectors in
+  `test/fixtures/ik-vectors.json` (format documented in
+  `src/shared/ik/README.md`) that the future MicroPython `snakie_ik.py`
+  (#539) must also pass, plus a vitest suite running every vector and
+  seeded property-style edge cases.
+- **skeleton.json — auto-generated device-side skeleton (#537, epic #533 §2).**
+  Saving the project URDF (or robot.yml — servo bindings live there) now
+  regenerates `<project>/skeleton.json` automatically: per joint its name, type
+  (revolute/continuous/prismatic/fixed), parent/child link, origin, bone length
+  (mm, joint-origin → joint-origin), axis, min/max limits from the URDF
+  `<limit>` (deg / mm), and the bound servo (pin + calibration) where the
+  project maps one — plus an extensible per-link section (masses land there in
+  #535). JSON so MicroPython parses it natively; the embedded `urdf_hash` +
+  `schema_version` let Snakie warn "skeleton out of date — sync?" at connect
+  time when the board's copy is stale, and file sync (#178) pushes it like any
+  project file. The URDF stays the single source of truth — skeleton.json is
+  derived, never hand-edited.
+- **Bone Mode in Robot View (#536, epic #533 §1).** A 🦴 toggle on the zoom
+  toolbar ghosts the robot (solid grey at ~80% transparency) and overlays its
+  skeleton: coloured joint-to-joint bones labelled with their length in mm,
+  never occluded by the mesh; a compass at every revolute joint (arc from min
+  to max limit, needle at the live angle, readout that shifts green → amber →
+  red approaching a limit); a linear ruler gauge for prismatic joints; and a
+  friendly error when joint names aren't unique. The overlay tracks sliders,
+  Motion Studio playback and live servo telemetry frame-by-frame.
+- **Discovery tips in the status bar (#434).** When the status bar has nothing
+  real to say, it now shows a rotating 💡 tip about a Snakie feature — fading
+  in/out over a second, changing every 5–10 minutes, and always giving way to
+  actual warnings and status messages. Some tips link to docs.snakie.org
+  articles (opened in your browser). The list lives in a plain YAML file so
+  it's easy to extend, and a **Settings → Appearance** toggle turns tips off.
+- **ESP32/ESP8266 firmware flashing in the browser (Web W3, #284, epic #267).**
+  Outside the Electron desktop app — e.g. a future web build — the Flash
+  MicroPython firmware dialog now flashes ESP32/ESP8266 boards entirely
+  client-side over the **Web Serial API** via Espressif's official
+  [`esptool-js`](https://github.com/espressif/esptool-js), with no local
+  process or `esptool` install required: pick a local `.bin` file, click
+  Flash, choose the board's serial port when the browser prompts, and watch
+  the same live log + progress bar the desktop flasher shows. This lands
+  first (of a 3-part split for #284) since it needs no other web-track work;
+  the desktop Electron flashing path (esptool shell-out, UF2/DAPLink drive
+  copy) is unchanged. A browser-native firmware catalog download isn't
+  available yet, so the catalog tab is hidden outside Electron (Local file
+  only) — RP2040/micro:bit browser flashing follows below.
+- **micro:bit and Pico (RP2040) firmware flashing in the browser (Web W3,
+  #284, epic #267).** The second part of the browser flashing work: a
+  micro:bit now flashes over **WebUSB/DAPLink** via ARM's
+  [`dapjs`](https://github.com/ARMmbed/dapjs) — the same approach the
+  MakeCode editor uses — with a one-click **"Copy to drive instead"**
+  fallback (and automatic fallback when the browser has no WebUSB) for
+  boards/browsers where WebUSB DAPLink doesn't respond. A Pico's BOOTSEL
+  bootloader has no WebUSB interface at all, so it always uses that same
+  guided drive-copy flow: Snakie tells you to hold BOOTSEL (or just plug in a
+  micro:bit), then uses the **File System Access API**'s save-file picker to
+  write the firmware straight onto whichever mounted drive you pick — no
+  auto-detected mass-storage path required. Chrome/Edge only for both the
+  WebUSB and File System Access paths; the desktop Electron flashing path is
+  unchanged.
+- **Desktop-only chrome hidden outside Electron (Web W3, #284, epic #267).**
+  The Source Control and Plugins views — both need a real filesystem and a
+  spawned local process, neither available in a browser tab — are now hidden
+  from the activity bar and, as a defensive fallback, show a short "desktop
+  app only" notice instead of a broken panel if somehow selected. Backed by a
+  new shared `isElectron()`/`hasWebSerial()`/`hasWebUSB()`/
+  `hasFileSystemAccess()` capability-detection module, reused by the ESP
+  browser-flashing work and by the micro:bit/Pico web flashing above.
 - **Board View works by touch — iPad-friendly wiring (part of #525).** On a
   touchscreen, tapping the board or a part now reveals its pin capability
   chips (they stay up until you tap elsewhere — touch has no hover), wires can

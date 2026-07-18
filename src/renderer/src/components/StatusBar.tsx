@@ -13,6 +13,14 @@ import {
   firmwareFamilyFromBanner,
   firmwareUpdateFromConsole
 } from './firmware-version'
+import {
+  STATUS_TIPS,
+  TIP_FADE_MS,
+  nextTipDelayMs,
+  pickTipIndex,
+  shouldShowTip,
+  type StatusTip
+} from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
 import './StatusBar.css'
@@ -238,6 +246,58 @@ export function StatusBar({
   // `liveWarningVisible`.
   const showLiveWarning = liveWarningVisible(instrumentsLive, connected, instrumentCount)
 
+  // Discovery tips (issue #434) — a rotating 💡 tip in the otherwise-empty
+  // message area. `shouldShowTip` (pure, unit-tested) gates it: tips ALWAYS
+  // give way to the live-poll warning and plugin messages, and the Settings →
+  // Appearance toggle turns them off entirely. While shown, a new random tip
+  // (never the previous one) is picked every 5–10 minutes with a ~1s CSS
+  // opacity fade out/in around the swap.
+  const [tip, setTip] = useState<StatusTip | null>(null)
+  const [tipFaded, setTipFaded] = useState(true)
+  const tipIndexRef = useRef<number | null>(null)
+  const tipSlotFree = shouldShowTip({
+    enabled: settings.showTips,
+    liveWarning: showLiveWarning,
+    hasPluginMessage: pluginMsg != null
+  })
+
+  useEffect(() => {
+    if (!tipSlotFree || STATUS_TIPS.length === 0) {
+      // Real content owns the bar (or tips are off) — vacate immediately.
+      setTip(null)
+      setTipFaded(true)
+      return
+    }
+    let alive = true
+    const timers: ReturnType<typeof setTimeout>[] = []
+    const later = (ms: number, fn: () => void): void => {
+      timers.push(
+        setTimeout(() => {
+          if (alive) fn()
+        }, ms)
+      )
+    }
+    const show = (): void => {
+      const i = pickTipIndex(STATUS_TIPS.length, tipIndexRef.current)
+      tipIndexRef.current = i
+      setTip(STATUS_TIPS[i])
+      // Mounted at opacity 0; lift the flag a beat later so the CSS
+      // transition runs the fade-in.
+      later(30, () => setTipFaded(false))
+      later(nextTipDelayMs(), rotate)
+    }
+    const rotate = (): void => {
+      setTipFaded(true) // fade out…
+      later(TIP_FADE_MS, show) // …then swap in the next tip and fade back in
+    }
+    setTipFaded(true)
+    show()
+    return () => {
+      alive = false
+      timers.forEach(clearTimeout)
+    }
+  }, [tipSlotFree])
+
   // Update-aware version slot (issue #74). The pure mapping lives in
   // `updateButton.ts` so it can be unit-tested without rendering.
   const updateView = updateButtonView(update, version)
@@ -314,6 +374,36 @@ export function StatusBar({
               title={pluginMsg.tooltip ?? undefined}
             >
               {pluginMsg.text}
+            </span>
+          ))}
+
+        {/* Discovery tip (#434) — only rendered while the bar is otherwise
+            empty (tipSlotFree); real messages above always take its place.
+            Tips with an href open the docs article in the external browser. */}
+        {tipSlotFree &&
+          tip &&
+          (tip.href ? (
+            <button
+              type="button"
+              className={`statusbar__item statusbar__tip statusbar__tip--link${
+                tipFaded ? ' statusbar__tip--faded' : ''
+              }`}
+              title={tip.href}
+              onClick={() => {
+                if (tip.href) void window.api.openExternal(tip.href)
+              }}
+            >
+              <span aria-hidden="true">💡</span>
+              <span className="statusbar__tip-text">{tip.text}</span>
+            </button>
+          ) : (
+            <span
+              className={`statusbar__item statusbar__tip${
+                tipFaded ? ' statusbar__tip--faded' : ''
+              }`}
+            >
+              <span aria-hidden="true">💡</span>
+              <span className="statusbar__tip-text">{tip.text}</span>
             </span>
           ))}
       </div>

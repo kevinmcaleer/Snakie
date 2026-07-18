@@ -18,7 +18,7 @@ const BoardPane = lazy(() => import('./BoardPane'))
 const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
-import { ActivityBar, ActivityView } from './ActivityBar'
+import { ActivityBar, ActivityView, DESKTOP_ONLY_VIEWS } from './ActivityBar'
 import { BugReportPanel } from './BugReportPanel'
 import { PanelHeader } from './PanelHeader'
 import { FilePanel } from './FilePanel'
@@ -48,6 +48,7 @@ import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { PartsImportBanner } from './PartsImportBanner'
+import { isElectron } from '../lib/platform'
 import { TutorialPanel } from './TutorialPanel'
 import {
   requiredPartModules,
@@ -58,6 +59,7 @@ import {
 } from './part-imports'
 import { installPartDriver } from './driver-install'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useSkeletonSync } from '../hooks/useSkeletonSync'
 import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
@@ -112,6 +114,21 @@ function LeftView({
   view: ActivityView
   helpTarget?: { id: string; nonce: number }
 }): JSX.Element {
+  // Guard against a persisted `activityView` (from a previous Electron
+  // session) pointing at a desktop-only view in a browser tab — the
+  // ActivityBar already hides these, but a stale localStorage value could
+  // still select one directly (Web W3, issue #284).
+  if (DESKTOP_ONLY_VIEWS.has(view) && !isElectron()) {
+    const title = view === 'source-control' ? 'Source Control' : 'Plugins'
+    return (
+      <LeftRegion title={title}>
+        <p className="region__empty">
+          {title} needs a real filesystem and local processes (git / the Python
+          plugin host), so it&apos;s only available in the Snakie desktop app.
+        </p>
+      </LeftRegion>
+    )
+  }
   switch (view) {
     case 'source-control':
       return (
@@ -189,6 +206,10 @@ export function AppShell(): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
+
+  // skeleton.json autogen (#537): regenerate from the URDF on every save, and
+  // check the board's copy for staleness at connect time.
+  useSkeletonSync(currentFolder)
 
   const boardSource = activeFile?.content ?? ''
   const boardFileName = activeFile?.name

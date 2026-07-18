@@ -50,6 +50,8 @@ export interface SettingsStore {
   minimap: boolean
   /** The Board View breadboard background. Default `dark`. */
   breadboardBg: BreadboardBg
+  /** Whether the status bar shows rotating 💡 discovery tips (#434). Default on. */
+  showTips: boolean
   setPaper: (paper: EditorPaper) => void
   /** Set the line spacing (clamped to [MIN, MAX]). */
   setLineSpacing: (px: number) => void
@@ -61,6 +63,8 @@ export interface SettingsStore {
   setMinimap: (on: boolean) => void
   /** Set the Board View breadboard background. */
   setBreadboardBg: (bg: BreadboardBg) => void
+  /** Show/hide the status-bar discovery tips (#434). */
+  setShowTips: (on: boolean) => void
 }
 
 const SettingsContext = createContext<SettingsStore | null>(null)
@@ -91,6 +95,7 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
     'snakie.board.breadboardBg',
     'blueprint'
   )
+  const [showTips, setShowTips] = useLocalStorage<boolean>('snakie.statusbar.tips', true)
 
   // Apply the paper mode + spacing to the document root so the CSS ruled paper
   // and Monaco's line height both follow the same source of truth.
@@ -150,12 +155,14 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       checkFirmwareUpdates,
       minimap,
       breadboardBg,
+      showTips,
       setPaper,
       setLineSpacing: (px: number) => setLineSpacingRaw(clampSpacing(px)),
       setEditorTheme,
       setCheckFirmwareUpdates,
       setMinimap,
-      setBreadboardBg
+      setBreadboardBg,
+      setShowTips
     }),
     [
       paper,
@@ -164,12 +171,14 @@ export function SettingsProvider({ children }: { children: ReactNode }): JSX.Ele
       checkFirmwareUpdates,
       minimap,
       breadboardBg,
+      showTips,
       setPaper,
       setLineSpacingRaw,
       setEditorTheme,
       setCheckFirmwareUpdates,
       setMinimap,
-      setBreadboardBg
+      setBreadboardBg,
+      setShowTips
     ]
   )
 
