@@ -150,7 +150,7 @@ function AppearanceTab({
   theme: Theme
   setTheme: (t: Theme) => void
 }): JSX.Element {
-  const { breadboardBg, setBreadboardBg } = useEditorSettings()
+  const { breadboardBg, setBreadboardBg, showTips, setShowTips } = useEditorSettings()
   return (
     <>
       <section className="settings-section">
@@ -195,6 +195,21 @@ function AppearanceTab({
             </button>
           ))}
         </div>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-section__title">Status bar tips</h3>
+        <p className="settings-section__hint">
+          Rotate a 💡 discovery tip through the status bar when it has nothing else to say.
+        </p>
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={showTips}
+            onChange={(e) => setShowTips(e.target.checked)}
+          />
+          <span>Show tips in the status bar</span>
+        </label>
       </section>
     </>
   )
