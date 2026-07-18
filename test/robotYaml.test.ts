@@ -67,6 +67,67 @@ describe('robot.yml round-trip', () => {
   })
 })
 
+describe('KRF robot model round-trips (#312)', () => {
+  it('serialises + parses the robot: section (limits, defaultPose, poses)', () => {
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: {
+        version: 1,
+        urdf: 'urdf/arm.urdf',
+        joints: { shoulder: { min: -45, max: 45 } },
+        defaultPose: { shoulder: 10 },
+        poses: [{ name: 'home', values: { shoulder: 0, elbow: 20 } }]
+      }
+    }
+    const round = robotFromYaml(robotToYaml(def))
+    expect(round.robot?.urdf).toBe('urdf/arm.urdf')
+    expect(round.robot?.joints?.shoulder).toEqual({ min: -45, max: 45 })
+    expect(round.robot?.defaultPose).toEqual({ shoulder: 10 })
+    expect(round.robot?.poses).toEqual([{ name: 'home', values: { shoulder: 0, elbow: 20 } }])
+  })
+
+  it('round-trips the chosen baseLink (#354)', () => {
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: { version: 1, urdf: 'urdf/arm.urdf', baseLink: 'base_link' }
+    }
+    expect(robotFromYaml(robotToYaml(def)).robot?.baseLink).toBe('base_link')
+    // A blank / whitespace baseLink is dropped by the sanitiser.
+    const blank = robotFromYaml(robotToYaml({ parts: [], connections: [], robot: { baseLink: '  ' } }))
+    expect(blank.robot?.baseLink).toBeUndefined()
+  })
+
+  it('a wiring-only robot.yml stays free of a robot: section', () => {
+    const yaml = robotToYaml({ parts: [], connections: [] })
+    expect(yaml).not.toMatch(/\brobot:/)
+    expect(robotFromYaml(yaml).robot).toBeUndefined()
+  })
+
+  it('round-trips a motion timeline + mirror (#314)', () => {
+    const def: RobotDefinition = {
+      parts: [],
+      connections: [],
+      robot: {
+        version: 1,
+        urdf: 'urdf/biped.urdf',
+        timeline: {
+          duration: 2,
+          easing: 'easeInOut',
+          loop: true,
+          fps: 20,
+          tracks: [{ joint: 'hip_left', keys: [{ t: 0, value: 45 }, { t: 1, value: 70 }] }]
+        },
+        mirror: [{ a: 'hip_left', b: 'hip_right', invert: true }]
+      }
+    }
+    const round = robotFromYaml(robotToYaml(def))
+    expect(round.robot?.timeline).toEqual(def.robot!.timeline)
+    expect(round.robot?.mirror).toEqual(def.robot!.mirror)
+  })
+})
+
 describe('connection colours', () => {
   it('vcc is red, gnd flips with the theme, signal uses its colour', () => {
     expect(connectionColor({ id: '1', from: 'a', to: 'b', net: 'vcc' }, false)).toBe('#c0392b')

@@ -66,6 +66,16 @@ describe('instrument-telemetry parseTelemetry — SCOPE', () => {
     expect(parseTelemetry('SNK PWM pwm x 0.5')).toBeNull() // non-numeric freq
   })
 
+  it('parses a pin-keyed SERVO position (#313)', () => {
+    expect(parseTelemetry('SNK SERVO 0 90')).toEqual({ kind: 'servo', pin: '0', angle: 90 })
+    expect(parseTelemetry('SNK SERVO 16 135')).toEqual({ kind: 'servo', pin: '16', angle: 135 })
+  })
+
+  it('rejects a malformed SERVO line', () => {
+    expect(parseTelemetry('SNK SERVO 0')).toBeNull() // missing angle
+    expect(parseTelemetry('SNK SERVO 0 x')).toBeNull() // non-numeric angle
+  })
+
   it('parses a BIND object descriptor (inst.watch)', () => {
     expect(parseTelemetry('SNK BIND pwm pwm')).toEqual({ kind: 'bind', name: 'pwm', objKind: 'pwm' })
     expect(parseTelemetry('SNK BIND pot adc')).toEqual({ kind: 'bind', name: 'pot', objKind: 'adc' })

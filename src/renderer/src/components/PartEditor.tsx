@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
+import { SwatchPicker } from './SwatchPicker'
 import {
   PartCanvas,
   DEFAULT_LAYERS,
@@ -11,6 +12,7 @@ import {
   type LayerLocks
 } from './PartCanvas'
 import { pinOutwardDir } from './part-body'
+import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
@@ -26,10 +28,12 @@ import {
   blankPart,
   collectUsedColors,
   normalisePart,
-  orderedComponents,
+  orderedItems,
+  applyItemOrder,
+  nextItemZ,
+  type OrderedItem,
   pinNames,
   pinShapeOf,
-  reorderComponent,
   resolvedPins,
   sanitisePartId,
   validatePart,
@@ -338,6 +342,10 @@ export function PartEditor({
   // locked resize keeps its true proportions. Null until known / no image.
   const [imageNativeAspect, setImageNativeAspect] = useState<number | null>(null)
   const [snap, setSnap] = useState(false)
+  // Background-removal tolerance (Euclidean RGB distance) + the pristine image so
+  // "Reset image" can undo every erase back to what was loaded this session.
+  const [bgTol, setBgTol] = useState(32)
+  const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
   const [fitSignal, setFitSignal] = useState(0)
@@ -386,6 +394,13 @@ export function PartEditor({
     }
   }, [part.imageData])
 
+  // Snapshot the pristine image the first time one is present (a re-opened part
+  // or a fresh upload), so background erasing has an original to reset to. Once
+  // captured it isn't overwritten by erases (which also patch `imageData`).
+  useEffect(() => {
+    if (part.imageData && imageOriginal === undefined) setImageOriginal(part.imageData)
+  }, [part.imageData, imageOriginal])
+
   /** The board outline aspect (w/h) — dimensions first, like the canvas. */
   const boardAspectOf = (p: PartDefinition): number =>
     p.dimensions && p.dimensions.width > 0 && p.dimensions.height > 0
@@ -421,6 +436,7 @@ export function PartEditor({
     reader.onload = () => {
       if (typeof reader.result === 'string') {
         patch({ imageData: reader.result })
+        setImageOriginal(reader.result) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
@@ -439,8 +455,72 @@ export function PartEditor({
       delete next.imageLayer
       return next
     })
+    setImageOriginal(undefined)
+    if (tool === 'erasebg') setTool('select')
     if (selection?.type === 'image') setSelection(null)
   }
+
+  // --- background removal (#132) --------------------------------------------
+  /** Load a data-URL image, hand its pixels to `mutate`, and return a new PNG
+   *  data URL (or null on any failure). All the flood-fill ops go through this. */
+  const processImage = (
+    dataUrl: string,
+    mutate: (img: { data: Uint8ClampedArray; width: number; height: number }) => void
+  ): Promise<string | null> =>
+    new Promise((resolve) => {
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        canvas.width = img.naturalWidth
+        canvas.height = img.naturalHeight
+        const ctx = canvas.getContext('2d')
+        if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(null)
+        ctx.drawImage(img, 0, 0)
+        let data: ImageData
+        try {
+          data = ctx.getImageData(0, 0, canvas.width, canvas.height)
+        } catch {
+          return resolve(null) // e.g. a tainted canvas
+        }
+        mutate(data)
+        ctx.putImageData(data, 0, 0)
+        resolve(canvas.toDataURL('image/png'))
+      }
+      img.onerror = () => resolve(null)
+      img.src = dataUrl
+    })
+  /** Auto: knock out the connected border background from every edge. */
+  const autoRemoveBg = async (): Promise<void> => {
+    if (!part.imageData) return
+    const out = await processImage(part.imageData, (img) => removeBackgroundFromEdges(img, bgTol))
+    if (out) {
+      patch({ imageData: out })
+      setStatus({ kind: 'info', text: 'Removed the background from the image edges. Click leftover patches to erase them.' })
+    } else setStatus({ kind: 'error', text: 'Could not process that image.' })
+  }
+  /** Click-to-erase: flood-fill the background at a clicked board point. */
+  const eraseBgAt = async (nx: number, ny: number): Promise<void> => {
+    const src = part.imageData
+    if (!src) return
+    const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
+    const v = (ny - layer.y) / (layer.h || 1)
+    if (u < 0 || u > 1 || v < 0 || v > 1) return
+    const out = await processImage(src, (img) => {
+      const px = Math.min(img.width - 1, Math.max(0, Math.round(u * img.width)))
+      const py = Math.min(img.height - 1, Math.max(0, Math.round(v * img.height)))
+      floodFillTransparent(img, [[px, py]], bgTol)
+    })
+    if (out) patch({ imageData: out })
+  }
+  /** Restore the pristine image captured on load/upload. */
+  const resetBg = (): void => {
+    if (imageOriginal) {
+      patch({ imageData: imageOriginal })
+      setStatus({ kind: 'info', text: 'Restored the original image.' })
+    }
+  }
+  const canResetBg = imageOriginal !== undefined && part.imageData !== undefined && part.imageData !== imageOriginal
   const setImageLayer = (p: Partial<ImageLayer>): void => {
     const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
     patch({ imageLayer: { ...cur, ...p } })
@@ -730,6 +810,7 @@ export function PartEditor({
                   onChange={setPart}
                   onSelect={setSelection}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
+                  onEraseImageAt={eraseBgAt}
                   onToggleGrid={() => setShowGrid((g) => !g)}
                   onToggleSnap={() => setSnap((s) => !s)}
                   resetSignal={fitSignal}
@@ -763,6 +844,12 @@ export function PartEditor({
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}
                 patch={patch}
+                removeImage={removeImage}
+                onAutoRemoveBg={autoRemoveBg}
+                onResetBg={resetBg}
+                canResetBg={canResetBg}
+                bgTol={bgTol}
+                setBgTol={setBgTol}
               />
               <Inspector
                 part={part}
@@ -800,6 +887,12 @@ export function PartEditor({
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}
                 patch={patch}
+                removeImage={removeImage}
+                onAutoRemoveBg={autoRemoveBg}
+                onResetBg={resetBg}
+                canResetBg={canResetBg}
+                bgTol={bgTol}
+                setBgTol={setBgTol}
               />
             </div>
           </>
@@ -839,6 +932,14 @@ interface LayersPanelProps {
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
   patch: (p: Partial<PartDefinition>) => void
+  /** Remove the background image (only used by the 'layers' variant's bg row). */
+  removeImage: () => void
+  /** Background-removal controls (the 'layers' variant's bg row). */
+  onAutoRemoveBg: () => void
+  onResetBg: () => void
+  canResetBg: boolean
+  bgTol: number
+  setBgTol: (v: number) => void
   /** Which sections to show: 'layers' = Components + Pins; 'board' = Mounting holes
    *  + PCB + Image. Lets the board layers sit BELOW the selection inspector. */
   variant?: 'layers' | 'board'
@@ -863,8 +964,18 @@ function LayersPanel({
   fileInputRef,
   onPickImage,
   patch,
+  removeImage,
+  onAutoRemoveBg,
+  onResetBg,
+  canResetBg,
+  bgTol,
+  setBgTol,
   variant = 'layers'
 }: LayersPanelProps): JSX.Element {
+  const [addOpen, setAddOpen] = useState(false)
+  const [bgMenuOpen, setBgMenuOpen] = useState(false)
+  const [dragRow, setDragRow] = useState<number | null>(null)
+  const [dragOver, setDragOver] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
   // The Pins list reads best sorted: by board number when a pin has one (numbered
@@ -897,18 +1008,83 @@ function LayersPanel({
     image: part.imageData ? 1 : 0
   }
   /** Append an onboard LED at the board centre and select it (type set in the
-   *  inspector: LED / RGB / NeoPixel). */
+   *  inspector: LED / RGB / NeoPixel). New parts land on TOP of the layer stack. */
   const addLed = (kind: 'single' | 'rgb' | 'neopixel' = 'single'): void => {
-    const next = [...onboardLeds, { kind, x: 0.5, y: 0.5 } as (typeof onboardLeds)[number]]
+    const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
   }
   /** Append a connector (QWIIC/STEMMA QT or generic JST) at the centre + select it. */
   const addConnector = (kind: 'qwiic' | 'jst'): void => {
     const pins = cloneConnPins(kind === 'qwiic' ? QWIIC_PINS : JST_PINS)
-    const next = [...connectors, { kind, x: 0.5, y: 0.5, pins }]
+    const next = [...connectors, { kind, x: 0.5, y: 0.5, pins, z: nextItemZ(part) }]
     patch({ connectors: next })
     setSelection({ type: 'connector', index: next.length - 1 })
+  }
+  /** Append a grey rectangle component (an IC/connector body) on top + select it. */
+  const addShape = (): void => {
+    const next = [
+      ...shapes,
+      { kind: 'rect', x: 0.4, y: 0.42, w: 0.2, h: 0.16, z: nextItemZ(part) } as (typeof shapes)[number]
+    ]
+    patch({ shapes: next })
+    setSelection({ type: 'shape', index: next.length - 1 })
+  }
+  /** Remove one part (any kind) by its array index. Clears the selection since
+   *  removing shifts later indices (a stale selection could point at the wrong
+   *  item). */
+  const removeItem = (kind: OrderedItem['kind'], index: number): void => {
+    const without = <T,>(arr: T[]): T[] => arr.filter((_, i) => i !== index)
+    if (kind === 'shape') patch({ shapes: without(shapes) })
+    else if (kind === 'label') patch({ labels: without(labels) })
+    else if (kind === 'button') patch({ buttons: without(buttons) })
+    else if (kind === 'led') patch({ onboardLeds: without(onboardLeds) })
+    else if (kind === 'connector') patch({ connectors: without(connectors) })
+    setSelection(null)
+  }
+  /** Display name + hover helper text + canvas selection for a flat-list part. */
+  const describe = (it: OrderedItem): { name: string; sub: string; sel: CanvasSelection } => {
+    switch (it.kind) {
+      case 'shape': {
+        const s = shapes[it.index]
+        return { name: s.label || s.kind, sub: s.kind, sel: { type: 'shape', index: it.index } }
+      }
+      case 'label': {
+        const l = labels[it.index]
+        return { name: l.text || '(label)', sub: 'text', sel: { type: 'label', index: it.index } }
+      }
+      case 'button': {
+        const b = buttons[it.index]
+        return { name: b.label || `Button ${it.index + 1}`, sub: 'button', sel: { type: 'button', index: it.index } }
+      }
+      case 'led': {
+        const l = onboardLeds[it.index]
+        const word = l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED'
+        return { name: `${l.label || word} ${it.index + 1}`, sub: l.kind, sel: { type: 'led', index: it.index } }
+      }
+      case 'connector': {
+        const c = connectors[it.index]
+        const word = c.kind === 'qwiic' ? 'QWIIC' : 'JST'
+        return { name: `${c.label || word} ${it.index + 1}`, sub: `${c.pins.length}-pin`, sel: { type: 'connector', index: it.index } }
+      }
+    }
+  }
+  // The flat list, TOP-MOST FIRST (index 0 = highest z = drawn on top / wins clicks).
+  const items = orderedItems(part).slice().reverse()
+  /** Drop the dragged row onto row `target`, rewriting every part's z so the new
+   *  visual order sticks (top of the list ⇒ highest z ⇒ painted last). */
+  const dropRow = (target: number): void => {
+    if (dragRow === null || dragRow === target) {
+      setDragRow(null)
+      setDragOver(null)
+      return
+    }
+    const nextTopFirst = items.slice()
+    const [moved] = nextTopFirst.splice(dragRow, 1)
+    nextTopFirst.splice(target, 0, moved)
+    patch(applyItemOrder(part, nextTopFirst))
+    setDragRow(null)
+    setDragOver(null)
   }
   const toggleVis = (key: keyof LayerVisibility): void => setVisible((v) => ({ ...v, [key]: !v[key] }))
   const eye = (key: keyof LayerVisibility): JSX.Element => (
@@ -977,66 +1153,80 @@ function LayersPanel({
     }
     if (kind === 'rect' && tool === 'shape') setTool('select')
   }
-  /** Restack a component one step (dir +1 = forward/on top, -1 = backward). */
-  const moveComponent = (kind: 'shape' | 'label', index: number, dir: 1 | -1): void => {
-    const next = reorderComponent(part, { kind, index }, dir)
-    patch({ shapes: next.shapes, labels: next.labels })
-  }
-
   return (
     <section className="pe__section pe__layers">
       <h3 className="pe__h">{variant === 'board' ? 'Board' : 'Layers'}</h3>
 
       {variant !== 'board' && (
         <>
-      {/* Components (top) */}
-      <div className={`pe__layer${tool === 'rect' || tool === 'circle' || tool === 'cpoly' || tool === 'text' ? ' is-active' : ''}`}>
-        <div className="pe__layer-head">
-          {caret('components')}
-          {eye('components')}
-          {lock('components')}
-          <span className="pe__layer-name">Components</span>
-          <span className="pe__layer-count">{counts.components}</span>
-          {delBtn((selection?.type === 'shape' || selection?.type === 'shape-vertex' || selection?.type === 'label') && !locked.components)}
+      {/* Flat, drag-reorderable list of every part on the board (#132). Top of the
+          list = highest z = painted last (on top) = wins the click. The old fixed
+          per-type layers are gone; parts stack freely and you drag to reorder. */}
+      <div className={`pe__flat-head${tool === 'rect' || tool === 'circle' || tool === 'cpoly' || tool === 'text' ? ' is-active' : ''}`}>
+        {eye('components')}
+        {lock('components')}
+        <span className="pe__layer-name">Parts</span>
+        <span className="pe__layer-count">{items.length}</span>
+        <div className="pe__addwrap">
+          <button type="button" className={`pe__chip pe__chip--add${addOpen ? ' is-active' : ''}`} onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen} aria-haspopup="menu" title="Add a part">
+            ＋ Add
+          </button>
+          {addOpen && (
+            <>
+              <div className="pe__addback" onClick={() => setAddOpen(false)} aria-hidden />
+              <div className="pe__addmenu" role="menu">
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('button') }} title="Click the board to place a push-button">Button</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addLed() }} title="Add an onboard LED (set LED / RGB / NeoPixel + GPIO in the inspector)">LED</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / JST connector (switch kind in the inspector)">Connector</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
+              </div>
+            </>
+          )}
         </div>
-        {isOpen('components') && (
-          <ul className="pe__layer-list">
-            {counts.components === 0 && <li className="pe__layer-empty">Add shapes from the toolbar ▸ Shapes.</li>}
-            {/* One list across shapes + labels in draw order, TOP-MOST FIRST. The
-                ▲/▼ buttons restack a component (top of the list draws on top). */}
-            {orderedComponents(part)
-              .slice()
-              .reverse()
-              .map((c, ri, rows) => {
-                const isShape = c.kind === 'shape'
-                const name = isShape ? shapes[c.index].label || shapes[c.index].kind : labels[c.index].text || '(label)'
-                const sub = isShape ? shapes[c.index].kind : 'text'
-                const active = isShape
-                  ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === c.index
-                  : selEq({ type: 'label', index: c.index })
-                const sel: CanvasSelection = isShape ? { type: 'shape', index: c.index } : { type: 'label', index: c.index }
-                return (
-                  <li key={`${c.kind}${c.index}`} className="pe__item-row">
-                    <button type="button" disabled={locked.components} className={`pe__item${active ? ' is-active' : ''}`} onClick={() => setSelection(sel)}>
-                      <span className="pe__item-name">{name}</span>
-                      <span className="pe__item-sub">{sub}</span>
-                    </button>
-                    <div className="pe__item-order">
-                      <button type="button" className="pe__ordbtn" disabled={ri === 0 || locked.components} title="Bring forward (draw on top)" aria-label="Bring forward" onClick={() => moveComponent(c.kind, c.index, 1)}>
-                        ▲
-                      </button>
-                      <button type="button" className="pe__ordbtn" disabled={ri === rows.length - 1 || locked.components} title="Send backward (draw underneath)" aria-label="Send backward" onClick={() => moveComponent(c.kind, c.index, -1)}>
-                        ▼
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-          </ul>
-        )}
       </div>
+      {isOpen('components') && (
+        <ul className="pe__flat" role="list">
+          {items.length === 0 && <li className="pe__layer-empty">No parts yet — use ＋ Add.</li>}
+          {items.map((it, ri) => {
+            const { name, sub, sel } = describe(it)
+            const active =
+              it.kind === 'shape'
+                ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
+                : selEq(sel)
+            return (
+              <li
+                key={`${it.kind}${it.index}`}
+                className={`pe__flatrow${active ? ' is-active' : ''}${dragOver === ri ? ' is-dragover' : ''}${dragRow === ri ? ' is-dragging' : ''}`}
+                draggable={!locked.components}
+                onDragStart={() => setDragRow(ri)}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  if (dragOver !== ri) setDragOver(ri)
+                }}
+                onDrop={() => dropRow(ri)}
+                onDragEnd={() => {
+                  setDragRow(null)
+                  setDragOver(null)
+                }}
+              >
+                <span className="pe__grip" aria-hidden title="Drag to reorder (top = on top)">
+                  ⋮⋮
+                </span>
+                <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
+                  <span className="pe__item-name">{name}</span>
+                </button>
+                <span className="pe__flathelp">{sub}</span>
+                <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
+                  🗑
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
 
-      {/* Pins */}
+      {/* Pins — one collapsible group. Hover helper = the pin's role (io/pwr/gnd). */}
       <div className={`pe__layer${tool === 'pin' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {caret('pins')}
@@ -1047,81 +1237,107 @@ function LayersPanel({
           <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
             ＋
           </button>
-          {delBtn(selection?.type === 'pin' && !locked.pins)}
         </div>
         {isOpen('pins') && (
-          <ul className="pe__layer-list">
+          <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
             {sortedPins.map((rp) => (
-              <li key={`p${rp.hi}-${rp.pi}`}>
-                <button type="button" disabled={locked.pins} className={`pe__item${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+              <li key={`p${rp.hi}-${rp.pi}`} className={`pe__flatrow pe__flatrow--pin${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}>
+                <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                   <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
-                  <span className="pe__item-sub">{rp.pin.type}</span>
                 </button>
+                <span className="pe__flathelp">{rp.pin.type}</span>
               </li>
             ))}
           </ul>
         )}
       </div>
 
-      {/* Onboard LEDs (LED / RGB / NeoPixel) tied to GPIO(s). Kept in the top
-          panel — right above the selection inspector — so their GPIO config is one
-          click away (no scrolling). Added here, then dragged into place. */}
-      <div className="pe__layer">
+      {/* Background image — PINNED to the bottom of the stack (painted under every
+          part). Pick / replace, a background eraser + a remover live here (#132). */}
+      <div className="pe__layer pe__layer--bg">
         <div className="pe__layer-head">
-          {caret('leds')}
-          <span className="pe__layer-name">Onboard LEDs</span>
-          <span className="pe__layer-count">{counts.leds}</span>
-          <button type="button" className="pe__chip pe__chip--add" onClick={() => addLed()} title="Add an onboard LED — pick LED / RGB / NeoPixel and assign GPIO(s) in the inspector">
-            ＋ LED
+          {eye('image')}
+          <span className="pe__layer-name">Background image</span>
+          <span className="pe__flathelp pe__flathelp--bg">{part.imageData ? 'photo' : 'none'}</span>
+          <span className="pe__flatspacer" />
+          {part.imageData && (
+            <div className="pe__addwrap">
+              <button
+                type="button"
+                className={`pe__chip${bgMenuOpen || tool === 'erasebg' ? ' is-active' : ''}`}
+                onClick={() => setBgMenuOpen((o) => !o)}
+                aria-expanded={bgMenuOpen}
+                aria-haspopup="menu"
+                title="Remove the photo's background"
+              >
+                BG ▾
+              </button>
+              {bgMenuOpen && (
+                <>
+                  <div className="pe__addback" onClick={() => setBgMenuOpen(false)} aria-hidden />
+                  <div className="pe__bgmenu" role="menu">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        onAutoRemoveBg()
+                      }}
+                      title="Flood-fill the background inward from every edge"
+                    >
+                      Auto remove (from edges)
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={tool === 'erasebg' ? 'is-active' : ''}
+                      onClick={() => {
+                        setTool(tool === 'erasebg' ? 'select' : 'erasebg')
+                        setBgMenuOpen(false) // close so the canvas is clickable for erasing
+                      }}
+                      title="Then click a background patch on the image to erase it"
+                    >
+                      {tool === 'erasebg' ? '✓ Click to erase (on)' : 'Click to erase a spot'}
+                    </button>
+                    <label className="pe__bgtol">
+                      <span>Tolerance</span>
+                      <input
+                        type="range"
+                        min={0}
+                        max={120}
+                        step={1}
+                        value={bgTol}
+                        onChange={(e) => setBgTol(Number(e.target.value))}
+                      />
+                      <span className="pe__bgtol-val">{bgTol}</span>
+                    </label>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      disabled={!canResetBg}
+                      onClick={() => {
+                        onResetBg()
+                      }}
+                      title="Restore the original image (undo all erasing)"
+                    >
+                      Reset image
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title={part.imageData ? 'Replace the board photo' : 'Add a board photo'}>
+            {part.imageData ? 'Replace' : '＋'}
           </button>
-          {delBtn(selection?.type === 'led' && !locked.components)}
+          {part.imageData && (
+            <button type="button" className="pe__trash" onClick={removeImage} title="Remove background image" aria-label="Remove background image">
+              🗑
+            </button>
+          )}
         </div>
-        {isOpen('leds') && (
-          <ul className="pe__layer-list">
-            {onboardLeds.length === 0 && <li className="pe__layer-empty">No onboard LEDs yet.</li>}
-            {onboardLeds.map((l, i) => (
-              <li key={`led${i}`}>
-                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'led', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'led', index: i })}>
-                  <span className="pe__item-name">
-                    {l.label || (l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED')} {i + 1}
-                  </span>
-                  <span className="pe__item-sub">{l.kind}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Connectors (QWIIC / STEMMA QT / JST). Their pins are full pins — assign a
-          GP## + I2C bus to SDA/SCL in the inspector — added here then dragged. */}
-      <div className="pe__layer">
-        <div className="pe__layer-head">
-          {caret('connectors')}
-          <span className="pe__layer-name">Connectors</span>
-          <span className="pe__layer-count">{counts.connectors}</span>
-          <button type="button" className="pe__chip pe__chip--add" onClick={() => addConnector('qwiic')} title="Add a QWIIC / STEMMA QT (4-pin JST-SH I2C) connector">
-            ＋QWIIC
-          </button>
-          <button type="button" className="pe__chip pe__chip--add" onClick={() => addConnector('jst')} title="Add a generic JST connector (4 editable pins)">
-            ＋JST
-          </button>
-          {delBtn(selection?.type === 'connector' && !locked.components)}
-        </div>
-        {isOpen('connectors') && (
-          <ul className="pe__layer-list">
-            {connectors.length === 0 && <li className="pe__layer-empty">No connectors yet.</li>}
-            {connectors.map((c, i) => (
-              <li key={`conn${i}`}>
-                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'connector', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'connector', index: i })}>
-                  <span className="pe__item-name">{c.label || (c.kind === 'qwiic' ? 'QWIIC' : 'JST')} {i + 1}</span>
-                  <span className="pe__item-sub">{c.pins.length}-pin</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {tool === 'erasebg' && <p className="pe__hint pe__hint--muted">Erase mode: click a background patch on the image. Adjust Tolerance if it takes too much / too little.</p>}
+        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
 
         </>
@@ -1157,34 +1373,9 @@ function LayersPanel({
         )}
       </div>
 
-      {/* On-board buttons (#130) — push-buttons like BOOT/RESET. They live on the
-          Components layer, so its eye/lock govern their visibility. */}
-      <div className={`pe__layer${tool === 'button' ? ' is-active' : ''}`}>
-        <div className="pe__layer-head">
-          {caret('buttons')}
-          <span className="pe__layer-name">Buttons</span>
-          <span className="pe__layer-count">{counts.buttons}</span>
-          <button type="button" className={`pe__chip pe__chip--add${tool === 'button' ? ' is-active' : ''}`} onClick={() => setTool('button')} title="Click the board to add a push-button">
-            ＋
-          </button>
-          {delBtn(selection?.type === 'button' && !locked.components)}
-        </div>
-        {isOpen('buttons') && (
-          <ul className="pe__layer-list">
-            {buttons.length === 0 && <li className="pe__layer-empty">No buttons yet.</li>}
-            {buttons.map((b, i) => (
-              <li key={`btn${i}`}>
-                <button type="button" disabled={locked.components} className={`pe__item${selEq({ type: 'button', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'button', index: i })}>
-                  <span className="pe__item-name">{b.label || `Button ${i + 1}`}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
       {/* PCB body (outline + fill) — its own toggle so board-less parts (motors)
-          can hide it independently of the photo. */}
+          can hide it independently of the photo. Buttons + the background image now
+          live in the flat Parts list above (#132). */}
       <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {eye('pcb')}
@@ -1203,22 +1394,7 @@ function LayersPanel({
           )}
         </div>
       </div>
-
-      {/* Image (board photo) — separate toggle from the PCB body. */}
-      <div className="pe__layer">
-        <div className="pe__layer-head">
-          {eye('image')}
-          <span className="pe__layer-name">Image</span>
-          <span className="pe__layer-count">{counts.image ? 'img' : '—'}</span>
-        </div>
-        <div className="pe__layer-tools">
-          <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title="Upload a board photo onto the PCB layer">
-            {part.imageData ? 'Replace image' : '＋ Image'}
-          </button>
-        </div>
-        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
-      </div>
-      <p className="pe__hint pe__hint--muted">PCB on the bottom; holes cut through it; pins &amp; components on top.</p>
+      <p className="pe__hint pe__hint--muted">PCB on the bottom; holes cut through it; pins &amp; parts on top.</p>
         </>
       )}
     </section>
@@ -1399,48 +1575,6 @@ function SliderField({
         />
       </div>
     </label>
-  )
-}
-
-/** A native colour input plus a quick-pick grid of the colours already used in
- *  the part — shared by every colour well in the Properties panel. */
-function SwatchPicker({
-  value,
-  fallback,
-  used,
-  onChange,
-  ariaLabel
-}: {
-  value?: string
-  fallback: string
-  used: string[]
-  onChange: (c: string) => void
-  ariaLabel?: string
-}): JSX.Element {
-  return (
-    <div className="pe__swatchpick">
-      <input
-        type="color"
-        value={/^#[0-9a-f]{6}$/i.test(value ?? '') ? (value as string) : fallback}
-        onChange={(e) => onChange(e.target.value)}
-        aria-label={ariaLabel}
-      />
-      {used.length > 0 && (
-        <div className="pe__swatches">
-          {used.map((c) => (
-            <button
-              key={c}
-              type="button"
-              className="pe__swatch"
-              style={{ background: c }}
-              title={c}
-              aria-label={`Use ${c}`}
-              onClick={() => onChange(c)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 

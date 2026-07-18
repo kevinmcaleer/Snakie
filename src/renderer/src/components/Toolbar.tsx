@@ -4,6 +4,8 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
+import { isVirtualPort } from '../../../shared/virtual-device'
+import { IS_WEB } from '../lib/env'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -162,7 +164,10 @@ export function Toolbar({
   const { markRun } = useConsole()
   const connected = status.state === 'connected'
   const activeFile = openFiles.find((f) => f.id === activeId)
-  const canRun = connected && activeFile != null
+  // Run is clickable whenever a file is open — if nothing is connected we boot
+  // the simulator first (see handleRun), so Run never silently no-ops.
+  const [connecting, setConnecting] = useState(false)
+  const canRun = activeFile != null && !connecting
 
   /**
    * Execute the active file on the device using MicroPython paste mode:
@@ -180,8 +185,26 @@ export function Toolbar({
     if (!connected) setRunning(false)
   }, [connected])
 
-  const handleRun = useCallback(() => {
-    if (!connected || !activeFile) return
+  const handleRun = useCallback(async (): Promise<void> => {
+    if (!activeFile) return
+    // Nothing connected? (e.g. a page reload dropped the simulated device, or the
+    // user hasn't pressed Connect yet.) Boot the simulator and run on it, so Run
+    // never silently does nothing. A real board the user already connected wins —
+    // `connected` is true then and we skip straight to sending the program.
+    if (!connected) {
+      try {
+        setConnecting(true)
+        const ports = await window.api.device.listPorts()
+        const target = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
+        if (!target) throw new Error('No device is available to run on.')
+        await window.api.device.connect(target.path)
+      } catch (err) {
+        reporter('connect', { notify: "Couldn't connect a device to run your program." })(err)
+        return
+      } finally {
+        setConnecting(false)
+      }
+    }
     // Record the console position so "send console to chat" / the composer's
     // attach-console control grab only this run's output (issue #78).
     markRun()
@@ -255,14 +278,16 @@ export function Toolbar({
         <button
           type="button"
           className="btn btn--primary"
-          onClick={handleRun}
+          onClick={() => void handleRun()}
           disabled={!canRun}
           title={
-            !connected
-              ? 'Connect to a device to run'
-              : !activeFile
-                ? 'Open a file to run'
-                : `Run ${activeFile.name} on the device`
+            !activeFile
+              ? 'Open a file to run'
+              : connecting
+                ? 'Connecting…'
+                : !connected
+                  ? 'Run on the simulator'
+                  : `Run ${activeFile.name} on the device`
           }
           aria-label="Run active file on device"
         >
@@ -294,6 +319,8 @@ export function Toolbar({
 
       <span className="toolbar__divider" aria-hidden="true" />
 
+      {/* Board View pops out into its own window — an OS BrowserWindow on the
+          desktop, a browser popup on the web (see web/web-board.ts). */}
       <div className="toolbar__group">
         <button
           type="button"
@@ -346,16 +373,19 @@ export function Toolbar({
         >
           {PANEL_BOTTOM_ICON}
         </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!rightCollapsed}
-          onClick={onToggleRight}
-          title="Toggle Chat panel"
-          aria-label="Toggle Chat panel"
-        >
-          {PANEL_RIGHT_ICON}
-        </button>
+        {/* Chat panel — hidden on the web build (the LLM chat is desktop-only). */}
+        {!IS_WEB && (
+          <button
+            type="button"
+            className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
+            aria-pressed={!rightCollapsed}
+            onClick={onToggleRight}
+            title="Toggle Chat panel"
+            aria-label="Toggle Chat panel"
+          >
+            {PANEL_RIGHT_ICON}
+          </button>
+        )}
         <button
           type="button"
           className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}

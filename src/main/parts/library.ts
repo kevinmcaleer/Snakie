@@ -435,6 +435,22 @@ export async function readDriverSource(
 }
 
 /**
+ * Resolve the absolute path to a bundled file inside a part folder
+ * (`<parts>/<lib>/<part>/<filename>`), path-traversal guarded like the driver/image
+ * readers. Returns null for an unsafe or unknown ref. Used to copy a part's linked
+ * mesh into a project URDF's `meshes/` folder (#406).
+ */
+export function resolvePartAsset(libraryId: string, partId: string, filename: string): string | null {
+  const libId = sanitiseId(libraryId)
+  const pId = sanitiseId(partId)
+  const file = String(filename ?? '').trim()
+  if (!libId || !pId || !file) return null
+  const partDir = join(partsDir(), libId, pId)
+  if (!isContainedFile(partDir, file)) return null
+  return join(partDir, file)
+}
+
+/**
  * DEV workflow (#52/issue-3, #192): promote ANY part into the Standard library so
  * it becomes a shipped default — not just microcontrollers, so the standard
  * library can also hold sensors, ICs, power parts, displays, etc. Writes it into

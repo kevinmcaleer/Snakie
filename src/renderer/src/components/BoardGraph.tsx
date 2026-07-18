@@ -112,6 +112,10 @@ export interface BoardGraphProps {
   robot?: RobotDefinition
   /** Persist a changed robot definition (writes robot.yml). */
   onChangeRobot?: (next: RobotDefinition) => void
+  /** The linked URDF's joint names — for a servo's "drives joint" picker (#). */
+  joints?: string[]
+  /** Each joint's real travel (deg / mm) — seeds a new binding's joint range (#). */
+  jointLimits?: Record<string, { min: number; max: number }>
   /** Installed part libraries (to resolve placed parts' pins). */
   libraries?: PartLibraryWithParts[]
   /** Append a library part to the project. When set, the library dock shows. `pos`
@@ -249,10 +253,11 @@ function useLiveValues(conns: UsedPins[], enabled: boolean): LiveState {
   // Latest connections, read inside the interval without re-arming it each edit.
   const connsRef = useRef(conns)
   connsRef.current = conns
+  const hasConns = conns.length > 0
 
   useEffect(() => {
     // OFF, or nothing to read → never touch the device; show idle placeholders.
-    if (!enabled || conns.length === 0) {
+    if (!enabled || !hasConns) {
       setValues(new Map())
       setConnected(false)
       return
@@ -300,10 +305,14 @@ function useLiveValues(conns: UsedPins[], enabled: boolean): LiveState {
       cancelled = true
       window.clearInterval(id)
     }
-    // Re-arm only when the toggle flips or the connection COUNT changes (so the
-    // empty/non-empty branch is correct); per-edit content changes ride
-    // `connsRef` without restarting the interval.
-  }, [enabled, conns.length])
+    // Re-arm ONLY when the toggle flips or we cross the empty↔non-empty boundary
+    // (that's the only thing the guard above depends on). We deliberately do NOT
+    // depend on the exact `conns.length`: switching editor tabs changes the pin
+    // COUNT, which used to re-arm the interval and fire an immediate `exec()` —
+    // and that raw-mode probe interrupts a program the user is running (#…). The
+    // running interval already reads the latest pins via `connsRef`, so a tab
+    // switch now updates values on the next tick without pre-empting a run.
+  }, [enabled, hasConns])
 
   return { values, connected }
 }
@@ -316,6 +325,8 @@ export function BoardGraph({
   asWindow = false,
   robot,
   onChangeRobot,
+  joints,
+  jointLimits,
   libraries,
   onAddToProject
 }: BoardGraphProps): JSX.Element {
@@ -615,7 +626,10 @@ export function BoardGraph({
   // row-count changes so the board always opens nicely framed.
   const touchedRef = useRef(false)
 
-  // Measure the canvas (clip) box and keep it current on resize.
+  // Measure the canvas (clip) box and keep it current on resize. Re-runs on
+  // `effectiveView` too: the node-graph canvas only mounts in the graph view, so
+  // without this the measure never fired when switching INTO node graph and `vp`
+  // stayed 0 — breaking auto-fit and the fit/100% toggle.
   useLayoutEffect(() => {
     const el = canvasRef.current
     if (!el) return
@@ -626,7 +640,7 @@ export function BoardGraph({
     const ro = new ResizeObserver(measure)
     ro.observe(el)
     return () => ro.disconnect()
-  }, [hasRows])
+  }, [hasRows, effectiveView])
 
   // Auto-fit until the user interacts (re-fit on rotation / board change while
   // untouched, so switching board in the picker reframes the whole new pinout).
@@ -659,18 +673,20 @@ export function BoardGraph({
     setIsOneToOne(false)
   }, [vp.w, vp.h, stageW, stageH, rotation])
 
-  // 100% button: toggles between a centred 1:1 view and zoom-to-fit.
+  // The zoom readout toggles between a centred 1:1 view and zoom-to-fit, keyed
+  // on the LIVE zoom (like the breadboard) so clicking at 100% fits even when
+  // the user got to 100% by hand.
   const onToggleOneToOne = useCallback((): void => {
     touchedRef.current = true
     if (vp.w === 0 || vp.h === 0) return
-    if (isOneToOne) {
+    if (Math.abs(view.zoom - 1) < 0.005) {
       setView(fitTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(false)
     } else {
       setView(oneToOneTransform(stageW, stageH, vp.w, vp.h, rotation))
       setIsOneToOne(true)
     }
-  }, [isOneToOne, vp.w, vp.h, stageW, stageH, rotation])
+  }, [view.zoom, vp.w, vp.h, stageW, stageH, rotation])
 
   const onRotate = useCallback((): void => {
     touchedRef.current = true
@@ -874,6 +890,8 @@ export function BoardGraph({
               renderMode={effectiveView}
               robot={robot as RobotDefinition}
               onChange={onChangeRobot as (next: RobotDefinition) => void}
+              joints={joints ?? []}
+              jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
@@ -1002,6 +1020,7 @@ export function BoardGraph({
                     boxedPins
                     pinVariables={pinVars}
                     rotation={rotation}
+                    pinLabels="hidden"
                   />
                 ) : (
                   <Board
@@ -1053,6 +1072,56 @@ export function BoardGraph({
                     <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
                   ))}
                 </g>
+                {/* Pin labels + variable names OVER the wires (#…): the board body
+                    was drawn under the wires with its labels hidden; re-draw ONLY
+                    the labels here so a wire never obscures a pin name/variable. */}
+                {boardPart && (
+                  <PartBody
+                    part={boardPart}
+                    box={box}
+                    boxedPins
+                    pinVariables={pinVars}
+                    rotation={rotation}
+                    pinLabels="only"
+                  />
+                )}
+                {/* Variable-name labels over each wire (#498) — haloed so they read
+                    over the wires + board in both themes. Only for the stylised
+                    fallback board: an authored part draws the variable at its pad
+                    (over the wires) via the pinLabels="only" pass above, so this
+                    would double it. */}
+                {!boardPart && (
+                <g>
+                  {rows.map((r, i) => {
+                    const label = r.conn.variable
+                    if (!label) return null
+                    const mx = (dotXFor(r.side) + r.pad.x) / 2
+                    const my = (r.y + r.pad.y) / 2
+                    return (
+                      <text
+                        key={`wlabel-${i}`}
+                        x={mx}
+                        y={my}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        style={{
+                          fontFamily: 'var(--font-mono)',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fill: 'var(--text)',
+                          stroke: 'var(--bg)',
+                          strokeWidth: 3.5,
+                          strokeLinejoin: 'round',
+                          paintOrder: 'stroke',
+                          pointerEvents: 'none'
+                        }}
+                      >
+                        {label}
+                      </text>
+                    )
+                  })}
+                </g>
+                )}
               </svg>
 
               {/* Node cards (HTML, over the SVG) — one per connection. PWM/ADC
@@ -1093,9 +1162,11 @@ export function BoardGraph({
                 className="boardgraph__vbtn boardgraph__vbtn--pct"
                 onClick={onToggleOneToOne}
                 title={isOneToOne ? 'Zoom to fit' : 'Actual size (100%)'}
-                aria-label={isOneToOne ? 'Zoom to fit' : 'Actual size, 100 percent'}
+                aria-label={`Zoom ${zoomPercent(view.zoom)} — click to toggle 100% / fit`}
               >
-                {isOneToOne ? zoomPercent(view.zoom) : '100%'}
+                {/* Always the LIVE zoom (like the breadboard), and clicking
+                    toggles 100% ↔ fit. */}
+                {zoomPercent(view.zoom)}
               </button>
               <button
                 type="button"

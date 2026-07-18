@@ -4,7 +4,7 @@ import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentW
 import { type InstrumentDef } from './instruments-registry'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useInstrumentWorkspace } from '../store/workspace'
 import { buzzerDemo, BUZZER_DEMO_NAME } from './buzzer-demo'
 import {
   CHROMATIC,
@@ -108,7 +108,7 @@ export function BuzzerInstrument({
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
   const { present } = useSnakiePresence()
-  const { openBuffer, openFiles, activeId, updateContent } = useWorkspace()
+  const { openBuffer, openFiles, activeId, updateContent } = useInstrumentWorkspace()
 
   // The active editor buffer (if any) — the target for "Paste to code" + the
   // source we scan for a declared buzzer pin to warn on a mismatch.

@@ -53,8 +53,7 @@ import {
   readSession,
   restoreMode,
   markRestoreStart,
-  markRestoreDone,
-  RESTORE_STABLE_MS
+  markRestoreDone
 } from './session-restore'
 
 export type FileSource = 'local' | 'device'
@@ -73,8 +72,13 @@ export interface FileSavedDetail {
   content: string
 }
 
-/** Announce a successful save so listeners (e.g. file sync, #178) can react. */
-function announceSaved(source: FileSource, path: string, content: string): void {
+/**
+ * Announce a successful save so listeners react — file sync (#178) auto-uploads
+ * tagged files, and the local file tree refreshes its listing (#491). Exported so
+ * code that writes files outside `saveFile` (e.g. "New robot") can trigger the
+ * same refresh.
+ */
+export function announceSaved(source: FileSource, path: string, content: string): void {
   window.dispatchEvent(
     new CustomEvent<FileSavedDetail>(FILE_SAVED_EVENT, { detail: { source, path, content } })
   )
@@ -164,8 +168,8 @@ type Action =
   | { type: 'setActive'; id: string }
   | { type: 'close'; id: string }
   | { type: 'updateContent'; id: string; content: string }
-  | { type: 'markSaved'; id: string }
-  | { type: 'savedAs'; id: string; path: string; name: string }
+  | { type: 'markSaved'; id: string; content: string }
+  | { type: 'savedAs'; id: string; path: string; name: string; content: string }
   | { type: 'add'; file: OpenFile }
   | { type: 'revealLine'; line: number }
   | { type: 'setFolder'; folder: string | null }
@@ -221,10 +225,13 @@ function reducer(state: State, action: Action): State {
         )
       }
     case 'markSaved':
+      // Clear dirty ONLY if the buffer still matches what was written — edits
+      // typed while the write was in flight must stay dirty (#514), else the
+      // tab claims "Saved" while the buffer differs from disk.
       return {
         ...state,
         openFiles: state.openFiles.map((f) =>
-          f.id === action.id ? { ...f, dirty: false } : f
+          f.id === action.id && f.content === action.content ? { ...f, dirty: false } : f
         )
       }
     case 'savedAs':
@@ -234,7 +241,9 @@ function reducer(state: State, action: Action): State {
         ...state,
         openFiles: state.openFiles.map((f) =>
           f.id === action.id
-            ? { ...f, path: action.path, name: action.name, dirty: false }
+            ? // Same in-flight-edit race as markSaved (#514): keep dirty when the
+              // buffer moved on while the Save As dialog/write was pending.
+              { ...f, path: action.path, name: action.name, dirty: f.content !== action.content }
             : f
         )
       }
@@ -306,7 +315,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         const chosen = await window.api.fs.saveFileDialog(file.name)
         if (!chosen) return
         await window.api.fs.writeFile(chosen, file.content)
-        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen) })
+        dispatch({ type: 'savedAs', id, path: chosen, name: baseName(chosen), content: file.content })
         announceSaved('local', chosen, file.content)
         return
       }
@@ -316,7 +325,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       } else {
         await window.api.device.writeFile(file.path, file.content)
       }
-      dispatch({ type: 'markSaved', id })
+      dispatch({ type: 'markSaved', id, content: file.content })
       announceSaved(file.source, file.path, file.content)
     },
     [state.openFiles]
@@ -428,10 +437,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
     }
 
     markRestoreStart(storage)
-    let cancelled = false
     void (async () => {
       for (const path of session.paths) {
-        if (cancelled) return
         try {
           await openFile('local', path)
         } catch {
@@ -439,25 +446,26 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
         }
       }
       // Re-activate the tab that was focused last session.
-      if (!cancelled && session.activePath) {
+      if (session.activePath) {
         try {
           await openFile('local', session.activePath)
         } catch {
           // ignore
         }
       }
-      // Now that the restore has applied, allow future edits to persist.
-      if (!cancelled) hydrated.current = true
+      // Restore applied → allow future edits to persist, then disarm the guard
+      // on the NEXT painted frame. If a restored file had crashed the renderer,
+      // the crash would happen during this render — before these fire — so the
+      // guard survives and the next launch recovers. Otherwise it clears almost
+      // immediately, so a quick relaunch / dev HMR reload can't strand it (the
+      // old 4 s window did, which wiped the session).
+      hydrated.current = true
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => markRestoreDone(storage))
+      )
     })()
-
-    // Trust the restore once the app has stayed up a moment, then disarm the
-    // guard. If a restored file crashes the renderer first, this timer never
-    // fires, the guard survives, and the NEXT launch recovers.
-    const stable = window.setTimeout(() => markRestoreDone(storage), RESTORE_STABLE_MS)
-    return () => {
-      cancelled = true
-      window.clearTimeout(stable)
-    }
+    // NB: deliberately no cleanup that cancels the restore or the guard-clear —
+    // a StrictMode unmount/remount (or any remount) must not strand the marker.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, [])
 
@@ -542,4 +550,33 @@ export function useWorkspace(): WorkspaceStore {
  */
 export function useWorkspaceOptional(): WorkspaceStore | null {
   return useContext(WorkspaceContext)
+}
+
+/** Stable empty list so a detached instrument doesn't re-render on every read. */
+const EMPTY_OPEN_FILES: OpenFile[] = []
+const NOOP_WRITE = (): void => undefined
+
+/**
+ * Workspace access for an instrument that ALSO renders in a DETACHED OS window
+ * (which has no `WorkspaceProvider`). Returns the live workspace bits when docked,
+ * or safe no-ops / empties when detached — so the instrument renders instead of
+ * crashing on the throwing {@link useWorkspace} (a blank pop-out window). The
+ * workspace-backed extras (insert a demo file, edit the active file) simply become
+ * inert in the detached window; `detached` lets a caller hide/disable them.
+ */
+export function useInstrumentWorkspace(): {
+  openBuffer: (name: string, content: string) => void
+  updateContent: (id: string, content: string) => void
+  openFiles: OpenFile[]
+  activeId: string | null
+  detached: boolean
+} {
+  const ws = useWorkspaceOptional()
+  return {
+    openBuffer: ws?.openBuffer ?? NOOP_WRITE,
+    updateContent: ws?.updateContent ?? NOOP_WRITE,
+    openFiles: ws?.openFiles ?? EMPTY_OPEN_FILES,
+    activeId: ws?.activeId ?? null,
+    detached: !ws
+  }
 }

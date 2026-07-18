@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FsEntry } from '../../../main/fs/types'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useWorkspace, FILE_SAVED_EVENT, type FileSavedDetail } from '../store/workspace'
 import { useSync } from '../store/sync'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
@@ -85,6 +85,8 @@ interface TreeNodeProps {
   isSynced: (path: string) => boolean
   /** Tag / untag a (file) path for device sync (#178). */
   toggleSync: (path: string) => void
+  /** Bumped by the Refresh button — expanded folders re-read their children. */
+  refreshNonce: number
 }
 
 /** Recursively renders a directory entry and (when expanded) its children. */
@@ -97,7 +99,8 @@ function TreeNode({
   onChanged,
   onContextMenu,
   isSynced,
-  toggleSync
+  toggleSync,
+  refreshNonce
 }: TreeNodeProps): JSX.Element {
   const [expanded, setExpanded] = useState(false)
   const [children, setChildren] = useState<FsEntry[] | null>(null)
@@ -111,6 +114,16 @@ function TreeNode({
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [entry.path])
+
+  // Refresh signal from above: re-read an EXPANDED folder's children so newly
+  // added/removed files show up (the root re-reads separately). Skip the first
+  // render — only react to actual bumps.
+  const firstNonce = useRef(refreshNonce)
+  useEffect(() => {
+    if (refreshNonce === firstNonce.current) return
+    if (expanded) void loadChildren()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshNonce])
 
   const toggle = useCallback(async (): Promise<void> => {
     if (!expanded && children === null) await loadChildren()
@@ -186,6 +199,7 @@ function TreeNode({
             onContextMenu={onContextMenu}
             isSynced={isSynced}
             toggleSync={toggleSync}
+            refreshNonce={refreshNonce}
           />
         ))}
     </div>
@@ -200,7 +214,7 @@ interface MenuState {
 }
 
 export function LocalFileTree(): JSX.Element {
-  const { openFile, currentFolder, openFolder, openFolderPath } = useWorkspace()
+  const { openFile, currentFolder, openFolder, openFolderPath, newFile } = useWorkspace()
   const prompt = usePrompt()
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
@@ -214,8 +228,12 @@ export function LocalFileTree(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [menu, setMenu] = useState<MenuState | null>(null)
 
+  // Bumping this tells every EXPANDED subfolder to re-read its children too, so
+  // Refresh reflects changes anywhere in the open tree (not just the root).
+  const [refreshNonce, setRefreshNonce] = useState(0)
   const refresh = useCallback(async (): Promise<void> => {
     if (!root) return
+    setRefreshNonce((n) => n + 1)
     try {
       setEntries(await window.api.fs.readDir(root))
       setError(null)
@@ -226,6 +244,18 @@ export function LocalFileTree(): JSX.Element {
 
   useEffect(() => {
     void refresh()
+  }, [refresh])
+
+  // Re-read the listing when a local file is saved or created elsewhere (a manual
+  // save, or "New robot" writing a .urdf + robot.yml) so new files appear without
+  // a manual Refresh (#491). `refresh` preserves selection + expansion state.
+  useEffect(() => {
+    const onSaved = (e: Event): void => {
+      const detail = (e as CustomEvent<FileSavedDetail>).detail
+      if (detail?.source === 'local') void refresh()
+    }
+    window.addEventListener(FILE_SAVED_EVENT, onSaved)
+    return () => window.removeEventListener(FILE_SAVED_EVENT, onSaved)
   }, [refresh])
 
   // When the working folder changes (e.g. opened from the toolbar), reset the
@@ -242,6 +272,36 @@ export function LocalFileTree(): JSX.Element {
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [openFolder])
+
+  // Web only (#476): a folder persisted from a previous visit that needs a click
+  // to re-grant permission. `reopenFolderName` is absent on desktop, so this
+  // stays null there and the "Reopen" button never renders.
+  const [reopenName, setReopenName] = useState<string | null>(null)
+  useEffect(() => {
+    if (root) {
+      setReopenName(null)
+      return
+    }
+    const fsx = window.api.fs as unknown as { reopenFolderName?: () => Promise<string | null> }
+    if (!fsx.reopenFolderName) return
+    let live = true
+    void fsx.reopenFolderName().then((n) => live && setReopenName(n)).catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [root])
+
+  const handleReopenFolder = useCallback(async (): Promise<void> => {
+    const fsx = window.api.fs as unknown as { reopenFolder?: () => Promise<string | null> }
+    if (!fsx.reopenFolder) return
+    try {
+      const path = await fsx.reopenFolder()
+      if (path) openFolderPath(path)
+      else setReopenName(null) // denied/dismissed — drop the offer
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }, [openFolderPath])
 
   const handleSelect = useCallback((path: string, isDir: boolean): void => {
     setSelectedPath(path)
@@ -455,10 +515,12 @@ export function LocalFileTree(): JSX.Element {
           </button>
           <button
             className="btn btn--ghost btn--icon"
-            onClick={() => newFileIn(null)}
-            title="New file"
+            // With no folder open this used to be a dead button; fall back to an
+            // untitled buffer (same as the toolbar's New file) so "create a file
+            // and run it" always works — on the web there may be no folder at all.
+            onClick={() => (root ? newFileIn(null) : newFile())}
+            title={root ? 'New file' : 'New untitled file'}
             aria-label="New file"
-            disabled={!root}
           >
             <NewFileIcon />
           </button>
@@ -526,6 +588,7 @@ export function LocalFileTree(): JSX.Element {
                 onContextMenu={handleContextMenu}
                 isSynced={isSynced}
                 toggleSync={toggleSync}
+                refreshNonce={refreshNonce}
               />
             ))}
           </div>
@@ -533,7 +596,19 @@ export function LocalFileTree(): JSX.Element {
       ) : (
         <div className="localtree__empty">
           {error && <div className="localtree__error">{error}</div>}
-          <button className="btn btn--primary" onClick={handleOpenFolder}>
+          {reopenName && (
+            <button
+              className="btn btn--primary"
+              onClick={() => void handleReopenFolder()}
+              title={`Reopen ${reopenName} from your last visit`}
+            >
+              <span aria-hidden>{'↻'}</span> Reopen {reopenName}
+            </button>
+          )}
+          <button
+            className={reopenName ? 'btn btn--ghost' : 'btn btn--primary'}
+            onClick={handleOpenFolder}
+          >
             <span aria-hidden>{'▸'}</span> Open Folder
           </button>
         </div>

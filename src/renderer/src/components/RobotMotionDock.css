@@ -1,0 +1,87 @@
+/* Motion dock (#403 follow-up) — the tabbed, collapsible bottom container for the
+   three Motion Studio surfaces. Theme-aware; unique `motiondock__` BEM prefix. */
+.motiondock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Never let the dock eat the 3-D stage: cap it at HALF the Robot View pane (a
+     definite height), not a window-relative `vh` — the latter overflows a short
+     pane and, because the stage canvas is absolutely positioned, collapses the
+     3-D view entirely. The body flex-fills + scrolls within this cap. */
+  max-height: 50%;
+  background: var(--bg-elevated, #202227);
+  border-top: var(--border-w, 1px) solid var(--border, #2c2e33);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+}
+
+.motiondock__tabs {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  gap: 0.1rem;
+  padding: 0 0.4rem;
+  border-bottom: 1px solid var(--border, #2c2e33);
+}
+.motiondock.is-collapsed .motiondock__tabs {
+  border-bottom: none;
+}
+
+.motiondock__tab {
+  position: relative;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text-muted, #8a8f96);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.32rem 0.6rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.motiondock__tab:hover {
+  color: var(--text, #cdd2d9);
+}
+.motiondock__tab.is-active {
+  color: var(--text, #cdd2d9);
+  border-bottom-color: var(--accent, #d6a23f);
+  font-weight: 600;
+}
+.motiondock__badge {
+  display: inline-block;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 50%;
+  background: var(--accent, #d6a23f);
+  margin-left: 0.28rem;
+  vertical-align: middle;
+}
+
+.motiondock__spacer {
+  flex: 1 1 auto;
+}
+.motiondock__collapse {
+  font-family: inherit;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted, #8a8f96);
+  background: none;
+  border: none;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+.motiondock__collapse:hover {
+  color: var(--text, #cdd2d9);
+}
+
+.motiondock__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+/* The nested panel (robottimeline / robotseq / robotctl) brings its own padding +
+   matching background; drop its top border so the dock's tab strip is the ONLY
+   divider (no double rule). */
+.motiondock__body > * {
+  border-top: none;
+}

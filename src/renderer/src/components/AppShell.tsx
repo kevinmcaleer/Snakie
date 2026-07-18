@@ -7,12 +7,15 @@ import {
   PanelResizeHandle
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { useWorkspaceLayout } from '../store/layout'
+import { appliedHorizontal, useWorkspaceLayout, type WorkspaceId } from '../store/layout'
 
 // The embedded Board View pane (the Board workspace's tri-split, #259) is
 // code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
 // loads only when a workspace with the pane open is activated.
 const BoardPane = lazy(() => import('./BoardPane'))
+// The mini 3-D Robot panel (Robot mode, #320) — lazy so three.js only loads
+// when you enter Robot mode.
+const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView, DESKTOP_ONLY_VIEWS } from './ActivityBar'
@@ -38,6 +41,7 @@ import { type UsedPins } from './parse-pins'
 import { runFindCommand } from './findController'
 import { ShellPanel } from './ShellPanel'
 import { RightPanel } from './RightPanel'
+import { IS_WEB } from '../lib/env'
 import { StatusBar } from './StatusBar'
 import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
@@ -45,6 +49,7 @@ import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { PartsImportBanner } from './PartsImportBanner'
 import { isElectron } from '../lib/platform'
+import { TutorialPanel } from './TutorialPanel'
 import {
   requiredPartModules,
   missingImports as computeMissingImports,
@@ -58,6 +63,8 @@ import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
   INSTRUMENTS_LIB_DIR,
+  SNAKIE_LIB_PATH,
+  SNAKIE_ROOT_PATH,
   classifyPresentCopy,
   parseLibVersion,
   shouldShowBanner,
@@ -150,6 +157,14 @@ function LeftView({
           <BugReportPanel />
         </LeftRegion>
       )
+    case 'learn':
+      // The Learn panel (tutorials, #479) brings its own gallery/course header,
+      // so drop the region title bar.
+      return (
+        <LeftRegion title="Learn" showHeader={false}>
+          <TutorialPanel />
+        </LeftRegion>
+      )
     case 'help':
       // The Help Library brings its own brass header plate, so drop the region
       // title bar.
@@ -202,8 +217,8 @@ export function AppShell(): JSX.Element {
   // they can consult/flip these synchronously. The `.current` values are kept
   // fresh in the workspace-layout block further down (after `layout` exists).
   const poppedFromBoardRef = useRef(false)
-  const switchWorkspaceRef = useRef<(id: 'code' | 'board' | 'datalab') => void>(() => undefined)
-  const activeWsRef = useRef<'code' | 'board' | 'datalab'>('code')
+  const switchWorkspaceRef = useRef<(id: WorkspaceId) => void>(() => undefined)
+  const activeWsRef = useRef<WorkspaceId>('code')
 
   // Toggle the floating Board View window from the toolbar button: open (and
   // push the current file immediately so it isn't blank) if closed, or close it
@@ -287,6 +302,10 @@ export function AppShell(): JSX.Element {
   const { filesCollapsed, shellCollapsed, rightCollapsed, activityView, boardPaneOpen } =
     layout.workspace
   const dockOpen = layout.workspace.dockOpen
+  // Transient editor focus (Robot pop-out): hide the board, instruments + console
+  // around the URDF without touching the workspace (#320 follow-up).
+  const focus = layout.focus
+  const boardPaneVisible = boardPaneOpen && !focus
 
   const filesRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
@@ -302,16 +321,32 @@ export function AppShell(): JSX.Element {
   }
 
   // Collapse/expand a panel; the Panel's own onCollapse/onExpand callbacks sync
-  // the store flag, so this stays the single imperative entry point.
-  const toggle = useCallback(
-    (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
-      const panel = ref.current
-      if (!panel) return
-      if (collapsed) panel.expand()
-      else panel.collapse()
-    },
-    []
-  )
+  // the store flag, so this stays the single imperative entry point. Read the
+  // ACTUAL panel state (not the store flag), so a transient desync — e.g. after
+  // a workspace switch or a drag-collapse — can never leave the toggle stuck
+  // calling collapse() on an already-collapsed panel (the "won't reopen" bug).
+  const toggle = useCallback((ref: React.RefObject<ImperativePanelHandle>): void => {
+    const panel = ref.current
+    if (!panel) return
+    if (panel.isCollapsed()) panel.expand()
+    else panel.collapse()
+  }, [])
+
+  // Ensure a panel is open (no-op when already expanded).
+  const openPanel = useCallback((ref: React.RefObject<ImperativePanelHandle>): void => {
+    const panel = ref.current
+    if (panel && panel.isCollapsed()) panel.expand()
+  }, [])
+
+  // A panel toggle (or activity click) while in focus mode simply LEAVES focus,
+  // restoring the full Robot layout, rather than fighting the focus overrides.
+  const exitFocus = useCallback((): boolean => {
+    if (layout.focus) {
+      layout.setFocus(false)
+      return true
+    }
+    return false
+  }, [layout])
 
   // Apply the active workspace's geometry whenever it changes (switch / reset).
   // setLayout drives the sizes; the explicit collapse() calls are belt-and-braces
@@ -325,16 +360,25 @@ export function AppShell(): JSX.Element {
     // the "board pane opens tiny" bug). After rAF the group knows all panels.
     const raf = requestAnimationFrame(() => {
       // The horizontal group's setLayout array must match the RENDERED panels:
-      // 4 with the board pane open, 3 (board slot elided) when it's closed.
-      hGroupRef.current?.setLayout(
-        ws.boardPaneOpen
-          ? [...ws.horizontal]
-          : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
-      )
+      // the board slot elides when the pane is closed (and in focus mode, where
+      // the editor takes its share), and the chat slot doesn't exist on the web
+      // build (#528) — a stray extra size makes react-resizable-panels throw.
+      const boardOn = ws.boardPaneOpen && !focus
+      hGroupRef.current?.setLayout(appliedHorizontal(ws.horizontal, boardOn, !IS_WEB))
       vGroupRef.current?.setLayout([...ws.vertical])
-      if (ws.filesCollapsed) filesRef.current?.collapse()
-      if (ws.shellCollapsed) shellRef.current?.collapse()
-      if (ws.rightCollapsed) rightRef.current?.collapse()
+      // Sync each collapsible panel BOTH ways to the target workspace, so the RRP
+      // panel state can't drift from the store flag (which would strand the
+      // toggle button / activity icon on the next click). Focus also collapses
+      // the console so only the URDF shows.
+      const sync = (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
+        const panel = ref.current
+        if (!panel) return
+        if (collapsed) panel.collapse()
+        else panel.expand()
+      }
+      sync(filesRef, ws.filesCollapsed)
+      sync(shellRef, focus || ws.shellCollapsed)
+      sync(rightRef, ws.rightCollapsed)
     })
     return () => cancelAnimationFrame(raf)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyNonce IS the signal
@@ -474,7 +518,7 @@ export function AppShell(): JSX.Element {
   // other's freed space, which made toggling one reveal the other). Its flag is
   // part of the workspace layout (the Board/Data Lab workspaces open it).
   const setDockOpen = layout.setDockOpen
-  const instrumentsVisible = dockOpen
+  const instrumentsVisible = dockOpen && !focus
   const toggleInstruments = useCallback((): void => {
     setDockOpen(!dockOpen)
   }, [dockOpen, setDockOpen])
@@ -628,6 +672,14 @@ export function AppShell(): JSX.Element {
           .catch(() => false)
         if (rootShadow) {
           await window.api.device.writeFile(INSTRUMENTS_ROOT_PATH, source)
+        }
+        // Install the `snakie.py` hardware umbrella beside it (best-effort — an
+        // older bundle without it just skips this), so `from snakie import Servo`
+        // works and a vendor `servo` module can't shadow ours.
+        const umbrella = await window.api.instruments.umbrellaSource().catch(() => '')
+        if (umbrella) {
+          await window.api.device.writeFile(SNAKIE_LIB_PATH, umbrella)
+          if (rootShadow) await window.api.device.writeFile(SNAKIE_ROOT_PATH, umbrella)
         }
         setLibState('present')
         // The device's files changed — tell every window so e.g. the Device
@@ -933,13 +985,23 @@ export function AppShell(): JSX.Element {
       </div>
       <Toolbar
         filesCollapsed={filesCollapsed}
-        onToggleFiles={() => toggle(filesRef, filesCollapsed)}
+        onToggleFiles={() => {
+          if (!exitFocus()) toggle(filesRef)
+        }}
         shellCollapsed={shellCollapsed}
-        onToggleShell={() => toggle(shellRef, shellCollapsed)}
+        onToggleShell={() => {
+          if (!exitFocus()) toggle(shellRef)
+        }}
         rightCollapsed={rightCollapsed}
-        onToggleRight={() => toggle(rightRef, rightCollapsed)}
-        onOpenBoard={toggleBoard}
-        onToggleInstruments={toggleInstruments}
+        onToggleRight={() => {
+          if (!exitFocus()) toggle(rightRef)
+        }}
+        onOpenBoard={() => {
+          if (!exitFocus()) toggleBoard()
+        }}
+        onToggleInstruments={() => {
+          if (!exitFocus()) toggleInstruments()
+        }}
         instrumentsVisible={instrumentsVisible}
         instrumentCount={openInstruments.length}
       />
@@ -949,16 +1011,21 @@ export function AppShell(): JSX.Element {
           active={activityView}
           onOpenSettings={() => openSettings('appearance')}
           onSelect={(view) => {
+            // In focus mode, any activity click just restores the Robot layout.
+            if (exitFocus()) {
+              setActivityView(view)
+              return
+            }
             // Clicking the already-active view toggles the left panel collapse
             // (issue #86): collapse it when open, re-expand it when collapsed.
             if (view === activityView) {
-              toggle(filesRef, filesCollapsed)
+              toggle(filesRef)
               return
             }
             // Switching to a different view selects it and reveals the sidebar
             // if it was collapsed.
             setActivityView(view)
-            if (filesCollapsed) toggle(filesRef, true)
+            openPanel(filesRef)
           }}
         />
         {/* Sizes are recorded into the ACTIVE workspace via onLayout and applied
@@ -976,7 +1043,7 @@ export function AppShell(): JSX.Element {
             collapsible
             collapsedSize={0}
             defaultSize={initialSizes.current.h[0]}
-            minSize={24}
+            minSize={30}
             onCollapse={() => layout.setCollapsed('files', true)}
             onExpand={() => layout.setCollapsed('files', false)}
           >
@@ -1017,7 +1084,7 @@ export function AppShell(): JSX.Element {
           {/* The embedded Board View (the Board workspace's tri-split, #259):
               code on the left, the board here, the instrument dock at the far
               right — code, wiring and instruments visible together. */}
-          {boardPaneOpen && (
+          {boardPaneVisible && (
             <>
               <PanelResizeHandle className="resize-handle resize-handle--vertical" />
               {/* defaultSize = the ACTIVE workspace's board share (not the mount-time
@@ -1037,20 +1104,25 @@ export function AppShell(): JSX.Element {
             </>
           )}
 
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+          {/* The Chat right-pane is desktop-only — hidden on the web build. */}
+          {!IS_WEB && (
+            <>
+              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
-          <Panel
-            ref={rightRef}
-            order={4}
-            collapsible
-            collapsedSize={0}
-            defaultSize={initialSizes.current.h[3]}
-            minSize={14}
-            onCollapse={() => layout.setCollapsed('right', true)}
-            onExpand={() => layout.setCollapsed('right', false)}
-          >
-            <RightPanel />
-          </Panel>
+              <Panel
+                ref={rightRef}
+                order={4}
+                collapsible
+                collapsedSize={0}
+                defaultSize={initialSizes.current.h[3]}
+                minSize={14}
+                onCollapse={() => layout.setCollapsed('right', true)}
+                onExpand={() => layout.setCollapsed('right', false)}
+              >
+                <RightPanel />
+              </Panel>
+            </>
+          )}
         </PanelGroup>
 
         {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region
@@ -1059,7 +1131,17 @@ export function AppShell(): JSX.Element {
             redistribute each other's freed space). Shown by the toolbar
             Instruments button or an incoming `instruments:open`. */}
         {instrumentsVisible && (
-          <aside className="shell__dock" aria-label="Instrument dock">
+          <aside
+            className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ''}`}
+            aria-label="Instrument dock"
+          >
+            {layout.active === 'robot' && (
+              <div className="shell__robot3d">
+                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
+                  <RobotDockPanel />
+                </Suspense>
+              </div>
+            )}
             <InstrumentDockRegion
               host={instruments}
               vis={visibility}
@@ -1094,6 +1176,7 @@ export function AppShell(): JSX.Element {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+
     </div>
   )
 }

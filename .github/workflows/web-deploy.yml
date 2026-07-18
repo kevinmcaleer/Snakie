@@ -1,0 +1,61 @@
+name: Deploy Web App
+
+# Builds the browser build of Snakie (epic #267, `npm run build:web`) and PUBLISHES
+# it to the separate `kevinmcaleer/app.snakie.org` repo, which serves it via GitHub
+# Pages at https://app.snakie.org.
+#
+# Auth: an SSH deploy key — the PRIVATE key is the `ACTIONS_DEPLOY_KEY` secret here,
+# the PUBLIC key is a write deploy key on the app.snakie.org repo. So this repo can
+# push the built site there without a personal access token.
+on:
+  push:
+    branches: [master]
+    # Only rebuild when something that affects the web build changes.
+    paths:
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      # The Standard parts library is inlined into the web bundle by
+      # vite-plugin-standard-parts, so a part edit (parts.yml / image / driver)
+      # must rebuild + redeploy too — otherwise it silently never ships.
+      - 'examples/parts/**'
+      - 'vite-plugin-standard-parts.ts'
+      - 'vite.web.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/web-deploy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never let two deploys race; a newer push supersedes an in-flight one.
+concurrency:
+  group: web-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build:web
+        env:
+          # Bakes the post-only feedback key into the bundle so web bug reports work.
+          SNAKIE_FEEDBACK_KEY: ${{ secrets.SNAKIE_FEEDBACK_KEY }}
+      - name: Publish to app.snakie.org
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          deploy_key: ${{ secrets.ACTIONS_DEPLOY_KEY }}
+          external_repository: kevinmcaleer/app.snakie.org
+          publish_branch: main
+          publish_dir: ./dist-web
+          # Keep the custom domain + skip Jekyll (peaceiris writes CNAME + .nojekyll).
+          cname: app.snakie.org
+          # A clean single-commit deploy branch (built assets don't bloat history).
+          force_orphan: true
+          commit_message: 'Deploy ${{ github.sha }} — Snakie for Web'

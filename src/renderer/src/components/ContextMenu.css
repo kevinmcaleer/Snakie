@@ -14,8 +14,8 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface, #1e1e1e);
-  border: 1px solid var(--color-border, #3a3a3a);
+  background: var(--bg-elevated, #1e1e1e);
+  border: 1px solid var(--border, #3a3a3a);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   outline: none;
@@ -31,7 +31,7 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--color-text, #e6e6e6);
+  color: var(--text, #e6e6e6);
   font: inherit;
   text-align: left;
   cursor: pointer;
@@ -39,23 +39,23 @@
 
 .context-menu__item:hover:not(:disabled),
 .context-menu__item.is-active:not(:disabled) {
-  background: var(--color-accent, #0e639c);
-  color: #fff;
+  background: var(--accent, #0e639c);
+  color: var(--accent-contrast, #fff);
 }
 
 .context-menu__item:disabled,
 .context-menu__item[aria-disabled='true'] {
-  color: var(--color-text-muted, #777);
+  color: var(--text-muted, #777);
   cursor: default;
   opacity: 0.6;
 }
 
 .context-menu__item--danger {
-  color: var(--color-danger, #e06c75);
+  color: var(--danger, #e06c75);
 }
 
 .context-menu__item--danger:hover:not(:disabled),
 .context-menu__item--danger.is-active:not(:disabled) {
-  background: var(--color-danger, #c0392b);
+  background: var(--danger, #c0392b);
   color: #fff;
 }

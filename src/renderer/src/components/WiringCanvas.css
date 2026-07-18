@@ -20,12 +20,30 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  /* The graph-paper grid is now drawn IN the SVG (see .wc__grid) so it pans and
+     scales with the parts; the stage is just the flat "desk" behind it. */
   background-color: #161719;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
   transition: box-shadow 0.12s ease;
+}
+
+/* --- Graph-paper grid (drawn inside the pan/zoom content group) ------------- */
+.wc__grid {
+  fill: none;
+  /* Constant on-screen line weight regardless of zoom — crisp at any scale. */
+  vector-effect: non-scaling-stroke;
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+.wc__grid--fine {
+  stroke: #7f8794;
+}
+.wc__grid--minor {
+  stroke: #8b93a1;
+}
+.wc__grid--major {
+  /* The 1-inch anchor lines — a touch brighter, like ruled paper. */
+  stroke: #9aa2b0;
+  stroke-width: 1.2;
 }
 
 /* A part is being dragged in from the Parts panel (#159) — frame the drop zone. */
@@ -34,18 +52,36 @@
   background-color: #191b1f;
 }
 
-/* Blueprint breadboard background (Settings → Appearance): classic blue paper
-   with a fine light grid + bolder major lines. Applied via `data-breadboard-bg`
-   on the Board View window's root. Scoped to the LIFELIKE breadboard — the
-   schematic view keeps a plain white/dark sheet (blueprint doesn't suit it). */
+/* Blueprint breadboard background (Settings → Appearance): classic blue paper.
+   Applied via `data-breadboard-bg` on the Board View window's root, scoped to
+   the LIFELIKE breadboard. The grid LINES come from the SVG graph-paper grid
+   now (which pans/scales with the parts); here we only set the blue paper +
+   recolour those lines to a light blue (see `.wc__grid` overrides below). */
 :root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__stage {
   background-color: #0d3b66;
-  background-image:
-    linear-gradient(rgba(214, 230, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(214, 230, 255, 0.28) 1px, transparent 1px),
-    linear-gradient(rgba(214, 230, 255, 0.11) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(214, 230, 255, 0.11) 1px, transparent 1px);
-  background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
+}
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid {
+  stroke: #d6e6ff;
+  /* A whisper so the graph-paper grid reads as a faint backdrop, not foreground
+     (#452 — ~50% softer again than the previous 0.5). */
+  stroke-opacity: 0.25;
+}
+/* Blueprint only: warp the grid with the paper fibre so the lines aren't
+   machine-perfect — a subtle ink-on-paper wobble that scales with the grid. */
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__grid-layer {
+  filter: url(#wc-grid-rough);
+}
+
+/* Procedural paper mottle — only on the blueprint sheet. `soft-light` turns the
+   grey fractal noise into a faint light/dark undulation over the blue paper;
+   keep it a whisper (low opacity) so it reads as texture, not noise. */
+.wc__paper {
+  display: none;
+}
+:root[data-breadboard-bg='blueprint'] .wc--lifelike .wc__paper {
+  display: block;
+  opacity: 0.85;
+  mix-blend-mode: soft-light;
 }
 
 /* Keep the mat blue (not the dark drop tint) while dragging a part over blueprint. */
@@ -55,14 +91,14 @@
 
 /* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard
    mat. Dark theme keeps the existing dark mat (light-on-dark symbols); the light
-   (skeuomorph) theme uses a white sheet with a faint grid, and the symbol
-   overrides below flip the symbols to dark-on-white so they stay legible. */
+   (skeuomorph) theme uses a white sheet, and the symbol overrides below flip the
+   symbols to dark-on-white so they stay legible. The grid LINES come from the
+   SVG graph-paper grid — on the white sheet we darken them (see below). */
 :root[data-theme='skeuomorph'] .wc--schematic .wc__stage {
   background-color: #fbfbfa;
-  background-image:
-    linear-gradient(rgba(20, 30, 50, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 30, 50, 0.06) 1px, transparent 1px);
-  background-size: 28px 28px;
+}
+:root[data-theme='skeuomorph'] .wc--schematic .wc__grid {
+  stroke: #2c3648;
 }
 
 /* Dark-on-white schematic symbols for the light theme: a light symbol body with
@@ -147,12 +183,33 @@
   border-color: #565b63;
 }
 
+/* Active toggle state (snap-to-grid magnet). */
+.wc__zoom-btn.is-on {
+  color: #7fc4f0;
+  border-color: #3f6f8f;
+  background: #1d2b36;
+}
+
 .wc__zoom-pct {
   min-width: 2.6rem;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 0.66rem;
   color: #aeb4bd;
+}
+
+/* The zoom readout doubles as a 100% / fit toggle button. */
+.wc__zoom-pct--btn {
+  padding: 0.2rem 0.15rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+.wc__zoom-pct--btn:hover {
+  color: #d6dade;
+  border-color: #3a3d44;
+  background: #26282d;
 }
 
 .wc__zoom-sep {
@@ -255,6 +312,43 @@
   color: #fff;
   background: #c0392b;
   border-color: #a5281b;
+}
+
+/* Servo → joint binding controls (#): a note (not wired / no joints yet) or the
+   joint picker. Matches the dark floating toolbar. */
+.wc__parttb-note {
+  display: inline-flex;
+  align-items: center;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  font-size: 0.6rem;
+  color: #b7bcc4;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.wc__parttb-joint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  height: 1.6rem;
+  padding: 0 0.2rem 0 0.35rem;
+  color: #d6dade;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+}
+.wc__parttb-select {
+  max-width: 8rem;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.62rem;
+  color: #d6dade;
+  background: #1c1e22;
+  border: 1px solid #3a3d44;
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
+  cursor: pointer;
 }
 
 .wc__parttb-input {

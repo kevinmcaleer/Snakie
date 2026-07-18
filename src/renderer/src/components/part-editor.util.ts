@@ -429,6 +429,70 @@ export function orderedComponents(part: PartDefinition): OrderedComponent[] {
     .map(({ c }) => c)
 }
 
+/** Every free-placed COMPONENT (shape, label, button, LED, connector) merged
+ *  into one ascending-z draw order — the unified stack the canvas paints,
+ *  hit-tests and the Layers panel lists (#130). Pins/holes/image are NOT here
+ *  (pins anchor to the outline; the image is pinned to the bottom). The legacy
+ *  category defaults keep today's look for parts authored before per-item z:
+ *  shapes (0..), labels above them, then buttons, LEDs, connectors on top. */
+export type OrderedItemKind = 'shape' | 'label' | 'button' | 'led' | 'connector'
+export interface OrderedItem {
+  kind: OrderedItemKind
+  index: number
+  z: number
+}
+
+const Z_BUTTON = 1_000_000
+const Z_LED = 2_000_000
+const Z_CONNECTOR = 3_000_000
+
+export function orderedItems(part: PartDefinition): OrderedItem[] {
+  const shapes = part.shapes ?? []
+  const labels = part.labels ?? []
+  const buttons = part.buttons ?? []
+  const leds = part.onboardLeds ?? []
+  const connectors = part.connectors ?? []
+  const combined: OrderedItem[] = [
+    ...shapes.map((s, i) => ({ kind: 'shape' as const, index: i, z: s.z ?? i })),
+    ...labels.map((l, i) => ({ kind: 'label' as const, index: i, z: l.z ?? shapes.length + i })),
+    ...buttons.map((b, i) => ({ kind: 'button' as const, index: i, z: b.z ?? Z_BUTTON + i })),
+    ...leds.map((d, i) => ({ kind: 'led' as const, index: i, z: d.z ?? Z_LED + i })),
+    ...connectors.map((c, i) => ({ kind: 'connector' as const, index: i, z: c.z ?? Z_CONNECTOR + i }))
+  ]
+  return combined
+    .map((c, i) => ({ c, i }))
+    .sort((a, b) => a.c.z - b.c.z || a.i - b.i)
+    .map(({ c }) => c)
+}
+
+/** Write sequential z back to every component array so the canvas paints +
+ *  hit-tests match a desired TOP-FIRST order (0 = bottom). Returns the patched
+ *  arrays for `patch()`. Used by the Layers panel's drag-to-reorder (#130). */
+export function applyItemOrder(
+  part: PartDefinition,
+  topFirst: OrderedItem[]
+): Pick<PartDefinition, 'shapes' | 'labels' | 'buttons' | 'onboardLeds' | 'connectors'> {
+  const shapes = [...(part.shapes ?? [])]
+  const labels = [...(part.labels ?? [])]
+  const buttons = [...(part.buttons ?? [])]
+  const leds = [...(part.onboardLeds ?? [])]
+  const connectors = [...(part.connectors ?? [])]
+  ;[...topFirst].reverse().forEach((it, z) => {
+    if (it.kind === 'shape') shapes[it.index] = { ...shapes[it.index], z }
+    else if (it.kind === 'label') labels[it.index] = { ...labels[it.index], z }
+    else if (it.kind === 'button') buttons[it.index] = { ...buttons[it.index], z }
+    else if (it.kind === 'led') leds[it.index] = { ...leds[it.index], z }
+    else connectors[it.index] = { ...connectors[it.index], z }
+  })
+  return { shapes, labels, buttons, onboardLeds: leds, connectors }
+}
+
+/** The z a newly-created ITEM (any kind) should take to land on top. */
+export function nextItemZ(part: PartDefinition): number {
+  const ord = orderedItems(part)
+  return ord.length ? ord[ord.length - 1].z + 1 : 0
+}
+
 /** The z a newly-created component should take to land on top of everything. */
 export function nextComponentZ(part: PartDefinition): number {
   const ord = orderedComponents(part)
@@ -900,6 +964,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   // `help` is the relative filename; keep it. `helpText` (the inlined markdown) is
   // runtime-only, like `imageData`, so it's NOT part of the round-trip shape.
   set('help', text(part.help))
+  // The 3-D mesh link (#406): a relative filename + its declared units/scale.
+  set('mesh', text(part.mesh))
+  if (part.meshUnits === 'mm' || part.meshUnits === 'm') out.meshUnits = part.meshUnits
+  if (typeof part.meshScale === 'number' && part.meshScale > 0) out.meshScale = part.meshScale
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

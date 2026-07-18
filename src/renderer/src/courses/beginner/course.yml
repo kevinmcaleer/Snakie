@@ -1,0 +1,89 @@
+title: First Steps with MicroPython
+description: Write your very first programs — no board needed. Runs on the simulator.
+emoji: "🐣"
+accent: "#34ad4f"
+track: beginner
+lessons:
+  - title: Hello, Snakie
+    file: 01-hello.md
+    code: |
+      # Press Run ▶ to send this to the board (or the simulator).
+      print("Hello from Snakie!")
+    tip: "`print()` shows text in the console at the bottom of the screen."
+  - title: Variables
+    file: 02-variables.md
+    code: |
+      name = "Ada"
+      age = 9
+      print("Hi", name, "- you are", age)
+    tip: "A variable is a labelled box that remembers a value."
+  - title: Doing maths
+    file: 03-maths.md
+    code: |
+      print(2 + 2)
+      print(10 * 3)
+      print(7 / 2)
+    tip: "Try `//` for whole-number division and `%` for the remainder."
+  - title: Repeating with for
+    file: 04-for-loops.md
+    code: |
+      for i in range(5):
+          print("count", i)
+    tip: "`range(5)` gives 0, 1, 2, 3, 4 — five numbers starting at zero."
+  - title: while and sleep
+    file: 05-while-sleep.md
+    code: |
+      import time
+      n = 3
+      while n > 0:
+          print(n)
+          time.sleep(1)
+          n = n - 1
+      print("Lift off!")
+    tip: "Press **Stop** ⏹ to end a program that loops forever."
+  - title: Making decisions
+    file: 06-if-else.md
+    code: |
+      score = 7
+      if score >= 5:
+          print("You passed!")
+      else:
+          print("Try again")
+    tip: "Indentation (the spaces) tells Python which lines belong to the `if`."
+  - title: Functions
+    file: 07-functions.md
+    code: |
+      def greet(who):
+          print("Hello,", who)
+
+      greet("world")
+      greet("robot")
+    tip: "A function is a reusable recipe — write it once, call it many times."
+  - title: Lists
+    file: 08-lists.md
+    code: |
+      pets = ["cat", "dog", "fish"]
+      for pet in pets:
+          print("I have a", pet)
+      print("Total:", len(pets))
+    tip: "A list holds many values in order. `len()` counts them."
+  - title: Talking to pins
+    file: 09-pins.md
+    code: |
+      from machine import Pin
+      led = Pin(25, Pin.OUT)
+      led.on()
+      print("LED value:", led.value())
+    tip: "`Pin` is how MicroPython controls the board's legs (its GPIO pins)."
+  - title: "Project: countdown light"
+    file: 10-project-countdown.md
+    code: |
+      from machine import Pin
+      import time
+      led = Pin(25, Pin.OUT)
+      for i in range(5, 0, -1):
+          print(i)
+          led.toggle()
+          time.sleep_ms(500)
+      print("Go!")
+    tip: "You've combined pins, loops and timing — that's real robot code!"

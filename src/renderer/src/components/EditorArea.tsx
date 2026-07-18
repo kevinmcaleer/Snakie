@@ -9,11 +9,19 @@ import { useWorkspace } from '../store/workspace'
 const MonacoEditor = lazy(() => import('./MonacoEditor'))
 // Data View (#274) is code-split too — only pulled in when a data file is open.
 const DataView = lazy(() => import('./DataView').then((m) => ({ default: m.DataView })))
+// Robot View (#311) — the three.js chunk only loads when a .urdf file is open.
+const RobotView = lazy(() => import('./RobotView'))
 
 /** Files opened as a table (Data View) rather than in the code editor (#274). */
 const DATA_FILE_RE = /\.(csv|tsv|tab)$/i
 function isDataFile(name: string | undefined): boolean {
   return !!name && DATA_FILE_RE.test(name)
+}
+
+/** Files opened in the 3D Robot View rather than the code editor (#311). */
+const ROBOT_FILE_RE = /\.urdf$/i
+function isRobotFile(name: string | undefined): boolean {
+  return !!name && ROBOT_FILE_RE.test(name)
 }
 
 /**
@@ -33,6 +41,7 @@ export function EditorArea(): JSX.Element {
   const hasFiles = openFiles.length > 0
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const showData = isDataFile(activeFile?.name)
+  const showRobot = isRobotFile(activeFile?.name)
 
   // Open the Find & Replace window. The window itself drives the editor over IPC
   // (issue #146); we only need to open/focus it.
@@ -74,7 +83,7 @@ export function EditorArea(): JSX.Element {
     >
       <div className="editor-header">
         <EditorTabs />
-        {hasFiles && !showData && (
+        {hasFiles && !showData && !showRobot && (
           <div className="editor-header__actions">
             <button
               type="button"
@@ -93,6 +102,10 @@ export function EditorArea(): JSX.Element {
         ) : showData ? (
           <Suspense fallback={<EditorPlaceholder text="Loading data view…" />}>
             <DataView />
+          </Suspense>
+        ) : showRobot ? (
+          <Suspense fallback={<EditorPlaceholder text="Loading robot view…" />}>
+            <RobotView />
           </Suspense>
         ) : (
           <Suspense fallback={<EditorPlaceholder text="Loading editor…" />}>

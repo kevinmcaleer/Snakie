@@ -1,0 +1,378 @@
+/* Fusion-style floating Properties dialog (#352), docked top-right of the stage
+   by default, draggable by its title bar. Prefix robotprops__. */
+.robotprops {
+  position: absolute;
+  top: 190px; /* comfortably below the 144px nav cube + its projection dropdown */
+  right: 12px;
+  /* Above the zoom controls + nav cube (z-index 30): a tall dialog reaches the
+     bottom-right, and if it sat below them the zoom toolbar covered its Add/OK
+     button so clicks landed on "Zoom to fit" instead (a joint silently not added). */
+  z-index: 40;
+  width: 13rem;
+  /* Never grow past the stage; scroll the body so the footer stays reachable. */
+  max-height: calc(100% - 202px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 8px;
+  background: rgba(20, 21, 24, 0.92);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  color: var(--text, #cdd2d9);
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.66rem;
+}
+:root[data-theme='skeuomorph'] .robotprops {
+  background: rgba(231, 226, 211, 0.94);
+}
+.robotprops__head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border, #3a3d44);
+  cursor: grab;
+  user-select: none;
+}
+.robotprops__head:active {
+  cursor: grabbing;
+}
+.robotprops__grip {
+  color: var(--text-muted, #8b919b);
+  letter-spacing: -1px;
+}
+.robotprops__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+  color: var(--accent-ink);
+}
+.robotprops__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.robotprops__section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.robotprops__label {
+  font-size: 0.56rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__note {
+  margin: 0;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+  font-style: italic;
+}
+.robotprops__note--warn {
+  color: var(--danger);
+  font-style: normal;
+}
+.robotprops__text.is-invalid {
+  border-color: var(--danger);
+}
+/* Servo / pose form controls. */
+.robotprops__row {
+  display: flex;
+  gap: 0.4rem;
+}
+.robotprops__mm {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__mm input {
+  width: 3.2rem;
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.12rem 0.25rem;
+}
+.robotprops__sel,
+.robotprops__text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.2rem 0.3rem;
+}
+/* The joint-name field sits above the Joint form; a little gap below it. */
+.robotprops__jname {
+  margin-bottom: 0.35rem;
+}
+.robotprops__check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.6rem;
+  color: var(--text-muted, #8b919b);
+  cursor: pointer;
+}
+/* Add Joint — the pick slot for Component 1 / 2 (filled by a 3-D click). */
+.robotprops__pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  text-align: left;
+}
+.robotprops__pick.is-arming {
+  border-color: var(--accent, #d6a23f);
+  box-shadow: 0 0 0 1px var(--accent, #d6a23f) inset;
+}
+.robotprops__pick-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 700;
+}
+.robotprops__pick-role {
+  flex: 0 0 auto;
+  font-size: 0.56rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__pick-hint {
+  color: var(--text-muted, #8b919b);
+}
+/* Swap parent ↔ child — sits between the two pick slots. */
+.robotprops__swaprow {
+  display: flex;
+  justify-content: center;
+  margin: -0.15rem 0;
+}
+.robotprops__swap {
+  font-family: inherit;
+  font-size: 0.58rem;
+  color: var(--text-muted, #8b919b);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.1rem 0.5rem;
+  cursor: pointer;
+}
+.robotprops__swap:hover:not(:disabled) {
+  color: var(--text, #f2f4f7);
+  border-color: var(--text-muted, #6b7079);
+}
+.robotprops__swap:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* Joint-type chips (Static / Rotation / Linear). */
+.robotprops__chip {
+  flex: 1 1 auto;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.2rem;
+  cursor: pointer;
+}
+.robotprops__chip.is-on {
+  color: var(--accent-contrast, #15161a);
+  background: var(--accent, #d6a23f);
+  border-color: var(--accent, #d6a23f);
+  font-weight: 700;
+}
+.robotprops__foot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  border-top: 1px solid var(--border, #3a3d44);
+}
+.robotprops__foot-spacer {
+  flex: 1 1 auto;
+}
+.robotprops__btn {
+  font-family: inherit;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.7rem;
+  cursor: pointer;
+}
+.robotprops__btn:hover {
+  border-color: var(--text-muted, #6b7079);
+  color: var(--text, #f2f4f7);
+}
+.robotprops__btn--ok {
+  color: var(--accent-contrast, #15161a);
+  background: var(--accent, #d6a23f);
+  border-color: var(--accent, #d6a23f);
+  font-weight: 700;
+}
+.robotprops__btn--ok:hover {
+  color: var(--accent-contrast, #15161a);
+  filter: brightness(1.08);
+}
+.robotprops__btn--danger {
+  color: var(--danger);
+}
+.robotprops__btn--danger:hover {
+  color: #fff;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+/* Pose editor (#312) — the retired sidebar's joint sliders live here now. */
+.robotprops__poserow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+/* "Live ●" — a running program's servos are driving the joints (#414). Green
+   reads on both the dark and the parchment (light) theme. */
+.robotprops__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #2f9e5b;
+}
+.robotprops__live-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #34c46b;
+  box-shadow: 0 0 0 2px rgba(52, 196, 107, 0.28);
+  animation: robotprops-livepulse 1.1s ease-in-out infinite;
+}
+@keyframes robotprops-livepulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+/* Per-joint include checkbox in the capture list (#414). */
+.robotprops__poj-inc {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.robotprops__poj-inc input {
+  margin: 0;
+  accent-color: var(--accent, #d6a23f);
+  cursor: pointer;
+}
+/* An excluded joint is dimmed — it won't be written to the pose. */
+.robotprops__poj--excluded {
+  opacity: 0.45;
+}
+.robotprops__poses-joints {
+  display: flex;
+  flex-direction: column;
+  gap: 0.22rem;
+  max-height: 15rem;
+  overflow-y: auto;
+  margin: 0.15rem 0 0.35rem;
+}
+/* Each joint: a head row (name + editable value) then a FULL-WIDTH slider below, so
+   the slider isn't squashed into a sliver by the narrow dialog (#312). */
+.robotprops__poj {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.1rem 0;
+}
+.robotprops__poj-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.robotprops__poj-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.62rem;
+  color: var(--text, #cdd2d9);
+}
+.robotprops__poj-slider {
+  width: 100%;
+  accent-color: var(--accent, #d6a23f);
+}
+.robotprops__poj-valwrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  gap: 0.15rem;
+}
+.robotprops__poj-num {
+  width: 3rem;
+  box-sizing: border-box;
+  text-align: right;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.08rem 0.2rem;
+  font-variant-numeric: tabular-nums;
+}
+.robotprops__poj-unit {
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robotprops__poj-val {
+  flex: 0 0 auto;
+  text-align: right;
+  font-size: 0.6rem;
+  color: var(--text-muted, #9aa0a6);
+  font-variant-numeric: tabular-nums;
+}
+.robotprops__poj--mimic .robotprops__poj-mimic {
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+  font-style: italic;
+}
+.robotprops__savepose {
+  width: 100%;
+  margin-top: 0.15rem;
+}
