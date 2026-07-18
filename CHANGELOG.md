@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-07-18
+
 ### Added
 - **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**
   A new 🎯 toggle drops a draggable end-effector goal on the selected chain;
@@ -2752,7 +2754,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.0...HEAD
+[0.33.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...v0.32.0
 [0.31.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.30.0...v0.31.0
 [0.30.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.29.0...v0.30.0
