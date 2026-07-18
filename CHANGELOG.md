@@ -13,6 +13,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   actual warnings and status messages. Some tips link to docs.snakie.org
   articles (opened in your browser). The list lives in a plain YAML file so
   it's easy to extend, and a **Settings → Appearance** toggle turns tips off.
+- **ESP32/ESP8266 firmware flashing in the browser (Web W3, #284, epic #267).**
+  Outside the Electron desktop app — e.g. a future web build — the Flash
+  MicroPython firmware dialog now flashes ESP32/ESP8266 boards entirely
+  client-side over the **Web Serial API** via Espressif's official
+  [`esptool-js`](https://github.com/espressif/esptool-js), with no local
+  process or `esptool` install required: pick a local `.bin` file, click
+  Flash, choose the board's serial port when the browser prompts, and watch
+  the same live log + progress bar the desktop flasher shows. This lands
+  first (of a 3-part split for #284) since it needs no other web-track work;
+  the desktop Electron flashing path (esptool shell-out, UF2/DAPLink drive
+  copy) is unchanged. Known limitations for this round, to close in
+  follow-ups: RP2040/micro:bit browser flashing and a browser-native firmware
+  catalog download aren't available yet (the board picker and catalog tab
+  are hidden outside Electron accordingly).
+- **Desktop-only chrome hidden outside Electron (Web W3, #284, epic #267).**
+  The Source Control and Plugins views — both need a real filesystem and a
+  spawned local process, neither available in a browser tab — are now hidden
+  from the activity bar and, as a defensive fallback, show a short "desktop
+  app only" notice instead of a broken panel if somehow selected. Backed by a
+  new shared `isElectron()`/`hasWebSerial()`/`hasWebUSB()`/
+  `hasFileSystemAccess()` capability-detection module, reused by the ESP
+  browser-flashing work above and by upcoming micro:bit/Pico web flashing.
+>>>>>>> origin/master
 - **Board View works by touch — iPad-friendly wiring (part of #525).** On a
   touchscreen, tapping the board or a part now reveals its pin capability
   chips (they stay up until you tap elsewhere — touch has no hover), wires can
