@@ -17,6 +17,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Same manifest reconciliation either way, so update checks behave
   identically regardless of which path installed a library. Desktop installs
   are unaffected wherever `git` is present (the common case).
+- **skeleton.json — auto-generated device-side skeleton (#537, epic #533 §2).**
+  Saving the project URDF (or robot.yml — servo bindings live there) now
+  regenerates `<project>/skeleton.json` automatically: per joint its name, type
+  (revolute/continuous/prismatic/fixed), parent/child link, origin, bone length
+  (mm, joint-origin → joint-origin), axis, min/max limits from the URDF
+  `<limit>` (deg / mm), and the bound servo (pin + calibration) where the
+  project maps one — plus an extensible per-link section (masses land there in
+  #535). JSON so MicroPython parses it natively; the embedded `urdf_hash` +
+  `schema_version` let Snakie warn "skeleton out of date — sync?" at connect
+  time when the board's copy is stale, and file sync (#178) pushes it like any
+  project file. The URDF stays the single source of truth — skeleton.json is
+  derived, never hand-edited.
+- **Bone Mode in Robot View (#536, epic #533 §1).** A 🦴 toggle on the zoom
+  toolbar ghosts the robot (solid grey at ~80% transparency) and overlays its
+  skeleton: coloured joint-to-joint bones labelled with their length in mm,
+  never occluded by the mesh; a compass at every revolute joint (arc from min
+  to max limit, needle at the live angle, readout that shifts green → amber →
+  red approaching a limit); a linear ruler gauge for prismatic joints; and a
+  friendly error when joint names aren't unique. The overlay tracks sliders,
+  Motion Studio playback and live servo telemetry frame-by-frame.
 - **Discovery tips in the status bar (#434).** When the status bar has nothing
   real to say, it now shows a rotating 💡 tip about a Snakie feature — fading
   in/out over a second, changing every 5–10 minutes, and always giving way to

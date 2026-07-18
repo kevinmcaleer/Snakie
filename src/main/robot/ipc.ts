@@ -13,6 +13,8 @@ import { basename, dirname, extname, join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
+import { readRobotModel } from '../../shared/krf'
+import { generateSkeleton, skeletonJson } from '../../shared/skeleton'
 import { resolvePartAsset } from '../parts/library'
 
 /** Result of importing a mesh: the path relative to the URDF's folder, or a
@@ -107,6 +109,25 @@ async function robotPath(folder?: string): Promise<string> {
   return join(app.getPath('userData'), 'robot.yml')
 }
 
+/**
+ * Regenerate `<folder>/skeleton.json` from the project URDF after a robot.yml
+ * save (#537) — servo↔joint bindings live in robot.yml, so binding edits must
+ * refresh the skeleton's servo section. Best-effort: a project without a folder
+ * or a linked URDF simply has no skeleton, and failure never breaks the save.
+ */
+async function regenerateSkeleton(folder: string | undefined, def: RobotDefinition): Promise<void> {
+  const urdfRel = readRobotModel(def)?.urdf
+  if (!folder || !folder.trim() || !urdfRel) return
+  try {
+    if (!(await fsp.stat(folder)).isDirectory()) return
+    const urdf = await fsp.readFile(join(folder, urdfRel), 'utf-8')
+    const json = skeletonJson(generateSkeleton(urdf, readRobotModel(def)?.servoJointMap))
+    await fsp.writeFile(join(folder, 'skeleton.json'), json, 'utf-8')
+  } catch {
+    // No URDF yet / unreadable — nothing to derive.
+  }
+}
+
 /** Serialise writes per-path so two overlapping saves can't interleave and
  *  truncate each other mid-write (writeFile truncates-then-writes). */
 const writeChains = new Map<string, Promise<unknown>>()
@@ -153,6 +174,7 @@ export function registerRobotIpc(): void {
       try {
         const path = await robotPath(args?.folder)
         await queuedWrite(path, robotToYaml(args.def))
+        await regenerateSkeleton(args?.folder, args.def) // #537 — bindings feed skeleton.json
         // Edits happen in the Board View window; tell the OTHER windows so e.g. the
         // main window's parts-import banner re-reads (a removed part clears its nag).
         for (const w of BrowserWindow.getAllWindows()) {
