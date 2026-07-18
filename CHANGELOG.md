@@ -21,6 +21,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `snakie_motion` rig (degrading gracefully when none is present). Runs
   unmodified on CPython (all hardware behind `snakie_motion`/`instruments`'
   `machine` guard) and uses only `math`/`json`, so it's Pico-friendly.
+- **Community parts install fallback when `git` isn't available (Web W3,
+  #284, epic #267).** Installing/updating a library from the Community Parts
+  registry normally does a shallow `git clone`; Snakie now probes once
+  whether `git` is on `PATH` and, if not, transparently falls back to
+  downloading the repo as a GitHub tarball
+  (`codeload.github.com/.../tar.gz/HEAD`, always the current default branch)
+  and extracting it straight into the library folder instead of failing.
+  Same manifest reconciliation either way, so update checks behave
+  identically regardless of which path installed a library. Desktop installs
+  are unaffected wherever `git` is present (the common case).
+- **Robot build checklist in the Learn panel (#436).** A completion checklist
+  at the top of the Learn gallery walks a maker through building a robot
+  end-to-end: pick a board, add a servo, import an STL, create a joint, bind a
+  servo to it, save poses, write the app, and run it on the simulator. Six
+  steps tick themselves live from project state (robot.yml, the linked URDF
+  and the parts library); "write your robot app" and "run it on the simulator"
+  latch on when observed (an open servo-driving `.py`; a Simulated-device
+  connection) with a manual checkbox fallback, remembered per project.
 - **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
   planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
   deps): an exact law-of-cosines 2-bone solver that picks between both elbow

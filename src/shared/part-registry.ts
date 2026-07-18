@@ -10,6 +10,8 @@
  *  - {@link compareVersions}/{@link isNewer} — SemVer-ish ordering.
  *  - {@link diffInstalled}  — which installed libraries have a newer version.
  *  - {@link availableToInstall} — registry entries not yet installed.
+ *  - {@link githubArchiveUrl} — derive a codeload tarball URL from a repo URL,
+ *    for the zip/tarball install fallback (#284) used when git isn't usable.
  */
 
 import type {
@@ -197,4 +199,32 @@ export function availableToInstall(
 ): RegistryEntry[] {
   const have = new Set(installed.map((l) => String(l.id ?? '').toLowerCase()))
   return registry.libraries.filter((e) => !have.has(e.id.toLowerCase()))
+}
+
+/**
+ * Derive a `codeload.github.com` tarball URL from a repo's `https?://` URL,
+ * for the zip/tarball install fallback (#284) used when `git` isn't usable.
+ * Only GitHub repos are supported (same hosting the registry itself expects);
+ * returns `null` for anything else, or for a URL that doesn't look like
+ * `github.com/<owner>/<repo>`.
+ *
+ * The `/tar.gz/HEAD` form always resolves to the repo's *current default
+ * branch* without Snakie needing to look it up first (unlike
+ * `/archive/refs/heads/<branch>.tar.gz`, which requires knowing the branch
+ * name up front).
+ */
+export function githubArchiveUrl(repoUrl: string): string | null {
+  let parsed: URL
+  try {
+    parsed = new URL(String(repoUrl ?? '').trim())
+  } catch {
+    return null
+  }
+  if (!/^(www\.)?github\.com$/i.test(parsed.hostname)) return null
+  const segments = parsed.pathname.split('/').filter((s) => s.length > 0)
+  if (segments.length < 2) return null
+  const owner = segments[0]
+  const repo = segments[1].replace(/\.git$/i, '')
+  if (!owner || !repo) return null
+  return `https://codeload.github.com/${owner}/${repo}/tar.gz/HEAD`
 }
