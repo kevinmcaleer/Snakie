@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Community parts install fallback when `git` isn't available (Web W3,
+  #284, epic #267).** Installing/updating a library from the Community Parts
+  registry normally does a shallow `git clone`; Snakie now probes once
+  whether `git` is on `PATH` and, if not, transparently falls back to
+  downloading the repo as a GitHub tarball
+  (`codeload.github.com/.../tar.gz/HEAD`, always the current default branch)
+  and extracting it straight into the library folder instead of failing.
+  Same manifest reconciliation either way, so update checks behave
+  identically regardless of which path installed a library. Desktop installs
+  are unaffected wherever `git` is present (the common case).
 - **Robot build checklist in the Learn panel (#436).** A completion checklist
   at the top of the Learn gallery walks a maker through building a robot
   end-to-end: pick a board, add a servo, import an STL, create a joint, bind a

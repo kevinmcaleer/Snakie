@@ -4,6 +4,7 @@ import {
   bumpPatch,
   compareVersions,
   diffInstalled,
+  githubArchiveUrl,
   isNewer,
   parseRegistry
 } from '../src/shared/part-registry'
@@ -133,5 +134,49 @@ describe('diffInstalled / availableToInstall', () => {
   it('lists registry entries not yet installed', () => {
     const avail = availableToInstall(installed, registry)
     expect(avail.map((e) => e.id)).toEqual(['adafruit'])
+  })
+})
+
+describe('githubArchiveUrl', () => {
+  it('derives a codeload tar.gz URL from a plain github.com repo URL', () => {
+    expect(githubArchiveUrl('https://github.com/adafruit/Adafruit_CircuitPython_BME280')).toBe(
+      'https://codeload.github.com/adafruit/Adafruit_CircuitPython_BME280/tar.gz/HEAD'
+    )
+  })
+
+  it('strips a trailing .git suffix', () => {
+    expect(githubArchiveUrl('https://github.com/octocat/Hello-World.git')).toBe(
+      'https://codeload.github.com/octocat/Hello-World/tar.gz/HEAD'
+    )
+  })
+
+  it('tolerates a trailing slash and extra path segments', () => {
+    expect(githubArchiveUrl('https://github.com/octocat/Hello-World/')).toBe(
+      'https://codeload.github.com/octocat/Hello-World/tar.gz/HEAD'
+    )
+    expect(githubArchiveUrl('https://github.com/octocat/Hello-World/tree/main')).toBe(
+      'https://codeload.github.com/octocat/Hello-World/tar.gz/HEAD'
+    )
+  })
+
+  it('accepts a www.github.com host', () => {
+    expect(githubArchiveUrl('https://www.github.com/octocat/Hello-World')).toBe(
+      'https://codeload.github.com/octocat/Hello-World/tar.gz/HEAD'
+    )
+  })
+
+  it('returns null for non-GitHub hosts', () => {
+    expect(githubArchiveUrl('https://gitlab.com/octocat/Hello-World')).toBeNull()
+    expect(githubArchiveUrl('https://example.com/octocat/Hello-World')).toBeNull()
+  })
+
+  it('returns null for a github.com URL missing an owner or repo', () => {
+    expect(githubArchiveUrl('https://github.com/octocat')).toBeNull()
+    expect(githubArchiveUrl('https://github.com/')).toBeNull()
+  })
+
+  it('returns null for garbage / non-URL input', () => {
+    expect(githubArchiveUrl('not a url')).toBeNull()
+    expect(githubArchiveUrl('')).toBeNull()
   })
 })
