@@ -1,0 +1,145 @@
+/* Robot build checklist (#436) — the card at the top of the Learn panel's
+   gallery. Follows the Tutorials panel look: theme tokens throughout (reads in
+   both skins), the friendly learn sans for prose, mono only for the counter. */
+
+.bcl {
+  margin: 10px 14px 4px;
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--accent);
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  overflow: hidden;
+}
+
+.bcl__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.bcl__head-emoji {
+  font-size: 18px;
+  line-height: 1;
+}
+.bcl__head-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+.bcl__count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.bcl__count--done {
+  color: var(--success);
+  font-weight: 700;
+}
+.bcl__chev {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.bcl__list {
+  list-style: none;
+  margin: 0;
+  padding: 0 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bcl__row {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+}
+.bcl__row--done {
+  opacity: 0.82;
+}
+
+/* Auto-detected steps: a numbered pip that flips to a green tick. */
+.bcl__tick {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-sunken);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+.bcl__row--done .bcl__tick {
+  border-color: var(--success);
+  background: var(--success);
+  color: var(--accent-contrast);
+  font-weight: 700;
+}
+
+/* Manual (observed) steps: a real checkbox the maker can tick. */
+.bcl__check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 1px 0;
+  accent-color: var(--success);
+  cursor: pointer;
+}
+
+.bcl__body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 1px;
+}
+.bcl__row-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.bcl__row--done .bcl__row-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--success);
+}
+.bcl__where {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--bg-sunken);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.bcl__hint {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.bcl__congrats {
+  margin: 0;
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+}

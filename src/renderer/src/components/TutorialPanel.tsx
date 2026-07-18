@@ -17,6 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTutorials } from '../store/tutorials'
 import { useWorkspace } from '../store/workspace'
 import { Markdown } from './Markdown'
+import { BuildChecklist } from './BuildChecklist'
 import type { Course, CourseTrack } from '../lib/courses'
 import './Tutorials.css'
 
@@ -55,6 +56,7 @@ export function TutorialPanel(): JSX.Element {
           <h1 className="tp__title">Learn Snakie</h1>
           <p className="tp__sub">Pick a project and follow along — each runs on the simulator, no hardware needed.</p>
         </div>
+        <BuildChecklist />
         {courses.length === 0 && <p className="tp__empty">No tutorials are bundled in this build yet.</p>}
         {tracks.map((t) => {
           const list = courses.filter((c) => c.track === t)
