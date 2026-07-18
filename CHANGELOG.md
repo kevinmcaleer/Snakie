@@ -17,6 +17,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Same manifest reconciliation either way, so update checks behave
   identically regardless of which path installed a library. Desktop installs
   are unaffected wherever `git` is present (the common case).
+- **Robot build checklist in the Learn panel (#436).** A completion checklist
+  at the top of the Learn gallery walks a maker through building a robot
+  end-to-end: pick a board, add a servo, import an STL, create a joint, bind a
+  servo to it, save poses, write the app, and run it on the simulator. Six
+  steps tick themselves live from project state (robot.yml, the linked URDF
+  and the parts library); "write your robot app" and "run it on the simulator"
+  latch on when observed (an open servo-driving `.py`; a Simulated-device
+  connection) with a manual checkbox fallback, remembered per project.
+- **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
+  planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
+  deps): an exact law-of-cosines 2-bone solver that picks between both elbow
+  configurations (limits first, then closest to the current pose), a FABRIK
+  solver for 3+ bone chains with CCD refinement, an analytic two-group
+  fallback and a perturbed-seed retry for the classic slow-convergence
+  singularities, joint-limit clamping throughout (poses never fold through a
+  limit), and a status that distinguishes `reached` / `out_of_reach` /
+  `blocked_by_limits`. Ships 35 language-neutral test vectors in
+  `test/fixtures/ik-vectors.json` (format documented in
+  `src/shared/ik/README.md`) that the future MicroPython `snakie_ik.py`
+  (#539) must also pass, plus a vitest suite running every vector and
+  seeded property-style edge cases.
 - **skeleton.json — auto-generated device-side skeleton (#537, epic #533 §2).**
   Saving the project URDF (or robot.yml — servo bindings live there) now
   regenerates `<project>/skeleton.json` automatically: per joint its name, type
