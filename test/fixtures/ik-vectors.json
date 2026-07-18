@@ -1,0 +1,391 @@
+{
+  "format": "snakie-ik-vectors",
+  "version": 1,
+  "docs": "Language-neutral IK solver test vectors (epic #533 section 3). Format and runner semantics: src/shared/ik/README.md. Angles in radians, normalised to [-PI, PI); planar XY chains with the base at the origin; angles[i] is the RELATIVE angle of joint i. Both the TypeScript solver (src/shared/ik) and the MicroPython solver (snakie_ik.py, #539) must pass every case.",
+  "cases": [
+    {
+      "id": "2bone-straight-reach",
+      "description": "Trivial: target straight out at full extension",
+      "input": { "boneLengths": [1, 1], "target": [2, 0] },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 0],
+        "angleTolerance": 1e-4,
+        "position": [2, 0],
+        "positionTolerance": 1e-6
+      }
+    },
+    {
+      "id": "2bone-right-angle-elbow-up",
+      "description": "Two solutions exist; from the zero pose the elbow-up (+acos) configuration is closer",
+      "input": { "boneLengths": [1, 1], "currentAngles": [0, 0], "target": [1, 1] },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-elbow-follows-current",
+      "description": "Same target, but the current pose favours the elbow-down (-acos) configuration",
+      "input": { "boneLengths": [1, 1], "currentAngles": [1.5, -1.4], "target": [1, 1] },
+      "expected": {
+        "status": "reached",
+        "angles": [1.5707963267948966, -1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-elbow-forced-up-by-limits",
+      "description": "Current pose favours elbow-down, but the elbow limit [0, PI] only admits elbow-up",
+      "input": {
+        "boneLengths": [1, 1],
+        "limits": [
+          [-3.141592653589793, 3.141592653589793],
+          [0, 3.141592653589793]
+        ],
+        "currentAngles": [1.5, -1.4],
+        "target": [1, 1]
+      },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-elbow-forced-down-by-limits",
+      "description": "Current pose favours elbow-up, but the elbow limit [-PI, 0] only admits elbow-down",
+      "input": {
+        "boneLengths": [1, 1],
+        "limits": [
+          [-3.141592653589793, 3.141592653589793],
+          [-3.141592653589793, 0]
+        ],
+        "currentAngles": [0, 0],
+        "target": [1, 1]
+      },
+      "expected": {
+        "status": "reached",
+        "angles": [1.5707963267948966, -1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-boundary-of-reach",
+      "description": "Target exactly on the outer reach circle: straight arm",
+      "input": { "boneLengths": [1, 1], "target": [0, 2] },
+      "expected": {
+        "status": "reached",
+        "angles": [1.5707963267948966, 0],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-near-boundary",
+      "description": "Just inside the outer reach circle (cancellation-prone; status and FK only)",
+      "input": { "boneLengths": [1, 1], "target": [1.9999, 0], "tolerance": 0.001 },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "2bone-singularity-from-bent",
+      "description": "Straight-line singularity (unique solution) approached from a bent pose",
+      "input": { "boneLengths": [1, 1], "currentAngles": [0.3, 2.0], "target": [2, 0] },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 0],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-unequal-bones",
+      "description": "Unequal bone lengths, exact right-angle elbow",
+      "input": { "boneLengths": [2, 1], "target": [2, 1] },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "2bone-target-at-base",
+      "description": "Zero-distance target with equal bones: fold back onto the base (angles are degenerate; status and FK only)",
+      "input": { "boneLengths": [1, 1], "target": [0, 0] },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "2bone-out-of-reach-straight",
+      "description": "Beyond total length on the +X axis: best effort points straight at it",
+      "input": { "boneLengths": [1, 1], "target": [3, 0] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0, 0],
+        "angleTolerance": 1e-4,
+        "position": [2, 0],
+        "positionTolerance": 1e-6
+      }
+    },
+    {
+      "id": "2bone-out-of-reach-diagonal",
+      "description": "Beyond total length on the diagonal: best effort aims along atan2(3,3)",
+      "input": { "boneLengths": [1, 1], "target": [3, 3] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0.7853981633974483, 0],
+        "angleTolerance": 1e-4,
+        "position": [1.4142135623730951, 1.4142135623730951],
+        "positionTolerance": 1e-5
+      }
+    },
+    {
+      "id": "2bone-inner-dead-zone",
+      "description": "Target inside the annulus |L1-L2|: geometrically unreachable, folds fully back",
+      "input": { "boneLengths": [2, 1], "target": [0.5, 0] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0, -3.141592653589793],
+        "angleTolerance": 1e-4,
+        "position": [1, 0],
+        "positionTolerance": 1e-5
+      }
+    },
+    {
+      "id": "2bone-blocked-by-limits",
+      "description": "Reachable geometrically (d=1.5 < 2) but tight limits pin both joints at +0.2",
+      "input": {
+        "boneLengths": [1, 1],
+        "limits": [
+          [-0.2, 0.2],
+          [-0.2, 0.2]
+        ],
+        "target": [0, 1.5]
+      },
+      "expected": {
+        "status": "blocked_by_limits",
+        "angles": [0.2, 0.2],
+        "angleTolerance": 1e-6
+      }
+    },
+    {
+      "id": "1bone-aim",
+      "description": "Single bone: aim at a target on its circle",
+      "input": { "boneLengths": [1], "target": [0, 1] },
+      "expected": {
+        "status": "reached",
+        "angles": [1.5707963267948966],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "1bone-radius-mismatch",
+      "description": "Single bone: target off its circle is out of reach; best effort aims at it",
+      "input": { "boneLengths": [1], "target": [2, 0] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0],
+        "angleTolerance": 1e-4,
+        "position": [1, 0],
+        "positionTolerance": 1e-6
+      }
+    },
+    {
+      "id": "guard-zero-length-bone",
+      "description": "Zero-length bones are invalid",
+      "input": { "boneLengths": [1, 0], "target": [1, 0] },
+      "expected": { "throws": "invalid_bone_length" }
+    },
+    {
+      "id": "guard-negative-bone",
+      "description": "Negative bone lengths are invalid",
+      "input": { "boneLengths": [-1, 1], "target": [1, 0] },
+      "expected": { "throws": "invalid_bone_length" }
+    },
+    {
+      "id": "guard-empty-chain",
+      "description": "A chain with no bones is invalid",
+      "input": { "boneLengths": [], "target": [1, 0] },
+      "expected": { "throws": "invalid_chain" }
+    },
+    {
+      "id": "guard-invalid-limits",
+      "description": "A limit with min > max is invalid (null entries are fine)",
+      "input": {
+        "boneLengths": [1, 1],
+        "limits": [[0.5, -0.5], null],
+        "target": [1, 0]
+      },
+      "expected": { "throws": "invalid_limits" }
+    },
+    {
+      "id": "guard-angle-count-mismatch",
+      "description": "currentAngles must match the bone count",
+      "input": { "boneLengths": [1, 1], "currentAngles": [0], "target": [1, 0] },
+      "expected": { "throws": "invalid_angles" }
+    },
+    {
+      "id": "fabrik-3bone-reach",
+      "description": "3-bone chain, comfortably reachable target",
+      "input": { "boneLengths": [1, 1, 1], "target": [1.5, 1.5] },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-3bone-seed-already-at-target",
+      "description": "The straight current pose already touches the boundary target: returned unchanged",
+      "input": { "boneLengths": [1, 1, 1], "currentAngles": [0, 0, 0], "target": [3, 0] },
+      "expected": {
+        "status": "reached",
+        "angles": [0, 0, 0],
+        "angleTolerance": 1e-9
+      }
+    },
+    {
+      "id": "fabrik-3bone-boundary-from-bent",
+      "description": "Boundary-of-reach target from a bent pose (slow-convergence singularity; status and FK only)",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "currentAngles": [0.4, -0.2, 0.3],
+        "target": [3, 0],
+        "tolerance": 0.001
+      },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-3bone-fold-to-base",
+      "description": "Zero-distance target: the chain must fold into a closed triangle",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "currentAngles": [0, 0, 0],
+        "target": [0, 0],
+        "tolerance": 0.001
+      },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-3bone-near-base",
+      "description": "Target close to the base from a bent pose",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "currentAngles": [0.3, 0.5, 0.5],
+        "target": [0.2, 0.2]
+      },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-3bone-out-of-reach",
+      "description": "Beyond total length: stretched straight towards the target",
+      "input": { "boneLengths": [1, 1, 1], "currentAngles": [0.5, 0.5, 0.5], "target": [4, 0] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0, 0, 0],
+        "angleTolerance": 1e-6,
+        "position": [3, 0],
+        "positionTolerance": 1e-6
+      }
+    },
+    {
+      "id": "fabrik-3bone-out-of-reach-diagonal",
+      "description": "Beyond total length straight up: stretched along +Y",
+      "input": { "boneLengths": [1, 1, 1], "target": [0, 5] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [1.5707963267948966, 0, 0],
+        "angleTolerance": 1e-6,
+        "position": [0, 3],
+        "positionTolerance": 1e-6
+      }
+    },
+    {
+      "id": "fabrik-3bone-out-of-reach-limited",
+      "description": "Out of reach AND limit-clamped: geometric impossibility wins the status; base joint pins at +0.5",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "limits": [
+          [-0.5, 0.5],
+          [-0.5, 0.5],
+          [-0.5, 0.5]
+        ],
+        "target": [0, 5]
+      },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [0.5, 0, 0],
+        "angleTolerance": 1e-6,
+        "position": [2.6327476856711183, 1.438276615812609],
+        "positionTolerance": 1e-5
+      }
+    },
+    {
+      "id": "fabrik-3bone-blocked-by-limits",
+      "description": "Reachable geometrically (d=2 < 3) but +/-0.3 limits pin every joint at max",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "limits": [
+          [-0.3, 0.3],
+          [-0.3, 0.3],
+          [-0.3, 0.3]
+        ],
+        "target": [0, 2]
+      },
+      "expected": {
+        "status": "blocked_by_limits",
+        "angles": [0.3, 0.3, 0.3],
+        "angleTolerance": 1e-4
+      }
+    },
+    {
+      "id": "fabrik-3bone-limited-reach",
+      "description": "Limits active (last joint rides its +1.2 clamp) but the target is still reachable",
+      "input": {
+        "boneLengths": [1, 1, 1],
+        "limits": [
+          [-1.2, 1.2],
+          [-1.2, 1.2],
+          [-1.2, 1.2]
+        ],
+        "target": [1.5, 1.5],
+        "tolerance": 0.001
+      },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-4bone-reach",
+      "description": "4-bone chain with mixed lengths, reachable target",
+      "input": { "boneLengths": [1, 0.8, 0.6, 0.4], "target": [1.2, 1.0] },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-4bone-limited-reach",
+      "description": "4-bone chain with +/-1.2 limits, reachable target",
+      "input": {
+        "boneLengths": [1, 1, 1, 1],
+        "limits": [
+          [-1.2, 1.2],
+          [-1.2, 1.2],
+          [-1.2, 1.2],
+          [-1.2, 1.2]
+        ],
+        "target": [2, 2],
+        "tolerance": 0.001
+      },
+      "expected": { "status": "reached" }
+    },
+    {
+      "id": "fabrik-4bone-out-of-reach",
+      "description": "4-bone chain, target beyond total length on the down-diagonal",
+      "input": { "boneLengths": [1, 0.8, 0.6, 0.4], "target": [3, -3] },
+      "expected": {
+        "status": "out_of_reach",
+        "angles": [-0.7853981633974483, 0, 0, 0],
+        "angleTolerance": 1e-6,
+        "position": [1.9798989873223332, -1.9798989873223332],
+        "positionTolerance": 1e-5
+      }
+    },
+    {
+      "id": "fabrik-5bone-reach",
+      "description": "5-bone chain of short equal bones, reachable target",
+      "input": { "boneLengths": [0.5, 0.5, 0.5, 0.5, 0.5], "target": [1.0, 0.8] },
+      "expected": { "status": "reached" }
+    }
+  ]
+}
