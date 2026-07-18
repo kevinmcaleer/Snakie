@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Robot build checklist in the Learn panel (#436).** A completion checklist
+  at the top of the Learn gallery walks a maker through building a robot
+  end-to-end: pick a board, add a servo, import an STL, create a joint, bind a
+  servo to it, save poses, write the app, and run it on the simulator. Six
+  steps tick themselves live from project state (robot.yml, the linked URDF
+  and the parts library); "write your robot app" and "run it on the simulator"
+  latch on when observed (an open servo-driving `.py`; a Simulated-device
+  connection) with a manual checkbox fallback, remembered per project.
 - **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
   planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
   deps): an exact law-of-cosines 2-bone solver that picks between both elbow
