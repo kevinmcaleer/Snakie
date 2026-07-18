@@ -1,0 +1,411 @@
+/* ROBOT VIEW (#311) — the 3D URDF panel. Prefix `robotview__`. */
+
+.robotview {
+  position: relative;
+  display: flex;
+  flex-direction: column; /* [main row] over [timeline dock] */
+  height: 100%;
+  min-height: 0;
+  background: #191a1d;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+}
+
+/* The main row: 3D stage + the pose sidebar beside it. */
+.robotview__main {
+  display: flex;
+  flex-direction: row;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The 3D area (canvas + overlays); the pose sidebar sits beside it. */
+.robotview__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.robotview__canvas {
+  position: absolute;
+  inset: 0;
+}
+.robotview__canvas canvas {
+  display: block;
+}
+
+/* Centred overlay: empty-state prompt or an error. */
+.robotview__overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  text-align: center;
+  padding: 1.5rem;
+  color: var(--text-muted, #8b919b);
+  pointer-events: none;
+}
+
+.robotview__overlay-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text, #d6dae0);
+}
+.robotview__overlay-msg {
+  margin: 0;
+  font-size: 0.72rem;
+  max-width: 24rem;
+}
+
+.robotview__overlay--error .robotview__overlay-title {
+  color: #e0774a;
+}
+
+/* Bottom-left readout. */
+.robotview__hud {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.55rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(20, 21, 24, 0.72);
+  border: 1px solid var(--border, #2c2e33);
+  font-size: 0.64rem;
+  color: var(--text, #cdd2d9);
+  pointer-events: none;
+}
+/* Light theme: parchment pill so the (dark) text is readable, not black-on-dark. */
+:root[data-theme='skeuomorph'] .robotview__hud {
+  background: rgba(231, 226, 211, 0.86);
+}
+.robotview__hud strong {
+  color: var(--accent-ink);
+}
+.robotview__hud-hint {
+  color: var(--text-muted, #7d838d);
+}
+
+/* Navigation zone — top-right of the stage: the ViewCube + a hover-revealed
+   Home button. */
+/* The cube sits tight in the top-right corner; the Home button + projection
+   dropdown are positioned around it so they don't push it down. */
+.robotview__navzone {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 30;
+  width: 144px;
+  /* Taller than the 144px cube so the projection dropdown below it lives INSIDE
+     the hover box — otherwise moving the pointer down to click it exits the zone,
+     :hover drops, and the dropdown vanishes before the click lands. */
+  height: 178px;
+}
+.robotview__home {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 2; /* above the cube canvas, so clicks land on the button */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--text, #cdd2d9);
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  /* Revealed + clickable only on nav-zone hover; click-through otherwise so it
+     doesn't block the cube corner it overlaps. */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.robotview__navzone:hover .robotview__home {
+  opacity: 1;
+  pointer-events: auto;
+}
+.robotview__home:hover {
+  color: #c8a24a;
+  border-color: #5a606b;
+}
+:root[data-theme='skeuomorph'] .robotview__home {
+  background: rgba(231, 226, 211, 0.92);
+}
+/* Compact (mini dock) home button — top-right, clear of the New/Pop-out actions
+   on the left. Always visible (the mini view has no hover nav zone). */
+.robotview__minihome {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotview__minihome {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__minihome:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+/* Saved-pose preview dropdown in the compact/docked viewer (#409). Top-right, just
+   LEFT of the 24px Home button. Its width is capped so, growing leftward from the
+   right anchor, it can never reach the top-left New/Open/Pop-out action row on a
+   narrow dock. Mirrors the mini-home chrome: dark glass + skeuomorph parchment. */
+.robotview__minipose {
+  position: absolute;
+  top: 0.35rem;
+  right: calc(0.35rem + 24px + 0.3rem);
+  z-index: 2;
+  /* Reserve ~18rem at the left for the New/Open/Pop-out row (its emoji/symbol glyphs
+     render wide) + this control's right offset, so the dropdown's left edge stays
+     clear of the Pop-out button even on a narrow dock. */
+  max-width: min(9rem, calc(100% - 18rem));
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.18rem 0.3rem;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotview__minipose {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__minipose:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+/* The ViewCube's own canvas is appended here (2× — was 96px). */
+.robotview__viewcube {
+  width: 144px;
+  height: 144px;
+  /* Shadow drops down-back, consistent with the cube being lit from lower-front. */
+  filter: drop-shadow(0 5px 9px rgba(0, 0, 0, 0.5));
+}
+.robotview__viewcube canvas {
+  display: block;
+}
+/* Projection dropdown beneath the cube's bottom-right. Collapsed to just the ▾
+   arrow (the value text is clipped by the narrow width); revealed on nav-zone
+   hover like the Home button; clicking opens the full native option list. */
+.robotview__proj {
+  position: absolute;
+  /* Just below the 144px cube, but WITHIN the (178px) nav-zone box so the hover
+     region is continuous from cube → dropdown. */
+  top: 148px;
+  right: 0;
+  width: 30px;
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 6px;
+  padding: 0.22rem 0.15rem;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.robotview__navzone:hover .robotview__proj,
+.robotview__proj:focus {
+  opacity: 1;
+  pointer-events: auto;
+}
+:root[data-theme='skeuomorph'] .robotview__proj {
+  background: rgba(231, 226, 211, 0.92);
+  color: var(--text, #34373d);
+}
+
+/* Bottom-right zoom cluster — identical to the node-graph viewport control
+   (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
+.robotview__zoom {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 12px;
+  background: rgba(31, 32, 36, 0.92);
+  border: 1px solid #3a3d44;
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(6px);
+  user-select: none;
+}
+.robotview__zbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 6px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 17px;
+  line-height: 1;
+  color: #c2c7cf;
+  background: linear-gradient(180deg, #2c2f35, #232529);
+  border: 1px solid #3d414a;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.robotview__zbtn:hover {
+  color: #fff;
+  border-color: #5a606b;
+  background: linear-gradient(180deg, #34373e, #292b30);
+}
+.robotview__zbtn:active {
+  background: #202227;
+}
+.robotview__zbtn--pct {
+  min-width: 48px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.robotview__zsep {
+  width: 1px;
+  height: 22px;
+  margin: 0 2px;
+  background: #3d414a;
+  flex: 0 0 auto;
+}
+
+/* A non-blocking banner when one or more meshes couldn't load (#319). Sits left
+   of the navigation cube (top-right). */
+/* Stack the mesh notes (couldn't-load warning + copy-external offer) top-right so
+   they never overlap; the container owns the positioning. */
+.robotview__notes {
+  position: absolute;
+  right: 216px;
+  top: 0.55rem;
+  max-width: 70%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+  z-index: 5;
+  /* Click-through by default (#319) so an orbit/drag started over a note reaches the
+     canvas; only the interactive offer note re-enables pointer-events on itself. */
+  pointer-events: none;
+}
+.robotview__note {
+  padding: 0.3rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(80, 44, 40, 0.82);
+  border: 1px solid #b4544e;
+  font-size: 0.62rem;
+  line-height: 1.35;
+  color: #f2d7d3;
+  pointer-events: none;
+}
+/* The "copy external meshes into the project" offer (#407) — informational (not an
+   error) and interactive, so it overrides the warning tone + pointer-events. Reads
+   in both skins (dark slate + accent border/button). */
+.robotview__note--offer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(28, 32, 38, 0.88);
+  border-color: var(--accent, #c8a24a);
+  color: #e8ecf1;
+  pointer-events: auto;
+}
+.robotview__note-action {
+  flex: none;
+  padding: 0.22rem 0.5rem;
+  border-radius: 5px;
+  border: 1px solid var(--accent, #c8a24a);
+  background: var(--accent, #c8a24a);
+  color: #1a1d22;
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.robotview__note-action:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.robotview__note-action:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Floating status pills (#312) — the save state + measure readout, formerly in the
+   retired pose sidebar. Bottom-centre, over the 3-D stage, in both skins. */
+.robotview__hud-status {
+  position: absolute;
+  left: 50%;
+  bottom: 0.6rem;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 0.35rem;
+  z-index: 5;
+  pointer-events: none;
+}
+.robotview__hud-pill {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.72);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  backdrop-filter: blur(6px);
+}
+:root[data-theme='skeuomorph'] .robotview__hud-pill {
+  color: #2c2a24;
+  background: rgba(246, 242, 232, 0.85);
+}
+
+/* Exploded view (#499) — inline cluster on the zoom toolbar. Theme tokens only
+   so it reads in both the dark and light (skeuomorph) skins. */
+.robotview__explode {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+.robotview__explode input[type='range'] {
+  width: 90px;
+  accent-color: var(--accent);
+}
+.robotview__explode-orbit {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+}
+.robotview__zbtn.is-active {
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}

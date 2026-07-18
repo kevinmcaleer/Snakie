@@ -133,6 +133,10 @@ drivers:
     target: lib/servo.py
     label: Servo driver
 help: help.md
+# A 3-D mesh for the Robot View (#406): dropping this part onto a design also drops
+# this STL into the project URDF as a loose link. Authored in millimetres.
+mesh: model.stl
+meshUnits: mm
 layerVisibility:
   pcb: false
   image: false

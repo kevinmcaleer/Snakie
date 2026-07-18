@@ -8,6 +8,7 @@
 
 import { parse, stringify } from 'yaml'
 import type { RobotConnection, RobotDefinition, RobotNet, RobotPart } from './robot'
+import { sanitiseRobotModel } from './krf'
 
 const NETS: RobotNet[] = ['vcc', 'gnd', 'signal']
 
@@ -64,6 +65,13 @@ export function robotToYaml(def: RobotDefinition): string {
   if (str(def.board)) obj.board = def.board
   if (typeof def.boardX === 'number') obj.boardX = def.boardX
   if (typeof def.boardY === 'number') obj.boardY = def.boardY
+  // The KRF robot MODEL section (URDF link + servo↔joint map + limits + poses,
+  // epic #309), emitted near the TOP of robot.yml — before the (potentially long)
+  // parts/connections lists — so the linked `.urdf` is prominent. Round-trip
+  // through the sanitiser so only clean, non-empty fields are written (and a
+  // legacy wiring-only robot.yml stays untouched).
+  const model = sanitiseRobotModel(def.robot)
+  if (model) obj.robot = model
   obj.parts = (def.parts ?? []).map((p) => {
     const o: Record<string, unknown> = { id: p.id, lib: p.lib, part: p.part }
     if (p.label) o.label = p.label
@@ -100,5 +108,7 @@ export function robotFromYaml(text: string): RobotDefinition {
   const by = num(raw.boardY)
   if (bx !== undefined) def.boardX = bx
   if (by !== undefined) def.boardY = by
+  const model = sanitiseRobotModel(raw.robot)
+  if (model) def.robot = model
   return def
 }

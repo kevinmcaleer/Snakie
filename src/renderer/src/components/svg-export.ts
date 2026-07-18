@@ -150,6 +150,10 @@ const INLINE_PROPS = [
   'stroke-linejoin',
   'stroke-opacity',
   'opacity',
+  // Preserve the blueprint paper's soft-light mottle in exports.
+  'mix-blend-mode',
+  // Preserve CSS-applied filters (e.g. the blueprint grid's ink-on-paper wobble).
+  'filter',
   'color',
   'font-family',
   'font-size',
@@ -183,16 +187,81 @@ const SVG_NS = 'http://www.w3.org/2000/svg'
  * styles are inlined so it renders without the app's CSS. Returns null when the
  * content has no measurable box.
  */
+/** A child's bbox mapped into its PARENT's coordinate space. `getBBox()` alone
+ *  is in the child's own (pre-transform) space, so a translated group would be
+ *  mislocated — apply the child's transform matrix to the box corners. */
+function childBoxInParent(k: SVGGraphicsElement): { x0: number; y0: number; x1: number; y1: number } | null {
+  let bb: DOMRect
+  try {
+    bb = k.getBBox()
+  } catch {
+    return null
+  }
+  if (!bb.width && !bb.height) return null
+  const m = k.transform?.baseVal?.consolidate?.()?.matrix
+  if (!m) return { x0: bb.x, y0: bb.y, x1: bb.x + bb.width, y1: bb.y + bb.height }
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  for (const [px, py] of [
+    [bb.x, bb.y],
+    [bb.x + bb.width, bb.y],
+    [bb.x, bb.y + bb.height],
+    [bb.x + bb.width, bb.y + bb.height]
+  ]) {
+    const X = m.a * px + m.c * py + m.e
+    const Y = m.b * px + m.d * py + m.f
+    x0 = Math.min(x0, X)
+    y0 = Math.min(y0, Y)
+    x1 = Math.max(x1, X)
+    y1 = Math.max(y1, Y)
+  }
+  return { x0, y0, x1, y1 }
+}
+
+/** Union bbox (in the group's own space) of a group's direct children, skipping
+ *  `<defs>` + `exclude` selectors. Falls back to the full getBBox if none. */
+function bboxExcluding(
+  content: SVGGraphicsElement,
+  exclude: string[]
+): { x: number; y: number; width: number; height: number } {
+  let x0 = Infinity
+  let y0 = Infinity
+  let x1 = -Infinity
+  let y1 = -Infinity
+  content.querySelectorAll(':scope > *').forEach((k) => {
+    if (k.tagName.toLowerCase() === 'defs') return
+    if (exclude.some((sel) => (k as Element).matches?.(sel))) return
+    const b = childBoxInParent(k as SVGGraphicsElement)
+    if (!b) return
+    x0 = Math.min(x0, b.x0)
+    y0 = Math.min(y0, b.y0)
+    x1 = Math.max(x1, b.x1)
+    y1 = Math.max(y1, b.y1)
+  })
+  if (!Number.isFinite(x0)) return content.getBBox()
+  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 }
+}
+
 export function serializeLiveSvg(
   svg: SVGSVGElement,
   contentSelector: string,
-  opts: { background?: string; margin?: number; exclude?: string[] } = {}
+  opts: {
+    background?: string
+    margin?: number
+    exclude?: string[]
+    /** Frame to everything EXCEPT children matching these selectors (e.g. the
+     *  full-canvas grid/paper) so the export is tight to the drawing, and those
+     *  large backdrop layers just fill the framed area to the edges. */
+    bboxExclude?: string[]
+  } = {}
 ): { svg: string; width: number; height: number } | null {
   const content = svg.querySelector(contentSelector) as SVGGraphicsElement | null
   if (!content) return null
-  let bbox: DOMRect
+  let bbox: { x: number; y: number; width: number; height: number }
   try {
-    bbox = content.getBBox()
+    bbox = opts.bboxExclude?.length ? bboxExcluding(content, opts.bboxExclude) : content.getBBox()
   } catch {
     return null
   }

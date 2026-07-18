@@ -1,0 +1,155 @@
+name: Bugerbot
+description: Its a burger shaped bot!
+board: pico2w
+boardX: -386.8373116524391
+boardY: 122.9421398727101
+parts:
+  - id: sg90
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -109.30044118049273
+    y: 88.31669732059257
+  - id: sg902
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -106.60627317349343
+    y: -109.19009477198553
+  - id: sg903
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -109.13368264045161
+    y: 488.1112436221548
+  - id: sg904
+    lib: snakie-standard
+    part: sg90
+    label: SG90 Micro Servo
+    x: -112.39519240868486
+    y: 309.0252828819799
+connections:
+  - id: sg90.Signal#0__board.S10#9
+    from: sg90.Signal#0
+    to: board.S10#9
+    net: signal
+    color: "#4ea1ff"
+  - id: sg902.Signal#0__board.S11#10
+    from: sg902.Signal#0
+    to: board.S11#10
+    net: signal
+    color: "#46e06a"
+  - id: sg903.Signal#0__board.S12#11
+    from: sg903.Signal#0
+    to: board.S12#11
+    net: signal
+    color: "#d6a531"
+  - id: sg904.Signal#0__board.S13#12
+    from: sg904.Signal#0
+    to: board.S13#12
+    net: signal
+    color: "#b06af0"
+robot:
+  version: 1
+  urdf: robot.urdf
+  baseLink: base
+  jointRoll:
+    buddy_jr_2_shoulder_3_joint: 0
+    servo_1_joint: 90
+    buddy_jr_basic_arm_4_joint: 0
+    servo_2_joint: 0
+    arm_joint: 0
+    servo_3_joint: 90
+    buddy_jr_basic_arm_5_joint: 0
+    servo_4_joint: 0
+    buddy_jr_basic_arm_6_joint: 90
+    servo_5_joint: 0
+    buddy_jr_basic_arm_7_joint: -270
+    servo_6_joint: 0
+    buddy_jr_camera_holder_1_joint: -90
+  jointNormal:
+    servo_1_joint:
+      - 0
+      - 0
+      - -1
+    buddy_jr_basic_arm_4_joint:
+      - 0
+      - 1
+      - 1.5165616700819895e-16
+    servo_2_joint:
+      - 0
+      - 0
+      - -1
+    servo_3_joint:
+      - 1
+      - 0
+      - 0
+    arm_joint:
+      - 2.220446049250313e-16
+      - 1
+      - 6.163021097746056e-33
+    servo_4_joint:
+      - -1.0875653695436978e-16
+      - 5.551115123125783e-16
+      - -0.9999999999999999
+    buddy_jr_basic_arm_6_joint:
+      - -5.551115123125783e-17
+      - -1
+      - 3.1672679480206425e-18
+    servo_5_joint:
+      - -1.1102230246251565e-16
+      - -1.1102230246251565e-16
+      - -1
+    buddy_jr_basic_arm_7_joint:
+      - 2.905705198126134e-16
+      - -1.0000000000000002
+      - 3.995115599019633e-17
+    servo_6_joint:
+      - 0
+      - -1.6019722373183769e-16
+      - -1.0000000000000002
+    buddy_jr_camera_holder_1_joint:
+      - 2.220446049250313e-16
+      - 1.0000000000000002
+      - -1.284252296385657e-16
+  poses:
+    - name: Start
+      values:
+        buddy_jr_2_shoulder_3_joint: -1
+        buddy_jr_basic_arm_3_joint: 26
+        buddy_jr_basic_arm_4_joint: -9
+    - name: Default
+      values:
+        buddy_jr_2_shoulder_3_joint: 46
+        servo_4_joint: -22
+        servo_5_joint: -6
+    - name: Duck
+      values:
+        buddy_jr_2_shoulder_3_joint: -90
+        servo_4_joint: -90
+        servo_5_joint: -63
+        servo_6_joint: -67
+  timeline:
+    duration: 2
+    easing: easeInOut
+    loop: true
+    tracks:
+      - joint: buddy_jr_2_shoulder_3_joint
+        keys:
+          - t: 0
+            value: 46
+          - t: 0.7420136971993853
+            value: -1
+      - joint: servo_4_joint
+        keys:
+          - t: 0
+            value: -22
+          - t: 0.3275391295265663
+            value: -22
+      - joint: servo_5_joint
+        keys:
+          - t: 0
+            value: -6
+          - t: 0.9781337192820161
+            value: -6.000000000000001
+    fps: 20

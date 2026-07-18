@@ -62,6 +62,8 @@ import type {
 } from '../main/git/types'
 import type {
   LintResult,
+  MotionCheckResult,
+  MotionReadResult,
   PluginContext,
   PluginListing,
   PluginStatus,
@@ -246,6 +248,11 @@ const fs = {
   /** Show the native "open folder" dialog. Resolves to the path or null. */
   openFolderDialog: (): Promise<string | null> =>
     unwrap(ipcRenderer.invoke('fs:openFolderDialog')),
+  /** Show the native "open file" dialog (optionally filtered). Resolves to the
+   *  chosen path, or null if cancelled. */
+  openFileDialog: (opts?: {
+    filters?: { name: string; extensions: string[] }[]
+  }): Promise<string | null> => unwrap(ipcRenderer.invoke('fs:openFileDialog', opts)),
   /**
    * Show the native "save file" dialog (used for the untitled "Save As" flow).
    * `defaultName` seeds the dialog's default path. Resolves to the chosen path,
@@ -257,6 +264,11 @@ const fs = {
   readDir: (path: string): Promise<FsEntry[]> => unwrap(ipcRenderer.invoke('fs:readDir', path)),
   /** Read a file's contents (UTF-8). */
   readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('fs:readFile', path)),
+  /** Read a file's raw bytes (for binary meshes — #319). */
+  readFileBytes: (path: string): Promise<Uint8Array> =>
+    unwrap<string>(ipcRenderer.invoke('fs:readFileBase64', path)).then((b64) =>
+      Uint8Array.from(Buffer.from(b64, 'base64'))
+    ),
   /** Write contents to a file (created/overwritten). */
   writeFile: (path: string, contents: string): Promise<void> =>
     unwrap(ipcRenderer.invoke('fs:writeFile', path, contents)),
@@ -676,7 +688,18 @@ const plugins = {
   lint: (context: PluginContext): Promise<LintResult> =>
     unwrap(ipcRenderer.invoke('plugins:lint', context)),
   /** Kill + re-spawn the host, picking up newly added plugins. */
-  reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload'))
+  reload: (): Promise<PluginStatus> => unwrap(ipcRenderer.invoke('plugins:reload')),
+  /**
+   * Read a `.py`'s managed Motion Studio blocks (#413) — poses, sequences and
+   * servo map — via the host's AST reader. `ok:false` with `pythonFound:false`
+   * means no interpreter (skip the round-trip); `ok:false` with an `error` means
+   * a broken/hand-edited block (suspend managed rewrite for the file).
+   */
+  motionRead: (source: string): Promise<MotionReadResult> =>
+    unwrap(ipcRenderer.invoke('plugins:motionRead', source)),
+  /** Probe whether a `.py`'s managed blocks still parse (validity + schema). */
+  motionCheck: (source: string): Promise<MotionCheckResult> =>
+    unwrap(ipcRenderer.invoke('plugins:motionCheck', source))
 }
 
 /**
@@ -776,6 +799,9 @@ const instruments = {
    * treats as "unavailable".
    */
   librarySource: (): Promise<string> => ipcRenderer.invoke('instruments:librarySource'),
+  /** The bundled `snakie.py` hardware-umbrella source, installed to `/lib/snakie.py`
+   *  alongside `instruments.py` so `from snakie import Servo, …` works on the board. */
+  umbrellaSource: (): Promise<string> => ipcRenderer.invoke('instruments:umbrellaSource'),
 
   // --- Detached instrument OS windows (#205) ---
   /** Open (or focus) a true OS window rendering one undocked instrument. */
@@ -966,6 +992,26 @@ const robot = {
   /** Save the robot definition. Resolves to {ok,error} — never rejects. */
   save: (folder: string | undefined, def: RobotDefinition): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke('robot:save', { folder, def }),
+  /** Import an STL/DAE mesh into the robot's `<urdf-folder>/meshes/` (#309).
+   *  Without `src`, a native picker chooses the file; with `src` (an absolute path)
+   *  that file is copied straight in — used to pull a URDF's own out-of-project
+   *  meshes into the project (#407). Resolves to the mesh path relative to the
+   *  URDF, or cancelled. */
+  importMesh: (
+    urdfPath: string,
+    src?: string
+  ): Promise<{ cancelled?: boolean; error?: string; rel?: string; name?: string }> =>
+    ipcRenderer.invoke('robot:importMesh', { urdfPath, src }),
+  /** Copy a Parts Library part's BUNDLED mesh into `<urdf-folder>/meshes/` (#406) —
+   *  used by the drop bridge when a mesh-linked part is added to a design. Resolves to
+   *  the mesh path relative to the URDF + (for an STL) its largest bbox dimension. */
+  importPartMesh: (
+    urdfPath: string,
+    libraryId: string,
+    partId: string,
+    mesh: string
+  ): Promise<{ error?: string; rel?: string; name?: string; maxDim?: number }> =>
+    ipcRenderer.invoke('robot:importPartMesh', { urdfPath, libraryId, partId, mesh }),
   /** Subscribe to robot.yml changes from ANOTHER window (e.g. the Board View
    *  adding/removing a part). Returns an unsubscribe. */
   onChanged: (cb: () => void): (() => void) => {

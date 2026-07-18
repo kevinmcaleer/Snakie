@@ -1,0 +1,36 @@
+title: Build a Robot in 3-D
+description: Make a robot model from primitives and STL parts, add joints, and pose it in the Robot View.
+emoji: "🦾"
+accent: "#2f7c70"
+track: urdf
+lessons:
+  - title: Open the Robot View
+    file: 01-open-robot-view.md
+    tip: "The Robot View shows a 3-D robot you can spin, zoom and pose."
+  - title: A robot is a URDF
+    file: 02-what-is-urdf.md
+    tip: "URDF = a text file describing a robot's parts (links) and joints."
+  - title: Add a box link
+    file: 03-primitives.md
+    tip: "Primitives (box, cylinder, sphere) are the building blocks of a link."
+  - title: A second part
+    file: 04-second-link.md
+    tip: "Use the Join tool to mate one part's face to another's."
+  - title: Connect with a joint
+    file: 05-joints.md
+    tip: "A **revolute** joint rotates; a **prismatic** joint slides."
+  - title: Set joint limits
+    file: 06-joint-limits.md
+    tip: "Limits stop the model (and your servo) moving past a safe angle."
+  - title: Pose with sliders
+    file: 07-pose-sliders.md
+    tip: "Drag a joint slider to pose the robot live on screen."
+  - title: Bind a servo to a joint
+    file: 08-bind-servo.md
+    tip: "Wire a servo on the breadboard, then pick the joint it drives."
+  - title: Save a pose
+    file: 09-save-pose.md
+    tip: "A pose is a named snapshot of every joint — reuse it in code."
+  - title: "Project: export your robot"
+    file: 10-project-export.md
+    tip: "Export a clean URDF into `urdf/` to share or version your robot."

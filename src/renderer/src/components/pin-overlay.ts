@@ -61,5 +61,6 @@ export function savePin(storage: PinStorage, key: string, value: boolean): void 
 /** The persisted pin keys (one per pinnable board panel). */
 export const PIN_KEYS = {
   library: 'snakie.board.pin.library',
-  connections: 'snakie.board.pin.connections'
+  connections: 'snakie.board.pin.connections',
+  builder: 'snakie.robot.pin.builder'
 } as const

@@ -1,0 +1,101 @@
+title: Build a Robot on the Breadboard
+description: Wire up LEDs, buttons, servos and sensors — see them on the Board View and instruments.
+emoji: "🤖"
+accent: "#e6ab30"
+track: robotics
+lessons:
+  - title: Meet the simulator
+    file: 01-simulator.md
+    code: |
+      print("Board is alive!")
+    tip: "Connect the **Simulated device (offline)** — no real hardware needed."
+  - title: See your board
+    file: 02-board-view.md
+    code: |
+      from machine import Pin
+      led = Pin(15, Pin.OUT)
+      led.on()
+    tip: "Open the **Board View** to see your wiring drawn out."
+  - title: Blink an LED
+    file: 03-blink.md
+    code: |
+      from machine import Pin
+      import time
+      led = Pin(15, Pin.OUT)
+      while True:
+          led.toggle()
+          time.sleep_ms(400)
+    tip: "`toggle()` flips the LED on↔off each time round the loop."
+  - title: Read a button
+    file: 04-button.md
+    code: |
+      from machine import Pin
+      button = Pin(14, Pin.IN, Pin.PULL_UP)
+      while True:
+          if button.value() == 0:
+              print("Pressed!")
+    tip: "`PULL_UP` means the pin reads 1 normally, and 0 when pressed."
+  - title: Fading with PWM
+    file: 05-pwm.md
+    code: |
+      from machine import Pin, PWM
+      import time
+      led = PWM(Pin(15))
+      led.freq(1000)
+      for duty in range(0, 65535, 4000):
+          led.duty_u16(duty)
+          time.sleep_ms(50)
+    tip: "PWM switches a pin on/off fast to dim an LED or drive a motor."
+  - title: Drive a servo
+    file: 06-servo.md
+    code: |
+      from snakie import Servo, Pin, PWM
+      import time
+      s = Servo(PWM(Pin(0)), pin=0)
+      for angle in (0, 90, 180, 90):
+          s.angle(angle)
+          time.sleep_ms(600)
+    tip: "A servo turns to an exact angle. Watch the Pose bench move with it!"
+  - title: Make some noise
+    file: 07-buzzer.md
+    code: |
+      from snakie import Buzzer, Pin, PWM
+      import time
+      buz = Buzzer(PWM(Pin(16)))
+      for note in (262, 330, 392, 523):
+          buz.tone(note)
+          time.sleep_ms(250)
+      buz.off()
+    tip: "Different frequencies make different musical notes."
+  - title: Plot a sensor
+    file: 08-plot-sensor.md
+    code: |
+      from machine import ADC
+      import time
+      sensor = ADC(26)
+      while True:
+          print("SNK PLOT light", sensor.read_u16())
+          time.sleep_ms(100)
+    tip: "Open the **Plotter** instrument to see the value as a live graph."
+  - title: The multimeter
+    file: 09-multimeter.md
+    code: |
+      from machine import ADC
+      import time
+      pin = ADC(26)
+      while True:
+          volts = pin.read_u16() / 65535 * 3.3
+          print("SNK METER volts", round(volts, 2))
+          time.sleep_ms(200)
+    tip: "`SNK METER` lines drive the on-screen **Multimeter**."
+  - title: "Project: wave hello"
+    file: 10-project-wave.md
+    code: |
+      from snakie import Servo, Pin, PWM
+      import time
+      arm = Servo(PWM(Pin(0)), pin=0)
+      for _ in range(3):
+          arm.angle(60); time.sleep_ms(300)
+          arm.angle(120); time.sleep_ms(300)
+      arm.angle(90)
+    tip: "You've made a real robot behaviour — a friendly wave!"

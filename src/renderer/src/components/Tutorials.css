@@ -1,0 +1,330 @@
+/* Learn side panel (#479). Docked in the activity-bar "Learn" view — the course
+   gallery, the course splash, and the lesson walkthrough all live here. Uses the
+   theme tokens throughout so it reads in both the dark and light (skeuomorph)
+   skins; the panel scrolls via its host `.region__body`. */
+
+.tp {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  color: var(--text);
+  /* The learning system reads in a friendly, legible SANS (the rest of the app
+     stays retro-mono); code blocks below switch back to mono so they stand out. */
+  font-family: var(--font-learn);
+  font-size: 13.5px;
+}
+
+/* ── Gallery ─────────────────────────────────────────────────────────────── */
+.tp__intro {
+  padding: 16px 14px 6px;
+}
+.tp__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.tp__sub {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.tp__empty {
+  padding: 0 14px;
+  color: var(--text-muted);
+}
+.tp__section {
+  padding: 10px 14px 4px;
+}
+.tp__section-title {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.tp__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.tp__card {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  text-align: left;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  color: inherit;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-left: 5px solid var(--accent);
+  transition: transform 0.08s ease, box-shadow 0.12s ease;
+}
+.tp__card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.5);
+}
+.tp__card-emoji {
+  font-size: 30px;
+  line-height: 1;
+  align-self: center;
+}
+.tp__card-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tp__card-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+.tp__card-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
+}
+.tp__card-meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  margin-top: 6px;
+}
+
+/* ── Course bar (sticky header when a course is open) ─────────────────────── */
+.tp__bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border);
+}
+.tp__bar-emoji {
+  font-size: 18px;
+}
+.tp__bar-title {
+  flex: 1;
+  font-weight: 700;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tp__all {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 14px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.tp__all:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+/* ── Splash ──────────────────────────────────────────────────────────────── */
+.tp__splash {
+  padding: 30px 20px;
+  text-align: center;
+}
+.tp__splash-emoji {
+  font-size: 48px;
+}
+.tp__splash-title {
+  margin: 12px 0 6px;
+  font-size: 18px;
+}
+.tp__splash-desc {
+  font-size: 13px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.tp__splash-meta {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-ink);
+  margin: 10px 0 18px;
+}
+.tp__start {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border: none;
+  border-radius: 18px;
+  padding: 8px 20px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Lesson list on the course splash — left-aligned inside the centred splash;
+   each row jumps to that lesson. */
+.tp__toc {
+  list-style: none;
+  margin: 4px 0 20px;
+  padding: 0;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tp__toc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 9px;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+}
+.tp__toc-item:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+.tp__toc-num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent-ink);
+  font-weight: 700;
+  font-size: 11px;
+}
+.tp__toc-name {
+  min-width: 0;
+}
+
+/* ── Lesson ──────────────────────────────────────────────────────────────── */
+.tp__lesson {
+  flex: 1;
+  padding: 14px 16px;
+}
+/* The base `.md` rules (Markdown.css) already style headings, the inline-code
+   chips and the fenced-code slabs in the monospace font — now that the prose
+   above is sans (.tp), that mono code stands out on its own. Here we only bump
+   the body size + line-spacing for legibility, and keep <pre> mono. The higher
+   specificity (`.tp .tp__md`) wins over `.md` regardless of stylesheet order. */
+.tp .tp__md {
+  font-size: 14px;
+  line-height: 1.7;
+}
+.tp .tp__md pre {
+  font-family: var(--font-mono);
+}
+.tp .tp__md a {
+  color: var(--accent-ink);
+}
+.tp__tip {
+  display: flex;
+  gap: 8px;
+  margin: 8px 8px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  font-size: 13px;
+}
+.tp__tip-bulb {
+  flex: none;
+}
+
+/* ── Lesson footer (tip + nav, pinned to the panel bottom) ───────────────── */
+.tp__bottom {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg-elevated);
+  border-top: 1px solid var(--border);
+}
+.tp__foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+}
+.tp__nav {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 6px 12px;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tp__nav:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+.tp__nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+/* The primary "Next / Finish" action is accent-filled. It also carries .tp__nav
+   for sizing, so this must come AFTER .tp__nav to win the equal-specificity tie
+   (otherwise the base transparent nav style would override the accent fill). */
+.tp__nav--next {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  border-color: transparent;
+  font-weight: 700;
+}
+.tp__nav--next:hover:not(:disabled) {
+  background: var(--accent);
+  filter: brightness(1.08);
+}
+/* One row only — dots that don't fit are clipped rather than wrapping. */
+.tp__dots {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.tp__dot {
+  flex: none;
+}
+.tp__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  background: var(--border);
+}
+.tp__dot--on {
+  background: var(--accent);
+  transform: scale(1.25);
+}
+.tp__tipbtn {
+  border: 1px solid var(--border);
+  background: transparent;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+}
+.tp__tipbtn--on {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+  border-color: var(--accent);
+}

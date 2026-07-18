@@ -21,6 +21,9 @@
    * (see the sans rule in the Skeuomorph block). Kept as a token so refs
    * resolve here. */
   --font-pixel: var(--font-mono);
+  /* Friendly, legible sans for the learning system's prose (the rest of the app
+   * keeps its retro monospace). Bundled via @fontsource/nunito-sans. */
+  --font-learn: 'Nunito Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --toolbar-h: 60px;
 }
 
@@ -43,6 +46,7 @@
   --text-muted: #9aa0aa;
 
   --accent: #d6a23f; /* brass — active/selected/links */
+  --accent-ink: #d6a23f; /* brass for TEXT — readable on the dark chrome */
   --accent-2: #3fae5a; /* green — connected / run / saved */
   --accent-contrast: #15161a;
   --danger: #e3624f;
@@ -100,6 +104,7 @@
   --text-muted: #5c616a;
 
   --accent: #b07d1e; /* brass — active/selected/links */
+  --accent-ink: #5c3f0c; /* DARK brass for TEXT — readable on the parchment */
   --accent-2: #1c7a34; /* green — connected / run / saved */
   --accent-contrast: #fffdf6;
   --danger: #c4301f;
@@ -376,7 +381,9 @@
   background-color: #2f5d44;
   background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px);
   background-size: 3px 3px;
-  color: #e8f1ea;
+  color: #f2f8f4;
+  /* Muted text must stay readable on the green felt — near-white, not grey. */
+  --text-muted: #d8e8de;
   border-left: 3px solid #1c3b2a;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
 }
@@ -408,7 +415,7 @@
 :root[data-theme='skeuomorph'] .git__notice,
 :root[data-theme='skeuomorph'] .git__file-dir,
 :root[data-theme='skeuomorph'] .git__repo-path {
-  color: #bcd4c4;
+  color: #d8e8de;
 }
 
 :root[data-theme='skeuomorph'] .git__branch-select,
@@ -1090,7 +1097,9 @@
   background-color: #1a3326;
   background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 3px 3px;
-  color: #cfe0d4;
+  color: #eef6f0;
+  /* Muted text must stay readable on the dark green felt — near-white, not grey. */
+  --text-muted: #cfe4d8;
   border-left: 3px solid #0c1c14;
   box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.55);
 }
@@ -1122,7 +1131,7 @@
 :root[data-theme='dark'] .git__notice,
 :root[data-theme='dark'] .git__file-dir,
 :root[data-theme='dark'] .git__repo-path {
-  color: #9bbfa6;
+  color: #cfe4d8;
 }
 
 :root[data-theme='dark'] .git__branch-select,
@@ -1766,6 +1775,15 @@ body {
   overflow: auto;
 }
 
+/* Placeholder copy for a view unavailable in the current build (e.g.
+ * desktop-only chrome hidden on web — Web W3, issue #284). */
+.region__empty {
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
 /* The terminal owns its own scrolling; don't double up. */
 .region__body--terminal {
   overflow: hidden;
@@ -2116,6 +2134,86 @@ body {
   height: 100%;
   min-height: 0;
   display: flex;
+}
+
+/* Robot mode (#320): the mini 3-D Robot panel sits ABOVE the instrument dock. */
+.shell__main .shell__dock--robot {
+  flex-direction: column;
+}
+.shell__robot3d {
+  flex: 0 0 42%;
+  min-height: 160px;
+  position: relative;
+  border-bottom: var(--border-w) solid var(--border);
+}
+.shell__robot3d-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+/* The instrument dock takes the remaining height + scrolls. */
+.shell__dock--robot .instr-dock {
+  min-height: 0;
+}
+/* The docked mini-viewer fills its slot; a top action row creates a new robot
+   or pops the viewer out full-screen (#320 / new-URDF). */
+.robotdock {
+  position: absolute;
+  inset: 0;
+}
+.robotdock__actions {
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  z-index: 2;
+  display: flex;
+  gap: 0.3rem;
+}
+.robotdock__btn {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  /* Dark glass by default; a light parchment in the skeuomorph skin so the
+     (dark) label isn't dark-on-dark. */
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotdock__btn {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotdock__btn:hover {
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+}
+/* Highlight "New robot" when there's no project robot yet (the demo is a stand-in). */
+.robotdock__btn--cta {
+  color: var(--accent-contrast, #191a1d);
+  background: var(--accent, #c8a24a);
+  border-color: var(--accent, #c8a24a);
+  font-weight: 700;
+}
+.robotdock__btn--cta:hover {
+  color: var(--accent-contrast, #191a1d);
+  background: var(--accent, #c8a24a);
+  filter: brightness(1.08);
+}
+/* In the skeuomorph skin the base `:root[data-theme='skeuomorph'] .robotdock__btn`
+   rule (higher specificity than .robotdock__btn--cta) flips the button to a LIGHT
+   parchment background — which left the white CTA label illegible (white-on-light).
+   Restore a solid DARK-brass fill so the white "New robot" label reads clearly. */
+:root[data-theme='skeuomorph'] .robotdock__btn--cta,
+:root[data-theme='skeuomorph'] .robotdock__btn--cta:hover {
+  background: var(--accent-ink);
+  border-color: var(--accent-ink);
+  color: var(--accent-contrast);
 }
 
 .activitybar {

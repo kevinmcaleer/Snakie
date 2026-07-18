@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Snakie — Robot Mode workflow</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    padding: 2.5rem 1.5rem 3.5rem;
+    background: radial-gradient(1200px 600px at 50% -10%, #16211c, #0c0f0d 60%);
+    color: #e8f5ee;
+    font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    text-align: center;
+  }
+  h1 { font-size: 1.5rem; letter-spacing: .02em; margin: 0 0 .35rem; }
+  p.sub { color: #9fb7ad; margin: 0 auto 2rem; max-width: 46rem; line-height: 1.5; }
+  .diagram { max-width: 1100px; margin: 0 auto; }
+  .badge {
+    display: inline-block; margin-bottom: 1.5rem; padding: .3rem .8rem;
+    border: 1px solid #37884a; border-radius: 999px; color: #7fe0a0;
+    font-size: .78rem; letter-spacing: .08em; text-transform: uppercase;
+  }
+  .mermaid { background: transparent; }
+</style>
+</head>
+<body>
+  <span class="badge">Coming soon</span>
+  <h1>Simulate a whole robot — without the robot</h1>
+  <p class="sub">
+    Design the circuit, write the code, print the parts, then watch your
+    MicroPython drive a 3D model of the robot — all inside Snakie, before a
+    single wire is soldered.
+  </p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart LR
+  subgraph BENCH["🛠️ &nbsp;Design and wire — Board View"]
+    direction TB
+    A["✍️ &nbsp;Write MicroPython<br/>in the editor"]
+    B["🔌 &nbsp;Add components<br/>to the breadboard"]
+    C["⚙️ &nbsp;Load part drivers"]
+    A --> B --> C
+  end
+
+  subgraph ROBOT["🤖 &nbsp;Robot Mode"]
+    direction TB
+    D["🦾 &nbsp;Add servos"]
+    E["🧭 &nbsp;Map each servo<br/>to your code"]
+    F["📦 &nbsp;Import STL meshes"]
+    G["🔗 &nbsp;Link STLs into an<br/>IK chain (URDF joints)"]
+    H["▶️ &nbsp;Simulate movement<br/>from your code"]
+    D --> E --> F --> G --> H
+  end
+
+  C ==>|enter Robot Mode| D
+
+  subgraph DOCS["📚 &nbsp;The project documents itself"]
+    direction TB
+    S["📐 &nbsp;Schematic"]
+    W["🍞 &nbsp;Breadboard image<br/>+ pinout table"]
+    K["🐍 &nbsp;MicroPython code"]
+    M["🧊 &nbsp;3D model"]
+  end
+
+  C -.-> S
+  C -.-> W
+  A -.-> K
+  G -.-> M
+
+  H --> DONE(["✅ &nbsp;A complete robot,<br/>simulated in a virtual<br/>environment — all inside Snakie"])
+
+  classDef bench fill:#12352b,stroke:#37884a,stroke-width:1.5px,color:#e8f5ee;
+  classDef robot fill:#1b2a3a,stroke:#4ea1ff,stroke-width:1.5px,color:#eaf3ff;
+  classDef docs fill:#2a2416,stroke:#b8892b,stroke-width:1.5px,color:#f6ecd6;
+  classDef done fill:#0f5132,stroke:#3ddc84,stroke-width:2px,color:#eafff3;
+
+  class A,B,C bench;
+  class D,E,F,G,H robot;
+  class S,W,K,M docs;
+  class DONE done;
+    </pre>
+  </div>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "dark",
+      flowchart: { htmlLabels: true, curve: "basis", nodeSpacing: 45, rankSpacing: 60 },
+      themeVariables: { fontFamily: '"JetBrains Mono", ui-monospace, monospace' }
+    });
+  </script>
+</body>
+</html>

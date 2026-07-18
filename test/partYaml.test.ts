@@ -64,6 +64,8 @@ const RICH: PartDefinition = normalisePart({
   ledLabel: 'LED',
   image: 'image.png',
   imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 0.9 },
+  mesh: 'model.stl',
+  meshUnits: 'mm',
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] }
 })
 
@@ -86,6 +88,21 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(yaml).not.toContain('base64')
     // The relative filename IS kept.
     expect(yaml).toContain('image: image.png')
+  })
+
+  it('round-trips the linked mesh filename + declared units/scale (#406)', () => {
+    // meshUnits (in RICH) round-trips as part of the rich part above; check meshScale
+    // + a bare mesh here.
+    const withScale = normalisePart({ id: 'm', name: 'M', headers: [], mesh: 'model.stl', meshScale: 0.01 })
+    const yaml = partToYaml(withScale)
+    expect(yaml).toContain('mesh: model.stl')
+    expect(yaml).toContain('meshScale: 0.01')
+    const back = normalisePart(partFromYaml(yaml))
+    expect(back.mesh).toBe('model.stl')
+    expect(back.meshScale).toBe(0.01)
+    expect(back.meshUnits).toBeUndefined()
+    // An unknown meshUnits value is dropped (tolerant parse).
+    expect(normalisePart(partFromYaml('id: m\nname: M\nmesh: x.stl\nmeshUnits: furlongs\n')).meshUnits).toBeUndefined()
   })
 
   it('never serialises the inlined helpText; keeps the help filename', () => {

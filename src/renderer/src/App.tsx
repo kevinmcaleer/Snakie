@@ -7,18 +7,24 @@ import { SettingsProvider } from './store/settings'
 import { ConsoleProvider } from './store/console'
 import { SyncProvider } from './store/sync'
 import { LayoutProvider } from './store/layout'
+import { TutorialsProvider } from './store/tutorials'
+import { IS_WEB } from './lib/env'
 
 function App(): JSX.Element {
   return (
     <PromptProvider>
       <SettingsProvider>
-        <LayoutProvider>
+        {/* No chat right-pane on the web build — the layout store must know so
+            panel sizes map to the right slots (#528). */}
+        <LayoutProvider chatPane={!IS_WEB}>
           <WorkspaceProvider>
             <SyncProvider>
               <DiagnosticsProvider>
                 <ConsoleProvider>
-                  <AppShell />
-                  <UpdateNotifier />
+                  <TutorialsProvider>
+                    <AppShell />
+                    <UpdateNotifier />
+                  </TutorialsProvider>
                 </ConsoleProvider>
               </DiagnosticsProvider>
             </SyncProvider>

@@ -3,6 +3,9 @@ import { BoardGraph } from './BoardGraph'
 import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
+import { readRobotModel } from '../../../shared/krf'
+import { jointNames, jointDisplayLimits } from './robot-assembly'
+import { attachPartMesh } from './robot-part-mesh'
 import { useWorkspace } from '../store/workspace'
 import { useEditorSettings } from '../store/settings'
 import type {
@@ -101,6 +104,41 @@ export function BoardPane(): JSX.Element {
     }
   }, [folder, robotNonce])
 
+  // The linked URDF's joint names, so a placed servo's inspector can offer a
+  // "drives joint" picker (#) — mirrors the floating Board View window, which
+  // loads these too. Read the `.urdf` pointed at by robot.yml; empty when there's
+  // no URDF link / folder yet (then the picker shows "no joints"). Without this
+  // the in-window board pane ALWAYS showed "no joints", even with a linked rig.
+  const [joints, setJoints] = useState<string[]>([])
+  // Each joint's real travel (deg / mm) — seeds a new binding's joint range so the
+  // 3-D model doesn't clamp (a flat 0…180 default did).
+  const [jointLimits, setJointLimits] = useState<Record<string, { min: number; max: number }>>({})
+  const urdfPath = robot.robot?.urdf
+  useEffect(() => {
+    if (!folder || !urdfPath) {
+      setJoints([])
+      setJointLimits({})
+      return
+    }
+    let live = true
+    window.api.fs
+      .readFile(`${folder}/${urdfPath}`)
+      .then((content) => {
+        if (!live) return
+        setJoints(jointNames(content))
+        setJointLimits(jointDisplayLimits(content))
+      })
+      .catch(() => {
+        if (live) {
+          setJoints([])
+          setJointLimits({})
+        }
+      })
+    return () => {
+      live = false
+    }
+  }, [folder, urdfPath, robotNonce])
+
   const saveRobot = useCallback(
     (next: RobotDefinition): void => {
       saveSeqRef.current += 1
@@ -120,10 +158,27 @@ export function BoardPane(): JSX.Element {
       let n = 2
       while (ids.has(id)) id = `${part.id}${n++}`
       const placed = pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : {}
-      saveRobot({
+      const withPart: RobotDefinition = {
         ...robot,
         parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name, ...placed }]
-      })
+      }
+      if (part.mesh && folder) {
+        // #406: a mesh-linked part ALSO drops its STL into the project URDF (creating +
+        // linking one if absent). Save the part + link SYNCHRONOUSLY (so a rapid second
+        // drop / cross-window reload can't clobber it), THEN write the mesh into the
+        // .urdf. It shows in the Robot View the next time that URDF is loaded (e.g. on
+        // switching to Robot mode); an already-open Robot View won't refresh live.
+        const existingUrdf = readRobotModel(robot)?.urdf
+        const urdfName = existingUrdf || 'robot.urdf'
+        saveRobot(
+          existingUrdf
+            ? withPart
+            : { ...withPart, robot: { ...(withPart.robot ?? {}), version: 1, urdf: urdfName } }
+        )
+        void attachPartMesh(folder, urdfName, libraryId, part).catch(() => undefined)
+      } else {
+        saveRobot(withPart)
+      }
       const lib = part.library
       if (lib?.url && !(part.drivers && part.drivers.length > 0)) {
         const mod = lib.module || part.name
@@ -145,7 +200,7 @@ export function BoardPane(): JSX.Element {
         }
       }
     },
-    [robot, saveRobot]
+    [robot, saveRobot, folder]
   )
 
   // The Part Editor overlay (opened from the pane's library dock, exactly like
@@ -196,6 +251,8 @@ export function BoardPane(): JSX.Element {
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}
+        joints={joints}
+        jointLimits={jointLimits}
         onAddToProject={addToProject}
       />
       {editing && (

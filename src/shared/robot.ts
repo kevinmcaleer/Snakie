@@ -43,6 +43,160 @@ export interface RobotConnection {
   color?: string
 }
 
+/**
+ * The robot-MODEL section of a KRF `robot.yml` (epic #309 / #310). All fields
+ * are optional so a legacy wiring-only robot.yml still loads. Pure helpers to
+ * read/validate this live in {@link ./krf}.
+ */
+export interface RobotModel {
+  /** KRF schema version (bumped on breaking changes). */
+  version?: number
+  /** Path to the `.urdf` file, relative to the project root (e.g. `urdf/arm.urdf`). */
+  urdf?: string
+  /** The link the user designated as the base (root) of the kinematic tree — the
+   *  anchor every other part hangs off. Distinguishes the intended base from other
+   *  as-yet-unconnected imported parts (#354). */
+  baseLink?: string
+  /** Servo pin ↔ URDF joint bindings with angle calibration (Phase 3). */
+  servoJointMap?: ServoJointBinding[]
+  /** Per-joint limit / calibration overrides edited in-app (Phase 2). */
+  joints?: Record<string, JointConfig>
+  /** Per-joint absolute roll about its own normal axis, in DEGREES (#354). The URDF
+   *  `<origin rpy>` already bakes this in; it's remembered here so the joint editor
+   *  can show the current roll and edit it absolutely (deltas re-applied to the rpy),
+   *  instead of the field resetting to 0 each time the dialog reopens. */
+  jointRoll?: Record<string, number>
+  /** Per-joint mating normal (the parent's picked face normal, in the PARENT frame)
+   *  captured when the joint was mated (#354). It's the axis the roll turns about —
+   *  it can't be recovered from a finished joint's `rpy`, so it's stored here so the
+   *  editor's Roll rotates the child about the same axis the Add-Joint mate used. */
+  jointNormal?: Record<string, [number, number, number]>
+  /** The default pose applied on load: joint name → value (deg / mm). */
+  defaultPose?: Record<string, number>
+  /** Saved named poses (Phase 2). */
+  poses?: NamedPose[]
+  /** The choreographed motion timeline (Phase 4, #314). */
+  timeline?: MotionTimeline
+  /** Pose-to-pose sequences / walk cycles (#415) — sit beside `timeline`. */
+  sequences?: MotionSequence[]
+  /** Puppet controls — sliders that blend 2+ poses live (#416). */
+  controls?: PuppetControl[]
+  /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
+  mirror?: MirrorPair[]
+}
+
+/** A servo(pin) ↔ URDF joint binding with angle-range calibration (Phase 3). */
+export interface ServoJointBinding {
+  /** The board pin the servo signal is on (e.g. `GP0`, or a bare pin number). */
+  pin: string
+  /** The URDF joint this servo drives. */
+  joint: string
+  /** Servo input range in degrees (default 0…180). */
+  servoMin?: number
+  servoMax?: number
+  /** Joint output range the servo maps onto (revolute = degrees, prismatic = mm). */
+  jointMin: number
+  jointMax: number
+  /** Reverse the mapping (servo min → joint max). */
+  invert?: boolean
+}
+
+/** Per-joint limit overrides (edited in the pose tool, written back here). */
+export interface JointConfig {
+  min?: number
+  max?: number
+}
+
+/** A saved pose: joint name → value (degrees for revolute, mm for prismatic). */
+export interface NamedPose {
+  name: string
+  values: Record<string, number>
+}
+
+/** Interpolation between motion keyframes (Phase 4). */
+export type MotionEasing = 'linear' | 'easeInOut'
+
+/** One keyframe on a joint's track: time `t` (seconds) → `value` (deg / mm). */
+export interface MotionKey {
+  t: number
+  value: number
+}
+
+/** A per-joint keyframe track (`joint` is a movable, non-mimic joint). */
+export interface MotionTrack {
+  joint: string
+  /** Keyframes, sorted ascending by `t`. */
+  keys: MotionKey[]
+}
+
+/** A choreographed motion clip — the timeline (Phase 4, #314). Values are in
+ *  DISPLAY units (deg / mm) like {@link NamedPose}. */
+export interface MotionTimeline {
+  /** Loop length in seconds. */
+  duration: number
+  /** Interpolation between keys. */
+  easing: MotionEasing
+  /** Preview loop + exported `while True`. */
+  loop: boolean
+  /** Preview / export sample rate (default 20). */
+  fps?: number
+  /** One track per animated joint. */
+  tracks: MotionTrack[]
+}
+
+/**
+ * One step of a pose-to-pose sequence (#415): the model eases FROM this step's
+ * pose TO the next step's pose (wrapping to the first step on a loop) over
+ * `duration` seconds, using `easing`. `pose` names a {@link NamedPose} in
+ * `RobotModel.poses`.
+ */
+export interface PoseStep {
+  /** The saved pose this step starts on (a `NamedPose.name`). */
+  pose: string
+  /** Seconds to transition to the NEXT step's pose (the loop seam uses the last). */
+  duration: number
+  /** Interpolation into the next pose (default easeInOut). */
+  easing?: MotionEasing
+}
+
+/**
+ * A pose-to-pose motion clip (#415) — how makers author a walk cycle: an ordered
+ * list of saved poses, each held for a duration. Sits BESIDE the per-joint
+ * keyframe {@link MotionTimeline}; a robot may have either, both, or neither.
+ */
+export interface MotionSequence {
+  /** Display name (also the key of its exported `SNAKIE_SEQUENCES` entry). */
+  name?: string
+  /** Loop the sequence (the last step eases back to the first). */
+  loop: boolean
+  /** Preview / export sample rate (default 20). */
+  fps?: number
+  /** The ordered pose steps. */
+  steps: PoseStep[]
+}
+
+/**
+ * A puppet control (#416): a named slider that blends 2+ saved poses. The poses
+ * sit at even parameter stops `i/(N-1)`; dragging the slider (0..1) linearly
+ * interpolates between the bracketing pair and drives the model + board live.
+ */
+export interface PuppetControl {
+  /** Stable id within the project. */
+  id: string
+  /** Display name (the slider label). */
+  name: string
+  /** The ordered saved-pose names to blend (≥2 to be usable). */
+  poses: string[]
+}
+
+/** A left↔right mirror pairing (`a` copies onto `b`), for symmetric gaits. */
+export interface MirrorPair {
+  a: string
+  b: string
+  /** Reflect the value about the joint's neutral (opposite-axis partner). */
+  invert?: boolean
+}
+
 /** A full robot/project definition. */
 export interface RobotDefinition {
   /** Project name. */
@@ -58,6 +212,9 @@ export interface RobotDefinition {
   parts: RobotPart[]
   /** The pin-to-pin wires. */
   connections: RobotConnection[]
+  /** The KRF robot-model section (URDF, servo↔joint map, poses) — optional so a
+   *  legacy wiring-only robot.yml is unaffected (epic #309). */
+  robot?: RobotModel
 }
 
 /** A fresh, empty robot definition. */

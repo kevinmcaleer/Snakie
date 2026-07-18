@@ -60,6 +60,26 @@ function readInstrumentsLibrarySource(): string {
   }
 }
 
+/**
+ * The bundled `snakie.py` hardware umbrella — the friendly re-export of the
+ * instrument runtime's hardware classes (`from snakie import Servo, …`). Resolved
+ * like {@link readInstrumentsLibrarySource}; installed to `/lib/snakie.py`
+ * alongside `instruments.py` so a vendor `servo` module can't shadow ours.
+ */
+function readSnakieUmbrellaSource(): string {
+  const packaged = join(process.resourcesPath, 'micropython', 'snakie.py')
+  const path =
+    app.isPackaged && existsSync(packaged)
+      ? packaged
+      : join(__dirname, '..', '..', 'micropython', 'snakie.py')
+  try {
+    return readFileSync(path, 'utf-8')
+  } catch (err) {
+    console.error('[snakie] could not read the bundled umbrella at', path, err)
+    return ''
+  }
+}
+
 function createWindow(): void {
   // Create the browser window with secure defaults.
   const window = new BrowserWindow({
@@ -143,6 +163,7 @@ app.whenReady().then(() => {
   // (issue #107). Reads from resources when packaged, the repo in dev; never
   // throws (returns '' on failure — the renderer treats that as "unavailable").
   ipcMain.handle('instruments:librarySource', () => readInstrumentsLibrarySource())
+  ipcMain.handle('instruments:umbrellaSource', () => readSnakieUmbrellaSource())
 
   // Open an external URL in the user's default browser (used by clickable
   // plugin status-bar links). Only http(s) URLs are honoured.

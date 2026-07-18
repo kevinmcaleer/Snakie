@@ -31,3 +31,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Build (web)
+        run: npm run build:web

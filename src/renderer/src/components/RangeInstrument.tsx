@@ -6,7 +6,7 @@ import type { InstrumentDef } from './range-instrument-def'
 import { useTelemetryStream, type DistanceTelemetry } from './range-telemetry'
 import { useSnakiePresence } from './snakie-presence'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
-import { useWorkspace } from '../store/workspace'
+import { useInstrumentWorkspace } from '../store/workspace'
 import { rangeDemo, RANGE_DEMO_NAME } from './range-demo'
 import {
   blipOpacity,
@@ -117,7 +117,7 @@ export function RangeInstrument({
   const deviceStatus = useDeviceStatus()
   const connected = deviceStatus.state === 'connected'
   const { present } = useSnakiePresence()
-  const { openBuffer, openFiles, activeId, updateContent } = useWorkspace()
+  const { openBuffer, openFiles, activeId, updateContent } = useInstrumentWorkspace()
 
   // The active editor buffer (if any) — the target for the code-sync update + the
   // source we scan for declared RANGE_TRIG / RANGE_ECHO pins to warn on a mismatch.

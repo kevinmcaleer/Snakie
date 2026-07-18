@@ -176,7 +176,7 @@
 }
 
 .problems__sev--warning {
-  color: var(--warning, #e5c07b);
+  color: var(--warn, #e5c07b);
 }
 
 .problems__sev--info {

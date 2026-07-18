@@ -1,0 +1,111 @@
+/* POSE instrument (pose bench) — global CSS, so every selector uses the UNIQUE
+   `posebench__` prefix (never reuse another panel's prefix). Themed via the shared
+   tokens (--text/--border/--bg-sunken) + --accent/--accent-border, so it reads in
+   BOTH the dark and light (skeuomorph) skins. */
+.posebench {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.55rem 0.6rem 0.65rem;
+}
+
+.posebench__empty {
+  margin: 0;
+  padding: 0.9rem 0.7rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: var(--text-muted, #9aa0a8);
+  text-align: center;
+}
+
+.posebench__label {
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9aa0a8);
+}
+
+/* --- Pose quick-jump buttons --- */
+.posebench__poses {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.posebench__pose-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.posebench__pose {
+  padding: 0.32rem 0.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text, #d6dade);
+  background: var(--bg-sunken, #17181c);
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.posebench__pose:hover {
+  /* The accent is a fixed instrument colour (def.accent), so on-accent text is a
+     fixed dark ink — like ServoInstrument's is-on state — not the theme --accent-ink. */
+  color: #12241a;
+  background: var(--accent, #7fe0a8);
+  border-color: var(--accent, #7fe0a8);
+}
+.posebench__pose:active {
+  transform: translateY(1px);
+}
+
+/* --- Per-servo sliders --- */
+.posebench__servos {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.posebench__servo {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 8.5rem) 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+.posebench__servo-name {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+.posebench__servo-pin {
+  flex: 0 0 auto;
+  font-weight: 700;
+  color: var(--accent, #7fe0a8);
+}
+.posebench__servo-joint {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted, #9aa0a8);
+}
+.posebench__slider {
+  min-width: 0;
+  width: 100%;
+  accent-color: var(--accent, #7fe0a8);
+}
+.posebench__servo-val {
+  flex: 0 0 auto;
+  min-width: 2.6rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--text, #d6dade);
+}

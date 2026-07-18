@@ -21,7 +21,7 @@ import {
   nearestCenter,
   nearestPolygonEdge,
   nextComponentZ,
-  orderedComponents,
+  orderedItems,
   pasteStyle,
   pinShapeOf,
   resolvedPins,
@@ -95,6 +95,7 @@ export type CanvasTool =
   | 'rect'
   | 'circle'
   | 'cpoly'
+  | 'erasebg'
 
 /** Which layers are currently shown (driven by the Layers panel). */
 export interface LayerVisibility {
@@ -156,6 +157,10 @@ export interface PartCanvasProps {
   onSelect?: (sel: CanvasSelection) => void
   /** Surface a transient message (e.g. "can't place a pin in a hole"). */
   onNotify?: (msg: string) => void
+  /** Erase-background click: the pointer landed on the image at normalised board
+   *  coords (nx, ny) while the `erasebg` tool is active. The editor maps it to an
+   *  image pixel and flood-fills the background there. */
+  onEraseImageAt?: (nx: number, ny: number) => void
   /** Toggle the pin-spacing grid (the zoom-overlay grid button). */
   onToggleGrid?: () => void
   /** Toggle snap-to-grid (the zoom-overlay snap button). */
@@ -295,6 +300,7 @@ export function PartCanvas({
   onChange,
   onSelect,
   onNotify,
+  onEraseImageAt,
   onToggleGrid,
   onToggleSnap,
   resetSignal
@@ -1315,17 +1321,29 @@ export function PartCanvas({
     return inside
   }
   const hitTest = (nx: number, ny: number): CanvasSelection => {
+    // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
+    // The SVG paints connectors → LEDs → buttons ON TOP of shapes/labels, which
+    // sit on top of pins → holes → image. Testing shapes first (the old order)
+    // let a shape UNDERNEATH an LED steal the click; test the free-placed
+    // component glyphs before shapes so clicking an LED selects the LED.
     // A locked layer is skipped entirely — its items can't be picked up.
     if (visible.components && !locked.components) {
-      // Walk the unified z-order top-most first so a click selects what's visually
-      // on top (shapes and labels interleave by `z`).
-      const ord = orderedComponents(part)
-      for (let k = ord.length - 1; k >= 0; k--) {
-        const c = ord[k]
-        if (c.kind === 'label') {
-          if (dist(nx, ny, labels[c.index].x, labels[c.index].y) < HIT * 1.4) return { type: 'label', index: c.index }
-        } else if (inShape(shapes[c.index], nx, ny)) {
-          return { type: 'shape', index: c.index }
+      // Walk the unified item z-order top-most FIRST, so a click always selects
+      // what's visually on top (an LED reordered above a shape wins, and vice
+      // versa) — the render paints this same order.
+      const items = orderedItems(part)
+      for (let k = items.length - 1; k >= 0; k--) {
+        const it = items[k]
+        if (it.kind === 'connector') {
+          if (dist(nx, ny, connectors[it.index].x, connectors[it.index].y) < HIT) return { type: 'connector', index: it.index }
+        } else if (it.kind === 'led') {
+          if (dist(nx, ny, onboardLeds[it.index].x, onboardLeds[it.index].y) < HIT) return { type: 'led', index: it.index }
+        } else if (it.kind === 'button') {
+          if (dist(nx, ny, buttons[it.index].x, buttons[it.index].y) < HIT) return { type: 'button', index: it.index }
+        } else if (it.kind === 'label') {
+          if (dist(nx, ny, labels[it.index].x, labels[it.index].y) < HIT * 1.4) return { type: 'label', index: it.index }
+        } else if (inShape(shapes[it.index], nx, ny)) {
+          return { type: 'shape', index: it.index }
         }
       }
     }
@@ -1335,15 +1353,6 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
-    if (visible.components && !locked.components)
-      for (let i = buttons.length - 1; i >= 0; i--)
-        if (dist(nx, ny, buttons[i].x, buttons[i].y) < HIT) return { type: 'button', index: i }
-    if (visible.components && !locked.components)
-      for (let i = onboardLeds.length - 1; i >= 0; i--)
-        if (dist(nx, ny, onboardLeds[i].x, onboardLeds[i].y) < HIT) return { type: 'led', index: i }
-    if (visible.components && !locked.components)
-      for (let i = connectors.length - 1; i >= 0; i--)
-        if (dist(nx, ny, connectors[i].x, connectors[i].y) < HIT) return { type: 'connector', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -1357,6 +1366,15 @@ export function PartCanvas({
 
     if (tool === 'move') {
       dragRef.current = { kind: 'pan', sel: null, startNX: nx, startNY: ny, ox: 0, oy: 0, panX: e.clientX, panY: e.clientY, panTX: view.tx, panTY: view.ty }
+      return
+    }
+    // Erase-background: clicking on the image flood-fills the backdrop there.
+    if (tool === 'erasebg') {
+      if (locked.image || !part.imageData) return
+      const inX = nx >= layer.x && nx <= layer.x + layer.w
+      const inY = ny >= layer.y && ny <= layer.y + layer.h
+      if (inX && inY) onEraseImageAt?.(nx, ny)
+      else onNotify?.('Click on the image to erase its background there.')
       return
     }
     // Creation tools no-op on a locked layer.
@@ -2279,7 +2297,54 @@ export function PartCanvas({
         {/* Layer 4b/4c: shapes + text labels, drawn in one unified z-order so they
             can be stacked (top of the Components list = highest z = drawn last). */}
         {visible.components &&
-          orderedComponents(part).map((c) => {
+          orderedItems(part).map((c) => {
+            if (c.kind === 'button') {
+              const i = c.index
+              const b = buttons[i]
+              const cx = px(b.x)
+              const cy = py(b.y)
+              const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
+              return (
+                <g key={`btn${i}`}>
+                  {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
+                  {b.label &&
+                    styledText({
+                      text: b.label,
+                      cx,
+                      cy: labelY,
+                      fontSize: 9,
+                      fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
+                    })}
+                </g>
+              )
+            }
+            if (c.kind === 'led') {
+              const i = c.index
+              const led = onboardLeds[i]
+              const cx = px(led.x)
+              const cy = py(led.y)
+              const sel = isSel({ type: 'led', index: i })
+              return (
+                <g key={`led${i}`}>
+                  {onboardLedGlyph(cx, cy, led, sel)}
+                  {styledText({ text: onboardLedLabel(led), cx, cy: cy + 18, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                </g>
+              )
+            }
+            if (c.kind === 'connector') {
+              const i = c.index
+              const conn = connectors[i]
+              const cx = px(conn.x)
+              const cy = py(conn.y)
+              const { h: connH } = connectorSize(conn, connPxPerMm)
+              const sel = isSel({ type: 'connector', index: i })
+              return (
+                <g key={`conn${i}`}>
+                  {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+                  {styledText({ text: connectorLabel(conn), cx, cy: cy + connH / 2 + 11, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                </g>
+              )
+            }
             if (c.kind === 'label') {
               const i = c.index
               const l = labels[i]
@@ -2353,67 +2418,8 @@ export function PartCanvas({
             )
           })}
 
-        {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + label. */}
-        {visible.components &&
-          buttons.map((b, i) => {
-            const cx = px(b.x)
-            const cy = py(b.y)
-            const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
-            return (
-              <g key={`btn${i}`}>
-                {partButtonGlyph(cx, cy, PART_BUTTON_SIZE, isSel({ type: 'button', index: i }))}
-                {b.label &&
-                  styledText({
-                    text: b.label,
-                    cx,
-                    cy: labelY,
-                    fontSize: 9,
-                    fill: isSel({ type: 'button', index: i }) ? '#fff' : '#cfd6dd'
-                  })}
-              </g>
-            )
-          })}
-
-        {/* Layer 4e: onboard indicator LEDs (single / RGB) — glow glyph + label. */}
-        {visible.components &&
-          onboardLeds.map((led, i) => {
-            const cx = px(led.x)
-            const cy = py(led.y)
-            const sel = isSel({ type: 'led', index: i })
-            return (
-              <g key={`led${i}`}>
-                {onboardLedGlyph(cx, cy, led, sel)}
-                {styledText({
-                  text: onboardLedLabel(led),
-                  cx,
-                  cy: cy + 18,
-                  fontSize: 9,
-                  fill: sel ? '#fff' : '#cfd6dd'
-                })}
-              </g>
-            )
-          })}
-
-        {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — housing + label. */}
-        {visible.components &&
-          connectors.map((conn, i) => {
-            const cx = px(conn.x)
-            const cy = py(conn.y)
-            const { h: connH } = connectorSize(conn, connPxPerMm)
-            const sel = isSel({ type: 'connector', index: i })
-            return (
-              <g key={`conn${i}`}>
-                {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
-                {styledText({
-                  text: connectorLabel(conn),
-                  cx,
-                  cy: cy + connH / 2 + 11,
-                  fontSize: 9,
-                  fill: sel ? '#fff' : '#cfd6dd'
-                })}
-              </g>
-            )
-          })}
+        {/* Buttons / LEDs / connectors now interleave with shapes+labels in the
+            single z-ordered loop above (#130). */}
 
         {/* Selection chrome: image box + handles */}
         {interactive && selection?.type === 'image' && visible.image && !locked.image && part.imageData && (

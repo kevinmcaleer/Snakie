@@ -30,6 +30,9 @@ import { BoardGraph } from './components/BoardGraph'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
+import { readRobotModel } from '../../shared/krf'
+import { attachPartMesh } from './components/robot-part-mesh'
+import { jointNames, jointDisplayLimits } from './components/robot-assembly'
 import type {
   BoardDefinition,
   BoardSourcePayload,
@@ -101,12 +104,12 @@ function BoardWindowApp(): JSX.Element {
     }
     applyTheme(initial)
     setPayload((p) => ({ ...p, theme: initial }))
-    let bg = 'dark'
+    let bg = 'blueprint'
     try {
       const raw = window.localStorage.getItem(BREADBOARD_BG_KEY)
       if (raw) bg = JSON.parse(raw) as string
     } catch {
-      // Ignore — default dark.
+      // Ignore — default blueprint.
     }
     applyBreadboardBg(bg)
   }, [])
@@ -211,6 +214,38 @@ function BoardWindowApp(): JSX.Element {
     [folder]
   )
 
+  // The URDF's joint names — read the linked `.urdf` so a servo's inspector can
+  // offer a "drives joint" picker (#). Empty when there's no URDF / no folder yet.
+  const [joints, setJoints] = useState<string[]>([])
+  // Each joint's real travel (deg / mm) — seeds a new binding's joint range so the
+  // 3-D model doesn't clamp (a flat 0…180 default did).
+  const [jointLimits, setJointLimits] = useState<Record<string, { min: number; max: number }>>({})
+  const urdfPath = robot.robot?.urdf
+  useEffect(() => {
+    if (!folder || !urdfPath) {
+      setJoints([])
+      setJointLimits({})
+      return
+    }
+    let live = true
+    window.api.fs
+      .readFile(`${folder}/${urdfPath}`)
+      .then((content) => {
+        if (!live) return
+        setJoints(jointNames(content))
+        setJointLimits(jointDisplayLimits(content))
+      })
+      .catch(() => {
+        if (live) {
+          setJoints([])
+          setJointLimits({})
+        }
+      })
+    return () => {
+      live = false
+    }
+  }, [folder, urdfPath, robotNonce])
+
   // Append a library part to the project (robot.yml), with a unique instance id.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
@@ -223,10 +258,27 @@ function BoardWindowApp(): JSX.Element {
       // A drag-drop carries a canvas position (#159); a click-add leaves x/y unset
       // so the canvas auto-lays the part out.
       const placed = pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : {}
-      saveRobot({
+      const withPart: RobotDefinition = {
         ...robot,
         parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name, ...placed }]
-      })
+      }
+      if (part.mesh && folder) {
+        // #406: a mesh-linked part ALSO drops its STL into the project URDF (creating +
+        // linking one if absent). Save the part + link SYNCHRONOUSLY (so a rapid second
+        // drop / cross-window reload can't clobber it), THEN write the mesh into the
+        // .urdf. It shows in the Robot View the next time that URDF is loaded (e.g. on
+        // switching to Robot mode); an already-open Robot View won't refresh live.
+        const existingUrdf = readRobotModel(robot)?.urdf
+        const urdfName = existingUrdf || 'robot.urdf'
+        saveRobot(
+          existingUrdf
+            ? withPart
+            : { ...withPart, robot: { ...(withPart.robot ?? {}), version: 1, urdf: urdfName } }
+        )
+        void attachPartMesh(folder, urdfName, libraryId, part).catch(() => undefined)
+      } else {
+        saveRobot(withPart)
+      }
       // #166: offer to install the part's linked MicroPython library via mip —
       // but ONLY when the part ships NO bundled driver files. When it declares
       // `drivers` (the Driver Install banner copies those to the board OFFLINE), a
@@ -249,7 +301,7 @@ function BoardWindowApp(): JSX.Element {
         }
       }
     },
-    [robot, saveRobot]
+    [robot, saveRobot, folder]
   )
 
   // Esc backs out one level at a time (so a stray Esc / a focused input's Esc
@@ -278,6 +330,8 @@ function BoardWindowApp(): JSX.Element {
         asWindow
         robot={robot}
         onChangeRobot={saveRobot}
+        joints={joints}
+        jointLimits={jointLimits}
         libraries={libraries}
         onAddToProject={addToProject}
       />
@@ -299,4 +353,22 @@ function BoardWindowApp(): JSX.Element {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<BoardWindowApp />)
+const render = (): void =>
+  ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(<BoardWindowApp />)
+
+// In the WEB build this window is a browser popup (no preload): install the web
+// backends (parts / fs / robot) + the BroadcastChannel relay to the main window
+// BEFORE rendering, mirroring main.tsx. A failure still renders the bare viewer.
+if (import.meta.env.VITE_SNAKIE_WEB) {
+  import('./web/install-web-api')
+    .then((m) => {
+      m.installWebApi('board')
+      render()
+    })
+    .catch((err) => {
+      console.error('[Snakie] web backend install failed', err)
+      render()
+    })
+} else {
+  render()
+}

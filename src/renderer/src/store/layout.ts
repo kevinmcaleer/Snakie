@@ -41,14 +41,15 @@ import type { ActivityView } from '../components/ActivityBar'
 /** The named workspaces (Phase 1; slimmed 4 → 3 by the modes review). Order =
  *  the switcher's display order. Old `lab`/`data` envelopes migrate to
  *  `datalab` in {@link loadLayoutState}. */
-export const WORKSPACE_IDS = ['code', 'board', 'datalab'] as const
+export const WORKSPACE_IDS = ['code', 'board', 'datalab', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
   board: { label: 'Board', hint: 'Focused Board View beside your code' },
-  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' }
+  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' },
+  robot: { label: 'Robot', hint: 'Code · board · a 3D robot over the instruments' }
 }
 
 /** One workspace's remembered geometry. */
@@ -102,7 +103,9 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     filesCollapsed: true,
     shellCollapsed: false,
     rightCollapsed: true,
-    dockOpen: true,
+    // Instruments HIDDEN by default in Board mode — the board is the star, so it
+    // gets the room (Data Lab opens the dock, Code keeps it closed).
+    dockOpen: false,
     boardPaneOpen: true,
     horizontal: [0, 42, 58, 0],
     vertical: [65, 35]
@@ -118,6 +121,19 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     boardPaneOpen: false,
     horizontal: [0, 100, 0, 0],
     vertical: [50, 50]
+  },
+  // Robot (#320): the robotics cockpit — files collapsed, CODE ~⅓ on the left,
+  // the Board View (breadboard) in the middle, and the dock on the right (which
+  // in this mode carries a mini 3-D Robot panel above the instruments).
+  robot: {
+    activityView: 'files',
+    filesCollapsed: true,
+    shellCollapsed: false,
+    rightCollapsed: true,
+    dockOpen: true,
+    boardPaneOpen: true,
+    horizontal: [0, 34, 66, 0],
+    vertical: [65, 35]
   }
 }
 
@@ -168,6 +184,46 @@ function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayo
     ws.horizontal[2] = 0
   }
   return ws
+}
+
+/**
+ * The horizontal PanelGroup renders a VARIABLE number of panels — the board
+ * pane elides when closed (or in focus mode) and the chat pane doesn't exist
+ * at all on the web build (#528). These two helpers translate between the
+ * canonical 4-slot store layout `[files, centre, board, chat]` and whatever
+ * the group actually renders, so setLayout never receives a stray slot and
+ * onLayout sizes always land back in the right slots.
+ */
+
+/** The setLayout array for the RENDERED panels: elided slots fold into the
+ *  centre so the shares still sum to 100. */
+export function appliedHorizontal(
+  horizontal: readonly [number, number, number, number],
+  boardOn: boolean,
+  chatOn: boolean
+): number[] {
+  const [files, centre, board, chat] = horizontal
+  const sizes = [files, centre + (boardOn ? 0 : board) + (chatOn ? 0 : chat)]
+  if (boardOn) sizes.push(board)
+  if (chatOn) sizes.push(chat)
+  return sizes
+}
+
+/** Map an onLayout report back into the canonical 4 slots (elided slots → 0),
+ *  or null when the report doesn't match the rendered panel count. */
+export function recordedHorizontal(
+  sizes: number[],
+  boardOn: boolean,
+  chatOn: boolean
+): [number, number, number, number] | null {
+  const n = 2 + (boardOn ? 1 : 0) + (chatOn ? 1 : 0)
+  if (!validSizes(sizes, n)) return null
+  return [
+    sizes[0],
+    sizes[1],
+    boardOn ? sizes[2] : 0,
+    chatOn ? sizes[boardOn ? 3 : 2] : 0
+  ]
 }
 
 /** A fresh factory-default state (every workspace at its preset). */
@@ -289,6 +345,9 @@ export interface LayoutStore {
   workspace: WorkspaceLayout
   /** Bumps when geometry must be re-applied to the panel groups (switch/reset). */
   applyNonce: number
+  /** Transient editor focus (Robot pop-out): hide board/instruments/console so the
+   *  URDF fills the editor. NOT persisted; cleared on workspace switch. */
+  focus: boolean
   /** Latest sizes for a group (live ref-backed; safe to call every render). */
   getSizes: (group: 'horizontal' | 'vertical') => number[]
   switchWorkspace: (id: WorkspaceId) => void
@@ -297,6 +356,8 @@ export interface LayoutStore {
   setActivityView: (view: ActivityView) => void
   setCollapsed: (panel: 'files' | 'shell' | 'right', collapsed: boolean) => void
   setDockOpen: (open: boolean) => void
+  /** Enter/leave transient editor-focus mode. */
+  setFocus: (focus: boolean) => void
   /** Record a live panel-group layout (called from onLayout every drag frame). */
   recordSizes: (group: 'horizontal' | 'vertical', sizes: number[]) => void
 }
@@ -306,7 +367,15 @@ const LayoutContext = createContext<LayoutStore | null>(null)
 /** Debounce for localStorage writes while dragging (ms). */
 const SAVE_DEBOUNCE_MS = 300
 
-export function LayoutProvider({ children }: { children: ReactNode }): JSX.Element {
+export function LayoutProvider({
+  children,
+  chatPane = true
+}: {
+  children: ReactNode
+  /** Whether the chat right-pane exists in this build (false on web, #528) —
+   *  recordSizes needs it to slot onLayout reports back into the 4-slot store. */
+  chatPane?: boolean
+}): JSX.Element {
   // The full envelope lives in a ref (sizes mutate every drag frame); the
   // pieces React must re-render on (active id + the active workspace's
   // non-size fields) are mirrored into state.
@@ -317,6 +386,8 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     stateRef.current.workspaces[stateRef.current.active]
   )
   const [applyNonce, setApplyNonce] = useState(0)
+  // Transient editor-focus (Robot pop-out) — never persisted.
+  const [focus, setFocusState] = useState(false)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persist = useCallback((): void => {
@@ -351,12 +422,13 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     (group: 'horizontal' | 'vertical', sizes: number[]): void => {
       const s = stateRef.current as LayoutState
       const ws = s.workspaces[s.active]
-      if (group === 'horizontal' && ws.boardPaneOpen && validSizes(sizes, 4)) {
-        ws.horizontal = sizes as [number, number, number, number]
-      } else if (group === 'horizontal' && !ws.boardPaneOpen && validSizes(sizes, 3)) {
-        // The board Panel isn't rendered — the group reports [files, centre,
-        // chat]; slot the closed pane's 0 back into index 2.
-        ws.horizontal = [sizes[0], sizes[1], 0, sizes[2]]
+      if (group === 'horizontal') {
+        // Elided panels (closed board pane; no chat pane on web) report fewer
+        // sizes — map them back into the canonical 4 slots. A count mismatch
+        // (e.g. transient focus mode) is ignored, as before.
+        const mapped = recordedHorizontal(sizes, ws.boardPaneOpen, chatPane)
+        if (!mapped) return
+        ws.horizontal = mapped
       } else if (group === 'vertical' && validSizes(sizes, 2)) {
         ws.vertical = sizes as [number, number]
       } else {
@@ -365,16 +437,25 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
       // Sizes deliberately DON'T touch React state (per-frame drags); persist only.
       persist()
     },
-    [persist]
+    [persist, chatPane]
   )
 
   const switchWorkspace = useCallback(
     (id: WorkspaceId): void => {
       const s = stateRef.current as LayoutState
-      if (s.active === id) return
+      if (s.active === id) {
+        // Re-clicking the active workspace tab exits focus mode (a way back to
+        // the normal layout without switching away).
+        setFocusState((f) => {
+          if (f) setApplyNonce((n) => n + 1)
+          return false
+        })
+        return
+      }
       s.active = id
       setActive(id)
       setWorkspace(s.workspaces[id])
+      setFocusState(false) // leaving focus mode when the workspace changes
       setApplyNonce((n) => n + 1)
       persist()
     },
@@ -414,29 +495,45 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     [patchActive]
   )
 
+  // TRANSIENT focus mode (not persisted): the Robot pop-out hides the board,
+  // instruments + console so the URDF fills the editor, without changing the
+  // workspace. Bumps applyNonce so the shell re-collapses/expands + the board
+  // pane elides; switching workspace clears it (below).
+  const setFocus = useCallback((next: boolean): void => {
+    setFocusState((cur) => {
+      if (cur === next) return cur
+      setApplyNonce((n) => n + 1)
+      return next
+    })
+  }, [])
+
   const store = useMemo<LayoutStore>(
     () => ({
       active,
       workspace,
       applyNonce,
+      focus,
       getSizes,
       switchWorkspace,
       resetActive,
       setActivityView,
       setCollapsed,
       setDockOpen,
+      setFocus,
       recordSizes
     }),
     [
       active,
       workspace,
       applyNonce,
+      focus,
       getSizes,
       switchWorkspace,
       resetActive,
       setActivityView,
       setCollapsed,
       setDockOpen,
+      setFocus,
       recordSizes
     ]
   )

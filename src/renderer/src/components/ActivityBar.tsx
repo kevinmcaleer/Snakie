@@ -1,4 +1,5 @@
 import type { JSX, ReactNode } from 'react'
+import { isElectron } from '../lib/platform'
 
 /**
  * ACTIVITY BAR — narrow vertical icon strip on the far left.
@@ -23,6 +24,7 @@ export type ActivityView =
   | 'plugins'
   | 'inspect'
   | 'report-bug'
+  | 'learn'
   | 'help'
 
 const SVG = (children: ReactNode): JSX.Element => (
@@ -89,6 +91,15 @@ const ICONS: Record<ActivityView, JSX.Element> = {
       <path d="M5 5a3 3 0 1 1 4 2.8c-.7.4-1 .7-1 1.4V10H7V9c0-1.2.6-1.8 1.4-2.3A1.3 1.3 0 1 0 6.6 5z" />
       <rect x="7" y="11.5" width="2" height="2" />
     </g>
+  ),
+  // graduation cap (mortarboard) — the tutorials / Learn view
+  learn: SVG(
+    <g fill="currentColor">
+      <path d="M8 2 15 5.5 8 9 1 5.5 8 2Z" />
+      <path d="M4 7v3.1c0 .9 1.8 1.7 4 1.7s4-.8 4-1.7V7L8 8.9 4 7Z" />
+      <rect x="13.9" y="5.7" width="0.9" height="3.8" />
+      <circle cx="14.35" cy="10.2" r="1.1" />
+    </g>
   )
 }
 
@@ -124,10 +135,21 @@ const TOP_ITEMS: ActivityItem[] = [
   { id: 'inspect', label: 'Inspect' }
 ]
 
+/**
+ * Views that need a real filesystem + spawned processes (`simple-git`, the
+ * Python plugin host) that a browser tab can't provide — hidden outside
+ * Electron (Web W3, issue #284). Exported so `AppShell`'s `LeftView` can guard
+ * the panel body too (in case a persisted `activityView` from a previous
+ * Electron session points at one of these in a browser).
+ */
+export const DESKTOP_ONLY_VIEWS: ReadonlySet<ActivityView> = new Set(['source-control', 'plugins'])
+
 // Report Bug sits ABOVE Help (issue #206). It's a normal VIEW now — a non-modal
 // left panel — so the editor + console stay usable while a report is open.
+// Learn (the tutorials panel, #479) sits just above Help too.
 const BOTTOM_ITEMS: ActivityItem[] = [
   { id: 'report-bug', label: 'Report Bug' },
+  { id: 'learn', label: 'Learn' },
   { id: 'help', label: 'Help' }
 ]
 
@@ -160,10 +182,14 @@ function renderItem(
 }
 
 export function ActivityBar({ active, onSelect, onOpenSettings }: ActivityBarProps): JSX.Element {
+  // Hide desktop-only views (Source Control, Plugins) outside Electron — a
+  // browser tab has no filesystem/process access for git or the plugin host
+  // (Web W3, issue #284).
+  const topItems = isElectron() ? TOP_ITEMS : TOP_ITEMS.filter((item) => !DESKTOP_ONLY_VIEWS.has(item.id))
   return (
     <nav className="activitybar" aria-label="Activity bar">
       <div className="activitybar__group">
-        {TOP_ITEMS.map((item) => renderItem(item, active, onSelect))}
+        {topItems.map((item) => renderItem(item, active, onSelect))}
       </div>
       <div className="activitybar__group activitybar__group--bottom">
         {BOTTOM_ITEMS.map((item) => renderItem(item, active, onSelect))}
