@@ -56,6 +56,7 @@ import {
   type PrimitiveGeom
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
+import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
 import { createViewCube } from './robot-viewcube'
 import {
   historyInit,
@@ -230,6 +231,9 @@ export function RobotView({
   // Guards the one-time managed-block seed per focused file id.
   const seededManagedRef = useRef<string>('')
   const [measureActive, setMeasureActive] = useState(false)
+  const [boneMode, setBoneMode] = useState(false) // skeleton overlay (#536)
+  const boneModeRef = useRef(false)
+  const boneApiRef = useRef<BoneModeHandle | null>(null)
   const [measureDist, setMeasureDist] = useState<number | null>(null)
   const [savingLabel, setSavingLabel] = useState<string | null>(null)
   // True while a running program's `SNK SERVO` telemetry is actively driving a
@@ -459,6 +463,9 @@ export function RobotView({
   const assembly = useMemo(() => parseAssembly(content), [content])
   // The model's joints, for the hierarchy's Joints branch (#353).
   const joints = useMemo(() => readAllJoints(content), [content])
+  // Bone Mode (#536) needs unique joint names (IK keys on them) — URDF requires
+  // it, but a hand-edited file can break it; surface a friendly error.
+  const dupJointNames = useMemo(() => duplicateNames(jointNames(content)), [content])
   // Import is only possible for a saved local `.urdf` (a file we can edit).
   const canImport = poseUI && activeFile?.source === 'local' && !!activeFile.path
   const [importing, setImporting] = useState(false)
@@ -2127,6 +2134,15 @@ export function RobotView({
     }
   }, [measureActive])
 
+  // Bone Mode toggle (#536): ghost/unghost via the overlay api, then re-apply the
+  // selection highlight so its tint is cloned from the CURRENT (ghosted or
+  // restored) materials rather than a stale swap.
+  useEffect(() => {
+    boneModeRef.current = boneMode
+    boneApiRef.current?.setEnabled(boneMode)
+    highlightApiRef.current?.apply(selectedLinkRef.current)
+  }, [boneMode])
+
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
@@ -2226,6 +2242,11 @@ export function RobotView({
     const fill = new THREE.DirectionalLight(0x9fb4d0, 0.35)
     fill.position.set(-1.5, 1, -1.2)
     scene.add(fill)
+
+    // Bone Mode overlay (#536): built once per scene, driven per-frame in tick().
+    const boneModeApi = createBoneMode(scene, () => robotRef.current)
+    boneApiRef.current = boneModeApi
+    boneModeApi.setEnabled(boneModeRef.current)
 
     // Navigation cube (top-right): mirrors the camera; a face-click snaps the
     // view to that orthographic direction. Its own canvas → no OrbitControls clash.
@@ -4318,6 +4339,7 @@ export function RobotView({
     const tick = (): void => {
       stepAnim()
       controls.update()
+      boneModeApi.update() // live skeleton overlay (#536) — follows every joint drive
       renderer.render(scene, camera)
       if (viewCube) {
         viewCube.sync(camera.quaternion)
@@ -4346,6 +4368,8 @@ export function RobotView({
       controls.removeEventListener('start', onControlsStart)
       stopExplodeAnim()
       zoomApiRef.current = null
+      boneApiRef.current = null
+      boneModeApi.dispose()
       if (viewCube) {
         viewCube.dom.remove()
         viewCube.dispose()
@@ -4389,11 +4413,19 @@ export function RobotView({
             </div>
           )
         )}
-        {!error && (meshNote || externalMeshRefs.length > 0) && (
+        {!error && (meshNote || externalMeshRefs.length > 0 || (boneMode && dupJointNames.length > 0)) && (
           <div className="robotview__notes">
             {meshNote && (
               <div className="robotview__note" role="status">
                 {meshNote}
+              </div>
+            )}
+            {boneMode && dupJointNames.length > 0 && (
+              <div className="robotview__note" role="alert">
+                Bone Mode needs every joint to have its own name, but{' '}
+                {dupJointNames.map((n) => `“${n}”`).join(', ')}{' '}
+                {dupJointNames.length === 1 ? 'is' : 'are'} used more than once — rename the
+                duplicate joint{dupJointNames.length === 1 ? '' : 's'} in the Build panel.
               </div>
             )}
             {externalMeshRefs.length > 0 && (
@@ -4617,6 +4649,18 @@ export function RobotView({
                 </button>
               </div>
             )}
+            <span className="robotview__zsep" aria-hidden="true" />
+            {/* Bone Mode (#536): ghost mesh + skeleton/compass overlay. */}
+            <button
+              type="button"
+              className={`robotview__zbtn${boneMode ? ' is-active' : ''}`}
+              onClick={() => setBoneMode((v) => !v)}
+              title="Bone Mode — see the skeleton: bones, lengths and joint compasses"
+              aria-label="Bone Mode"
+              aria-pressed={boneMode}
+            >
+              🦴
+            </button>
           </div>
         )}
         {showPanel && buildOpen && (
