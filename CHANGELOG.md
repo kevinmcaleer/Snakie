@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Discovery tips in the status bar (#434).** When the status bar has nothing
+  real to say, it now shows a rotating 💡 tip about a Snakie feature — fading
+  in/out over a second, changing every 5–10 minutes, and always giving way to
+  actual warnings and status messages. Some tips link to docs.snakie.org
+  articles (opened in your browser). The list lives in a plain YAML file so
+  it's easy to extend, and a **Settings → Appearance** toggle turns tips off.
 - **Board View works by touch — iPad-friendly wiring (part of #525).** On a
   touchscreen, tapping the board or a part now reveals its pin capability
   chips (they stay up until you tap elsewhere — touch has no hover), wires can
