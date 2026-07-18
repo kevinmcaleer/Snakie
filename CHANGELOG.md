@@ -20,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the existing book icons), the shell's "Send to chat", SAM's SPEAK button and
   the build toolbar's tube primitive. Glyphs DejaVu *does* cover (✓ ✕ ⚙ ⚠ ★ ▦ ●
   and the arrows) are deliberately left as text — they already render fine.
+  Learn-panel course cards are covered too: courses still declare a thumbnail
+  `emoji:` in their `course.yml`, but it now resolves through a small
+  emoji→icon map, falling back to the raw glyph for an unmapped value so
+  authored courses keep working.
 
 ### Added
 - **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**

@@ -19,7 +19,7 @@ import { useWorkspace } from '../store/workspace'
 import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
 import type { Course, CourseTrack } from '../lib/courses'
-import { BulbIcon } from './ui-icons'
+import { BulbIcon, CourseIcon } from './ui-icons'
 import './Tutorials.css'
 
 const TRACK_LABEL: Record<CourseTrack, string> = {
@@ -74,7 +74,7 @@ export function TutorialPanel(): JSX.Element {
                     onClick={() => openCourse(c)}
                   >
                     <span className="tp__card-emoji" aria-hidden>
-                      {c.emoji}
+                      <CourseIcon emoji={c.emoji} size={30} />
                     </span>
                     <span className="tp__card-body">
                       <span className="tp__card-title">{c.title}</span>

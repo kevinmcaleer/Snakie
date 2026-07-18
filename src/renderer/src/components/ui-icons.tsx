@@ -1,4 +1,5 @@
 import type { JSX } from 'react'
+import { ClosedBookIcon } from './help-icons'
 
 /**
  * Line icons for UI chrome that previously used emoji (#549).
@@ -217,6 +218,57 @@ export const SpeakerIcon = ({ size }: { size?: number }): JSX.Element =>
     ),
     size
   )
+
+/** A chick — the beginner course track. */
+export const ChickIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(
+      <>
+        <circle cx="11.4" cy="14.6" r="5.6" />
+        <circle cx="11.4" cy="6.7" r="3.7" />
+        <path d="M14.9 6.3 17.7 7.4 14.9 8.5z" />
+        <circle cx="12.7" cy="6" r="0.9" fill="currentColor" stroke="none" />
+        <path d="M9.2 19.9 8.3 21.6M13.6 19.9 14.5 21.6" />
+      </>
+    ),
+    size
+  )
+
+/** A jointed robot arm — the URDF / robot-building course track. */
+export const ArmIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(
+      <>
+        <path d="M4.8 20.8h6.6" />
+        <path d="M8.1 20.8v-4.6" />
+        <circle cx="8.1" cy="14.6" r="1.7" />
+        <path d="M9.3 13.4 13.1 9.6" />
+        <circle cx="14.3" cy="8.4" r="1.7" />
+        <path d="M15.5 7.2 17.4 5.3" />
+        <path d="M17.4 5.3 20.3 4.8M17.4 5.3 17.9 2.4" />
+      </>
+    ),
+    size
+  )
+
+/**
+ * Course-card thumbnail for the Learn panel (#549).
+ *
+ * Courses declare a thumbnail as an emoji in their `course.yml`, which is
+ * invisible on a Linux box with no emoji font. Map the ones we ship to icons;
+ * anything else falls back to the raw emoji so a course author using an
+ * unmapped glyph still gets whatever their platform can render.
+ */
+export const CourseIcon = ({ emoji, size }: { emoji: string; size?: number }): JSX.Element => {
+  const known: Record<string, ({ size }: { size?: number }) => JSX.Element> = {
+    '🐣': ChickIcon,
+    '🤖': RobotIcon,
+    '🦾': ArmIcon,
+    '📘': ClosedBookIcon
+  }
+  const Icon = known[emoji]
+  return Icon ? <Icon size={size} /> : <>{emoji}</>
+}
 
 /** A cylinder — the "add a tube" build primitive. */
 export const CylinderIcon = ({ size }: { size?: number }): JSX.Element =>
