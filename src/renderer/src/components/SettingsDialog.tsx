@@ -10,6 +10,7 @@ import { EDITOR_THEME_LIST } from '../store/editorThemes'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import type { Theme } from '../hooks/useTheme'
 import { ChatSettings } from './ChatSettings'
+import { BulbIcon } from './ui-icons'
 import './SettingsDialog.css'
 
 /**
@@ -200,7 +201,8 @@ function AppearanceTab({
       <section className="settings-section">
         <h3 className="settings-section__title">Status bar tips</h3>
         <p className="settings-section__hint">
-          Rotate a 💡 discovery tip through the status bar when it has nothing else to say.
+          Rotate a <BulbIcon size={12} /> discovery tip through the status bar when it has nothing
+          else to say.
         </p>
         <label className="settings-check">
           <input

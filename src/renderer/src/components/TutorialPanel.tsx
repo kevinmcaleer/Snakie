@@ -19,6 +19,7 @@ import { useWorkspace } from '../store/workspace'
 import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
 import type { Course, CourseTrack } from '../lib/courses'
+import { BulbIcon, CourseIcon } from './ui-icons'
 import './Tutorials.css'
 
 const TRACK_LABEL: Record<CourseTrack, string> = {
@@ -73,7 +74,7 @@ export function TutorialPanel(): JSX.Element {
                     onClick={() => openCourse(c)}
                   >
                     <span className="tp__card-emoji" aria-hidden>
-                      {c.emoji}
+                      <CourseIcon emoji={c.emoji} size={30} />
                     </span>
                     <span className="tp__card-body">
                       <span className="tp__card-title">{c.title}</span>
@@ -142,7 +143,7 @@ export function TutorialPanel(): JSX.Element {
             {tipOpen && lesson?.tip && (
               <div className="tp__tip" role="note">
                 <span className="tp__tip-bulb" aria-hidden>
-                  💡
+                  <BulbIcon size={14} />
                 </span>
                 <Markdown source={lesson.tip} className="tp__tip-md" />
               </div>
@@ -170,7 +171,7 @@ export function TutorialPanel(): JSX.Element {
                   aria-label="Show a tip"
                   aria-pressed={tipOpen}
                 >
-                  💡
+                  <BulbIcon size={14} />
                 </button>
               )}
               <button

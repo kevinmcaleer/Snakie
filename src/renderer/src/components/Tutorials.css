@@ -68,6 +68,10 @@
   box-shadow: 0 8px 20px -12px rgba(0, 0, 0, 0.5);
 }
 .tp__card-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Sizes the emoji fallback for a course whose glyph has no mapped icon. */
   font-size: 30px;
   line-height: 1;
   align-self: center;

@@ -8,6 +8,7 @@ import { useDiagnostics } from '../store/diagnostics'
 import { useConsole } from '../store/console'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { SEND_CONSOLE_EVENT } from './ChatPanel'
+import { ChatIcon } from './ui-icons'
 import './RunControls.css'
 import './ShellPanel.css'
 
@@ -127,7 +128,7 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
                 aria-label="Send console output to chat"
               >
                 <span className="btn__glyph" aria-hidden="true">
-                  💬
+                  <ChatIcon size={13} />
                 </span>
                 <span>Send to chat</span>
               </button>

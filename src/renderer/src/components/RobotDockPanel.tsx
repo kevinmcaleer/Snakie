@@ -6,6 +6,7 @@ import { useWorkspace, announceSaved } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
 import demoArm from '../assets/demo-arm.urdf?raw'
+import { FolderOpenIcon } from './ui-icons'
 
 /**
  * ROBOT DOCK PANEL (#320) — the mini 3-D Robot view that sits above the
@@ -243,7 +244,7 @@ export function RobotDockPanel(): JSX.Element {
           title="Open an existing robot (.urdf) full-screen"
           onClick={() => void openRobot()}
         >
-          📂 Open…
+          <FolderOpenIcon size={13} /> Open…
         </button>
         <button
           type="button"

@@ -6,7 +6,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.33.0] - 2026-07-18
+### Fixed
+- **UI icons no longer vanish on Linux (#549).** Raspberry Pi OS ships no
+  colour-emoji font, so DejaVu Sans is the fallback and every glyph in the
+  U+1F300+ plane rendered as a blank box — most visibly the 🦴 Bone Mode and
+  💥 exploded-view buttons added in 0.33.0. Those glyphs are now SVG line icons
+  in a new `ui-icons.tsx` (same conventions as `help-icons.tsx`: 24×24 viewBox,
+  `currentColor`, `aria-hidden` since each call site already carries its own
+  `title`/`aria-label`). Covers the Robot View toolbar (exploded view, save
+  explosion video, Bone Mode, IK goal, Capture Pose, the measure readout), the
+  status-bar and tutorial tip bulbs, Part Editor lock/unlock and delete, the
+  build checklist header, the "Open…" buttons, Help Panel doc links (reusing
+  the existing book icons), the shell's "Send to chat", SAM's SPEAK button and
+  the build toolbar's tube primitive. Glyphs DejaVu *does* cover (✓ ✕ ⚙ ⚠ ★ ▦ ●
+  and the arrows) are deliberately left as text — they already render fine.
+  Learn-panel course cards are covered too: courses still declare a thumbnail
+  `emoji:` in their `course.yml`, but it now resolves through a small
+  emoji→icon map, falling back to the raw glyph for an unmapped value so
+  authored courses keep working. Also the build checklist's completion message
+  and the Robot View snap tooltip's "locked" label — the latter needed
+  `setBuildDim`'s `text` widened from `string` to `ReactNode` so the label can
+  carry an inline padlock icon.
 
 ### Added
 - **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**

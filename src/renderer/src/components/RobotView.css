@@ -370,6 +370,9 @@
   pointer-events: none;
 }
 .robotview__hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.6rem;
   color: var(--text, #cdd2d9);

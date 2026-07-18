@@ -30,6 +30,7 @@ import {
   type StickyRecord
 } from './build-checklist'
 import type { RobotDefinition } from '../../../shared/robot'
+import { TrophyIcon, RobotIcon, ConfettiIcon } from './ui-icons'
 import './BuildChecklist.css'
 
 /** Collapse preference — global (not per-project), like the motion dock's. */
@@ -180,7 +181,7 @@ export function BuildChecklist(): JSX.Element {
         title={collapsed ? 'Show the checklist' : 'Hide the checklist'}
       >
         <span className="bcl__head-emoji" aria-hidden>
-          {complete ? '🏆' : '🤖'}
+          {complete ? <TrophyIcon size={15} /> : <RobotIcon size={15} />}
         </span>
         <span className="bcl__head-title">Robot build checklist</span>
         <span className={`bcl__count${complete ? ' bcl__count--done' : ''}`}>
@@ -219,7 +220,10 @@ export function BuildChecklist(): JSX.Element {
         </ol>
       )}
       {!collapsed && complete && (
-        <p className="bcl__congrats">Robot complete — you built, posed and simulated it. Amazing work! 🎉</p>
+        <p className="bcl__congrats">
+          Robot complete — you built, posed and simulated it. Amazing work!{' '}
+          <ConfettiIcon size={13} />
+        </p>
       )}
     </section>
   )

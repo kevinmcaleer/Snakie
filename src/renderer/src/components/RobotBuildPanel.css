@@ -583,6 +583,11 @@
 .robotbuild__dim {
   position: absolute;
   z-index: 5;
+  /* inline-flex so the "locked" label's padlock icon (#549) centres against
+     the text instead of sitting on the baseline. */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   pointer-events: none;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.66rem;
