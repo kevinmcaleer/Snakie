@@ -7,8 +7,10 @@ import type {
   FlashProgress
 } from '../../../preload/index.d'
 import { useFocusTrap } from '../hooks/useFocusTrap'
-import { isElectron } from '../lib/platform'
+import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
+import { flashMicrobitInBrowser, requestMicrobitDevice } from '../lib/webFirmware/microbitFlash'
+import { copyFirmwareToDrive } from '../lib/webFirmware/driveCopyFlash'
 import './FirmwareFlasher.css'
 
 interface FirmwareFlasherProps {
@@ -76,13 +78,24 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
  *
  * In Electron, all heavy lifting happens in the main process via
  * `window.api.firmware`. Outside Electron (a browser tab — Web W3, issue
- * #284) there's no process to shell out to `esptool`, so ESP32/ESP8266
- * flashing instead runs entirely in the renderer over the Web Serial API via
- * `esptool-js` (see `lib/webFirmware/espFlash.ts`); the board picker is
- * narrowed to ESP boards only and the firmware-catalog download is hidden
- * (RP2040/micro:bit browser flashing and a browser-native catalog fetch are
- * follow-up work). `isElectron()` from `lib/platform` decides which path a
- * given render takes.
+ * #284) there's no process to shell out to, so every board flashes entirely
+ * client-side instead, over whichever browser API fits it:
+ *  - ESP32/ESP8266: Web Serial via Espressif's `esptool-js`
+ *    (`lib/webFirmware/espFlash.ts`).
+ *  - micro:bit: WebUSB/DAPLink via ARM's `dapjs`
+ *    (`lib/webFirmware/microbitFlash.ts`), the same approach MakeCode uses —
+ *    with an explicit "copy to drive instead" fallback for browsers/boards
+ *    where WebUSB DAPLink doesn't respond.
+ *  - RP2040 (BOOTSEL): there's no WebUSB interface to talk to in bootloader
+ *    mode, so this ALWAYS uses the guided drive-copy flow below.
+ *  - The guided drive-copy flow (`lib/webFirmware/driveCopyFlash.ts`) talks
+ *    the user through the manual mount step (hold BOOTSEL / plug in), then
+ *    uses the File System Access API's save-file picker to write the
+ *    firmware onto whichever drive they pick.
+ * A browser-native firmware-catalog fetch isn't implemented yet, so the
+ * catalog-download source is hidden outside Electron; only "Local file" is
+ * offered there. `isElectron()`/`hasWebUSB()` from `lib/platform` decide
+ * which path a given render takes.
  */
 export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
@@ -91,10 +104,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
   const [firmwarePath, setFirmwarePath] = useState<string>('')
-  // The picked firmware's raw bytes, for the browser (Web Serial) flash path,
-  // which has no filesystem path to hand to esptool — only a `File` (Web W3).
-  const [webFirmwareBytes, setWebFirmwareBytes] = useState<Uint8Array | null>(null)
+  // The picked firmware's raw bytes, for the browser flash paths, which have
+  // no filesystem path to hand to esptool/dapjs — only a `File` (Web W3).
+  const [webFirmwareBytes, setWebFirmwareBytes] = useState<Uint8Array<ArrayBuffer> | null>(null)
   const webFileInputRef = useRef<HTMLInputElement>(null)
+  // For a browser micro:bit flash: false tries WebUSB/DAPLink first (the
+  // default when the browser supports it); true skips straight to the
+  // guided drive-copy flow, either because the user hit the explicit
+  // fallback button or because this browser has no WebUSB at all.
+  const [microbitUseDriveCopy, setMicrobitUseDriveCopy] = useState(false)
   const [esptool, setEsptool] = useState<EsptoolInfo | null>(null)
   // Generation of a detected micro:bit (v1/v2), to pre-select the right firmware.
   const [detectedMicrobit, setDetectedMicrobit] = useState<'v1' | 'v2' | undefined>(undefined)
@@ -117,6 +135,13 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [selVersionUrl, setSelVersionUrl] = useState<string>('')
 
   const isEsp = board === 'esp32' || board === 'esp8266'
+  // In the browser, micro:bit flashes via WebUSB/DAPLink unless the browser
+  // lacks WebUSB or the user chose the drive-copy fallback; RP2040 always
+  // uses drive-copy (BOOTSEL has no WebUSB interface).
+  const browserMicrobitViaWebUsb =
+    !isElectron() && board === 'microbit' && hasWebUSB() && !microbitUseDriveCopy
+  const browserDriveCopy =
+    !isElectron() && (board === 'rp2040' || (board === 'microbit' && !browserMicrobitViaWebUsb))
 
   // A single handler for a streamed progress line, shared by BOTH the
   // Electron IPC subscription below AND the browser (Web Serial) flash path,
@@ -192,6 +217,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const handleBoardChange = useCallback((next: BoardType): void => {
     setBoard(next)
     setOffset(DEFAULT_OFFSET[next])
+    // Reset the drive-copy opt-in so switching away from and back to
+    // micro:bit re-tries WebUSB/DAPLink first (Web W3, issue #284).
+    setMicrobitUseDriveCopy(false)
     // The catalog now serves ESP (`.bin`) and RP2040 (`.uf2`) alike (issue
     // #125), so the source is no longer gated by board.
   }, [])
@@ -328,11 +356,12 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const canFlash = useMemo(() => {
     if (flashing) return false
-    if (!isElectron() && isEsp) {
-      // Browser (Web Serial) flashing reads bytes picked via `<input type=file>`
+    if (!isElectron() && (isEsp || browserMicrobitViaWebUsb || browserDriveCopy)) {
+      // Every browser flash path reads bytes picked via `<input type=file>`
       // directly — there's no IPC firmwarePath/esptool-availability check to
-      // make, and the serial port itself is only requested once Flash is
-      // clicked (Web W3, issue #284).
+      // make, and the port/device/save-location itself is only requested
+      // once Flash is clicked, since each of Web Serial/WebUSB/File System
+      // Access requires a user gesture (Web W3, issue #284).
       return webFirmwareBytes !== null && webFirmwareBytes.length > 0
     }
     if (!haveFirmware) return false
@@ -344,7 +373,18 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     // A drive board (RP2040 / micro:bit) needs the boot drive to copy onto, and a
     // micro:bit must NOT be in maintenance mode.
     return mountPath.length > 0 && !selectedMaintenance
-  }, [flashing, isEsp, webFirmwareBytes, haveFirmware, port, esptool, mountPath, selectedMaintenance])
+  }, [
+    flashing,
+    isEsp,
+    browserMicrobitViaWebUsb,
+    browserDriveCopy,
+    webFirmwareBytes,
+    haveFirmware,
+    port,
+    esptool,
+    mountPath,
+    selectedMaintenance
+  ])
 
   const resetRun = useCallback((): void => {
     setLog([])
@@ -367,6 +407,32 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         }
         const serialPort = await requestEspPort()
         await flashEspInBrowser(serialPort, { firmware: webFirmwareBytes, offset }, handleProgress)
+        return
+      }
+      if (browserMicrobitViaWebUsb) {
+        // Browser micro:bit flash via WebUSB/DAPLink: the device is
+        // requested here — inside this click handler — because
+        // `navigator.usb.requestDevice()` requires a user gesture (Web W3,
+        // issue #284).
+        if (!webFirmwareBytes) {
+          throw new Error('Choose a firmware .hex file first.')
+        }
+        const device = await requestMicrobitDevice()
+        await flashMicrobitInBrowser(device, webFirmwareBytes, handleProgress)
+        return
+      }
+      if (browserDriveCopy) {
+        // Browser guided drive-copy flash (RP2040 always; micro:bit when
+        // WebUSB isn't available or the user opted into this fallback). The
+        // save-file picker is requested here for the same user-gesture
+        // reason as above (Web W3, issue #284).
+        if (!webFirmwareBytes) {
+          throw new Error(
+            `Choose a firmware ${board === 'microbit' ? '.hex' : '.uf2'} file first.`
+          )
+        }
+        const suggestedName = firmwarePath || (board === 'microbit' ? 'firmware.hex' : 'firmware.uf2')
+        await copyFirmwareToDrive(webFirmwareBytes, suggestedName, handleProgress)
         return
       }
       if (usingCatalog) {
@@ -404,6 +470,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   }, [
     resetRun,
     isEsp,
+    browserMicrobitViaWebUsb,
+    browserDriveCopy,
     webFirmwareBytes,
     offset,
     handleProgress,
@@ -462,16 +530,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 disabled={flashing || usingCatalog}
                 onChange={(e) => handleBoardChange(e.target.value as BoardType)}
               >
-                {(Object.keys(BOARD_LABELS) as BoardType[])
-                  // Outside Electron, only ESP32/ESP8266 flash today (Web
-                  // Serial via esptool-js) — RP2040/micro:bit browser flashing
-                  // is follow-up work (Web W3, issue #284).
-                  .filter((b) => isElectron() || isEspBoard(b))
-                  .map((b) => (
-                    <option key={b} value={b}>
-                      {BOARD_LABELS[b]}
-                    </option>
-                  ))}
+                {(Object.keys(BOARD_LABELS) as BoardType[]).map((b) => (
+                  <option key={b} value={b}>
+                    {BOARD_LABELS[b]}
+                  </option>
+                ))}
               </select>
               {isElectron() && (
                 <button
@@ -493,12 +556,6 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
             {candidates.length > 0 && (
               <p className="firmware-hint">
                 Detected: {candidates.map((c) => c.label).join('; ')}
-              </p>
-            )}
-            {!isElectron() && (
-              <p className="firmware-hint">
-                micro:bit and Pico flashing in the browser are coming soon — use the desktop app for
-                those boards today.
               </p>
             )}
           </div>
@@ -563,8 +620,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 </p>
               )}
             </>
-          ) : (
-
+          ) : isElectron() ? (
             <div className="firmware-field">
               <label className="firmware-field__label" htmlFor="firmware-mount">
                 {board === 'microbit' ? 'micro:bit drive (MICROBIT)' : 'RP2040 boot drive (RPI-RP2)'}
@@ -603,6 +659,54 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   <strong>without holding the reset button</strong> so the MICROBIT drive appears,
                   then press Detect.
                 </p>
+              )}
+            </div>
+          ) : (
+            <div className="firmware-field">
+              <span className="firmware-field__label">
+                {board === 'microbit' ? 'micro:bit' : 'RP2040 (Pico) boot drive'}
+              </span>
+              {board === 'rp2040' && (
+                <p className="firmware-hint">
+                  Hold the <strong>BOOTSEL</strong> button while plugging your Pico in via USB, then
+                  click Flash — you&apos;ll be asked to pick the <strong>RPI-RP2</strong> drive that
+                  appears (File System Access — Chrome or Edge only).
+                </p>
+              )}
+              {board === 'microbit' && browserMicrobitViaWebUsb && (
+                <>
+                  <p className="firmware-hint">
+                    Clicking Flash will prompt you to select your micro:bit over WebUSB (Chrome or
+                    Edge only).
+                  </p>
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--sm"
+                    onClick={() => setMicrobitUseDriveCopy(true)}
+                    disabled={flashing}
+                  >
+                    Trouble connecting? Copy to drive instead
+                  </button>
+                </>
+              )}
+              {board === 'microbit' && !browserMicrobitViaWebUsb && (
+                <>
+                  <p className="firmware-hint">
+                    Plug your micro:bit in via USB, then click Flash — you&apos;ll be asked to pick
+                    the <strong>MICROBIT</strong> drive that appears (File System Access — Chrome or
+                    Edge only).
+                  </p>
+                  {hasWebUSB() && (
+                    <button
+                      type="button"
+                      className="btn btn--ghost btn--sm"
+                      onClick={() => setMicrobitUseDriveCopy(false)}
+                      disabled={flashing}
+                    >
+                      Use WebUSB instead
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
