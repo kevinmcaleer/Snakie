@@ -15,6 +15,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and re-adopt-after-reload semantics match the desktop.
 
 ### Fixed
+- **CODE→ROBOT workspace switch no longer throws on the web app (#528).** The
+  layout store always keeps four horizontal panel shares (files, centre,
+  board, chat) but the chat pane doesn't exist on the web build, so applying a
+  workspace pushed a stray fourth value into a three-panel group —
+  react-resizable-panels rejected it (`Invalid 3 panel layout`) and dragged
+  sizes were never recorded on the web. Layouts are now mapped to exactly the
+  rendered panels in both directions (apply + record).
 - **"New robot" / "Open Folder" now work on iPad (part of #525).** iPadOS
   Safari has no folder picker (`showDirectoryPicker`), so the web fs backend
   never installed and both buttons silently did nothing. Where the pickers are

@@ -186,6 +186,46 @@ function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayo
   return ws
 }
 
+/**
+ * The horizontal PanelGroup renders a VARIABLE number of panels — the board
+ * pane elides when closed (or in focus mode) and the chat pane doesn't exist
+ * at all on the web build (#528). These two helpers translate between the
+ * canonical 4-slot store layout `[files, centre, board, chat]` and whatever
+ * the group actually renders, so setLayout never receives a stray slot and
+ * onLayout sizes always land back in the right slots.
+ */
+
+/** The setLayout array for the RENDERED panels: elided slots fold into the
+ *  centre so the shares still sum to 100. */
+export function appliedHorizontal(
+  horizontal: readonly [number, number, number, number],
+  boardOn: boolean,
+  chatOn: boolean
+): number[] {
+  const [files, centre, board, chat] = horizontal
+  const sizes = [files, centre + (boardOn ? 0 : board) + (chatOn ? 0 : chat)]
+  if (boardOn) sizes.push(board)
+  if (chatOn) sizes.push(chat)
+  return sizes
+}
+
+/** Map an onLayout report back into the canonical 4 slots (elided slots → 0),
+ *  or null when the report doesn't match the rendered panel count. */
+export function recordedHorizontal(
+  sizes: number[],
+  boardOn: boolean,
+  chatOn: boolean
+): [number, number, number, number] | null {
+  const n = 2 + (boardOn ? 1 : 0) + (chatOn ? 1 : 0)
+  if (!validSizes(sizes, n)) return null
+  return [
+    sizes[0],
+    sizes[1],
+    boardOn ? sizes[2] : 0,
+    chatOn ? sizes[boardOn ? 3 : 2] : 0
+  ]
+}
+
 /** A fresh factory-default state (every workspace at its preset). */
 export function defaultLayoutState(): LayoutState {
   const workspaces = {} as Record<WorkspaceId, WorkspaceLayout>
@@ -327,7 +367,15 @@ const LayoutContext = createContext<LayoutStore | null>(null)
 /** Debounce for localStorage writes while dragging (ms). */
 const SAVE_DEBOUNCE_MS = 300
 
-export function LayoutProvider({ children }: { children: ReactNode }): JSX.Element {
+export function LayoutProvider({
+  children,
+  chatPane = true
+}: {
+  children: ReactNode
+  /** Whether the chat right-pane exists in this build (false on web, #528) —
+   *  recordSizes needs it to slot onLayout reports back into the 4-slot store. */
+  chatPane?: boolean
+}): JSX.Element {
   // The full envelope lives in a ref (sizes mutate every drag frame); the
   // pieces React must re-render on (active id + the active workspace's
   // non-size fields) are mirrored into state.
@@ -374,12 +422,13 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
     (group: 'horizontal' | 'vertical', sizes: number[]): void => {
       const s = stateRef.current as LayoutState
       const ws = s.workspaces[s.active]
-      if (group === 'horizontal' && ws.boardPaneOpen && validSizes(sizes, 4)) {
-        ws.horizontal = sizes as [number, number, number, number]
-      } else if (group === 'horizontal' && !ws.boardPaneOpen && validSizes(sizes, 3)) {
-        // The board Panel isn't rendered — the group reports [files, centre,
-        // chat]; slot the closed pane's 0 back into index 2.
-        ws.horizontal = [sizes[0], sizes[1], 0, sizes[2]]
+      if (group === 'horizontal') {
+        // Elided panels (closed board pane; no chat pane on web) report fewer
+        // sizes — map them back into the canonical 4 slots. A count mismatch
+        // (e.g. transient focus mode) is ignored, as before.
+        const mapped = recordedHorizontal(sizes, ws.boardPaneOpen, chatPane)
+        if (!mapped) return
+        ws.horizontal = mapped
       } else if (group === 'vertical' && validSizes(sizes, 2)) {
         ws.vertical = sizes as [number, number]
       } else {
@@ -388,7 +437,7 @@ export function LayoutProvider({ children }: { children: ReactNode }): JSX.Eleme
       // Sizes deliberately DON'T touch React state (per-frame drags); persist only.
       persist()
     },
-    [persist]
+    [persist, chatPane]
   )
 
   const switchWorkspace = useCallback(

@@ -7,7 +7,7 @@ import {
   PanelResizeHandle
 } from 'react-resizable-panels'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { useWorkspaceLayout, type WorkspaceId } from '../store/layout'
+import { appliedHorizontal, useWorkspaceLayout, type WorkspaceId } from '../store/layout'
 
 // The embedded Board View pane (the Board workspace's tri-split, #259) is
 // code-split: the whole board subsystem (BoardGraph + wiring + Part Editor)
@@ -344,14 +344,11 @@ export function AppShell(): JSX.Element {
     // the "board pane opens tiny" bug). After rAF the group knows all panels.
     const raf = requestAnimationFrame(() => {
       // The horizontal group's setLayout array must match the RENDERED panels:
-      // 4 with the board pane open, 3 (board slot elided) when it's closed.
-      // In focus mode the board pane elides, so the editor takes its share.
+      // the board slot elides when the pane is closed (and in focus mode, where
+      // the editor takes its share), and the chat slot doesn't exist on the web
+      // build (#528) — a stray extra size makes react-resizable-panels throw.
       const boardOn = ws.boardPaneOpen && !focus
-      hGroupRef.current?.setLayout(
-        boardOn
-          ? [...ws.horizontal]
-          : [ws.horizontal[0], ws.horizontal[1] + ws.horizontal[2], ws.horizontal[3]]
-      )
+      hGroupRef.current?.setLayout(appliedHorizontal(ws.horizontal, boardOn, !IS_WEB))
       vGroupRef.current?.setLayout([...ws.vertical])
       // Sync each collapsible panel BOTH ways to the target workspace, so the RRP
       // panel state can't drift from the store flag (which would strand the

@@ -3,8 +3,10 @@ import {
   WORKSPACE_IDS,
   WORKSPACE_PRESETS,
   LAYOUT_STORAGE_KEY,
+  appliedHorizontal,
   defaultLayoutState,
   loadLayoutState,
+  recordedHorizontal,
   type StorageLike
 } from '../src/renderer/src/store/layout'
 
@@ -75,6 +77,62 @@ describe('workspace presets (epic #259; +Robot mode #320)', () => {
     a.workspaces.code.horizontal[0] = 99
     expect(WORKSPACE_PRESETS.code.horizontal[0]).not.toBe(99)
     expect(defaultLayoutState().workspaces.code.horizontal[0]).not.toBe(99)
+  })
+})
+
+describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
+  const h: [number, number, number, number] = [10, 30, 40, 20]
+
+  it('appliedHorizontal matches the rendered panel count in every combination', () => {
+    // Desktop (chat rendered): 4 panels with the board, 3 without.
+    expect(appliedHorizontal(h, true, true)).toEqual([10, 30, 40, 20])
+    expect(appliedHorizontal(h, false, true)).toEqual([10, 70, 20])
+    // Web (no chat pane): 3 panels with the board, 2 without — the extra 0
+    // here is exactly what threw 'Invalid 3 panel layout: 0%, 34%, 66%, 0%'.
+    expect(appliedHorizontal(h, true, false)).toEqual([10, 50, 40])
+    expect(appliedHorizontal(h, false, false)).toEqual([10, 90])
+  })
+
+  it('applied sizes always sum to 100 (folded slots go to the centre)', () => {
+    for (const boardOn of [true, false]) {
+      for (const chatOn of [true, false]) {
+        const sizes = appliedHorizontal(h, boardOn, chatOn)
+        expect(sizes.reduce((a, b) => a + b, 0)).toBeCloseTo(100)
+        expect(sizes).toHaveLength(2 + (boardOn ? 1 : 0) + (chatOn ? 1 : 0))
+      }
+    }
+  })
+
+  it('recordedHorizontal slots an onLayout report back into the 4-slot store', () => {
+    expect(recordedHorizontal([10, 30, 40, 20], true, true)).toEqual([10, 30, 40, 20])
+    expect(recordedHorizontal([10, 70, 20], false, true)).toEqual([10, 70, 0, 20])
+    expect(recordedHorizontal([10, 50, 40], true, false)).toEqual([10, 50, 40, 0])
+    expect(recordedHorizontal([10, 90], false, false)).toEqual([10, 90, 0, 0])
+  })
+
+  it('recordedHorizontal rejects a count mismatch (e.g. transient focus mode)', () => {
+    // Focus mode elides the board pane while boardPaneOpen stays true — the
+    // report is one short and must be ignored, not mis-slotted.
+    expect(recordedHorizontal([10, 70, 20], true, true)).toBeNull()
+    expect(recordedHorizontal([10, 90], true, false)).toBeNull()
+    // Bad shares are rejected too.
+    expect(recordedHorizontal([10, 20, 30, 5], true, true)).toBeNull()
+  })
+
+  it('round-trips: applied sizes record back losslessly (chat/board at 0 when elided)', () => {
+    for (const boardOn of [true, false]) {
+      for (const chatOn of [true, false]) {
+        const expected = [
+          h[0],
+          h[1] + (boardOn ? 0 : h[2]) + (chatOn ? 0 : h[3]),
+          boardOn ? h[2] : 0,
+          chatOn ? h[3] : 0
+        ]
+        expect(recordedHorizontal(appliedHorizontal(h, boardOn, chatOn), boardOn, chatOn)).toEqual(
+          expected
+        )
+      }
+    }
   })
 })
 
