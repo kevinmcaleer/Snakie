@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**
+  A new 🎯 toggle drops a draggable end-effector goal on the selected chain;
+  dragging it runs the shared planar solver (#538) live, poses the model in
+  real time, and — when a board is connected with servo bindings — streams the
+  solved angles over the same channel the puppet controls use (best-effort, a
+  no-op with no board). The goal handle recolours by status (reached / blocked
+  by limits / out of reach) and a translucent point cloud shades the chain's
+  reachable workspace so you can see why a goal can't be reached. 📸 Capture
+  Pose saves the current IK-solved posture as a Motion Studio pose. Composes
+  with Bone Mode (shared skeleton + live tick). Scope: planar arm/leg chains
+  (joints on a shared/parallel axis) — a non-planar chain is solved as its
+  best in-plane projection and flagged, not faked as full 3-D IK.
 - **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
   planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
   deps): an exact law-of-cosines 2-bone solver that picks between both elbow

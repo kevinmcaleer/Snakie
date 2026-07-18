@@ -23,6 +23,7 @@ import {
   uniquePoseName
 } from './robot-pose'
 import { solveCCD, type IkJoint } from './robot-ik'
+import { createIkGizmo, type IkChainRef, type IkGizmoHandle } from './robot-ik-gizmo'
 import {
   addMeshLink,
   addPrimitive,
@@ -57,6 +58,7 @@ import {
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
+import { usePrompt } from './PromptModal'
 import { createViewCube } from './robot-viewcube'
 import {
   historyInit,
@@ -210,6 +212,7 @@ export function RobotView({
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<{ name: string; joints: number; links: number } | null>(null)
   const [meshNote, setMeshNote] = useState<string | null>(null)
+  const prompt = usePrompt() // in-app modal (window.prompt is dead in the renderer)
 
   const isEmpty = !content.trim()
   // The full-screen (non-compact) view is the Pose tool (#312): a joint sidebar,
@@ -234,6 +237,11 @@ export function RobotView({
   const [boneMode, setBoneMode] = useState(false) // skeleton overlay (#536)
   const boneModeRef = useRef(false)
   const boneApiRef = useRef<BoneModeHandle | null>(null)
+  // Interactive IK goal gizmo (#540, epic #533 §5): a draggable end-effector goal
+  // that live-solves the selected chain (shared planar solver).
+  const [ikGoal, setIkGoal] = useState(false)
+  const ikGoalRef = useRef(false)
+  const ikApiRef = useRef<IkGizmoHandle | null>(null)
   const [measureDist, setMeasureDist] = useState<number | null>(null)
   const [savingLabel, setSavingLabel] = useState<string | null>(null)
   // True while a running program's `SNK SERVO` telemetry is actively driving a
@@ -340,6 +348,41 @@ export function RobotView({
     // (Recall/Delete appear, the name locks in), instead of a stale new-pose draft.
     if (name) setDialogCtx({ kind: 'pose', name })
   }
+
+  // The IK goal gizmo's target chain (#540): the movable revolute/continuous
+  // joints from the selected link UP to the root, BASE-first (the shared planar
+  // solver's convention). Reused for both the gizmo and Capture Pose.
+  const ikGoalChain = (endLink: string | null): IkChainRef | null => {
+    if (!endLink) return null
+    const byChild = new Map(readAllJoints(contentRef.current).map((j) => [j.child, j]))
+    const names: string[] = []
+    const seen = new Set<string>()
+    let cur: string | undefined = endLink
+    while (cur && !seen.has(cur)) {
+      seen.add(cur)
+      const j = byChild.get(cur) // the joint whose child is `cur` (its parent joint)
+      if (!j) break
+      const m = metaRef.current.find((x) => x.name === j.name)
+      if (m && !m.isMimic && (m.type === 'revolute' || m.type === 'continuous')) names.push(j.name)
+      cur = j.parent
+    }
+    if (!names.length) return null
+    names.reverse() // walk was tip→base; the solver wants base→tip
+    return { joints: names, endLink }
+  }
+
+  // Capture the current IK-solved posture as a Motion Studio pose (#540) — a
+  // PARTIAL pose of just the chain the gizmo drove, so it composes with the rest.
+  const handleCaptureIkPose = async (): Promise<void> => {
+    const joints = ikApiRef.current?.chainJoints() ?? []
+    if (!joints.length) return
+    const name = await prompt('Name this IK pose', uniquePoseName('ik pose', posesRef.current.map((p) => p.name)))
+    if (name && name.trim()) handleSavePose(name.trim(), joints)
+  }
+  // Refs so the (stable-deps) three.js scene effect can call the latest chain
+  // resolver + board streamer without re-subscribing the whole scene each render.
+  const ikGoalChainRef = useRef(ikGoalChain)
+  ikGoalChainRef.current = ikGoalChain
 
   // Duplicate a pose under a unique "<name> copy" name, keeping the original and
   // never clobbering an existing entry (#414). Opens the copy for editing.
@@ -1759,6 +1802,9 @@ export function RobotView({
       }
     }
   }
+  // Ref so the scene effect (stable deps) can stream the latest bindings/board.
+  const streamServosRef = useRef(streamServos)
+  streamServosRef.current = streamServos
 
   // Apply a sampled sequence frame (mirrors auto-follow); `commitState` syncs the
   // sliders (scrub/pause only). Streams to the board when Live.
@@ -2143,6 +2189,12 @@ export function RobotView({
     highlightApiRef.current?.apply(selectedLinkRef.current)
   }, [boneMode])
 
+  // Arm/disarm the interactive IK goal gizmo (#540).
+  useEffect(() => {
+    ikGoalRef.current = ikGoal
+    ikApiRef.current?.setArmed(ikGoal)
+  }, [ikGoal])
+
   useEffect(() => {
     const mount = mountRef.current
     if (!mount) return
@@ -2247,6 +2299,35 @@ export function RobotView({
     const boneModeApi = createBoneMode(scene, () => robotRef.current)
     boneApiRef.current = boneModeApi
     boneModeApi.setEnabled(boneModeRef.current)
+
+    // Interactive IK goal gizmo (#540): drag a goal, the shared planar solver
+    // poses the chain live, streams to a connected board, and feeds Capture Pose.
+    const ikGizmoApi = createIkGizmo(scene, {
+      getRobot: () => robotRef.current,
+      camera,
+      controls,
+      dom: renderer.domElement,
+      getChain: () => ikGoalChainRef.current(selectedLinkRef.current),
+      getLimit: (name) => {
+        const m = metaRef.current.find((x) => x.name === name)
+        return m ? effectiveLimit(m, overridesRef.current[name]) : { lower: -Math.PI, upper: Math.PI }
+      },
+      // Per drag-frame: mirror the solved angles to a connected board (best-effort;
+      // no board / no bindings → a harmless no-op, same channel the puppet uses).
+      onLive: (native) => {
+        const disp: Record<string, number> = {}
+        for (const [name, val] of Object.entries(native)) {
+          const m = metaRef.current.find((x) => x.name === name)
+          if (m) disp[name] = toDisplay(m.type, val)
+        }
+        streamServosRef.current(disp)
+      },
+      // On release: commit the solved angles into React so the sliders + Save Pose
+      // reflect the new posture (native units, mirrors the Grab tool's finishGrab).
+      onCommit: (native) => setValues((v) => ({ ...v, ...native }))
+    })
+    ikApiRef.current = ikGizmoApi
+    ikGizmoApi.setArmed(ikGoalRef.current)
 
     // Navigation cube (top-right): mirrors the camera; a face-click snaps the
     // view to that orthographic direction. Its own canvas → no OrbitControls clash.
@@ -4340,6 +4421,7 @@ export function RobotView({
       stepAnim()
       controls.update()
       boneModeApi.update() // live skeleton overlay (#536) — follows every joint drive
+      ikGizmoApi.update() // interactive IK goal gizmo (#540) — composes with Bone Mode
       renderer.render(scene, camera)
       if (viewCube) {
         viewCube.sync(camera.quaternion)
@@ -4370,6 +4452,8 @@ export function RobotView({
       zoomApiRef.current = null
       boneApiRef.current = null
       boneModeApi.dispose()
+      ikApiRef.current = null
+      ikGizmoApi.dispose()
       if (viewCube) {
         viewCube.dom.remove()
         viewCube.dispose()
@@ -4661,6 +4745,32 @@ export function RobotView({
             >
               🦴
             </button>
+            {/* Interactive IK goal gizmo (#540): drag a goal, the chain follows. */}
+            <button
+              type="button"
+              className={`robotview__zbtn${ikGoal ? ' is-active' : ''}`}
+              disabled={
+                !jointMeta.some((m) => !m.isMimic && (m.type === 'revolute' || m.type === 'continuous'))
+              }
+              onClick={() => setIkGoal((v) => !v)}
+              title="IK goal — pick a part, then drag its goal and the chain solves to reach it"
+              aria-label="Interactive IK goal"
+              aria-pressed={ikGoal}
+            >
+              🎯
+            </button>
+            {ikGoal && (
+              <button
+                type="button"
+                className="robotview__zbtn"
+                disabled={!ikGoalChain(selectedLink)}
+                onClick={() => void handleCaptureIkPose()}
+                title="Capture Pose — save the current IK-solved position as a Motion Studio pose"
+                aria-label="Capture IK pose"
+              >
+                📸
+              </button>
+            )}
           </div>
         )}
         {showPanel && buildOpen && (
