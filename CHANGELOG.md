@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Bone Mode in Robot View (#536, epic #533 §1).** A 🦴 toggle on the zoom
+  toolbar ghosts the robot (solid grey at ~80% transparency) and overlays its
+  skeleton: coloured joint-to-joint bones labelled with their length in mm,
+  never occluded by the mesh; a compass at every revolute joint (arc from min
+  to max limit, needle at the live angle, readout that shifts green → amber →
+  red approaching a limit); a linear ruler gauge for prismatic joints; and a
+  friendly error when joint names aren't unique. The overlay tracks sliders,
+  Motion Studio playback and live servo telemetry frame-by-frame.
 - **Discovery tips in the status bar (#434).** When the status bar has nothing
   real to say, it now shows a rotating 💡 tip about a Snakie feature — fading
   in/out over a second, changing every 5–10 minutes, and always giving way to
