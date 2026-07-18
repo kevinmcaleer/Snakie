@@ -23,7 +23,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Learn-panel course cards are covered too: courses still declare a thumbnail
   `emoji:` in their `course.yml`, but it now resolves through a small
   emoji→icon map, falling back to the raw glyph for an unmapped value so
-  authored courses keep working.
+  authored courses keep working. Also the build checklist's completion message
+  and the Robot View snap tooltip's "locked" label — the latter needed
+  `setBuildDim`'s `text` widened from `string` to `ReactNode` so the label can
+  carry an inline padlock icon.
 
 ### Added
 - **Interactive IK goal gizmo + Capture Pose in Robot View (#540, epic #533 §5).**

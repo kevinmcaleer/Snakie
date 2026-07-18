@@ -219,6 +219,18 @@ export const SpeakerIcon = ({ size }: { size?: number }): JSX.Element =>
     size
   )
 
+/** A confetti burst — the build checklist's completion message (#436). */
+export const ConfettiIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(
+      <>
+        <path d="M4 20.4 9.6 8.9l5.5 5.5z" />
+        <path d="M14.6 3.6v2.6M19.2 4.9l-1.8 1.8M20.8 9.6h-2.6M19.9 14.2l-1.9-1.1M15.5 10.6l1.1 1.9" />
+      </>
+    ),
+    size
+  )
+
 /** A chick — the beginner course track. */
 export const ChickIcon = ({ size }: { size?: number }): JSX.Element =>
   svg(

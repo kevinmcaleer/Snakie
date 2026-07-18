@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
@@ -139,7 +140,15 @@ import type {
   ServoJointBinding
 } from '../../../shared/robot'
 import type { PartDefinition } from '../../../preload/index.d'
-import { ExplodeIcon, ClapperIcon, BoneIcon, TargetIcon, CameraIcon, RulerIcon } from './ui-icons'
+import {
+  ExplodeIcon,
+  ClapperIcon,
+  BoneIcon,
+  TargetIcon,
+  CameraIcon,
+  RulerIcon,
+  LockIcon
+} from './ui-icons'
 import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
@@ -550,7 +559,10 @@ export function RobotView({
   const [dialogCtx, setDialogCtx] = useState<PropsContext | null>(null)
   const editLink =
     dialogCtx?.kind === 'link' ? dialogCtx.link : dialogCtx?.kind === 'joint' ? dialogCtx.child : null
-  const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: string } | null>(null)
+  // `text` is a ReactNode, not a string: the "locked" label carries an inline
+  // padlock ICON (#549) — an emoji there is invisible on Linux without an
+  // emoji font. Every other producer still passes a plain string.
+  const [buildDim, setBuildDim] = useState<{ x: number; y: number; text: ReactNode } | null>(null)
   // Join tool (#354): the two points picked in 3-D. Non-null = pick mode is armed.
   // `local` + `normal` are in the link's LOCAL frame (the point + its face normal).
   type JointPickPt = {
@@ -4251,7 +4263,11 @@ export function RobotView({
                 setBuildDim({
                   x: e.clientX - rect.left + 14,
                   y: e.clientY - rect.top + 14,
-                  text: `🔒 locked ${snapRoleLabel(role)}`
+                  text: (
+                    <>
+                      <LockIcon size={11} /> locked {snapRoleLabel(role)}
+                    </>
+                  )
                 })
                 return
               }
@@ -4292,7 +4308,14 @@ export function RobotView({
                 setBuildDim({
                   x: e.clientX - rect.left + 14,
                   y: e.clientY - rect.top + 14,
-                  text: lockedIndex !== null ? `🔒 locked ${snapRoleLabel(role)}` : `snap ✓ ${snapRoleLabel(role)}`
+                  text:
+                    lockedIndex !== null ? (
+                      <>
+                        <LockIcon size={11} /> locked {snapRoleLabel(role)}
+                      </>
+                    ) : (
+                      `snap ✓ ${snapRoleLabel(role)}`
+                    )
                 })
               } else {
                 clearHoverMarker()
