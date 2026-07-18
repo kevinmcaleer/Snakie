@@ -19,6 +19,38 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   with Bone Mode (shared skeleton + live tick). Scope: planar arm/leg chains
   (joints on a shared/parallel axis) — a non-planar chain is solved as its
   best in-plane projection and flagged, not faked as full 3-D IK.
+- **`snakie_ik.py` — on-device IK runtime (#539, epic #533 §4).** New
+  MicroPython module `micropython/snakie_ik.py` that mirrors the shared
+  TypeScript solver step-for-step and passes the SAME 35 language-neutral
+  vectors (`test/fixtures/ik-vectors.json`), so a goal posed in the browser and
+  a goal posed in code on a Pico produce identical joint angles. Provides a pure
+  planar `solve_ik` (law-of-cosines for 1/2-bone chains, FABRIK + CCD + analytic
+  two-group fallback + perturbed-seed retry for 3+ bones, joint-limit clamping,
+  `reached` / `out_of_reach` / `blocked_by_limits` status) plus a `Skeleton`
+  helper: `Skeleton.load("skeleton.json")` parses the #537 schema into bones,
+  limits and servo bindings, `solve(chain, target_xyz)` turns a named joint
+  chain into angles, and `apply(angles)` drives the bound servos through the
+  `snakie_motion` rig (degrading gracefully when none is present). Runs
+  unmodified on CPython (all hardware behind `snakie_motion`/`instruments`'
+  `machine` guard) and uses only `math`/`json`, so it's Pico-friendly.
+- **Community parts install fallback when `git` isn't available (Web W3,
+  #284, epic #267).** Installing/updating a library from the Community Parts
+  registry normally does a shallow `git clone`; Snakie now probes once
+  whether `git` is on `PATH` and, if not, transparently falls back to
+  downloading the repo as a GitHub tarball
+  (`codeload.github.com/.../tar.gz/HEAD`, always the current default branch)
+  and extracting it straight into the library folder instead of failing.
+  Same manifest reconciliation either way, so update checks behave
+  identically regardless of which path installed a library. Desktop installs
+  are unaffected wherever `git` is present (the common case).
+- **Robot build checklist in the Learn panel (#436).** A completion checklist
+  at the top of the Learn gallery walks a maker through building a robot
+  end-to-end: pick a board, add a servo, import an STL, create a joint, bind a
+  servo to it, save poses, write the app, and run it on the simulator. Six
+  steps tick themselves live from project state (robot.yml, the linked URDF
+  and the parts library); "write your robot app" and "run it on the simulator"
+  latch on when observed (an open servo-driving `.py`; a Simulated-device
+  connection) with a manual checkbox fallback, remembered per project.
 - **Shared IK solver library (#538, epic #533 §3).** New pure-TypeScript
   planar inverse-kinematics module `src/shared/ik/` (no Three.js/DOM/Electron
   deps): an exact law-of-cosines 2-bone solver that picks between both elbow

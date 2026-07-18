@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "urdf_hash": "fnv1a-12345678",
+  "robot": "test_arm",
+  "joints": [
+    {
+      "name": "shoulder",
+      "type": "revolute",
+      "parent": "base_link",
+      "child": "upper_arm",
+      "origin_xyz": [0, 0, 0],
+      "origin_rpy": [0, 0, 0],
+      "bone_length_mm": 0,
+      "axis": [0, 0, 1],
+      "limits": { "min": -90, "max": 90 },
+      "servo": {
+        "pin": "16",
+        "servo_min": 0,
+        "servo_max": 180,
+        "joint_min": -90,
+        "joint_max": 90
+      }
+    },
+    {
+      "name": "elbow",
+      "type": "revolute",
+      "parent": "upper_arm",
+      "child": "forearm",
+      "origin_xyz": [0.06, 0, 0],
+      "origin_rpy": [0, 0, 0],
+      "bone_length_mm": 60,
+      "axis": [0, 0, 1],
+      "limits": { "min": 0, "max": 150 },
+      "servo": {
+        "pin": "17",
+        "servo_min": 0,
+        "servo_max": 180,
+        "joint_min": 0,
+        "joint_max": 150,
+        "invert": true
+      }
+    },
+    {
+      "name": "wrist",
+      "type": "continuous",
+      "parent": "forearm",
+      "child": "hand",
+      "origin_xyz": [0.04, 0, 0],
+      "origin_rpy": [0, 0, 0],
+      "bone_length_mm": 40,
+      "axis": [0, 0, 1]
+    },
+    {
+      "name": "tip",
+      "type": "fixed",
+      "parent": "hand",
+      "child": "tool",
+      "origin_xyz": [0.03, 0, 0],
+      "origin_rpy": [0, 0, 0],
+      "bone_length_mm": 30
+    }
+  ],
+  "links": {
+    "base_link": {},
+    "upper_arm": {},
+    "forearm": {},
+    "hand": {},
+    "tool": {}
+  }
+}
