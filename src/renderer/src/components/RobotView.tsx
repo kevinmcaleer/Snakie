@@ -139,6 +139,7 @@ import type {
   ServoJointBinding
 } from '../../../shared/robot'
 import type { PartDefinition } from '../../../preload/index.d'
+import { ExplodeIcon, ClapperIcon, BoneIcon, TargetIcon, CameraIcon, RulerIcon } from './ui-icons'
 import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
@@ -4671,7 +4672,7 @@ export function RobotView({
               aria-label="Exploded view"
               aria-pressed={explodeOpen}
             >
-              💥
+              <ExplodeIcon />
             </button>
             {explodeOpen && (
               <div className="robotview__explode" role="group" aria-label="Exploded view controls">
@@ -4729,7 +4730,7 @@ export function RobotView({
                   title="Save the explosion animation as a video (mp4/webm)"
                   aria-label="Save explosion video"
                 >
-                  🎬
+                  <ClapperIcon />
                 </button>
               </div>
             )}
@@ -4743,7 +4744,7 @@ export function RobotView({
               aria-label="Bone Mode"
               aria-pressed={boneMode}
             >
-              🦴
+              <BoneIcon />
             </button>
             {/* Interactive IK goal gizmo (#540): drag a goal, the chain follows. */}
             <button
@@ -4757,7 +4758,7 @@ export function RobotView({
               aria-label="Interactive IK goal"
               aria-pressed={ikGoal}
             >
-              🎯
+              <TargetIcon />
             </button>
             {ikGoal && (
               <button
@@ -4768,7 +4769,7 @@ export function RobotView({
                 title="Capture Pose — save the current IK-solved position as a Motion Studio pose"
                 aria-label="Capture IK pose"
               >
-                📸
+                <CameraIcon />
               </button>
             )}
           </div>
@@ -4910,7 +4911,9 @@ export function RobotView({
         {showPanel && (savingLabel || (measureActive && measureDist != null)) && (
           <div className="robotview__hud-status">
             {measureActive && measureDist != null && (
-              <span className="robotview__hud-pill">📏 {Math.round(measureDist)} mm</span>
+              <span className="robotview__hud-pill">
+                <RulerIcon size={13} /> {Math.round(measureDist)} mm
+              </span>
             )}
             {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}
           </div>

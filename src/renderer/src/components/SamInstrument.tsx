@@ -6,6 +6,7 @@ import { useBoards } from './use-boards'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useInstrumentWorkspace } from '../store/workspace'
 import { SAM_DEMO, SAM_DEMO_NAME } from './sam-demo'
+import { SpeakerIcon } from './ui-icons'
 import './SamInstrument.css'
 
 /**
@@ -164,7 +165,15 @@ export function SamInstrument({ def, onClose, docked = true, onToggleDock, float
             disabled={!connected || busy || !text.trim()}
             title={connected ? 'Speak the text via the buzzer pin (Ctrl/Cmd+Enter)' : 'Connect a board first'}
           >
-            {state === 'speaking' ? 'SPEAKING…' : state === 'installing' ? 'INSTALLING…' : '🔊 SPEAK'}
+            {state === 'speaking' ? (
+              'SPEAKING…'
+            ) : state === 'installing' ? (
+              'INSTALLING…'
+            ) : (
+              <>
+                <SpeakerIcon size={13} /> SPEAK
+              </>
+            )}
           </button>
         </div>
 

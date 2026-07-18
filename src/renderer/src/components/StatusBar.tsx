@@ -23,6 +23,7 @@ import {
 } from './status-tips'
 import { isVirtualPort, VIRTUAL_PORT_SHORT } from '../../../shared/virtual-device'
 import type { FirmwareCatalog, UpdateStatus } from '../../../preload/index.d'
+import { BulbIcon } from './ui-icons'
 import './StatusBar.css'
 
 /**
@@ -393,7 +394,7 @@ export function StatusBar({
                 if (tip.href) void window.api.openExternal(tip.href)
               }}
             >
-              <span aria-hidden="true">💡</span>
+              <BulbIcon size={11} />
               <span className="statusbar__tip-text">{tip.text}</span>
             </button>
           ) : (
@@ -402,7 +403,7 @@ export function StatusBar({
                 tipFaded ? ' statusbar__tip--faded' : ''
               }`}
             >
-              <span aria-hidden="true">💡</span>
+              <BulbIcon size={11} />
               <span className="statusbar__tip-text">{tip.text}</span>
             </span>
           ))}

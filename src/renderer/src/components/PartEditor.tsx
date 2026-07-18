@@ -62,6 +62,7 @@ import type {
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
 import { Markdown } from './Markdown'
+import { LockIcon, UnlockIcon, TrashIcon } from './ui-icons'
 import './PartEditor.css'
 
 /** Per-capability bus/channel + signal controls shown when the capability is
@@ -1114,7 +1115,7 @@ function LayersPanel({
       aria-label={`${locked[key] ? 'Unlock' : 'Lock'} layer`}
       aria-pressed={locked[key]}
     >
-      {locked[key] ? '🔒' : '🔓'}
+      {locked[key] ? <LockIcon size={13} /> : <UnlockIcon size={13} />}
     </button>
   )
   const isOpen = (id: string): boolean => !collapsed[id]
@@ -1218,7 +1219,7 @@ function LayersPanel({
                 </button>
                 <span className="pe__flathelp">{sub}</span>
                 <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
-                  🗑
+                  <TrashIcon size={13} />
                 </button>
               </li>
             )
@@ -1332,7 +1333,7 @@ function LayersPanel({
           </button>
           {part.imageData && (
             <button type="button" className="pe__trash" onClick={removeImage} title="Remove background image" aria-label="Remove background image">
-              🗑
+              <TrashIcon size={13} />
             </button>
           )}
         </div>

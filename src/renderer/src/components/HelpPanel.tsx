@@ -271,7 +271,7 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
                   onClick={() => void window.api?.openExternal?.(meta.guideUrl as string).catch(() => undefined)}
                   title={meta.guideUrl}
                 >
-                  📖 Full guide on kevsrobots.com →
+                  <OpenBookIcon size={13} /> Full guide on kevsrobots.com →
                 </button>
               )}
               {meta?.exampleCode && (
@@ -295,7 +295,7 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
             onClick={openDocs}
             title={DOCS_URL}
           >
-            📚 More in the full documentation ↗
+            <TomeIcon size={13} /> More in the full documentation ↗
           </button>
         </div>
       </div>
@@ -327,7 +327,7 @@ export function HelpPanel({ target }: { target?: { id: string; nonce: number } }
         {tree.map((n) => renderNode(n, 0))}
       </div>
       <button type="button" className="help__docs" onClick={openDocs} title={DOCS_URL}>
-        📚 Full documentation at docs.snakie.org ↗
+        <TomeIcon size={13} /> Full documentation at docs.snakie.org ↗
       </button>
       {appVersion && (
         <div className="help__version" title="App version">

@@ -19,6 +19,7 @@ import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
+import { FolderOpenIcon } from './ui-icons'
 import './RobotBuildPanel.css'
 
 /**
@@ -972,7 +973,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           onClick={onOpenRobot}
           title="Open a different robot (.urdf) — works when popped out full-screen"
         >
-          📂 Open…
+          <FolderOpenIcon size={13} /> Open…
         </button>
         <button
           type="button"

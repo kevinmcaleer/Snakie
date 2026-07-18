@@ -1,4 +1,6 @@
+import type { ReactNode } from 'react'
 import type { BuildTool, PrimitiveKind } from './robot-build'
+import { CylinderIcon } from './ui-icons'
 import './RobotToolbar.css'
 
 /**
@@ -34,9 +36,11 @@ const MEASURE_ICON = (
   </svg>
 )
 
-const ADD: Array<{ kind: PrimitiveKind; glyph: string; label: string }> = [
+// ▦ and ● are in DejaVu Sans so they survive a Linux box with no emoji font;
+// the tube glyph (U+2B2D) is not, so it uses an SVG icon instead (#549).
+const ADD: Array<{ kind: PrimitiveKind; glyph: ReactNode; label: string }> = [
   { kind: 'box', glyph: '▦', label: 'Add a box' },
-  { kind: 'cylinder', glyph: '⬭', label: 'Add a tube' },
+  { kind: 'cylinder', glyph: <CylinderIcon size={15} />, label: 'Add a tube' },
   { kind: 'sphere', glyph: '●', label: 'Add a ball' }
 ]
 
