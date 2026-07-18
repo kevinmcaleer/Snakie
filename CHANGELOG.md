@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **skeleton.json — auto-generated device-side skeleton (#537, epic #533 §2).**
+  Saving the project URDF (or robot.yml — servo bindings live there) now
+  regenerates `<project>/skeleton.json` automatically: per joint its name, type
+  (revolute/continuous/prismatic/fixed), parent/child link, origin, bone length
+  (mm, joint-origin → joint-origin), axis, min/max limits from the URDF
+  `<limit>` (deg / mm), and the bound servo (pin + calibration) where the
+  project maps one — plus an extensible per-link section (masses land there in
+  #535). JSON so MicroPython parses it natively; the embedded `urdf_hash` +
+  `schema_version` let Snakie warn "skeleton out of date — sync?" at connect
+  time when the board's copy is stale, and file sync (#178) pushes it like any
+  project file. The URDF stays the single source of truth — skeleton.json is
+  derived, never hand-edited.
 - **Board View works by touch — iPad-friendly wiring (part of #525).** On a
   touchscreen, tapping the board or a part now reveals its pin capability
   chips (they stay up until you tap elsewhere — touch has no hover), wires can

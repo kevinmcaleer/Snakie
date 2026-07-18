@@ -24,6 +24,8 @@
  */
 import { robotFromYaml, robotToYaml } from '../../../shared/robot-yaml'
 import type { RobotDefinition } from '../../../shared/robot'
+import { readRobotModel } from '../../../shared/krf'
+import { generateSkeleton, skeletonJson } from '../../../shared/skeleton'
 
 /** The subset of the web fs backend this layer needs (see {@link ./web-fs}). */
 export interface WebRobotFs {
@@ -108,6 +110,22 @@ export function createWebRobotApi(fs: WebRobotFs): Record<string, unknown> {
         const text = robotToYaml(def)
         if (hasFolder(folder)) await queuedWrite(robotYmlPath(folder), text)
         else window.localStorage.setItem(LS_KEY, text)
+        // Regenerate <folder>/skeleton.json (#537) — servo↔joint bindings live
+        // here, so a binding edit must refresh the skeleton's servo section.
+        // Best-effort, mirroring the desktop robot:save handler.
+        if (hasFolder(folder)) {
+          const urdfRel = readRobotModel(def)?.urdf
+          if (urdfRel) {
+            try {
+              const base = folder.replace(/[/\\]+$/, '')
+              const urdf = await fs.readFile(`${base}/${urdfRel}`)
+              const json = skeletonJson(generateSkeleton(urdf, readRobotModel(def)?.servoJointMap))
+              await fs.writeFile(`${base}/skeleton.json`, json)
+            } catch {
+              // No URDF yet / unreadable — nothing to derive.
+            }
+          }
+        }
         return { ok: true }
       } catch (err) {
         return { ok: false, error: err instanceof Error ? err.message : String(err) }

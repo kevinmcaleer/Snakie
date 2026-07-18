@@ -58,6 +58,7 @@ import {
 } from './part-imports'
 import { installPartDriver } from './driver-install'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useSkeletonSync } from '../hooks/useSkeletonSync'
 import {
   INSTRUMENTS_LIB_PATH,
   INSTRUMENTS_ROOT_PATH,
@@ -189,6 +190,10 @@ export function AppShell(): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const [boardOpened, setBoardOpened] = useState(false)
+
+  // skeleton.json autogen (#537): regenerate from the URDF on every save, and
+  // check the board's copy for staleness at connect time.
+  useSkeletonSync(currentFolder)
 
   const boardSource = activeFile?.content ?? ''
   const boardFileName = activeFile?.name
