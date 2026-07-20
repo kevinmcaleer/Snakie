@@ -560,4 +560,37 @@ describe('component rotation round-trip', () => {
     expect(back.shapes?.[0].rotation).toBeUndefined()
     expect(back.labels?.[0].rotation).toBeUndefined()
   })
+
+  describe('mass_g + com_xyz (#554)', () => {
+    const withMass = (extra: Partial<PartDefinition>): PartDefinition =>
+      partFromYaml(
+        partToYaml(normalisePart({ id: 'm', name: 'M', ...extra } as PartDefinition))
+      )
+
+    it('round-trips mass_g in grams', () => {
+      expect(withMass({ mass_g: 9 }).mass_g).toBe(9)
+      expect(withMass({ mass_g: 8.5 }).mass_g).toBe(8.5)
+    })
+
+    it('round-trips com_xyz as a 3-tuple in mm', () => {
+      expect(withMass({ com_xyz: [1, -2, 3.5] }).com_xyz).toEqual([1, -2, 3.5])
+    })
+
+    it('omits both when absent (no churn on parts without mass)', () => {
+      const yaml = partToYaml(normalisePart({ id: 'm', name: 'M' } as PartDefinition))
+      expect(yaml).not.toContain('mass_g')
+      expect(yaml).not.toContain('com_xyz')
+    })
+
+    it('ignores a non-positive or unparseable mass rather than storing it', () => {
+      expect(partFromYaml('id: m\nname: M\nmass_g: 0\n').mass_g).toBeUndefined()
+      expect(partFromYaml('id: m\nname: M\nmass_g: -5\n').mass_g).toBeUndefined()
+      expect(partFromYaml('id: m\nname: M\nmass_g: heavy\n').mass_g).toBeUndefined()
+    })
+
+    it('ignores a malformed com_xyz (wrong length or non-numeric)', () => {
+      expect(partFromYaml('id: m\nname: M\ncom_xyz: [1, 2]\n').com_xyz).toBeUndefined()
+      expect(partFromYaml('id: m\nname: M\ncom_xyz: [1, x, 3]\n').com_xyz).toBeUndefined()
+    })
+  })
 })

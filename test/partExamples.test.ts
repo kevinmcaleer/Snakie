@@ -60,6 +60,15 @@ describe('example parts library', () => {
     expect(reg.libraries.map((l) => l.id)).toContain('snakie-basics')
     expect(reg.libraries[0].repo).toMatch(/^https?:\/\//)
   })
+
+  it.each([
+    ['snakie-standard', 'sg90', 9],
+    ['snakie-standard', 'hr-sr04', 8.5],
+    ['snakie-standard', 'pico', 3]
+  ])('%s/%s ships a real mass_g of %d grams (#554)', (lib, id, grams) => {
+    const part = partFromYaml(read(lib, id, 'parts.yml'))
+    expect(part.mass_g).toBe(grams)
+  })
 })
 
 describe('standard parts library (snakie-standard)', () => {

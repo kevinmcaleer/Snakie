@@ -968,6 +968,18 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   set('mesh', text(part.mesh))
   if (part.meshUnits === 'mm' || part.meshUnits === 'm') out.meshUnits = part.meshUnits
   if (typeof part.meshScale === 'number' && part.meshScale > 0) out.meshScale = part.meshScale
+  // Mass (grams) + optional CoM (mm) (#554). A non-positive mass is dropped, so
+  // "unset" and "zero" both mean fall back to a volume estimate downstream.
+  if (typeof part.mass_g === 'number' && Number.isFinite(part.mass_g) && part.mass_g > 0) {
+    out.mass_g = part.mass_g
+  }
+  if (
+    Array.isArray(part.com_xyz) &&
+    part.com_xyz.length === 3 &&
+    part.com_xyz.every((n) => typeof n === 'number' && Number.isFinite(n))
+  ) {
+    out.com_xyz = [part.com_xyz[0], part.com_xyz[1], part.com_xyz[2]]
+  }
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

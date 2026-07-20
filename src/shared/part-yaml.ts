@@ -317,6 +317,9 @@ export function partToYaml(part: PartDefinition): string {
     mesh: part.mesh,
     meshUnits: part.meshUnits,
     meshScale: part.meshScale,
+    // Mass in grams + optional CoM in mm (#554).
+    mass_g: part.mass_g,
+    com_xyz: part.com_xyz,
     schematic: part.schematic,
     i2cAddresses: part.i2cAddresses,
     library: part.library,
@@ -530,6 +533,16 @@ export function partFromYaml(text: string): PartDefinition {
   const meshUnits = str(raw.meshUnits)
   if (meshUnits === 'mm' || meshUnits === 'm') assign('meshUnits', meshUnits)
   assign('meshScale', num(raw.meshScale))
+  // Mass in grams (#554); ignore non-positive/garbage so a bad file doesn't
+  // poison the CoM maths downstream.
+  const massG = num(raw.mass_g)
+  if (massG !== undefined && massG > 0) assign('mass_g', massG)
+  if (Array.isArray(raw.com_xyz) && raw.com_xyz.length === 3) {
+    const v = raw.com_xyz.map(num)
+    if (v.every((n): n is number => n !== undefined)) {
+      assign('com_xyz', [v[0], v[1], v[2]])
+    }
+  }
   if (raw.imageLayer && typeof raw.imageLayer === 'object') {
     const il = raw.imageLayer as Record<string, unknown>
     const x = num(il.x)

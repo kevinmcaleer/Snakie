@@ -1,4 +1,5 @@
 id: pico-2w
+mass_g: 3
 name: Raspberry Pi Pico 2 W
 description: RP2350 microcontroller board with CYW43439 wireless.
 manufacturer: Raspberry Pi
