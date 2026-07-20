@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-07-21
+
 ### Added
 - **Motion Studio stability strip (#559, epic #535 §3).** The Keyframes timeline
   gains a **balance** heat-strip: each frame of the clip is sampled and coloured
@@ -2859,7 +2861,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...HEAD
+[0.34.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...v0.33.0
 [0.32.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.31.0...v0.32.0
