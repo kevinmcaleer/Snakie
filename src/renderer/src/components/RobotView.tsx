@@ -159,9 +159,12 @@ import {
   kgToGrams,
   mmToM,
   mToMm,
+  summariseMass,
   DEFAULT_MATERIAL,
   DEFAULT_INFILL,
-  type MassEstimate
+  type MassEstimate,
+  type MassBreakdown,
+  type MassSort
 } from './robot-mass'
 import type { MassEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
@@ -872,6 +875,7 @@ export function RobotView({
   // dragging the infill slider re-estimates live.
   const [massMaterial, setMassMaterial] = useState(DEFAULT_MATERIAL)
   const [massInfill, setMassInfill] = useState(DEFAULT_INFILL)
+  const [massSort, setMassSort] = useState<MassSort>('mass')
   useEffect(() => {
     const lm = editLink ? defRef.current?.robot?.linkMass?.[editLink] : undefined
     setMassMaterial(lm?.material ?? DEFAULT_MATERIAL)
@@ -993,6 +997,24 @@ export function RobotView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editLink, dialogCtx, content, editMassEstimate, massMaterial, massInfill])
+
+  // The whole-robot mass breakdown (#555 part 2): each link's stored <inertial>
+  // mass + its provenance, totalled and sorted for the Build panel's table. Reads
+  // the authoritative persisted value (not a live estimate), so it's pure over
+  // `content`; the source label comes from robot.yml provenance.
+  const massSummary = useMemo<MassBreakdown | null>(() => {
+    const linkNames = parseAssembly(content).map((i) => i.link)
+    if (linkNames.length === 0) return null
+    const lm = defRef.current?.robot?.linkMass
+    const rows = linkNames.map((link) => {
+      const inertial = readInertial(content, link)
+      const grams = inertial ? kgToGrams(inertial.mass) : 0
+      const source = inertial ? lm?.[link]?.source ?? 'measured' : 'none'
+      return { link, grams, source }
+    })
+    return summariseMass(rows, massSort)
+  }, [content, massSort])
+
   // Colour a link (#405) — an inline URDF <material>, so it round-trips + undoes like
   // any other build edit; urdf-loader renders it, recolouring only this link.
   const handleSetColor = (link: string, hex: string): void => {
@@ -5040,6 +5062,9 @@ export function RobotView({
             importing={importing}
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}
+            massSummary={massSummary}
+            massSort={massSort}
+            onSetMassSort={setMassSort}
           />
         )}
         {showPanel && dialogCtx && (

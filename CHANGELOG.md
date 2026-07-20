@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Total mass + per-link breakdown table (#555, epic #535 §1).** The Build panel
+  gains a Mass section: the robot's total mass at a glance, and a per-link table
+  you can sort by mass (what dominates) or by name. Rows with no mass show a dash,
+  with a hint that the total is a lower bound until they're weighed; clicking a
+  row opens that link's mass editor. Reads each link's stored `<inertial>`, so it
+  reflects what's actually set.
 - **Per-link mass in the robot inspector (#555, epic #535 §1).** A link's
   Properties now has a Mass section: pick a print material (PLA/PETG/ABS/resin)
   and an infill %, and Snakie estimates the mass from the mesh volume live; a
