@@ -510,6 +510,25 @@ export interface PartDefinition {
    */
   meshScale?: number
 
+  // --- Mass / centre of mass (#554, epic #535 §1) --------------------------
+  /**
+   * Real mass in **grams**, for the heavy off-the-shelf parts (servos, motors,
+   * batteries, boards) whose weight can't be estimated from a print — a printed
+   * link estimates its mass from mesh volume, but an SG90 is 9 g of gearbox no
+   * volume estimate can reach. Populated for bundled library parts where known.
+   * Absent ⇒ the link falls back to a volume estimate (or a manual override).
+   *
+   * When a part is placed, this flows into the URDF `<mass>` (converted to kg)
+   * and thence into `skeleton.json`'s `mass_g`.
+   */
+  mass_g?: number
+  /**
+   * Centre of mass in the part's own frame, **millimetres**, for lopsided parts
+   * whose real CoM isn't the mesh/body centroid (a geared motor's mass sits over
+   * its gearbox, not its centre). Absent ⇒ use the computed centroid.
+   */
+  com_xyz?: [number, number, number]
+
   // --- Editor display state (persisted) ------------------------------------
   /**
    * Which layers are shown when the part is drawn (Part Editor, Parts Library

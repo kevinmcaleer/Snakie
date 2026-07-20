@@ -1,4 +1,5 @@
 id: sg90
+mass_g: 9
 name: SG90 Micro Servo
 description: 9g hobby micro servo, ~180° range, 50 Hz PWM control.
 manufacturer: TowerPro

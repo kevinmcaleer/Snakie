@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Parts carry a real mass (#554, epic #535 §1).** Part definitions gain a
+  `mass_g` field (grams) plus optional `com_xyz` (centre of mass, mm) for
+  lopsided parts, round-tripped through `parts.yml`. The heaviest robot parts —
+  servos, motors, batteries, boards — aren't printed, so their weight can't be
+  estimated from mesh volume; now they carry a measured figure. The bundled
+  standard library ships real masses for the SG90 (9 g), HC-SR04 (8.5 g) and the
+  Pico family (3 g); parts whose mass varies too much to pin are left unset and
+  fall back to a volume estimate.
 - **URDF `<inertial>` read/write round-trip (#553, epic #535 §1).** Snakie's URDF
   layer can now read and write per-link mass + centre-of-mass as standard URDF
   `<inertial>` tags (`readInertial`/`setInertial`/`removeInertial`), so mass data

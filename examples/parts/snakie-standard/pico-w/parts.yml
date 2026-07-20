@@ -1,4 +1,5 @@
 id: pico-w
+mass_g: 3
 help: help.md
 name: Raspberry Pi Pico W
 description: RP2040 microcontroller board with CYW43439 2.4GHz wireless (Wi-Fi / BLE).
