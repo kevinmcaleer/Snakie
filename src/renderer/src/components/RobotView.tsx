@@ -62,8 +62,9 @@ import {
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
-import { createComOverlay, type ComOverlayHandle, type ComStatus } from './robot-com-overlay'
+import { createComOverlay, poseBalance, type ComOverlayHandle, type ComStatus } from './robot-com-overlay'
 import { readLinkMasses } from './robot-com'
+import type { StabilityState } from './robot-support'
 import { usePrompt } from './PromptModal'
 import { createViewCube } from './robot-viewcube'
 import {
@@ -1926,6 +1927,47 @@ export function RobotView({
   const applyTimelineAt = (t: number, commitState = false): void => {
     applyDisplayPose(sampleTimeline(timelineRef.current, t), commitState)
   }
+
+  // Motion Studio stability strip (#559, epic #535 §3): sample the timeline at N
+  // points and classify each pose's static stability, for a green/amber/red
+  // heat-strip beside the tracks. Poses the robot to each sample WITHOUT React
+  // churn (applyDisplayPose commit=false) and restores the live pose after.
+  // Recomputes only when the timeline / contacts / masses change — never per
+  // frame. Empty when nothing is weighed (no meaningful stability).
+  const [stabilityStrip, setStabilityStrip] = useState<StabilityState[]>([])
+  useEffect(() => {
+    const r = robotRef.current
+    const tl = timelineRef.current
+    if (!r || tl.tracks.length === 0 || tl.duration <= 0) {
+      setStabilityStrip([])
+      return
+    }
+    const links = parseAssembly(contentRef.current).map((i) => i.link)
+    const masses = readLinkMasses(contentRef.current, links)
+    if (Object.keys(masses).length === 0) {
+      setStabilityStrip([])
+      return
+    }
+    const contactsNow = contactsRef.current
+    const matOf = (l: string): THREE.Matrix4 | null => r.links[l]?.matrixWorld ?? null
+    const N = 48
+    const states: StabilityState[] = []
+    for (let i = 0; i < N; i++) {
+      applyDisplayPose(sampleTimeline(tl, tl.duration * (i / (N - 1))), false)
+      r.updateMatrixWorld(true)
+      const balance = poseBalance(matOf, masses, contactsNow)
+      states.push(balance ? balance.stability.state : 'none')
+    }
+    // Restore the live pose (native joint values) the sampling perturbed.
+    for (const m of metaRef.current) {
+      if (m.isMimic) continue
+      const v = valuesRef.current[m.name]
+      if (typeof v === 'number') r.setJointValue(m.name, v)
+    }
+    r.updateMatrixWorld(true)
+    setStabilityStrip(states)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeline, contacts, content])
 
   // Playback: a rAF loop drives setJointValue every frame; the scrubber/playhead
   // React state is throttled to ~20 Hz so it never causes a per-frame re-render.
@@ -5313,6 +5355,7 @@ export function RobotView({
                 <RobotTimeline
                   timeline={timeline}
                   movableJoints={movableNames}
+                  stabilityStrip={stabilityStrip}
                   playhead={playhead}
                   playing={playing}
                   selected={selectedKey}

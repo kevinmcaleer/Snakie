@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Motion Studio stability strip (#559, epic #535 §3).** The Keyframes timeline
+  gains a **balance** heat-strip: each frame of the clip is sampled and coloured
+  green / amber / red by whether the centre-of-mass projection stays over the
+  support polygon (#558) at that pose — so a sequence that tips is obvious *before*
+  you flash it to hardware. Honest scoping in the tooltip: this is *static*
+  stability, and a dynamic gait (trot, run) can be statically unstable and still
+  walk, so amber/red is a heads-up, not an error. The strip only appears once
+  links have masses; it recomputes on timeline, contact or mass edits, never per
+  frame. (Per-frame CSV export + the ground-path draw are follow-ups.)
 - **Centre-of-mass + support-polygon overlay (#558, epic #535 §2).** The headline
   of the mass epic: a new ⚖ Balance toggle in Robot View drops a marker on the
   robot's live centre of mass, a plumb line down to the ground, and the support
