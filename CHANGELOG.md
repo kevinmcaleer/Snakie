@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Mesh volume + true centroid for mass estimation (#552, epic #535 §1).** New
+  pure module `robot-mass-geometry.ts` computing a mesh's volume and its
+  *volumetric* centroid by the divergence theorem, plus a watertight check.
+  Volume × a material density preset (PLA/PETG/ABS/resin) × an infill factor
+  gives the estimated grams a printed link weighs. Meshes with holes have no
+  well-defined interior, so the estimate degrades deliberately — mesh → convex
+  hull → bounding box — and reports which method it used so the UI can label an
+  estimate honestly rather than quietly showing a wrong number. Note this is
+  *not* the bounding-box "centroid" the exploded view uses, which is visibly
+  wrong for asymmetric parts like a servo with a horn.
+
 ## [0.33.1] - 2026-07-18
 
 ### Fixed
