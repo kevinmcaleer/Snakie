@@ -180,3 +180,53 @@
   font-size: 0.64rem;
   margin: 0.2rem 0;
 }
+
+/* Static-stability heat-strip (#559) — one cell per sampled frame, coloured by
+   whether the CoM projection stays over the support polygon. */
+.robottimeline__stab {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 0.7rem;
+  margin: 0.1rem 0 0.15rem;
+}
+.robottimeline__stab-label {
+  flex: 0 0 6rem;
+  width: 6rem;
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+  cursor: help;
+}
+.robottimeline__stab-cells {
+  position: relative;
+  flex: 1 1 auto;
+  display: flex;
+  height: 100%;
+  border: 1px solid var(--border, #2c2e33);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.robottimeline__stab-cell {
+  flex: 1 1 0;
+}
+.robottimeline__stab-cell--stable {
+  background: #3f9b52;
+}
+.robottimeline__stab-cell--marginal {
+  background: #d99a1a;
+}
+.robottimeline__stab-cell--unstable {
+  background: #cf4436;
+}
+.robottimeline__stab-cell--none {
+  background: var(--bg-sunken, #2b2d32);
+}
+.robottimeline__stab-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 2;
+}

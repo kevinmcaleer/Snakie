@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 import type { URDFRobot } from 'urdf-loader'
-import { createComOverlay, type ComOverlayData } from '../src/renderer/src/components/robot-com-overlay'
+import {
+  createComOverlay,
+  poseBalance,
+  type ComOverlayData
+} from '../src/renderer/src/components/robot-com-overlay'
 
 /**
  * Integration test for the CoM overlay's three.js glue (#558) — exercised with
@@ -134,5 +138,56 @@ describe('createComOverlay', () => {
     }))
     expect(overlay.update()).toBeNull() // never enabled
     overlay.dispose()
+  })
+})
+
+describe('poseBalance — shared by the overlay and the Motion Studio strip (#559)', () => {
+  const matOf =
+    (links: Record<string, THREE.Object3D>) =>
+    (l: string): THREE.Matrix4 | null =>
+      links[l]?.matrixWorld ?? null
+
+  const linkAt = (x: number, y: number, z: number): THREE.Object3D => {
+    const o = new THREE.Object3D()
+    o.position.set(x, y, z)
+    o.updateMatrixWorld(true)
+    return o
+  }
+
+  it('classifies a centred CoM over a foot square as stable', () => {
+    const links = {
+      m: linkAt(0.1, 0.1, 0),
+      f1: linkAt(0, 0, -0.1),
+      f2: linkAt(0.2, 0, -0.1),
+      f3: linkAt(0.2, 0, 0.1),
+      f4: linkAt(0, 0, 0.1)
+    }
+    const b = poseBalance(
+      matOf(links),
+      { m: { massKg: 1, comLocalM: [0, 0, 0] } },
+      { f1: [[0, 0, 0]], f2: [[0, 0, 0]], f3: [[0, 0, 0]], f4: [[0, 0, 0]] }
+    )
+    expect(b!.stability.state).toBe('stable')
+    expect(b!.hull).toHaveLength(4)
+    expect(b!.com.comWorld[0]).toBeCloseTo(0.1, 6)
+  })
+
+  it('classifies a CoM off the side as unstable', () => {
+    const links = {
+      m: linkAt(1, 0.1, 0),
+      f1: linkAt(0, 0, -0.05),
+      f2: linkAt(0.1, 0, -0.05),
+      f3: linkAt(0.05, 0, 0.05)
+    }
+    const b = poseBalance(
+      matOf(links),
+      { m: { massKg: 1, comLocalM: [0, 0, 0] } },
+      { f1: [[0, 0, 0]], f2: [[0, 0, 0]], f3: [[0, 0, 0]] }
+    )
+    expect(b!.stability.state).toBe('unstable')
+  })
+
+  it('is null when nothing is weighed', () => {
+    expect(poseBalance(matOf({ a: linkAt(0, 0, 0) }), {}, {})).toBeNull()
   })
 })

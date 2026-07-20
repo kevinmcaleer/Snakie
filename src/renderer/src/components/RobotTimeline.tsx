@@ -1,12 +1,16 @@
 import { useRef } from 'react'
 import type { MirrorPair, MotionEasing, MotionTimeline } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
+import type { StabilityState } from './robot-support'
 import './RobotTimeline.css'
 
 export interface RobotTimelineProps {
   timeline: MotionTimeline
   /** Movable (non-mimic) joint names — the track rows. */
   movableJoints: string[]
+  /** Per-frame static-stability samples across the clip (#559), left→right in
+   *  time. Empty when nothing is weighed — the strip hides. */
+  stabilityStrip?: StabilityState[]
   playhead: number // seconds
   playing: boolean
   /** The selected keyframe, if any. */
@@ -46,6 +50,7 @@ export function RobotTimeline(props: RobotTimelineProps): JSX.Element {
   const {
     timeline,
     movableJoints,
+    stabilityStrip,
     playhead,
     playing,
     selected,
@@ -249,6 +254,27 @@ export function RobotTimeline(props: RobotTimelineProps): JSX.Element {
           Export .py
         </button>
       </div>
+
+      {stabilityStrip && stabilityStrip.length > 0 && (
+        <div className="robottimeline__stab" role="group" aria-label="Static stability">
+          <span
+            className="robottimeline__stab-label"
+            title="Static stability: the centre of mass over the support polygon at each frame. A dynamic gait (trot, run) can be statically unstable and still walk — amber/red is a heads-up, not an error."
+          >
+            balance
+          </span>
+          <div className="robottimeline__stab-cells">
+            {stabilityStrip.map((s, i) => (
+              <span key={i} className={`robottimeline__stab-cell robottimeline__stab-cell--${s}`} />
+            ))}
+            <div
+              className="robottimeline__stab-playhead"
+              style={{ left: `${(Math.min(playhead, duration) / duration) * 100}%` }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+      )}
 
       <div className="robottimeline__tracks">
         <div

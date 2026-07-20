@@ -17,9 +17,41 @@
  */
 import * as THREE from 'three'
 import type { URDFRobot } from 'urdf-loader'
-import { robotWorldCoM, type LinkMass } from './robot-com'
+import { robotWorldCoM, type CoMResult, type LinkMass } from './robot-com'
 import { contactWorldPoints } from './robot-contacts'
-import { comStability, supportPolygon, type Pt2, type StabilityState } from './robot-support'
+import {
+  comStability,
+  supportPolygon,
+  type Pt2,
+  type Stability,
+  type StabilityState
+} from './robot-support'
+
+/** The full balance picture at one pose: CoM, support polygon, verdict. */
+export interface PoseBalance {
+  com: CoMResult
+  hull: Pt2[]
+  stability: Stability
+}
+
+/**
+ * Compute a pose's balance from the live scene (#558/#559) — the shared core the
+ * overlay draws from and the Motion Studio strip (#559) samples. `matOf(link)`
+ * gives each link's `matrixWorld`. Null when nothing is weighed (no CoM).
+ */
+export function poseBalance(
+  matOf: (link: string) => THREE.Matrix4 | null | undefined,
+  masses: Record<string, LinkMass>,
+  contacts: Record<string, [number, number, number][]>,
+  marginFrac = 0.1
+): PoseBalance | null {
+  const com = robotWorldCoM(matOf, masses)
+  if (!com) return null
+  const world = contactWorldPoints(matOf, contacts).map((c) => c.world)
+  const hull = supportPolygon(world)
+  const stability = comStability([com.comWorld[0], com.comWorld[2]], hull, marginFrac)
+  return { com, hull, stability }
+}
 
 /** What the overlay needs each frame — supplied by RobotView. */
 export interface ComOverlayData {
@@ -147,8 +179,8 @@ export function createComOverlay(
     const matOf = (l: string): THREE.Matrix4 | null => robot.links[l]?.matrixWorld ?? null
 
     const data = getData()
-    const com = robotWorldCoM(matOf, data.masses)
-    if (!com) {
+    const balance = poseBalance(matOf, data.masses, data.contacts, data.marginFrac)
+    if (!balance) {
       // Nothing weighed — hide everything, report nothing.
       comMarker.visible = false
       plumb.visible = false
@@ -160,15 +192,13 @@ export function createComOverlay(
     plumb.visible = true
     groundMarker.visible = true
 
+    const { com, hull, stability } = balance
     const [cx, cy, cz] = com.comWorld
     comMarker.position.set(cx, cy, cz)
     groundMarker.position.set(cx, data.groundY + 0.0005, cz)
     lineGeom.setFromPoints([new THREE.Vector3(cx, cy, cz), new THREE.Vector3(cx, data.groundY, cz)])
     lineGeom.computeBoundingSphere()
 
-    const worldContacts = contactWorldPoints(matOf, data.contacts).map((c) => c.world)
-    const hull = supportPolygon(worldContacts)
-    const stability = comStability([cx, cz], hull, data.marginFrac)
     drawPolygon(hull, data.groundY, STATE_COLOR[stability.state])
 
     return { state: stability.state, marginMm: stability.marginMm, massKg: com.massKg }
