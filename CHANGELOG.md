@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Centre-of-mass computation service (#556, epic #535 §2).** New
+  `robot-com.ts`: the robot's total mass and mass-weighted centre of mass at its
+  current pose. Split so the maths is pure and unit-tested (`centreOfMass` —
+  weighted average of point masses; `readLinkMasses` — per-link mass + local CoM
+  from the URDF `<inertial>`) with a thin three.js layer (`robotWorldCoM`) that
+  transforms each link's local CoM by its live `matrixWorld`, so it's cheap to
+  recompute every frame as joints move. The shared engine the CoM +
+  support-polygon overlay, the stability strip and the balance parameters all
+  build on. No visible UI yet — that's the overlay (#558).
 - **Total mass + per-link breakdown table (#555, epic #535 §1).** The Build panel
   gains a Mass section: the robot's total mass at a glance, and a per-link table
   you can sort by mass (what dominates) or by name. Rows with no mass show a dash,
