@@ -72,6 +72,20 @@ export interface MassEditorProps {
   onSetInfill: (infill: number) => void
 }
 
+/**
+ * The Ground-contacts editor for a link (#557) — the foot/wheel points the
+ * support polygon is hulled from. Points are in the link's own frame, MM (the
+ * editor's unit; stored as metres). `null` ⇒ not applicable.
+ */
+export interface ContactsEditorProps {
+  /** This link's contact points, in mm. */
+  pointsMm: Array<[number, number, number]>
+  /** Add a point — at the link's lowest mesh vertex where known, else the origin. */
+  onAdd: () => void
+  onRemove: (index: number) => void
+  onSet: (index: number, pointMm: [number, number, number]) => void
+}
+
 export interface RobotPropertiesDialogProps {
   context: PropsContext
   // link / joint
@@ -81,6 +95,8 @@ export interface RobotPropertiesDialogProps {
   onSetSize: (link: string, dims: number[]) => void
   /** Mass editor for the open link (#555), or null when not applicable. */
   massEditor?: MassEditorProps | null
+  /** Ground-contact editor for the open link (#557), or null when not applicable. */
+  contactsEditor?: ContactsEditorProps | null
   /** The edited link's colour (#rrggbb), or undefined for the default. */
   linkColor?: string
   /** Whether this link can be recoloured (a primitive, or an STL mesh — not DAE). */
@@ -297,6 +313,60 @@ function MassForm({ mass }: { mass: MassEditorProps }): JSX.Element {
   )
 }
 
+/**
+ * The Ground-contacts section (#557): the points on a link that touch the floor,
+ * so the support polygon has vertices. Each is x/y/z in mm; "Add" drops one at
+ * the link's lowest point (or origin) to nudge, and each row deletes.
+ */
+function ContactsForm({ contacts }: { contacts: ContactsEditorProps }): JSX.Element {
+  const { pointsMm, onAdd, onRemove, onSet } = contacts
+  return (
+    <section className="robotprops__section">
+      <div className="robotprops__label">
+        Ground contacts
+        <span className="robotprops__masssrc">
+          {pointsMm.length ? `${pointsMm.length} pt${pointsMm.length === 1 ? '' : 's'}` : 'none'}
+        </span>
+      </div>
+      {pointsMm.map((p, i) => (
+        <div className="robotprops__contactrow" key={i}>
+          {(['x', 'y', 'z'] as const).map((axis, a) => (
+            <label key={axis} className="robotprops__contactaxis">
+              <span>{axis}</span>
+              <input
+                type="number"
+                step="1"
+                value={Math.round(p[a] * 10) / 10}
+                onChange={(e) => {
+                  const next: [number, number, number] = [...p]
+                  next[a] = Number(e.target.value)
+                  onSet(i, next)
+                }}
+                aria-label={`Contact ${i + 1} ${axis} (mm)`}
+              />
+            </label>
+          ))}
+          <button
+            type="button"
+            className="robotprops__contactdel"
+            onClick={() => onRemove(i)}
+            title="Remove this contact point"
+            aria-label={`Remove contact ${i + 1}`}
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      <button type="button" className="robotprops__minibtn" onClick={onAdd}>
+        + Add contact point
+      </button>
+      {pointsMm.length === 0 && (
+        <p className="robotprops__note">Mark where this part touches the floor (a foot or wheel).</p>
+      )}
+    </section>
+  )
+}
+
 export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.Element {
   const { context, onOk, onCancel } = props
 
@@ -443,6 +513,7 @@ function LinkBody({
   jointNames,
   onSetSize,
   massEditor,
+  contactsEditor,
   onSetJoint,
   onRenameJoint,
   onSetJointOrigin,
@@ -470,6 +541,7 @@ function LinkBody({
             </section>
           )}
           {massEditor && <MassForm mass={massEditor} />}
+          {contactsEditor && <ContactsForm contacts={contactsEditor} />}
           {colorable ? (
             // Primitives + STL meshes recolour via the inline URDF <material>. (DAE/
             // Collada meshes carry their own materials, so they fall through to the note.)

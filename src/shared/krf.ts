@@ -211,6 +211,25 @@ function sanitiseVec3Map(raw: unknown): Record<string, [number, number, number]>
   return out
 }
 
+/** A map of key → LIST of vec3s (e.g. per-link ground-contact points, #557).
+ *  Drops malformed points, and keys whose list ends up empty. */
+function sanitiseVec3ListMap(raw: unknown): Record<string, [number, number, number][]> {
+  const out: Record<string, [number, number, number][]> = {}
+  if (raw && typeof raw === 'object') {
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      if (!Array.isArray(v)) continue
+      const pts = v
+        .filter(
+          (p): p is [number, number, number] =>
+            Array.isArray(p) && p.length === 3 && p.every(isFiniteNum)
+        )
+        .map((p) => [p[0], p[1], p[2]] as [number, number, number])
+      if (pts.length) out[k] = pts
+    }
+  }
+  return out
+}
+
 /**
  * Validate the robot-model section, corruption-safe: unknown/legacy shapes and
  * bad fields are dropped, never thrown. Returns `undefined` when there's no
@@ -266,6 +285,9 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
     }
     if (Object.keys(linkMass).length) model.linkMass = linkMass
   }
+
+  const contacts = sanitiseVec3ListMap(r.contacts)
+  if (Object.keys(contacts).length) model.contacts = contacts
 
   if (Array.isArray(r.poses)) {
     const poses = r.poses

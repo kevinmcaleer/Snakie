@@ -66,6 +66,10 @@ export interface RobotModel {
    *  the active source, and the material/infill an estimate used so it stays
    *  reproducible. Keyed by link name. Absent ⇒ the link has no authored mass. */
   linkMass?: Record<string, LinkMassSpec>
+  /** Per-link GROUND-CONTACT points (#557, epic #535 §2), in the link's own
+   *  frame, METRES — the feet/wheels the support-polygon hull is built from.
+   *  Keyed by link name; a link with none doesn't touch the ground. */
+  contacts?: Record<string, [number, number, number][]>
   /** Per-joint absolute roll about its own normal axis, in DEGREES (#354). The URDF
    *  `<origin rpy>` already bakes this in; it's remembered here so the joint editor
    *  can show the current roll and edit it absolutely (deltas re-applied to the rpy),
