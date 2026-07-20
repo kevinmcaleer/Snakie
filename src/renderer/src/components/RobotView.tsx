@@ -163,8 +163,7 @@ import {
   DEFAULT_MATERIAL,
   DEFAULT_INFILL,
   type MassEstimate,
-  type MassBreakdown,
-  type MassSort
+  type MassBreakdown
 } from './robot-mass'
 import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
@@ -913,7 +912,6 @@ export function RobotView({
   // dragging the infill slider re-estimates live.
   const [massMaterial, setMassMaterial] = useState(DEFAULT_MATERIAL)
   const [massInfill, setMassInfill] = useState(DEFAULT_INFILL)
-  const [massSort, setMassSort] = useState<MassSort>('mass')
   useEffect(() => {
     const lm = editLink ? defRef.current?.robot?.linkMass?.[editLink] : undefined
     setMassMaterial(lm?.material ?? DEFAULT_MATERIAL)
@@ -1050,8 +1048,10 @@ export function RobotView({
       const source = inertial ? lm?.[link]?.source ?? 'measured' : 'none'
       return { link, grams, source }
     })
-    return summariseMass(rows, massSort)
-  }, [content, massSort])
+    // Sort order is irrelevant now only the total is shown (#567), but the
+    // breakdown is kept for a future stats surface; default (by mass) is fine.
+    return summariseMass(rows)
+  }, [content])
 
   // ── Ground-contact points (#557, epic #535 §2) ───────────────────────────
   const persistContacts = (next: Record<string, [number, number, number][]>): void => {
@@ -5136,8 +5136,6 @@ export function RobotView({
             canEdit={canEdit}
             onOpenRobot={() => void handleOpenRobotFile()}
             massSummary={massSummary}
-            massSort={massSort}
-            onSetMassSort={setMassSort}
           />
         )}
         {showPanel && dialogCtx && (

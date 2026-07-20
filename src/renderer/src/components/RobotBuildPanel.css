@@ -608,78 +608,20 @@
   background: rgba(128, 128, 128, 0.14);
 }
 
-/* Mass summary (#555 part 2) — total readout + per-link breakdown table. */
-.robotbuild__masstotal {
-  color: var(--accent, #34ad4f);
-  font-weight: 700;
-}
-.robotbuild__masstable {
+/* Total-mass readout (#555 / #567) — a compact bar above the panel footer.
+   Per-link mass lives in the Properties dialog; this is just the robot-level sum. */
+.robotbuild__masstotal-bar {
   display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  padding: 0.15rem 0.2rem 0.3rem;
-}
-.robotbuild__masssort {
-  display: flex;
-  gap: 0.25rem;
-  margin-bottom: 0.2rem;
-}
-.robotbuild__masssort button {
-  font-family: var(--font-mono, 'JetBrains Mono', monospace);
-  font-size: 0.54rem;
-  color: var(--text-muted, #8b919b);
-  background: transparent;
-  border: 1px solid var(--border, #3a3d44);
-  border-radius: 4px;
-  padding: 0.05rem 0.3rem;
-  cursor: pointer;
-}
-.robotbuild__masssort button.is-on {
-  color: var(--accent-ink, #191a1d);
-  background: var(--accent, #d6a23f);
-  border-color: var(--accent, #d6a23f);
-}
-.robotbuild__massrow {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
   align-items: center;
-  gap: 0.4rem;
-  width: 100%;
+  justify-content: space-between;
+  padding: 0.25rem 0.5rem;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.6rem;
-  color: var(--text, #cdd2d9);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  padding: 0.12rem 0.3rem;
-  cursor: pointer;
-  text-align: left;
+  color: var(--text-muted, #8b919b);
+  border-top: 1px solid var(--border, #3a3d44);
 }
-.robotbuild__massrow:hover {
-  background: var(--bg-sunken, rgba(255, 255, 255, 0.05));
-}
-.robotbuild__massrow-link {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.robotbuild__massrow-g {
+.robotbuild__masstotal-g {
+  color: var(--accent, #34ad4f);
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--text, #cdd2d9);
-}
-.robotbuild__massrow-src {
-  font-size: 0.52rem;
-  color: var(--text-muted, #8b919b);
-}
-.robotbuild__massrow-src--measured {
-  color: #7ec98f;
-}
-.robotbuild__massrow-src--none {
-  font-style: italic;
-}
-.robotbuild__masshint {
-  margin: 0.2rem 0.3rem 0;
-  font-size: 0.54rem;
-  font-style: italic;
-  color: var(--text-muted, #8b919b);
 }

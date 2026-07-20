@@ -14,7 +14,7 @@ import { principalAxisName } from './robot-build'
 import { toDisplay, toNative, unitLabel, normPin, type MovableType } from './robot-pose'
 import { boundJoint, type BindableServo } from './servo-bind'
 import { shouldAutoHide } from './pin-overlay'
-import { sourceLabel, type MassBreakdown, type MassSort } from './robot-mass'
+import type { MassBreakdown } from './robot-mass'
 import type { ServoJointBinding } from '../../../shared/robot'
 import type { NamedPoseLike } from './robot-pose'
 import type { PropsContext } from './RobotPropertiesDialog'
@@ -132,11 +132,9 @@ export interface RobotBuildPanelProps {
   canEdit: boolean
   /** Open a different robot `.urdf` via the native picker (works popped out). */
   onOpenRobot: () => void
-  /** Per-link mass breakdown + total (#555 part 2), or null when nothing has a mass. */
+  /** The robot's total mass in grams + how many links are still un-weighed (#555 /
+   *  #567) — a compact footer readout; per-link mass lives in the Properties dialog. */
   massSummary?: MassBreakdown | null
-  /** Current breakdown sort, and a setter (the table's "by mass / by name" toggle). */
-  massSort: MassSort
-  onSetMassSort: (sort: MassSort) => void
 }
 
 /** metres → integer mm (display) and back. */
@@ -505,93 +503,6 @@ function Section({
   )
 }
 
-/** Grams for the table, whole numbers once past ~10 g, else one decimal. */
-const fmtRowGrams = (g: number): string =>
-  g >= 10 ? Math.round(g).toString() : (Math.round(g * 10) / 10).toString()
-
-/**
- * The Mass summary (#555 part 2): a total-mass readout + a per-link table you
- * can sort by mass (what dominates) or name. Collapsible like the other tree
- * sections; clicking a row opens that link's inspector. Rows with no mass show
- * a dash so it's obvious what's still un-weighed.
- */
-function MassSummary({
-  summary,
-  sort,
-  onSetSort,
-  collapsed,
-  onToggle,
-  onSelect
-}: {
-  summary: MassBreakdown
-  sort: MassSort
-  onSetSort: (s: MassSort) => void
-  collapsed: Record<string, boolean>
-  onToggle: (id: string) => void
-  onSelect: (link: string) => void
-}): JSX.Element {
-  const isCollapsed = !!collapsed.mass
-  return (
-    <div className="robotbuild__section">
-      <button
-        type="button"
-        className="robotbuild__branch"
-        aria-expanded={!isCollapsed}
-        onClick={() => onToggle('mass')}
-      >
-        <span className="robotbuild__caret">{isCollapsed ? '▸' : '▾'}</span>
-        <span className="robotbuild__branch-label">Mass</span>
-        <span className="robotbuild__branch-count robotbuild__masstotal">
-          {Math.round(summary.totalG)} g
-        </span>
-      </button>
-      {!isCollapsed && (
-        <div className="robotbuild__masstable">
-          <div className="robotbuild__masssort" role="group" aria-label="Sort mass table">
-            <button
-              type="button"
-              className={sort === 'mass' ? 'is-on' : ''}
-              onClick={() => onSetSort('mass')}
-            >
-              by mass
-            </button>
-            <button
-              type="button"
-              className={sort === 'name' ? 'is-on' : ''}
-              onClick={() => onSetSort('name')}
-            >
-              by name
-            </button>
-          </div>
-          {summary.rows.map((r) => (
-            <button
-              key={r.link}
-              type="button"
-              className="robotbuild__massrow"
-              onClick={() => onSelect(r.link)}
-              title={`Edit ${r.link}'s mass`}
-            >
-              <span className="robotbuild__massrow-link">{r.link}</span>
-              <span className="robotbuild__massrow-g">
-                {r.grams > 0 ? `${fmtRowGrams(r.grams)} g` : '—'}
-              </span>
-              <span className={`robotbuild__massrow-src robotbuild__massrow-src--${r.source}`}>
-                {r.grams > 0 ? sourceLabel(r.source) : 'not set'}
-              </span>
-            </button>
-          ))}
-          {summary.unsetCount > 0 && (
-            <p className="robotbuild__masshint">
-              {summary.unsetCount} link{summary.unsetCount === 1 ? '' : 's'} with no mass — the total
-              is a lower bound.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 const INDENT = 14 // px of indent per depth level in the chain tree
 
 // A distinct glyph per joint type (#): a lock (fixed), a rotation arrow (hinge /
@@ -769,9 +680,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     importing,
     canEdit,
     onOpenRobot,
-    massSummary,
-    massSort,
-    onSetMassSort
+    massSummary
   } = props
   const dockRef = useRef<HTMLElement | null>(null)
   const prompt = usePrompt()
@@ -933,16 +842,6 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
             ))}
           </Section>
         )}
-        {massSummary && massSummary.rows.length > 0 && (
-          <MassSummary
-            summary={massSummary}
-            sort={massSort}
-            onSetSort={onSetMassSort}
-            collapsed={collapsed}
-            onToggle={toggle}
-            onSelect={onEdit}
-          />
-        )}
         {rootLink === null && assembly.length > 1 && (
           <p className="robotbuild__hint">
             Several parts, no base yet — right-click a part ▸ <b>Make base</b> to start the chain.
@@ -1071,6 +970,22 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
           <p className="robotbuild__hint">Add a block or import an STL to start building.</p>
         )}
       </div>
+
+      {massSummary && massSummary.totalG > 0 && (
+        <div
+          className="robotbuild__masstotal-bar"
+          title={
+            massSummary.unsetCount > 0
+              ? `${massSummary.unsetCount} link(s) still un-weighed — the total is a lower bound. Set a link's mass in its Properties.`
+              : 'Sum of every link’s mass'
+          }
+        >
+          <span>Total mass</span>
+          <span className="robotbuild__masstotal-g">
+            {Math.round(massSummary.totalG)} g{massSummary.unsetCount > 0 ? '+' : ''}
+          </span>
+        </div>
+      )}
 
       <div className="robotbuild__foot">
         <button
