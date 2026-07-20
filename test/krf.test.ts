@@ -182,6 +182,27 @@ describe('sanitiseRobotModel — corruption-safe (#310)', () => {
     expect(m).toBeDefined()
     expect(m!.linkMass!.arm.source).toBe('measured')
   })
+
+  it('sanitises ground contacts (#557): keeps valid vec3 lists, drops junk', () => {
+    const m = sanitiseRobotModel({
+      contacts: {
+        foot_l: [[0, 0, 0], [0.02, 0, 0.01]],
+        foot_r: [[1, 2, 3]],
+        bad: [[0, 0], 'nope', [1, 2, 3, 4]], // all malformed → key dropped
+        empty: []
+      }
+    })
+    expect(m!.contacts!.foot_l).toEqual([[0, 0, 0], [0.02, 0, 0.01]])
+    expect(m!.contacts!.foot_r).toEqual([[1, 2, 3]])
+    expect(m!.contacts!.bad).toBeUndefined()
+    expect(m!.contacts!.empty).toBeUndefined()
+  })
+
+  it('a contacts-only model round-trips (regression: never silently dropped)', () => {
+    const m = sanitiseRobotModel({ contacts: { foot: [[0, 0, 0]] } })
+    expect(m).toBeDefined()
+    expect(m!.contacts!.foot).toEqual([[0, 0, 0]])
+  })
 })
 
 describe('scaffoldKrf (#310)', () => {

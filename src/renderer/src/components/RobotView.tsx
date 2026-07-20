@@ -166,8 +166,9 @@ import {
   type MassBreakdown,
   type MassSort
 } from './robot-mass'
-import type { MassEditorProps } from './RobotPropertiesDialog'
+import type { MassEditorProps, ContactsEditorProps } from './RobotPropertiesDialog'
 import type { MeshTriangles } from './robot-mass-geometry'
+import { addContact, removeContact, setContact } from './robot-contacts'
 import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
@@ -265,6 +266,40 @@ function linkLocalTriangles(robot: URDFRobot, link: string): MeshTriangles | nul
   return positions.length >= 9 ? { positions } : null
 }
 
+/**
+ * The link's LOCAL-frame point that sits lowest in the WORLD (#557) — the
+ * natural spot to seed a ground-contact for a foot. Scans the link's own mesh
+ * vertices, tracks the one with the smallest world Y (Snakie's up axis), and
+ * returns it back in link-local coordinates. Null when the link has no mesh.
+ */
+function lowestLinkPointLocal(robot: URDFRobot, link: string): [number, number, number] | null {
+  const linkObj = robot.links[link]
+  if (!linkObj) return null
+  robot.updateMatrixWorld(true)
+  const toWorld = new THREE.Matrix4().copy(linkObj.matrixWorld)
+  const toLocal = new THREE.Matrix4().copy(toWorld).invert()
+  const world = new THREE.Vector3()
+  let best: THREE.Vector3 | null = null
+  let bestY = Infinity
+  linkObj.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || ownerLink(mesh) !== link) return
+    const geom = mesh.geometry as THREE.BufferGeometry
+    const pos = geom.getAttribute('position') as THREE.BufferAttribute | undefined
+    if (!pos) return
+    for (let i = 0; i < pos.count; i++) {
+      world.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld)
+      if (world.y < bestY) {
+        bestY = world.y
+        best = world.clone()
+      }
+    }
+  })
+  if (!best) return null
+  const local = (best as THREE.Vector3).applyMatrix4(toLocal)
+  return [local.x, local.y, local.z]
+}
+
 export function RobotView({
   urdfContent,
   basePath,
@@ -296,6 +331,9 @@ export function RobotView({
   const [overrides, setOverrides] = useState<Record<string, { min?: number; max?: number }>>({})
   const [poses, setPoses] = useState<NamedPoseLike[]>([])
   const posesRef = useRef<NamedPoseLike[]>([])
+  // Per-link ground-contact points (#557), link-local metres — mirrors robot.yml
+  // `contacts`, kept reactive so the inspector reflects edits immediately.
+  const [contacts, setContacts] = useState<Record<string, [number, number, number][]>>({})
   posesRef.current = poses
   // Managed sequences (#413) parsed from an opened motion.py — round-tripped
   // losslessly on re-export even though the sequence editor UI (#415) is pending.
@@ -1015,6 +1053,40 @@ export function RobotView({
     return summariseMass(rows, massSort)
   }, [content, massSort])
 
+  // ── Ground-contact points (#557, epic #535 §2) ───────────────────────────
+  const persistContacts = (next: Record<string, [number, number, number][]>): void => {
+    setContacts(next)
+    void persist((m) => {
+      if (Object.keys(next).length) m.contacts = next
+      else delete m.contacts
+    })
+  }
+  const handleAddContact = (link: string): void => {
+    const robot = robotRef.current
+    const local = robot ? lowestLinkPointLocal(robot, link) : null
+    persistContacts(addContact(contacts, link, local ?? [0, 0, 0]))
+  }
+  const handleRemoveContact = (link: string, index: number): void => {
+    persistContacts(removeContact(contacts, link, index))
+  }
+  const handleSetContactMm = (link: string, index: number, mm: [number, number, number]): void => {
+    persistContacts(setContact(contacts, link, index, [mmToM(mm[0]), mmToM(mm[1]), mmToM(mm[2])]))
+  }
+
+  const contactsEditor = useMemo<ContactsEditorProps | null>(() => {
+    if (!editLink || dialogCtx?.kind !== 'link') return null
+    const pointsMm = (contacts[editLink] ?? []).map(
+      (p): [number, number, number] => [mToMm(p[0]), mToMm(p[1]), mToMm(p[2])]
+    )
+    return {
+      pointsMm,
+      onAdd: () => handleAddContact(editLink),
+      onRemove: (i) => handleRemoveContact(editLink, i),
+      onSet: (i, mm) => handleSetContactMm(editLink, i, mm)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLink, dialogCtx, contacts])
+
   // Colour a link (#405) — an inline URDF <material>, so it round-trips + undoes like
   // any other build edit; urdf-loader renders it, recolouring only this link.
   const handleSetColor = (link: string, hex: string): void => {
@@ -1584,6 +1656,7 @@ export function RobotView({
         defRef.current = def // seed so persist() never clobbers an unloaded robot.yml
         setBindings(def.robot?.servoJointMap ?? [])
         setControls(def.robot?.controls ?? []) // puppet controls (#416)
+        setContacts(def.robot?.contacts ?? {}) // ground contacts (#557)
         setPlacedParts(def.parts ?? []) // breadboard parts (for the bindable-servos list)
         setPlacedConns(def.connections ?? [])
       } catch {
@@ -5086,6 +5159,7 @@ export function RobotView({
             jointNames={allJointNames}
             onSetSize={handleSetSize}
             massEditor={massEditor}
+            contactsEditor={contactsEditor}
             linkColor={editLinkColor}
             colorable={editColorable}
             usedColors={usedLinkColors}

@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Ground-contact tagging (#557, epic #535 §2).** A link's Properties gain a
+  Ground Contacts section: mark the points where a part (a foot or wheel) touches
+  the floor, so the support-polygon check (coming in #558) has vertices to hull.
+  "Add contact point" drops one at the link's lowest point automatically; each is
+  editable by x/y/z (mm) and removable. Points are stored per link in `robot.yml`
+  (`contacts`, link-local metres) and transform with the pose, so a lifted foot
+  moves with it. New pure `robot-contacts.ts` (world-transform + immutable edits).
+  Part-level authoring on the parts library is a follow-up (it needs the
+  link→part mapping URDF links don't yet carry).
 - **Centre-of-mass computation service (#556, epic #535 §2).** New
   `robot-com.ts`: the robot's total mass and mass-weighted centre of mass at its
   current pose. Split so the maths is pure and unit-tested (`centreOfMass` —
