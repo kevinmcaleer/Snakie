@@ -9,7 +9,8 @@ import {
   mToMm,
   mmToM,
   resolveMass,
-  sourceLabel
+  sourceLabel,
+  summariseMass
 } from '../src/renderer/src/components/robot-mass'
 import type { MeshTriangles, Vec3 } from '../src/renderer/src/components/robot-mass-geometry'
 
@@ -118,6 +119,51 @@ describe('unit conversions', () => {
     expect(kgToGrams(0.009)).toBeCloseTo(9, 9)
     expect(mmToM(50)).toBeCloseTo(0.05, 9)
     expect(mToMm(0.05)).toBeCloseTo(50, 9)
+  })
+})
+
+describe('summariseMass — breakdown table', () => {
+  const rows = [
+    { link: 'base', grams: 300, source: 'estimated' as const },
+    { link: 'arm', grams: 9, source: 'measured' as const },
+    { link: 'gripper', grams: 0, source: 'none' as const },
+    { link: 'wrist', grams: 50, source: 'library' as const }
+  ]
+
+  it('sorts heaviest-first by default and totals the set masses', () => {
+    const b = summariseMass(rows)
+    expect(b.rows.map((r) => r.link)).toEqual(['base', 'wrist', 'arm', 'gripper'])
+    expect(b.totalG).toBe(359)
+    expect(b.unsetCount).toBe(1)
+  })
+
+  it('sorts by name when asked', () => {
+    const b = summariseMass(rows, 'name')
+    expect(b.rows.map((r) => r.link)).toEqual(['arm', 'base', 'gripper', 'wrist'])
+    expect(b.totalG).toBe(359)
+  })
+
+  it('breaks mass ties by link name for a stable order', () => {
+    const b = summariseMass([
+      { link: 'z', grams: 10, source: 'measured' },
+      { link: 'a', grams: 10, source: 'measured' }
+    ])
+    expect(b.rows.map((r) => r.link)).toEqual(['a', 'z'])
+  })
+
+  it('an all-empty robot totals zero with everything unset', () => {
+    const b = summariseMass([
+      { link: 'a', grams: 0, source: 'none' },
+      { link: 'b', grams: 0, source: 'none' }
+    ])
+    expect(b.totalG).toBe(0)
+    expect(b.unsetCount).toBe(2)
+  })
+
+  it('does not mutate the caller’s array', () => {
+    const input = [...rows]
+    summariseMass(input)
+    expect(input.map((r) => r.link)).toEqual(['base', 'arm', 'gripper', 'wrist'])
   })
 })
 

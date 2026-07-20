@@ -124,6 +124,46 @@ export const mmToM = (mm: number): number => mm / 1000
 /** URDF metres → millimetres (the editor's unit). */
 export const mToMm = (m: number): number => m * 1000
 
+/** One link's line in the mass breakdown (#555 part 2). */
+export interface MassRow {
+  link: string
+  /** Grams (0 ⇒ no mass set on this link). */
+  grams: number
+  source: MassSource
+}
+
+export interface MassBreakdown {
+  /** Rows, heaviest first by default (see {@link summariseMass}). */
+  rows: MassRow[]
+  /** Total mass in grams across every link that has one. */
+  totalG: number
+  /** How many links still have no mass — the "finish weighing these" count. */
+  unsetCount: number
+}
+
+/** How the breakdown table is ordered. */
+export type MassSort = 'mass' | 'name'
+
+/**
+ * Summarise per-link masses into a total + an ordered table (#555 part 2).
+ *
+ * `mass` order is heaviest-first so what dominates is obvious at a glance, with
+ * link name as a stable tiebreak; `name` order is alphabetical. Rows with no
+ * mass sink to the bottom in `mass` order (they contribute 0) but keep their
+ * place in `name` order. Pure — the caller reads each link's stored `<inertial>`.
+ */
+export function summariseMass(entries: MassRow[], sort: MassSort = 'mass'): MassBreakdown {
+  const rows = [...entries]
+  if (sort === 'name') {
+    rows.sort((a, b) => a.link.localeCompare(b.link))
+  } else {
+    rows.sort((a, b) => b.grams - a.grams || a.link.localeCompare(b.link))
+  }
+  const totalG = rows.reduce((sum, r) => sum + (r.grams > 0 ? r.grams : 0), 0)
+  const unsetCount = rows.reduce((n, r) => n + (r.grams > 0 ? 0 : 1), 0)
+  return { rows, totalG, unsetCount }
+}
+
 /** A short human label for a mass source, for the inspector's provenance chip. */
 export function sourceLabel(source: MassSource): string {
   switch (source) {
