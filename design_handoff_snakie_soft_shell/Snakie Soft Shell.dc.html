@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  @keyframes blink { 50% { opacity: .35; } }
+  :root{
+    --bg:#e6dfcf;--shell:#efe9dc;--panel:#f6f1e6;--panel2:#ece5d6;--shellbd:#e0d9c8;
+    --head:#2a2b28;--txt2:#5f5c50;--txt3:#7a776a;--txt4:#9a9686;--txt5:#a5a08e;
+    --card:#fff;--rail:#e3e6df;--line:#e7dcc4;--editor:#f4eede;--gutter:#ece2cd;
+    --green:#26a269;--greentext:#1c7a4d;--greenpill:linear-gradient(145deg,#eafaf1,#dbf3e6);
+    --gold:#d9a441;--goldbg:#f0dca6;--goldink:#6b4e17;
+    --kw:#a23b2e;--str:#9c7a2e;--num:#2f6f8f;--com:#a39877;--ident:#3a362a;
+    --blueprint:#1f4e6b;--bpline:rgba(220,235,245,.09);--bptext:#cfe4f0;
+    --pillinset:rgba(255,255,255,.6);--glass:rgba(255,255,255,.78);--dot:rgba(60,55,40,.09);
+    --con:#14160f;--conbd:#2a2d24;
+  }
+  [data-theme='dark']{
+    --bg:#121410;--shell:#1d201a;--panel:#21251f;--panel2:#171a14;--shellbd:#31352b;
+    --head:#eef1ea;--txt2:#9a9d8f;--txt3:#8b8e80;--txt4:#73766a;--txt5:#73766a;
+    --card:#262a21;--rail:#2a2e24;--line:#2a2e22;--editor:#191c15;--gutter:#15180f;
+    --greentext:#8fe6b6;--greenpill:linear-gradient(145deg,#203f2d,#183324);
+    --gold:#d9a441;--goldbg:#4a3c1c;--goldink:#f0dca6;
+    --kw:#e08b7d;--str:#d8b96e;--num:#7fc4e0;--com:#6f7a63;--ident:#cdd4cb;
+    --blueprint:#16324a;--bpline:rgba(220,235,245,.07);--bptext:#cfe4f0;
+    --pillinset:rgba(255,255,255,.08);--glass:rgba(18,22,15,.74);--dot:rgba(200,214,188,.05);
+    --con:#0c0e08;--conbd:#242a1c;
+  }
+</style>
+</helmet>
+
+<div data-theme="{{ themeAttr }}" style="min-height:948px; display:flex; align-items:center; justify-content:center; overflow:auto; background:var(--bg); background-image:radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 0); background-size:26px 26px; padding:40px; font-family:'Plus Jakarta Sans',sans-serif;">
+
+  <div style="width:1360px; flex:none; height:868px; border-radius:22px; overflow:hidden; background:var(--shell); border:1px solid var(--shellbd); box-shadow:0 30px 70px -30px rgba(0,0,0,.4); display:flex; flex-direction:column;">
+
+    <!-- ===== TOP TOOLBAR ===== -->
+    <div style="height:58px; flex:none; display:flex; align-items:center; gap:14px; padding:0 16px; background:var(--panel); border-bottom:1px solid var(--shellbd);">
+      <div style="display:flex; align-items:center; gap:9px;">
+        <div style="width:30px;height:30px;border-radius:9px;background:linear-gradient(145deg,#3fc686,#22935e);box-shadow:0 3px 8px rgba(38,162,105,.4),inset 0 1px 0 rgba(255,255,255,.4);display:grid;place-items:center;color:#fff;font-weight:700;font-size:15px;">§</div>
+        <span style="font-weight:700;font-size:17px;color:#2f9e63;letter-spacing:-.01em;">Snakie</span>
+      </div>
+      <!-- file group -->
+      <div style="display:flex; padding:3px; gap:2px; background:var(--panel2); border-radius:10px; box-shadow:inset 0 1px 2px rgba(0,0,0,.08);">
+        <div title="New" style="width:34px;height:30px;border-radius:8px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt2);font-size:14px;cursor:pointer;">🖹</div>
+        <div title="Open" style="width:34px;height:30px;border-radius:8px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt2);font-size:14px;cursor:pointer;">🗀</div>
+        <div title="Save" style="width:34px;height:30px;border-radius:8px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt2);font-size:14px;cursor:pointer;">🖫</div>
+      </div>
+      <div title="Undo" style="width:34px;height:34px;border-radius:10px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt3);font-size:15px;cursor:pointer;">↶</div>
+      <div style="width:1px;height:28px;background:var(--shellbd);"></div>
+      <!-- run / reset -->
+      <div style="display:flex; gap:9px;">
+        <div style="display:flex;align-items:center;gap:7px;padding:8px 18px;border-radius:11px;color:#fff;font-weight:600;font-size:14px;background:linear-gradient(145deg,#42b877,#2f9e63);box-shadow:0 5px 12px rgba(38,162,105,.4),inset 0 1px 0 rgba(255,255,255,.4);cursor:pointer;"><span style="font-size:11px;">▶</span> Run</div>
+        <div style="display:flex;align-items:center;gap:7px;padding:8px 18px;border-radius:11px;color:#fff;font-weight:600;font-size:14px;background:linear-gradient(145deg,#e06a54,#cf4a37);box-shadow:0 5px 12px rgba(207,74,55,.35),inset 0 1px 0 rgba(255,255,255,.35);cursor:pointer;">↺ Reset</div>
+      </div>
+
+      <!-- center: workspace switch -->
+      <div style="margin:0 auto; display:flex; padding:4px; gap:3px; background:var(--panel2); border-radius:12px; box-shadow:inset 0 1px 2px rgba(0,0,0,.08);">
+        <sc-if value="{{ isCode }}" hint-placeholder-val="{{ true }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:700; color:var(--goldink); background:linear-gradient(145deg,#f0dca6,#e7bf62); box-shadow:0 2px 5px rgba(207,154,47,.3); cursor:pointer;" onClick="{{ setCode }}">Code</div></sc-if>
+        <sc-if value="{{ notCode }}" hint-placeholder-val="{{ false }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:600; color:var(--txt3); cursor:pointer;" onClick="{{ setCode }}">Code</div></sc-if>
+        <sc-if value="{{ isElec }}" hint-placeholder-val="{{ false }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:700; color:var(--goldink); background:linear-gradient(145deg,#f0dca6,#e7bf62); box-shadow:0 2px 5px rgba(207,154,47,.3); cursor:pointer;" onClick="{{ setElec }}">Electronics</div></sc-if>
+        <sc-if value="{{ notElec }}" hint-placeholder-val="{{ true }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:600; color:var(--txt3); cursor:pointer;" onClick="{{ setElec }}">Electronics</div></sc-if>
+        <sc-if value="{{ isSim }}" hint-placeholder-val="{{ false }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:700; color:var(--goldink); background:linear-gradient(145deg,#f0dca6,#e7bf62); box-shadow:0 2px 5px rgba(207,154,47,.3); cursor:pointer;" onClick="{{ setSim }}">Build</div></sc-if>
+        <sc-if value="{{ notSim }}" hint-placeholder-val="{{ true }}"><div style="padding:7px 18px; border-radius:9px; font-size:13px; font-weight:600; color:var(--txt3); cursor:pointer;" onClick="{{ setSim }}">Build</div></sc-if>
+      </div>
+
+      <!-- right cluster -->
+      <div onClick="{{ toggleTheme }}" title="Toggle light / dark" style="width:34px;height:34px;border-radius:10px;background:var(--panel2);display:grid;place-items:center;color:var(--txt2);font-size:15px;cursor:pointer;">{{ themeIcon }}</div>
+    </div>
+
+    <!-- ===== MIDDLE: rail + workspace ===== -->
+    <div style="flex:1; display:flex; min-height:0;">
+      <!-- LEFT ICON RAIL (always dark) -->
+      <div style="width:72px; flex:none; background:#26281f; display:flex; flex-direction:column; align-items:center; padding:14px 0; gap:4px;">
+        <div style="width:52px;padding:9px 0;border-radius:12px;background:linear-gradient(145deg,#3a3d30,#2c2f24);display:flex;flex-direction:column;align-items:center;gap:4px;color:#e7bf62;box-shadow:inset 0 1px 0 rgba(255,255,255,.06);"><span style="font-size:17px;">🗂</span><span style="font-size:9px;letter-spacing:.03em;">Files</span></div>
+        <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:17px;">⬡</span><span style="font-size:9px;">Packages</span></div>
+        <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:17px;">⌕</span><span style="font-size:9px;">Inspect</span></div>
+        <div style="margin-top:auto; display:flex; flex-direction:column; align-items:center; gap:4px;">
+          <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:16px;">🐞</span><span style="font-size:9px;">Report</span></div>
+          <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:16px;">◈</span><span style="font-size:9px;">Learn</span></div>
+          <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:16px;">?</span><span style="font-size:9px;">Help</span></div>
+          <div style="width:52px;padding:9px 0;border-radius:12px;display:flex;flex-direction:column;align-items:center;gap:4px;color:#8f9184;cursor:pointer;"><span style="font-size:16px;">⚙</span><span style="font-size:9px;">Settings</span></div>
+        </div>
+      </div>
+
+      <!-- WORKSPACE -->
+      <div style="flex:1; min-width:0; padding:14px; display:flex; flex-direction:column; min-height:0;">
+
+        <!-- ============ CODE ============ -->
+        <sc-if value="{{ isCode }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1; display:grid; gap:14px; min-height:0; grid-template-columns:{{ codeGridCols }};">
+          <!-- files panel -->
+          <sc-if value="{{ filesClosed }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ toggleFiles }}" title="Show files" style="background:var(--panel); border-radius:16px; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; align-items:center; padding-top:14px; gap:10px; cursor:pointer; color:var(--txt3);"><span style="font-size:13px;">›</span><span style="writing-mode:vertical-rl; font-size:10px; letter-spacing:.14em; text-transform:uppercase; font-weight:700;">Files</span></div>
+          </sc-if>
+          <sc-if value="{{ filesOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--panel); border-radius:16px; display:flex; flex-direction:column; min-height:0; box-shadow:0 2px 8px rgba(0,0,0,.06); overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:8px; padding:13px 14px; border-bottom:1px solid var(--shellbd);">
+              <span style="font-size:11px; letter-spacing:.12em; color:var(--txt3); text-transform:uppercase; font-weight:700;">▤ Local files</span>
+              <div style="margin-left:auto; display:flex; gap:5px; color:var(--txt4); font-size:12px;"><span style="cursor:pointer;">↻</span><span style="cursor:pointer;">🖹</span><span style="cursor:pointer;">🗀</span><span onClick="{{ toggleFiles }}" title="Collapse" style="cursor:pointer; color:var(--txt3); font-weight:700;">‹</span></div>
+            </div>
+            <div style="flex:1; display:grid; place-items:center;">
+              <div style="display:flex;align-items:center;gap:8px;padding:11px 22px;border-radius:12px;color:#fff;font-weight:600;font-size:14px;background:linear-gradient(145deg,#42b877,#2f9e63);box-shadow:0 6px 14px rgba(38,162,105,.4),inset 0 1px 0 rgba(255,255,255,.4);cursor:pointer;"><span style="font-size:11px;">▶</span> Open Folder</div>
+            </div>
+            <div style="display:flex; justify-content:center; gap:10px; padding:12px; border-top:1px solid var(--shellbd);">
+              <div style="width:34px;height:30px;border-radius:8px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt3);cursor:pointer;">↑</div>
+              <div style="width:34px;height:30px;border-radius:8px;background:var(--card);box-shadow:0 1px 2px rgba(0,0,0,.12);display:grid;place-items:center;color:var(--txt3);cursor:pointer;">↓</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px; padding:13px 14px; border-top:1px solid var(--shellbd);">
+              <span style="font-size:11px; letter-spacing:.12em; color:var(--txt3); text-transform:uppercase; font-weight:700;">▦ Device files</span>
+              <div style="margin-left:auto; display:flex; gap:5px; color:var(--txt4); font-size:12px;"><span>⇄</span><span>↻</span></div>
+            </div>
+            <div style="padding:6px 16px 16px; color:var(--txt2); font-size:13px; font-family:'IBM Plex Mono',monospace;">▸ lib</div>
+          </div>
+          </sc-if>
+          <!-- editor + console -->
+          <div style="display:flex; flex-direction:column; gap:14px; min-height:0;">
+            <div style="flex:1; background:var(--editor); border-radius:16px; display:flex; flex-direction:column; min-height:0; box-shadow:0 2px 8px rgba(0,0,0,.06); overflow:hidden;">
+              <!-- tabs -->
+              <div style="display:flex; align-items:center; gap:4px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--panel);">
+                <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:9px 9px 0 0;background:var(--editor);font-size:13px;color:var(--head);font-weight:600;"><span style="width:7px;height:7px;border-radius:50%;background:var(--gold);"></span>untitled-1.py<span style="color:var(--txt4);">✕</span></div>
+                <div style="width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--txt3);font-size:15px;cursor:pointer;">+</div>
+                <div style="margin-left:auto; font-size:12px; color:var(--txt3); cursor:pointer;">Find</div>
+              </div>
+              <!-- code -->
+              <div style="flex:1; position:relative; overflow:hidden; background-image:repeating-linear-gradient(var(--editor),var(--editor) 27px,var(--line) 27px,var(--line) 28px);">
+                <div style="display:flex; font-family:'IBM Plex Mono',monospace; font-size:13.5px; line-height:28px;">
+                  <div style="flex:none; width:52px; text-align:right; padding-right:12px; color:var(--txt5); background:var(--gutter); border-right:2px solid var(--kw);">1<br>2<br>3<br>4<br>5<br>6<br>7<br>8<br>9<br>10<br>11<br>12<br>13<br>14<br>15<br>16<br>17<br>18<br>19<br>20</div>
+                  <pre style="margin:0; padding:0 16px; color:var(--ident); white-space:pre;"><span style="color:var(--kw);font-weight:600;">from</span> snake_robot <span style="color:var(--kw);font-weight:600;">import</span> Snake
+<span style="color:var(--kw);font-weight:600;">import</span> time
+
+<span style="color:var(--com);font-style:italic;"># A four-legged creep gait: lift one foot at a time so the
+# centre of mass always stays over the other three.</span>
+robot = Snake(<span style="color:var(--str);">"quad"</span>)
+
+STEP = [
+    (<span style="color:var(--str);">"front_left"</span>, <span style="color:var(--num);">30</span>),
+    (<span style="color:var(--str);">"back_right"</span>, <span style="color:var(--num);">30</span>),
+    (<span style="color:var(--str);">"front_right"</span>, <span style="color:var(--num);">30</span>),
+    (<span style="color:var(--str);">"back_left"</span>, <span style="color:var(--num);">30</span>),
+]
+
+<span style="color:var(--kw);font-weight:600;">def</span> walk(cycles=<span style="color:var(--num);">4</span>):
+    <span style="color:var(--kw);font-weight:600;">for</span> _ <span style="color:var(--kw);font-weight:600;">in</span> range(cycles):
+        <span style="color:var(--kw);font-weight:600;">for</span> leg, angle <span style="color:var(--kw);font-weight:600;">in</span> STEP:
+            robot.lift(leg)
+            robot.swing(leg, angle)
+            robot.plant(leg)</pre>
+                </div>
+              </div>
+            </div>
+            <!-- console -->
+            <sc-if value="{{ consoleClosed }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ toggleConsole }}" title="Show console" style="flex:none; height:34px; display:flex; align-items:center; gap:8px; padding:0 14px; background:var(--panel); border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.06); cursor:pointer; color:var(--txt3); font-size:12px; font-weight:600;"><span style="font-size:13px;">⌃</span>Console<span style="color:var(--greentext); background:var(--greenpill); border-radius:6px; padding:1px 7px; font-size:10px;">&gt;&gt;&gt;</span></div>
+            </sc-if>
+            <sc-if value="{{ consoleOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="height:210px; flex:none; display:flex; flex-direction:column;">
+              <div style="display:flex; align-items:center; gap:10px; padding:0 2px 10px;">
+                <div style="display:flex; padding:3px; gap:2px; background:var(--panel2); border-radius:9px;"><div style="padding:5px 14px;border-radius:7px;background:var(--card);font-size:12px;font-weight:600;color:var(--head);box-shadow:0 1px 3px rgba(0,0,0,.1);">Console</div><div style="padding:5px 14px;border-radius:7px;font-size:12px;font-weight:500;color:var(--txt3);">Problems</div></div>
+                <div style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--txt3);cursor:pointer;">✕ Clear</div>
+                <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+                  <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card);border-radius:9px;font-size:12px;color:var(--txt2);box-shadow:0 1px 2px rgba(0,0,0,.1);">Simulated device (offline) ▾</div>
+                  <div style="padding:6px 14px;border-radius:9px;color:#fff;font-weight:600;font-size:12px;background:linear-gradient(145deg,#e06a54,#cf4a37);box-shadow:0 3px 8px rgba(207,74,55,.3);cursor:pointer;">Disconnect</div>
+                  <div onClick="{{ toggleConsole }}" title="Collapse" style="cursor:pointer; color:var(--txt3); font-size:14px; font-weight:700;">⌄</div>
+                </div>
+              </div>
+              <div style="flex:1; border-radius:12px; background:var(--con); border:1px solid var(--conbd); padding:14px 16px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; line-height:1.7; color:#7fe0a8; box-shadow:inset 0 2px 8px rgba(0,0,0,.4);">MicroPython v1.28.0-6.g974b56afa6 on 2026-04-06; JS with Emscripten<br>Type "help()" for more information.<br><span style="color:#9fe8bf;">&gt;&gt;&gt;</span> <span style="border-left:2px solid #7fe0a8;animation:blink 1s steps(1) infinite;">&nbsp;</span></div>
+            </div>
+            </sc-if>
+          </div>
+          <!-- right column: mini viewer + instrument dock -->
+          <div style="display:flex; flex-direction:column; gap:14px; min-height:0;">
+            <!-- mini board / 3D viewer -->
+            <div style="flex:none; background:var(--panel); border-radius:16px; box-shadow:0 2px 8px rgba(0,0,0,.06); overflow:hidden;">
+              <div style="display:flex; padding:8px 8px 0; gap:3px;">
+                <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}"><div onClick="{{ setBoard }}" style="flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; font-weight:600; color:#26a269; background:var(--greenpill); cursor:pointer;">Board</div></sc-if>
+                <sc-if value="{{ notBoard }}" hint-placeholder-val="{{ false }}"><div onClick="{{ setBoard }}" style="flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; font-weight:500; color:var(--txt3); cursor:pointer;">Board</div></sc-if>
+                <sc-if value="{{ is3D }}" hint-placeholder-val="{{ false }}"><div onClick="{{ set3D }}" style="flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; font-weight:600; color:#26a269; background:var(--greenpill); cursor:pointer;">3D</div></sc-if>
+                <sc-if value="{{ not3D }}" hint-placeholder-val="{{ true }}"><div onClick="{{ set3D }}" style="flex:1; text-align:center; padding:6px; border-radius:9px; font-size:12px; font-weight:500; color:var(--txt3); cursor:pointer;">3D</div></sc-if>
+              </div>
+              <!-- mini board -->
+              <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ true }}">
+              <div style="margin:8px; height:104px; border-radius:12px; background:var(--blueprint); background-image:linear-gradient(var(--bpline) 1px,transparent 1px),linear-gradient(90deg,var(--bpline) 1px,transparent 1px); background-size:20px 20px; position:relative; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 1px 4px rgba(0,0,0,.4);">
+                <div onClick="{{ setElec }}" title="Open Electronics workspace" style="position:absolute; right:7px; bottom:7px; width:22px; height:22px; border-radius:7px; background:rgba(220,235,245,.14); display:grid; place-items:center; color:#cfe4f0; font-size:12px; cursor:pointer;">⤢</div>
+                <div style="width:40px; height:64px; border-radius:5px; background:linear-gradient(160deg,#1f7a4d,#0f5e38); box-shadow:0 4px 10px rgba(0,0,0,.4); position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;"><div style="width:20px;height:12px;border-radius:2px;background:linear-gradient(#d6dce0,#a8b0b6);"></div><div style="width:18px;height:18px;border-radius:3px;background:#0a0c0a;"></div></div>
+                <div style="position:absolute; left:10px; top:10px; bottom:10px; display:flex; flex-direction:column; justify-content:space-around;"><span style="width:6px;height:6px;border-radius:50%;background:#d9a441;"></span><span style="width:6px;height:6px;border-radius:50%;background:#d9a441;"></span><span style="width:6px;height:6px;border-radius:50%;background:#e8ecef;"></span><span style="width:6px;height:6px;border-radius:50%;background:#d9a441;"></span></div>
+                <div style="position:absolute; right:10px; top:10px; bottom:10px; display:flex; flex-direction:column; justify-content:space-around;"><span style="width:6px;height:6px;border-radius:50%;background:#d4553f;"></span><span style="width:6px;height:6px;border-radius:50%;background:#e8ecef;"></span><span style="width:6px;height:6px;border-radius:50%;background:#d9a441;"></span><span style="width:6px;height:6px;border-radius:50%;background:#d9a441;"></span></div>
+              </div>
+              </sc-if>
+              <!-- mini 3D -->
+              <sc-if value="{{ is3D }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:8px; height:104px; border-radius:12px; background:linear-gradient(160deg,#eef1ec,#dfe3dc); position:relative; overflow:hidden; box-shadow:inset 0 1px 4px rgba(0,0,0,.08);">
+                <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(90,110,90,.1) 1px,transparent 1px),linear-gradient(90deg,rgba(90,110,90,.1) 1px,transparent 1px); background-size:22px 22px;"></div>
+                <div onClick="{{ setSim }}" title="Open Build workspace" style="position:absolute; right:7px; bottom:7px; width:22px; height:22px; border-radius:7px; background:rgba(38,162,105,.16); display:grid; place-items:center; color:#26a269; font-size:12px; cursor:pointer;">⤢</div>
+                <div style="position:absolute; left:50%; top:56%; transform:translate(-50%,-50%) scale(.52);">
+                  <div style="position:relative; width:0; height:0;">
+                    <div style="position:absolute; left:-34px; top:58px; width:68px; height:22px; border-radius:8px; background:linear-gradient(160deg,#c6ccc0,#9aa094);"></div>
+                    <div style="position:absolute; left:-9px; top:-8px; width:18px; height:72px; border-radius:10px; background:linear-gradient(150deg,#dfe3dc,#aeb4a8); transform-origin:bottom center; transform:rotate(14deg);"></div>
+                    <div style="position:absolute; left:8px; top:-72px; width:16px; height:86px; border-radius:9px; background:linear-gradient(150deg,#dfe3dc,#aeb4a8); transform-origin:bottom center; transform:rotate(-42deg);"></div>
+                    <div style="position:absolute; left:-46px; top:-94px; width:14px; height:56px; border-radius:8px; background:linear-gradient(150deg,#4fd191,#22935e); transform-origin:bottom center; transform:rotate(38deg);"></div>
+                  </div>
+                </div>
+              </div>
+              </sc-if>
+              <div style="display:flex; justify-content:space-between; padding:0 12px 11px; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--txt3);"><span>7.9V</span><span>42%</span><span>38°C</span></div>
+            </div>
+            <!-- instrument dock -->
+            <sc-if value="{{ dockClosed }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ toggleDock }}" title="Show instrument dock" style="flex:none; height:36px; display:flex; align-items:center; gap:8px; padding:0 14px; background:var(--panel); border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.06); cursor:pointer; color:var(--txt3); font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em;"><span style="font-size:13px;">⌃</span>Instrument dock</div>
+            </sc-if>
+            <sc-if value="{{ dockOpen }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:1; background:var(--panel); border-radius:16px; padding:14px; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; min-height:0; overflow:auto;">
+              <div style="display:flex; align-items:center; margin-bottom:12px;"><span style="font-size:11px; letter-spacing:.12em; color:var(--txt3); text-transform:uppercase; font-weight:700;">▭ Instrument dock</span><span onClick="{{ toggleDock }}" title="Collapse" style="margin-left:auto; cursor:pointer; color:var(--txt3); font-weight:700;">⌄</span></div>
+              <div style="font-size:10px; letter-spacing:.1em; color:var(--txt4); font-weight:700; margin-bottom:8px;">INPUTS</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px;"><sc-for list="{{ inputs }}" as="ic" hint-placeholder-count="10"><div style="width:34px;height:34px;border-radius:10px;background:var(--card);box-shadow:0 2px 5px rgba(0,0,0,.08);display:grid;place-items:center;color:var(--greentext);font-size:14px;cursor:pointer;">{{ ic }}</div></sc-for></div>
+              <div style="font-size:10px; letter-spacing:.1em; color:var(--txt4); font-weight:700; margin-bottom:8px;">OUTPUTS</div>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;"><sc-for list="{{ outputs }}" as="oc" hint-placeholder-count="6"><div style="width:34px;height:34px;border-radius:10px;background:var(--card);box-shadow:0 2px 5px rgba(0,0,0,.08);display:grid;place-items:center;color:var(--gold);font-size:14px;cursor:pointer;">{{ oc }}</div></sc-for></div>
+              <div style="display:inline-flex;align-self:flex-start;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:var(--greenpill);color:var(--greentext);font-size:12px;font-weight:600;box-shadow:inset 0 1px 0 var(--pillinset);cursor:pointer;margin-bottom:14px;">+ Add</div>
+              <!-- plotter (an instrument) -->
+              <div style="border-radius:12px; background:var(--card); padding:12px; box-shadow:0 2px 6px rgba(0,0,0,.06);">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;"><span style="font-size:11px; letter-spacing:.12em; color:var(--txt3); text-transform:uppercase; font-weight:700;">Plotter</span><span style="font-size:10px; color:var(--greentext); background:var(--greenpill); border-radius:6px; padding:2px 8px; font-weight:600;">serial · live</span><span style="margin-left:auto; color:var(--txt4); font-size:12px;">✕</span></div>
+                <div style="height:150px; border-radius:10px; background:var(--con); border:1px solid var(--conbd); position:relative; overflow:hidden; box-shadow:inset 0 2px 8px rgba(0,0,0,.4);">
+                  <div style="position:absolute; left:10px; top:8px; display:flex; gap:12px; font-family:'IBM Plex Mono',monospace; font-size:10px;"><span style="color:#e7bf62;">▬ temp</span><span style="color:#5fc4e0;">▬ light</span></div>
+                  <svg viewBox="0 0 300 120" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%;"><path d="M0,70 C40,20 70,20 100,55 C140,100 180,105 210,75 C240,50 270,55 300,60" fill="none" stroke="#e7bf62" stroke-width="2.5"/><path d="M0,80 C60,78 120,72 180,66 C240,60 270,58 300,57" fill="none" stroke="#5fc4e0" stroke-width="2.5"/></svg>
+                  <div style="position:absolute; right:10px; bottom:8px; font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6f8a76;">92 samples · 8.3 Hz</div>
+                </div>
+                <div style="display:flex; align-items:center; margin-top:10px;"><span style="font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--txt3);">auto-scroll · live</span><span style="margin-left:auto; font-size:11px; color:var(--txt3); cursor:pointer;">↺ Clear</span></div>
+              </div>
+            </div>
+            </sc-if>
+          </div>
+        </div>
+        </sc-if>
+
+        <!-- ============ ELECTRONICS (BOARD VIEW) ============ -->
+        <sc-if value="{{ isElec }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:grid; gap:14px; min-height:0; grid-template-columns:{{ elecGridCols }};">
+          <!-- board canvas -->
+          <div style="border-radius:16px; overflow:hidden; display:flex; flex-direction:column; min-height:0; box-shadow:0 2px 8px rgba(0,0,0,.06);">
+            <!-- board sub-toolbar -->
+            <div style="flex:none; display:flex; align-items:center; gap:12px; padding:11px 14px; background:var(--panel);">
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:13px; letter-spacing:.16em; color:var(--head); font-weight:600;">BOARD VIEW</span>
+              <div style="display:flex; padding:3px; gap:2px; background:var(--panel2); border-radius:9px; margin-left:6px;">
+                <div style="padding:5px 12px;border-radius:7px;font-size:12px;color:var(--txt3);cursor:pointer;">Node graph</div>
+                <div style="padding:5px 12px;border-radius:7px;font-size:12px;font-weight:700;color:var(--goldink);background:linear-gradient(145deg,#f0dca6,#e7bf62);box-shadow:0 1px 3px rgba(207,154,47,.3);cursor:pointer;">Breadboard</div>
+                <div style="padding:5px 12px;border-radius:7px;font-size:12px;color:var(--txt3);cursor:pointer;">Schematic</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--card);border-radius:9px;font-size:12px;color:var(--head);box-shadow:0 1px 2px rgba(0,0,0,.1);">Raspberry Pi Pico 2 W ▾</div>
+              <span style="font-family:'IBM Plex Mono',monospace; font-size:12px; color:var(--txt4);">RP2350</span>
+              <div style="margin-left:auto; display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:9px;background:linear-gradient(145deg,#f0dca6,#e7bf62);color:#6b4e17;font-size:12px;font-weight:600;cursor:pointer;">Help <span style="background:#cf9a2f;color:#fff;border-radius:50%;width:16px;height:16px;display:inline-grid;place-items:center;font-size:10px;">1</span></div>
+            </div>
+            <!-- blueprint -->
+            <div style="flex:1; position:relative; background:var(--blueprint); background-image:linear-gradient(var(--bpline) 1px,transparent 1px),linear-gradient(90deg,var(--bpline) 1px,transparent 1px); background-size:26px 26px; min-height:0; overflow:hidden;">
+              <!-- browser panel -->
+              <sc-if value="{{ browserClosed }}" hint-placeholder-val="{{ false }}">
+              <div onClick="{{ toggleBrowser }}" title="Show browser" style="position:absolute; left:16px; top:16px; background:rgba(12,20,28,.82); border:1px solid rgba(220,235,245,.12); border-radius:10px; padding:8px 12px; color:#cfe4f0; font-size:10px; letter-spacing:.14em; cursor:pointer;">BROWSER <span style="color:#7fa3bb;">›</span></div>
+              </sc-if>
+              <sc-if value="{{ browserOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="position:absolute; left:16px; top:16px; width:210px; background:rgba(12,20,28,.82); border:1px solid rgba(220,235,245,.12); border-radius:12px; padding:13px; color:#cfe4f0;">
+                <div style="display:flex; justify-content:space-between; font-size:10px; letter-spacing:.14em; color:#7fa3bb; margin-bottom:10px;">BROWSER <span onClick="{{ toggleBrowser }}" title="Collapse" style="cursor:pointer;">‹</span></div>
+                <div style="font-family:'IBM Plex Mono',monospace; font-size:13px; font-style:italic; color:#eaf3f9;">Untitled project</div>
+                <div style="font-size:11px; color:#6f92aa; margin:5px 0 12px;">Add a description…</div>
+                <div style="display:flex; justify-content:space-between; font-size:12px; color:#9fbdd0; border-top:1px solid rgba(220,235,245,.1); padding-top:9px;"><span>▾ Components</span><span>1</span></div>
+                <div style="display:flex; align-items:center; gap:8px; margin-top:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; color:#eaf3f9;">Raspberry Pi Pico 2 W <span style="font-size:9px;color:#7fe0a8;border:1px solid #3a7a5a;border-radius:4px;padding:1px 4px;">MCU</span></div>
+              </div>
+              </sc-if>
+              <!-- board graphic -->
+              <div style="position:absolute; left:50%; top:50%; transform:translate(-50%,-52%); display:flex; align-items:stretch; gap:12px;">
+                <div style="display:flex; flex-direction:column; justify-content:space-between; align-items:flex-end; padding:8px 0; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--bptext);">
+                  <sc-for list="{{ leftPins }}" as="p" hint-placeholder-count="20"><div style="display:flex;align-items:center;gap:7px;height:16px;"><span>{{ p.n }} {{ p.i }}</span><span style="width:9px;height:9px;border-radius:50%;background:{{ p.c }};box-shadow:0 0 4px rgba(0,0,0,.5);"></span></div></sc-for>
+                </div>
+                <div style="width:118px; border-radius:12px 12px 8px 8px; background:linear-gradient(160deg,#1f7a4d,#0f5e38); box-shadow:0 12px 30px rgba(0,0,0,.4); display:flex; flex-direction:column; align-items:center; padding:12px 0; position:relative;">
+                  <div style="text-align:center; color:#bfe8cf; font-family:'IBM Plex Mono',monospace; font-size:10px; letter-spacing:.1em; margin-bottom:8px;">Pico 2 W</div>
+                  <div style="width:44px;height:26px;border-radius:4px;background:linear-gradient(#d6dce0,#a8b0b6);box-shadow:inset 0 -2px 3px rgba(0,0,0,.3);"></div>
+                  <div style="width:38px;height:38px;margin-top:auto;margin-bottom:auto;border-radius:6px;background:#0a0c0a;box-shadow:inset 0 0 0 1px #2a5a3e;display:grid;place-items:center;color:#3a7a5a;font-size:9px;">RP</div>
+                  <div style="width:50px;height:40px;border-radius:4px;background:linear-gradient(135deg,#6a7278,#3a4046);"></div>
+                </div>
+                <div style="display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start; padding:8px 0; font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--bptext);">
+                  <sc-for list="{{ rightPins }}" as="p" hint-placeholder-count="20"><div style="display:flex;align-items:center;gap:7px;height:16px;"><span style="width:9px;height:9px;border-radius:50%;background:{{ p.c }};box-shadow:0 0 4px rgba(0,0,0,.5);"></span><span>{{ p.i }} {{ p.n }}</span></div></sc-for>
+                </div>
+              </div>
+              <!-- zoom controls -->
+              <div style="position:absolute; left:16px; bottom:16px; display:flex; align-items:center; gap:8px; background:rgba(12,20,28,.82); border:1px solid rgba(220,235,245,.12); border-radius:10px; padding:7px 10px; color:#cfe4f0; font-family:'IBM Plex Mono',monospace; font-size:12px;"><span>Drag from a pin to another pin to wire them.</span><span style="cursor:pointer;">−</span><span>164%</span><span style="cursor:pointer;">+</span><span style="cursor:pointer;">⛶</span></div>
+              <!-- connections -->
+              <div style="position:absolute; right:16px; bottom:16px; background:rgba(12,20,28,.82); border:1px solid rgba(220,235,245,.12); border-radius:10px; padding:8px 13px; color:#9fbdd0; font-size:12px;">▾ Connections <span style="background:#2a4a5e;border-radius:20px;padding:1px 7px;font-size:11px;">0</span></div>
+            </div>
+          </div>
+          <!-- library -->
+          <sc-if value="{{ libraryClosed }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ toggleLibrary }}" title="Show library" style="background:var(--panel); border-radius:16px; box-shadow:0 2px 8px rgba(0,0,0,.06); display:flex; flex-direction:column; align-items:center; padding-top:14px; gap:10px; cursor:pointer; color:var(--txt3);"><span style="font-size:13px;">‹</span><span style="color:var(--gold);">📌</span><span style="writing-mode:vertical-rl; font-size:10px; letter-spacing:.14em; text-transform:uppercase; font-weight:700;">Library</span></div>
+          </sc-if>
+          <sc-if value="{{ libraryOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="background:var(--panel); border-radius:16px; display:flex; flex-direction:column; min-height:0; box-shadow:0 2px 8px rgba(0,0,0,.06); overflow:hidden;">
+            <div style="display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--shellbd);">
+              <span style="color:var(--gold);">📌</span><span style="font-size:11px; letter-spacing:.12em; color:var(--txt3); text-transform:uppercase; font-weight:700;">Library</span><span onClick="{{ toggleLibrary }}" title="Collapse" style="margin-left:auto; cursor:pointer; color:var(--txt3); font-weight:700;">›</span>
+            </div>
+            <div style="display:flex; gap:6px; padding:12px 14px 10px;">
+              <div style="flex:1; text-align:center; padding:7px; border-radius:9px; background:linear-gradient(145deg,#f0dca6,#e7bf62); color:#6b4e17; font-size:12px; font-weight:700; box-shadow:0 2px 5px rgba(207,154,47,.3); cursor:pointer;">+ New part</div>
+              <div style="flex:1; text-align:center; padding:7px; border-radius:9px; background:var(--card); color:var(--txt2); font-size:12px; font-weight:600; box-shadow:0 1px 2px rgba(0,0,0,.1); cursor:pointer;">Add library</div>
+            </div>
+            <div style="margin:0 14px 10px; padding:9px 12px; border-radius:9px; background:var(--card); box-shadow:inset 0 1px 3px rgba(0,0,0,.08); font-size:12px; color:var(--txt4); font-family:'IBM Plex Mono',monospace;">Search parts (name, tag…)</div>
+            <div style="flex:1; overflow:hidden; padding:0 8px 8px;">
+              <div style="display:flex; align-items:center; gap:6px; padding:6px 8px; font-size:12px; font-weight:700; color:var(--head);">▾ Standard Parts <span style="margin-left:auto; background:var(--panel2); border-radius:20px; padding:1px 8px; font-size:11px; color:var(--txt3);">22</span></div>
+              <sc-for list="{{ libGroups }}" as="g" hint-placeholder-count="5">
+                <div style="font-size:10px; letter-spacing:.1em; color:var(--txt4); text-transform:uppercase; font-weight:700; padding:9px 8px 4px;">{{ g.name }} <span style="color:var(--txt5);">{{ g.count }}</span></div>
+                <sc-for list="{{ g.parts }}" as="pt" hint-placeholder-count="3"><div style="padding:6px 12px; font-size:12.5px; color:var(--txt2); border-radius:8px; cursor:pointer;">{{ pt }}</div></sc-for>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <!-- ============ BUILD (3D + instruments) ============ -->
+        <sc-if value="{{ isSim }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1; display:flex; flex-direction:column; gap:14px; min-height:0;">
+          <div style="flex:1; display:grid; grid-template-columns:1fr; gap:14px; min-height:0;">
+            <!-- 3D viewport -->
+            <div style="position:relative; background:var(--surface,linear-gradient(160deg,#fbfaf5,#eef0ea)); border-radius:16px; overflow:hidden; box-shadow:inset 0 2px 10px rgba(0,0,0,.06); background:linear-gradient(160deg,#eef1ec,#dfe3dc);">
+              <div style="position:absolute; inset:0; background-image:linear-gradient(rgba(90,110,90,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(90,110,90,.08) 1px,transparent 1px); background-size:44px 44px; transform:perspective(700px) rotateX(56deg) scale(1.5); transform-origin:center 70%;"></div>
+              <!-- viewport toolbar -->
+              <div style="position:absolute; left:14px; top:14px; right:14px; display:flex; align-items:center; gap:8px;">
+                <div style="display:flex;align-items:center;gap:6px;padding:6px 13px;border-radius:10px;background:linear-gradient(145deg,#f0dca6,#e7bf62);color:#6b4e17;font-size:12px;font-weight:700;box-shadow:0 3px 8px rgba(207,154,47,.3);cursor:pointer;">+ New robot</div>
+                <div style="padding:6px 12px;border-radius:10px;background:var(--card);color:var(--txt2);font-size:12px;font-weight:600;box-shadow:0 2px 5px rgba(0,0,0,.12);cursor:pointer;">🗀 Open…</div>
+                <div style="padding:6px 12px;border-radius:10px;background:var(--card);color:var(--txt2);font-size:12px;font-weight:600;box-shadow:0 2px 5px rgba(0,0,0,.12);cursor:pointer;">⤢ Pop out</div>
+                <div style="margin-left:auto; width:32px;height:32px;border-radius:10px;background:var(--card);display:grid;place-items:center;color:var(--txt3);box-shadow:0 2px 5px rgba(0,0,0,.12);cursor:pointer;">⌂</div>
+              </div>
+              <!-- robot arm -->
+              <div style="position:absolute; left:50%; top:56%; transform:translate(-50%,-50%);">
+                <div style="position:relative; width:0; height:0;">
+                  <div style="position:absolute; left:-34px; top:58px; width:68px; height:22px; border-radius:8px; background:linear-gradient(160deg,#c6ccc0,#9aa094); box-shadow:0 10px 22px rgba(0,0,0,.22);"></div>
+                  <div style="position:absolute; left:-9px; top:-8px; width:18px; height:72px; border-radius:10px; background:linear-gradient(150deg,#dfe3dc,#aeb4a8); box-shadow:0 4px 10px rgba(0,0,0,.16); transform-origin:bottom center; transform:rotate(14deg);"></div>
+                  <div style="position:absolute; left:8px; top:-72px; width:16px; height:86px; border-radius:9px; background:linear-gradient(150deg,#dfe3dc,#aeb4a8); box-shadow:0 4px 10px rgba(0,0,0,.16); transform-origin:bottom center; transform:rotate(-42deg);"></div>
+                  <div style="position:absolute; left:-46px; top:-94px; width:14px; height:56px; border-radius:8px; background:linear-gradient(150deg,#4fd191,#22935e); box-shadow:0 4px 10px rgba(38,162,105,.35); transform-origin:bottom center; transform:rotate(38deg);"></div>
+                  <div style="position:absolute; left:-8px; top:58px; width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px #26a269,0 2px 5px rgba(0,0,0,.2);"></div>
+                  <div style="position:absolute; left:7px; top:-15px; width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px #26a269;"></div>
+                  <div style="position:absolute; left:5px; top:-80px; width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 0 0 4px #26a269;"></div>
+                  <div style="position:absolute; left:-52px; top:-98px; width:13px;height:13px;border-radius:50%;background:#4fd191;box-shadow:0 0 12px rgba(79,209,145,.8);"></div>
+                </div>
+              </div>
+              <div style="position:absolute; left:50%; bottom:16px; transform:translateX(-50%); padding:7px 16px; border-radius:20px; background:var(--glass); backdrop-filter:blur(6px); box-shadow:0 3px 10px rgba(0,0,0,.12); font-size:12px; color:var(--txt2); font-weight:600;">demo_arm · 3 joints · 4 links</div>
+            </div>
+          </div>
+          <!-- Pose Studio dock -->
+          <sc-if value="{{ poseClosed }}" hint-placeholder-val="{{ false }}">
+          <div onClick="{{ togglePose }}" title="Show Pose Studio" style="height:38px; flex:none; background:var(--panel); border-radius:14px; display:flex; align-items:center; gap:8px; padding:0 16px; box-shadow:0 2px 8px rgba(0,0,0,.06); cursor:pointer; color:var(--txt3); font-size:13px; font-weight:700;"><span style="font-size:13px;">⌃</span>Pose Studio<span style="color:var(--txt4); font-weight:500;">stand → step_A</span></div>
+          </sc-if>
+          <sc-if value="{{ poseOpen }}" hint-placeholder-val="{{ true }}">
+          <div style="height:172px; flex:none; background:var(--panel); border-radius:16px; padding:14px 20px; display:flex; gap:26px; align-items:stretch; box-shadow:0 2px 8px rgba(0,0,0,.06); position:relative;">
+            <div onClick="{{ togglePose }}" title="Collapse" style="position:absolute; right:14px; top:12px; cursor:pointer; color:var(--txt3); font-size:14px; font-weight:700;">⌄</div>
+            <div style="display:flex; flex-direction:column; gap:6px; min-width:150px;">
+              <div style="font-weight:700; font-size:15px; color:var(--head);">Pose Studio</div>
+              <div style="font-size:12px; color:var(--txt4);">stand → step_A</div>
+              <div style="margin-top:auto; display:flex; gap:10px;">
+                <div style="width:40px;height:40px;border-radius:13px;background:linear-gradient(145deg,#42b877,#22935e);color:#fff;display:grid;place-items:center;box-shadow:0 5px 12px rgba(38,162,105,.4);cursor:pointer;">▶</div>
+                <div style="width:40px;height:40px;border-radius:13px;background:var(--card);color:var(--txt2);display:grid;place-items:center;box-shadow:0 3px 8px rgba(0,0,0,.12);font-size:14px;cursor:pointer;">↺</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:22px; align-items:flex-start; padding-top:2px;">
+              <div style="text-align:center;"><div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,#fbfaf5,#dfe0d8);box-shadow:0 6px 14px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.8);position:relative;margin:0 auto;"><div style="position:absolute;left:50%;top:8px;width:4px;height:20px;background:var(--green);border-radius:3px;transform-origin:center 24px;transform:translateX(-50%) rotate(40deg);"></div></div><div style="font-size:11px;color:var(--txt3);margin-top:7px;font-weight:500;">Coxa <span style="color:var(--green);font-weight:600;">+40°</span></div></div>
+              <div style="text-align:center;"><div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,#fbfaf5,#dfe0d8);box-shadow:0 6px 14px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.8);position:relative;margin:0 auto;"><div style="position:absolute;left:50%;top:8px;width:4px;height:20px;background:var(--green);border-radius:3px;transform-origin:center 24px;transform:translateX(-50%) rotate(-25deg);"></div></div><div style="font-size:11px;color:var(--txt3);margin-top:7px;font-weight:500;">Femur <span style="color:var(--green);font-weight:600;">−25°</span></div></div>
+              <div style="text-align:center;"><div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(160deg,#fbfaf5,#dfe0d8);box-shadow:0 6px 14px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.8);position:relative;margin:0 auto;"><div style="position:absolute;left:50%;top:8px;width:4px;height:20px;background:var(--green);border-radius:3px;transform-origin:center 24px;transform:translateX(-50%) rotate(110deg);"></div></div><div style="font-size:11px;color:var(--txt3);margin-top:7px;font-weight:500;">Tibia <span style="color:var(--green);font-weight:600;">+110°</span></div></div>
+            </div>
+            <div style="flex:1; display:flex; flex-direction:column; gap:9px;">
+              <div style="display:flex; justify-content:space-between; font-size:12px; color:var(--txt4);"><span style="font-weight:500;">Keyframes</span><span>lerp · ease-in-out</span></div>
+              <div style="flex:1; border-radius:14px; background:var(--card); box-shadow:inset 0 2px 8px rgba(0,0,0,.08); position:relative; padding:0 16px; display:flex; align-items:center;">
+                <div style="position:absolute; left:16px; right:16px; height:3px; border-radius:2px; background:var(--rail);"></div>
+                <div style="position:absolute; left:8%; width:16px;height:16px;border-radius:6px;background:linear-gradient(145deg,#4fd191,#22935e);box-shadow:0 3px 8px rgba(38,162,105,.4);"></div>
+                <div style="position:absolute; left:34%; width:16px;height:16px;border-radius:6px;background:var(--greenpill);"></div>
+                <div style="position:absolute; left:62%; width:16px;height:16px;border-radius:6px;background:var(--greenpill);"></div>
+                <div style="position:absolute; left:88%; width:16px;height:16px;border-radius:6px;background:var(--greenpill);"></div>
+                <div style="position:absolute; left:46%; top:10px; bottom:10px; width:3px; border-radius:2px; background:var(--gold);"></div>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+      </div>
+    </div>
+
+    <!-- ===== STATUS BAR ===== -->
+    <div style="height:34px; flex:none; display:flex; align-items:center; gap:14px; padding:0 16px; background:var(--panel); border-top:1px solid var(--shellbd); font-size:12px; color:var(--txt3);">
+      <span style="display:flex;align-items:center;gap:6px;"><span style="width:8px;height:8px;border-radius:50%;background:var(--gold);"></span>Simulated device · offline</span>
+      <span style="color:var(--txt4);">Snakie also runs in your browser — installable, works offline, and talks to real boards over Web Serial.</span>
+      <span style="margin-left:auto;">27 lines</span>
+      <span>Unsaved</span>
+      <span>v0.33.1</span>
+      <span style="display:flex;align-items:center;gap:5px;padding:4px 11px;border-radius:8px;background:var(--greenpill);color:var(--greentext);font-weight:600;cursor:pointer;">⚡ Flash firmware</span>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1360,&quot;height&quot;:948},&quot;mode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;code&quot;,&quot;elec&quot;,&quot;sim&quot;],&quot;default&quot;:&quot;code&quot;,&quot;tsType&quot;:&quot;'code'|'elec'|'sim'&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;'light'|'dark'&quot;}}">
+class Component extends DCLogic {
+  state = { mode: this.props.mode || 'code', theme: this.props.theme || 'light', filesOpen: true, consoleOpen: true, dockOpen: true, browserOpen: true, libraryOpen: true, poseOpen: true, preview: 'board' };
+  componentDidMount() { if (this.props.theme) return; try { const t = localStorage.getItem('snakie-theme'); if (t) this.setState({ theme: t }); } catch (e) {} }
+  renderVals() {
+    const m = this.state.mode;
+    const GP='#d9a441', PW='#d4553f', GN='#e8ecef';
+    const L=['GP0/01/gp','GP1/02/gp','GND/03/gnd','GP2/04/gp','GP3/05/gp','GP4/06/gp','GP5/07/gp','GND/08/gnd','GP6/09/gp','GP7/10/gp','GP8/11/gp','GP9/12/gp','GND/13/gnd','GP10/14/gp','GP11/15/gp','GP12/16/gp','GP13/17/gp','GND/18/gnd','GP14/19/gp','GP15/20/gp'];
+    const R=['VBUS/40/pw','VSYS/39/pw','GND/38/gnd','3V3_EN/37/gp','3V3/36/pw','ADC_VREF/35/gp','GP28/34/gp','GND/33/gnd','GP27/32/gp','GP26/31/gp','RUN/30/gp','GP22/29/gp','GND/28/gnd','GP21/27/gp','GP20/26/gp','GP19/25/gp','GP18/24/gp','GND/23/gnd','GP17/22/gp','GP16/21/gp'];
+    const col=t=> t==='pw'?PW : t==='gnd'?GN : GP;
+    const pin=s=>{const[n,i,t]=s.split('/');return{n,i,c:col(t)};};
+    return {
+      isCode: m==='code', notCode: m!=='code',
+      isElec: m==='elec', notElec: m!=='elec',
+      isSim: m==='sim', notSim: m!=='sim',
+      setCode: ()=>this.setState({mode:'code'}),
+      setElec: ()=>this.setState({mode:'elec'}),
+      setSim: ()=>this.setState({mode:'sim'}),
+      themeAttr: this.state.theme==='dark'?'dark':'',
+      themeIcon: this.state.theme==='dark'?'☾':'☀',
+      toggleTheme: ()=>{const t=this.state.theme==='dark'?'light':'dark'; try{localStorage.setItem('snakie-theme',t);}catch(e){} this.setState({theme:t});},
+      filesOpen: this.state.filesOpen, consoleOpen: this.state.consoleOpen, dockOpen: this.state.dockOpen,
+      toggleFiles: ()=>this.setState(s=>({filesOpen:!s.filesOpen})),
+      toggleConsole: ()=>this.setState(s=>({consoleOpen:!s.consoleOpen})),
+      toggleDock: ()=>this.setState(s=>({dockOpen:!s.dockOpen})),
+      codeGridCols: [this.state.filesOpen?'272px':'34px','1fr','300px'].join(' '),
+      isBoard: this.state.preview==='board', notBoard: this.state.preview!=='board',
+      is3D: this.state.preview==='3d', not3D: this.state.preview!=='3d',
+      setBoard: ()=>this.setState({preview:'board'}),
+      set3D: ()=>this.setState({preview:'3d'}),
+      elecGridCols: '1fr '+(this.state.libraryOpen?'300px':'34px'),
+      browserOpen: this.state.browserOpen, libraryOpen: this.state.libraryOpen, poseOpen: this.state.poseOpen,
+      toggleBrowser: ()=>this.setState(s=>({browserOpen:!s.browserOpen})),
+      toggleLibrary: ()=>this.setState(s=>({libraryOpen:!s.libraryOpen})),
+      togglePose: ()=>this.setState(s=>({poseOpen:!s.poseOpen})),
+      filesClosed: !this.state.filesOpen, consoleClosed: !this.state.consoleOpen, dockClosed: !this.state.dockOpen,
+      libraryClosed: !this.state.libraryOpen, browserClosed: !this.state.browserOpen, poseClosed: !this.state.poseOpen,
+      leftPins: L.map(pin),
+      rightPins: R.map(pin),
+      libGroups: [
+        {name:'Microcontroller',count:15,parts:['Adafruit Feather ESP32-S3','Adafruit Feather nRF52840','Adafruit Feather RP2040','Adafruit ItsyBitsy RP2040','Adafruit QT Py RP2040','ESP32 DevKit','ESP32-12F','Pimoroni Motor 2040','Pimoroni Servo 2040','Pimoroni Tiny 2350','Raspberry Pi Pico','Raspberry Pi Pico 2 W','Raspberry Pi Pico W','Seeed XIAO RP2040','Seeed XIAO RP2350']},
+        {name:'Sensor',count:3,parts:['BME280 Breakout','HR SR04','ICM20948 Breakout']},
+        {name:'Input',count:1,parts:['Potentiometer']},
+        {name:'Motor',count:2,parts:['N20 Motor','SG90 Micro Servo']},
+        {name:'Breakout',count:1,parts:['MX1508']},
+      ],
+      inputs: ['∿','⊞','📈','🎚','🌡','◷','▣','☁','⏱','▤','⌗'],
+      outputs: ['▭','💡','📉','🎛','🔊','💬'],
+    };
+  }
+}
+</script>
+</body>
+</html>
