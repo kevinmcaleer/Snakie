@@ -376,3 +376,76 @@
   width: 100%;
   margin-top: 0.15rem;
 }
+
+/* Mass section (#555) — estimate controls, source chip, measured override. */
+.robotprops__masssrc {
+  margin-left: 0.4rem;
+  padding: 0.02rem 0.3rem;
+  border-radius: 999px;
+  font-size: 0.54rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+}
+.robotprops__masssrc--measured {
+  color: #b9f6c9;
+  border-color: #2f7d47;
+}
+.robotprops__masssrc--none {
+  color: var(--text-muted, #8b919b);
+  font-style: italic;
+}
+.robotprops__massrow {
+  display: flex;
+  gap: 0.5rem;
+}
+.robotprops__masssub {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+  font-size: 0.56rem;
+  color: var(--text-muted, #8b919b);
+}
+.robotprops__masssub--wide {
+  flex: none;
+}
+.robotprops__masssub input[type='range'] {
+  width: 100%;
+}
+.robotprops__sel--sm {
+  font-size: 0.62rem;
+  padding: 0.12rem 0.2rem;
+}
+.robotprops__text--sm {
+  width: 5rem;
+}
+.robotprops__massest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+}
+.robotprops__minibtn {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.56rem;
+  color: var(--accent-ink, #191a1d);
+  background: var(--accent, #d6a23f);
+  border: none;
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+.robotprops__minibtn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.robotprops__masswarn {
+  margin: 0;
+  font-size: 0.56rem;
+  color: var(--danger, #e06c5a);
+}

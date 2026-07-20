@@ -39,6 +39,9 @@ import {
   readJoint,
   readPrimitive,
   readVisualOrigin,
+  readInertial,
+  setInertial,
+  removeInertial,
   removeJoint,
   removeLink,
   renameLink,
@@ -149,6 +152,19 @@ import {
   RulerIcon,
   LockIcon
 } from './ui-icons'
+import {
+  estimateFromMesh,
+  estimateWarning,
+  gramsToKg,
+  kgToGrams,
+  mmToM,
+  mToMm,
+  DEFAULT_MATERIAL,
+  DEFAULT_INFILL,
+  type MassEstimate
+} from './robot-mass'
+import type { MassEditorProps } from './RobotPropertiesDialog'
+import type { MeshTriangles } from './robot-mass-geometry'
 import './RobotView.css'
 
 /** An empty motion clip (2 s, ease-in-out, looping). */
@@ -201,6 +217,49 @@ function placeholderMesh(material: THREE.Material | null): THREE.Mesh {
   const mat =
     material ?? new THREE.MeshStandardMaterial({ color: 0xb4544e, wireframe: true })
   return new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), mat)
+}
+
+/** The `urdfName` of the URDFLink an object belongs to, or null (#555). */
+function ownerLink(obj: THREE.Object3D | null): string | null {
+  let o = obj
+  while (o && !(o as unknown as { isURDFLink?: boolean }).isURDFLink) o = o.parent
+  return (o as unknown as { urdfName?: string } | null)?.urdfName ?? null
+}
+
+/**
+ * Extract a link's OWN mesh triangles in its LOCAL frame, in metres (#555).
+ *
+ * A joined child nests under its parent in the scene graph, so we keep only
+ * meshes this link actually owns (`ownerLink`). Each vertex is pushed through
+ * `mesh.matrixWorld` then back into the link's local frame, which bakes in the
+ * mesh's `scale` (mm→m etc.) — so the caller measures volume in metres and
+ * converts with a fixed unitScaleToMm of 1000, regardless of authored units.
+ * Returns null when the link has no triangle geometry (a primitive-only link
+ * is handled elsewhere; a bare/empty link has no mesh to estimate from).
+ */
+function linkLocalTriangles(robot: URDFRobot, link: string): MeshTriangles | null {
+  const linkObj = robot.links[link]
+  if (!linkObj) return null
+  robot.updateMatrixWorld(true)
+  const toLocal = new THREE.Matrix4().copy(linkObj.matrixWorld).invert()
+  const positions: number[] = []
+  const v = new THREE.Vector3()
+  linkObj.traverse((o) => {
+    const mesh = o as THREE.Mesh
+    if (!mesh.isMesh || ownerLink(mesh) !== link) return
+    const geom = mesh.geometry as THREE.BufferGeometry
+    const pos = geom.getAttribute('position') as THREE.BufferAttribute | undefined
+    if (!pos) return
+    const toLinkLocal = new THREE.Matrix4().multiplyMatrices(toLocal, mesh.matrixWorld)
+    const index = geom.getIndex()
+    const emit = (i: number): void => {
+      v.fromBufferAttribute(pos, i).applyMatrix4(toLinkLocal)
+      positions.push(v.x, v.y, v.z)
+    }
+    if (index) for (let i = 0; i < index.count; i++) emit(index.getX(i))
+    else for (let i = 0; i < pos.count; i++) emit(i)
+  })
+  return positions.length >= 9 ? { positions } : null
 }
 
 export function RobotView({
@@ -805,6 +864,135 @@ export function RobotView({
   const handleSetSize = (link: string, dims: number[]): void => {
     commitUrdf(setPrimitiveSize(content, link, dims))
   }
+
+  // ── Per-link mass (#555, epic #535 §1) ────────────────────────────────────
+  // The value lives in the URDF <inertial>; the estimate settings (material +
+  // infill) live in robot.yml so the estimate stays reproducible. Material/infill
+  // are held in React state, seeded from robot.yml when the open link changes, so
+  // dragging the infill slider re-estimates live.
+  const [massMaterial, setMassMaterial] = useState(DEFAULT_MATERIAL)
+  const [massInfill, setMassInfill] = useState(DEFAULT_INFILL)
+  useEffect(() => {
+    const lm = editLink ? defRef.current?.robot?.linkMass?.[editLink] : undefined
+    setMassMaterial(lm?.material ?? DEFAULT_MATERIAL)
+    setMassInfill(typeof lm?.infill === 'number' ? lm.infill : DEFAULT_INFILL)
+    // editLink is the only real dependency; the ref read is intentional.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLink])
+
+  /** Estimate the open link's mass from its mesh, in the current material/infill. */
+  const estimateLink = useCallback(
+    (link: string, material: string, infill: number): MassEstimate | null => {
+      const robot = robotRef.current
+      if (!robot) return null
+      const tris = linkLocalTriangles(robot, link)
+      if (!tris) return null
+      return estimateFromMesh(tris, { material, infill, unitScaleToMm: 1000 })
+    },
+    []
+  )
+
+  /** The CoM (URDF metres) to store with a mass: an existing one wins, else the
+   *  estimate's centroid, else the origin. */
+  const comForLink = (link: string, est: MassEstimate | null): [number, number, number] => {
+    const existing = readInertial(contentRef.current, link)
+    if (existing) return existing.com
+    if (est) return [mmToM(est.centroidMm[0]), mmToM(est.centroidMm[1]), mmToM(est.centroidMm[2])]
+    return [0, 0, 0]
+  }
+
+  const handleSetMeasured = (link: string, grams: number | null): void => {
+    if (grams === null) {
+      commitUrdf(removeInertial(contentRef.current, link))
+      void persist((m) => {
+        if (m.linkMass) delete m.linkMass[link]
+      })
+      return
+    }
+    commitUrdf(setInertial(contentRef.current, link, { mass: gramsToKg(grams), com: comForLink(link, null) }))
+    void persist((m) => {
+      m.linkMass = { ...(m.linkMass ?? {}), [link]: { source: 'measured' } }
+    })
+  }
+
+  const handleUseEstimate = (link: string): void => {
+    const est = estimateLink(link, massMaterial, massInfill)
+    if (!est) return
+    const com: [number, number, number] = [
+      mmToM(est.centroidMm[0]),
+      mmToM(est.centroidMm[1]),
+      mmToM(est.centroidMm[2])
+    ]
+    commitUrdf(setInertial(contentRef.current, link, { mass: gramsToKg(est.grams), com }))
+    void persist((m) => {
+      m.linkMass = {
+        ...(m.linkMass ?? {}),
+        [link]: { source: 'estimated', material: massMaterial, infill: massInfill }
+      }
+    })
+  }
+
+  /** Persist new estimate settings; if this link's mass IS the estimate, re-apply
+   *  it so the stored value tracks the sliders. */
+  const handleSetMassSettings = (link: string, material: string, infill: number): void => {
+    const wasEstimate = defRef.current?.robot?.linkMass?.[link]?.source === 'estimated'
+    if (wasEstimate) {
+      const est = estimateLink(link, material, infill)
+      if (est) {
+        const com: [number, number, number] = [
+          mmToM(est.centroidMm[0]),
+          mmToM(est.centroidMm[1]),
+          mmToM(est.centroidMm[2])
+        ]
+        commitUrdf(setInertial(contentRef.current, link, { mass: gramsToKg(est.grams), com }))
+      }
+    }
+    void persist((m) => {
+      const prev = m.linkMass?.[link]
+      m.linkMass = { ...(m.linkMass ?? {}), [link]: { source: prev?.source ?? 'none', material, infill } }
+    })
+  }
+
+  // Live mass estimate for the open link (#555). Recomputes when the link, the
+  // material/infill, or the geometry (content) changes; robotRef is populated by
+  // the time a link dialog is open.
+  const editMassEstimate = useMemo<MassEstimate | null>(() => {
+    if (!editLink || dialogCtx?.kind !== 'link') return null
+    return estimateLink(editLink, massMaterial, massInfill)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLink, dialogCtx, massMaterial, massInfill, content, estimateLink])
+
+  const massEditor = useMemo<MassEditorProps | null>(() => {
+    if (!editLink || dialogCtx?.kind !== 'link') return null
+    const inertial = readInertial(content, editLink)
+    const provenance = defRef.current?.robot?.linkMass?.[editLink]
+    // The URDF <inertial> holds the authoritative value; provenance labels it.
+    const grams = inertial ? kgToGrams(inertial.mass) : 0
+    const source = inertial ? provenance?.source ?? 'measured' : 'none'
+    const comMm: [number, number, number] | undefined = inertial
+      ? [mToMm(inertial.com[0]), mToMm(inertial.com[1]), mToMm(inertial.com[2])]
+      : editMassEstimate?.centroidMm
+    return {
+      grams,
+      source,
+      estimateG: editMassEstimate?.grams,
+      material: massMaterial,
+      infill: massInfill,
+      warning: editMassEstimate ? estimateWarning(editMassEstimate) : null,
+      comMm,
+      onSetMeasured: (g) => handleSetMeasured(editLink, g),
+      onUseEstimate: () => handleUseEstimate(editLink),
+      onSetMaterial: (m) => {
+        setMassMaterial(m)
+        handleSetMassSettings(editLink, m, massInfill)
+      },
+      onSetInfill: (i) => {
+        setMassInfill(i)
+        handleSetMassSettings(editLink, massMaterial, i)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editLink, dialogCtx, content, editMassEstimate, massMaterial, massInfill])
   // Colour a link (#405) — an inline URDF <material>, so it round-trips + undoes like
   // any other build edit; urdf-loader renders it, recolouring only this link.
   const handleSetColor = (link: string, hex: string): void => {
@@ -4872,6 +5060,7 @@ export function RobotView({
             joint={editJoint}
             jointNames={allJointNames}
             onSetSize={handleSetSize}
+            massEditor={massEditor}
             linkColor={editLinkColor}
             colorable={editColorable}
             usedColors={usedLinkColors}

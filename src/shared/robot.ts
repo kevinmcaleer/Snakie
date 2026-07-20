@@ -61,6 +61,11 @@ export interface RobotModel {
   servoJointMap?: ServoJointBinding[]
   /** Per-joint limit / calibration overrides edited in-app (Phase 2). */
   joints?: Record<string, JointConfig>
+  /** Per-link mass AUTHORING metadata (#555, epic #535 §1). The physical value
+   *  lives in the URDF `<inertial>` (portable); this remembers HOW it was set —
+   *  the active source, and the material/infill an estimate used so it stays
+   *  reproducible. Keyed by link name. Absent ⇒ the link has no authored mass. */
+  linkMass?: Record<string, LinkMassSpec>
   /** Per-joint absolute roll about its own normal axis, in DEGREES (#354). The URDF
    *  `<origin rpy>` already bakes this in; it's remembered here so the joint editor
    *  can show the current roll and edit it absolutely (deltas re-applied to the rpy),
@@ -84,6 +89,20 @@ export interface RobotModel {
   /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
   mirror?: MirrorPair[]
 }
+
+/** How a link's mass was authored (#555). The number itself is in the URDF. */
+export interface LinkMassSpec {
+  /** Which source is active: measured / library / estimated (or none). */
+  source: MassSource
+  /** Material preset name for the estimate (e.g. `PLA`), when source-relevant. */
+  material?: string
+  /** Infill fraction 0…1 the estimate used, when source-relevant. */
+  infill?: number
+}
+
+/** Where a link's mass came from — mirrors the union in `robot-mass.ts`, kept
+ *  here so the shared model type has no renderer dependency. */
+export type MassSource = 'measured' | 'library' | 'estimated' | 'none'
 
 /** A servo(pin) ↔ URDF joint binding with angle-range calibration (Phase 3). */
 export interface ServoJointBinding {

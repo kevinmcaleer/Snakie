@@ -161,6 +161,27 @@ describe('sanitiseRobotModel — corruption-safe (#310)', () => {
     const m = readRobotModel({ parts: [], connections: [], robot: { urdf: 'urdf/a.urdf' } })
     expect(m!.urdf).toBe('urdf/a.urdf')
   })
+
+  it('sanitises linkMass provenance (#555): validates source, clamps infill', () => {
+    const m = sanitiseRobotModel({
+      linkMass: {
+        arm: { source: 'estimated', material: 'PETG', infill: 0.3 },
+        base: { source: 'measured' },
+        foot: { source: 'nonsense', infill: 5 }, // bad source → none; infill clamps to 1
+        bad: 'junk'
+      }
+    })
+    expect(m!.linkMass!.arm).toEqual({ source: 'estimated', material: 'PETG', infill: 0.3 })
+    expect(m!.linkMass!.base).toEqual({ source: 'measured' })
+    expect(m!.linkMass!.foot).toEqual({ source: 'none', infill: 1 })
+    expect(m!.linkMass!.bad).toEqual({ source: 'none' })
+  })
+
+  it('a linkMass-only model round-trips (regression: never silently dropped)', () => {
+    const m = sanitiseRobotModel({ linkMass: { arm: { source: 'measured' } } })
+    expect(m).toBeDefined()
+    expect(m!.linkMass!.arm.source).toBe('measured')
+  })
 })
 
 describe('scaffoldKrf (#310)', () => {
