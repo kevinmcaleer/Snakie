@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **URDF `<inertial>` read/write round-trip (#553, epic #535 §1).** Snakie's URDF
+  layer can now read and write per-link mass + centre-of-mass as standard URDF
+  `<inertial>` tags (`readInertial`/`setInertial`/`removeInertial`), so mass data
+  lives in the spec rather than a private format. Written in the same scoped
+  string-surgery style as the existing geometry editors, so a mass edit never
+  disturbs a link's visual or a sibling tag, and a set-then-remove restores the
+  file byte-for-byte (by `urdfHash`). The inertia tensor is deferred — a
+  placeholder identity is written; mass + CoM are what static stability needs.
+  Cross-checked against a standards XML DOM parser so the regex layer can't drift
+  from what `urdf-loader` reads when it builds the 3-D scene.
 - **Mesh volume + true centroid for mass estimation (#552, epic #535 §1).** New
   pure module `robot-mass-geometry.ts` computing a mesh's volume and its
   *volumetric* centroid by the divergence theorem, plus a watertight check.

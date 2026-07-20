@@ -451,6 +451,111 @@ export function setVisualOrigin(
   return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
 }
 
+/**
+ * A link's `<inertial>` data, in URDF's own units (#553, epic #535 §1).
+ *
+ * The inertia tensor is deferred — static stability and starting-gain maths
+ * don't need it, so {@link setInertial} writes a placeholder identity and this
+ * type doesn't surface it. Only mass + CoM matter here.
+ */
+export interface InertialSpec {
+  /**
+   * Link mass in **kilograms** — URDF `<mass value>` is SI, per the spec this
+   * epic is populating (not inventing). Editor UI works in grams and the parts
+   * library stores `mass_g`; both convert at their boundary, they do NOT change
+   * what lands in the `.urdf`.
+   */
+  mass: number
+  /** Centre-of-mass origin in the link frame, **metres** (URDF `<origin xyz>`). */
+  com: [number, number, number]
+}
+
+/** The `<inertial> … </inertial>` (or self-closing `<inertial/>`) sub-span of a
+ *  link body, byte offsets, or null. Scopes edits so a mass write never touches
+ *  a sibling `<visual>`/`<collision>`. */
+function inertialSlice(body: string): { start: number; end: number } | null {
+  const open = /<inertial\b[^>]*?(\/?)>/i.exec(body)
+  if (!open) return null
+  if (open[1] === '/') return { start: open.index, end: open.index + open[0].length }
+  const close = body.indexOf('</inertial>', open.index + open[0].length)
+  if (close < 0) return null
+  return { start: open.index, end: close + 11 }
+}
+
+/**
+ * Read a link's mass + CoM, or null when it carries no usable `<inertial>`.
+ *
+ * AUTHORITY: this regex reader is authoritative for the editor's read-your-own-
+ * write. `urdf-loader` ALSO parses `<inertial>` into `robot.links[name].inertial`
+ * for the live scene (URDFLoader.js), but only on a full reload, so the text is
+ * the live source of truth while editing — same as every other `read*` here.
+ * The two agree on well-formed URDF; they diverge only on malformed input, where
+ * the loader coerces a bad `value` to 0 and this returns null ("no data") so the
+ * editor shows the field as unset rather than a spurious 0 kg.
+ */
+export function readInertial(urdf: string, link: string): InertialSpec | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const is = inertialSlice(body)
+  if (!is) return null
+  const block = body.slice(is.start, is.end)
+  const massM = /<mass\b[^>]*\bvalue\s*=\s*"([^"]+)"/i.exec(block)
+  if (!massM) return null
+  const mass = Number(massM[1])
+  if (!Number.isFinite(mass)) return null
+  const originM = /<origin\b[^>]*\bxyz\s*=\s*"([^"]+)"/i.exec(block)
+  return { mass, com: originM ? parseVec3(originM[1]) : [0, 0, 0] }
+}
+
+/** Multi-line `<inertial>` block, 4-space link-body indentation, identity
+ *  inertia placeholder (deferred — see {@link InertialSpec}). */
+function renderInertial(spec: InertialSpec): string {
+  return (
+    `<inertial>\n` +
+    `      <origin xyz="${fmtVec(spec.com)}" rpy="0 0 0"/>\n` +
+    `      <mass value="${fmtNum(spec.mass)}"/>\n` +
+    `      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>\n` +
+    `    </inertial>`
+  )
+}
+
+/**
+ * Insert-or-replace a link's `<inertial>` (mass + CoM), scoped to that link.
+ *
+ * Replaces an existing block in place; otherwise inserts at the TOP of the link
+ * body (URDF convention: inertial before visual/collision). Only the inertial
+ * block is rewritten — surrounding tags and their whitespace are untouched, so
+ * `urdfHash()` sees a real change on a mass edit but nothing spurious elsewhere.
+ */
+export function setInertial(urdf: string, link: string, spec: InertialSpec): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const block = renderInertial(spec)
+  const is = inertialSlice(body)
+  const nextBody = is
+    ? body.slice(0, is.start) + block + body.slice(is.end)
+    : `\n    ${block}` + body
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/** Remove a link's `<inertial>` (the "mass cleared" path). No-op when absent. */
+export function removeInertial(urdf: string, link: string): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const is = inertialSlice(body)
+  if (!is) return urdf
+  // Also swallow the blank line the inserted block left behind, if present.
+  let start = is.start
+  const before = body.slice(0, start)
+  const trimmed = before.replace(/\n[ \t]*$/, '')
+  start = trimmed.length
+  const nextBody = body.slice(0, start) + body.slice(is.end)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
 /** Read the joint whose `<child>` is `childLink`, or null (e.g. the root link has
  *  none — the move tool uses that to refuse moving the base). */
 /** The four joint types the builder can author (a subset of the URDF set). */
