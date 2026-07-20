@@ -62,6 +62,8 @@ import {
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
+import { createComOverlay, type ComOverlayHandle, type ComStatus } from './robot-com-overlay'
+import { readLinkMasses } from './robot-com'
 import { usePrompt } from './PromptModal'
 import { createViewCube } from './robot-viewcube'
 import {
@@ -147,6 +149,7 @@ import {
   ExplodeIcon,
   ClapperIcon,
   BoneIcon,
+  BalanceIcon,
   TargetIcon,
   CameraIcon,
   RulerIcon,
@@ -333,6 +336,12 @@ export function RobotView({
   // Per-link ground-contact points (#557), link-local metres — mirrors robot.yml
   // `contacts`, kept reactive so the inspector reflects edits immediately.
   const [contacts, setContacts] = useState<Record<string, [number, number, number][]>>({})
+  const contactsRef = useRef<Record<string, [number, number, number][]>>({})
+  contactsRef.current = contacts
+  // The scene ground-plane Y (the grid's height) + the per-link masses, held in
+  // refs so the CoM overlay's per-frame getData reads them without re-closing (#558).
+  const groundYRef = useRef(0)
+  const linkMassesRef = useRef<ReturnType<typeof readLinkMasses>>({})
   posesRef.current = poses
   // Managed sequences (#413) parsed from an opened motion.py — round-tripped
   // losslessly on re-export even though the sequence editor UI (#415) is pending.
@@ -346,6 +355,10 @@ export function RobotView({
   const [boneMode, setBoneMode] = useState(false) // skeleton overlay (#536)
   const boneModeRef = useRef(false)
   const boneApiRef = useRef<BoneModeHandle | null>(null)
+  const [comMode, setComMode] = useState(false) // CoM + support-polygon overlay (#558)
+  const comModeRef = useRef(false)
+  const comApiRef = useRef<ComOverlayHandle | null>(null)
+  const [comStatus, setComStatus] = useState<ComStatus | null>(null)
   // Interactive IK goal gizmo (#540, epic #533 §5): a draggable end-effector goal
   // that live-solves the selected chain (shared planar solver).
   const [ikGoal, setIkGoal] = useState(false)
@@ -1051,6 +1064,12 @@ export function RobotView({
     // Sort order is irrelevant now only the total is shown (#567), but the
     // breakdown is kept for a future stats surface; default (by mass) is fine.
     return summariseMass(rows)
+  }, [content])
+
+  // Per-link masses for the CoM overlay (#558) — recomputed only on edit, held in
+  // a ref so the render loop reads them without re-parsing the URDF every frame.
+  useEffect(() => {
+    linkMassesRef.current = readLinkMasses(content, parseAssembly(content).map((i) => i.link))
   }, [content])
 
   // ── Ground-contact points (#557, epic #535 §2) ───────────────────────────
@@ -2485,6 +2504,18 @@ export function RobotView({
     highlightApiRef.current?.apply(selectedLinkRef.current)
   }, [boneMode])
 
+  // CoM + support-polygon overlay toggle (#558). Live status is pushed to the HUD
+  // from the render loop (only when it changes), so just arm/disarm here.
+  const comStatusRef = useRef<string>('')
+  useEffect(() => {
+    comModeRef.current = comMode
+    comApiRef.current?.setEnabled(comMode)
+    if (!comMode) {
+      comStatusRef.current = ''
+      setComStatus(null)
+    }
+  }, [comMode])
+
   // Arm/disarm the interactive IK goal gizmo (#540).
   useEffect(() => {
     ikGoalRef.current = ikGoal
@@ -2531,6 +2562,7 @@ export function RobotView({
     const layGrid = (size: number, minY: number): void => {
       disposeGrid()
       gridParams = { size, minY }
+      groundYRef.current = minY // feed the CoM overlay's ground plane (#558)
       const light = themeIsLight()
       const minorC = light ? 0xd7d3c6 : 0x2b2d32
       const majorC = light ? 0xbcb6a4 : 0x40434a
@@ -2595,6 +2627,17 @@ export function RobotView({
     const boneModeApi = createBoneMode(scene, () => robotRef.current)
     boneApiRef.current = boneModeApi
     boneModeApi.setEnabled(boneModeRef.current)
+
+    // CoM + support-polygon overlay (#558): also built once, driven per-frame.
+    // Composes with Bone Mode. getData reads live refs so it tracks every edit.
+    const comOverlayApi = createComOverlay(scene, () => robotRef.current, () => ({
+      masses: linkMassesRef.current,
+      contacts: contactsRef.current,
+      groundY: groundYRef.current,
+      marginFrac: 0.1
+    }))
+    comApiRef.current = comOverlayApi
+    comOverlayApi.setEnabled(comModeRef.current)
 
     // Interactive IK goal gizmo (#540): drag a goal, the shared planar solver
     // poses the chain live, streams to a connected board, and feeds Capture Pose.
@@ -4729,6 +4772,15 @@ export function RobotView({
       controls.update()
       boneModeApi.update() // live skeleton overlay (#536) — follows every joint drive
       ikGizmoApi.update() // interactive IK goal gizmo (#540) — composes with Bone Mode
+      const cs = comOverlayApi.update() // CoM + support polygon (#558)
+      if (comModeRef.current) {
+        // Push to the HUD only when the readout actually changes — no per-frame renders.
+        const key = cs ? `${cs.state}:${cs.marginMm}:${Math.round(cs.massKg * 1000)}` : ''
+        if (key !== comStatusRef.current) {
+          comStatusRef.current = key
+          setComStatus(cs)
+        }
+      }
       renderer.render(scene, camera)
       if (viewCube) {
         viewCube.sync(camera.quaternion)
@@ -4759,6 +4811,7 @@ export function RobotView({
       zoomApiRef.current = null
       boneApiRef.current = null
       boneModeApi.dispose()
+      comOverlayApi.dispose()
       ikApiRef.current = null
       ikGizmoApi.dispose()
       if (viewCube) {
@@ -5052,6 +5105,17 @@ export function RobotView({
             >
               <BoneIcon />
             </button>
+            {/* CoM + support-polygon overlay (#558): balance point + stability. */}
+            <button
+              type="button"
+              className={`robotview__zbtn${comMode ? ' is-active' : ''}`}
+              onClick={() => setComMode((v) => !v)}
+              title="Balance — centre of mass, ground projection and support polygon"
+              aria-label="Centre of mass overlay"
+              aria-pressed={comMode}
+            >
+              <BalanceIcon />
+            </button>
             {/* Interactive IK goal gizmo (#540): drag a goal, the chain follows. */}
             <button
               type="button"
@@ -5217,16 +5281,25 @@ export function RobotView({
         )}
         {/* Floating status pills (formerly hosted in the retired pose sidebar): the
             save state, and the measure tool's live readout. */}
-        {showPanel && (savingLabel || (measureActive && measureDist != null)) && (
-          <div className="robotview__hud-status">
-            {measureActive && measureDist != null && (
-              <span className="robotview__hud-pill">
-                <RulerIcon size={13} /> {Math.round(measureDist)} mm
-              </span>
-            )}
-            {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}
-          </div>
-        )}
+        {showPanel &&
+          (savingLabel || (measureActive && measureDist != null) || (comMode && comStatus)) && (
+            <div className="robotview__hud-status">
+              {measureActive && measureDist != null && (
+                <span className="robotview__hud-pill">
+                  <RulerIcon size={13} /> {Math.round(measureDist)} mm
+                </span>
+              )}
+              {comMode && comStatus && (
+                <span className={`robotview__hud-pill robotview__hud-com robotview__hud-com--${comStatus.state}`}>
+                  <BalanceIcon size={13} />{' '}
+                  {comStatus.state === 'none'
+                    ? `${Math.round(comStatus.massKg * 1000)} g · tag feet for stability`
+                    : `${Math.round(comStatus.massKg * 1000)} g · ${comStatus.state} · ${comStatus.marginMm} mm`}
+                </span>
+              )}
+              {savingLabel && <span className="robotview__hud-pill">{savingLabel}</span>}
+            </div>
+          )}
       </div>
       </div>
       {showTimeline && (

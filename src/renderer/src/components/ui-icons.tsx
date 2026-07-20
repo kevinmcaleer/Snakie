@@ -282,6 +282,20 @@ export const CourseIcon = ({ emoji, size }: { emoji: string; size?: number }): J
   return Icon ? <Icon size={size} /> : <>{emoji}</>
 }
 
+/** A plumb bob over a base line — the centre-of-mass / balance overlay (#558). */
+export const BalanceIcon = ({ size }: { size?: number }): JSX.Element =>
+  svg(
+    g(
+      <>
+        <circle cx="12" cy="7" r="3" />
+        <path d="M12 10v7.5" strokeDasharray="1.5 2" />
+        <path d="M5 20.5h14" strokeWidth="2" />
+        <path d="M12 17.5l-2.4 3h4.8z" fill="currentColor" stroke="none" />
+      </>
+    ),
+    size
+  )
+
 /** A cylinder — the "add a tube" build primitive. */
 export const CylinderIcon = ({ size }: { size?: number }): JSX.Element =>
   svg(

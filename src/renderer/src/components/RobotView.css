@@ -412,3 +412,17 @@
   color: var(--accent-ink);
   border-color: var(--accent);
 }
+
+/* CoM overlay stability pill (#558) — colour tracks the stability state. */
+.robotview__hud-com--stable {
+  color: #b9f6c9;
+  border-color: #2f7d47;
+}
+.robotview__hud-com--marginal {
+  color: #ffe0a3;
+  border-color: #b07d1e;
+}
+.robotview__hud-com--unstable {
+  color: #ffc2bb;
+  border-color: #b23b2e;
+}

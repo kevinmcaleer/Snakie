@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Centre-of-mass + support-polygon overlay (#558, epic #535 §2).** The headline
+  of the mass epic: a new ⚖ Balance toggle in Robot View drops a marker on the
+  robot's live centre of mass, a plumb line down to the ground, and the support
+  polygon — the convex hull of the grounded contact points (#557). It colours by
+  static stability: green while the CoM projection sits inside the polygon, amber
+  near the edge, red once it leaves and the robot would tip, with the clearance in
+  mm on a HUD pill. Everything recomputes each frame, so it tracks joint sliders,
+  Motion Studio playback and IK drags; a lifted foot leaves the polygon. Composes
+  with Bone Mode. Pure geometry (`robot-support.ts`: 2-D hull, point-in-polygon,
+  stability) kept separate from the three.js overlay and unit-tested.
 - **Ground-contact tagging (#557, epic #535 §2).** A link's Properties gain a
   Ground Contacts section: mark the points where a part (a foot or wheel) touches
   the floor, so the support-polygon check (coming in #558) has vertices to hull.
