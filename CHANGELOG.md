@@ -25,12 +25,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   recompute every frame as joints move. The shared engine the CoM +
   support-polygon overlay, the stability strip and the balance parameters all
   build on. No visible UI yet — that's the overlay (#558).
-- **Total mass + per-link breakdown table (#555, epic #535 §1).** The Build panel
-  gains a Mass section: the robot's total mass at a glance, and a per-link table
-  you can sort by mass (what dominates) or by name. Rows with no mass show a dash,
-  with a hint that the total is a lower bound until they're weighed; clicking a
-  row opens that link's mass editor. Reads each link's stored `<inertial>`, so it
-  reflects what's actually set.
+- **Total mass readout (#555 / #567, epic #535 §1).** The Build panel shows the
+  robot's total mass in a compact bar above the footer (a `+` when some links are
+  still un-weighed, so the total reads as a lower bound). Per-link mass is edited
+  in each item's Properties dialog — the hierarchy stays a list of physical items
+  (#567).
 - **Per-link mass in the robot inspector (#555, epic #535 §1).** A link's
   Properties now has a Mass section: pick a print material (PLA/PETG/ABS/resin)
   and an infill %, and Snakie estimates the mass from the mesh volume live; a
