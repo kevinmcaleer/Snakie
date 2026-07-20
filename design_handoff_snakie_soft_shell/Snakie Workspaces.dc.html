@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+</style>
+</helmet>
+
+<div style="min-height:100%; background:#dcd3bf; background-image:radial-gradient(circle at 1px 1px, rgba(60,55,40,.10) 1px, transparent 0); background-size:26px 26px; padding:56px 64px 120px; font-family:'Plus Jakarta Sans',sans-serif;">
+  <div style="max-width:1200px; margin:0 0 40px;">
+    <div style="display:inline-flex; align-items:center; gap:10px; padding:6px 14px; background:#2f8f5b; color:#f2ecdb; border-radius:999px; font-size:13px; font-weight:600; box-shadow:0 2px 0 #1f6e44;">Snakie · three workspaces</div>
+    <h1 style="font-size:36px; margin:16px 0 8px; color:#33301f; letter-spacing:-.02em;">Code · Electronics · Build</h1>
+    <p style="max-width:720px; font-size:15px; line-height:1.55; color:#5c563f; margin:0;">The same Soft Shell frame across the three workspaces. Shelf (files) stays left; the centre surface and right panel swap per mode; the Pose Studio dock is Build-only. Pan across — reference a frame by id (2a / 2b / 2c) in chat.</p>
+  </div>
+
+  <div style="display:flex; gap:56px; align-items:flex-start;">
+    <div id="2a" style="scroll-margin:80px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;"><span style="font-weight:700; font-size:13px; color:#f2ecdb; background:#26a269; padding:4px 11px; border-radius:8px;">2a</span><h2 style="font-size:22px; margin:0; color:#33301f;">Code</h2><span style="font-size:14px; color:#6c654b;">write MicroPython · define pins</span></div>
+      <div style="width:1360px; box-shadow:0 30px 70px -30px rgba(40,36,24,.5); border-radius:26px;">
+        <dc-import name="Snakie Soft Shell" mode="code" theme="light" hint-size="1360px,948px"></dc-import>
+      </div>
+    </div>
+    <div id="2b" style="scroll-margin:80px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;"><span style="font-weight:700; font-size:13px; color:#f2ecdb; background:#26a269; padding:4px 11px; border-radius:8px;">2b</span><h2 style="font-size:22px; margin:0; color:#33301f;">Electronics</h2><span style="font-size:14px; color:#6c654b;">wire parts to pins · auto-drivers</span></div>
+      <div style="width:1360px; box-shadow:0 30px 70px -30px rgba(40,36,24,.5); border-radius:26px;">
+        <dc-import name="Snakie Soft Shell" mode="elec" theme="light" hint-size="1360px,948px"></dc-import>
+      </div>
+    </div>
+    <div id="2c" style="scroll-margin:80px;">
+      <div style="display:flex; align-items:baseline; gap:12px; margin-bottom:16px;"><span style="font-weight:700; font-size:13px; color:#f2ecdb; background:#26a269; padding:4px 11px; border-radius:8px;">2c</span><h2 style="font-size:22px; margin:0; color:#33301f;">Build</h2><span style="font-size:14px; color:#6c654b;">URDF joints · IK · Pose Studio</span></div>
+      <div style="width:1360px; box-shadow:0 30px 70px -30px rgba(40,36,24,.5); border-radius:26px;">
+        <dc-import name="Snakie Soft Shell" mode="sim" theme="light" hint-size="1360px,948px"></dc-import>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
