@@ -20,6 +20,8 @@
 import {
   blankRobot,
   type JointConfig,
+  type LinkMassSpec,
+  type MassSource,
   type MirrorPair,
   type MotionEasing,
   type MotionKey,
@@ -249,6 +251,21 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
 
   const normals = sanitiseVec3Map(r.jointNormal)
   if (Object.keys(normals).length) model.jointNormal = normals
+
+  if (r.linkMass && typeof r.linkMass === 'object') {
+    const SOURCES: readonly MassSource[] = ['measured', 'library', 'estimated', 'none']
+    const linkMass: Record<string, LinkMassSpec> = {}
+    for (const [link, raw] of Object.entries(r.linkMass as Record<string, unknown>)) {
+      const lm = (raw ?? {}) as Record<string, unknown>
+      const source = SOURCES.includes(lm.source as MassSource) ? (lm.source as MassSource) : 'none'
+      const spec: LinkMassSpec = { source }
+      if (isStr(lm.material) && lm.material) spec.material = lm.material
+      // Infill is a fraction; clamp a hand-edited value into 0…1.
+      if (isFiniteNum(lm.infill)) spec.infill = Math.min(1, Math.max(0, lm.infill))
+      linkMass[link] = spec
+    }
+    if (Object.keys(linkMass).length) model.linkMass = linkMass
+  }
 
   if (Array.isArray(r.poses)) {
     const poses = r.poses

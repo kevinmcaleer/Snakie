@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Per-link mass in the robot inspector (#555, epic #535 §1).** A link's
+  Properties now has a Mass section: pick a print material (PLA/PETG/ABS/resin)
+  and an infill %, and Snakie estimates the mass from the mesh volume live; a
+  measured weight you type in beats the estimate, and a chip shows which source
+  is active. Non-watertight meshes are flagged as rough. The value is written to
+  the URDF `<inertial>` (#553); the estimate settings persist in `robot.yml`
+  (`linkMass`) so the estimate stays reproducible. Library-part mass is modelled
+  but not yet wired — URDF links carry no source-part id, so that lookup is a
+  follow-up. (The total-mass readout + sortable breakdown table land next.)
 - **Parts carry a real mass (#554, epic #535 §1).** Part definitions gain a
   `mass_g` field (grams) plus optional `com_xyz` (centre of mass, mm) for
   lopsided parts, round-tripped through `parts.yml`. The heaviest robot parts —

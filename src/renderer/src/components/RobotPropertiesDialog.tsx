@@ -13,6 +13,8 @@ import {
 } from './robot-pose'
 import { SizeForm, JointForm } from './RobotBuildPanel'
 import { SwatchPicker } from './SwatchPicker'
+import { MATERIAL_NAMES, sourceLabel } from './robot-mass'
+import type { MassSource } from '../../../shared/robot'
 import './RobotPropertiesDialog.css'
 
 /**
@@ -44,6 +46,32 @@ function contextTitle(ctx: PropsContext): string {
   }
 }
 
+/**
+ * Everything the Mass section of a link shows and edits (#555). Bundled so the
+ * dialog's prop list doesn't balloon. `null` ⇒ this link can't carry a mass
+ * (e.g. the context isn't a link).
+ */
+export interface MassEditorProps {
+  /** Active resolved mass in grams (0 ⇒ unset). */
+  grams: number
+  source: MassSource
+  /** A live mesh-volume estimate in grams, or undefined when there's no mesh. */
+  estimateG?: number
+  /** Estimate settings, echoed back so the controls are controlled. */
+  material: string
+  infill: number
+  /** Estimate-quality warning (holey mesh etc.), or null when clean. */
+  warning?: string | null
+  /** Current centre of mass in mm (from `<inertial>`, or the mesh centroid). */
+  comMm?: [number, number, number]
+  /** Set a measured mass in grams; null clears it (falls back to the estimate). */
+  onSetMeasured: (grams: number | null) => void
+  /** Adopt the current estimate as this link's mass. */
+  onUseEstimate: () => void
+  onSetMaterial: (material: string) => void
+  onSetInfill: (infill: number) => void
+}
+
 export interface RobotPropertiesDialogProps {
   context: PropsContext
   // link / joint
@@ -51,6 +79,8 @@ export interface RobotPropertiesDialogProps {
   joint: JointDef | null
   jointNames: string[]
   onSetSize: (link: string, dims: number[]) => void
+  /** Mass editor for the open link (#555), or null when not applicable. */
+  massEditor?: MassEditorProps | null
   /** The edited link's colour (#rrggbb), or undefined for the default. */
   linkColor?: string
   /** Whether this link can be recoloured (a primitive, or an STL mesh — not DAE). */
@@ -152,6 +182,121 @@ export interface JointPickView {
  *
  * Mounted with a per-node `key` so switching nodes gives fresh local state.
  */
+/** Round a gram value for display without trailing float noise. */
+const fmtGrams = (g: number): string => (Math.round(g * 100) / 100).toString()
+
+/**
+ * The Mass section of a link's Properties (#555). Shows the active mass + where
+ * it came from, a mesh-volume estimate you can tune (material + infill) and
+ * adopt, and a measured override that beats everything. The centre of mass is
+ * shown read-only here — a numeric override lands with the breakdown table.
+ */
+function MassForm({ mass }: { mass: MassEditorProps }): JSX.Element {
+  const {
+    grams,
+    source,
+    estimateG,
+    material,
+    infill,
+    warning,
+    comMm,
+    onSetMeasured,
+    onUseEstimate,
+    onSetMaterial,
+    onSetInfill
+  } = mass
+  const [measured, setMeasured] = useState(source === 'measured' && grams > 0 ? fmtGrams(grams) : '')
+
+  const commitMeasured = (): void => {
+    const t = measured.trim()
+    if (t === '') return onSetMeasured(null)
+    const n = Number(t)
+    if (Number.isFinite(n) && n > 0) onSetMeasured(n)
+  }
+
+  return (
+    <section className="robotprops__section">
+      <div className="robotprops__label">
+        Mass
+        <span className={`robotprops__masssrc robotprops__masssrc--${source}`}>
+          {grams > 0 ? `${fmtGrams(grams)} g · ${sourceLabel(source)}` : 'not set'}
+        </span>
+      </div>
+
+      {estimateG !== undefined ? (
+        <div className="robotprops__massrow">
+          <label className="robotprops__masssub" title="What the print is made of">
+            <span>Material</span>
+            <select
+              className="robotprops__sel robotprops__sel--sm"
+              value={material}
+              onChange={(e) => onSetMaterial(e.target.value)}
+              aria-label="Material"
+            >
+              {MATERIAL_NAMES.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="robotprops__masssub" title="How solid the print is (a print is mostly air)">
+            <span>Infill {Math.round(infill * 100)}%</span>
+            <input
+              type="range"
+              min={5}
+              max={100}
+              step={5}
+              value={Math.round(infill * 100)}
+              onChange={(e) => onSetInfill(Number(e.target.value) / 100)}
+              aria-label="Infill"
+            />
+          </label>
+        </div>
+      ) : (
+        <p className="robotprops__note">No mesh to estimate from — enter a measured weight below.</p>
+      )}
+
+      {estimateG !== undefined && (
+        <div className="robotprops__massest">
+          <span>Estimated {fmtGrams(estimateG)} g</span>
+          <button
+            type="button"
+            className="robotprops__minibtn"
+            onClick={onUseEstimate}
+            disabled={source === 'estimated'}
+          >
+            Use estimate
+          </button>
+        </div>
+      )}
+      {warning && <p className="robotprops__masswarn">⚠ {warning}</p>}
+
+      <label className="robotprops__masssub robotprops__masssub--wide" title="Weighed on a scale — beats the estimate">
+        <span>Measured (g)</span>
+        <input
+          className="robotprops__text robotprops__text--sm"
+          type="number"
+          min={0}
+          step="0.1"
+          value={measured}
+          placeholder="weigh it"
+          onChange={(e) => setMeasured(e.target.value)}
+          onBlur={commitMeasured}
+          onKeyDown={(e) => e.key === 'Enter' && commitMeasured()}
+          aria-label="Measured mass in grams"
+        />
+      </label>
+
+      {comMm && grams > 0 && (
+        <p className="robotprops__note">
+          Centre of mass: {comMm.map((n) => Math.round(n)).join(', ')} mm
+        </p>
+      )}
+    </section>
+  )
+}
+
 export function RobotPropertiesDialog(props: RobotPropertiesDialogProps): JSX.Element {
   const { context, onOk, onCancel } = props
 
@@ -297,6 +442,7 @@ function LinkBody({
   joint,
   jointNames,
   onSetSize,
+  massEditor,
   onSetJoint,
   onRenameJoint,
   onSetJointOrigin,
@@ -323,6 +469,7 @@ function LinkBody({
               <SizeForm geom={geom} onChange={(d) => onSetSize(link, d)} />
             </section>
           )}
+          {massEditor && <MassForm mass={massEditor} />}
           {colorable ? (
             // Primitives + STL meshes recolour via the inline URDF <material>. (DAE/
             // Collada meshes carry their own materials, so they fall through to the note.)
