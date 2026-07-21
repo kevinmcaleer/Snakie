@@ -66,7 +66,7 @@ export function MiniViewer({ source, isPython }: { source: string; isPython: boo
           <MiniBoardView source={source} isPython={isPython} />
         ) : (
           <Suspense fallback={<div className="miniviewer__loading">Loading 3D…</div>}>
-            <RobotDockPanel />
+            <RobotDockPanel embedded />
           </Suspense>
         )}
       </div>
