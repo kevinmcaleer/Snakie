@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Reusable collapsible-panel primitive (#577, epic #573).** A shared
+  `CollapsiblePanel` (Soft Shell styled) so every panel owns its own collapse
+  control — a chevron in its own header, with an optional badge and header
+  actions, and a `keepMounted` mode for panels whose contents must survive a
+  collapse (a terminal's scrollback, a live plotter). Waves 3 adopt it across the
+  Code / Electronics / Build workspaces.
+
 ### Changed
 - **Chrome now speaks the Soft Shell UI font (#576, epic #573).** The toolbar,
   left icon rail, status bar, panel headers and tabs use **Plus Jakarta Sans**

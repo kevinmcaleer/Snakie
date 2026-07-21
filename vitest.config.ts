@@ -11,10 +11,13 @@ import { defineConfig } from 'vitest/config'
  * are needed.
  */
 export default defineConfig({
+  // The app uses the automatic JSX runtime (no `import React`); match it so
+  // component tests (rendered to static markup) transform the same way (#577).
+  esbuild: { jsx: 'automatic' },
   test: {
     globals: false,
     environment: 'node',
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.{ts,tsx}'],
     // Compile the sim's worker_threads worker once, and point the runtime at it
     // (integration tests spawn a real MicroPython interpreter in that worker).
     globalSetup: ['./test/setup/globalSetup.ts'],

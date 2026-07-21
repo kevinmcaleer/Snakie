@@ -1,0 +1,72 @@
+/* Soft Shell collapsible panel (#577, epic #573). Uses the Soft Shell tokens
+   (#574) with fallbacks to the semantic tokens so it reads before waves 2–3
+   finish the migration. */
+.cpanel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.cpanel__head {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.cpanel__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--txt3, var(--text-muted));
+  background: transparent;
+  border: none;
+  padding: 0.28rem 0.3rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cpanel__toggle:hover {
+  color: var(--head, var(--text));
+}
+
+.cpanel__chevron {
+  font-size: 0.7rem;
+  line-height: 1;
+  color: var(--txt4, var(--text-muted));
+}
+
+.cpanel__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cpanel__badge {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--txt4, var(--text-muted));
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.cpanel__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.cpanel__body {
+  min-height: 0;
+}
+
+/* keepMounted + collapsed: keep the body in the tree but out of view. */
+.cpanel__body--hidden {
+  display: none;
+}
