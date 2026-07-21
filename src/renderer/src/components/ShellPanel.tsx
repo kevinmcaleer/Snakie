@@ -202,7 +202,11 @@ export function ShellPanel({ chatOpen = false, onToggleChat, onCollapse }: Shell
           {/* Keep the terminal MOUNTED even when popped out, so its scrollback
               survives; just hide it and show a redock placeholder instead. */}
           <div className={`shell-console${poppedOut ? ' shell-console--popped' : ''}`}>
-            <Terminal ref={terminalRef} />
+            {/* Seed from the always-on console store so the REPL scrollback survives
+                a remount — e.g. leaving and returning to the Code workspace, which
+                unmounts/remounts this panel (#…). The live onData stream continues
+                seamlessly on top of the seed. */}
+            <Terminal ref={terminalRef} seed={getAll()} />
             {!poppedOut && (
               <button
                 type="button"

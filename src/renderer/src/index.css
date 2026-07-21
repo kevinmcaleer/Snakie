@@ -2362,15 +2362,35 @@ body {
   display: none;
 }
 
-/* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an
-   optional lesson panel (tutorial/help) on the left. Sits where the panel group
-   would, filling the space between the activity bar and (absent) dock. */
+/* The work area holds the always-mounted Code panel group and, for Electronics /
+   Build, the solo overlay stacked on top of it (so the console/editor survive a
+   workspace switch instead of remounting). */
+.shell__main .shell__workarea {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+.shell__main .shell__workarea > .shell__panels {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Electronics/Build (#…): the solo layout — the Board View / URDF editor fills the
+   area, with an optional lesson panel (tutorial/help) on the left. Rendered as an
+   OPAQUE overlay covering the hidden Code panel group. */
 .shell__main .shell__solo {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
   min-height: 0;
   height: 100%;
+}
+.shell__main .shell__solo--overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  background: var(--shell, var(--bg));
 }
 .shell__solo-lesson {
   flex: 0 0 auto;

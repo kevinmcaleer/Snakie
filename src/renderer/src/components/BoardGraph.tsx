@@ -362,8 +362,11 @@ export function BoardGraph({
   // library is a pinnable Obsidian-style overlay — closed by default, opened
   // from its edge tab, auto-hiding on focus loss unless PINNED. The floating
   // Board window defaults to open+pinned (the pre-review behaviour).
+  // The parts LIBRARY defaults to open + PINNED in the Electronics workspace too
+  // (#…), consistent with the Browser + Build panels; the user's own pin choice
+  // still persists.
   const [dockPinned, setDockPinnedState] = useState<boolean>(() =>
-    asWindow ? true : loadPin(window.localStorage, PIN_KEYS.library, false)
+    asWindow ? true : loadPin(window.localStorage, PIN_KEYS.library, true)
   )
   const [dockOpen, setDockOpen] = useState<boolean>(() => asWindow || dockPinned)
   const dockRef = useRef<HTMLElement | null>(null)
