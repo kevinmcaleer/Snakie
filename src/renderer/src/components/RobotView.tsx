@@ -3261,11 +3261,20 @@ export function RobotView({
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
-    const frameModel = (robot: URDFRobot, animate = false): void => {
+    const frameModel = (robot: URDFRobot, animate = false, attempt = 0): void => {
       // Flush world matrices BEFORE measuring — a dirty transform frames stale.
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
-      if (!Number.isFinite(box.min.x) || box.isEmpty()) return
+      if (!Number.isFinite(box.min.x) || box.isEmpty()) {
+        // The geometry isn't laid out yet (can happen on the very first frame,
+        // notably under Electron) — retry next frame instead of bailing and
+        // leaving the camera at its default FRONT position (#…). Bounded so a
+        // genuinely empty model doesn't loop; stops if the robot is swapped out.
+        if (attempt < 8 && robotRef.current === robot) {
+          requestAnimationFrame(() => frameModel(robot, animate, attempt + 1))
+        }
+        return
+      }
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
       const radius = Math.max(size.x, size.y, size.z, 0.1) * 0.5
