@@ -15,6 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Code / Electronics / Build workspaces.
 
 ### Changed
+- **Build (Robot) workspace restyled to Soft Shell (#580, epic #573).** The 3-D
+  viewport chrome, overlay toolbar and zoom cluster, the CHAIN / URDF hierarchy
+  tree (now built on the shared `CollapsiblePanel`), the Pose Studio dock
+  (keyframe timeline, mirror/export, stability heat-strip) and the Properties
+  dialog (per-link mass + ground-contact editors) all take the warm parchment +
+  green/gold palette in both skins. Every recent tool is preserved — Bone Mode,
+  Exploded view, IK goal, the Balance / CoM + support-polygon overlay, the measure
+  tool, the stability strip and the mass/contacts editors — and the live three.js
+  scene and overlay behaviour are unchanged.
 - **Electronics (Board View) workspace restyled to Soft Shell (#579, epic #573).**
   The board sub-toolbar, blueprint grid, floating Browser panel, zoom + Connections
   overlays and the parts Library panel now use the Soft Shell tokens (`--panel`/

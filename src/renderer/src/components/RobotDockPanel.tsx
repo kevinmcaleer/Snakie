@@ -7,6 +7,7 @@ import { useWorkspaceLayout } from '../store/layout'
 import { readRobotModel } from '../../../shared/krf'
 import demoArm from '../assets/demo-arm.urdf?raw'
 import { FolderOpenIcon } from './ui-icons'
+import './RobotDockPanel.css'
 
 /**
  * ROBOT DOCK PANEL (#320) — the mini 3-D Robot view that sits above the

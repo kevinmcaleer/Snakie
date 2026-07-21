@@ -45,13 +45,13 @@
   color: #b4544e;
 }
 .robottimeline__btn--export {
-  color: #191a1d;
-  background: #6fae6f;
-  border-color: #6fae6f;
+  color: #fff;
+  background: var(--grad-run, var(--green, #6fae6f));
+  border-color: var(--green, #6fae6f);
   font-weight: 700;
 }
 .robottimeline__btn--export:hover:not(:disabled) {
-  background: #7cbe7c;
+  filter: brightness(1.06);
 }
 
 .robottimeline__loop {
@@ -159,13 +159,15 @@
   border-radius: 4px;
   cursor: copy;
 }
+/* Soft Shell keyframes: green blocks with a gold playhead sweeping across (per the
+   Build mock). The selected key inverts to white with a gold glow. */
 .robottimeline__key {
   position: absolute;
   top: 50%;
   width: 9px;
   height: 9px;
   transform: translate(-50%, -50%) rotate(45deg);
-  background: var(--accent);
+  background: var(--green, var(--accent-2, #3fae5a));
   border: 1px solid #191a1d;
   border-radius: 2px;
   padding: 0;

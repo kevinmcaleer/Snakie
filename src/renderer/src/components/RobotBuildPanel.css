@@ -148,48 +148,27 @@
   flex-direction: column;
   gap: 0.1rem;
 }
+/* A branch of the hierarchy tree (CHAIN / URDF / Poses) — rendered via the shared
+   Soft Shell CollapsiblePanel (#580). Give its header a subtle Soft Shell backing
+   so the disclosure row reads as an "edge" over the 3-D canvas (Fusion-style). */
 .robotbuild__section {
   display: flex;
   flex-direction: column;
 }
-/* A branch header: disclosure caret + label + a muted count. */
-.robotbuild__branch {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-family: inherit;
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--text-muted, #9aa0a6);
-  background: rgba(24, 26, 30, 0.62);
-  border: none;
+.robotbuild__section > .cpanel__head {
+  background: var(--panel2, rgba(24, 26, 30, 0.62));
   border-radius: 5px;
+}
+.robotbuild__section > .cpanel__head .cpanel__toggle {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.66rem;
   padding: 0.22rem 0.35rem 0.2rem;
-  cursor: pointer;
-  text-align: left;
 }
-.robotbuild__branch:hover {
-  color: var(--accent-ink);
+.robotbuild__section > .cpanel__head .cpanel__badge {
+  font-size: 0.62rem;
 }
-:root[data-theme='skeuomorph'] .robotbuild__branch {
-  background: rgba(246, 242, 232, 0.82);
-}
-.robotbuild__caret {
-  flex: 0 0 auto;
-  width: 0.7rem;
-  font-size: 0.6rem;
-}
-.robotbuild__branch-label {
-  flex: 1 1 auto;
-}
-.robotbuild__branch-count {
-  flex: 0 0 auto;
-  font-weight: 400;
-  /* Lean on the AA-tuned muted token directly — fading it with opacity dropped it
-     below AA on the parchment theme. */
-  color: var(--text-muted, #9aa0a6);
+.robotbuild__section-body {
+  min-width: 0;
 }
 .robotbuild__parts {
   list-style: none;

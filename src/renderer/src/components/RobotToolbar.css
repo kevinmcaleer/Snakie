@@ -8,13 +8,12 @@
   display: flex;
   gap: 0.2rem;
   padding: 0.2rem;
-  border: 1px solid var(--border, #3a3d44);
+  border: 1px solid var(--shellbd, var(--border, #3a3d44));
   border-radius: 8px;
-  background: rgba(20, 21, 24, 0.55);
+  /* Soft Shell glass — parchment in the light skin, dark glass in the dark skin. */
+  background: var(--glass, rgba(20, 21, 24, 0.55));
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
   backdrop-filter: blur(8px);
-}
-:root[data-theme='skeuomorph'] .robottool {
-  background: rgba(231, 226, 211, 0.78);
 }
 .robottool__btn {
   display: inline-flex;

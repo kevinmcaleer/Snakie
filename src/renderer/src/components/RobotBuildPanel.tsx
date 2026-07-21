@@ -21,6 +21,7 @@ import type { PropsContext } from './RobotPropertiesDialog'
 import { ContextMenu, type ContextMenuItem, type ContextMenuPosition } from './ContextMenu'
 import { usePrompt } from './PromptModal'
 import { FolderOpenIcon } from './ui-icons'
+import { CollapsiblePanel } from './CollapsiblePanel'
 import './RobotBuildPanel.css'
 
 /**
@@ -486,20 +487,20 @@ function Section({
   children: React.ReactNode
 }): JSX.Element {
   const isCollapsed = !!collapsed[id]
+  // Soft Shell (#580): the CHAIN / URDF / Poses branches now use the shared
+  // CollapsiblePanel primitive, so each owns its own header chevron + count badge
+  // and matches every other collapsible panel in the app.
   return (
-    <div className="robotbuild__section">
-      <button
-        type="button"
-        className="robotbuild__branch"
-        aria-expanded={!isCollapsed}
-        onClick={() => onToggle(id)}
-      >
-        <span className="robotbuild__caret">{isCollapsed ? '▸' : '▾'}</span>
-        <span className="robotbuild__branch-label">{label}</span>
-        <span className="robotbuild__branch-count">{count}</span>
-      </button>
-      {!isCollapsed && <ul className="robotbuild__parts">{children}</ul>}
-    </div>
+    <CollapsiblePanel
+      title={label}
+      open={!isCollapsed}
+      onToggle={() => onToggle(id)}
+      badge={count}
+      className="robotbuild__section"
+      bodyClassName="robotbuild__section-body"
+    >
+      <ul className="robotbuild__parts">{children}</ul>
+    </CollapsiblePanel>
   )
 }
 

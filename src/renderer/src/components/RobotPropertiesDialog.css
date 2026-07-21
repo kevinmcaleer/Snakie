@@ -433,7 +433,9 @@
 .robotprops__minibtn {
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.56rem;
-  color: var(--accent-ink, #191a1d);
+  /* Dark ink on the gold fill (reads in both skins — the gold-ink label would be
+     pale-on-gold in the dark skin). */
+  color: var(--accent-contrast, #191a1d);
   background: var(--accent, #d6a23f);
   border: none;
   border-radius: 4px;
