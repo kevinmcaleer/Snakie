@@ -40,7 +40,9 @@ import type {
   PartLibrary,
   PartLibraryWithParts
 } from '../../preload/index.d'
-import '@fontsource/jetbrains-mono'
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource/ibm-plex-mono/600.css'
 import './index.css'
 
 /** Theme key shared with the editor window's `useTheme`. */

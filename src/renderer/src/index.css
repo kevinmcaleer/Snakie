@@ -16,7 +16,10 @@
   --border-w: 1px;
   --pixel-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
   --pixel-shadow-active: inset 0 2px 4px rgba(0, 0, 0, 0.3);
-  --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  /* Soft Shell typography (#574, epic #573): IBM Plex Mono for code/console/
+   * telemetry, Plus Jakarta Sans for chrome. Both bundled via @fontsource. */
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --font-ui: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   /* Single readable content font; the chrome speaks Helvetica in this skin
    * (see the sans rule in the Skeuomorph block). Kept as a token so refs
    * resolve here. */
@@ -76,7 +79,7 @@
   --editor-region-bg: #1c1e24;
   --editor-margin-rule: #7a4a4a;
 
-  --font-mono: 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
+  --font-mono: 'IBM Plex Mono', 'JetBrains Mono', 'DejaVu Sans Mono', ui-monospace, monospace;
   --font-pixel: var(--font-mono);
   --toolbar-h: 60px;
 }
@@ -134,6 +137,115 @@
   --editor-paper-dot: rgba(176, 150, 96, 0.22);
   --editor-region-bg: #e9e3d2;
   --editor-margin-rule: #d98a8a;
+}
+
+/* ===========================================================================
+ * SOFT SHELL design tokens (#574, epic #573) — the new design system, adopted
+ * app-wide going forward. Values transcribed from the handoff spec
+ * (design_handoff_snakie_soft_shell/README.md §Design Tokens): light values map
+ * to the skeuomorph skin, dark values to the dark skin.
+ *
+ * This sub-issue only DEFINES the vocabulary + wires the fonts; waves 2–3 of the
+ * epic migrate components onto these tokens. Purely additive — nothing here
+ * clobbers an existing token, so no component restyles yet. The one rename: the
+ * spec's desk background is `--bg`, but the app already owns `--bg`, so the desk
+ * surface is `--desk` here.
+ * ========================================================================= */
+:root,
+:root[data-theme='dark'] {
+  /* surfaces */
+  --desk: #121410;
+  --shell: #1d201a;
+  --panel: #21251f;
+  --panel2: #171a14;
+  --shellbd: #31352b;
+  --card: #262a21;
+  --rail: #2a2e24;
+  --editor: #191c15;
+  --gutter: #15180f;
+  --line: #2a2e22;
+  --con: #0c0e08;
+  --conbd: #242a1c;
+  /* text */
+  --head: #eef1ea;
+  --txt2: #9a9d8f;
+  --txt3: #8b8e80;
+  --txt4: #73766a;
+  --txt5: #73766a;
+  /* accents */
+  --green: #26a269;
+  --greentext: #8fe6b6;
+  --greenpill: linear-gradient(145deg, #203f2d, #183324);
+  --grad-run: linear-gradient(180deg, #42b877, #2f9e63);
+  --grad-danger: linear-gradient(180deg, #e06a54, #cf4a37);
+  --gold: #d9a441;
+  --goldbg: #4a3c1c;
+  --goldink: #f0dca6;
+  --grad-gold: linear-gradient(180deg, #f0dca6, #e7bf62);
+  /* blueprint (board surface) + pin dots */
+  --blueprint: #16324a;
+  --bpline: rgba(220, 235, 245, 0.07);
+  --bptext: #cfe4f0;
+  --pin-power: #d4553f;
+  --pin-gpio: #d9a441;
+  --pin-gnd: #e8ecef;
+  /* syntax */
+  --kw: #e08b7d;
+  --str: #d8b96e;
+  --num: #7fc4e0;
+  --com: #6f7a63;
+  --ident: #cdd4cb;
+  /* misc */
+  --glass: rgba(18, 22, 15, 0.74);
+  --pillinset: rgba(255, 255, 255, 0.08);
+}
+
+:root[data-theme='skeuomorph'] {
+  /* surfaces */
+  --desk: #e6dfcf;
+  --shell: #efe9dc;
+  --panel: #f6f1e6;
+  --panel2: #ece5d6;
+  --shellbd: #e0d9c8;
+  --card: #fff;
+  --rail: #e3e6df;
+  --editor: #f4eede;
+  --gutter: #ece2cd;
+  --line: #e7dcc4;
+  --con: #14160f;
+  --conbd: #2a2d24;
+  /* text */
+  --head: #2a2b28;
+  --txt2: #5f5c50;
+  --txt3: #7a776a;
+  --txt4: #9a9686;
+  --txt5: #a5a08e;
+  /* accents */
+  --green: #26a269;
+  --greentext: #1c7a4d;
+  --greenpill: linear-gradient(145deg, #eafaf1, #dbf3e6);
+  --grad-run: linear-gradient(180deg, #42b877, #2f9e63);
+  --grad-danger: linear-gradient(180deg, #e06a54, #cf4a37);
+  --gold: #d9a441;
+  --goldbg: #f0dca6;
+  --goldink: #6b4e17;
+  --grad-gold: linear-gradient(180deg, #f0dca6, #e7bf62);
+  /* blueprint (board surface) + pin dots */
+  --blueprint: #1f4e6b;
+  --bpline: rgba(220, 235, 245, 0.09);
+  --bptext: #cfe4f0;
+  --pin-power: #d4553f;
+  --pin-gpio: #d9a441;
+  --pin-gnd: #e8ecef;
+  /* syntax */
+  --kw: #a23b2e;
+  --str: #9c7a2e;
+  --num: #2f6f8f;
+  --com: #a39877;
+  --ident: #3a362a;
+  /* misc */
+  --glass: rgba(255, 255, 255, 0.78);
+  --pillinset: rgba(255, 255, 255, 0.6);
 }
 
 /* Chrome speaks sans (Helvetica) in this skin; editor/console/trees stay mono. */
