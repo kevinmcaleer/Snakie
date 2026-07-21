@@ -94,7 +94,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.35rem 0.6rem 0.4rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--shellbd, var(--border));
 }
 .devicetree__disk-bar {
   flex: 1 1 auto;
@@ -107,7 +107,9 @@
 .devicetree__disk-fill {
   height: 100%;
   border-radius: 3px;
-  background: var(--accent, #6aa9ff);
+  /* Soft Shell (#578): a green fill for the healthy flash gauge, amber/red as it
+     fills up (below). */
+  background: var(--green, var(--accent, #6aa9ff));
   transition: width 0.3s ease;
 }
 .devicetree__disk-fill.is-high {

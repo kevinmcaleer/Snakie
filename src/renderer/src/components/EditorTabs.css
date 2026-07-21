@@ -2,11 +2,17 @@
    actions (e.g. the Find button, issue #137). The tabs grow and scroll; the
    actions stay pinned to the right. The bottom border lives here so it spans
    the whole row, not just the tabs. */
+/* Soft Shell (#578, epic #573): the tab bar reads as a parchment `--panel`
+   strip over the editor card, with a hairline `--line` rule below. All rules
+   fall back to the old semantic tokens for any theme that hasn't defined the
+   Soft Shell palette; the `skeuomorph` light theme's fuller treatment lives in
+   index.css and out-specifies these base rules, so these mainly carry the dark
+   theme onto Soft Shell surfaces. */
 .editor-header {
   display: flex;
   align-items: stretch;
-  background: var(--bg-sunken);
-  border-bottom: 1px solid var(--border);
+  background: var(--panel, var(--bg-sunken));
+  border-bottom: 1px solid var(--line, var(--border));
 }
 
 .editor-header__actions {
@@ -61,10 +67,10 @@
   gap: 6px;
   padding: 0 8px 0 12px;
   max-width: 200px;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
+  background: var(--panel, var(--bg-sunken));
+  color: var(--txt3, var(--text-muted));
   border: none;
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--line, var(--border));
   font-size: 13px;
   cursor: pointer;
   user-select: none;
@@ -72,13 +78,15 @@
 }
 
 .editor-tab:hover {
-  background: var(--bg);
+  background: var(--editor, var(--bg));
 }
 
+/* Active tab sits on the raised editor surface with the head text colour and a
+   thin green Soft Shell accent along its top edge. */
 .editor-tab--active {
-  background: var(--bg-elevated);
-  color: var(--text);
-  box-shadow: inset 0 2px 0 var(--accent);
+  background: var(--editor, var(--bg-elevated));
+  color: var(--head, var(--text));
+  box-shadow: inset 0 2px 0 var(--green, var(--accent));
 }
 
 .editor-tab__label {
@@ -86,12 +94,14 @@
   text-overflow: ellipsis;
 }
 
+/* Gold status dot on the unsaved tab (Soft Shell spec: the active tab carries a
+   gold `●` dirty indicator). */
 .editor-tab__dirty {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--gold, var(--accent));
 }
 
 .editor-tab__close {
@@ -112,8 +122,8 @@
 }
 
 .editor-tab__close:hover {
-  background: var(--border);
-  color: var(--text);
+  background: var(--shellbd, var(--border));
+  color: var(--head, var(--text));
 }
 
 .editor-tabs__new {
@@ -128,13 +138,13 @@
   border: none;
   border-radius: var(--radius);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--txt3, var(--text-muted));
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
 }
 
 .editor-tabs__new:hover {
-  background: var(--border);
-  color: var(--text);
+  background: var(--shellbd, var(--border));
+  color: var(--head, var(--text));
 }
