@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-07-21
+
 ### Added
 - **Soft Shell cards (epic #573).** The Files panel, editor, console and
   instrument dock now float as rounded cards on the parchment workspace (soft
@@ -2989,7 +2991,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...HEAD
+[0.35.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.0...v0.33.1
 [0.33.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.32.0...v0.33.0
