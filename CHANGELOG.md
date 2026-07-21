@@ -24,6 +24,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Exploded view, IK goal, the Balance / CoM + support-polygon overlay, the measure
   tool, the stability strip and the mass/contacts editors — and the live three.js
   scene and overlay behaviour are unchanged.
+- **Electronics (Board View) workspace restyled to Soft Shell (#579, epic #573).**
+  The board sub-toolbar, blueprint grid, floating Browser panel, zoom + Connections
+  overlays and the parts Library panel now use the Soft Shell tokens (`--panel`/
+  `--card` surfaces, `--blueprint`/`--bpline`/`--bptext` board mat, gold segmented
+  tabs + Help pill, `--pin-*` dots) and the Library's section groups adopt the
+  shared `CollapsiblePanel`. The live board render, wiring, driver auto-detect and
+  parts-library install are unchanged — only the surrounding chrome was restyled.
+- **Code workspace restyled to Soft Shell (#578, epic #573).** The editor tab
+  bar, the Console/shell (a parchment `--panel` frame cradling the near-black
+  terminal, warmed Console/Problems toggle) and the file trees now speak the Soft
+  Shell palette — parchment `--panel`/`--card`/`--editor` surfaces, `--shellbd`/
+  `--line` borders, `--head`/`--txt3` text, a gold unsaved-tab dot, a green editor
+  active-tab accent, and a green flash-usage gauge. The live renders (Monaco,
+  xterm terminal, serial plotter) are untouched — only their card chrome; the
+  plotter now sits in a `--card` sub-card with its dark phosphor scope intact. The
+  dark theme, previously left on the old semantic tokens, is carried onto Soft
+  Shell surfaces too (via token fallbacks).
 - **Chrome now speaks the Soft Shell UI font (#576, epic #573).** The toolbar,
   left icon rail, status bar, panel headers and tabs use **Plus Jakarta Sans**
   (`--font-ui`) in both themes, replacing the old Helvetica chrome font — pairing

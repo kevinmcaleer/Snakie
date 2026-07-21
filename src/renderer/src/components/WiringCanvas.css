@@ -48,7 +48,7 @@
 
 /* A part is being dragged in from the Parts panel (#159) — frame the drop zone. */
 .wc--drop .wc__stage {
-  box-shadow: inset 0 0 0 2px var(--accent, #4ea1ff);
+  box-shadow: inset 0 0 0 2px var(--green, #4ea1ff);
   background-color: #191b1f;
 }
 
@@ -136,7 +136,9 @@
   cursor: default;
 }
 
-/* Floating controls (bottom-left of the mat). */
+/* Floating controls (bottom-left of the mat). These sit ON the blueprint board
+   surface, so they stay a translucent dark "blueprint chrome" in BOTH skins
+   (a light glass panel would vanish over the blue mat) — text via `--bptext`. */
 .wc__controls {
   position: absolute;
   left: 12px;
@@ -145,14 +147,18 @@
   align-items: center;
   gap: 0.6rem;
   padding: 0.3rem 0.5rem;
-  background: rgba(20, 22, 26, 0.82);
-  border: 1px solid #2c2e33;
-  border-radius: 10px;
+  background: rgba(12, 20, 28, 0.82);
+  border: 1px solid rgba(220, 235, 245, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(6px);
 }
 
 .wc__hint {
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.68rem;
-  color: #aeb4bd;
+  color: var(--bptext, #aeb4bd);
+  opacity: 0.9;
 }
 
 /* Zoom cluster (− / % / + / fit) — mirrors the node-graph + Part Editor controls
@@ -167,27 +173,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
+  width: 1.6rem;
+  height: 1.6rem;
   font-family: var(--font-mono);
   font-size: 0.85rem;
   line-height: 1;
-  color: #d6dade;
-  background: #26282d;
-  border: 1px solid #3a3d44;
+  color: var(--bptext, #d6dade);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(220, 235, 245, 0.16);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .wc__zoom-btn:hover {
-  border-color: #565b63;
+  border-color: rgba(220, 235, 245, 0.34);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 /* Active toggle state (snap-to-grid magnet). */
 .wc__zoom-btn.is-on {
   color: #7fc4f0;
   border-color: #3f6f8f;
-  background: #1d2b36;
+  background: rgba(63, 111, 143, 0.35);
 }
 
 .wc__zoom-pct {
@@ -195,7 +202,8 @@
   text-align: center;
   font-family: var(--font-mono);
   font-size: 0.66rem;
-  color: #aeb4bd;
+  color: var(--bptext, #aeb4bd);
+  opacity: 0.9;
 }
 
 /* The zoom readout doubles as a 100% / fit toggle button. */
@@ -207,16 +215,16 @@
   cursor: pointer;
 }
 .wc__zoom-pct--btn:hover {
-  color: #d6dade;
-  border-color: #3a3d44;
-  background: #26282d;
+  color: var(--bptext, #d6dade);
+  border-color: rgba(220, 235, 245, 0.16);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .wc__zoom-sep {
   width: 1px;
   align-self: stretch;
   margin: 0.1rem 0.15rem;
-  background: #3a3d44;
+  background: rgba(220, 235, 245, 0.16);
 }
 
 /* Export-image menu (PNG / SVG / PDF) on the zoom toolbar. */
@@ -234,17 +242,18 @@
   flex-direction: column;
   min-width: 8.5rem;
   padding: 0.2rem;
-  background: rgba(20, 22, 26, 0.96);
-  border: 1px solid #2c2e33;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  background: rgba(12, 20, 28, 0.96);
+  border: 1px solid rgba(220, 235, 245, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(6px);
 }
 
 .wc__export-item {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
   text-align: left;
-  color: #d6dade;
+  color: var(--bptext, #d6dade);
   background: none;
   border: none;
   border-radius: 6px;
@@ -253,14 +262,14 @@
 }
 
 .wc__export-item:hover {
-  background: rgba(255, 255, 255, 0.07);
+  background: rgba(255, 255, 255, 0.1);
 }
 
 /* Divider between the image exports and the Markdown (BOM / pinouts) exports. */
 .wc__export-sep {
   height: 1px;
   margin: 0.2rem 0.1rem;
-  background: #2c2e33;
+  background: rgba(220, 235, 245, 0.16);
 }
 
 /* Selected-part ring + mini-toolbar (#176). */
@@ -280,10 +289,11 @@
   align-items: center;
   gap: 0.2rem;
   padding: 0.22rem 0.3rem;
-  background: rgba(20, 22, 26, 0.94);
-  border: 1px solid #2c2e33;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  background: rgba(12, 20, 28, 0.94);
+  border: 1px solid rgba(220, 235, 245, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
   z-index: 9; /* above the floating browser (8) so a selected part's toolbar shows */
 }
 
@@ -297,15 +307,16 @@
   justify-content: center;
   width: 1.6rem;
   height: 1.6rem;
-  color: #d6dade;
-  background: #26282d;
-  border: 1px solid #3a3d44;
+  color: var(--bptext, #d6dade);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(220, 235, 245, 0.16);
   border-radius: 6px;
   cursor: pointer;
 }
 
 .wc__parttb-btn:hover {
-  border-color: #565b63;
+  border-color: rgba(220, 235, 245, 0.34);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .wc__parttb-btn--danger:hover {
@@ -408,13 +419,13 @@
   cursor: crosshair;
 }
 .wc__dot--vcc {
-  fill: #c0392b;
+  fill: var(--pin-power, #c0392b);
 }
 .wc__dot--gnd {
-  fill: #e9edf1;
+  fill: var(--pin-gnd, #e9edf1);
 }
 .wc__dot--signal {
-  fill: #d6a531;
+  fill: var(--pin-gpio, #d6a531);
 }
 
 /* Breadboard capability chips (shown while hovering a part) fade in; the inline
@@ -446,10 +457,12 @@
   text-align: center;
   padding: 2rem;
   pointer-events: none;
-  color: #aeb4bd;
+  color: var(--bptext, #aeb4bd);
+  opacity: 0.85;
 }
 .wc__empty p {
   margin: 0.3rem 0;
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.8rem;
 }
 
@@ -458,7 +471,9 @@
   font-size: 0.72rem;
 }
 
-/* Floating project browser (Fusion-360-style), top-left over the canvas. */
+/* Floating project browser (Fusion-360-style), top-left over the canvas. Like
+   the other mat overlays it stays translucent-dark "blueprint chrome" in both
+   skins so it reads over the blue board surface — text via `--bptext`. */
 .wc__browser {
   position: absolute;
   top: 10px;
@@ -469,34 +484,35 @@
   width: 14rem;
   max-height: calc(100% - 20px);
   overflow: auto;
-  background: rgba(20, 22, 26, 0.92);
-  border: 1px solid #2c2e33;
-  border-radius: 10px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background: rgba(12, 20, 28, 0.82);
+  border: 1px solid rgba(220, 235, 245, 0.16);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
 }
 
 .wc__browser-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.3rem 0.45rem;
-  border-bottom: 1px solid #2c2e33;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(220, 235, 245, 0.12);
 }
 
 .wc__browser-title {
   font-family: var(--font-mono);
   font-size: 0.6rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #8b919b;
+  letter-spacing: 0.12em;
+  color: var(--bptext, #8b919b);
+  opacity: 0.8;
 }
 
 .wc__browser-collapse {
   font: inherit;
   font-size: 0.9rem;
   line-height: 1;
-  color: #aeb4bd;
+  color: var(--bptext, #aeb4bd);
   background: none;
   border: none;
   cursor: pointer;
@@ -504,7 +520,7 @@
 }
 
 .wc__browser-collapse:hover {
-  color: #e9edf1;
+  color: #fff;
 }
 
 /* The collapsed tab (a small button to reopen the browser). */
@@ -513,18 +529,20 @@
   top: 10px;
   left: 10px;
   z-index: 8;
-  width: 1.7rem;
-  height: 1.7rem;
+  width: 1.8rem;
+  height: 1.8rem;
   font-size: 0.85rem;
-  color: #d6dade;
-  background: rgba(20, 22, 26, 0.92);
-  border: 1px solid #2c2e33;
-  border-radius: 8px;
+  color: var(--bptext, #d6dade);
+  background: rgba(12, 20, 28, 0.82);
+  border: 1px solid rgba(220, 235, 245, 0.16);
+  border-radius: 10px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
   cursor: pointer;
 }
 
 .wc__browser-tab:hover {
-  border-color: #565b63;
+  border-color: rgba(220, 235, 245, 0.34);
 }
 
 /* Component hierarchy tree. */
@@ -537,10 +555,10 @@
   align-items: center;
   gap: 0.3rem;
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
-  color: #d6dade;
+  color: var(--bptext, #d6dade);
   background: none;
   border: none;
   cursor: pointer;
@@ -549,7 +567,8 @@
 
 .wc__tree-caret {
   width: 0.7rem;
-  color: #8b919b;
+  color: var(--bptext, #8b919b);
+  opacity: 0.7;
 }
 
 .wc__tree-label {
@@ -558,8 +577,10 @@
 }
 
 .wc__tree-count {
+  font-family: var(--font-mono);
   font-size: 0.62rem;
-  color: #8b919b;
+  color: var(--bptext, #8b919b);
+  opacity: 0.7;
 }
 
 .wc__tree-list {
@@ -574,12 +595,13 @@
   gap: 0.35rem;
   padding: 0.14rem 0.25rem;
   border-radius: var(--radius);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
-  color: #d6dade;
+  color: var(--bptext, #d6dade);
 }
 
 .wc__tree-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .wc__tree-item--board {
@@ -630,10 +652,10 @@
 }
 
 .wc__project-name {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.92rem;
   font-weight: 700;
-  color: var(--text);
+  color: var(--bptext, #e9edf1);
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius);
@@ -641,9 +663,10 @@
 }
 
 .wc__project-desc {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
-  color: var(--text-muted);
+  color: var(--bptext, #aeb4bd);
+  opacity: 0.85;
   background: transparent;
   border: 1px solid transparent;
   border-radius: var(--radius);
@@ -653,27 +676,28 @@
 
 .wc__project-name:hover,
 .wc__project-desc:hover {
-  border-color: var(--border);
+  border-color: rgba(220, 235, 245, 0.16);
 }
 
 .wc__project-name:focus,
 .wc__project-desc:focus {
   outline: none;
-  border-color: var(--text-muted);
-  background: var(--bg-sunken);
+  border-color: rgba(220, 235, 245, 0.34);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .wc__project-name::placeholder,
 .wc__project-desc::placeholder {
-  color: var(--text-muted);
+  color: var(--bptext, #aeb4bd);
   font-style: italic;
   font-weight: 400;
-  opacity: 0.7;
+  opacity: 0.55;
 }
 
 .wc__project-saved {
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.66rem;
-  color: var(--accent-2, #46e06a);
+  color: var(--green, #46e06a);
   min-height: 0.9rem;
   opacity: 0;
   transition: opacity 0.15s;
@@ -690,20 +714,23 @@
   align-items: stretch;
   max-height: 34%;
   min-height: 0;
-  border-top: var(--border-w) solid var(--border);
-  background: var(--bg-elevated);
+  border-top: 1px solid var(--shellbd, var(--border));
+  background: var(--panel2, var(--bg-elevated));
 }
 
-/* The "MCU" tag pinned on the microcontroller row in the browser tree. */
+/* The "MCU" tag pinned on the microcontroller row in the browser tree — a small
+   green Soft Shell pill that reads over the blueprint-chrome browser. */
 .wc__parts-tag {
   flex: 0 0 auto;
+  font-family: var(--font-mono);
   font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.05em;
-  color: var(--accent-2, #46e06a);
-  border: var(--border-w) solid var(--border);
+  color: #8fe6b6;
+  background: rgba(38, 162, 105, 0.22);
+  border: 1px solid rgba(143, 230, 182, 0.4);
   border-radius: var(--radius);
-  padding: 0 0.25rem;
+  padding: 0 0.3rem;
 }
 
 /* Trash icon — hidden until the row is hovered (or the button focused). */
@@ -741,11 +768,12 @@
   align-items: center;
   gap: 0.4rem;
   margin-bottom: 0.3rem;
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  color: var(--txt3, var(--text-muted));
 }
 
 /* The connections header doubles as a collapse toggle (#…). */
@@ -765,12 +793,15 @@
 }
 
 .wc__table-head--toggle:hover {
-  color: var(--text);
+  color: var(--head, var(--text));
 }
 
 .wc__table-count {
+  font-family: var(--font-mono);
   font-size: 0.62rem;
-  background: var(--bg-sunken);
+  color: var(--txt3, var(--text-muted));
+  background: var(--panel, var(--bg-sunken));
+  border: 1px solid var(--shellbd, transparent);
   border-radius: 999px;
   padding: 0 0.4rem;
 }
@@ -789,11 +820,11 @@
 .wc__table td {
   text-align: left;
   padding: 0.18rem 0.3rem;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--shellbd, var(--border));
 }
 
 .wc__table th {
-  color: var(--text-muted);
+  color: var(--txt3, var(--text-muted));
   font-weight: 700;
 }
 
@@ -896,5 +927,5 @@
 }
 
 .wc__pin.is-pinned {
-  color: var(--accent, #34ad4f);
+  color: var(--green, #34ad4f);
 }
