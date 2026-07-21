@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Soft Shell close-out: Data Lab retired (#581, epic #573).** The never-surfaced
+  Data Lab workspace is removed — the switcher is exactly Code · Electronics ·
+  Build, and its instrument bench lives on in the Code/Build docks. A stale
+  persisted session that was in Data Lab (or the older `lab`/`data`) now lands on
+  Code instead of an unreachable layout with no active segment. Completes the
+  Soft Shell redesign epic; the three workspaces were audited cohesive in both
+  the light and dark skins.
+
 ### Added
 - **Reusable collapsible-panel primitive (#577, epic #573).** A shared
   `CollapsiblePanel` (Soft Shell styled) so every panel owns its own collapse

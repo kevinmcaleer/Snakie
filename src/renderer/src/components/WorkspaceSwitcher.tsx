@@ -11,12 +11,11 @@ import './WorkspaceSwitcher.css'
  * workspace to its factory preset — the always-available "Reset layout" escape hatch.
  *
  * Soft Shell (#575, epic #573) surfaces three: **Code · Electronics · Build**
- * (Electronics = the Board View; Build = the former Robot). Data Lab stays hidden
- * for now — its fate is the epic's close-out (#581). Reads the layout store directly.
+ * (Electronics = the Board View; Build = the former Robot). Data Lab was retired
+ * in the epic's close-out (#581), so all of WORKSPACE_IDS is shown. Reads the
+ * layout store directly.
  */
-const VISIBLE_WORKSPACES = WORKSPACE_IDS.filter(
-  (id) => id === 'code' || id === 'board' || id === 'robot'
-)
+const VISIBLE_WORKSPACES = WORKSPACE_IDS
 
 export function WorkspaceSwitcher(): JSX.Element {
   const layout = useWorkspaceLayout()

@@ -38,10 +38,11 @@ import {
 } from 'react'
 import type { ActivityView } from '../components/ActivityBar'
 
-/** The named workspaces (Phase 1; slimmed 4 → 3 by the modes review). Order =
- *  the switcher's display order. Old `lab`/`data` envelopes migrate to
- *  `datalab` in {@link loadLayoutState}. */
-export const WORKSPACE_IDS = ['code', 'board', 'datalab', 'robot'] as const
+/** The named workspaces. Order = the switcher's display order (Code · Electronics
+ *  · Build). Soft Shell (#581, epic #573) retired the never-surfaced Data Lab —
+ *  its instrument bench lives on in the Code/Build docks. Stale `lab`/`data`/
+ *  `datalab` persisted state coerces to `code` in {@link loadLayoutState}. */
+export const WORKSPACE_IDS = ['code', 'board', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
@@ -51,7 +52,6 @@ export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
   board: { label: 'Electronics', hint: 'Wire components to your board — the Board View beside your code' },
-  datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' },
   robot: { label: 'Build', hint: 'Assemble the robot in 3D — joints, IK chains and poses' }
 }
 
@@ -112,18 +112,6 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     boardPaneOpen: true,
     horizontal: [0, 42, 58, 0],
     vertical: [65, 35]
-  },
-  // Data Lab (the old Lab + Data merged): the instrument bench — dock open —
-  // with a tall shell region (Console | Plotter | Problems) for data work.
-  datalab: {
-    activityView: 'files',
-    filesCollapsed: true,
-    shellCollapsed: false,
-    rightCollapsed: true,
-    dockOpen: true,
-    boardPaneOpen: false,
-    horizontal: [0, 100, 0, 0],
-    vertical: [50, 50]
   },
   // Robot (#320): the robotics cockpit — files collapsed, CODE ~⅓ on the left,
   // the Board View (breadboard) in the middle, and the dock on the right (which
@@ -288,18 +276,15 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       if (parsed && parsed.version === 1 && parsed.workspaces) {
         const state = defaultLayoutState()
-        // Modes review: the old `lab` and `data` workspaces merged into
-        // `datalab`. Map a stale active id, and seed datalab's geometry from
-        // the old data (preferred — it's the closer layout) else lab entry, so
-        // an existing user's sizes carry over.
+        // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
+        // never surfaced and is retired in Soft Shell, #581) coerces to `code`
+        // via the WORKSPACE_IDS membership check below, so a stale session can't
+        // land on a workspace with no switcher segment.
         const saved = parsed.workspaces as Record<string, unknown>
-        const activeRaw = ['lab', 'data'].includes(parsed.active as string)
-          ? 'datalab'
-          : (parsed.active as WorkspaceId)
+        const activeRaw = parsed.active as WorkspaceId
         state.active = WORKSPACE_IDS.includes(activeRaw) ? activeRaw : 'code'
         for (const id of WORKSPACE_IDS) {
-          const legacy = id === 'datalab' ? (saved.datalab ?? saved.data ?? saved.lab) : saved[id]
-          state.workspaces[id] = sanitiseWorkspace(legacy, WORKSPACE_PRESETS[id])
+          state.workspaces[id] = sanitiseWorkspace(saved[id], WORKSPACE_PRESETS[id])
         }
         return state
       }
