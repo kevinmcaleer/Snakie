@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Workspaces are now Code · Electronics · Build (#575, epic #573 Soft Shell).**
+  The top-toolbar switcher surfaces three workspaces: **Electronics** promotes the
+  Board View to a first-class segment (wire components beside your code), and
+  **Build** is the former Robot workspace (renamed so it won't collide with the
+  coming electronics simulator). The switcher takes the Soft Shell look — a soft
+  parchment track with a gold-gradient active segment in Plus Jakarta Sans. Data
+  Lab stays hidden for now; its fate is decided in the epic's close-out.
+
 ## [0.34.0] - 2026-07-21
 
 ### Added

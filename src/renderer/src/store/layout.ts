@@ -45,11 +45,14 @@ export const WORKSPACE_IDS = ['code', 'board', 'datalab', 'robot'] as const
 export type WorkspaceId = (typeof WORKSPACE_IDS)[number]
 
 /** Display labels + a one-line description for the switcher tooltips. */
+// Soft Shell (#575, epic #573) renamed the switcher's three workspaces to
+// Code / Electronics / Build. "Electronics" surfaces the Board View; "Build"
+// (was "Robot") won't collide with the upcoming electronics simulator.
 export const WORKSPACE_INFO: Record<WorkspaceId, { label: string; hint: string }> = {
   code: { label: 'Code', hint: 'Editor-first: files, editor and console' },
-  board: { label: 'Board', hint: 'Focused Board View beside your code' },
+  board: { label: 'Electronics', hint: 'Wire components to your board — the Board View beside your code' },
   datalab: { label: 'Data Lab', hint: 'Instrument bench + a tall console/plotter' },
-  robot: { label: 'Robot', hint: 'Code · board · a 3D robot over the instruments' }
+  robot: { label: 'Build', hint: 'Assemble the robot in 3D — joints, IK chains and poses' }
 }
 
 /** One workspace's remembered geometry. */

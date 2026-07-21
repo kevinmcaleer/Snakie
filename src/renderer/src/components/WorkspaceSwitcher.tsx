@@ -10,11 +10,13 @@ import './WorkspaceSwitcher.css'
  * console scrollback, instruments) is lost. The ↺ button restores the active
  * workspace to its factory preset — the always-available "Reset layout" escape hatch.
  *
- * The Board + Data Lab workspaces are hidden from the switcher (the Board View is
- * still reachable via its pop-out window and the Robot workspace); a follow-up issue
- * tracks removing the underlying views. Reads the layout store directly.
+ * Soft Shell (#575, epic #573) surfaces three: **Code · Electronics · Build**
+ * (Electronics = the Board View; Build = the former Robot). Data Lab stays hidden
+ * for now — its fate is the epic's close-out (#581). Reads the layout store directly.
  */
-const VISIBLE_WORKSPACES = WORKSPACE_IDS.filter((id) => id === 'code' || id === 'robot')
+const VISIBLE_WORKSPACES = WORKSPACE_IDS.filter(
+  (id) => id === 'code' || id === 'board' || id === 'robot'
+)
 
 export function WorkspaceSwitcher(): JSX.Element {
   const layout = useWorkspaceLayout()
