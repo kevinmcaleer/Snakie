@@ -6,6 +6,29 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **One board across every view (epic #573 Soft Shell).** The microcontroller
+  selected in the mini-board (Code workspace) and the Board View (Electronics) now
+  stay in sync — `robot.yml`'s `board` is the shared source of truth: the mini
+  board reads and writes it (for the open project), the Board View adopts a pick
+  made anywhere and keeps the localStorage fallback in step. Picking a board in
+  either place updates both.
+- **Mini-viewer pop-outs switch workspaces (epic #573).** The mini-board's pop-out
+  now opens the **Electronics** workspace and the mini-3-D's opens **Build** —
+  in-app, instead of the standalone Board View window.
+- **Chat toggle in the console header (epic #573).** The AI chat pane (Code
+  workspace, desktop) gets a **Chat** button in the console header — the opener
+  that went missing when the global toolbar toggles were retired (#592).
+
+### Fixed
+- **No more demo-arm flash (epic #573).** Switching into the 3-D view no longer
+  briefly shows the bundled demo arm before the project's model loads — it shows a
+  short loading state, then the real model (demo arm only when there's no project
+  model).
+- **Build toolbar stays put (epic #573).** Hiding the URDF hierarchy no longer
+  hides the build toolbar (add primitive/joint, measure, undo/redo) — its tools
+  act on the viewport, not the tree.
+
 ### Changed
 - **Focused workspace layouts — Code · Electronics · Build (epic #573 Soft
   Shell).** Each workspace now shows only what it's for, matching the design

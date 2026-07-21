@@ -5186,7 +5186,10 @@ export function RobotView({
             )}
           </div>
         )}
-        {showPanel && buildOpen && (
+        {/* The build toolbar stays available even when the hierarchy panel is
+            hidden (#…) — its tools (add primitive/joint, measure, undo/redo) act on
+            the viewport, not the tree. */}
+        {showPanel && (
           <RobotToolbar
             tool={buildTool}
             onSetTool={onSetTool}

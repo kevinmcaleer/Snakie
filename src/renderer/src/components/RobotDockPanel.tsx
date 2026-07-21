@@ -19,11 +19,22 @@ import './RobotDockPanel.css'
  */
 export function RobotDockPanel({
   embedded = false,
-  full = false
-}: { embedded?: boolean; full?: boolean } = {}): JSX.Element {
+  full = false,
+  onPopOut
+}: {
+  embedded?: boolean
+  full?: boolean
+  /** When set (MiniViewer 3-D mode), the pop-out button switches to the Build
+   *  workspace instead of opening the URDF full-screen in focus mode. */
+  onPopOut?: () => void
+}): JSX.Element {
   const { currentFolder, openFile, openBuffer, openFolderPath } = useWorkspace()
   const { setFocus } = useWorkspaceLayout()
-  const [urdf, setUrdf] = useState<string>(demoArm)
+  // `null` = not resolved yet. Starting undetermined (rather than the demo arm)
+  // means a project that HAS a linked model never flashes the bundled demo arm
+  // first — we show a brief loading state, then the real model (#…). The demo arm
+  // is only used once the async resolve confirms there's no project model.
+  const [urdf, setUrdf] = useState<string | null>(null)
   // The URDF's folder, so RobotView resolves the robot's meshes (#319). Empty
   // for the bundled demo arm (all primitives — no meshes to resolve).
   const [base, setBase] = useState<string>('')
@@ -87,7 +98,7 @@ export function RobotDockPanel({
   // the URDF fills the editor, restored when you switch modes or reopen a panel.
   const popOut = (): void => {
     if (urdfPath) void openFile('local', urdfPath)
-    else openBuffer('demo-arm.urdf', urdf)
+    else openBuffer('demo-arm.urdf', urdf ?? demoArm)
     setFocus(true)
   }
 
@@ -235,9 +246,35 @@ export function RobotDockPanel({
       {/* `full` (Build workspace): the URDF/pose editor fills the whole main area
           — the non-compact RobotView (joint sidebar, poses, stability) and no dock
           action row. Otherwise the compact mini viewer for the MiniViewer card. */}
-      <RobotView urdfContent={urdf} basePath={base} compact={!full} />
-      {/* Embedded in the MiniViewer (#595) or full-screen in Build: the card's own
-          expand ⤢ / the full pose tool is the single control, so hide this row. */}
+      {urdf === null ? (
+        <div className="robotdock__loading">Loading 3D…</div>
+      ) : (
+        <RobotView urdfContent={urdf} basePath={base} compact={!full} />
+      )}
+      {/* Embedded in the MiniViewer (#595) 3-D mode: a single pop-out button that
+          switches to the Build workspace (mirrors the mini-board → Electronics). */}
+      {embedded && onPopOut && (
+        <button
+          type="button"
+          className="robotdock__popout"
+          title="Open the Build workspace"
+          aria-label="Open the Build workspace"
+          onClick={onPopOut}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path
+              d="M14 4h6v6M20 4l-8 8M10 6H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
+      {/* Full-screen in Build: the full pose tool is the single control, so hide
+          this row. */}
       {!embedded && !full && <div className="robotdock__actions">
         <button
           type="button"

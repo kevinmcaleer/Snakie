@@ -2366,6 +2366,41 @@ body {
   position: absolute;
   inset: 0;
 }
+/* Mini 3-D pop-out (#…) — top-right button that switches to the Build workspace,
+   mirroring the mini-board's Electronics pop-out. */
+.robotdock__popout {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--txt3, var(--text-muted));
+  background: var(--card, rgba(20, 21, 24, 0.7));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robotdock__popout:hover {
+  color: var(--head, var(--text));
+  border-color: var(--gold, var(--accent));
+}
+/* Brief loading state shown while the project URDF resolves — replaces the old
+   demo-arm flash when a project has a linked model (#…). */
+.robotdock__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted, var(--txt3));
+}
 .robotdock__actions {
   position: absolute;
   top: 0.35rem;

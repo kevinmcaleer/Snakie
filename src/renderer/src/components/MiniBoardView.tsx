@@ -20,6 +20,7 @@ import {
 import { PartBody, padPinNumber, partBodyBox } from './part-body'
 import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
+import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { isVirtualPort } from '../../../shared/virtual-device'
@@ -166,7 +167,17 @@ const MAX_MINI_SCROLL_H = 640
  * board. Self-contained (no BoardGraph import) so it doesn't pull the board-window
  * subsystem into the main-window bundle.
  */
-export function MiniBoardView({ source, isPython }: { source: string; isPython: boolean }): JSX.Element {
+export function MiniBoardView({
+  source,
+  isPython,
+  onPopOut
+}: {
+  source: string
+  isPython: boolean
+  /** When set, the pop-out button switches to the Electronics workspace instead of
+   *  opening the standalone Board View window (used inside the MiniViewer). */
+  onPopOut?: () => void
+}): JSX.Element {
   const consoleStore = useConsole()
   // Connected to the built-in simulator rather than real hardware (#135)? Surface
   // it here so the board's pins/values are clearly understood as simulated.
@@ -175,6 +186,10 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
   // Boards from the installed parts libraries (microcontroller parts), built-ins
   // as a fallback — the same source the full Board Viewer uses (#52).
   const boards = useBoards()
+  // The open project folder — so this view reads/writes the SAME board authority
+  // (`robot.yml`'s `board`) that the full Board View uses (#…), keeping the mini
+  // board, the Board View and the Code workspace all on one board.
+  const { currentFolder } = useWorkspace()
   const [boardId, setBoardId] = useState<string>(() => {
     try {
       return window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_BOARD_ID
@@ -182,21 +197,60 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
       return DEFAULT_BOARD_ID
     }
   })
+  // Live refs so the once-registered listeners below read the latest values.
+  const boardIdRef = useRef(boardId)
+  boardIdRef.current = boardId
+  // Whether the project's robot.yml pins a board — the authoritative choice. When
+  // set, a REPL-detected board must NOT override it (the authored board wins).
+  const robotBoardRef = useRef<string | null>(null)
 
-  // Adopt a board inferred from REPL text, persisting it so the full Board Viewer
-  // picks it up too. Guarded to KNOWN boards + only when it actually changes.
+  // Adopt a board inferred from REPL text, and PROPAGATE it (localStorage +
+  // cross-view broadcast) so the Board View follows too. Guarded to KNOWN boards,
+  // only on a real change, and NEVER over an authored `robot.yml` board.
   const adopt = useRef<(text: string) => void>(() => {})
   adopt.current = (text: string): void => {
+    if (robotBoardRef.current) return // authored board wins over REPL detection
     const id = boardIdFromReplText(text, boards)
-    if (id && id !== boardId && boards.some((b) => b.id === id)) {
+    if (id && id !== boardIdRef.current && boards.some((b) => b.id === id)) {
       setBoardId(id)
       try {
         window.localStorage.setItem(STORAGE_KEY, id)
       } catch {
         // ignore storage failures
       }
+      window.api.board.selectBoard?.(id)
     }
   }
+
+  // Adopt the project's authored board (robot.yml `board`) — the shared source of
+  // truth — on mount and whenever robot.yml changes in any window. Keeps the mini
+  // board in step with the Board View without waiting for a broadcast.
+  useEffect(() => {
+    let live = true
+    const adoptFromRobot = async (): Promise<void> => {
+      try {
+        const def = await window.api.robot.load(currentFolder ?? undefined)
+        const b = typeof def.board === 'string' && def.board ? def.board : null
+        robotBoardRef.current = b
+        if (live && b && b !== boardIdRef.current && boards.some((x) => x.id === b)) {
+          setBoardId(b)
+          try {
+            window.localStorage.setItem(STORAGE_KEY, b)
+          } catch {
+            // ignore storage failures
+          }
+        }
+      } catch {
+        // no/unreadable robot.yml — leave the localStorage/broadcast choice as-is
+      }
+    }
+    void adoptFromRobot()
+    const off = window.api.robot.onChanged(() => void adoptFromRobot())
+    return () => {
+      live = false
+      off()
+    }
+  }, [currentFolder, boards])
 
   // Follow the full Board Viewer: when the user picks a different board there, it
   // broadcasts the id (via main) so this mini view switches to the same board.
@@ -232,7 +286,9 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
   const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
 
   // User picked a microcontroller from the header dropdown: adopt it, persist it,
-  // and broadcast (via main) so the full Board Viewer + other consumers follow.
+  // broadcast (via main) so the full Board Viewer + other consumers follow, AND —
+  // when a project is open — write it into robot.yml (the shared authority) so the
+  // pick sticks for the wiring and can't be reverted by the robot.board adoption.
   const selectBoard = (id: string): void => {
     setBoardId(id)
     try {
@@ -241,6 +297,17 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
       // ignore storage failures
     }
     window.api.board.selectBoard?.(id)
+    if (currentFolder) {
+      robotBoardRef.current = id
+      void (async () => {
+        try {
+          const def = await window.api.robot.load(currentFolder)
+          if (def.board !== id) await window.api.robot.save(currentFolder, { ...def, board: id })
+        } catch {
+          // best-effort — the broadcast/localStorage still keep the views in sync
+        }
+      })()
+    }
   }
 
   // The installed libraries, so we can resolve the board's SOURCE part and draw it
@@ -414,9 +481,9 @@ export function MiniBoardView({ source, isPython }: { source: string; isPython: 
         <button
           type="button"
           className="mini-board__open"
-          title="Open the full Board Viewer"
-          aria-label="Open the full Board Viewer"
-          onClick={() => void window.api.board.open()}
+          title={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
+          aria-label={onPopOut ? 'Open the Electronics workspace' : 'Open the full Board Viewer'}
+          onClick={() => (onPopOut ? onPopOut() : void window.api.board.open())}
         >
           <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path

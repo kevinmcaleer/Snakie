@@ -42,31 +42,19 @@ export function MiniViewer({ source, isPython }: { source: string; isPython: boo
             3D
           </button>
         </div>
-        <button
-          type="button"
-          className="miniviewer__expand"
-          title={mode === 'board' ? 'Open the Electronics workspace' : 'Open the Build workspace'}
-          aria-label={mode === 'board' ? 'Expand to the Electronics workspace' : 'Expand to the Build workspace'}
-          onClick={() => switchWorkspace(mode === 'board' ? 'board' : 'robot')}
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-            <path
-              d="M6 3H3v10h10v-3M9.5 2.5H13.5V6.5M13 3 8 8"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
       </div>
       <div className="miniviewer__body">
+        {/* Each mini viewer's own pop-out button switches to the matching full
+            workspace (Board → Electronics, 3D → Build) — no standalone window. */}
         {mode === 'board' ? (
-          <MiniBoardView source={source} isPython={isPython} />
+          <MiniBoardView
+            source={source}
+            isPython={isPython}
+            onPopOut={() => switchWorkspace('board')}
+          />
         ) : (
           <Suspense fallback={<div className="miniviewer__loading">Loading 3D…</div>}>
-            <RobotDockPanel embedded />
+            <RobotDockPanel embedded onPopOut={() => switchWorkspace('robot')} />
           </Suspense>
         )}
       </div>

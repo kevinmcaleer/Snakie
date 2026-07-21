@@ -1137,6 +1137,7 @@ export function AppShell(): JSX.Element {
                 >
                   <ShellPanel
                     chatOpen={!rightCollapsed}
+                    onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
                     onCollapse={() => {
                       if (!exitFocus()) toggle(shellRef)
                     }}

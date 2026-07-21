@@ -18,6 +18,9 @@ type ShellView = 'console' | 'problems'
 interface ShellPanelProps {
   /** Whether the right-hand chat panel is open (controls the "Send to chat" button). */
   chatOpen?: boolean
+  /** Toggle the AI chat panel open/closed. When provided (desktop), the console
+   *  header shows a Chat button — the single opener for the chat pane (#…). */
+  onToggleChat?: () => void
   /** Collapse this panel from its own header (Soft Shell per-panel control, #592). */
   onCollapse?: () => void
 }
@@ -38,7 +41,7 @@ interface ShellPanelProps {
  * Both bodies (Terminal, Problems) stay mounted; the inactive one is hidden via
  * CSS so console scrollback survives toggling.
  */
-export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): JSX.Element {
+export function ShellPanel({ chatOpen = false, onToggleChat, onCollapse }: ShellPanelProps): JSX.Element {
   const status = useDeviceStatus()
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
@@ -133,6 +136,23 @@ export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): J
                   <ChatIcon size={13} />
                 </span>
                 <span>Send to chat</span>
+              </button>
+            )}
+            {/* Chat toggle (#…) — the single opener for the AI chat pane after the
+                global toolbar toggles were retired (#592). Console view only. */}
+            {view === 'console' && onToggleChat && (
+              <button
+                type="button"
+                className={`btn btn--ghost btn--sm${chatOpen ? ' is-active' : ''}`}
+                onClick={onToggleChat}
+                title={chatOpen ? 'Hide the AI chat panel' : 'Show the AI chat panel'}
+                aria-label={chatOpen ? 'Hide chat' : 'Show chat'}
+                aria-pressed={chatOpen}
+              >
+                <span className="btn__glyph" aria-hidden="true">
+                  <ChatIcon size={13} />
+                </span>
+                <span>Chat</span>
               </button>
             )}
             {view === 'console' && (
