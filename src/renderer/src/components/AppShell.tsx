@@ -281,8 +281,7 @@ export function AppShell(): JSX.Element {
   // workspace's geometry when it becomes active (nothing remounts — the editor,
   // xterm scrollback and instruments survive every switch).
   const layout = useWorkspaceLayout()
-  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen, filesCollapsed } =
-    layout.workspace
+  const { shellCollapsed, rightCollapsed, activityView, filesCollapsed } = layout.workspace
   // Build (#…): the centre column hosts the full-screen URDF/3-D editor instead of
   // the code editor + console — no code, no board view.
   const robotMain = layout.active === 'robot'
@@ -306,10 +305,6 @@ export function AppShell(): JSX.Element {
   // Transient editor focus (Robot pop-out): hide the board, instruments + console
   // around the URDF without touching the workspace (#320 follow-up).
   const focus = layout.focus
-  // Build (robot) is the full-screen URDF editor ONLY — it structurally never
-  // shows the board pane, whatever a persisted `boardPaneOpen` says (belt-and-
-  // braces over the v2 layout migration).
-  const boardPaneVisible = boardPaneOpen && !focus && !robotMain
 
   const filesRef = useRef<ImperativePanelHandle>(null)
   const centreRef = useRef<ImperativePanelHandle>(null)
@@ -363,7 +358,10 @@ export function AppShell(): JSX.Element {
     // The horizontal group's setLayout array must match the RENDERED panels: the
     // board slot elides when the pane is closed (or in Build), and the chat slot
     // doesn't exist on web (#528) — a stray extra size makes RRP throw.
-    const boardOn = ws.boardPaneOpen && !focus && !rMain
+    // The board pane no longer lives in the panel group (Electronics renders it in
+    // the solo overlay), so the group is always [files, centre, chat] — board off.
+    void rMain
+    const boardOn = false
     hGroupRef.current?.setLayout(appliedHorizontal(ws.horizontal, boardOn, !IS_WEB))
     vGroupRef.current?.setLayout([...ws.vertical])
     // Then sync each collapsible panel's collapsed state (belt-and-braces over the
@@ -1058,37 +1056,11 @@ export function AppShell(): JSX.Element {
             otherwise there's no sidebar. Keeping these out of the resizable panel
             group makes the code panels structurally absent (no persisted flag can
             resurface them) and avoids RRP collapse races. */}
-        {soloWorkspace ? (
-          <div className="shell__solo">
-            {soloLessonOpen && (
-              <aside className="shell__solo-lesson" aria-label="Lesson">
-                <LeftView view={activityView} helpTarget={helpTarget} />
-              </aside>
-            )}
-            {robotMain ? (
-              <div className="shell__robot-main">
-                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
-                  <RobotDockPanel full />
-                </Suspense>
-              </div>
-            ) : (
-              <div className="shell__solo-board">
-                <Suspense
-                  fallback={
-                    <div className="board-pane__loading" role="status">
-                      Loading Board View…
-                    </div>
-                  }
-                >
-                  <BoardPane />
-                </Suspense>
-              </div>
-            )}
-          </div>
-        ) : (
-        /* Sizes are recorded into the ACTIVE workspace via onLayout and applied
-            imperatively on workspace switch (setLayout) — the library's own
-            autoSaveId persistence is replaced by the layout store (#259). */
+        <div className="shell__workarea">
+        {/* Code's panel group is ALWAYS mounted (#…) so the console terminal + editor
+            keep their state across a workspace switch, instead of remounting blank.
+            The solo overlay (below) covers it for Electronics/Build. Sizes are
+            recorded per-workspace via onLayout and applied imperatively on switch. */}
         <PanelGroup
           direction="horizontal"
           ref={hGroupRef}
@@ -1186,28 +1158,8 @@ export function AppShell(): JSX.Element {
             </div>
           </Panel>
 
-          {/* The embedded Board View (the Board workspace's tri-split, #259):
-              code on the left, the board here, the instrument dock at the far
-              right — code, wiring and instruments visible together. */}
-          {boardPaneVisible && (
-            <>
-              <PanelResizeHandle className="resize-handle resize-handle--vertical" />
-              {/* defaultSize = the ACTIVE workspace's board share (not the mount-time
-                  snapshot): the pane mounts when switching into Board, and the deferred
-                  setLayout can lose a race — this keeps the fallback correct too. */}
-              <Panel order={3} minSize={25} defaultSize={layout.workspace.horizontal[2] || 40}>
-                <Suspense
-                  fallback={
-                    <div className="board-pane__loading" role="status">
-                      Loading Board View…
-                    </div>
-                  }
-                >
-                  <BoardPane />
-                </Suspense>
-              </Panel>
-            </>
-          )}
+          {/* (The Board View is NOT a panel here anymore — Electronics renders it in
+              the solo overlay below, so the group stays a stable Code layout.) */}
 
           {/* The Chat right-pane is desktop-only — hidden on the web build. */}
           {!IS_WEB && (
@@ -1229,7 +1181,37 @@ export function AppShell(): JSX.Element {
             </>
           )}
         </PanelGroup>
+        {/* Electronics + Build overlay the Code panel group (which stays mounted
+            underneath). A tutorial/help lesson carried in shows in a left panel. */}
+        {soloWorkspace && (
+          <div className="shell__solo shell__solo--overlay">
+            {soloLessonOpen && (
+              <aside className="shell__solo-lesson" aria-label="Lesson">
+                <LeftView view={activityView} helpTarget={helpTarget} />
+              </aside>
+            )}
+            {robotMain ? (
+              <div className="shell__robot-main">
+                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
+                  <RobotDockPanel full />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="shell__solo-board">
+                <Suspense
+                  fallback={
+                    <div className="board-pane__loading" role="status">
+                      Loading Board View…
+                    </div>
+                  }
+                >
+                  <BoardPane />
+                </Suspense>
+              </div>
+            )}
+          </div>
         )}
+        </div>
 
         {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region
             to the right of the chat. Kept out of the group so toggling it (or the
