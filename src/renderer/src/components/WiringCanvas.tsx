@@ -630,8 +630,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     })
   // The floating project BROWSER's open state — lifted here so the fit math can
   // inset content to the right of it (so the leftmost item isn't hidden under it).
-  // Focused chrome (Board mode) starts it collapsed so the canvas gets the room.
-  const [browserOpen, setBrowserOpen] = useState(!focusedChrome)
+  // Defaults OPEN + PINNED, consistent with the Build panel's hierarchy (#…).
+  const [browserOpen, setBrowserOpen] = useState(true)
+  const [browserPinned, setBrowserPinnedState] = useState<boolean>(() =>
+    focusedChrome ? loadPin(window.localStorage, PIN_KEYS.browser, true) : true
+  )
+  const setBrowserPinned = (v: boolean): void => {
+    setBrowserPinnedState(v)
+    savePin(window.localStorage, PIN_KEYS.browser, v)
+  }
   const [, force] = useState(0) // re-render during a wire/pan/box drag (ref-driven)
   // What the pointer is over (breadboard view): a part (`pin: null`) reveals all
   // its pins' capability chips; a specific pin emphasises its own.
@@ -1974,6 +1981,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           open={browserOpen}
           onOpenChange={setBrowserOpen}
           onFocus={fitToKey}
+          pinned={focusedChrome ? browserPinned : undefined}
+          onPin={focusedChrome ? setBrowserPinned : undefined}
         />
 
         {!boardDef && robot.parts.length === 0 && (
@@ -2030,7 +2039,9 @@ function BoardBrowser({
   onRemovePart,
   open,
   onOpenChange,
-  onFocus
+  onFocus,
+  pinned,
+  onPin
 }: {
   name: string
   description: string
@@ -2043,16 +2054,26 @@ function BoardBrowser({
   onOpenChange: (open: boolean) => void
   /** Zoom the canvas to fit a subject: `'board'` or a placed part's instance id. */
   onFocus: (key: string) => void
+  /** Pin model (focused Board mode only) — matches the Build hierarchy: an
+   *  unpinned panel auto-hides on blur; `undefined` disables pinning entirely. */
+  pinned?: boolean
+  onPin?: (v: boolean) => void
 }): JSX.Element {
   const [compOpen, setCompOpen] = useState(true)
+  const asideRef = useRef<HTMLElement | null>(null)
   const count = parts.length + (board ? 1 : 0)
+  const pinnable = onPin !== undefined
 
   if (!open) {
     return (
       <button
         type="button"
         className="wc__browser-tab"
-        onClick={() => onOpenChange(true)}
+        onClick={() => {
+          onOpenChange(true)
+          // Focus so an unpinned panel can auto-hide on blur (like the Build panel).
+          if (pinnable) requestAnimationFrame(() => asideRef.current?.focus())
+        }}
         title="Show project browser"
         aria-label="Show project browser"
       >
@@ -2062,8 +2083,38 @@ function BoardBrowser({
   }
 
   return (
-    <aside className="wc__browser" aria-label="Project browser">
+    <aside
+      className={`wc__browser${pinnable && !pinned ? ' wc__browser--overlay' : ''}`}
+      aria-label="Project browser"
+      ref={asideRef}
+      tabIndex={pinnable ? -1 : undefined}
+      onBlur={(e) => {
+        if (pinnable && shouldAutoHide(!!pinned, asideRef.current, e.relatedTarget)) {
+          onOpenChange(false)
+        }
+      }}
+    >
       <div className="wc__browser-head">
+        {pinnable && (
+          <button
+            type="button"
+            className={`wc__pin${pinned ? ' is-pinned' : ''}`}
+            onClick={() => onPin?.(!pinned)}
+            aria-pressed={pinned}
+            title={pinned ? 'Unpin — hide the browser when it loses focus' : 'Pin the browser open'}
+            aria-label={pinned ? 'Unpin the browser' : 'Pin the browser open'}
+          >
+            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true">
+              <path
+                d="M9.5 1.5l5 5-2.2.6-2.5 2.5.4 3.1-1.8-.3-2.6-2.6L2 13.6 1.4 13l3.8-3.8L2.6 6.6l-.3-1.8 3.1.4L7.9 2.7z"
+                fill={pinned ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         <span className="wc__browser-title">BROWSER</span>
         <button
           type="button"

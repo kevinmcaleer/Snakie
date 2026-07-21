@@ -2293,68 +2293,68 @@ body {
 /* The instrument dock is a flex sibling (fixed width), so it cards via margin —
    flexbox subtracts the margin, no overflow. */
 .shell__main .shell__dock {
-  margin: 7px;
+  margin: 5px;
   border-radius: 14px;
   border: 1px solid var(--shellbd, var(--border));
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.1),
     0 6px 16px rgba(0, 0, 0, 0.06);
   background: var(--panel, var(--bg-elevated));
+  /* Clip the inner viewers/instruments to the rounded card. */
+  overflow: hidden;
 }
-/* The resize handles read as a thin line of STITCHES running down the parchment
-   gap (a warm --stitch thread, not a grey bar). The handle stays a slim grabbable
-   track; a centred dashed pseudo-element draws the stitch. */
-.shell__panels > .resize-handle,
-.shell__vgroup > .resize-handle {
+/* The resize handles read as a HAIRLINE dashed line of STITCHES down the parchment
+   gap (a warm --stitch thread — a darker parchment tone, NOT grey). The handle is
+   a transparent grabbable track; a centred dashed pseudo-element draws the stitch.
+   Theme-scoped so it out-specifies the skins' grey `.resize-handle` fill. */
+:root[data-theme] .shell__panels > .resize-handle,
+:root[data-theme] .shell__vgroup > .resize-handle {
   background: transparent;
   position: relative;
 }
-.shell__panels > .resize-handle {
+:root[data-theme] .shell__panels > .resize-handle {
   width: 5px;
 }
-.shell__vgroup > .resize-handle {
+:root[data-theme] .shell__vgroup > .resize-handle {
   height: 5px;
 }
-.shell__panels > .resize-handle::before,
-.shell__vgroup > .resize-handle::before {
+:root[data-theme] .shell__panels > .resize-handle::before,
+:root[data-theme] .shell__vgroup > .resize-handle::before {
   content: '';
   position: absolute;
-  background: var(--stitch, var(--shellbd));
-  opacity: 0.55;
+  opacity: 0.75;
   transition: opacity 0.12s ease;
 }
-/* Vertical divider → vertical dashed thread. */
-.shell__panels > .resize-handle::before {
+/* Vertical divider → vertical dashed thread (1px hairline). */
+:root[data-theme] .shell__panels > .resize-handle::before {
   top: 10px;
   bottom: 10px;
   left: 50%;
-  width: 2px;
+  width: 1px;
   transform: translateX(-50%);
   background-image: repeating-linear-gradient(
     to bottom,
-    var(--stitch, var(--shellbd)) 0 5px,
-    transparent 5px 9px
+    var(--stitch, var(--shellbd)) 0 4px,
+    transparent 4px 8px
   );
-  background-color: transparent;
 }
-/* Horizontal divider → horizontal dashed thread. */
-.shell__vgroup > .resize-handle::before {
+/* Horizontal divider → horizontal dashed thread (1px hairline). */
+:root[data-theme] .shell__vgroup > .resize-handle::before {
   left: 10px;
   right: 10px;
   top: 50%;
-  height: 2px;
+  height: 1px;
   transform: translateY(-50%);
   background-image: repeating-linear-gradient(
     to right,
-    var(--stitch, var(--shellbd)) 0 5px,
-    transparent 5px 9px
+    var(--stitch, var(--shellbd)) 0 4px,
+    transparent 4px 8px
   );
-  background-color: transparent;
 }
-.shell__panels > .resize-handle:hover::before,
-.shell__panels > .resize-handle[data-resize-handle-active]::before,
-.shell__vgroup > .resize-handle:hover::before,
-.shell__vgroup > .resize-handle[data-resize-handle-active]::before {
+:root[data-theme] .shell__panels > .resize-handle:hover::before,
+:root[data-theme] .shell__panels > .resize-handle[data-resize-handle-active]::before,
+:root[data-theme] .shell__vgroup > .resize-handle:hover::before,
+:root[data-theme] .shell__vgroup > .resize-handle[data-resize-handle-active]::before {
   opacity: 1;
 }
 
@@ -2409,7 +2409,8 @@ body {
   flex: 0 0 auto;
   width: 436px;
   max-width: 50vw;
-  height: 100%;
+  /* No explicit height — flex stretch sizes it to the row MINUS its margin, so the
+     card never overlaps the status bar (#…). */
   min-height: 0;
   display: flex;
 }

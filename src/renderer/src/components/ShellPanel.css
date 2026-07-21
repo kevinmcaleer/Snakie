@@ -60,10 +60,15 @@
 }
 
 /* ── Console green treatment (#…) ────────────────────────────────────────────
-   The console reads as the app's green REPL rather than a grey card: a subtle
-   green frame with a DARKER green header (the terminal body stays dark). */
-.region.region--shell {
+   The console reads as the app's green REPL: a light pastel-green card frame with
+   a DARKER green header (the terminal body itself stays near-black). */
+.region.region--shell,
+:root[data-theme='skeuomorph'] .region.region--shell {
   border-color: var(--green, #26a269);
+  background: #e7f2e4;
+}
+:root[data-theme='dark'] .region.region--shell {
+  background: #18231a;
 }
 .region--shell > .panel-header,
 :root[data-theme='skeuomorph'] .region.region--shell > .panel-header,
@@ -72,7 +77,6 @@
   border-bottom: 1px solid rgba(0, 0, 0, 0.3);
   color: #eafff2;
 }
-/* Keep the header controls legible on the green header. */
 .region--shell > .panel-header .panel-collapse-btn,
 .region--shell > .panel-header .shell-actions {
   color: #eafff2;
@@ -81,6 +85,60 @@
   color: #fff;
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Console / Problems — a segmented control in the workspace-switcher style, but
+   green: a soft translucent track with a light-green active pill. */
+.region--shell .shell-actions .shell-toggle,
+:root[data-theme='skeuomorph'] .region--shell .shell-actions .shell-toggle {
+  border-color: rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.16);
+  padding: 2px;
+  gap: 2px;
+}
+.region--shell .shell-actions .shell-toggle__btn,
+:root[data-theme='skeuomorph'] .region--shell .shell-actions .shell-toggle__btn {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #dff2e6;
+  font-weight: 650;
+}
+.region--shell .shell-actions .shell-toggle__btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.region--shell .shell-actions .shell-toggle__btn--active,
+:root[data-theme='skeuomorph'] .region--shell .shell-actions .shell-toggle__btn--active {
+  background: linear-gradient(180deg, #eafff1, #c9e8d4);
+  color: #1f5b3c;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+}
+
+/* Clear + the connect/disconnect + device dropdown — subtle green chips on the
+   green header (no alarming red). */
+.region--shell .shell-actions__clear,
+.region--shell .conn-control .btn--ghost,
+.region--shell .conn-control__select {
+  color: #eafff2;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+.region--shell .shell-actions__clear:hover,
+.region--shell .conn-control .btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.region--shell .conn-control .btn--danger,
+.region--shell .conn-control .btn--primary {
+  background: linear-gradient(180deg, #3fa06a, #2c7d4e);
+  border-color: rgba(0, 0, 0, 0.22);
+  color: #fff;
+}
+.region--shell .conn-control .btn--danger:hover,
+.region--shell .conn-control .btn--primary:hover {
+  background: linear-gradient(180deg, #46ac73, #327f52);
 }
 
 /* Warm the segmented toggle to parchment on the skeuomorph light theme, so it

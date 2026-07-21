@@ -71,10 +71,13 @@
 .shell__dock {
   position: relative;
 }
+/* Collapse chevrons sit at the FAR EDGE of where the panel collapses to (#…):
+   the Files panel's is top-right; the instrument dock's is top-left (it collapses
+   off to the right). */
 .shell__dock-collapse {
   position: absolute;
   top: 6px;
-  right: 6px;
+  left: 6px;
   z-index: 4;
   display: inline-flex;
   align-items: center;
