@@ -248,7 +248,7 @@
   --pillinset: rgba(255, 255, 255, 0.6);
 }
 
-/* Chrome speaks sans (Helvetica) in this skin; editor/console/trees stay mono. */
+/* Chrome speaks the Soft Shell UI font (Plus Jakarta Sans, #576); editor/console/trees stay mono. */
 :root[data-theme='skeuomorph'] .toolbar,
 :root[data-theme='skeuomorph'] .btn,
 :root[data-theme='skeuomorph'] .panel-header,
@@ -259,7 +259,7 @@
 :root[data-theme='skeuomorph'] .editor-tab,
 :root[data-theme='skeuomorph'] .localtree__title,
 :root[data-theme='skeuomorph'] .devicetree__title {
-  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 /* Metal backdrop shows through any seams between panels. */
@@ -974,7 +974,7 @@
  * dark-paper / phosphor palettes in their own components.
  * ========================================================================= */
 
-/* Chrome speaks sans (Helvetica) in this skin too; editor/console/trees mono. */
+/* Chrome speaks the Soft Shell UI font (Plus Jakarta Sans, #576); editor/console/trees mono. */
 :root[data-theme='dark'] .toolbar,
 :root[data-theme='dark'] .btn,
 :root[data-theme='dark'] .panel-header,
@@ -985,7 +985,7 @@
 :root[data-theme='dark'] .editor-tab,
 :root[data-theme='dark'] .localtree__title,
 :root[data-theme='dark'] .devicetree__title {
-  font-family: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 /* Metal backdrop shows through any seams between panels. */

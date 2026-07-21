@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Chrome now speaks the Soft Shell UI font (#576, epic #573).** The toolbar,
+  left icon rail, status bar, panel headers and tabs use **Plus Jakarta Sans**
+  (`--font-ui`) in both themes, replacing the old Helvetica chrome font — pairing
+  with IBM Plex Mono in the editor/console (#574). The rail (Files/Packages/Inspect
+  + Report/Learn/Help/Settings, dark with a gold active tile) and status bar
+  already matched the Soft Shell layout.
 - **Workspaces are now Code · Electronics · Build (#575, epic #573 Soft Shell).**
   The top-toolbar switcher surfaces three workspaces: **Electronics** promotes the
   Board View to a first-class segment (wire components beside your code), and
