@@ -2248,9 +2248,23 @@ body {
   display: flex;
 }
 
-/* Robot mode (#320): the mini 3-D Robot panel sits ABOVE the instrument dock. */
-.shell__main .shell__dock--robot {
+/* Robot mode (#320): the mini 3-D Robot panel sits ABOVE the instrument dock.
+   Mini viewer (#595): the Code/Electronics dock stacks the same way, with the
+   MiniViewer card in the top slot. */
+.shell__main .shell__dock--robot,
+.shell__main .shell__dock--mini {
   flex-direction: column;
+}
+/* Mini viewer slot (#595): mirrors the robot 3-D slot's sizing. */
+.shell__miniviewer {
+  flex: 0 0 42%;
+  min-height: 160px;
+  position: relative;
+  border-bottom: var(--border-w) solid var(--border);
+  overflow: hidden;
+}
+.shell__dock--mini .instr-dock {
+  min-height: 0;
 }
 .shell__robot3d {
   flex: 0 0 42%;

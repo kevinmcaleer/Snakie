@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Dock mini viewer with Board/3D toggle (#595, epic #573 Soft Shell).** The
+  Code and Electronics workspaces now get a MiniViewer card at the top of the
+  instrument dock: a gold-active **Board / 3D** segmented toggle over the app's
+  real mini-board and mini-3-D renders, plus an expand ⤢ that jumps to the
+  matching full workspace (Board → Electronics, 3D → Build). The choice persists
+  across sessions. The Build workspace keeps its full 3-D cockpit unchanged.
 - **Part-level ground-contact authoring (#569, epic #535 §2).** A part definition
   can now carry `contacts` — the foot/wheel points (mm, part frame) where it
   touches the floor — authored once in the Part Editor's Details ▸ Ground contacts
