@@ -94,8 +94,8 @@
 }
 
 .localtree__crumb:hover:not(:disabled) {
-  color: var(--text);
-  background: var(--bg-elevated);
+  color: var(--head, var(--text));
+  background: var(--card, var(--bg-elevated));
 }
 
 /* The last (current) segment is non-interactive but still legible. */

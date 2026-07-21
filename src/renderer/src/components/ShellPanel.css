@@ -8,10 +8,14 @@
  * toggle. (The live Plotter moved to the instrument dock, right of chat.)
  */
 
+/* Soft Shell (#578, epic #573): the Console / Problems segmented toggle reads as
+   a recessed `--panel2` track whose active segment lifts onto a `--card`
+   surface. Fallbacks preserve the look on themes without the Soft Shell palette;
+   the skeuomorph light theme's warmer treatment is scoped below the base rules. */
 .shell-toggle {
   display: inline-flex;
   align-items: stretch;
-  border: 1px solid var(--border);
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
   overflow: hidden;
 }
@@ -19,8 +23,8 @@
 .shell-toggle__btn {
   appearance: none;
   border: none;
-  background: var(--bg-sunken);
-  color: var(--text-muted);
+  background: var(--panel2, var(--bg-sunken));
+  color: var(--txt3, var(--text-muted));
   font-size: 0.8rem;
   padding: 0.2rem 0.6rem;
   cursor: pointer;
@@ -28,17 +32,58 @@
 }
 
 .shell-toggle__btn + .shell-toggle__btn {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--shellbd, var(--border));
 }
 
 .shell-toggle__btn:hover {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--card, var(--bg));
+  color: var(--head, var(--text));
 }
 
 .shell-toggle__btn--active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--card, var(--accent));
+  color: var(--head, var(--accent-contrast));
+  box-shadow: inset 0 0 0 1px var(--shellbd, transparent);
+}
+
+/* --- Soft Shell shell frame ------------------------------------------------
+ * The shell region is a parchment `--panel` card cradling the near-black
+ * console screen (the terminal keeps its own recessed dark-glass treatment).
+ * The base rule carries the dark theme; the higher-specificity skeuomorph rule
+ * supersedes the legacy brushed-metal grey frame defined in index.css. */
+.region--shell {
+  background: var(--panel, var(--bg));
+}
+
+:root[data-theme='skeuomorph'] .region.region--shell {
+  background: var(--panel);
+}
+
+/* Warm the segmented toggle to parchment on the skeuomorph light theme, so it
+   sits on the parchment frame instead of the legacy grey metal (index.css).
+   Scoped under `.shell-actions` to out-specify the legacy rules. */
+:root[data-theme='skeuomorph'] .shell-actions .shell-toggle {
+  border-color: var(--shellbd);
+  box-shadow:
+    inset 0 1px 0 var(--pillinset),
+    0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme='skeuomorph'] .shell-actions .shell-toggle__btn {
+  background: var(--panel2);
+  color: var(--txt3);
+  text-shadow: none;
+}
+
+:root[data-theme='skeuomorph'] .shell-actions .shell-toggle__btn:hover {
+  background: var(--card);
+  color: var(--head);
+}
+
+:root[data-theme='skeuomorph'] .shell-actions .shell-toggle__btn--active {
+  background: var(--card);
+  color: var(--head);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 /* The shell body. A single full-body view fills it (Console or Problems); the
@@ -233,9 +278,9 @@
   width: 1.6rem;
   height: 1.6rem;
   padding: 0;
-  color: var(--text);
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+  color: var(--head, var(--text));
+  background: var(--card, var(--bg-elevated));
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
   cursor: pointer;
   opacity: 0;
@@ -250,7 +295,7 @@
 
 .shell-popout:hover {
   opacity: 1;
-  background: var(--bg);
+  background: var(--panel, var(--bg));
 }
 
 /* Placeholder shown in the docked area while the console is popped out. */
