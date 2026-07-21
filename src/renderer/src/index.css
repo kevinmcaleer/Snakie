@@ -2246,6 +2246,10 @@ body {
  * ------------------------------------------------------------------------ */
 .shell__main {
   display: flex;
+  /* Soft Shell (#…): the workspace area (right of the dark activity bar) is
+     parchment; the panels float on it as rounded cards — see the card block
+     at the end of this file. */
+  background: var(--shell, var(--bg));
   height: 100%;
   min-height: 0;
 }
@@ -2253,6 +2257,64 @@ body {
 .shell__main .shell__panels {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* ── Soft Shell cards (#…) ───────────────────────────────────────────────────
+   The Files panel, editor, console and instrument dock float as rounded cards on
+   the parchment workspace (matching the design handoff). RRP panel slots become
+   positioning contexts; each card is absolutely inset within its slot so the
+   parchment shows through as the gap, and the resize handles are transparent so
+   the gap reads as one continuous parchment margin. */
+.shell__panels > [data-panel-id],
+.shell__vgroup > [data-panel-id] {
+  position: relative;
+}
+.shell__panels > [data-panel-id] > .region,
+.shell__editor-region,
+.region--shell {
+  position: absolute;
+  inset: 7px;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--shellbd, var(--border));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 16px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+/* Left panel + console cards sit on the raised --panel surface. */
+.shell__panels > [data-panel-id] > .region--files,
+.shell__panels > [data-panel-id] > .region:not(.region--right),
+.region--shell {
+  background: var(--panel, var(--bg-elevated));
+}
+/* The instrument dock is a flex sibling (fixed width), so it cards via margin —
+   flexbox subtracts the margin, no overflow. */
+.shell__main .shell__dock {
+  margin: 7px;
+  border-radius: 14px;
+  border: 1px solid var(--shellbd, var(--border));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 16px rgba(0, 0, 0, 0.06);
+  background: var(--panel, var(--bg-elevated));
+}
+/* The resize handles live in the parchment gap — invisible tracks (so the divider
+   reads as pure parchment) but widened to be grabbable, with a faint hover hint. */
+.shell__panels > .resize-handle {
+  background: transparent;
+  width: 8px;
+}
+.shell__vgroup > .resize-handle {
+  background: transparent;
+  height: 8px;
+}
+.shell__panels > .resize-handle:hover,
+.shell__panels > .resize-handle[data-resize-handle-active],
+.shell__vgroup > .resize-handle:hover,
+.shell__vgroup > .resize-handle[data-resize-handle-active] {
+  background: var(--gold, var(--accent));
+  opacity: 0.35;
 }
 
 /* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an

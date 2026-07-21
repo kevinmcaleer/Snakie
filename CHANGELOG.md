@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Soft Shell cards (epic #573).** The Files panel, editor, console and
+  instrument dock now float as rounded cards on the parchment workspace (soft
+  shadow, radius, a parchment gap between them) — matching the design handoff.
 - **One board across every view (epic #573 Soft Shell).** The microcontroller
   selected in the mini-board (Code workspace) and the Board View (Electronics) now
   stay in sync — `robot.yml`'s `board` is the shared source of truth: the mini

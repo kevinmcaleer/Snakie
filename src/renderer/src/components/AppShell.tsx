@@ -1131,7 +1131,7 @@ export function AppShell(): JSX.Element {
                   collapsible
                   collapsedSize={0}
                   defaultSize={initialSizes.current.v[1]}
-                  minSize={12}
+                  minSize={22}
                   onCollapse={() => layout.setCollapsed('shell', true)}
                   onExpand={() => layout.setCollapsed('shell', false)}
                 >
