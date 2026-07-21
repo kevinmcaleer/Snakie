@@ -83,6 +83,50 @@ export function parseVariables(stdout: string): DeviceVariable[] {
   return vars
 }
 
+/**
+ * A compact glyph + colour category per Python built-in type, so the inspector
+ * distinguishes lists, dicts, numbers, strings, etc. at a glance instead of one
+ * uniform icon (#…). Unknown/user types fall back to a neutral object dot.
+ */
+export function typeGlyph(type: string): { glyph: string; kind: string } {
+  switch (type) {
+    case 'list':
+      return { glyph: '[ ]', kind: 'list' }
+    case 'tuple':
+      return { glyph: '( )', kind: 'tuple' }
+    case 'dict':
+      return { glyph: '{ }', kind: 'dict' }
+    case 'set':
+    case 'frozenset':
+      return { glyph: '{·}', kind: 'set' }
+    case 'str':
+      return { glyph: '" "', kind: 'str' }
+    case 'int':
+    case 'float':
+    case 'complex':
+      return { glyph: '#', kind: 'num' }
+    case 'bool':
+      return { glyph: '◑', kind: 'bool' }
+    case 'bytes':
+    case 'bytearray':
+    case 'memoryview':
+      return { glyph: '0x', kind: 'bytes' }
+    case 'NoneType':
+      return { glyph: '∅', kind: 'none' }
+    case 'module':
+      return { glyph: '☰', kind: 'module' }
+    case 'type':
+      return { glyph: '⬡', kind: 'class' }
+    case 'function':
+    case 'method':
+    case 'builtin_function_or_method':
+    case 'generator':
+      return { glyph: 'ƒ', kind: 'func' }
+    default:
+      return { glyph: '•', kind: 'obj' }
+  }
+}
+
 export function VariablesPanel(): JSX.Element {
   const status = useDeviceStatus()
   const connected = status.state === 'connected'
@@ -158,15 +202,21 @@ export function VariablesPanel(): JSX.Element {
       )}
 
       <ul className="vars__list" role="list">
-        {vars.map((v) => (
-          <li key={v.name} className="vars__item">
-            <span className="vars__name">{v.name}</span>
-            <span className="vars__type">{v.type}</span>
-            <span className="vars__value" title={v.value}>
-              {v.value}
-            </span>
-          </li>
-        ))}
+        {vars.map((v) => {
+          const g = typeGlyph(v.type)
+          return (
+            <li key={v.name} className="vars__item">
+              <span className={`vars__icon vars__icon--${g.kind}`} aria-hidden="true">
+                {g.glyph}
+              </span>
+              <span className="vars__name">{v.name}</span>
+              <span className="vars__type">{v.type}</span>
+              <span className="vars__value" title={v.value}>
+                {v.value}
+              </span>
+            </li>
+          )
+        })}
       </ul>
     </div>
   )

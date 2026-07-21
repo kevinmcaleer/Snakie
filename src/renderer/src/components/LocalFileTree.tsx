@@ -500,10 +500,32 @@ export function LocalFileTree(): JSX.Element {
   return (
     <div className="localtree">
       <div className="localtree__header">
-        <span className="localtree__title">
-          <span aria-hidden>{'▣'}</span> Local files
-        </span>
-        <div className="localtree__header-actions">
+        <div className="localtree__header-top">
+          <span className="localtree__title">
+            <span aria-hidden>{'▣'}</span> Local files
+          </span>
+          {/* Collapse the whole Files panel from its own header (#…, #592 pattern),
+              top-right. The shell owns the RRP panel, so we signal it by event. */}
+          <button
+            type="button"
+            className="localtree__collapse"
+            onClick={() => window.dispatchEvent(new CustomEvent('snakie:toggle-files'))}
+            title="Collapse the Files panel"
+            aria-label="Collapse the Files panel"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path
+                d="M10 4L6 8l4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        <div className="localtree__header-actions localtree__header-actions--center">
           <button
             className="btn btn--ghost btn--icon"
             onClick={() => void refresh()}

@@ -230,34 +230,9 @@ export function AppShell(): JSX.Element {
   // Toggle the floating Board View window from the toolbar button: open (and
   // push the current file immediately so it isn't blank) if closed, or close it
   // if it's already open. `onClosed` resets `boardOpened` either way.
-  // Pop-out: opening while Board MODE is active hands the board to the window —
-  // the workspace switch happens HERE, in the same handler as the open, so both
-  // state updates land in one commit (no half-switched state for the re-dock
-  // effect to misread).
-  const toggleBoard = useCallback((): void => {
-    if (boardOpened) {
-      window.api.board.close()
-      return
-    }
-    if (activeWsRef.current === 'board') {
-      poppedFromBoardRef.current = true
-      switchWorkspaceRef.current('code')
-    }
-    setBoardOpened(true)
-    window.api.board
-      .open()
-      .then(() =>
-        window.api.board.update({
-          source: boardSource,
-          fileName: boardFileName,
-          isPython: boardIsPython,
-          theme,
-          breadboardBg,
-          folder: boardFolder
-        })
-      )
-      .catch(() => undefined)
-  }, [boardOpened, boardSource, boardFileName, boardIsPython, theme, breadboardBg, boardFolder])
+  // (The toolbar's pop-out board knob was removed (#…) now that the Board View is
+  // the Electronics workspace; the board window can still open via other paths —
+  // e.g. the web build — so the streaming/close subscriptions below stay.)
 
   // While the window is open, stream the active file / content / theme to it on
   // every change so it stays live.
@@ -306,14 +281,38 @@ export function AppShell(): JSX.Element {
   // workspace's geometry when it becomes active (nothing remounts — the editor,
   // xterm scrollback and instruments survive every switch).
   const layout = useWorkspaceLayout()
-  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen } = layout.workspace
+  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen, filesCollapsed } =
+    layout.workspace
+  // Build (#…): the centre column hosts the full-screen URDF/3-D editor instead of
+  // the code editor + console — no code, no board view.
+  const robotMain = layout.active === 'robot'
+  // The instrument dock (mini-viewer peek + instruments + reopen rail) belongs to
+  // the CODE workspace only. Electronics fills the area with the Board View and
+  // Build with the URDF editor — both are self-contained, so neither shows the
+  // dock or the mini Board/3-D viewer.
+  const dockWorkspace = layout.active === 'code'
+  // Electronics + Build are "solo" workspaces: a single main surface (the Board
+  // View / the URDF 3-D editor) fills the area with NO code editor, console or
+  // instrument dock — a dedicated non-RRP layout, so a persisted flag can never
+  // resurface the code panels. Only Code uses the resizable panel group.
+  const soloWorkspace = robotMain || layout.active === 'board'
+  // A solo workspace hides the sidebar by default. ONLY a lesson (the Learn
+  // tutorials or the Help library) shows there — carried in from another workspace
+  // or opened from the activity bar — so a stale `filesCollapsed:false` for the
+  // plain Files view can't resurface a file tree in Electronics/Build.
+  const isLessonView = activityView === 'learn' || activityView === 'help'
+  const soloLessonOpen = soloWorkspace && isLessonView && !layout.workspace.filesCollapsed
   const dockOpen = layout.workspace.dockOpen
   // Transient editor focus (Robot pop-out): hide the board, instruments + console
   // around the URDF without touching the workspace (#320 follow-up).
   const focus = layout.focus
-  const boardPaneVisible = boardPaneOpen && !focus
+  // Build (robot) is the full-screen URDF editor ONLY — it structurally never
+  // shows the board pane, whatever a persisted `boardPaneOpen` says (belt-and-
+  // braces over the v2 layout migration).
+  const boardPaneVisible = boardPaneOpen && !focus && !robotMain
 
   const filesRef = useRef<ImperativePanelHandle>(null)
+  const centreRef = useRef<ImperativePanelHandle>(null)
   const shellRef = useRef<ImperativePanelHandle>(null)
   const rightRef = useRef<ImperativePanelHandle>(null)
   const hGroupRef = useRef<ImperativePanelGroupHandle>(null)
@@ -354,39 +353,55 @@ export function AppShell(): JSX.Element {
     return false
   }, [layout])
 
+  // Apply a workspace's geometry to the panel groups: setLayout drives the sizes;
+  // the explicit collapse()/expand() calls are belt-and-braces so a collapsible
+  // panel lands collapsed even if the group clamps a 0 size. Reads the LIVE store
+  // each call so re-applies (below) always use current state.
+  const applyWorkspaceGeometry = useCallback((): void => {
+    const ws = layout.workspace
+    const rMain = layout.active === 'robot'
+    // The horizontal group's setLayout array must match the RENDERED panels: the
+    // board slot elides when the pane is closed (or in Build), and the chat slot
+    // doesn't exist on web (#528) — a stray extra size makes RRP throw.
+    const boardOn = ws.boardPaneOpen && !focus && !rMain
+    hGroupRef.current?.setLayout(appliedHorizontal(ws.horizontal, boardOn, !IS_WEB))
+    vGroupRef.current?.setLayout([...ws.vertical])
+    // Then sync each collapsible panel's collapsed state (belt-and-braces over the
+    // sizes, so a panel lands collapsed even if the group clamped a 0 size). Order
+    // matters: sizes first, collapse/expand second — reversing it leaves Electronics'
+    // centre column at a 50/50 split instead of collapsed.
+    const sync = (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
+      const panel = ref.current
+      if (!panel) return
+      if (collapsed) panel.collapse()
+      else panel.expand()
+    }
+    sync(filesRef, ws.filesCollapsed)
+    // Electronics collapses the centre column (code + console) so the Board View
+    // fills the main area; the editor stays mounted behind the 0-width panel.
+    sync(centreRef, ws.centreCollapsed)
+    sync(shellRef, focus || ws.shellCollapsed)
+    sync(rightRef, ws.rightCollapsed)
+  }, [layout.workspace, layout.active, focus])
+  const applyGeomRef = useRef(applyWorkspaceGeometry)
+  applyGeomRef.current = applyWorkspaceGeometry
+
   // Apply the active workspace's geometry whenever it changes (switch / reset).
-  // setLayout drives the sizes; the explicit collapse() calls are belt-and-braces
-  // so a collapsible panel lands collapsed even if the group clamps a 0 size.
+  // Deferred one frame: switching INTO Electronics mounts the board Panel in this
+  // same commit, and a setLayout before the group registers it is ignored (the
+  // "board pane opens tiny" bug). A second pass the next frame re-asserts after the
+  // content settles. (Build uses its own NON-RRP layout, so it isn't affected.)
   useEffect(() => {
     if (layout.applyNonce === 0) return // initial mount already used defaultSize
-    const ws = layout.workspace
-    // Deferred one frame: switching INTO the Board workspace mounts the board
-    // Panel in this same commit, and a setLayout issued before the group has
-    // registered the new panel is ignored (the pane then lands on defaultSize —
-    // the "board pane opens tiny" bug). After rAF the group knows all panels.
-    const raf = requestAnimationFrame(() => {
-      // The horizontal group's setLayout array must match the RENDERED panels:
-      // the board slot elides when the pane is closed (and in focus mode, where
-      // the editor takes its share), and the chat slot doesn't exist on the web
-      // build (#528) — a stray extra size makes react-resizable-panels throw.
-      const boardOn = ws.boardPaneOpen && !focus
-      hGroupRef.current?.setLayout(appliedHorizontal(ws.horizontal, boardOn, !IS_WEB))
-      vGroupRef.current?.setLayout([...ws.vertical])
-      // Sync each collapsible panel BOTH ways to the target workspace, so the RRP
-      // panel state can't drift from the store flag (which would strand the
-      // toggle button / activity icon on the next click). Focus also collapses
-      // the console so only the URDF shows.
-      const sync = (ref: React.RefObject<ImperativePanelHandle>, collapsed: boolean): void => {
-        const panel = ref.current
-        if (!panel) return
-        if (collapsed) panel.collapse()
-        else panel.expand()
-      }
-      sync(filesRef, ws.filesCollapsed)
-      sync(shellRef, focus || ws.shellCollapsed)
-      sync(rightRef, ws.rightCollapsed)
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      applyGeomRef.current()
+      raf2 = requestAnimationFrame(() => applyGeomRef.current())
     })
-    return () => cancelAnimationFrame(raf)
+    return () => {
+      cancelAnimationFrame(raf1)
+      if (raf2) cancelAnimationFrame(raf2)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- applyNonce IS the signal
   }, [layout.applyNonce])
 
@@ -906,6 +921,15 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
+  // The Files panel's own collapse chevron (in the LocalFileTree header, #…) is
+  // deep in the tree, so it signals the shell by event to collapse the RRP files
+  // Panel — leaving the activity-bar Files toggle to reopen it.
+  useEffect(() => {
+    const handler = (): void => toggle(filesRef)
+    window.addEventListener('snakie:toggle-files', handler)
+    return () => window.removeEventListener('snakie:toggle-files', handler)
+  }, [toggle])
+
   // Which view the left sidebar shows, driven by the ActivityBar — remembered
   // per workspace (part of the layout store).
   const setActivityView = layout.setActivityView
@@ -986,11 +1010,7 @@ export function AppShell(): JSX.Element {
           />
         )}
       </div>
-      <Toolbar
-        onOpenBoard={() => {
-          if (!exitFocus()) toggleBoard()
-        }}
-      />
+      <Toolbar />
 
       <div className="shell__body shell__main">
         <ActivityBar
@@ -1000,6 +1020,23 @@ export function AppShell(): JSX.Element {
             // In focus mode, any activity click just restores the Robot layout.
             if (exitFocus()) {
               setActivityView(view)
+              return
+            }
+            // Solo workspaces (Electronics/Build) have no RRP files panel — only a
+            // lesson (Learn/Help) opens a sidebar there, driven by the store flag.
+            if (soloWorkspace) {
+              const lessonView = view === 'learn' || view === 'help'
+              if (!lessonView) {
+                // Files/Packages/etc. have no panel in a solo workspace — remember
+                // the choice but keep the sidebar hidden.
+                setActivityView(view)
+                layout.setCollapsed('files', true)
+              } else if (view === activityView && soloLessonOpen) {
+                layout.setCollapsed('files', true) // toggle the open lesson closed
+              } else {
+                setActivityView(view)
+                layout.setCollapsed('files', false) // open the lesson
+              }
               return
             }
             // Clicking the already-active view toggles the left panel collapse
@@ -1014,9 +1051,44 @@ export function AppShell(): JSX.Element {
             openPanel(filesRef)
           }}
         />
-        {/* Sizes are recorded into the ACTIVE workspace via onLayout and applied
+        {/* Electronics + Build (#…) get a dedicated, NON-RRP layout: a single main
+            surface (the Board View / the URDF 3-D pose editor) fills the whole area
+            — no code editor, console or instrument dock. A tutorial/help lesson
+            carried in from another workspace shows in a left panel beside it;
+            otherwise there's no sidebar. Keeping these out of the resizable panel
+            group makes the code panels structurally absent (no persisted flag can
+            resurface them) and avoids RRP collapse races. */}
+        {soloWorkspace ? (
+          <div className="shell__solo">
+            {soloLessonOpen && (
+              <aside className="shell__solo-lesson" aria-label="Lesson">
+                <LeftView view={activityView} helpTarget={helpTarget} />
+              </aside>
+            )}
+            {robotMain ? (
+              <div className="shell__robot-main">
+                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
+                  <RobotDockPanel full />
+                </Suspense>
+              </div>
+            ) : (
+              <div className="shell__solo-board">
+                <Suspense
+                  fallback={
+                    <div className="board-pane__loading" role="status">
+                      Loading Board View…
+                    </div>
+                  }
+                >
+                  <BoardPane />
+                </Suspense>
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Sizes are recorded into the ACTIVE workspace via onLayout and applied
             imperatively on workspace switch (setLayout) — the library's own
-            autoSaveId persistence is replaced by the layout store (#259). */}
+            autoSaveId persistence is replaced by the layout store (#259). */
         <PanelGroup
           direction="horizontal"
           ref={hGroupRef}
@@ -1029,72 +1101,88 @@ export function AppShell(): JSX.Element {
             collapsible
             collapsedSize={0}
             defaultSize={initialSizes.current.h[0]}
-            minSize={30}
+            minSize={16}
             onCollapse={() => layout.setCollapsed('files', true)}
             onExpand={() => layout.setCollapsed('files', false)}
           >
             <LeftView view={activityView} helpTarget={helpTarget} />
           </Panel>
 
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+          {/* Hide the stitch when Files is collapsed — the panel isn't reopened by
+              dragging this divider (any activity-bar button opens it for a purpose),
+              so a visible resize thread there would be misleading (#…). */}
+          <PanelResizeHandle
+            className={`resize-handle resize-handle--vertical resize-handle--files${filesCollapsed ? ' is-collapsed' : ''}`}
+          />
 
-          <Panel order={2} minSize={30}>
+          <Panel
+            ref={centreRef}
+            order={2}
+            collapsible
+            collapsedSize={0}
+            defaultSize={initialSizes.current.h[1]}
+            minSize={30}
+            onCollapse={() => layout.setCollapsed('centre', true)}
+            onExpand={() => layout.setCollapsed('centre', false)}
+          >
             <div className="shell__center-col">
-            <PanelGroup
-              direction="vertical"
-              ref={vGroupRef}
-              className="shell__vgroup"
-              onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
-            >
-              <Panel order={1} minSize={20}>
-                <div className="shell__editor-region">
-                  <EditorArea />
-                </div>
-              </Panel>
-
-              <PanelResizeHandle className="resize-handle resize-handle--horizontal" />
-
-              <Panel
-                ref={shellRef}
-                order={2}
-                collapsible
-                collapsedSize={0}
-                defaultSize={initialSizes.current.v[1]}
-                minSize={12}
-                onCollapse={() => layout.setCollapsed('shell', true)}
-                onExpand={() => layout.setCollapsed('shell', false)}
+              <PanelGroup
+                direction="vertical"
+                ref={vGroupRef}
+                className="shell__vgroup"
+                onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
               >
-                <ShellPanel
-                  chatOpen={!rightCollapsed}
-                  onCollapse={() => {
-                    if (!exitFocus()) toggle(shellRef)
-                  }}
-                />
-              </Panel>
-            </PanelGroup>
-            {/* Reopen rail (#592): when the console is collapsed to nothing, a
-                slim clickable bar is its own reopen affordance (the global
-                toolbar toggle is gone). */}
-            {shellCollapsed && !focus && (
-              <button
-                type="button"
-                className="shell__reopen shell__reopen--bottom"
-                onClick={() => openPanel(shellRef)}
-                title="Show the console"
-              >
-                <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                  <path
-                    d="M4 6l4 4 4-4"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
+                <Panel order={1} minSize={20}>
+                  <div className="shell__editor-region">
+                    <EditorArea />
+                  </div>
+                </Panel>
+
+                <PanelResizeHandle className="resize-handle resize-handle--horizontal" />
+
+                <Panel
+                  ref={shellRef}
+                  order={2}
+                  collapsible
+                  collapsedSize={0}
+                  defaultSize={initialSizes.current.v[1]}
+                  minSize={22}
+                  onCollapse={() => layout.setCollapsed('shell', true)}
+                  onExpand={() => layout.setCollapsed('shell', false)}
+                >
+                  <ShellPanel
+                    chatOpen={!rightCollapsed}
+                    onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
+                    onCollapse={() => {
+                      if (!exitFocus()) toggle(shellRef)
+                    }}
                   />
-                </svg>
-                <span>Console</span>
-              </button>
-            )}
+                </Panel>
+              </PanelGroup>
+              {/* Reopen rail (#592): when the console is collapsed to nothing, a
+                  slim clickable bar is its own reopen affordance (the global
+                  toolbar toggle is gone). */}
+              {shellCollapsed && !focus && (
+                <button
+                  type="button"
+                  className="shell__reopen shell__reopen--bottom"
+                  onClick={() => openPanel(shellRef)}
+                  title="Show the console"
+                >
+                  {/* Collapsed → UP chevron (the console expands upward). */}
+                  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path
+                      d="M4 10l4-4 4 4"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <span>Console</span>
+                </button>
+              )}
             </div>
           </Panel>
 
@@ -1141,15 +1229,16 @@ export function AppShell(): JSX.Element {
             </>
           )}
         </PanelGroup>
+        )}
 
         {/* The INSTRUMENT DOCK lives OUTSIDE the PanelGroup — a fixed-width region
             to the right of the chat. Kept out of the group so toggling it (or the
             chat) never resizes the other (two collapsible panels in one group
             redistribute each other's freed space). Shown by the toolbar
             Instruments button or an incoming `instruments:open`. */}
-        {instrumentsVisible && (
+        {instrumentsVisible && dockWorkspace && (
           <aside
-            className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ' shell__dock--mini'}`}
+            className="shell__dock shell__dock--mini"
             aria-label="Instrument dock"
           >
             {/* Per-panel collapse (#592) — the dock hides itself; the toolbar
@@ -1172,33 +1261,26 @@ export function AppShell(): JSX.Element {
                 />
               </svg>
             </button>
-            {/* Dock-top slot (#595): the Robot/Build workspace gets the full
-                3-D cockpit; every other workspace (Code, Electronics) gets the
-                MiniViewer card — a Board/3D peek that expands to the matching
-                workspace. Either way there's a top panel, so the dock stacks. */}
-            {layout.active === 'robot' ? (
-              <div className="shell__robot3d">
-                <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
-                  <RobotDockPanel />
-                </Suspense>
-              </div>
-            ) : (
-              <div className="shell__miniviewer">
-                <MiniViewer source={boardSource} isPython={boardIsPython} />
-              </div>
-            )}
+            {/* Dock-top slot (#595): the Code workspace gets the MiniViewer card —
+                a Board/3D peek that expands to the matching workspace. (Electronics
+                and Build are self-contained — the Board View / URDF editor fill the
+                area — so the whole dock is gated to Code above.) */}
+            <div className="shell__miniviewer">
+              <MiniViewer source={boardSource} isPython={boardIsPython} />
+            </div>
             <InstrumentDockRegion
               host={instruments}
               vis={visibility}
               inUse={inUse}
               onToggleVisible={toggleVisible}
-              hideMiniBoard={layout.active !== 'robot' || layout.workspace.boardPaneOpen}
+              hideMiniBoard
             />
           </aside>
         )}
         {/* Reopen rail (#592): when the dock is hidden, a slim clickable rail at
-            the far right is its own reopen affordance. */}
-        {!dockOpen && !focus && (
+            the far right is its own reopen affordance. Code only — Electronics and
+            Build have no instrument dock (the Board View / URDF editor fill the area). */}
+        {!dockOpen && !focus && dockWorkspace && (
           <button
             type="button"
             className="shell__dock-rail"
@@ -1206,6 +1288,25 @@ export function AppShell(): JSX.Element {
             title="Show the instrument dock"
             aria-label="Show the instrument dock"
           >
+            {/* Expand affordance at the top of the collapsed rail (#…) — signals the
+                panel can be opened (it slides back in from the right). */}
+            <svg
+              className="shell__dock-rail-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M10 4L6 8l4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             <span className="shell__dock-rail-label">Instruments</span>
           </button>
         )}

@@ -79,9 +79,6 @@ const SNAKE_LOGO = (
   </svg>
 )
 
-interface ToolbarProps {
-  onOpenBoard: () => void
-}
 
 /**
  * TOP TOOLBAR.
@@ -95,12 +92,13 @@ interface ToolbarProps {
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Also hosts the Board View knob next to Run/Stop and the centred workspace
- * switcher (Code · Electronics · Build). The old global panel-collapse knobs were
- * removed in Soft Shell (#592) — each panel owns its own collapse control now.
- * Settings and the theme picker live on the activity bar + Settings dialog.
+ * Hosts the file actions (New / Open / Save), Run / Stop, and the centred
+ * workspace switcher (Code · Electronics · Build). The Board View lives in the
+ * Electronics workspace now, so the old pop-out board knob is gone (#…); the old
+ * global panel-collapse knobs went in Soft Shell (#592) — each panel owns its own
+ * collapse control. Settings + the theme picker live on the activity bar.
  */
-export function Toolbar({ onOpenBoard }: ToolbarProps): JSX.Element {
+export function Toolbar(): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const { markRun } = useConsole()
@@ -176,6 +174,10 @@ export function Toolbar({ onOpenBoard }: ToolbarProps): JSX.Element {
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Main toolbar">
+      {/* Left cluster: brand + file/run/board controls. Wrapped in a flex side
+          that's balanced by an empty side on the right, so the workspace
+          switcher sits CENTRED at the top of the toolbar (not shoved right). */}
+      <div className="toolbar__side">
       <div className="toolbar__brand">
         {SNAKE_LOGO}
         <span className="toolbar__wordmark">Snakie</span>
@@ -259,42 +261,14 @@ export function Toolbar({ onOpenBoard }: ToolbarProps): JSX.Element {
         </button>
       </div>
 
-      <span className="toolbar__divider" aria-hidden="true" />
-
-      {/* Board View pops out into its own window — an OS BrowserWindow on the
-          desktop, a browser popup on the web (see web/web-board.ts). */}
-      <div className="toolbar__group">
-        <button
-          type="button"
-          className="btn btn--ghost btn--icon btn--knob"
-          onClick={onOpenBoard}
-          title="Board View — pop out into its own window (toggle)"
-          aria-label="Toggle Board View"
-        >
-          {/* dev board: outlined PCB with two rows of header pads + a chip */}
-          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
-            <rect x="4" y="3" width="16" height="18" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-            <rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity="0.35" />
-            <g fill="currentColor">
-              <rect x="5.4" y="5.5" width="1.6" height="1.6" />
-              <rect x="5.4" y="8.5" width="1.6" height="1.6" />
-              <rect x="5.4" y="11.5" width="1.6" height="1.6" />
-              <rect x="5.4" y="14.5" width="1.6" height="1.6" />
-              <rect x="17" y="5.5" width="1.6" height="1.6" />
-              <rect x="17" y="8.5" width="1.6" height="1.6" />
-              <rect x="17" y="11.5" width="1.6" height="1.6" />
-              <rect x="17" y="14.5" width="1.6" height="1.6" />
-            </g>
-          </svg>
-        </button>
       </div>
-
-      <div className="toolbar__spacer" />
 
       {/* Workspace layouts (epic #259): Code · Electronics · Build + reset.
           Per-panel collapse controls live IN each panel's own header now (#592),
-          so the old global Files/Shell/Chat/Instruments toggle knobs are gone. */}
+          so the old global Files/Shell/Chat/Instruments toggle knobs are gone.
+          Centred between two equal-weight sides. */}
       <WorkspaceSwitcher />
+      <div className="toolbar__side toolbar__side--end" aria-hidden="true" />
     </header>
   )
 }

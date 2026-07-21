@@ -5,59 +5,50 @@
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
+  /* Never shrink — the toolbar's flanking sides absorb the slack, so the switcher
+     keeps its size and the toolbar `gap` stays a margin against Run/Reset (#…). */
+  flex: 0 0 auto;
 }
 
-/* Soft Shell (#575): a soft --panel2 track with a gold-gradient active segment. */
+/* Soft Shell (#575): a soft --panel2 track with a gold-gradient active segment.
+   Prominent — this is the app's primary mode switch (#…), so it's larger and
+   heavier than a normal toolbar control. */
 .ws-switcher__seg {
   display: inline-flex;
   border: var(--border-w) solid var(--shellbd, var(--border));
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--panel2, var(--bg-sunken));
-  padding: 2px;
-  gap: 2px;
+  padding: 3px;
+  gap: 3px;
   overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .ws-switcher__btn {
   font-family: var(--font-ui, var(--font-mono));
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 0.86rem;
+  font-weight: 650;
   letter-spacing: 0.01em;
   color: var(--txt3, var(--text-muted));
   background: transparent;
   border: none;
-  border-radius: 8px;
-  padding: 0.3rem 0.7rem;
+  border-radius: 9px;
+  padding: 0.42rem 1.15rem;
   cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
 }
 
 .ws-switcher__btn:hover {
   color: var(--head, var(--text));
+  background: var(--card, rgba(0, 0, 0, 0.04));
 }
 
 .ws-switcher__btn.is-active {
   background: var(--grad-gold, var(--accent));
   color: var(--goldink, var(--accent-contrast));
-  font-weight: 700;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  font-weight: 750;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
 }
-
-/* Reset-to-preset: a small ghost icon button beside the segments. */
-.ws-switcher__reset {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  padding: 0;
-  color: var(--text-muted);
-  background: transparent;
-  border: var(--border-w) solid transparent;
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
-.ws-switcher__reset:hover {
-  color: var(--text);
-  border-color: var(--border);
+.ws-switcher__btn.is-active:hover {
+  color: var(--goldink, var(--accent-contrast));
 }

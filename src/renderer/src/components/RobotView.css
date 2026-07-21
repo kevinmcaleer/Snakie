@@ -166,7 +166,8 @@
 .robotview__minihome {
   position: absolute;
   top: 0.35rem;
-  right: 0.35rem;
+  /* Top-LEFT (#…) — the pop-out button lives top-right; keep them apart. */
+  left: 0.35rem;
   z-index: 2;
   display: inline-flex;
   align-items: center;

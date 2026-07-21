@@ -62,5 +62,6 @@ export function savePin(storage: PinStorage, key: string, value: boolean): void 
 export const PIN_KEYS = {
   library: 'snakie.board.pin.library',
   connections: 'snakie.board.pin.connections',
+  browser: 'snakie.board.pin.browser',
   builder: 'snakie.robot.pin.builder'
 } as const

@@ -159,6 +159,7 @@
   --panel: #21251f;
   --panel2: #171a14;
   --shellbd: #31352b;
+  --stitch: #6f6746;
   --card: #262a21;
   --rail: #2a2e24;
   --editor: #191c15;
@@ -207,6 +208,7 @@
   --panel: #f6f1e6;
   --panel2: #ece5d6;
   --shellbd: #e0d9c8;
+  --stitch: #cbb488;
   --card: #fff;
   --rail: #e3e6df;
   --editor: #f4eede;
@@ -1723,6 +1725,25 @@ body {
   flex: 1;
 }
 
+/* Two equal-weight sides flank the workspace switcher so it sits centred at the
+ * top of the toolbar. The left side carries the brand + file/run controls; the
+ * right side is an empty balance. Both grow equally from a 0 basis, so the
+ * switcher is centred when there's room — but they keep their automatic
+ * min-content floor (NO `min-width: 0`), so the left cluster never shrinks under
+ * Run/Reset: as the window narrows the switcher is pushed right instead of
+ * overlapping, always keeping the toolbar `gap` as a margin. */
+.toolbar__side {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 0;
+}
+
+.toolbar__side--end {
+  /* Empty balance — nothing to render, just claims the mirror-image space. */
+  pointer-events: none;
+}
+
 /* Buttons — big, easy to click, and pressable like 8-bit hardware. */
 .btn {
   display: inline-flex;
@@ -2227,6 +2248,10 @@ body {
  * ------------------------------------------------------------------------ */
 .shell__main {
   display: flex;
+  /* Soft Shell (#…): the workspace area (right of the dark activity bar) is
+     parchment; the panels float on it as rounded cards — see the card block
+     at the end of this file. */
+  background: var(--shell, var(--bg));
   height: 100%;
   min-height: 0;
 }
@@ -2236,6 +2261,151 @@ body {
   min-width: 0;
 }
 
+/* ── Soft Shell cards (#…) ───────────────────────────────────────────────────
+   The Files panel, editor, console and instrument dock float as rounded cards on
+   the parchment workspace (matching the design handoff). RRP panel slots become
+   positioning contexts; each card is absolutely inset within its slot so the
+   parchment shows through as the gap, and the resize handles are transparent so
+   the gap reads as one continuous parchment margin. */
+.shell__panels > [data-panel-id],
+.shell__vgroup > [data-panel-id] {
+  position: relative;
+}
+.shell__panels > [data-panel-id] > .region,
+.shell__editor-region,
+.region--shell {
+  position: absolute;
+  inset: 5px;
+  height: auto;
+  border-radius: 14px;
+  border: 1px solid var(--shellbd, var(--border));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 16px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+/* Left panel + console cards sit on the raised --panel surface. */
+.shell__panels > [data-panel-id] > .region--files,
+.shell__panels > [data-panel-id] > .region:not(.region--right),
+.region--shell {
+  background: var(--panel, var(--bg-elevated));
+}
+/* The instrument dock is a flex sibling (fixed width), so it cards via margin —
+   flexbox subtracts the margin, no overflow. */
+.shell__main .shell__dock {
+  margin: 5px;
+  border-radius: 14px;
+  border: 1px solid var(--shellbd, var(--border));
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.1),
+    0 6px 16px rgba(0, 0, 0, 0.06);
+  background: var(--panel, var(--bg-elevated));
+  /* Clip the inner viewers/instruments to the rounded card. */
+  overflow: hidden;
+}
+/* The resize handles read as a HAIRLINE dashed line of STITCHES down the parchment
+   gap (a warm --stitch thread — a darker parchment tone, NOT grey). The handle is
+   a transparent grabbable track; a centred dashed pseudo-element draws the stitch.
+   Theme-scoped so it out-specifies the skins' grey `.resize-handle` fill. */
+:root[data-theme] .shell__panels > .resize-handle,
+:root[data-theme] .shell__vgroup > .resize-handle {
+  background: transparent;
+  position: relative;
+}
+:root[data-theme] .shell__panels > .resize-handle {
+  width: 5px;
+}
+:root[data-theme] .shell__vgroup > .resize-handle {
+  height: 5px;
+}
+:root[data-theme] .shell__panels > .resize-handle::before,
+:root[data-theme] .shell__vgroup > .resize-handle::before {
+  content: '';
+  position: absolute;
+  opacity: 0.75;
+  transition: opacity 0.12s ease;
+}
+/* Vertical divider → vertical dashed thread (1px hairline). */
+:root[data-theme] .shell__panels > .resize-handle::before {
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--stitch, var(--shellbd)) 0 4px,
+    transparent 4px 8px
+  );
+}
+/* Horizontal divider → horizontal dashed thread (1px hairline). */
+:root[data-theme] .shell__vgroup > .resize-handle::before {
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  height: 1px;
+  transform: translateY(-50%);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--stitch, var(--shellbd)) 0 4px,
+    transparent 4px 8px
+  );
+}
+:root[data-theme] .shell__panels > .resize-handle:hover::before,
+:root[data-theme] .shell__panels > .resize-handle[data-resize-handle-active]::before,
+:root[data-theme] .shell__vgroup > .resize-handle:hover::before,
+:root[data-theme] .shell__vgroup > .resize-handle[data-resize-handle-active]::before {
+  opacity: 1;
+}
+/* Files collapsed → no stitch on its divider (it reopens from the activity bar). */
+:root[data-theme] .shell__panels > .resize-handle--files.is-collapsed::before {
+  display: none;
+}
+
+/* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an
+   optional lesson panel (tutorial/help) on the left. Sits where the panel group
+   would, filling the space between the activity bar and (absent) dock. */
+.shell__main .shell__solo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+}
+.shell__solo-lesson {
+  flex: 0 0 auto;
+  width: 320px;
+  max-width: 42%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: var(--border-w) solid var(--border);
+  overflow: hidden;
+}
+.shell__solo-lesson > .region {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.shell__solo > .shell__robot-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Electronics: the Board View fills the solo area (its library panel is part of
+   BoardPane). */
+.shell__solo > .shell__solo-board {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.shell__solo-board > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* The instrument dock — a fixed-width region to the right of the panel group
    (NOT a resizable panel), so its show/hide is independent of the chat panel.
    It fits a 404px instrument window; capped on narrow windows. */
@@ -2243,7 +2413,8 @@ body {
   flex: 0 0 auto;
   width: 436px;
   max-width: 50vw;
-  height: 100%;
+  /* No explicit height — flex stretch sizes it to the row MINUS its margin, so the
+     card never overlaps the status bar (#…). */
   min-height: 0;
   display: flex;
 }
@@ -2255,10 +2426,12 @@ body {
 .shell__main .shell__dock--mini {
   flex-direction: column;
 }
-/* Mini viewer slot (#595): mirrors the robot 3-D slot's sizing. */
+/* Mini viewer slot (#595): sizes to the MiniViewer's own content (the mini-board
+   island / the fixed-height 3-D box), so the instrument dock below sits FLUSH —
+   no parchment gap between the viewer and the dock. */
 .shell__miniviewer {
-  flex: 0 0 42%;
-  min-height: 160px;
+  flex: 0 0 auto;
+  min-height: 0;
   position: relative;
   border-bottom: var(--border-w) solid var(--border);
   overflow: hidden;
@@ -2286,11 +2459,55 @@ body {
 .shell__dock--robot .instr-dock {
   min-height: 0;
 }
+/* Build (#…): the URDF/3-D pose editor fills the WHOLE centre column (full-screen,
+   no code, no board). The absolutely-positioned `.robotdock` fills this relative
+   box, and `--full` renders the non-compact pose tool inside it. */
+.shell__robot-main {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
 /* The docked mini-viewer fills its slot; a top action row creates a new robot
    or pops the viewer out full-screen (#320 / new-URDF). */
 .robotdock {
   position: absolute;
   inset: 0;
+}
+/* Mini 3-D pop-out (#…) — top-right button that switches to the Build workspace,
+   mirroring the mini-board's Electronics pop-out. */
+.robotdock__popout {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--txt3, var(--text-muted));
+  background: var(--card, rgba(20, 21, 24, 0.7));
+  border: 1px solid var(--shellbd, var(--border));
+  border-radius: 6px;
+  cursor: pointer;
+}
+.robotdock__popout:hover {
+  color: var(--head, var(--text));
+  border-color: var(--gold, var(--accent));
+}
+/* Brief loading state shown while the project URDF resolves — replaces the old
+   demo-arm flash when a project has a linked model (#…). */
+.robotdock__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--text-muted, var(--txt3));
 }
 .robotdock__actions {
   position: absolute;

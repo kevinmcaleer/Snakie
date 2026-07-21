@@ -489,6 +489,42 @@ export function BoardGraph({
     }
   }
 
+  // Follow a board picked in ANOTHER view (the mini board / Code workspace): adopt
+  // it live, keep this window's localStorage fallback in step, and — when wiring is
+  // enabled — persist to robot.yml so the pick sticks. Held in a ref so the
+  // once-registered listener always sees current state without re-subscribing.
+  const onExternalSelectRef = useRef<(id: string) => void>(() => {})
+  onExternalSelectRef.current = (id: string): void => {
+    if (id === boardId || !boards.some((b) => b.id === id)) return
+    setBoardId(id)
+    try {
+      window.localStorage.setItem(STORAGE_KEY, id)
+    } catch {
+      // ignore storage failures
+    }
+    if (wiringEnabled && robot && onChangeRobot && robot.board !== id) {
+      onChangeRobot({ ...robot, board: id })
+    }
+  }
+  useEffect(() => {
+    const off = window.api.board.onSelectBoard((id) => onExternalSelectRef.current(id))
+    return off
+  }, [])
+
+  // Keep the shared localStorage board id in step with this view's EFFECTIVE board
+  // (including one adopted from robot.yml on load), so any consumer that falls back
+  // to localStorage matches. No broadcast here — selectBoard / the handler above do
+  // that; this only syncs the fallback, so it can't echo.
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(STORAGE_KEY) !== boardId) {
+        window.localStorage.setItem(STORAGE_KEY, boardId)
+      }
+    } catch {
+      // ignore storage failures
+    }
+  }, [boardId])
+
   // Re-parse on every source change → live update.
   const conns = useMemo(() => (isPython ? parsePins(source) : []), [source, isPython])
 
