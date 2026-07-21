@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
+import { CollapsiblePanel } from './CollapsiblePanel'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
@@ -486,60 +487,62 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
             const update = updatableById.get(lib.id)
             const isLocal = lib.id === LOCAL_LIBRARY_ID
             return (
-              <div className={`pl__lib${isLocal ? ' pl__lib--mine' : ''}`} key={lib.id}>
-                <div className="pl__lib-head">
-                  <button
-                    type="button"
-                    className="pl__lib-toggle"
-                    onClick={() => setCollapsed((c) => ({ ...c, [lib.id]: !c[lib.id] }))}
-                    aria-expanded={!isCollapsed}
-                  >
-                    <span className="pl__caret">{isCollapsed ? '▸' : '▾'}</span>
-                    <span className="pl__lib-name">{lib.name}</span>
+              // Soft Shell (#579): each library is a CollapsiblePanel — its own
+              // header owns the collapse chevron; the part count is the badge and
+              // the "your library" / update / publish / delete controls are the
+              // header actions (shown when open).
+              <CollapsiblePanel
+                key={lib.id}
+                className={`pl__lib${isLocal ? ' pl__lib--mine' : ''}`}
+                title={lib.name}
+                open={!isCollapsed}
+                onToggle={() => setCollapsed((c) => ({ ...c, [lib.id]: !c[lib.id] }))}
+                badge={lib.parts.length}
+                actions={
+                  <>
                     {isLocal && <span className="pl__badge pl__badge--mine">Your library</span>}
-                    <span className="pl__lib-count">{lib.parts.length}</span>
-                  </button>
-                  {update && (
+                    {update && (
+                      <button
+                        type="button"
+                        className="pl__badge pl__badge--update"
+                        title={`Update available: v${update.installed ?? '?'} → v${update.available}`}
+                        onClick={() => {
+                          const entry = (registry ?? []).find((e) => e.id === lib.id)
+                          if (entry) void install(entry)
+                          else void loadRegistry().then(() => setShowRegistry(true))
+                        }}
+                      >
+                        ⬆ v{update.available}
+                      </button>
+                    )}
+                    {/* DEV-only: publish the Standard library to GitHub (#197). */}
+                    {import.meta.env.DEV && lib.id === STANDARD_LIBRARY_ID && (
+                      <button
+                        type="button"
+                        className="pl__badge pl__badge--publish"
+                        title="Publish the Standard library to GitHub (developer)"
+                        disabled={busyLib === STANDARD_LIBRARY_ID}
+                        onClick={() => void publishStandard()}
+                      >
+                        {busyLib === STANDARD_LIBRARY_ID ? 'Publishing…' : '⇧ Publish'}
+                      </button>
+                    )}
                     <button
                       type="button"
-                      className="pl__badge pl__badge--update"
-                      title={`Update available: v${update.installed ?? '?'} → v${update.available}`}
-                      onClick={() => {
-                        const entry = (registry ?? []).find((e) => e.id === lib.id)
-                        if (entry) void install(entry)
-                        else void loadRegistry().then(() => setShowRegistry(true))
-                      }}
+                      className="pl__icon pl__icon--danger"
+                      title="Delete library"
+                      onClick={() => void deleteLibrary(lib)}
                     >
-                      ⬆ v{update.available}
+                      ✕
                     </button>
-                  )}
-                  {/* DEV-only: publish the Standard library to GitHub (#197). */}
-                  {import.meta.env.DEV && lib.id === STANDARD_LIBRARY_ID && (
-                    <button
-                      type="button"
-                      className="pl__badge pl__badge--publish"
-                      title="Publish the Standard library to GitHub (developer)"
-                      disabled={busyLib === STANDARD_LIBRARY_ID}
-                      onClick={() => void publishStandard()}
-                    >
-                      {busyLib === STANDARD_LIBRARY_ID ? 'Publishing…' : '⇧ Publish'}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="pl__icon pl__icon--danger"
-                    title="Delete library"
-                    onClick={() => void deleteLibrary(lib)}
-                  >
-                    ✕
-                  </button>
-                </div>
-                {!isCollapsed &&
-                  (parts.length === 0 ? (
-                    <p className="pl__muted pl__parts-empty">No parts in this library.</p>
-                  ) : (
-                    // Group the library's parts under category section headers (#193).
-                    groupByCategory(parts).map(({ category, items }) => (
+                  </>
+                }
+              >
+                {parts.length === 0 ? (
+                  <p className="pl__muted pl__parts-empty">No parts in this library.</p>
+                ) : (
+                  // Group the library's parts under category section headers (#193).
+                  groupByCategory(parts).map(({ category, items }) => (
                       <div className="pl__cat" key={category}>
                         <div className="pl__cat-head">
                           <span className="pl__cat-name">{category}</span>
@@ -597,8 +600,8 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
                         </ul>
                       </div>
                     ))
-                  ))}
-              </div>
+                )}
+              </CollapsiblePanel>
             )
           })}
           </div>

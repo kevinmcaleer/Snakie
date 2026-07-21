@@ -15,6 +15,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Code / Electronics / Build workspaces.
 
 ### Changed
+- **Electronics (Board View) workspace restyled to Soft Shell (#579, epic #573).**
+  The board sub-toolbar, blueprint grid, floating Browser panel, zoom + Connections
+  overlays and the parts Library panel now use the Soft Shell tokens (`--panel`/
+  `--card` surfaces, `--blueprint`/`--bpline`/`--bptext` board mat, gold segmented
+  tabs + Help pill, `--pin-*` dots) and the Library's section groups adopt the
+  shared `CollapsiblePanel`. The live board render, wiring, driver auto-detect and
+  parts-library install are unchanged — only the surrounding chrome was restyled.
 - **Chrome now speaks the Soft Shell UI font (#576, epic #573).** The toolbar,
   left icon rail, status bar, panel headers and tabs use **Plus Jakarta Sans**
   (`--font-ui`) in both themes, replacing the old Helvetica chrome font — pairing
