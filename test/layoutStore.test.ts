@@ -145,47 +145,56 @@ describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
 describe('loadLayoutState (corruption-safe, versioned)', () => {
   it('returns factory defaults with no stored state', () => {
     const s = loadLayoutState(storage())
-    expect(s.version).toBe(2)
+    expect(s.version).toBe(3)
     expect(s.active).toBe('code')
   })
 
-  it('migrates a v1 envelope: keeps Code, resets Electronics + Build to the new presets (#…)', () => {
-    // A pre-redesign v1 envelope where the user customised Code AND had the old
-    // Build layout (board pane open, dock open). Code carries over; Build +
-    // Electronics reset to the new full-screen / board-only presets.
+  it('migrates a v1 envelope: resets Electronics + Build + the Code proportions (#…)', () => {
+    // A pre-redesign v1 envelope where the user had the old Build layout (board
+    // pane open, dock open) and a stale Code split. Build + Electronics reset to
+    // the new full-screen / board-only presets; the Code sizes reset to the
+    // corrected proportions (files ~20%, console ~45%); the active view carries.
     const oldRobot = { ...WORKSPACE_PRESETS.robot, boardPaneOpen: true, dockOpen: true, centreCollapsed: false, horizontal: [0, 34, 66, 0] }
     const oldBoard = { ...WORKSPACE_PRESETS.board, centreCollapsed: false, horizontal: [0, 42, 58, 0] }
     const v1 = {
       version: 1,
       active: 'robot',
       workspaces: {
-        code: { ...WORKSPACE_PRESETS.code, horizontal: [22, 78, 0, 0] as [number, number, number, number] },
+        code: { ...WORKSPACE_PRESETS.code, activityView: 'help', horizontal: [30, 70, 0, 0] as [number, number, number, number], vertical: [70, 30] as [number, number] },
         board: oldBoard,
         robot: oldRobot
       }
     }
     const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v1) }))
-    expect(s.version).toBe(2)
+    expect(s.version).toBe(3)
     expect(s.active).toBe('robot')
-    // Code preserved.
-    expect(s.workspaces.code.horizontal).toEqual([22, 78, 0, 0])
+    // Code sizes reset to the corrected preset; the active view carries over.
+    expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
+    expect(s.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
+    expect(s.workspaces.code.activityView).toBe('help')
     // Build + Electronics reset — no board/dock in Build, code hidden in Electronics.
     expect(s.workspaces.robot).toEqual(WORKSPACE_PRESETS.robot)
     expect(s.workspaces.board).toEqual(WORKSPACE_PRESETS.board)
   })
 
-  it('v1 migration: a Code console still on the old 30% default grows to 40%; a custom split is kept', () => {
-    const mk = (vertical: [number, number]) => ({
-      version: 1,
+  it('v2 → v3 migration: the Code files width + console height reset to the corrected preset', () => {
+    // A v2 envelope with the old too-wide files (~30%) / too-short console (~30%).
+    const v2 = {
+      version: 2,
       active: 'code',
-      workspaces: { code: { ...WORKSPACE_PRESETS.code, vertical } }
-    })
-    // On the old default → bumped to the new preset.
-    const bumped = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(mk([70, 30])) }))
-    expect(bumped.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
-    expect(WORKSPACE_PRESETS.code.vertical).toEqual([60, 40])
-    // A customised split is preserved.
-    const kept = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(mk([50, 50])) }))
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code, horizontal: [30, 70, 0, 0], vertical: [70, 30] }
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v2) }))
+    expect(s.version).toBe(3)
+    expect(s.workspaces.code.horizontal).toEqual(WORKSPACE_PRESETS.code.horizontal)
+    expect(s.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
+    expect(WORKSPACE_PRESETS.code.horizontal).toEqual([20, 80, 0, 0])
+    expect(WORKSPACE_PRESETS.code.vertical).toEqual([55, 45])
+    // A v3 envelope is left as-is (no further reset).
+    const v3 = { version: 3, active: 'code', workspaces: { code: { ...WORKSPACE_PRESETS.code, vertical: [50, 50] } } }
+    const kept = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v3) }))
     expect(kept.workspaces.code.vertical).toEqual([50, 50])
   })
 

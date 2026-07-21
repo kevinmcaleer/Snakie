@@ -21,6 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   that went missing when the global toolbar toggles were retired (#592).
 
 ### Fixed
+- **Better Code defaults (epic #573).** The file panel opens at a comfortable
+  ~272px (was clamped ~30% too wide) and the console opens taller (~45%) so a
+  couple of REPL lines are clearly visible — the user recognises the console for
+  what it is. Existing layouts are migrated (envelope v3).
 - **No more demo-arm flash (epic #573).** Switching into the 3-D view no longer
   briefly shows the bundled demo arm before the project's model loads — it shows a
   short loading state, then the real model (demo arm only when there's no project

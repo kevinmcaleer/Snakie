@@ -85,7 +85,7 @@ export interface WorkspaceLayout {
  *  code/board/instrument dock. A stored v1 envelope keeps the user's Code layout
  *  but resets those two workspaces to the new presets ({@link loadLayoutState}). */
 export interface LayoutState {
-  version: 2
+  version: 3
   active: WorkspaceId
   workspaces: Record<WorkspaceId, WorkspaceLayout>
 }
@@ -104,10 +104,11 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
     rightCollapsed: true,
     dockOpen: false,
     boardPaneOpen: false,
-    horizontal: [18, 82, 0, 0],
-    // Console gets a roomy default share so the REPL is usable at a glance (#…) —
-    // 30% was too short to show the prompt + a few lines of output.
-    vertical: [60, 40]
+    // Files ~20% (≈ the design's 272px) — not the old 30% clamp. Console gets a
+    // roomy ~45% so a couple of REPL lines are clearly visible by default, so the
+    // user recognises the console for what it is (#…).
+    horizontal: [20, 80, 0, 0],
+    vertical: [55, 45]
   },
   // Electronics: the Board View fills the whole main area — CODE AND CONSOLE ARE
   // HIDDEN (the centre column collapses to 0, editor still mounted behind it), so
@@ -248,7 +249,7 @@ export function defaultLayoutState(): LayoutState {
       vertical: [...WORKSPACE_PRESETS[id].vertical]
     }
   }
-  return { version: 2, active: 'code', workspaces }
+  return { version: 3, active: 'code', workspaces }
 }
 
 /** Storage surface the loader reads (injectable for tests). */
@@ -296,7 +297,7 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
       const ver = (parsed as { version?: number } | null)?.version
-      if (parsed && (ver === 1 || ver === 2) && parsed.workspaces) {
+      if (parsed && (ver === 1 || ver === 2 || ver === 3) && parsed.workspaces) {
         const state = defaultLayoutState()
         // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
         // never surfaced and is retired in Soft Shell, #581) coerces to `code`
@@ -310,18 +311,19 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
         // the code + board panes; new Build is a full-screen URDF editor). Reset
         // those two to the new presets; the user's Code layout still carries over.
         const resetRedesigned = ver === 1
+        // v2 → v3: the Code proportions were corrected — files were clamped too wide
+        // (~30%) and the console too short. A pre-v3 envelope resets the Code
+        // workspace's sizes to the new preset (files ~20%, console ~45%) so the fix
+        // actually reaches existing users; collapse flags + the active view carry over.
+        const resetCodeSizes = ver === 1 || ver === 2
         for (const id of WORKSPACE_IDS) {
           if (resetRedesigned && (id === 'board' || id === 'robot')) continue // keep preset
           state.workspaces[id] = sanitiseWorkspace(saved[id], WORKSPACE_PRESETS[id])
         }
-        // The Code console's default share grew (30% → 40%) so the REPL is usable
-        // by default. A v1 user still on the exact OLD default gets the new one;
-        // a customised editor/console split is kept as-is.
-        if (resetRedesigned) {
+        if (resetCodeSizes) {
           const c = state.workspaces.code
-          if (c.vertical[0] === 70 && c.vertical[1] === 30) {
-            c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
-          }
+          c.horizontal = [...WORKSPACE_PRESETS.code.horizontal] as [number, number, number, number]
+          c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
         }
         return state
       }
