@@ -320,6 +320,8 @@ export function partToYaml(part: PartDefinition): string {
     // Mass in grams + optional CoM in mm (#554).
     mass_g: part.mass_g,
     com_xyz: part.com_xyz,
+    // Ground-contact points in mm (#569).
+    contacts: part.contacts,
     schematic: part.schematic,
     i2cAddresses: part.i2cAddresses,
     library: part.library,
@@ -542,6 +544,15 @@ export function partFromYaml(text: string): PartDefinition {
     if (v.every((n): n is number => n !== undefined)) {
       assign('com_xyz', [v[0], v[1], v[2]])
     }
+  }
+  // Ground-contact points (#569): a list of finite mm vec3s; drop malformed points.
+  if (Array.isArray(raw.contacts)) {
+    const pts = raw.contacts
+      .filter((p): p is unknown[] => Array.isArray(p) && p.length === 3)
+      .map((p) => p.map(num))
+      .filter((v): v is [number, number, number] => v.every((n) => n !== undefined))
+      .map((v) => [v[0], v[1], v[2]] as [number, number, number])
+    if (pts.length) assign('contacts', pts)
   }
   if (raw.imageLayer && typeof raw.imageLayer === 'object') {
     const il = raw.imageLayer as Record<string, unknown>

@@ -593,4 +593,28 @@ describe('component rotation round-trip', () => {
       expect(partFromYaml('id: m\nname: M\ncom_xyz: [1, x, 3]\n').com_xyz).toBeUndefined()
     })
   })
+
+  describe('ground contacts (#569)', () => {
+    const withContacts = (contacts: PartDefinition['contacts']): PartDefinition =>
+      partFromYaml(partToYaml(normalisePart({ id: 'foot', name: 'Foot', contacts } as PartDefinition)))
+
+    it('round-trips a list of mm contact points', () => {
+      expect(withContacts([[0, 0, 0], [4.5, -2, 1]]).contacts).toEqual([[0, 0, 0], [4.5, -2, 1]])
+    })
+
+    it('omits contacts when absent (no churn on parts without feet)', () => {
+      const yaml = partToYaml(normalisePart({ id: 'm', name: 'M' } as PartDefinition))
+      expect(yaml).not.toContain('contacts')
+    })
+
+    it('drops malformed points, keeps the valid ones', () => {
+      // normalisePart / partFromYaml both filter bad points.
+      const back = partFromYaml('id: f\nname: F\ncontacts:\n  - [0, 0, 0]\n  - [1, 2]\n  - [1, x, 3]\n  - [9, 9, 9]\n')
+      expect(back.contacts).toEqual([[0, 0, 0], [9, 9, 9]])
+    })
+
+    it('drops an all-malformed list to undefined', () => {
+      expect(partFromYaml('id: f\nname: F\ncontacts: [[1, 2], "nope"]\n').contacts).toBeUndefined()
+    })
+  })
 })
