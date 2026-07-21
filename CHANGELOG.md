@@ -15,6 +15,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Code / Electronics / Build workspaces.
 
 ### Changed
+- **Build (Robot) workspace restyled to Soft Shell (#580, epic #573).** The 3-D
+  viewport chrome, overlay toolbar and zoom cluster, the CHAIN / URDF hierarchy
+  tree (now built on the shared `CollapsiblePanel`), the Pose Studio dock
+  (keyframe timeline, mirror/export, stability heat-strip) and the Properties
+  dialog (per-link mass + ground-contact editors) all take the warm parchment +
+  green/gold palette in both skins. Every recent tool is preserved — Bone Mode,
+  Exploded view, IK goal, the Balance / CoM + support-polygon overlay, the measure
+  tool, the stability strip and the mass/contacts editors — and the live three.js
+  scene and overlay behaviour are unchanged.
 - **Chrome now speaks the Soft Shell UI font (#576, epic #573).** The toolbar,
   left icon rail, status bar, panel headers and tabs use **Plus Jakarta Sans**
   (`--font-ui`) in both themes, replacing the old Helvetica chrome font — pairing

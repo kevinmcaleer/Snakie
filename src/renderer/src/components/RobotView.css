@@ -6,8 +6,28 @@
   flex-direction: column; /* [main row] over [timeline dock] */
   height: 100%;
   min-height: 0;
-  background: #191a1d;
+  /* Soft Shell parchment behind the canvas (was a hard #191a1d that flashed dark
+     under the light-grid scene in the skeuomorph skin). */
+  background: var(--shell, #191a1d);
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
+
+  /* SOFT SHELL restyle (#580, epic #573) — the Build (Robot) workspace. Every
+     nested Build panel (build dock, pose studio, timeline, sequencer, properties,
+     toolbar) already reads the SEMANTIC surface/accent tokens below, so remapping
+     them here onto the Soft Shell palette (#574) restyles the whole workspace to
+     warm parchment + green/gold in one place — no per-rule churn, and the live
+     three.js scene + every overlay behaviour stay untouched. Fallbacks keep the
+     legacy brushed-metal look if a Soft Shell token is ever missing. */
+  --bg: var(--shell, #1d201a);
+  --bg-elevated: var(--panel, #2a2c30); /* panel / dock slabs */
+  --bg-sunken: var(--panel2, #202226); /* wells, tracks, inputs */
+  --border: var(--shellbd, #3a3d44);
+  --accent: var(--gold, #d6a23f); /* gold — active / selected / playhead */
+  --accent-ink: var(--goldink, #d6a23f); /* gold-ink — titles / labels on panels */
+  --accent-2: var(--green, #3fae5a); /* green — connected / run / saved */
+  /* Gold #d9a441 is a mid tone: dark ink reads on it in BOTH skins (the legacy
+     skeuomorph white-on-brass would be illegible on the lighter gold). */
+  --accent-contrast: #191a1d;
 }
 
 /* The main row: 3D stage + the pose sidebar beside it. */
@@ -240,6 +260,9 @@
 
 /* Bottom-right zoom cluster — identical to the node-graph viewport control
    (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
+/* Soft Shell glass — a warm parchment cluster in the light skin, dark glass in the
+   dark skin (the legacy hard darks had no skeuomorph override and read black on the
+   light grid). */
 .robotview__zoom {
   position: absolute;
   right: 16px;
@@ -250,11 +273,11 @@
   gap: 4px;
   padding: 5px;
   border-radius: 12px;
-  background: rgba(31, 32, 36, 0.92);
-  border: 1px solid #3a3d44;
+  background: var(--glass, rgba(31, 32, 36, 0.92));
+  border: 1px solid var(--shellbd, #3a3d44);
   box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 8px 22px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.04));
   backdrop-filter: blur(6px);
   user-select: none;
 }
@@ -268,19 +291,19 @@
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 17px;
   line-height: 1;
-  color: #c2c7cf;
-  background: linear-gradient(180deg, #2c2f35, #232529);
-  border: 1px solid #3d414a;
+  color: var(--txt2, #c2c7cf);
+  background: var(--card, linear-gradient(180deg, #2c2f35, #232529));
+  border: 1px solid var(--shellbd, #3d414a);
   border-radius: 8px;
   cursor: pointer;
 }
 .robotview__zbtn:hover {
-  color: #fff;
-  border-color: #5a606b;
-  background: linear-gradient(180deg, #34373e, #292b30);
+  color: var(--head, #fff);
+  border-color: var(--accent, #5a606b);
+  background: var(--panel2, linear-gradient(180deg, #34373e, #292b30));
 }
 .robotview__zbtn:active {
-  background: #202227;
+  background: var(--panel2, #202227);
 }
 .robotview__zbtn--pct {
   min-width: 48px;
@@ -292,7 +315,7 @@
   width: 1px;
   height: 22px;
   margin: 0 2px;
-  background: #3d414a;
+  background: var(--shellbd, #3d414a);
   flex: 0 0 auto;
 }
 

@@ -1,0 +1,35 @@
+/* SOFT SHELL restyle (#580, epic #573) — the Build viewport action row (New robot /
+   Open… / Pop out) that floats top-left over the 3-D stage. The base `.robotdock*`
+   layout lives in the shared index.css; these co-located rules only re-skin the
+   buttons to the Soft Shell palette (gold-gradient "New robot" CTA, parchment card
+   buttons), using selectors specific enough to win over the legacy brass rules in
+   index.css in both skins. */
+
+/* Open… / Pop out — parchment card buttons. */
+.robotdock .robotdock__btn,
+:root[data-theme='skeuomorph'] .robotdock .robotdock__btn {
+  color: var(--head, var(--text, #cdd2d9));
+  background: var(--card, rgba(20, 21, 24, 0.78));
+  border: 1px solid var(--shellbd, var(--border, #3a3d44));
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.robotdock .robotdock__btn:hover,
+:root[data-theme='skeuomorph'] .robotdock .robotdock__btn:hover {
+  color: var(--goldink, var(--accent-ink));
+  border-color: var(--gold, var(--accent));
+}
+
+/* New robot — the gold-gradient CTA when there's no project robot yet. */
+.robotdock .robotdock__btn--cta,
+.robotdock .robotdock__btn--cta:hover,
+:root[data-theme='skeuomorph'] .robotdock .robotdock__btn--cta,
+:root[data-theme='skeuomorph'] .robotdock .robotdock__btn--cta:hover {
+  color: var(--goldink, #191a1d);
+  background: var(--grad-gold, var(--accent, #c8a24a));
+  border: 1px solid var(--gold, var(--accent, #c8a24a));
+  font-weight: 700;
+}
+.robotdock .robotdock__btn--cta:hover,
+:root[data-theme='skeuomorph'] .robotdock .robotdock__btn--cta:hover {
+  filter: brightness(1.05);
+}
