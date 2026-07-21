@@ -4,7 +4,16 @@ import './lib/preloadFallback'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import '@fontsource/jetbrains-mono'
+// Soft Shell fonts (#574, epic #573): IBM Plex Mono is --font-mono (code /
+// console / telemetry), Plus Jakarta Sans is --font-ui (chrome). Bundled locally
+// so the offline-first app never reaches for a network font.
+import '@fontsource/ibm-plex-mono/400.css'
+import '@fontsource/ibm-plex-mono/500.css'
+import '@fontsource/ibm-plex-mono/600.css'
+import '@fontsource/plus-jakarta-sans/400.css'
+import '@fontsource/plus-jakarta-sans/500.css'
+import '@fontsource/plus-jakarta-sans/600.css'
+import '@fontsource/plus-jakarta-sans/700.css'
 // Nunito Sans — the learning system's prose font (see --font-learn). Weights:
 // 400 body, 600/700 emphasis, 800 lesson headings.
 import '@fontsource/nunito-sans/400.css'

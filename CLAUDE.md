@@ -62,8 +62,15 @@ published release.
 
 ## Conventions
 
-- Match surrounding code style; co-locate component CSS and import it; keep the
-  retro NES theme tokens + JetBrains Mono font.
+- Match surrounding code style; co-locate component CSS and import it; theme via
+  the CSS custom-property tokens (both the `skeuomorph`/`dark` skins).
+- **Design direction: "Soft Shell"** (epic #573) — warm skeuomorphic parchment,
+  green primary + amber/gold accent, tactile instrument controls. New/restyled UI
+  should use the Soft Shell tokens (`--panel`/`--shell`/`--card`/`--editor`/`--kw`…,
+  defined in `index.css`; spec in `design_handoff_snakie_soft_shell/`) and the
+  Soft Shell fonts — **`--font-mono` = IBM Plex Mono**, **`--font-ui` = Plus Jakarta
+  Sans** (bundled via @fontsource; the old JetBrains Mono / retro-NES direction is
+  superseded).
 - `window.prompt` does NOT work in Electron's renderer — use the in-app
   `usePrompt()` modal. `window.confirm` is fine.
 - Process management on the dev box: `pkill -f`/`pgrep -f` self-match their own
