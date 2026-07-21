@@ -281,7 +281,8 @@ export function AppShell(): JSX.Element {
   // workspace's geometry when it becomes active (nothing remounts — the editor,
   // xterm scrollback and instruments survive every switch).
   const layout = useWorkspaceLayout()
-  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen } = layout.workspace
+  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen, filesCollapsed } =
+    layout.workspace
   // Build (#…): the centre column hosts the full-screen URDF/3-D editor instead of
   // the code editor + console — no code, no board view.
   const robotMain = layout.active === 'robot'
@@ -1100,14 +1101,19 @@ export function AppShell(): JSX.Element {
             collapsible
             collapsedSize={0}
             defaultSize={initialSizes.current.h[0]}
-            minSize={12}
+            minSize={16}
             onCollapse={() => layout.setCollapsed('files', true)}
             onExpand={() => layout.setCollapsed('files', false)}
           >
             <LeftView view={activityView} helpTarget={helpTarget} />
           </Panel>
 
-          <PanelResizeHandle className="resize-handle resize-handle--vertical" />
+          {/* Hide the stitch when Files is collapsed — the panel isn't reopened by
+              dragging this divider (any activity-bar button opens it for a purpose),
+              so a visible resize thread there would be misleading (#…). */}
+          <PanelResizeHandle
+            className={`resize-handle resize-handle--vertical resize-handle--files${filesCollapsed ? ' is-collapsed' : ''}`}
+          />
 
           <Panel
             ref={centreRef}
@@ -1163,9 +1169,10 @@ export function AppShell(): JSX.Element {
                   onClick={() => openPanel(shellRef)}
                   title="Show the console"
                 >
+                  {/* Collapsed → UP chevron (the console expands upward). */}
                   <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
                     <path
-                      d="M4 6l4 4 4-4"
+                      d="M4 10l4-4 4 4"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="1.8"
@@ -1281,6 +1288,25 @@ export function AppShell(): JSX.Element {
             title="Show the instrument dock"
             aria-label="Show the instrument dock"
           >
+            {/* Expand affordance at the top of the collapsed rail (#…) — signals the
+                panel can be opened (it slides back in from the right). */}
+            <svg
+              className="shell__dock-rail-icon"
+              width="13"
+              height="13"
+              viewBox="0 0 16 16"
+              aria-hidden="true"
+              focusable="false"
+            >
+              <path
+                d="M10 4L6 8l4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
             <span className="shell__dock-rail-label">Instruments</span>
           </button>
         )}

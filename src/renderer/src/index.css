@@ -2357,6 +2357,10 @@ body {
 :root[data-theme] .shell__vgroup > .resize-handle[data-resize-handle-active]::before {
   opacity: 1;
 }
+/* Files collapsed → no stitch on its divider (it reopens from the activity bar). */
+:root[data-theme] .shell__panels > .resize-handle--files.is-collapsed::before {
+  display: none;
+}
 
 /* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an
    optional lesson panel (tutorial/help) on the left. Sits where the panel group

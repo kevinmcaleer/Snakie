@@ -42,6 +42,7 @@
 
 /* The instrument-dock reopen rail — a thin vertical strip at the far right. */
 .shell__dock-rail {
+  position: relative;
   flex: 0 0 auto;
   width: 26px;
   writing-mode: vertical-rl;
@@ -65,6 +66,15 @@
 }
 .shell__dock-rail-label {
   transform: rotate(180deg);
+}
+/* Expand chevron pinned to the top of the collapsed rail (horizontal, not in the
+   rail's vertical writing mode). */
+.shell__dock-rail-icon {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  writing-mode: horizontal-tb;
 }
 
 /* The dock's own collapse button, pinned top-right of the dock aside. */

@@ -325,6 +325,7 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
           c.horizontal = [...WORKSPACE_PRESETS.code.horizontal] as [number, number, number, number]
           c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
         }
+        ensureUsableConsole(state)
         return state
       }
     }
@@ -358,7 +359,19 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
   } catch {
     // any migration hiccup → plain defaults
   }
+  ensureUsableConsole(state)
   return state
+}
+
+/**
+ * Guarantee a usable Code console height on EVERY load: a persisted split whose
+ * console share is too short to show the REPL (any version) is bumped to the
+ * preset, so the console is always recognisable — a hard floor over the runtime
+ * `minSize`, which can't retro-fix an already-stored tiny value (#…).
+ */
+function ensureUsableConsole(state: LayoutState): void {
+  const c = state.workspaces.code
+  if (c.vertical[1] < 30) c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
 }
 
 // ---------------------------------------------------------------------------
