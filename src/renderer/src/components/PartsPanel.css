@@ -11,7 +11,8 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  color: var(--text);
+  color: var(--head, var(--text));
+  font-family: var(--font-ui), sans-serif;
 }
 
 .pl__toolbar {
@@ -21,19 +22,20 @@
 }
 
 .pl__btn {
-  font-family: var(--font-mono);
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--text);
-  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken));
-  border: var(--border-w) solid var(--border);
+  color: var(--head, var(--text));
+  background: var(--card, linear-gradient(180deg, var(--bg-elevated), var(--bg-sunken)));
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
-  padding: 0.28rem 0.55rem;
+  box-shadow: inset 0 1px 0 var(--pillinset, transparent);
+  padding: 0.32rem 0.6rem;
   cursor: pointer;
 }
 
 .pl__btn:hover:not(:disabled) {
-  border-color: var(--text-muted);
+  border-color: var(--txt4, var(--text-muted));
 }
 
 .pl__btn:disabled {
@@ -41,16 +43,16 @@
   cursor: not-allowed;
 }
 
+/* "+ New part" — the Soft Shell gold gradient button, in both skins. */
 .pl__btn--primary {
-  background: var(--accent, #2f6b2a);
-  border-color: var(--accent, #2f6b2a);
-  color: #fff;
+  background: var(--grad-gold, #2f6b2a);
+  border: none;
+  color: var(--goldink, #fff);
+  box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.5));
 }
 
-:root[data-theme='skeuomorph'] .pl__btn--primary {
-  background: radial-gradient(circle at 50% 30%, #fff4b8, #f6d572 40%, #e6ab30 80%, #c4881d);
-  border-color: #9a6b1e;
-  color: #5a3d0e;
+.pl__btn--primary:hover:not(:disabled) {
+  filter: brightness(1.04);
 }
 
 .pl__btn--small {
@@ -72,11 +74,21 @@
   width: 100%;
   font-family: var(--font-mono);
   font-size: 0.74rem;
-  color: #2a2c30;
-  background: var(--paper, #fbf7ec);
-  border: var(--border-w) solid var(--border);
+  color: var(--head, #2a2c30);
+  background: var(--card, var(--paper, #fbf7ec));
+  border: 1px solid var(--shellbd, var(--border));
   border-radius: var(--radius);
-  padding: 0.32rem 0.45rem;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  padding: 0.36rem 0.5rem;
+}
+
+.pl__search-input:focus {
+  outline: none;
+  border-color: var(--green, var(--text-muted));
+}
+
+.pl__search-input::placeholder {
+  color: var(--txt4, var(--text-muted));
 }
 
 .pl__note {
@@ -250,14 +262,14 @@
 }
 
 .pl__badge--update {
-  color: #5a3d0e;
-  background: #e6ab30;
-  border-color: #9a6b1e;
+  color: var(--goldink, #5a3d0e);
+  background: var(--grad-gold, #e6ab30);
+  border-color: transparent;
 }
 
 .pl__badge--mine {
   cursor: default;
-  color: var(--accent-2, #46e06a);
+  color: var(--green, #46e06a);
   border-color: currentColor;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -265,7 +277,7 @@
 
 /* The user's own library gets a subtle accent rail so it reads as "yours". */
 .pl__lib--mine {
-  border-left: 2px solid var(--accent-2, #46e06a);
+  border-left: 2px solid var(--green, #46e06a);
   padding-left: 0.4rem;
   margin-left: -0.2rem;
 }
@@ -339,11 +351,12 @@
 }
 
 .pl__cat-name {
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--text-muted);
+  letter-spacing: 0.1em;
+  color: var(--txt3, var(--text-muted));
 }
 
 .pl__cat-count {
@@ -498,13 +511,8 @@
 }
 
 .pl__seg-btn.is-active {
-  color: #fff;
-  background: var(--accent, #2f6b2a);
-}
-
-:root[data-theme='skeuomorph'] .pl__seg-btn.is-active {
-  background: #e6ab30;
-  color: #5a3d0e;
+  color: var(--goldink, #fff);
+  background: var(--grad-gold, var(--accent, #2f6b2a));
 }
 
 .pl__detail-head {

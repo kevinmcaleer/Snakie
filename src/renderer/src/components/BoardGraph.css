@@ -1,13 +1,17 @@
 /*
  * Board Graph — the node-graph LIVE Board View.
  *
- * One dark node card per parsed connection on the left, each wired by a drooping
- * "noodle" cable (SVG) to a gold castellated GPIO pad on the board's left edge,
- * the green PCB on the right, and a light "pins in use" table below.
+ * One node card per parsed connection on the left, each wired by a drooping
+ * "noodle" cable (SVG) to a colour-coded GPIO pad on the board, the green PCB on
+ * the right, and a "pins in use" table below.
  *
- * Intentionally dark in ALL themes (per the design handoff): every colour here is
- * self-contained (no theme tokens) so it reads identically in light / skeuomorph
- * / dark. Fonts use JetBrains Mono (`--font-mono`) for the labels + code.
+ * SOFT SHELL (#579, epic #573): the surrounding chrome now speaks the Soft Shell
+ * design language — a warm `--panel` sub-toolbar, a `--blueprint` board mat with
+ * `--bpline` grid, gold segmented tabs, and `--card`/`--panel2` surfaces. Every
+ * value is a Soft Shell token with a fallback to the older semantic value, so the
+ * view reads correctly in the light `skeuomorph` skin and the `dark` skin alike.
+ * The LIVE renders (board body, wires, node cards) are untouched — only the
+ * window dressing is restyled.
  */
 
 .boardgraph {
@@ -19,9 +23,9 @@
      with dead space below, instead of the canvas taking the freed height. */
   height: 100%;
   min-height: 0;
-  background: #1a1b1e;
-  color: #e6e8ec;
-  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  background: var(--panel, #1a1b1e);
+  color: var(--head, #e6e8ec);
+  font-family: var(--font-ui), var(--font-mono), 'JetBrains Mono', monospace;
 }
 
 /* As the window root: fill the OS window. */
@@ -30,15 +34,15 @@
   height: 100vh;
 }
 
-/* --- Header bar --- */
+/* --- Header bar (BOARD VIEW sub-toolbar) --- */
 .boardgraph__bar {
   display: flex;
   align-items: center;
   gap: 16px;
   height: 62px;
   padding: 0 22px;
-  background: #1f2024;
-  border-bottom: 1px solid #2c2e33;
+  background: var(--panel, #1f2024);
+  border-bottom: 1px solid var(--shellbd, #2c2e33);
   user-select: none;
   flex: 0 0 auto;
 }
@@ -56,42 +60,46 @@
 .boardgraph__bar--drag .boardgraph__knob,
 .boardgraph__bar--drag .boardgraph__viewtabs,
 .boardgraph__bar--drag .boardgraph__live,
+.boardgraph__bar--drag .boardgraph__help-btn,
 .boardgraph__bar--drag .boardgraph__key {
   -webkit-app-region: no-drag;
   app-region: no-drag;
 }
 
-/* --- View-type tabs (Node graph / Life-like / Schematic), #139/#140 --- */
+/* --- View-type tabs (Node graph / Breadboard / Schematic), #139/#140 ---
+   A `--panel2` segmented track; the ACTIVE segment is the Soft Shell gold pill. */
 .boardgraph__viewtabs {
   display: inline-flex;
   flex: 0 0 auto;
   padding: 2px;
   gap: 2px;
-  background: #161719;
-  border: 1px solid #2c2e33;
+  background: var(--panel2, #161719);
+  border: 1px solid var(--shellbd, #2c2e33);
   border-radius: 9px;
 }
 
 .boardgraph__viewtab {
-  font-family: inherit;
+  font-family: var(--font-ui), inherit;
   font-size: 12px;
   font-weight: 600;
-  color: #9aa0a8;
+  color: var(--txt3, #9aa0a8);
   background: transparent;
   border: none;
   border-radius: 7px;
-  padding: 5px 10px;
+  padding: 5px 12px;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .boardgraph__viewtab:hover {
-  color: #d6dade;
+  color: var(--head, #d6dade);
 }
 
 .boardgraph__viewtab.is-active {
-  color: #fff;
-  background: #2f5f8c;
+  color: var(--goldink, #fff);
+  font-weight: 700;
+  background: var(--grad-gold, #2f5f8c);
+  box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.4));
 }
 
 /* 6-dot drag grip (2 columns × 3 rows). */
@@ -108,14 +116,15 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #7a7f88;
+  background: var(--txt4, #7a7f88);
 }
 
 .boardgraph__title {
-  font-size: 16px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.22em;
-  color: #cfd3da;
+  letter-spacing: 0.16em;
+  color: var(--txt2, #cfd3da);
   /* Shrinkable + truncating so the right-docked actions (esp. the close X) are
      never pushed off the edge and clipped when the window is narrowed (#…). */
   flex: 0 1 auto;
@@ -141,18 +150,19 @@
   height: 32px;
   max-width: 16rem;
   padding: 0 14px;
-  border-radius: 9px;
-  background: #26282d;
-  border: 1px solid #3a3d44;
-  font-family: inherit;
+  border-radius: 10px;
+  background: var(--card, #26282d);
+  border: 1px solid var(--shellbd, #3a3d44);
+  box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.05));
+  font-family: var(--font-ui), inherit;
   font-size: 13px;
-  color: #d3d8de;
+  color: var(--head, #d3d8de);
   white-space: nowrap;
   cursor: pointer;
 }
 
 .boardgraph__picker-btn:hover {
-  border-color: #565b63;
+  border-color: var(--txt4, #565b63);
 }
 
 .boardgraph__picker-name {
@@ -162,7 +172,7 @@
 }
 
 .boardgraph__picker-caret {
-  color: #7a7f88;
+  color: var(--txt4, #7a7f88);
   font-size: 11px;
   line-height: 1;
 }
@@ -187,10 +197,10 @@
   margin: 0;
   padding: 5px;
   list-style: none;
-  background: #1f2024;
-  border: 1px solid #3a3d44;
-  border-radius: 10px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  background: var(--panel, #1f2024);
+  border: 1px solid var(--shellbd, #3a3d44);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
 }
 
 .boardgraph__picker-item {
@@ -200,23 +210,23 @@
   gap: 0.6rem;
   width: 100%;
   padding: 6px 9px;
-  font-family: inherit;
+  font-family: var(--font-ui), inherit;
   font-size: 12.5px;
-  color: #d6dade;
+  color: var(--head, #d6dade);
   background: transparent;
   border: none;
-  border-radius: 7px;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
 }
 
 .boardgraph__picker-item:hover {
-  background: #26282d;
+  background: var(--card, #26282d);
 }
 
 .boardgraph__picker-item.is-active {
-  background: #2f5f8c;
-  color: #fff;
+  background: var(--goldbg, #2f5f8c);
+  color: var(--goldink, #fff);
 }
 
 .boardgraph__picker-item-name {
@@ -224,17 +234,20 @@
 }
 
 .boardgraph__picker-item-mcu {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 10.5px;
-  color: #7a7f88;
+  color: var(--txt4, #7a7f88);
 }
 
 .boardgraph__picker-item.is-active .boardgraph__picker-item-mcu {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--goldink, rgba(255, 255, 255, 0.8));
+  opacity: 0.85;
 }
 
 .boardgraph__chip {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 13px;
-  color: #6a6f78;
+  color: var(--txt4, #6a6f78);
   letter-spacing: 0.05em;
   white-space: nowrap;
   /* Lowest-priority text — collapses first when space is tight. */
@@ -244,7 +257,7 @@
   text-overflow: ellipsis;
 }
 
-/* Right cluster (LIVE + knob + folder + close). NEVER shrinks, so the close X
+/* Right cluster (LIVE / Help + close). NEVER shrinks, so the close X
    stays pinned to the top-right and visible at any window width (#…). */
 .boardgraph__actions {
   margin-left: auto;
@@ -264,29 +277,30 @@
   border: none;
   background: none;
   font: inherit;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
   cursor: pointer;
-  color: #43c46a;
+  color: var(--green, #43c46a);
 }
 
 .boardgraph__led {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #43c46a;
-  box-shadow: 0 0 7px rgba(67, 196, 106, 0.8);
+  background: var(--green, #43c46a);
+  box-shadow: 0 0 7px rgba(38, 162, 105, 0.8);
   animation: boardgraph-pulse 1.6s ease-in-out infinite;
 }
 
-/* OFF: device untouched — dim grey, no pulse. */
+/* OFF: device untouched — dim, no pulse. */
 .boardgraph__live.is-off {
-  color: #6a7079;
+  color: var(--txt4, #6a7079);
 }
 
 .boardgraph__live.is-off .boardgraph__led {
-  background: #3a3f47;
+  background: var(--txt5, #3a3f47);
   box-shadow: none;
   animation: none;
 }
@@ -297,12 +311,12 @@
 
 /* ON but not (yet) connected — amber "waiting", a slow pulse. */
 .boardgraph__live.is-on:not(.is-connected) {
-  color: #d8a23a;
+  color: var(--gold, #d8a23a);
 }
 
 .boardgraph__live.is-on:not(.is-connected) .boardgraph__led {
-  background: #d8a23a;
-  box-shadow: 0 0 7px rgba(216, 162, 58, 0.7);
+  background: var(--gold, #d8a23a);
+  box-shadow: 0 0 7px rgba(217, 164, 65, 0.7);
 }
 
 /* ON + connected — green, pulsing (the default look already covers this). */
@@ -315,6 +329,49 @@
   50% {
     opacity: 0.5;
   }
+}
+
+/* Help pill — a gold Soft Shell chip with a count badge. */
+.boardgraph__help-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font-family: var(--font-ui), inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--goldink, #6b4e17);
+  background: var(--grad-gold, #e6ab30);
+  border: none;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+}
+
+.boardgraph__help-btn:hover {
+  filter: brightness(1.04);
+}
+
+.boardgraph__help-btn.is-active {
+  box-shadow:
+    inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.5)),
+    0 0 0 2px var(--gold, #d9a441);
+}
+
+.boardgraph__help-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--goldink, #6b4e17);
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
 }
 
 /* Gold edit knob → Board Creator. */
@@ -349,16 +406,16 @@
   padding: 0;
   font-size: 15px;
   line-height: 1;
-  background: #26282d;
-  border: 1px solid #3a3d44;
-  border-radius: 9px;
-  color: #aeb4bd;
+  background: var(--card, #26282d);
+  border: 1px solid var(--shellbd, #3a3d44);
+  border-radius: 10px;
+  color: var(--txt2, #aeb4bd);
   cursor: pointer;
 }
 
 .boardgraph__key:hover {
-  border-color: #565b63;
-  color: #d6dade;
+  border-color: var(--txt4, #565b63);
+  color: var(--head, #d6dade);
 }
 
 .boardgraph__key--close:hover {
@@ -386,29 +443,33 @@
   display: flex;
 }
 
+/* --- Library dock (right column) — a warm Soft Shell panel. --- */
 .boardgraph__dock {
   flex: 0 0 300px;
   width: 300px;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  /* Warm parchment — the same `--bg` the local Files tree uses, so the library
-     panel reads as a matching sidebar rather than dark chrome. */
-  background: var(--bg, #1f2024);
-  border-left: 1px solid var(--border, #2c2e33);
+  background: var(--panel, #1f2024);
+  border-left: 1px solid var(--shellbd, #2c2e33);
 }
 
 .boardgraph__dock-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.72rem;
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted, #9aa0a8);
-  border-bottom: 1px solid var(--border, #2c2e33);
+  letter-spacing: 0.12em;
+  color: var(--txt3, #9aa0a8);
+  border-bottom: 1px solid var(--shellbd, #2c2e33);
+}
+
+.boardgraph__dock-head > span {
+  flex: 1 1 auto;
 }
 
 .boardgraph__dock-toggle {
@@ -416,7 +477,7 @@
   height: 22px;
   font-size: 14px;
   line-height: 1;
-  color: var(--text-muted, #9aa0a8);
+  color: var(--txt3, #9aa0a8);
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -424,8 +485,8 @@
 }
 
 .boardgraph__dock-toggle:hover {
-  color: var(--text, #d6dade);
-  border-color: #3a3d44;
+  color: var(--head, #d6dade);
+  border-color: var(--shellbd, #3a3d44);
 }
 
 .boardgraph__dock-body {
@@ -440,24 +501,24 @@
   align-self: stretch;
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  padding: 0.6rem 0.25rem;
-  font-family: var(--font-mono);
+  padding: 0.6rem 0.4rem;
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--text-muted, #9aa0a8);
-  background: var(--bg-elevated, #1f2024);
+  color: var(--txt3, #9aa0a8);
+  background: var(--panel2, #1f2024);
   border: none;
-  border-left: 1px solid #2c2e33;
+  border-left: 1px solid var(--shellbd, #2c2e33);
   cursor: pointer;
 }
 
 .boardgraph__dock-tab:hover {
-  color: var(--text, #d6dade);
+  color: var(--head, #d6dade);
 }
 
-/* --- Canvas (dark mat + faint 28px grid) — the pan/zoom/rotate VIEWPORT.
+/* --- Canvas (blueprint mat + faint grid) — the pan/zoom/rotate VIEWPORT.
    `position: relative` anchors the floating control cluster; `overflow: hidden`
    clips the transformed stage (the transform, not scrollbars, does the panning);
    `touch-action: none` lets pointer-drag panning work on touch/trackpads. --- */
@@ -469,11 +530,11 @@
   min-width: 0;
   overflow: hidden;
   touch-action: none;
-  background-color: #161719;
+  background-color: var(--blueprint, #161719);
   background-image:
-    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-  background-size: 28px 28px;
+    linear-gradient(var(--bpline, rgba(255, 255, 255, 0.035)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--bpline, rgba(255, 255, 255, 0.035)) 1px, transparent 1px);
+  background-size: 26px 26px;
   cursor: grab;
 }
 
@@ -533,17 +594,19 @@
   font-size: 9px;
 }
 
-/* --- Node cards (HTML, absolutely positioned over the SVG) --- */
+/* --- Node cards (HTML, absolutely positioned over the SVG) ---
+   Translucent glass cards that read over the blueprint mat in both skins. */
 .boardgraph__node {
   position: absolute;
   box-sizing: border-box;
   overflow: hidden;
   border-radius: 9px;
-  background: #1e2127;
-  border: 1px solid #2f5f8c;
+  background: var(--glass, #1e2127);
+  border: 1px solid rgba(120, 170, 210, 0.35);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.34),
+    0 4px 12px rgba(0, 0, 0, 0.28),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(4px);
 }
 
 /* Inner flex row — counter-rotated (0°/180°) so the TEXT is never upside-down
@@ -561,6 +624,7 @@
 
 .boardgraph__node-tag {
   flex: 0 0 auto;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 9.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -570,8 +634,9 @@
 }
 
 .boardgraph__node-var {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 12.5px;
-  color: #d6dade;
+  color: var(--bptext, #d6dade);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -582,16 +647,17 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 11px;
   font-weight: 600;
-  color: #6a7079;
+  color: var(--txt4, #6a7079);
   flex: 0 0 auto;
 }
 
 /* Asserted/active live value (#97): output high / input high / pwm non-zero /
    bus active → green text + glowing dot. Rest stays the dim grey above. */
 .boardgraph__node-val.is-asserted {
-  color: #43c46a;
+  color: var(--green, #43c46a);
 }
 
 /* Right-column cards (#148) mirror the left ones: the dot/wire leave the card's
@@ -618,8 +684,8 @@
 }
 
 .boardgraph__node-dot.is-asserted {
-  background: #43c46a;
-  box-shadow: 0 0 7px rgba(67, 196, 106, 0.85);
+  background: var(--green, #43c46a);
+  box-shadow: 0 0 7px rgba(38, 162, 105, 0.85);
 }
 
 /* --- Per-node instrument launcher buttons (#101 scope / #102 meter) ---
@@ -659,8 +725,8 @@
 }
 
 /* --- Viewport control cluster (#99 zoom/fit/100%/export, #96 rotate) ---
-   A compact floating cluster pinned bottom-right of the canvas, noodleplanner
-   mindmap style: small dark metal pill/round keys. */
+   A compact floating cluster pinned bottom-right of the canvas — a translucent
+   Soft Shell glass pill of small keys. */
 .boardgraph__viewport-ctl {
   position: absolute;
   right: 16px;
@@ -671,11 +737,11 @@
   gap: 4px;
   padding: 5px;
   border-radius: 12px;
-  background: rgba(31, 32, 36, 0.92);
-  border: 1px solid #3a3d44;
+  background: var(--glass, rgba(31, 32, 36, 0.92));
+  border: 1px solid var(--shellbd, #3a3d44);
   box-shadow:
-    0 8px 22px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 8px 22px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.04));
   backdrop-filter: blur(6px);
   -webkit-app-region: no-drag;
   app-region: no-drag;
@@ -692,21 +758,21 @@
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 17px;
   line-height: 1;
-  color: #c2c7cf;
-  background: linear-gradient(180deg, #2c2f35, #232529);
-  border: 1px solid #3d414a;
+  color: var(--head, #c2c7cf);
+  background: var(--card, #2c2f35);
+  border: 1px solid var(--shellbd, #3d414a);
   border-radius: 8px;
   cursor: pointer;
 }
 
 .boardgraph__vbtn:hover {
-  color: #fff;
-  border-color: #5a606b;
-  background: linear-gradient(180deg, #34373e, #292b30);
+  color: var(--head, #fff);
+  border-color: var(--txt4, #5a606b);
+  filter: brightness(1.04);
 }
 
 .boardgraph__vbtn:active {
-  background: #202227;
+  filter: brightness(0.94);
 }
 
 /* The 100%↔fit toggle shows a number/percent, so it's a wider pill. */
@@ -721,7 +787,7 @@
   width: 1px;
   height: 22px;
   margin: 0 2px;
-  background: #3d414a;
+  background: var(--shellbd, #3d414a);
   flex: 0 0 auto;
 }
 
@@ -770,45 +836,49 @@
   margin: 0 auto;
   padding: 3rem 2rem;
   text-align: center;
+  font-family: var(--font-ui), sans-serif;
   font-size: 0.85rem;
-  color: #8a8f98;
+  color: var(--bptext, #8a8f98);
+  opacity: 0.85;
   line-height: 1.5;
 }
 
-/* --- "Pins in use" table (light) --- */
+/* --- "Pins in use" table (a warm Soft Shell panel) --- */
 .boardgraph__pins {
   flex: 0 0 auto;
   max-height: 32vh;
   overflow: auto;
-  background: #e9e6df;
-  color: #2a2620;
+  background: var(--panel2, #e9e6df);
+  color: var(--head, #2a2620);
 }
 
 .boardgraph__pins-head {
   display: flex;
   align-items: center;
   padding: 14px 24px 12px;
-  border-bottom: 1px solid #d4cfc3;
+  border-bottom: 1px solid var(--shellbd, #d4cfc3);
 }
 
 .boardgraph__pins-head span:first-child {
+  font-family: var(--font-ui), sans-serif;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.14em;
-  color: #5a5650;
+  color: var(--txt3, #5a5650);
 }
 
 .boardgraph__pins-file {
   margin-left: auto;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 13px;
-  color: #9a948a;
+  color: var(--txt4, #9a948a);
 }
 
 .boardgraph__pins-empty {
   margin: 0;
   padding: 16px 24px;
   font-size: 13px;
-  color: #9a948a;
+  color: var(--txt4, #9a948a);
 }
 
 .boardgraph__pins-list {
@@ -822,12 +892,12 @@
   align-items: center;
   height: 46px;
   padding: 0 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #e4e0d6;
+  background: var(--card, #ffffff);
+  border-bottom: 1px solid var(--shellbd, #e4e0d6);
 }
 
 .boardgraph__pins-row:nth-child(even) {
-  background: #f5f1e8;
+  background: var(--panel, #f5f1e8);
 }
 
 .boardgraph__swatch {
@@ -839,22 +909,25 @@
 }
 
 .boardgraph__pins-type {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 12px;
   font-weight: 700;
-  color: #4a4640;
+  color: var(--txt2, #4a4640);
   margin-left: 14px;
   min-width: 78px;
 }
 
 .boardgraph__pins-num {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 13px;
-  color: #7a756c;
+  color: var(--txt3, #7a756c);
   min-width: 48px;
 }
 
 .boardgraph__pins-src {
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 13.5px;
-  color: #2a2620;
+  color: var(--head, #2a2620);
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -865,11 +938,12 @@
 .boardgraph__pins-inst {
   flex: 0 0 auto;
   margin-left: 8px;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: #4a3a12;
-  background: #e8b34a;
+  color: var(--goldink, #4a3a12);
+  background: var(--gold, #e8b34a);
   border: 1px solid #c79a3a;
   border-radius: 4px;
   padding: 1px 6px;
@@ -880,11 +954,12 @@
 /* Instrument marker on a node-graph card: a tiny "inst" chip after the name. */
 .boardgraph__node-inst {
   flex: 0 0 auto;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
   font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #4a3a12;
-  background: #e8b34a;
+  color: var(--goldink, #4a3a12);
+  background: var(--gold, #e8b34a);
   border-radius: 3px;
   padding: 1px 4px;
   text-transform: uppercase;
@@ -901,8 +976,8 @@
   bottom: 0;
   z-index: 30;
   outline: none;
-  border-left: 1px solid var(--border, #2c2e33);
-  box-shadow: -14px 0 28px -16px rgba(0, 0, 0, 0.55);
+  border-left: 1px solid var(--shellbd, #2c2e33);
+  box-shadow: -14px 0 28px -16px rgba(0, 0, 0, 0.4);
 }
 
 .boardgraph__pin {
@@ -911,20 +986,19 @@
   justify-content: center;
   width: 22px;
   height: 22px;
-  margin-right: 0.35rem;
   padding: 0;
   border: none;
   border-radius: 4px;
   background: transparent;
-  color: var(--text-muted, #8b919b);
+  color: var(--txt3, #8b919b);
   cursor: pointer;
 }
 
 .boardgraph__pin:hover {
   background: rgba(128, 128, 128, 0.18);
-  color: var(--text, #d6dae0);
+  color: var(--head, #d6dae0);
 }
 
 .boardgraph__pin.is-pinned {
-  color: var(--accent, #34ad4f);
+  color: var(--green, #34ad4f);
 }
