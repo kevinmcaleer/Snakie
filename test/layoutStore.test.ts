@@ -27,15 +27,29 @@ describe('workspace presets (epic #259; +Robot mode #320)', () => {
     }
   })
 
-  it("Robot mode: files collapsed, code ~1/3, board middle, dock open (#320)", () => {
+  it('Build mode: URDF/3-D editor full screen — no code, no board, dock closed (#…)', () => {
     const r = WORKSPACE_PRESETS.robot
     expect(r.filesCollapsed).toBe(true)
-    expect(r.boardPaneOpen).toBe(true)
-    expect(r.dockOpen).toBe(true)
-    // code (centre) is roughly a third and the board (slot 2) gets the rest.
-    expect(r.horizontal[1]).toBeGreaterThan(25)
-    expect(r.horizontal[1]).toBeLessThan(45)
-    expect(r.horizontal[2]).toBeGreaterThan(r.horizontal[1])
+    // No board view and no reopened instrument dock — the 3-D IS the main area.
+    expect(r.boardPaneOpen).toBe(false)
+    expect(r.dockOpen).toBe(false)
+    // The centre column (now the full-screen robot editor) fills the width; the
+    // board slot is empty.
+    expect(r.horizontal[1]).toBe(100)
+    expect(r.horizontal[2]).toBe(0)
+    // The centre isn't collapsed (it holds the robot editor); only Electronics
+    // collapses the centre to hand the whole area to the Board View.
+    expect(r.centreCollapsed).toBe(false)
+  })
+
+  it('Electronics mode: code + console hidden, Board View fills the main area (#…)', () => {
+    const b = WORKSPACE_PRESETS.board
+    expect(b.filesCollapsed).toBe(true)
+    expect(b.centreCollapsed).toBe(true)
+    expect(b.boardPaneOpen).toBe(true)
+    // Centre collapsed to 0, board takes the whole width.
+    expect(b.horizontal[1]).toBe(0)
+    expect(b.horizontal[2]).toBe(100)
   })
 
   it('a pre-Robot saved envelope gains the robot preset (migration)', () => {
@@ -131,9 +145,48 @@ describe('horizontal slot mapping — elided board/chat panels (#528)', () => {
 describe('loadLayoutState (corruption-safe, versioned)', () => {
   it('returns factory defaults with no stored state', () => {
     const s = loadLayoutState(storage())
-    expect(s.version).toBe(1)
+    expect(s.version).toBe(2)
     expect(s.active).toBe('code')
-    expect(s.workspaces.datalab).toEqual(WORKSPACE_PRESETS.datalab)
+  })
+
+  it('migrates a v1 envelope: keeps Code, resets Electronics + Build to the new presets (#…)', () => {
+    // A pre-redesign v1 envelope where the user customised Code AND had the old
+    // Build layout (board pane open, dock open). Code carries over; Build +
+    // Electronics reset to the new full-screen / board-only presets.
+    const oldRobot = { ...WORKSPACE_PRESETS.robot, boardPaneOpen: true, dockOpen: true, centreCollapsed: false, horizontal: [0, 34, 66, 0] }
+    const oldBoard = { ...WORKSPACE_PRESETS.board, centreCollapsed: false, horizontal: [0, 42, 58, 0] }
+    const v1 = {
+      version: 1,
+      active: 'robot',
+      workspaces: {
+        code: { ...WORKSPACE_PRESETS.code, horizontal: [22, 78, 0, 0] as [number, number, number, number] },
+        board: oldBoard,
+        robot: oldRobot
+      }
+    }
+    const s = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(v1) }))
+    expect(s.version).toBe(2)
+    expect(s.active).toBe('robot')
+    // Code preserved.
+    expect(s.workspaces.code.horizontal).toEqual([22, 78, 0, 0])
+    // Build + Electronics reset — no board/dock in Build, code hidden in Electronics.
+    expect(s.workspaces.robot).toEqual(WORKSPACE_PRESETS.robot)
+    expect(s.workspaces.board).toEqual(WORKSPACE_PRESETS.board)
+  })
+
+  it('v1 migration: a Code console still on the old 30% default grows to 40%; a custom split is kept', () => {
+    const mk = (vertical: [number, number]) => ({
+      version: 1,
+      active: 'code',
+      workspaces: { code: { ...WORKSPACE_PRESETS.code, vertical } }
+    })
+    // On the old default → bumped to the new preset.
+    const bumped = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(mk([70, 30])) }))
+    expect(bumped.workspaces.code.vertical).toEqual(WORKSPACE_PRESETS.code.vertical)
+    expect(WORKSPACE_PRESETS.code.vertical).toEqual([60, 40])
+    // A customised split is preserved.
+    const kept = loadLayoutState(storage({ [LAYOUT_STORAGE_KEY]: JSON.stringify(mk([50, 50])) }))
+    expect(kept.workspaces.code.vertical).toEqual([50, 50])
   })
 
   it('survives corrupt JSON and wrong shapes', () => {

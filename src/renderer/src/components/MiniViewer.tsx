@@ -22,7 +22,7 @@ export function MiniViewer({ source, isPython }: { source: string; isPython: boo
   const [mode, setMode] = useLocalStorage<'board' | '3d'>('snakie.miniViewer.mode', 'board')
 
   return (
-    <div className="miniviewer">
+    <div className={`miniviewer miniviewer--${mode}`}>
       <div className="miniviewer__head">
         <div className="miniviewer__seg" role="group" aria-label="Mini viewer">
           <button

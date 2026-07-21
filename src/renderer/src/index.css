@@ -1723,6 +1723,25 @@ body {
   flex: 1;
 }
 
+/* Two equal-weight sides flank the workspace switcher so it sits centred at the
+ * top of the toolbar. The left side carries the brand + file/run controls; the
+ * right side is an empty balance. Both grow equally from a 0 basis, so the
+ * switcher is centred when there's room — but they keep their automatic
+ * min-content floor (NO `min-width: 0`), so the left cluster never shrinks under
+ * Run/Reset: as the window narrows the switcher is pushed right instead of
+ * overlapping, always keeping the toolbar `gap` as a margin. */
+.toolbar__side {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1 1 0;
+}
+
+.toolbar__side--end {
+  /* Empty balance — nothing to render, just claims the mirror-image space. */
+  pointer-events: none;
+}
+
 /* Buttons — big, easy to click, and pressable like 8-bit hardware. */
 .btn {
   display: inline-flex;
@@ -2236,6 +2255,50 @@ body {
   min-width: 0;
 }
 
+/* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an
+   optional lesson panel (tutorial/help) on the left. Sits where the panel group
+   would, filling the space between the activity bar and (absent) dock. */
+.shell__main .shell__solo {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  min-height: 0;
+  height: 100%;
+}
+.shell__solo-lesson {
+  flex: 0 0 auto;
+  width: 320px;
+  max-width: 42%;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: var(--border-w) solid var(--border);
+  overflow: hidden;
+}
+.shell__solo-lesson > .region {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.shell__solo > .shell__robot-main {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Electronics: the Board View fills the solo area (its library panel is part of
+   BoardPane). */
+.shell__solo > .shell__solo-board {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+.shell__solo-board > * {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
 /* The instrument dock — a fixed-width region to the right of the panel group
    (NOT a resizable panel), so its show/hide is independent of the chat panel.
    It fits a 404px instrument window; capped on narrow windows. */
@@ -2255,10 +2318,12 @@ body {
 .shell__main .shell__dock--mini {
   flex-direction: column;
 }
-/* Mini viewer slot (#595): mirrors the robot 3-D slot's sizing. */
+/* Mini viewer slot (#595): sizes to the MiniViewer's own content (the mini-board
+   island / the fixed-height 3-D box), so the instrument dock below sits FLUSH —
+   no parchment gap between the viewer and the dock. */
 .shell__miniviewer {
-  flex: 0 0 42%;
-  min-height: 160px;
+  flex: 0 0 auto;
+  min-height: 0;
   position: relative;
   border-bottom: var(--border-w) solid var(--border);
   overflow: hidden;
@@ -2285,6 +2350,15 @@ body {
 /* The instrument dock takes the remaining height + scrolls. */
 .shell__dock--robot .instr-dock {
   min-height: 0;
+}
+/* Build (#…): the URDF/3-D pose editor fills the WHOLE centre column (full-screen,
+   no code, no board). The absolutely-positioned `.robotdock` fills this relative
+   box, and `--full` renders the non-compact pose tool inside it. */
+.shell__robot-main {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 /* The docked mini-viewer fills its slot; a top action row creates a new robot
    or pops the viewer out full-screen (#320 / new-URDF). */

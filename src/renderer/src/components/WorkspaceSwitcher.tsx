@@ -4,16 +4,16 @@ import './WorkspaceSwitcher.css'
 /**
  * WORKSPACE SWITCHER (epic #259, Phase 1) — one-click named layouts.
  *
- * A compact segmented control in the toolbar: **Code · Robot**. Each workspace
- * remembers its own geometry (sidebar view, panel sizes, collapse states,
- * instrument dock); switching restyles the SAME mounted tree so nothing (editor,
- * console scrollback, instruments) is lost. The ↺ button restores the active
- * workspace to its factory preset — the always-available "Reset layout" escape hatch.
+ * A prominent segmented control centred in the toolbar — the app's primary mode
+ * switch. Each workspace remembers its own geometry (sidebar view, panel sizes,
+ * collapse states, instrument dock); switching restyles the SAME mounted tree so
+ * nothing (editor, console scrollback, instruments) is lost.
  *
  * Soft Shell (#575, epic #573) surfaces three: **Code · Electronics · Build**
  * (Electronics = the Board View; Build = the former Robot). Data Lab was retired
  * in the epic's close-out (#581), so all of WORKSPACE_IDS is shown. Reads the
- * layout store directly.
+ * layout store directly. (The reset-layout icon was removed (#…) — resetting is
+ * still available via `layout.resetActive()` if a control is wired up later.)
  */
 const VISIBLE_WORKSPACES = WORKSPACE_IDS
 
@@ -36,24 +36,6 @@ export function WorkspaceSwitcher(): JSX.Element {
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        className="ws-switcher__reset"
-        title={`Reset the ${WORKSPACE_INFO[layout.active].label} layout to its default`}
-        aria-label={`Reset the ${WORKSPACE_INFO[layout.active].label} workspace layout`}
-        onClick={() => layout.resetActive()}
-      >
-        <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">
-          <path
-            d="M13 8a5 5 0 1 1-1.5-3.6M13 2.5V5h-2.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.7"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
     </div>
   )
 }

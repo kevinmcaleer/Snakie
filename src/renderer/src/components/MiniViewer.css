@@ -4,13 +4,16 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  height: 100%;
   background: var(--panel, var(--bg-elevated));
 }
 
 .miniviewer__head {
+  position: relative;
   display: flex;
   align-items: center;
+  /* The Board / 3D toggle is CENTRED in the column; the expand ⤢ floats at the
+     right so it doesn't push the toggle off-centre. */
+  justify-content: center;
   gap: 0.4rem;
   padding: 0.3rem 0.4rem;
   border-bottom: var(--border-w, 1px) solid var(--shellbd, var(--border));
@@ -46,7 +49,10 @@
 }
 
 .miniviewer__expand {
-  margin-left: auto;
+  position: absolute;
+  right: 0.4rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -67,9 +73,19 @@
 
 .miniviewer__body {
   position: relative;
-  flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+}
+/* Board mode: hug the mini-board island (which sizes to its own content /
+   resize handle), so the instrument dock below sits FLUSH — no parchment gap. */
+.miniviewer--board .miniviewer__body {
+  flex: 0 0 auto;
+}
+/* 3-D mode: the RobotDockPanel fills its box absolutely, so it needs an explicit
+   height. Fixed and compact; the dock stays flush beneath it. */
+.miniviewer--3d .miniviewer__body {
+  flex: 0 0 auto;
+  height: 240px;
 }
 
 .miniviewer__loading {

@@ -6,13 +6,35 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Focused workspace layouts — Code · Electronics · Build (epic #573 Soft
+  Shell).** Each workspace now shows only what it's for, matching the design
+  handoff:
+  - **Code** — files + editor + console, with the mini-viewer / instrument dock
+    on the right (the dock is Code-only now).
+  - **Electronics** — the Board View (canvas + parts library) fills the whole
+    area in its own dedicated layout: no code editor, console, instrument dock or
+    mini viewer. The code panels are structurally absent, so no stale/persisted
+    layout can resurface them.
+  - **Build** — the URDF / 3-D pose editor is full-screen, likewise in its own
+    dedicated layout: no code, no board view, no instrument dock.
+  - In **Electronics** and **Build**, a tutorial / help lesson opened elsewhere
+    stays open in a slim panel beside the main surface across mode switches;
+    otherwise the sidebar is hidden (only the Learn/Help lessons open it there).
+  - The **workspace switcher** is centred and more prominent in the toolbar
+    (always keeping a margin from Run/Reset), the old **reset-layout** and
+    **pop-out Board View** toolbar buttons are removed, and the mini-viewer's
+    Board/3D toggle is centred with the instrument dock flush beneath it.
+  - The Code **console** opens taller by default (40%) so the REPL is usable at a
+    glance. Layout envelope bumped to **v2**: existing users keep their Code
+    layout but Electronics + Build reset to the new presets.
+
 ### Added
 - **Dock mini viewer with Board/3D toggle (#595, epic #573 Soft Shell).** The
-  Code and Electronics workspaces now get a MiniViewer card at the top of the
-  instrument dock: a gold-active **Board / 3D** segmented toggle over the app's
-  real mini-board and mini-3-D renders, plus an expand ⤢ that jumps to the
-  matching full workspace (Board → Electronics, 3D → Build). The choice persists
-  across sessions. The Build workspace keeps its full 3-D cockpit unchanged.
+  Code workspace gets a MiniViewer card at the top of the instrument dock: a
+  gold-active **Board / 3D** segmented toggle over the app's real mini-board and
+  mini-3-D renders, plus an expand ⤢ that jumps to the matching full workspace
+  (Board → Electronics, 3D → Build). The choice persists across sessions.
 - **Part-level ground-contact authoring (#569, epic #535 §2).** A part definition
   can now carry `contacts` — the foot/wheel points (mm, part frame) where it
   touches the floor — authored once in the Part Editor's Details ▸ Ground contacts

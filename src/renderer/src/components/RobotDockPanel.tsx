@@ -17,7 +17,10 @@ import './RobotDockPanel.css'
  * compact chrome. An **expand** button opens the project's `.urdf` full-screen
  * as the Pose tool (#312).
  */
-export function RobotDockPanel({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+export function RobotDockPanel({
+  embedded = false,
+  full = false
+}: { embedded?: boolean; full?: boolean } = {}): JSX.Element {
   const { currentFolder, openFile, openBuffer, openFolderPath } = useWorkspace()
   const { setFocus } = useWorkspaceLayout()
   const [urdf, setUrdf] = useState<string>(demoArm)
@@ -228,11 +231,14 @@ export function RobotDockPanel({ embedded = false }: { embedded?: boolean } = {}
   const hasProjectRobot = urdfPath !== null
 
   return (
-    <div className="robotdock">
-      <RobotView urdfContent={urdf} basePath={base} compact />
-      {/* Embedded in the MiniViewer (#595): the card's own expand ⤢ is the single
-          "go bigger" control, so hide this row to avoid duplicate affordances. */}
-      {!embedded && <div className="robotdock__actions">
+    <div className={`robotdock${full ? ' robotdock--full' : ''}`}>
+      {/* `full` (Build workspace): the URDF/pose editor fills the whole main area
+          — the non-compact RobotView (joint sidebar, poses, stability) and no dock
+          action row. Otherwise the compact mini viewer for the MiniViewer card. */}
+      <RobotView urdfContent={urdf} basePath={base} compact={!full} />
+      {/* Embedded in the MiniViewer (#595) or full-screen in Build: the card's own
+          expand ⤢ / the full pose tool is the single control, so hide this row. */}
+      {!embedded && !full && <div className="robotdock__actions">
         <button
           type="button"
           className={`robotdock__btn${hasProjectRobot ? '' : ' robotdock__btn--cta'}`}

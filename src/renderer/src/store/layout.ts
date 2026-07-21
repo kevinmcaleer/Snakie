@@ -60,6 +60,11 @@ export interface WorkspaceLayout {
   /** Active left-sidebar view (activity bar). */
   activityView: ActivityView
   filesCollapsed: boolean
+  /** The centre column (code editor + console). Collapsed to 0 in Electronics,
+   *  where the Board View takes over the whole main area (#…). The editor stays
+   *  MOUNTED behind the 0-width panel, so switching Code↔Electronics never
+   *  remounts Monaco. */
+  centreCollapsed: boolean
   shellCollapsed: boolean
   rightCollapsed: boolean
   /** The fixed-width instrument dock (not a Panel — a plain show/hide region). */
@@ -74,9 +79,13 @@ export interface WorkspaceLayout {
   vertical: [number, number]
 }
 
-/** The persisted envelope. Bump `version` on breaking shape changes. */
+/** The persisted envelope. Bump `version` on breaking shape changes.
+ *  v2 (#…): Electronics + Build were redesigned — Electronics hides code+console
+ *  so the Board View fills the area; Build is the full-screen URDF editor with no
+ *  code/board/instrument dock. A stored v1 envelope keeps the user's Code layout
+ *  but resets those two workspaces to the new presets ({@link loadLayoutState}). */
 export interface LayoutState {
-  version: 1
+  version: 2
   active: WorkspaceId
   workspaces: Record<WorkspaceId, WorkspaceLayout>
 }
@@ -90,40 +99,43 @@ export const WORKSPACE_PRESETS: Record<WorkspaceId, WorkspaceLayout> = {
   code: {
     activityView: 'files',
     filesCollapsed: false,
+    centreCollapsed: false,
     shellCollapsed: false,
     rightCollapsed: true,
     dockOpen: false,
     boardPaneOpen: false,
     horizontal: [18, 82, 0, 0],
-    vertical: [70, 30]
+    // Console gets a roomy default share so the REPL is usable at a glance (#…) —
+    // 30% was too short to show the prompt + a few lines of output.
+    vertical: [60, 40]
   },
-  // Board-first (the education tri-split): CODE on the left, the EMBEDDED
-  // Board View (breadboard/schematic/node graph) on the right, and the
-  // instrument dock at the far right — code, wiring and live instruments all
-  // visible at once. Console stays under the code.
+  // Electronics: the Board View fills the whole main area — CODE AND CONSOLE ARE
+  // HIDDEN (the centre column collapses to 0, editor still mounted behind it), so
+  // wiring is the sole focus. The instrument dock stays closed (reopenable).
   board: {
     activityView: 'files',
     filesCollapsed: true,
+    centreCollapsed: true,
     shellCollapsed: false,
     rightCollapsed: true,
-    // Instruments HIDDEN by default in Board mode — the board is the star, so it
-    // gets the room (Data Lab opens the dock, Code keeps it closed).
     dockOpen: false,
     boardPaneOpen: true,
-    horizontal: [0, 42, 58, 0],
+    horizontal: [0, 0, 100, 0],
     vertical: [65, 35]
   },
-  // Robot (#320): the robotics cockpit — files collapsed, CODE ~⅓ on the left,
-  // the Board View (breadboard) in the middle, and the dock on the right (which
-  // in this mode carries a mini 3-D Robot panel above the instruments).
+  // Build (#320): the URDF/3-D editor FULL SCREEN — no code, no board view. The
+  // centre column hosts the full-screen Robot pose tool (files collapsed, board
+  // pane closed, dock closed & reopenable for instruments). The 3-D IS the main
+  // area now, so the old mini-3-D dock panel is gone.
   robot: {
     activityView: 'files',
     filesCollapsed: true,
+    centreCollapsed: false,
     shellCollapsed: false,
     rightCollapsed: true,
-    dockOpen: true,
-    boardPaneOpen: true,
-    horizontal: [0, 34, 66, 0],
+    dockOpen: false,
+    boardPaneOpen: false,
+    horizontal: [0, 100, 0, 0],
     vertical: [65, 35]
   }
 }
@@ -146,9 +158,16 @@ const VIEWS: ActivityView[] = [
   'packages',
   'plugins',
   'inspect',
+  'learn',
   'help',
   'report-bug'
 ]
+
+/** Sidebar views that are a guided lesson (the Learn tutorials + the Help
+ *  library). When one of these is OPEN, it STAYS open across workspace switches
+ *  so the user can follow the lesson while changing modes — even into Build,
+ *  which otherwise hides the sidebar (#…). */
+const STICKY_LESSON_VIEWS: ReadonlySet<ActivityView> = new Set(['learn', 'help'])
 
 /** Validate one workspace's shape, falling back to `preset` field-by-field. */
 function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayout {
@@ -158,6 +177,8 @@ function sanitiseWorkspace(raw: unknown, preset: WorkspaceLayout): WorkspaceLayo
       ? (r.activityView as ActivityView)
       : preset.activityView,
     filesCollapsed: typeof r.filesCollapsed === 'boolean' ? r.filesCollapsed : preset.filesCollapsed,
+    centreCollapsed:
+      typeof r.centreCollapsed === 'boolean' ? r.centreCollapsed : preset.centreCollapsed,
     shellCollapsed: typeof r.shellCollapsed === 'boolean' ? r.shellCollapsed : preset.shellCollapsed,
     rightCollapsed: typeof r.rightCollapsed === 'boolean' ? r.rightCollapsed : preset.rightCollapsed,
     dockOpen: typeof r.dockOpen === 'boolean' ? r.dockOpen : preset.dockOpen,
@@ -227,7 +248,7 @@ export function defaultLayoutState(): LayoutState {
       vertical: [...WORKSPACE_PRESETS[id].vertical]
     }
   }
-  return { version: 1, active: 'code', workspaces }
+  return { version: 2, active: 'code', workspaces }
 }
 
 /** Storage surface the loader reads (injectable for tests). */
@@ -274,7 +295,8 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
     const raw = storage.getItem(LAYOUT_STORAGE_KEY)
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LayoutState>
-      if (parsed && parsed.version === 1 && parsed.workspaces) {
+      const ver = (parsed as { version?: number } | null)?.version
+      if (parsed && (ver === 1 || ver === 2) && parsed.workspaces) {
         const state = defaultLayoutState()
         // Any retired active workspace (`lab`/`data`/`datalab` — Data Lab was
         // never surfaced and is retired in Soft Shell, #581) coerces to `code`
@@ -283,8 +305,23 @@ export function loadLayoutState(storage: StorageLike): LayoutState {
         const saved = parsed.workspaces as Record<string, unknown>
         const activeRaw = parsed.active as WorkspaceId
         state.active = WORKSPACE_IDS.includes(activeRaw) ? activeRaw : 'code'
+        // v1 → v2: Electronics (`board`) + Build (`robot`) were redesigned, so a v1
+        // envelope's saved geometry for them no longer makes sense (old Build kept
+        // the code + board panes; new Build is a full-screen URDF editor). Reset
+        // those two to the new presets; the user's Code layout still carries over.
+        const resetRedesigned = ver === 1
         for (const id of WORKSPACE_IDS) {
+          if (resetRedesigned && (id === 'board' || id === 'robot')) continue // keep preset
           state.workspaces[id] = sanitiseWorkspace(saved[id], WORKSPACE_PRESETS[id])
+        }
+        // The Code console's default share grew (30% → 40%) so the REPL is usable
+        // by default. A v1 user still on the exact OLD default gets the new one;
+        // a customised editor/console split is kept as-is.
+        if (resetRedesigned) {
+          const c = state.workspaces.code
+          if (c.vertical[0] === 70 && c.vertical[1] === 30) {
+            c.vertical = [...WORKSPACE_PRESETS.code.vertical] as [number, number]
+          }
         }
         return state
       }
@@ -342,7 +379,7 @@ export interface LayoutStore {
   /** Restore the ACTIVE workspace to its factory preset. */
   resetActive: () => void
   setActivityView: (view: ActivityView) => void
-  setCollapsed: (panel: 'files' | 'shell' | 'right', collapsed: boolean) => void
+  setCollapsed: (panel: 'files' | 'centre' | 'shell' | 'right', collapsed: boolean) => void
   setDockOpen: (open: boolean) => void
   /** Enter/leave transient editor-focus mode. */
   setFocus: (focus: boolean) => void
@@ -440,6 +477,18 @@ export function LayoutProvider({
         })
         return
       }
+      // Sticky lesson: if the OUTGOING workspace has a tutorial / help lesson
+      // open, carry it into the target so the user keeps following it across the
+      // switch (Build otherwise hides the sidebar). A collapsed lesson, or any
+      // non-lesson view, is left alone — so Build keeps its files-hidden default.
+      const cur = s.workspaces[s.active]
+      if (STICKY_LESSON_VIEWS.has(cur.activityView) && !cur.filesCollapsed) {
+        s.workspaces[id] = {
+          ...s.workspaces[id],
+          activityView: cur.activityView,
+          filesCollapsed: false
+        }
+      }
       s.active = id
       setActive(id)
       setWorkspace(s.workspaces[id])
@@ -468,13 +517,15 @@ export function LayoutProvider({
     [patchActive]
   )
   const setCollapsed = useCallback(
-    (panel: 'files' | 'shell' | 'right', collapsed: boolean): void =>
+    (panel: 'files' | 'centre' | 'shell' | 'right', collapsed: boolean): void =>
       patchActive(
         panel === 'files'
           ? { filesCollapsed: collapsed }
-          : panel === 'shell'
-            ? { shellCollapsed: collapsed }
-            : { rightCollapsed: collapsed }
+          : panel === 'centre'
+            ? { centreCollapsed: collapsed }
+            : panel === 'shell'
+              ? { shellCollapsed: collapsed }
+              : { rightCollapsed: collapsed }
       ),
     [patchActive]
   )
