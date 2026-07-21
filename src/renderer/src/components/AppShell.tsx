@@ -920,6 +920,15 @@ export function AppShell(): JSX.Element {
     return off
   }, [])
 
+  // The Files panel's own collapse chevron (in the LocalFileTree header, #…) is
+  // deep in the tree, so it signals the shell by event to collapse the RRP files
+  // Panel — leaving the activity-bar Files toggle to reopen it.
+  useEffect(() => {
+    const handler = (): void => toggle(filesRef)
+    window.addEventListener('snakie:toggle-files', handler)
+    return () => window.removeEventListener('snakie:toggle-files', handler)
+  }, [toggle])
+
   // Which view the left sidebar shows, driven by the ActivityBar — remembered
   // per workspace (part of the layout store).
   const setActivityView = layout.setActivityView

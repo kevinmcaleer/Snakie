@@ -59,6 +59,30 @@
   background: var(--panel);
 }
 
+/* ── Console green treatment (#…) ────────────────────────────────────────────
+   The console reads as the app's green REPL rather than a grey card: a subtle
+   green frame with a DARKER green header (the terminal body stays dark). */
+.region.region--shell {
+  border-color: var(--green, #26a269);
+}
+.region--shell > .panel-header,
+:root[data-theme='skeuomorph'] .region.region--shell > .panel-header,
+:root[data-theme='dark'] .region.region--shell > .panel-header {
+  background: linear-gradient(180deg, #2f7d54, #235f40);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.3);
+  color: #eafff2;
+}
+/* Keep the header controls legible on the green header. */
+.region--shell > .panel-header .panel-collapse-btn,
+.region--shell > .panel-header .shell-actions {
+  color: #eafff2;
+}
+.region--shell > .panel-header .panel-collapse-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 /* Warm the segmented toggle to parchment on the skeuomorph light theme, so it
    sits on the parchment frame instead of the legacy grey metal (index.css).
    Scoped under `.shell-actions` to out-specify the legacy rules. */

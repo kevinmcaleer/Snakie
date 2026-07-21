@@ -159,6 +159,7 @@
   --panel: #21251f;
   --panel2: #171a14;
   --shellbd: #31352b;
+  --stitch: #6f6746;
   --card: #262a21;
   --rail: #2a2e24;
   --editor: #191c15;
@@ -207,6 +208,7 @@
   --panel: #f6f1e6;
   --panel2: #ece5d6;
   --shellbd: #e0d9c8;
+  --stitch: #cbb488;
   --card: #fff;
   --rail: #e3e6df;
   --editor: #f4eede;
@@ -2273,7 +2275,7 @@ body {
 .shell__editor-region,
 .region--shell {
   position: absolute;
-  inset: 7px;
+  inset: 5px;
   height: auto;
   border-radius: 14px;
   border: 1px solid var(--shellbd, var(--border));
@@ -2299,22 +2301,61 @@ body {
     0 6px 16px rgba(0, 0, 0, 0.06);
   background: var(--panel, var(--bg-elevated));
 }
-/* The resize handles live in the parchment gap — invisible tracks (so the divider
-   reads as pure parchment) but widened to be grabbable, with a faint hover hint. */
-.shell__panels > .resize-handle {
-  background: transparent;
-  width: 8px;
-}
+/* The resize handles read as a thin line of STITCHES running down the parchment
+   gap (a warm --stitch thread, not a grey bar). The handle stays a slim grabbable
+   track; a centred dashed pseudo-element draws the stitch. */
+.shell__panels > .resize-handle,
 .shell__vgroup > .resize-handle {
   background: transparent;
-  height: 8px;
+  position: relative;
 }
-.shell__panels > .resize-handle:hover,
-.shell__panels > .resize-handle[data-resize-handle-active],
-.shell__vgroup > .resize-handle:hover,
-.shell__vgroup > .resize-handle[data-resize-handle-active] {
-  background: var(--gold, var(--accent));
-  opacity: 0.35;
+.shell__panels > .resize-handle {
+  width: 5px;
+}
+.shell__vgroup > .resize-handle {
+  height: 5px;
+}
+.shell__panels > .resize-handle::before,
+.shell__vgroup > .resize-handle::before {
+  content: '';
+  position: absolute;
+  background: var(--stitch, var(--shellbd));
+  opacity: 0.55;
+  transition: opacity 0.12s ease;
+}
+/* Vertical divider → vertical dashed thread. */
+.shell__panels > .resize-handle::before {
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background-image: repeating-linear-gradient(
+    to bottom,
+    var(--stitch, var(--shellbd)) 0 5px,
+    transparent 5px 9px
+  );
+  background-color: transparent;
+}
+/* Horizontal divider → horizontal dashed thread. */
+.shell__vgroup > .resize-handle::before {
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--stitch, var(--shellbd)) 0 5px,
+    transparent 5px 9px
+  );
+  background-color: transparent;
+}
+.shell__panels > .resize-handle:hover::before,
+.shell__panels > .resize-handle[data-resize-handle-active]::before,
+.shell__vgroup > .resize-handle:hover::before,
+.shell__vgroup > .resize-handle[data-resize-handle-active]::before {
+  opacity: 1;
 }
 
 /* Build (#…): a NON-RRP solo layout — the URDF/3-D editor fills the area, with an
