@@ -528,6 +528,14 @@ export interface PartDefinition {
    * its gearbox, not its centre). Absent ⇒ use the computed centroid.
    */
   com_xyz?: [number, number, number]
+  /**
+   * Ground-contact points in the part's own frame, **millimetres** (#569, epic
+   * #535 §2) — the feet/wheels of a part that touch the floor. Authored once on
+   * the part so they travel with it across projects; applied to a placed part's
+   * URDF link (the robot-level per-link `contacts` in `robot.yml`, #557, override
+   * where a link needs bespoke points). Absent ⇒ the part isn't a foot/wheel.
+   */
+  contacts?: [number, number, number][]
 
   // --- Editor display state (persisted) ------------------------------------
   /**

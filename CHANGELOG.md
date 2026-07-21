@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Part-level ground-contact authoring (#569, epic #535 §2).** A part definition
+  can now carry `contacts` — the foot/wheel points (mm, part frame) where it
+  touches the floor — authored once in the Part Editor's Details ▸ Ground contacts
+  so they travel with the part across projects. Round-trips through `parts.yml`
+  (malformed points dropped) and feeds the balance support-polygon (#557/#558)
+  when the part is placed. The follow-up to #557, which shipped the robot-level
+  per-link contacts.
+
 ### Changed
 - **Per-panel collapse controls (#592, epic #573 Soft Shell).** The four global toolbar toggle knobs (Files / Shell / Chat / Instruments) are gone — each panel collapses from its OWN header chevron, and a collapsed panel becomes its own reopen affordance: the Console leaves a slim reopen bar and the instrument dock a thin “Instruments” rail, so nothing is ever stranded. The Files panel keeps its activity-bar toggle.
 

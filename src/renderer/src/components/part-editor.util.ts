@@ -980,6 +980,14 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   ) {
     out.com_xyz = [part.com_xyz[0], part.com_xyz[1], part.com_xyz[2]]
   }
+  // Ground-contact points (#569): keep finite mm vec3s, drop malformed ones.
+  if (Array.isArray(part.contacts)) {
+    const pts = part.contacts.filter(
+      (p): p is [number, number, number] =>
+        Array.isArray(p) && p.length === 3 && p.every((n) => typeof n === 'number' && Number.isFinite(n))
+    )
+    if (pts.length) out.contacts = pts.map((p) => [p[0], p[1], p[2]])
+  }
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

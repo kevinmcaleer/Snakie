@@ -2417,6 +2417,54 @@ function DetailsFields({
           </button>
         </div>
       ))}
+
+      <h4 className="pe__subh">
+        Ground contacts (mm)
+        <button
+          type="button"
+          className="pe__add"
+          onClick={() => patch({ contacts: [...(part.contacts ?? []), [0, 0, 0]] })}
+        >
+          + Add
+        </button>
+      </h4>
+      <p className="pe__hint">
+        Where this part (a foot or wheel) touches the floor, in its own frame. Travels with the part
+        across projects and feeds the balance support-polygon when it&rsquo;s placed on a robot (#569).
+      </p>
+      {(part.contacts ?? []).map((pt, i) => (
+        <div className="pe__row pe__subitem" key={i}>
+          {([0, 1, 2] as const).map((a) => (
+            <input
+              key={a}
+              className="pe__grow"
+              type="number"
+              step="0.1"
+              value={pt[a]}
+              aria-label={`Contact ${i + 1} ${['x', 'y', 'z'][a]} (mm)`}
+              onChange={(e) => {
+                const v = Number(e.target.value)
+                patch({
+                  contacts: (part.contacts ?? []).map((p, j): [number, number, number] =>
+                    j === i ? [a === 0 ? v : p[0], a === 1 ? v : p[1], a === 2 ? v : p[2]] : p
+                  )
+                })
+              }}
+            />
+          ))}
+          <button
+            type="button"
+            className="pe__icon pe__icon--danger"
+            onClick={() => {
+              const next = (part.contacts ?? []).filter((_, j) => j !== i)
+              patch({ contacts: next.length ? next : undefined })
+            }}
+            title="Delete contact point"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
     </>
   )
 }
