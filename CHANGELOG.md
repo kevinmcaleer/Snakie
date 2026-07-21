@@ -6,6 +6,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.35.1] - 2026-07-21
+
+### Fixed
+- **Console no longer blanks on a workspace switch (epic #573).** The Code panel
+  group now stays mounted for every workspace — Electronics/Build render as an
+  overlay on top of it — so returning to Code keeps the same terminal instance
+  (scrollback + device stream intact) instead of remounting a blank console that
+  needed a disconnect/reconnect to show REPL output again.
+- **3-D view defaults to the isometric home view, not front.** On the first frame
+  the model's bounding box could measure empty (geometry not laid out yet, notably
+  under Electron), leaving the camera at its default front position; framing now
+  retries until the box is ready.
+
+### Changed
+- **Electronics parts Library opens pinned by default**, consistent with the
+  Browser and Build hierarchy panels.
+
 ## [0.35.0] - 2026-07-21
 
 ### Added
@@ -2991,7 +3008,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...HEAD
+[0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...v0.34.0
 [0.33.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.0...v0.33.1
