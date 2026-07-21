@@ -1,0 +1,84 @@
+/* Mini viewer card (#595, Soft Shell) — the Board/3D peek at the top of the dock.
+   Soft Shell tokens with fallbacks to the semantic tokens. */
+.miniviewer {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  background: var(--panel, var(--bg-elevated));
+}
+
+.miniviewer__head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.4rem;
+  border-bottom: var(--border-w, 1px) solid var(--shellbd, var(--border));
+}
+
+/* Board / 3D segmented toggle — gold-active, matching the workspace switcher. */
+.miniviewer__seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: var(--border-w, 1px) solid var(--shellbd, var(--border));
+  border-radius: 9px;
+  background: var(--panel2, var(--bg-sunken));
+}
+.miniviewer__seg-btn {
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--txt3, var(--text-muted));
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  padding: 0.14rem 0.55rem;
+  cursor: pointer;
+}
+.miniviewer__seg-btn:hover {
+  color: var(--head, var(--text));
+}
+.miniviewer__seg-btn.is-active {
+  background: var(--grad-gold, var(--accent));
+  color: var(--goldink, var(--accent-contrast));
+  font-weight: 700;
+}
+
+.miniviewer__expand {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  color: var(--txt3, var(--text-muted));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.miniviewer__expand:hover {
+  color: var(--head, var(--text));
+  border-color: var(--shellbd, var(--border));
+  background: var(--card, var(--bg-elevated));
+}
+
+.miniviewer__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.miniviewer__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--txt3, var(--text-muted));
+}

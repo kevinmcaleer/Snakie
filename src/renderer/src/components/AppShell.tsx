@@ -16,6 +16,7 @@ const BoardPane = lazy(() => import('./BoardPane'))
 // The mini 3-D Robot panel (Robot mode, #320) — lazy so three.js only loads
 // when you enter Robot mode.
 const RobotDockPanel = lazy(() => import('./RobotDockPanel'))
+import { MiniViewer } from './MiniViewer'
 import { useTheme } from '../hooks/useTheme'
 import { Toolbar } from './Toolbar'
 import { ActivityBar, ActivityView, DESKTOP_ONLY_VIEWS } from './ActivityBar'
@@ -1148,7 +1149,7 @@ export function AppShell(): JSX.Element {
             Instruments button or an incoming `instruments:open`. */}
         {instrumentsVisible && (
           <aside
-            className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ''}`}
+            className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ' shell__dock--mini'}`}
             aria-label="Instrument dock"
           >
             {/* Per-panel collapse (#592) — the dock hides itself; the toolbar
@@ -1171,11 +1172,19 @@ export function AppShell(): JSX.Element {
                 />
               </svg>
             </button>
-            {layout.active === 'robot' && (
+            {/* Dock-top slot (#595): the Robot/Build workspace gets the full
+                3-D cockpit; every other workspace (Code, Electronics) gets the
+                MiniViewer card — a Board/3D peek that expands to the matching
+                workspace. Either way there's a top panel, so the dock stacks. */}
+            {layout.active === 'robot' ? (
               <div className="shell__robot3d">
                 <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
                   <RobotDockPanel />
                 </Suspense>
+              </div>
+            ) : (
+              <div className="shell__miniviewer">
+                <MiniViewer source={boardSource} isPython={boardIsPython} />
               </div>
             )}
             <InstrumentDockRegion
@@ -1183,7 +1192,7 @@ export function AppShell(): JSX.Element {
               vis={visibility}
               inUse={inUse}
               onToggleVisible={toggleVisible}
-              hideMiniBoard={layout.workspace.boardPaneOpen}
+              hideMiniBoard={layout.active !== 'robot' || layout.workspace.boardPaneOpen}
             />
           </aside>
         )}
