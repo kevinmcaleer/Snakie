@@ -18,7 +18,9 @@
   box-sizing: border-box;
   padding: 10px;
   gap: 10px;
-  background: var(--bg-sunken);
+  /* Soft Shell (#578): the plotter's frame reads as a `--card` sub-card cradling
+     the dark phosphor scope (the screen keeps its intrinsic near-black look). */
+  background: var(--card, var(--bg-sunken));
   font-family: var(--font-mono), 'JetBrains Mono', monospace;
 }
 
@@ -100,7 +102,7 @@
 
 .plotter__status {
   font-size: 11px;
-  color: #4a4f57;
+  color: var(--txt3, #4a4f57);
 }
 
 .plotter__clear {
