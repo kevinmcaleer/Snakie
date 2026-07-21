@@ -73,6 +73,7 @@ import {
 } from '../lib/instrumentsLib'
 import { useWorkspace } from '../store/workspace'
 import { useEditorSettings } from '../store/settings'
+import './AppShell.css'
 
 /**
  * Wrap a panel that lacks its own region chrome in a scrollable region.
@@ -304,8 +305,7 @@ export function AppShell(): JSX.Element {
   // workspace's geometry when it becomes active (nothing remounts — the editor,
   // xterm scrollback and instruments survive every switch).
   const layout = useWorkspaceLayout()
-  const { filesCollapsed, shellCollapsed, rightCollapsed, activityView, boardPaneOpen } =
-    layout.workspace
+  const { shellCollapsed, rightCollapsed, activityView, boardPaneOpen } = layout.workspace
   const dockOpen = layout.workspace.dockOpen
   // Transient editor focus (Robot pop-out): hide the board, instruments + console
   // around the URDF without touching the workspace (#320 follow-up).
@@ -524,9 +524,6 @@ export function AppShell(): JSX.Element {
   // part of the workspace layout (the Board/Data Lab workspaces open it).
   const setDockOpen = layout.setDockOpen
   const instrumentsVisible = dockOpen && !focus
-  const toggleInstruments = useCallback((): void => {
-    setDockOpen(!dockOpen)
-  }, [dockOpen, setDockOpen])
 
   // --- Board pop-out (modes review): the floating window and the Board MODE are
   // the same board in two homes, never both. Mirrors instrument undocking:
@@ -989,26 +986,9 @@ export function AppShell(): JSX.Element {
         )}
       </div>
       <Toolbar
-        filesCollapsed={filesCollapsed}
-        onToggleFiles={() => {
-          if (!exitFocus()) toggle(filesRef)
-        }}
-        shellCollapsed={shellCollapsed}
-        onToggleShell={() => {
-          if (!exitFocus()) toggle(shellRef)
-        }}
-        rightCollapsed={rightCollapsed}
-        onToggleRight={() => {
-          if (!exitFocus()) toggle(rightRef)
-        }}
         onOpenBoard={() => {
           if (!exitFocus()) toggleBoard()
         }}
-        onToggleInstruments={() => {
-          if (!exitFocus()) toggleInstruments()
-        }}
-        instrumentsVisible={instrumentsVisible}
-        instrumentCount={openInstruments.length}
       />
 
       <div className="shell__body shell__main">
@@ -1058,9 +1038,11 @@ export function AppShell(): JSX.Element {
           <PanelResizeHandle className="resize-handle resize-handle--vertical" />
 
           <Panel order={2} minSize={30}>
+            <div className="shell__center-col">
             <PanelGroup
               direction="vertical"
               ref={vGroupRef}
+              className="shell__vgroup"
               onLayout={(sizes) => layout.recordSizes('vertical', sizes)}
             >
               <Panel order={1} minSize={20}>
@@ -1081,9 +1063,38 @@ export function AppShell(): JSX.Element {
                 onCollapse={() => layout.setCollapsed('shell', true)}
                 onExpand={() => layout.setCollapsed('shell', false)}
               >
-                <ShellPanel chatOpen={!rightCollapsed} />
+                <ShellPanel
+                  chatOpen={!rightCollapsed}
+                  onCollapse={() => {
+                    if (!exitFocus()) toggle(shellRef)
+                  }}
+                />
               </Panel>
             </PanelGroup>
+            {/* Reopen rail (#592): when the console is collapsed to nothing, a
+                slim clickable bar is its own reopen affordance (the global
+                toolbar toggle is gone). */}
+            {shellCollapsed && !focus && (
+              <button
+                type="button"
+                className="shell__reopen shell__reopen--bottom"
+                onClick={() => openPanel(shellRef)}
+                title="Show the console"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path
+                    d="M4 6l4 4 4-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span>Console</span>
+              </button>
+            )}
+            </div>
           </Panel>
 
           {/* The embedded Board View (the Board workspace's tri-split, #259):
@@ -1140,6 +1151,26 @@ export function AppShell(): JSX.Element {
             className={`shell__dock${layout.active === 'robot' ? ' shell__dock--robot' : ''}`}
             aria-label="Instrument dock"
           >
+            {/* Per-panel collapse (#592) — the dock hides itself; the toolbar
+                Instruments toggle is gone, so the reopen rail below takes over. */}
+            <button
+              type="button"
+              className="shell__dock-collapse"
+              onClick={() => setDockOpen(false)}
+              title="Hide the instrument dock"
+              aria-label="Hide the instrument dock"
+            >
+              <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path
+                  d="M6 4l4 4-4 4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
             {layout.active === 'robot' && (
               <div className="shell__robot3d">
                 <Suspense fallback={<div className="shell__robot3d-loading">Loading 3D…</div>}>
@@ -1155,6 +1186,19 @@ export function AppShell(): JSX.Element {
               hideMiniBoard={layout.workspace.boardPaneOpen}
             />
           </aside>
+        )}
+        {/* Reopen rail (#592): when the dock is hidden, a slim clickable rail at
+            the far right is its own reopen affordance. */}
+        {!dockOpen && !focus && (
+          <button
+            type="button"
+            className="shell__dock-rail"
+            onClick={() => setDockOpen(true)}
+            title="Show the instrument dock"
+            aria-label="Show the instrument dock"
+          >
+            <span className="shell__dock-rail-label">Instruments</span>
+          </button>
         )}
       </div>
 

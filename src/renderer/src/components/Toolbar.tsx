@@ -5,7 +5,6 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { isVirtualPort } from '../../../shared/virtual-device'
-import { IS_WEB } from '../lib/env'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -26,16 +25,6 @@ const ToolIcon = (children: ReactNode): JSX.Element => (
   </svg>
 )
 
-/**
- * Inline SVG wrapper for the panel-collapse "knob" icons on the right of the
- * toolbar — a rounded-rect window with a filled bar on the edge of the panel it
- * toggles, plus a divider line (matches the Skeuomorph concept's hardware keys).
- */
-const PanelIcon = (children: ReactNode): JSX.Element => (
-  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false">
-    {children}
-  </svg>
-)
 
 // page with a `+` (new file)
 const NEW_FILE_ICON = ToolIcon(
@@ -57,30 +46,6 @@ const SAVE_ICON = ToolIcon(
   </g>
 )
 
-// Window with a filled bar on the left edge — toggles the left (Files) panel.
-const PANEL_LEFT_ICON = PanelIcon(
-  <g>
-    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-    <rect x="4.2" y="6.2" width="4.6" height="11.6" rx="1" fill="currentColor" opacity="0.3" />
-    <line x1="9" y1="5" x2="9" y2="19" stroke="currentColor" strokeWidth="1.6" />
-  </g>
-)
-// Window with a filled bar on the bottom edge — toggles the bottom (Shell) panel.
-const PANEL_BOTTOM_ICON = PanelIcon(
-  <g>
-    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-    <rect x="4.2" y="14" width="15.6" height="3.8" rx="1" fill="currentColor" opacity="0.3" />
-    <line x1="3" y1="14" x2="21" y2="14" stroke="currentColor" strokeWidth="1.6" />
-  </g>
-)
-// Window with a filled bar on the right edge — toggles the right (Chat) panel.
-const PANEL_RIGHT_ICON = PanelIcon(
-  <g>
-    <rect x="3" y="5" width="18" height="14" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-    <rect x="15.2" y="6.2" width="4.6" height="11.6" rx="1" fill="currentColor" opacity="0.3" />
-    <line x1="15" y1="5" x2="15" y2="19" stroke="currentColor" strokeWidth="1.6" />
-  </g>
-)
 
 /**
  * Glossy green snake brand mark from the Skeuomorph concept: a green
@@ -115,19 +80,7 @@ const SNAKE_LOGO = (
 )
 
 interface ToolbarProps {
-  filesCollapsed: boolean
-  onToggleFiles: () => void
-  shellCollapsed: boolean
-  onToggleShell: () => void
-  rightCollapsed: boolean
-  onToggleRight: () => void
   onOpenBoard: () => void
-  /** Toggle the visibility of the docked/floating instruments (#101 / #102). */
-  onToggleInstruments: () => void
-  /** Whether the instruments are currently shown (drives the pressed look). */
-  instrumentsVisible: boolean
-  /** Number of open instruments (for the button title; 0 ⇒ still toggles). */
-  instrumentCount: number
 }
 
 /**
@@ -142,23 +95,12 @@ interface ToolbarProps {
  * {@link StatusBar} (issue #71); this toolbar still reads {@link useDeviceStatus}
  * only to enable/disable the Run/Stop buttons.
  *
- * Also hosts the Board View knob next to Run/Stop and the right cluster of
- * panel-collapse knobs (Files / Shell / Chat), which render as pressable hardware
- * keys in the Skeuomorph skin (a pressed-in look marks the active / shown panel).
- * Settings and the theme picker now live on the activity bar + Settings dialog.
+ * Also hosts the Board View knob next to Run/Stop and the centred workspace
+ * switcher (Code · Electronics · Build). The old global panel-collapse knobs were
+ * removed in Soft Shell (#592) — each panel owns its own collapse control now.
+ * Settings and the theme picker live on the activity bar + Settings dialog.
  */
-export function Toolbar({
-  filesCollapsed,
-  onToggleFiles,
-  shellCollapsed,
-  onToggleShell,
-  rightCollapsed,
-  onToggleRight,
-  onOpenBoard,
-  onToggleInstruments,
-  instrumentsVisible,
-  instrumentCount
-}: ToolbarProps): JSX.Element {
+export function Toolbar({ onOpenBoard }: ToolbarProps): JSX.Element {
   const status = useDeviceStatus()
   const { openFiles, activeId, newFile, openFolder, saveFile } = useWorkspace()
   const { markRun } = useConsole()
@@ -349,73 +291,10 @@ export function Toolbar({
 
       <div className="toolbar__spacer" />
 
-      {/* Workspace layouts (epic #259): Code / Board / Lab / Data + reset. */}
+      {/* Workspace layouts (epic #259): Code · Electronics · Build + reset.
+          Per-panel collapse controls live IN each panel's own header now (#592),
+          so the old global Files/Shell/Chat/Instruments toggle knobs are gone. */}
       <WorkspaceSwitcher />
-
-      <div className="toolbar__group">
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${filesCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!filesCollapsed}
-          onClick={onToggleFiles}
-          title="Toggle Files panel"
-          aria-label="Toggle Files panel"
-        >
-          {PANEL_LEFT_ICON}
-        </button>
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${shellCollapsed ? '' : 'is-active'}`}
-          aria-pressed={!shellCollapsed}
-          onClick={onToggleShell}
-          title="Toggle Shell panel"
-          aria-label="Toggle Shell panel"
-        >
-          {PANEL_BOTTOM_ICON}
-        </button>
-        {/* Chat panel — hidden on the web build (the LLM chat is desktop-only). */}
-        {!IS_WEB && (
-          <button
-            type="button"
-            className={`btn btn--ghost btn--icon btn--knob ${rightCollapsed ? '' : 'is-active'}`}
-            aria-pressed={!rightCollapsed}
-            onClick={onToggleRight}
-            title="Toggle Chat panel"
-            aria-label="Toggle Chat panel"
-          >
-            {PANEL_RIGHT_ICON}
-          </button>
-        )}
-        <button
-          type="button"
-          className={`btn btn--ghost btn--icon btn--knob ${instrumentsVisible ? 'is-active' : ''}`}
-          aria-pressed={instrumentsVisible}
-          onClick={onToggleInstruments}
-          title={
-            instrumentCount > 0
-              ? `${instrumentsVisible ? 'Hide' : 'Show'} instruments (${instrumentCount} open)`
-              : 'Toggle instruments — open a scope/meter from a PWM/ADC pin in the Board View'
-          }
-          aria-label="Toggle instruments"
-        >
-          {/* Instrument cluster: a CRT scope screen with a square-wave trace +
-              a gauge tick, marking the oscilloscope/multimeter dock. Placed right
-              of the Chat toggle so the buttons match the panel order on screen. */}
-          <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false">
-            <rect x="3" y="4.5" width="18" height="13" rx="2" fill="none" stroke="currentColor" strokeWidth="1.7" />
-            <path
-              d="M5.5 12.5 L8 12.5 L8 9.5 L11 9.5 L11 12.5 L13.5 12.5"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-            <line x1="15" y1="12.5" x2="18" y2="9.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            <line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
     </header>
   )
 }
