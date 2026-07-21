@@ -7,38 +7,39 @@
   gap: 0.3rem;
 }
 
+/* Soft Shell (#575): a soft --panel2 track with a gold-gradient active segment. */
 .ws-switcher__seg {
   display: inline-flex;
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--shellbd, var(--border));
+  border-radius: 10px;
+  background: var(--panel2, var(--bg-sunken));
+  padding: 2px;
+  gap: 2px;
   overflow: hidden;
 }
 
 .ws-switcher__btn {
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
+  font-family: var(--font-ui, var(--font-mono));
+  font-size: 0.7rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-muted);
+  letter-spacing: 0.01em;
+  color: var(--txt3, var(--text-muted));
   background: transparent;
   border: none;
-  padding: 0.32rem 0.55rem;
+  border-radius: 8px;
+  padding: 0.3rem 0.7rem;
   cursor: pointer;
 }
 
-.ws-switcher__btn + .ws-switcher__btn {
-  border-left: var(--border-w) solid var(--border);
-}
-
 .ws-switcher__btn:hover {
-  color: var(--text);
+  color: var(--head, var(--text));
 }
 
 .ws-switcher__btn.is-active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  background: var(--grad-gold, var(--accent));
+  color: var(--goldink, var(--accent-contrast));
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 /* Reset-to-preset: a small ghost icon button beside the segments. */
