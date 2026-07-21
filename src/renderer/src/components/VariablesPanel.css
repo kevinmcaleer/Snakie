@@ -77,6 +77,41 @@
   border-bottom: 1px solid var(--border);
 }
 
+/* Per-type glyph icon (#…) — colour-coded by the editor syntax palette so lists,
+   dicts, numbers, strings, etc. are distinguishable at a glance. */
+.vars__icon {
+  flex: 0 0 auto;
+  width: 1.7em;
+  text-align: center;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.72rem;
+  line-height: 1;
+  color: var(--txt3, var(--text-muted));
+}
+.vars__icon--num {
+  color: var(--num, #7fc4e0);
+}
+.vars__icon--str,
+.vars__icon--bytes {
+  color: var(--str, #d8b96e);
+}
+.vars__icon--bool,
+.vars__icon--func {
+  color: var(--kw, #e08b7d);
+}
+.vars__icon--list,
+.vars__icon--tuple {
+  color: var(--green, #26a269);
+}
+.vars__icon--dict,
+.vars__icon--set {
+  color: var(--gold, #d9a441);
+}
+.vars__icon--module,
+.vars__icon--class {
+  color: var(--ident, #cdd4cb);
+}
+
 .vars__name {
   flex: 0 0 auto;
   font-weight: 600;
