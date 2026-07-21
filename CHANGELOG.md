@@ -7,6 +7,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Changed
+- **Per-panel collapse controls (#592, epic #573 Soft Shell).** The four global toolbar toggle knobs (Files / Shell / Chat / Instruments) are gone — each panel collapses from its OWN header chevron, and a collapsed panel becomes its own reopen affordance: the Console leaves a slim reopen bar and the instrument dock a thin “Instruments” rail, so nothing is ever stranded. The Files panel keeps its activity-bar toggle.
+
+### Changed
 - **Soft Shell close-out: Data Lab retired (#581, epic #573).** The never-surfaced
   Data Lab workspace is removed — the switcher is exactly Code · Electronics ·
   Build, and its instrument bench lives on in the Code/Build docks. A stale

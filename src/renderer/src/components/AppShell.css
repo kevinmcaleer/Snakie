@@ -1,0 +1,95 @@
+/* Per-panel collapse + reopen affordances (#592, epic #573 Soft Shell).
+   The global toolbar toggle knobs are gone; each panel collapses from its own
+   header, and a collapsed panel leaves a slim clickable reopen rail/bar. */
+
+/* Centre column wrapper so the console reopen bar can sit under the vertical
+   PanelGroup when the shell is collapsed to nothing. */
+.shell__center-col {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.shell__vgroup {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* A slim reopen bar/rail — the collapsed panel's own reopen affordance. */
+.shell__reopen {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--txt3, var(--text-muted));
+  background: var(--panel2, var(--bg-sunken));
+  border: none;
+  border-top: 1px solid var(--shellbd, var(--border));
+  cursor: pointer;
+}
+.shell__reopen:hover {
+  color: var(--head, var(--text));
+  background: var(--panel, var(--bg-elevated));
+}
+.shell__reopen--bottom {
+  width: 100%;
+  height: 24px;
+  padding: 0 0.6rem;
+}
+
+/* The instrument-dock reopen rail — a thin vertical strip at the far right. */
+.shell__dock-rail {
+  flex: 0 0 auto;
+  width: 26px;
+  writing-mode: vertical-rl;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--txt3, var(--text-muted));
+  background: var(--panel2, var(--bg-sunken));
+  border: none;
+  border-left: 1px solid var(--shellbd, var(--border));
+  cursor: pointer;
+}
+.shell__dock-rail:hover {
+  color: var(--head, var(--text));
+  background: var(--panel, var(--bg-elevated));
+}
+.shell__dock-rail-label {
+  transform: rotate(180deg);
+}
+
+/* The dock's own collapse button, pinned top-right of the dock aside. */
+.shell__dock {
+  position: relative;
+}
+.shell__dock-collapse {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  color: var(--txt3, var(--text-muted));
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.shell__dock-collapse:hover {
+  color: var(--head, var(--text));
+  border-color: var(--shellbd, var(--border));
+  background: var(--card, var(--bg-elevated));
+}

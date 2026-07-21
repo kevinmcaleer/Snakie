@@ -18,6 +18,8 @@ type ShellView = 'console' | 'problems'
 interface ShellPanelProps {
   /** Whether the right-hand chat panel is open (controls the "Send to chat" button). */
   chatOpen?: boolean
+  /** Collapse this panel from its own header (Soft Shell per-panel control, #592). */
+  onCollapse?: () => void
 }
 
 /**
@@ -36,7 +38,7 @@ interface ShellPanelProps {
  * Both bodies (Terminal, Problems) stay mounted; the inactive one is hidden via
  * CSS so console scrollback survives toggling.
  */
-export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
+export function ShellPanel({ chatOpen = false, onCollapse }: ShellPanelProps): JSX.Element {
   const status = useDeviceStatus()
   const terminalRef = useRef<TerminalHandle>(null)
   const [view, setView] = useState<ShellView>('console')
@@ -148,6 +150,26 @@ export function ShellPanel({ chatOpen = false }: ShellPanelProps): JSX.Element {
               </button>
             )}
             <ConnectionControl status={status} />
+            {onCollapse && (
+              <button
+                type="button"
+                className="panel-collapse-btn"
+                onClick={onCollapse}
+                title="Collapse the console"
+                aria-label="Collapse the console"
+              >
+                <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                  <path
+                    d="M4 10l4-4 4 4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
           </div>
         }
       />
