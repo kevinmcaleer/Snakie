@@ -295,8 +295,11 @@ const DOT_TOL = DOT_R + 5
 const TOUCH_DOT_TOL = DOT_R + 15
 
 // Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
+// Max is generous (600%) so dense boards like the Servo 2040 — which pack their
+// pin labels tightly even after density-scaling — can be zoomed in far enough to
+// read the number boxes + labels comfortably.
 const WC_MIN_ZOOM = 0.35
-const WC_MAX_ZOOM = 3
+const WC_MAX_ZOOM = 6
 const WC_ZOOM_STEP = 1.2
 const clampScale = (s: number): number => Math.min(WC_MAX_ZOOM, Math.max(WC_MIN_ZOOM, s))
 

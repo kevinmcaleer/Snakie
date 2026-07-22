@@ -972,12 +972,14 @@ export function PartBody({
   const padSize = Number.isFinite(minPinGapPx)
     ? Math.max(3, Math.min(physicalPad, minPinGapPx * 0.82))
     : physicalPad
-  // The fixed 14px number box wants ~21px of gap; below that, scale the annotations
-  // (number box + label + chips) down about the pin so a dense row stays legible.
-  // The floor is low (0.25) because very dense boards (Servo 2040 packed on a small
-  // board-body box) need an aggressive shrink to stop the number boxes overlapping;
-  // they stay readable via the view's zoom. Comfortable boards keep pinScale = 1.
-  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 21)) : 1
+  // Scale the annotations (number box + label + chips) down about the pin so a
+  // dense row stays legible. The divisor sets the target box/gap ratio: the fixed
+  // 14px number box fills ~0.78 of an 18px gap — as large as fits while still
+  // breathing. The floor is low (0.25) because very dense boards (Servo 2040 packed
+  // on a small board-body box) need an aggressive shrink to stop the number boxes
+  // overlapping; they stay readable via the view's zoom. Comfortable boards keep
+  // pinScale = 1.
+  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 18)) : 1
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
