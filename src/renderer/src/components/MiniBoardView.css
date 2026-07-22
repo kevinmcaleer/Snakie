@@ -229,16 +229,15 @@
 
 /* Grey square holding the board pin number, sat next to the pad. */
 .mini-board__numbox {
-  fill: rgba(255, 255, 255, 0.12);
-  stroke: #565b63;
-  stroke-width: 0.7;
+  fill: #2c3036;
+  stroke: none;
 }
 
 .mini-board__num {
   font-family: var(--font-mono), monospace;
   font-size: 9px;
   font-weight: 700;
-  fill: #e9edf1;
+  fill: #ffffff;
 }
 
 .mini-board__hint {

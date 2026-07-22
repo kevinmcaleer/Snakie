@@ -91,7 +91,13 @@ function PinAnnotation({ u }: { u: UsedPad }): JSX.Element {
     <>
       <rect x={bx} y={by} width={NUM_BOX} height={NUM_BOX} rx={2} className="mini-board__numbox" />
       {num && (
-        <text x={bx + NUM_BOX - 2.5} y={by + NUM_BOX - 3.5} textAnchor="end" className="mini-board__num">
+        <text
+          x={bx + NUM_BOX / 2}
+          y={by + NUM_BOX / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="mini-board__num"
+        >
           {num}
         </text>
       )}

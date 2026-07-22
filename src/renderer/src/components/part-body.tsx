@@ -497,7 +497,13 @@ export function boxedPinLabel(
     <>
       <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
       {shownNum && (
-        <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
+        <text
+          x={bx + B / 2}
+          y={by + B / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="pcv__pin-num"
+        >
           {shownNum}
         </text>
       )}

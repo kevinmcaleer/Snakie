@@ -466,18 +466,19 @@
   fill: #cfd6dd;
 }
 
-/* Boxed pin annotation (breadboard MCU): grey GPIO number box + the code variable. */
+/* Boxed pin annotation (breadboard MCU): a SOLID dark-grey GPIO number box with
+   centred white text and no border — a simple, high-contrast chip that reads on
+   both the dark board islands and the light editor canvas (#…). */
 .pcv__pin-numbox {
-  fill: rgba(255, 255, 255, 0.12);
-  stroke: #565b63;
-  stroke-width: 0.7;
+  fill: #2c3036;
+  stroke: none;
 }
 
 .pcv__pin-num {
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 700;
-  fill: #e9edf1;
+  fill: #ffffff;
 }
 
 .pcv__pin-var {
@@ -494,14 +495,11 @@
    tuned for dark surfaces). Scoped to `.pe` on purpose — the Board View and Mini
    Board View render the same `.pcv__*` labels but are intentionally DARK islands
    in every theme (#181), so they must keep the default light-on-dark palette. */
-:root[data-theme='skeuomorph'] .pe .pcv__pin-label,
-:root[data-theme='skeuomorph'] .pe .pcv__pin-num {
+:root[data-theme='skeuomorph'] .pe .pcv__pin-label {
   fill: var(--text);
 }
-
-:root[data-theme='skeuomorph'] .pe .pcv__pin-numbox {
-  fill: rgba(0, 0, 0, 0.05);
-}
+/* The number box is a solid dark chip in every theme now, so its white text +
+   dark fill are NOT overridden for the light editor (they'd become invisible). */
 
 :root[data-theme='skeuomorph'] .pe .pcv__pin-var {
   color: var(--text-muted);
