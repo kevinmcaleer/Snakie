@@ -18,6 +18,9 @@ import {
 } from './board-defs'
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
+import { buildNetlist } from '../../../shared/netlist'
+import { runErc, ercSummary } from '../../../shared/erc'
+import { ErcBadge, ErcPanel } from './ErcPanel'
 import {
   authoredPads,
   boardBox,
@@ -401,6 +404,25 @@ export function BoardGraph({
   // The source part behind the selected board (if any) — so the Breadboard view
   // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
   const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])
+
+  // Circuit Sim ERC (#601): extract the netlist from the wiring + placed parts and
+  // run the electrical rules. Recomputed only when the wiring / parts / board
+  // change (not per live-value tick). Pure + no solver — static wiring checks.
+  const ercIssues = useMemo(() => {
+    if (!robot) return []
+    const partDefs = new Map<string, PartDefinition>()
+    for (const rp of robot.parts ?? []) {
+      const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+      if (pdef) partDefs.set(rp.id, pdef)
+    }
+    try {
+      return runErc(buildNetlist(robot, def, partDefs), partDefs)
+    } catch {
+      return [] // a malformed circuit must never crash the board view
+    }
+  }, [robot, libraries, def])
+  const ercSum = useMemo(() => ercSummary(ercIssues), [ercIssues])
+  const [ercOpen, setErcOpen] = useState(false)
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
   // the consent-first install banner; empty (so hidden) without a robot/parts.
@@ -866,6 +888,11 @@ export function BoardGraph({
         <span className="boardgraph__chip">{def.mcu}</span>
 
         <div className="boardgraph__actions">
+          {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
+              ✓ when clean. Only where wiring exists (the node graph). */}
+          {wiringEnabled && effectiveView === 'graph' && (
+            <ErcBadge summary={ercSum} open={ercOpen} onToggle={() => setErcOpen((o) => !o)} />
+          )}
           {/* LIVE doubles as the on/off control for device polling (#97). OFF:
               dim LED, idle placeholders, device untouched. ON: lit when a board
               is connected (green, pulsing), amber while connecting/unreadable.
@@ -919,6 +946,10 @@ export function BoardGraph({
       {wiringEnabled && <DriverInstallBanner needs={driverNeeds} />}
 
       <div className="boardgraph__body">
+      {/* ERC issues panel (#601) — floats over the board, anchored to the body. */}
+      {wiringEnabled && effectiveView === 'graph' && ercOpen && (
+        <ErcPanel issues={ercIssues} onClose={() => setErcOpen(false)} />
+      )}
       {effectiveView !== 'graph' ? (
         <>
           <div className="boardgraph__wiring">
