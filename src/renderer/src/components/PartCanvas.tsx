@@ -1409,9 +1409,22 @@ export function PartCanvas({
         }
       }
     }
-    if (visible.pins && !locked.pins)
-      for (let i = pins.length - 1; i >= 0; i--)
-        if (dist(nx, ny, pins[i].x, pins[i].y) < HIT) return { type: 'pin', hi: pins[i].hi, pi: pins[i].pi }
+    if (visible.pins && !locked.pins) {
+      // Pick the NEAREST pin within HIT — not the first match. On a dense board
+      // (Servo 2040 renders ~9px pitch) HIT (14px) overlaps several pins, so
+      // returning the first in reverse order grabbed the neighbour to the RIGHT
+      // instead of the pad actually under the cursor.
+      let best = -1
+      let bestD = HIT
+      for (let i = 0; i < pins.length; i++) {
+        const d = dist(nx, ny, pins[i].x, pins[i].y)
+        if (d < bestD) {
+          bestD = d
+          best = i
+        }
+      }
+      if (best >= 0) return { type: 'pin', hi: pins[best].hi, pi: pins[best].pi }
+    }
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
