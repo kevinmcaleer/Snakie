@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { reporter } from '../lib/report-error'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -125,19 +125,48 @@ export function Toolbar(): JSX.Element {
     if (!connected) setRunning(false)
   }, [connected])
 
+  // Remember the last device the user was actually connected to: a REAL board's
+  // port, or null when it was the simulator. Drives Run's auto-connect so a
+  // dropped board doesn't silently switch to the sim (below).
+  const lastRealPortRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (status.state !== 'connected' || !status.path) return
+    lastRealPortRef.current = isVirtualPort(status.path) ? null : status.path
+  }, [status.state, status.path])
+
   const handleRun = useCallback(async (): Promise<void> => {
     if (!activeFile) return
-    // Nothing connected? (e.g. a page reload dropped the simulated device, or the
-    // user hasn't pressed Connect yet.) Boot the simulator and run on it, so Run
-    // never silently does nothing. A real board the user already connected wins —
-    // `connected` is true then and we skip straight to sending the program.
+    // Not connected? A real board the user already connected wins — `connected`
+    // is true then and we skip straight to running. Otherwise auto-connect, but
+    // PREFER a real board over the simulator: a Pico that briefly dropped (e.g. a
+    // servo current spike brown-out) should reconnect to the Pico, not silently
+    // switch to the offline simulator — that's the unexpected/annoying bit.
     if (!connected) {
       try {
         setConnecting(true)
         const ports = await window.api.device.listPorts()
-        const target = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
-        if (!target) throw new Error('No device is available to run on.')
-        await window.api.device.connect(target.path)
+        // Prefer the board we were last on, then any real board, over the sim.
+        const realBoard =
+          ports.find((p) => p.path === lastRealPortRef.current) ??
+          ports.find((p) => !isVirtualPort(p.path))
+        if (realBoard) {
+          await window.api.device.connect(realBoard.path)
+        } else if (lastRealPortRef.current) {
+          // A real board was in use and is now GONE — don't boot the sim behind
+          // the user's back. Tell them; they can reconnect, or pick the Simulator
+          // from the port menu to run without hardware on purpose.
+          reporter('run', {
+            notify:
+              'The board disconnected — reconnect it, or pick the Simulator from the port menu to run without hardware.'
+          })(new Error('board disconnected'))
+          return
+        } else {
+          // No real board has been used this session — boot the simulator so Run
+          // isn't a silent no-op for a first-time / no-hardware user.
+          const sim = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
+          if (!sim) throw new Error('No device is available to run on.')
+          await window.api.device.connect(sim.path)
+        }
       } catch (err) {
         reporter('connect', { notify: "Couldn't connect a device to run your program." })(err)
         return
