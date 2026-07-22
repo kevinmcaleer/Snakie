@@ -352,6 +352,61 @@ export interface PartSchematic {
 }
 
 /**
+ * The behavioural model a part uses in the Circuit Sim DC solver (epic #597).
+ * `passive` (default when absent) means the part has no electrical behaviour of
+ * its own — a mechanical/decorative part, or one whose pins just pass through.
+ */
+export type ElectricalModel =
+  | 'source' //   supplies a voltage (battery pack, bench PSU, a wall adapter)
+  | 'resistor' // fixed resistance between two pins
+  | 'led' //      light-emitting diode (forward-voltage drop + current → brightness)
+  | 'diode' //    plain diode (forward-voltage drop, one-way)
+  | 'switch' //   button / switch (open or closed between two pins)
+  | 'consumer' // a current sink with a typical + stall draw (servo, motor, sensor)
+  | 'passive' //  no electrical model (wires-through / mechanical / decorative)
+
+/**
+ * Electrical metadata for a part (epic #597, issue #600) — the parameters the
+ * netlist/ERC/solver read to give a part real behaviour. Every field is optional
+ * so a part declares only what its {@link model} needs; the block is authored in
+ * `parts.yml` alongside the geometry and round-trips like the rest of the sidecar.
+ *
+ * Units are explicit in the field names (volts, ohms, amps, milliamp-hours) so a
+ * hand-authored file is unambiguous. Sized up-front (sources + consumers) so the
+ * power-input parts (#602) and consequence engine (#607) don't need re-authoring.
+ */
+export interface PartElectrical {
+  /** The behavioural model (defaults to `passive` when absent). */
+  model: ElectricalModel
+  /** Forward voltage drop in **volts** — `led` / `diode`. */
+  vf?: number
+  /** Fixed resistance in **ohms** — `resistor`, or a `source`'s internal resistance. */
+  resistanceOhms?: number
+  /** Nominal supply voltage in **volts** — `source` (a battery's nominal, a PSU's
+   *  default set-point). */
+  supplyV?: number
+  /** Adjustable supply range `[min, max]` in **volts** — an adjustable `source`
+   *  (bench PSU). Absent ⇒ a fixed supply at {@link supplyV}. */
+  supplyRange?: [number, number]
+  /** Rated maximum current in **amps** before the part is damaged — the threshold
+   *  the consequence engine (#607) trips "magic smoke" at. */
+  maxCurrentA?: number
+  /** Battery capacity in **milliamp-hours** — a `source` battery; feeds the
+   *  battery-life estimate (#607). */
+  capacityMah?: number
+  /** Typical steady current draw in **amps** — a `consumer` (a sensor's quiescent
+   *  draw, a servo's idle). */
+  currentDrawA?: number
+  /** Peak / stall current draw in **amps** — a `consumer` under load (a servo
+   *  stalled, a motor started); the worst-case figure for the power budget (#607). */
+  stallCurrentA?: number
+  /** The pin NAMES that carry the part's terminals, so the solver knows which pad
+   *  is which without guessing. `positive`/`negative` for a 2-terminal source or
+   *  passive; absent ⇒ inferred from pin roles (pwr/gnd). */
+  terminals?: { positive?: string; negative?: string }
+}
+
+/**
  * A full, portable Part. The fields above the geometry line are the `parts.yml`
  * header the epic spells out (name, manufacturer, family, tags, package, pin
  * spacing, user key/values, voltage, part #); below it is everything the Board
@@ -536,6 +591,13 @@ export interface PartDefinition {
    * where a link needs bespoke points). Absent ⇒ the part isn't a foot/wheel.
    */
   contacts?: [number, number, number][]
+
+  /**
+   * Electrical behaviour for the Circuit Sim (epic #597, #600). Absent ⇒ the part
+   * is electrically `passive` (no source/load/model) — it still appears in the
+   * netlist as connection points, it just has no I–V behaviour of its own.
+   */
+  electrical?: PartElectrical
 
   // --- Editor display state (persisted) ------------------------------------
   /**

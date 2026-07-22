@@ -33,7 +33,7 @@ import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
-import { classifyBusWire } from './bus-wires'
+import { classifyBusWire } from '../../../shared/bus-wires'
 import './WiringCanvas.css'
 
 /**

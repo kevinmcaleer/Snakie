@@ -6,7 +6,7 @@
  * what makes real schematics chaotic — named stubs are the standard notation.
  * Pure + unit-tested.
  */
-import type { PartPinCapability, PartPinSignals, PartPinBuses } from '../../../shared/part'
+import type { PartPinCapability, PartPinSignals, PartPinBuses } from './part'
 
 /** What the classifier needs to know about ONE wire endpoint. */
 export interface BusEndInfo {

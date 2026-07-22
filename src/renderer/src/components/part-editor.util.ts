@@ -42,6 +42,7 @@ import {
   type PolygonPoint
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
+import { coerceElectrical } from '../../../shared/part-yaml'
 
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
@@ -988,6 +989,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     )
     if (pts.length) out.contacts = pts.map((p) => [p[0], p[1], p[2]])
   }
+  // Electrical behaviour (#597 / #600) — reuse the shared coercer so the save-time
+  // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
+  const electrical = coerceElectrical(part.electrical)
+  if (electrical) out.electrical = electrical
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

@@ -66,6 +66,7 @@ const RICH: PartDefinition = normalisePart({
   imageLayer: { x: 0.1, y: 0.1, w: 0.8, h: 0.8, opacity: 0.9 },
   mesh: 'model.stl',
   meshUnits: 'mm',
+  electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5] },
   schematic: { aspect: 1, pins: [{ pin: 'SDA', side: 'left', order: 0 }] }
 })
 
@@ -79,6 +80,23 @@ describe('partToYaml / partFromYaml round-trip', () => {
   it('round-trips the blank starter part', () => {
     const start = normalisePart(blankPart())
     expect(normalisePart(partFromYaml(partToYaml(start)))).toEqual(start)
+  })
+
+  it('round-trips the electrical block, and drops a bare/garbage one (#600)', () => {
+    // A source (LiPo) with the full spec survives read→write→read.
+    const src = normalisePart({
+      id: 'lipo', name: 'LiPo', headers: [],
+      electrical: { model: 'source', supplyV: 3.7, resistanceOhms: 0.09, maxCurrentA: 5, capacityMah: 1200 }
+    })
+    const back = normalisePart(partFromYaml(partToYaml(src)))
+    expect(back.electrical).toEqual(src.electrical)
+    // A bare `passive` block carries no info → dropped (not serialised as noise).
+    const bare = { id: 'x', name: 'X', headers: [], electrical: { model: 'passive' as const } }
+    expect(partToYaml(bare)).not.toContain('electrical')
+    expect(partFromYaml(partToYaml(bare)).electrical).toBeUndefined()
+    // A negative resistance is garbage → dropped, model still kept.
+    const bad = partFromYaml('id: r\nname: R\nelectrical:\n  model: resistor\n  resistanceOhms: -5\n')
+    expect(bad.electrical).toEqual({ model: 'resistor' })
   })
 
   it('never serialises the runtime imageData blob', () => {
