@@ -385,6 +385,15 @@ export function PartCanvas({
   // Board px-per-mm (from real dimensions) so physical parts like JST/QWIIC
   // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
   const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
+  // How wide one pin PITCH renders (mm-pitch × px-per-mm). On a dense/large board
+  // (e.g. the Servo 2040, ~2.54mm pitch across a wide body) that can be smaller
+  // than the fixed pad + label sizes, so they overlap. `pinScale` shrinks the pad
+  // AND its label together when the pitch is tight, and is 1 at a comfortable
+  // pitch so normal boards are unchanged (#…). PIN_PITCH_REF ≈ the pitch (px) the
+  // fixed 12px pad / 14px number-box were designed for.
+  const PIN_PITCH_REF = 22
+  const pitchPx = connPxPerMm > 0 ? spacing * connPxPerMm : 0
+  const pinScale = pitchPx > 0 ? Math.max(0.45, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
   /** A hole's drawn (and collision) radius in viewBox units. */
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
@@ -1932,7 +1941,7 @@ export function PartCanvas({
   const cutHoles = visible.holes && holes.length > 0
   // Pin/castellation through-holes to cut through the PCB + image + copper (#171).
   const pinHoleList = visible.pins
-    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12, rp.x, rp.pin.rotation))
+    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12 * pinScale, rp.x, rp.pin.rotation))
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
 
@@ -2092,7 +2101,8 @@ export function PartCanvas({
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-            const size = 12
+            // Pad shrinks with the pitch so dense boards don't overlap (#…).
+            const size = 12 * pinScale
             const cx = px(rp.x)
             const cy = py(rp.y)
             const stroke = sel ? '#fff' : '#0008'
@@ -2115,19 +2125,24 @@ export function PartCanvas({
               pad = (
                 <>
                   <circle cx={cx} cy={cy} r={size / 2} fill="#c79a4e" stroke={stroke} strokeWidth={sw} />
-                  <circle cx={cx} cy={cy} r={size / 2 - 3.5} fill="var(--bc-mat, #0c0f12)" />
+                  <circle cx={cx} cy={cy} r={Math.max(0.8, size / 2 - 3.5 * pinScale)} fill="var(--bc-mat, #0c0f12)" />
                 </>
               )
             } else {
               pad = (
                 <>
                   <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
-                  <circle cx={cx} cy={cy} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                  <circle cx={cx} cy={cy} r={2.3 * pinScale} fill="var(--bc-mat, #0c0f12)" />
                 </>
               )
             }
             const lo = rp.pin.labelOffset
-            const labelTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+            const dragTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+            // Shrink the number-box + label with the pad on a tight pitch, pivoted
+            // at the pin (so it stays anchored to its pad), keeping any hand-placed
+            // drag offset unscaled (#…).
+            const scaleTf = pinScale !== 1 ? `translate(${cx} ${cy}) scale(${pinScale}) translate(${-cx} ${-cy})` : undefined
+            const labelTf = [dragTf, scaleTf].filter(Boolean).join(' ') || undefined
             const labelDraggable = interactive && !locked.pins
             return (
               <g key={`p${i}`}>
