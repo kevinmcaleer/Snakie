@@ -308,6 +308,47 @@ describe('buildCircuit — netlist → SolverCircuit (adapter)', () => {
     expect(solveDC(buildCircuit(nl, comps(0.9))).nodeVoltages[2]).toBeCloseTo(4.5, 3)
   })
 
+  it('a regulator drops the input rail to its output rail and sources the load current', () => {
+    // PSU 5V → VBUS; an on-board regulator holds 3V3 at 3.3V; a 100Ω load hangs off
+    // 3V3 → GND. The load pulls 33mA, which the regulator draws back from VBUS — so
+    // the PSU (on VBUS) delivers that same 33mA. This is the "current flows from 3V3"
+    // behaviour: without the regulator, 3V3 has no source and can't drive anything.
+    const nl = netlist(
+      { ...node('N0', 'ground', term('psu', '-', 'gnd'), term('board', 'GND', 'gnd'), term('load', 'b', 'gnd')), rail: 'GND' },
+      { ...node('N1', 'power', term('psu', '+', 'pwr'), term('board', 'VBUS', 'pwr')), rail: 'VBUS' },
+      { ...node('N2', 'power', term('board', '3V3', 'pwr'), term('load', 'a', 'pwr')), rail: '3V3' }
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'psu', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } },
+      { key: 'board', electrical: { model: 'regulator', inputRail: 'VBUS', outputRail: '3V3', outputV: 3.3 } },
+      { key: 'load', electrical: { model: 'resistor', resistanceOhms: 100, terminals: { positive: 'a', negative: 'b' } } }
+    ]
+    const circuit = buildCircuit(nl, comps)
+    expect(circuit.elements.map((e) => e.id)).toContain('board#reg')
+    const r = solveDC(circuit)
+    expect(r.nodeVoltages[1]).toBeCloseTo(5, 6) // VBUS held by the PSU
+    expect(r.nodeVoltages[2]).toBeCloseTo(3.3, 6) // 3V3 regulated
+    expect(r.branchCurrents['board#reg']).toBeCloseTo(0.033, 4) // supplying 33mA out of 3V3
+    expect(Math.abs(r.branchCurrents['psu'])).toBeCloseTo(0.033, 4) // ...drawn back from VBUS
+  })
+
+  it('a regulator stays off when its input rail is unpowered (no free energy)', () => {
+    // Same board + 3V3 load, but NO source on VBUS. The regulator must not manufacture
+    // 3.3V from a floating input — 3V3 settles to ~0 and the regulator carries no current.
+    const nl = netlist(
+      { ...node('N0', 'ground', term('board', 'GND', 'gnd'), term('load', 'b', 'gnd')), rail: 'GND' },
+      { ...node('N1', 'power', term('board', 'VBUS', 'pwr')), rail: 'VBUS' },
+      { ...node('N2', 'power', term('board', '3V3', 'pwr'), term('load', 'a', 'pwr')), rail: '3V3' }
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'board', electrical: { model: 'regulator', inputRail: 'VBUS', outputRail: '3V3', outputV: 3.3 } },
+      { key: 'load', electrical: { model: 'resistor', resistanceOhms: 100, terminals: { positive: 'a', negative: 'b' } } }
+    ]
+    const r = solveDC(buildCircuit(nl, comps))
+    expect(r.nodeVoltages[2]).toBeCloseTo(0, 6) // 3V3 dead — regulator gated off
+    expect(r.branchCurrents['board#reg']).toBe(0)
+  })
+
   it('skips passive parts, unwired parts, and self-shorted terminals', () => {
     const nl = netlist(
       node('N0', 'ground', term('bat', '-', 'gnd')),

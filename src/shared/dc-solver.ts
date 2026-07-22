@@ -36,7 +36,8 @@ export interface SolverElement {
   vf?: number
   /** Resistance (ohms) — `resistor`, or a `source`'s internal resistance. */
   resistanceOhms?: number
-  /** Supply voltage (volts) — `source` (a battery nominal or a PSU's live set-point). */
+  /** Supply voltage (volts) — `source` (a battery nominal or a PSU's live set-point),
+   *  or a `regulator`'s regulated output voltage (`a`=input rail, `b`=output rail). */
   supplyV?: number
   /** Steady current draw (amps) — `consumer` (modelled as a current sink a→b). */
   currentDrawA?: number
@@ -169,7 +170,40 @@ export function solveDC(circuit: SolverCircuit): SolverState {
 
   // Ideal voltage sources (internal R == 0) each add one MNA branch-current unknown.
   const vsources = elements.filter((e) => e.model === 'source' && (e.resistanceOhms ?? 0) <= 0)
-  const m = vsources.length
+
+  // Which nodes are POWERED — reachable from a source terminal through conducting
+  // elements (a source ties both its nodes; resistors / closed switches carry on)?
+  // A regulator only regulates when its INPUT rail is powered; otherwise it would
+  // manufacture energy from a floating input, so it stays off.
+  const powered = new Set<number>()
+  {
+    const adj = new Map<number, number[]>()
+    const link = (a: number, b: number): void => {
+      if (!adj.has(a)) adj.set(a, [])
+      if (!adj.has(b)) adj.set(b, [])
+      adj.get(a)!.push(b)
+      adj.get(b)!.push(a)
+    }
+    const stack: number[] = []
+    for (const el of elements) {
+      if (el.model === 'source') {
+        stack.push(el.a, el.b)
+        link(el.a, el.b)
+      } else if (el.model === 'resistor') link(el.a, el.b)
+      else if (el.model === 'switch' && el.closed) link(el.a, el.b)
+    }
+    while (stack.length) {
+      const node = stack.pop()!
+      if (powered.has(node)) continue
+      powered.add(node)
+      for (const nb of adj.get(node) ?? []) if (!powered.has(nb)) stack.push(nb)
+    }
+  }
+  // Active regulators (input rail powered) each add one MNA branch-current unknown too.
+  const activeRegIds = new Set(
+    elements.filter((e) => e.model === 'regulator' && powered.has(e.a)).map((e) => e.id)
+  )
+  const m = vsources.length + activeRegIds.size
   const size = n + m
 
   // Region state for diodes/switches: start diodes ON (optimistic), switches by
@@ -205,7 +239,24 @@ export function solveDC(circuit: SolverCircuit): SolverState {
     }
 
     let vs = 0
+    let rg = 0
     for (const el of elements) {
+      if (el.model === 'regulator') {
+        if (!activeRegIds.has(el.id)) continue // input rail unpowered → regulator off
+        // A gyrator-like stamp: branch `k` holds V(output) − V(ground) = Vout, while the
+        // SAME current couples to the input rail (+Ibr into output KCL, −Ibr into input
+        // KCL) — so the load current on the regulated rail is drawn back from the input.
+        const k = n + vsources.length + rg++
+        const io = idx[el.b] // output rail node
+        const ii = idx[el.a] // input rail node
+        if (io >= 0) {
+          A[io][k] += 1 // branch current feeds the output node
+          A[k][io] += 1 // constraint row: V(output) − V(ground) = Vout
+        }
+        if (ii >= 0) A[ii][k] -= 1 // ...returned from the input node
+        z[k] += el.supplyV ?? 0
+        continue
+      }
       if (el.model === 'source') {
         const rInt = el.resistanceOhms ?? 0
         const v = el.supplyV ?? 0
@@ -294,10 +345,16 @@ export function solveDC(circuit: SolverCircuit): SolverState {
   const branchCurrents: Record<string, number> = {}
   const vAt = (node: number): number => nodeVoltages[node]
   let vs = 0
+  let rg = 0
   for (const el of elements) {
     const va = vAt(el.a)
     const vb = vAt(el.b)
     switch (el.model) {
+      case 'regulator':
+        // Branch current is defined input→output; negate the MNA unknown so a positive
+        // value means the regulator is SUPPLYING current out of its output rail.
+        branchCurrents[el.id] = activeRegIds.has(el.id) ? -solution[n + vsources.length + rg++] : 0
+        break
       case 'source': {
         const rInt = el.resistanceOhms ?? 0
         if (rInt <= 0) {
@@ -423,6 +480,27 @@ export function buildCircuit(netlist: Netlist, components: CircuitComponent[]): 
         const t = Math.max(0, Math.min(1, comp.wiperPos ?? 0.5))
         elements.push({ id: `${comp.key}#top`, model: 'resistor', a: vcc, b: wiper, resistanceOhms: Math.max(1, R * (1 - t)) })
         elements.push({ id: `${comp.key}#bot`, model: 'resistor', a: wiper, b: gnd, resistanceOhms: Math.max(1, R * t) })
+      }
+      continue
+    }
+
+    // A regulator (on-board LDO/buck) bridges two RAILS: it holds its output rail at
+    // `outputV` (vs ground) while pulling the load current back from its input rail —
+    // so e.g. a board's 3V3 pins actually source current, drawn from VBUS. Rails are
+    // resolved by the netlist's rail label (all like-named power pads = one node).
+    if (el.model === 'regulator') {
+      const railNode = (rail: string | undefined): number | undefined => {
+        if (!rail) return undefined
+        const R = rail.toUpperCase()
+        const i = netlist.nodes.findIndex(
+          (nd) => (nd.rail ?? '').toUpperCase() === R && nd.terminals.some((t) => t.key === comp.key)
+        )
+        return i >= 0 ? i : undefined
+      }
+      const input = railNode(el.inputRail)
+      const output = railNode(el.outputRail)
+      if (input !== undefined && output !== undefined && input !== output && el.outputV !== undefined) {
+        elements.push({ id: `${comp.key}#reg`, model: 'regulator', a: input, b: output, supplyV: el.outputV })
       }
       continue
     }

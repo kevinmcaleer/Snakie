@@ -22,6 +22,18 @@ dimensions:
 ledLabel: "25"
 image: image.png
 imageLayer: { x: 0, y: 0, w: 1, h: 1 }
+electrical:
+  # On-board 3.3V regulator (RP2040 boards buck/boost the input down to 3V3).
+  # Modelled VBUS → 3V3 so wiring 5V to VBUS makes the 3V3 pins actually source
+  # current into whatever hangs off them. It only regulates when VBUS is powered.
+  # (VSYS-direct powering + the real VBUS→VSYS diode needs multi-element board
+  # support — a follow-up; #602.)
+  model: regulator
+  inputRail: VBUS
+  outputRail: "3V3"
+  outputV: 3.3
+  dropoutV: 0.3
+  maxCurrentA: 0.6
 headers:
   - edge: left
     pins:

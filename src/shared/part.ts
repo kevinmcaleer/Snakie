@@ -388,6 +388,7 @@ export type ElectricalModel =
   | 'switch' //   button / switch (open or closed between two pins)
   | 'consumer' // a current sink with a typical + stall draw (servo, motor, sensor)
   | 'potentiometer' // a 3-pin variable divider: track VCC↔GND, a draggable wiper tap
+  | 'regulator' // an on-board LDO/buck: input rail in, a fixed regulated rail out
   | 'passive' //  no electrical model (wires-through / mechanical / decorative)
 
 /**
@@ -433,6 +434,19 @@ export interface PartElectrical {
    *  is which without guessing. `positive`/`negative` for a 2-terminal source or
    *  passive; absent ⇒ inferred from pin roles (pwr/gnd). */
   terminals?: { positive?: string; negative?: string }
+  /** The rail LABEL a `regulator` draws from (e.g. `VBUS`, `VSYS`, `VIN`) — the
+   *  netlist bonds a board's like-named power pads into one rail, so this names the
+   *  whole input net. The regulator only regulates when this rail is powered. */
+  inputRail?: string
+  /** The rail LABEL a `regulator` drives (e.g. `3V3`) — held at {@link outputV}
+   *  relative to ground, with the load current pulled back from {@link inputRail}
+   *  (so a board's on-board regulator makes its 3V3 pins actually source current). */
+  outputRail?: string
+  /** The regulated output voltage in **volts** — a `regulator` (e.g. `3.3`). */
+  outputV?: number
+  /** Dropout in **volts** — a `regulator` needs `input ≥ outputV + dropoutV` to
+   *  hold regulation (informational for now; the consequence engine #607 uses it). */
+  dropoutV?: number
 }
 
 /**
