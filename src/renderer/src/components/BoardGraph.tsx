@@ -357,7 +357,10 @@ export function BoardGraph({
   const [viewType, setViewType] = useState<'graph' | WiringRenderMode>(() => {
     try {
       const saved = window.localStorage.getItem(VIEW_KEY)
-      if (saved === 'graph' || saved === 'lifelike' || saved === 'schematic') return saved
+      // The node-graph view is retired (#…): everything it did (ERC, node-voltage
+      // overlay, LIVE) now lives on the Breadboard. A stale saved 'graph' migrates
+      // to the Breadboard.
+      if (saved === 'lifelike' || saved === 'schematic') return saved
     } catch {
       // Ignore storage read failures (disabled / quota).
     }
@@ -927,7 +930,6 @@ export function BoardGraph({
           <div className="boardgraph__viewtabs" role="tablist" aria-label="Board view type">
             {(
               [
-                ['graph', 'Node graph'],
                 ['lifelike', 'Breadboard'],
                 ['schematic', 'Schematic']
               ] as const
