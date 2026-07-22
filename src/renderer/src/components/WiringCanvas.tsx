@@ -1845,7 +1845,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // Elastic pull (#…): an active stretch follows the cursor; after
               // release the wobble decays the pulled belly back to rest.
               let pull: { x: number; y: number } | undefined
-              if (drag?.kind === 'stretch' && drag.boxKey === c.id && drag.liveX != null && drag.liveY != null) {
+              if (drag?.kind === 'stretch' && drag.moved && drag.boxKey === c.id && drag.liveX != null && drag.liveY != null) {
+                // Only bend once the user actually DRAGS — a plain click just selects
+                // (otherwise the belly jumps to the click point on pointer-down).
                 pull = { x: drag.liveX, y: drag.liveY }
               } else if (wobbleRef.current?.wireId === c.id) {
                 const en = wireEnds(c)
