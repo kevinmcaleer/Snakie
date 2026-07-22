@@ -729,6 +729,26 @@ export function BoardGraph({
     return m
   }, [usedByCode])
 
+  // LIVE readings keyed by board pad index (#…): the same code-used pins the node
+  // graph shows, mapped to their board pads so the Breadboard can badge each with
+  // its live device value. Empty when LIVE is off.
+  const liveByPad = useMemo(() => {
+    const m = new Map<number, { text: string; asserted: boolean }>()
+    if (!liveOn) return m
+    for (const r of rows) {
+      const lv = liveValues.get(r.index)
+      if (!lv) continue
+      const disp = liveValueDisplay(r.conn.type, lv)
+      const mark = (pad: (typeof pads)[number]): void => {
+        const idx = pads.indexOf(pad)
+        if (idx >= 0) m.set(idx, { text: disp.text, asserted: disp.asserted })
+      }
+      mark(r.pad)
+      for (const ep of r.extraPads) mark(ep)
+    }
+    return m
+  }, [rows, pads, liveValues, liveOn])
+
   // Stage extent spans BOTH the node column and the physical board (with its
   // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
   // Derived from geometry, NOT the connection count — so large N grows the node
@@ -978,8 +998,8 @@ export function BoardGraph({
           {/* LIVE doubles as the on/off control for device polling (#97). OFF:
               dim LED, idle placeholders, device untouched. ON: lit when a board
               is connected (green, pulsing), amber while connecting/unreadable.
-              Only the node-graph shows per-pin values, so LIVE hides elsewhere. */}
-          {effectiveView === 'graph' && (
+              Shown on the node-graph + Breadboard (both display per-pin values). */}
+          {effectiveView !== 'schematic' && (
             <button
               type="button"
               className={`boardgraph__live ${liveOn ? 'is-on' : 'is-off'} ${
@@ -1059,6 +1079,7 @@ export function BoardGraph({
                     }
                   : undefined
               }
+              live={liveOn ? { byPad: liveByPad, connected: liveConnected } : undefined}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)

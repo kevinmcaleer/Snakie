@@ -597,6 +597,13 @@ export interface WiringCanvasProps {
     reason?: 'empty' | 'no-ground' | 'singular' | 'floating'
     toggle: () => void
   }
+  /** LIVE device readings (#…), keyed by board pad index — the running board's
+   *  per-pin values (digital/adc/pwm) badged on each code-used board pad. Absent /
+   *  empty ⇒ LIVE off. `connected` gates the "no board" placeholder. */
+  live?: {
+    byPad: Map<number, { text: string; asserted: boolean }>
+    connected: boolean
+  }
 }
 
 interface Drag {
@@ -626,7 +633,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -1687,6 +1694,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 <SubjectBody
                   key={s.key}
                   subject={s}
+                  liveByPad={live?.byPad}
                   capsPins={capsOn ? 'all' : undefined}
                   capsHoverPin={capsOn && hover ? hover.pin : null}
                   onHoverPart={(on) =>
@@ -2444,7 +2452,8 @@ function SubjectBody({
   onHoverPin,
   onHoverPart,
   capsPins,
-  capsHoverPin
+  capsHoverPin,
+  liveByPad
 }: {
   subject: Subject
   onHoverPin?: (index: number | null) => void
@@ -2453,6 +2462,9 @@ function SubjectBody({
   /** Which pins draw hover capability chips (forwarded to PartBody). */
   capsPins?: 'all' | ReadonlySet<number>
   capsHoverPin?: number | null
+  /** LIVE device readings by board pad index (#…) — appended to each used pad's
+   *  code-variable label so the Breadboard shows live values. */
+  liveByPad?: Map<number, { text: string; asserted: boolean }>
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -2508,9 +2520,17 @@ function SubjectBody({
               // Tell PartBody the applied rotation/scale so it keeps text upright
               // and pin labels a consistent size (#180). For the MCU, draw the
               // boxed pin annotation (number box + label + code variable).
+              // LIVE (#…): append the running board's per-pin reading to the code
+              // variable at each used pad — e.g. `servo 3.30 V` — so the Breadboard
+              // shows live device values, not just the node graph.
               const pinVars =
                 s.kind === 'board' && s.codeUsed
-                  ? new Map([...s.codeUsed].map(([i, u]) => [i, { variable: u.label, color: u.color }]))
+                  ? new Map(
+                      [...s.codeUsed].map(([i, u]) => {
+                        const lv = liveByPad?.get(i)
+                        return [i, { variable: lv ? `${u.label}  ${lv.text}` : u.label, color: u.color }]
+                      })
+                    )
                   : undefined
               const body = (
                 <PartBody
