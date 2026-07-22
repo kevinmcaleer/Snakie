@@ -448,6 +448,16 @@
 .pcv__svg--interactive.pcv__tool-move {
   cursor: grab;
 }
+/* Count badge over a servo-header strip drag — white with a dark outline so it
+   reads on the board photo or bare PCB alike. */
+.pcv__strip-count {
+  font-family: var(--font-mono);
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+}
+
 .pcv__svg--interactive.pcv__tool-pin,
 .pcv__svg--interactive.pcv__tool-servo-header,
 .pcv__svg--interactive.pcv__tool-hole,

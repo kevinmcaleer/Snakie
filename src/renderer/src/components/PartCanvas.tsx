@@ -266,6 +266,7 @@ interface Drag {
     | 'move-vertex'
     | 'move-shape-vertex'
     | 'create-array'
+    | 'servo-strip'
     | 'marquee'
   sel: CanvasSelection
   corner?: number
@@ -321,6 +322,8 @@ export function PartCanvas({
   const [gridKey, setGridKey] = useState(false)
   // Live preview of the pins a "drag from the selected pin" gesture will create.
   const [createPreview, setCreatePreview] = useState<{ axis: 'x' | 'y'; dir: number; n: number } | null>(null)
+  // Live count while dragging out a servo-header strip (start pad + how many).
+  const [stripPreview, setStripPreview] = useState<{ x: number; y: number; n: number } | null>(null)
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   // Multi-select of components (shapes + labels) — same marquee / shift-click
@@ -751,11 +754,19 @@ export function PartCanvas({
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...newPins] } : h)) })
   }
 
-  /** Drop a pre-wired servo/DuPont header at (nx, ny): a vertical Signal / V+ / GND
-   *  trio at the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-
-   *  hidden, all sharing a `group` so they move + delete as one unit. The signal's
-   *  GPIO is left for the user to set. */
-  const addServoHeader = (nx: number, ny: number): void => {
+  /** One servo/DuPont header trio at (sx, sy): a vertical Signal / V+ / GND stack at
+   *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
+   *  all sharing `gid` so they move + delete as one unit. */
+  const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
+    { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
+    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
+    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
+  ]
+
+  /** Drop `n` pre-wired servo headers in a row starting at (nx, ny), spaced one pin
+   *  pitch apart along x (n = 1 for a plain click; more for a drag-strip). The
+   *  signals' GPIOs are left for the user to set. */
+  const addServoHeaders = (nx: number, ny: number, n = 1): void => {
     const sx = snapX(nx)
     const sy = snapY(ny)
     if (inHole(sx, sy)) {
@@ -764,16 +775,15 @@ export function PartCanvas({
     }
     const groups = new Set<string>()
     for (const h of part.headers) for (const p of h.pins) if (p.group) groups.add(p.group)
-    const idx = groups.size + 1
-    const gid = `servo-${idx}`
-    const trio: PartPin[] = [
-      { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
-      { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
-      { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
-    ]
+    let idx = groups.size
+    const trios: PartPin[] = []
+    for (let k = 0; k < Math.max(1, n); k++) {
+      idx += 1
+      trios.push(...servoTrio(clamp01(sx + k * stepNX), sy, `servo-${idx}`, idx))
+    }
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
-    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trio] } : h)) })
-    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the signal pin
+    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)) })
+    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the first signal
   }
 
   /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and
@@ -1498,7 +1508,16 @@ export function PartCanvas({
     }
     // Creation tools no-op on a locked layer.
     if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
-    if (tool === 'servo-header') return locked.pins ? undefined : addServoHeader(nx, ny)
+    if (tool === 'servo-header') {
+      // Down starts a strip drag: a plain click places one header, dragging right
+      // lays a row of N at the pin pitch (committed on release).
+      if (locked.pins) return
+      const sx = snapX(nx)
+      const sy = snapY(ny)
+      dragRef.current = { kind: 'servo-strip', sel: null, startNX: sx, startNY: sy, ox: sx, oy: sy }
+      setStripPreview({ x: sx, y: sy, n: 1 })
+      return
+    }
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
     if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
@@ -1728,6 +1747,12 @@ export function PartCanvas({
       setCompLabelOffset(d.sel, d.ox + dx, d.oy + dy)
       return
     }
+    if (d.kind === 'servo-strip') {
+      // Drag right/left from the start pad to set how many headers the strip lays.
+      const n = Math.max(1, Math.min(64, Math.round(Math.abs(nx - d.startNX) / stepNX) + 1))
+      setStripPreview({ x: d.startNX, y: d.startNY, n })
+      return
+    }
     if (d.kind === 'marquee') {
       setMarquee({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
       return
@@ -1905,8 +1930,16 @@ export function PartCanvas({
     dragRef.current = null
     const preview = createPreview
     setCreatePreview(null)
+    const strip = stripPreview
+    setStripPreview(null)
     setGuides(null) // drop any alignment guides
     if (!d || !interactive) return
+
+    // Servo-header strip → place N headers in a row (N=1 for a plain click).
+    if (d.kind === 'servo-strip') {
+      addServoHeaders(d.startNX, d.startNY, strip?.n ?? 1)
+      return
+    }
 
     // Marquee → select the pins + components whose centre is inside the box.
     if (d.kind === 'marquee') {
@@ -2354,6 +2387,42 @@ export function PartCanvas({
                   <circle key={`g${k}-${j}`} cx={px(s.x)} cy={py(s.y)} r={5} fill="#d6a531" opacity={opacity} />
                 ))
             })}
+          </g>
+        )}
+
+        {/* Live preview of a servo-header STRIP being dragged out: a faint S/V/G
+            column per header + a count badge. */}
+        {interactive && stripPreview && (
+          <g className="pcv__strip-preview" aria-hidden="true" style={{ pointerEvents: 'none' }}>
+            {Array.from({ length: stripPreview.n }, (_, k) => {
+              const x = clamp01(stripPreview.x + k * stepNX)
+              const r = connPxPerMm > 0 ? 1.2 * connPxPerMm : 5
+              return [0, 1, 2].map((row) => {
+                const y = clamp01(stripPreview.y + row * stepNY)
+                return (
+                  <circle
+                    key={`sp${k}-${row}`}
+                    cx={px(x)}
+                    cy={py(y)}
+                    r={r}
+                    fill={row === 0 ? '#d6a531' : row === 1 ? '#c0392b' : '#3a3f44'}
+                    stroke="#fff"
+                    strokeWidth={0.8}
+                    opacity={0.7}
+                  />
+                )
+              })
+            })}
+            <text
+              x={px(clamp01(stripPreview.x + (stripPreview.n - 1) * stepNX)) + 10}
+              y={py(stripPreview.y) - 6}
+              className="pcv__strip-count"
+              fill="#fff"
+              fontSize={11}
+              fontWeight={700}
+            >
+              ×{stripPreview.n}
+            </text>
           </g>
         )}
 
