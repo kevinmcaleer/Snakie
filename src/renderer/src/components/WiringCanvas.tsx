@@ -588,8 +588,13 @@ export interface WiringCanvasProps {
   voltage?: {
     byEndpoint: Map<string, number>
     ref: number
+    /** The overlay toggle state. */
     on: boolean
+    /** Whether the DC solve succeeded (so there are voltages to show). */
     ready: boolean
+    /** Why the solve degraded (when not ready) — surfaced so the user knows why
+     *  nothing colours: no ground, a floating node, a short, or nothing to solve. */
+    reason?: 'empty' | 'no-ground' | 'singular' | 'floating'
     toggle: () => void
   }
 }
@@ -1935,7 +1940,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         )}
 
         <div className="wc__controls" role="toolbar" aria-label="Wiring view controls">
-          <span className="wc__hint">Drag from a pin to another pin to wire them.</span>
+          <span className="wc__hint">
+            {voltage?.on && !voltage.ready
+              ? voltage.reason === 'no-ground'
+                ? 'Node voltages: no ground — connect a battery/PSU − (or a GND rail) to a ground path.'
+                : voltage.reason === 'singular' || voltage.reason === 'floating'
+                  ? 'Node voltages: the circuit is floating — complete the loop from + back to −.'
+                  : 'Node voltages: nothing to solve yet — add a powered source (battery / bench PSU) with an electrical model.'
+              : 'Drag from a pin to another pin to wire them.'}
+          </span>
           <div className="wc__zoom">
             <button
               type="button"

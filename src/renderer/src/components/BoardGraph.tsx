@@ -1052,8 +1052,9 @@ export function BoardGraph({
                   ? {
                       byEndpoint: endpointVoltage,
                       ref: overlayRefV,
-                      on: overlayActive,
+                      on: voltsOverlay,
                       ready: !!solverState?.ok,
+                      reason: solverState && !solverState.ok ? solverState.reason : undefined,
                       toggle: () => setVoltsOverlay((o) => !o)
                     }
                   : undefined
