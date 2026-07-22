@@ -385,15 +385,30 @@ export function PartCanvas({
   // Board px-per-mm (from real dimensions) so physical parts like JST/QWIIC
   // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
   const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
-  // How wide one pin PITCH renders (mm-pitch × px-per-mm). On a dense/large board
-  // (e.g. the Servo 2040, ~2.54mm pitch across a wide body) that can be smaller
-  // than the fixed pad + label sizes, so they overlap. `pinScale` shrinks the pad
-  // AND its label together when the pitch is tight, and is 1 at a comfortable
-  // pitch so normal boards are unchanged (#…). PIN_PITCH_REF ≈ the pitch (px) the
-  // fixed 12px pad / 14px number-box were designed for.
-  const PIN_PITCH_REF = 22
-  const pitchPx = connPxPerMm > 0 ? spacing * connPxPerMm : 0
-  const pinScale = pitchPx > 0 ? Math.max(0.45, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
+  // The fixed pad + number-box + label sizes were tuned for a comfortable pin
+  // pitch. On a dense/large board they render tighter than those fixed sizes, so
+  // the holes, number boxes and labels overlap. `pinScale` shrinks them together
+  // when the pitch is tight, and is 1 at a comfortable pitch so normal boards are
+  // unchanged (#…). PIN_PITCH_REF ≈ the gap (px) the fixed 14px number-box wants.
+  const PIN_PITCH_REF = 21
+  // The nominal pitch (mm-pitch × px-per-mm) OVERESTIMATES the real room: pins are
+  // often packed tighter than the nominal pinSpacing (e.g. the Servo 2040's 3-pin
+  // servo clusters render ~9px apart, under the nominal 2.54mm ≈ 12px), so drive
+  // the scale off the ACTUAL tightest centre-to-centre gap between rendered pins.
+  const nominalPitchPx = connPxPerMm > 0 ? spacing * connPxPerMm : 0
+  let minPinGapPx = Infinity
+  for (let i = 0; i < pins.length; i++) {
+    for (let j = i + 1; j < pins.length; j++) {
+      const d = Math.hypot((pins[i].x - pins[j].x) * box.w, (pins[i].y - pins[j].y) * box.h)
+      if (d > 0.5 && d < minPinGapPx) minPinGapPx = d
+    }
+  }
+  const pitchPx = Number.isFinite(minPinGapPx)
+    ? nominalPitchPx > 0
+      ? Math.min(minPinGapPx, nominalPitchPx)
+      : minPinGapPx
+    : nominalPitchPx
+  const pinScale = pitchPx > 0 ? Math.max(0.4, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
   /** A hole's drawn (and collision) radius in viewBox units. */
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
