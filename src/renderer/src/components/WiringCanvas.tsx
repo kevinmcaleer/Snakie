@@ -34,7 +34,7 @@ import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import { classifyBusWire } from '../../../shared/bus-wires'
-import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
+import { voltageColour, formatVoltage, formatCurrent } from '../../../shared/circuit-probe'
 import './WiringCanvas.css'
 
 /**
@@ -699,6 +699,45 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // The selected WIRE (connection id), mutually exclusive with a selected part —
   // click a wire to select it (highlighted), Delete removes it (#…).
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
+  // Circuit Sim click-probes (#604): 'meter' (tap two pads → voltage difference),
+  // 'clamp' (tap a wire → current). `meterA` is the first (+) probe point held while
+  // waiting for the second; `reading` is the readout shown in a floating pill.
+  const [probe, setProbe] = useState<'meter' | 'clamp' | null>(null)
+  const [meterA, setMeterA] = useState<{ endpoint: string; v: number } | null>(null)
+  const [reading, setReading] = useState<string | null>(null)
+  const setProbeMode = (m: 'meter' | 'clamp' | null): void => {
+    setProbe(m)
+    setMeterA(null)
+    setReading(
+      m === 'meter'
+        ? 'Multimeter: tap the + point, then the −.'
+        : m === 'clamp'
+          ? 'Clamp: tap a wire to read its current.'
+          : null
+    )
+  }
+  const probePad = (endpoint: string): void => {
+    const v = voltage?.byEndpoint.get(endpoint)
+    if (v === undefined) {
+      setReading('No solution — power + ground the circuit first.')
+      return
+    }
+    if (!meterA) {
+      setMeterA({ endpoint, v })
+      setReading(`+ ${formatVoltage(v)} — now tap the − point`)
+    } else {
+      setReading(`Δ = ${formatVoltage(meterA.v - v)}   (${formatVoltage(meterA.v)} − ${formatVoltage(v)})`)
+      setMeterA(null)
+    }
+  }
+  const probeWire = (id: string): void => {
+    const i = voltage?.currentByWire.get(id)
+    setReading(
+      i === undefined || Math.abs(i) < 1e-9
+        ? 'Clamp: 0 A (no current here)'
+        : `Clamp: ${formatCurrent(i)}${i < 0 ? '  (reverse)' : ''}`
+    )
+  }
   // Elastic wire wobble (#…): after a stretch drag releases, the pulled belly decays
   // back to rest with a damped oscillation, driven by requestAnimationFrame ticks.
   const wobbleRef = useRef<{ wireId: string; ox: number; oy: number; start: number } | null>(null)
@@ -1219,6 +1258,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const w = toWorld(e)
     // Fingers are far less precise than a mouse — grow the pin grab radius (#525).
     const dot = dotAt(w.x, w.y, touch ? TOUCH_DOT_TOL : DOT_TOL)
+    // Multimeter probe mode (#604): a pad tap reads its voltage instead of wiring;
+    // a tap on empty space still pans (so you can reposition while probing).
+    if (probe === 'meter' && dot) {
+      probePad(dot.endpoint)
+      return
+    }
     if (dot) {
       dragRef.current = { kind: 'wire', from: dot.endpoint, cx: w.x, cy: w.y }
       // Touch has no hover — surface the grabbed pin's chips like a mouse-over
@@ -1741,6 +1786,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
       onDrop={onDropPart ? onCanvasDrop : undefined}
       onKeyDown={(e) => {
+        // Escape leaves a probe mode (#604).
+        if (e.key === 'Escape' && probe) {
+          setProbeMode(null)
+          return
+        }
         // Delete / Backspace removes the selected part OR the selected wire (not
         // while typing). shouldDeleteSelectedPart just gates the key + typing guard.
         if (shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
@@ -1756,6 +1806,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       }}
     >
       <div className="wc__stage">
+        {/* Probe readout (#604): the multimeter / clamp result, floating over the
+            board while a probe mode is active. */}
+        {probe && reading && (
+          <div className={`wc__probe-readout wc__probe-readout--${probe}`} role="status">
+            {reading}
+          </div>
+        )}
         <svg
           ref={svgRef}
           className="wc__svg"
@@ -1885,9 +1942,14 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     fill="none"
                     stroke="transparent"
                     strokeWidth={14}
-                    style={{ pointerEvents: 'stroke', cursor: 'grab' }}
+                    style={{ pointerEvents: 'stroke', cursor: probe === 'clamp' ? 'crosshair' : 'grab' }}
                     onPointerDown={(e) => {
                       e.stopPropagation()
+                      // Clamp probe mode (#604): a wire tap reads its current, no drag.
+                      if (probe === 'clamp') {
+                        probeWire(c.id)
+                        return
+                      }
                       ;(e.target as Element).setPointerCapture?.(e.pointerId)
                       setSelectedWire(c.id)
                       setSelectedKey(null)
@@ -2208,6 +2270,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+                  </svg>
+                </button>
+                {/* Multimeter probe (#604) — tap two pads to read the voltage between. */}
+                <button
+                  type="button"
+                  className={`wc__zoom-btn${probe === 'meter' ? ' is-active' : ''}`}
+                  onClick={() => setProbeMode(probe === 'meter' ? null : 'meter')}
+                  aria-pressed={probe === 'meter'}
+                  title="Multimeter — tap two pads to read the voltage between them"
+                  aria-label="Multimeter probe"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 3v7m0 0 3.5 8.5A6 6 0 1 1 8.5 18.5z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {/* Current clamp (#604) — tap a wire to read its current. */}
+                <button
+                  type="button"
+                  className={`wc__zoom-btn${probe === 'clamp' ? ' is-active' : ''}`}
+                  onClick={() => setProbeMode(probe === 'clamp' ? null : 'clamp')}
+                  aria-pressed={probe === 'clamp'}
+                  title="Current clamp — tap a wire to read its current"
+                  aria-label="Current clamp probe"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M8 20a8 8 0 1 1 8 0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                    <path d="M8 20v-4M16 20v-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                 </button>
               </>
