@@ -19,7 +19,8 @@
  * `SolverCircuit` lives in {@link buildCircuit} (below) so this file is the whole
  * electrical engine; the worker (#603) and BoardGraph wiring consume it.
  */
-import type { ElectricalModel } from './part'
+import type { ElectricalModel, PartElectrical } from './part'
+import type { Netlist, TerminalRole } from './netlist'
 
 /** A two-terminal element in the circuit, its terminals mapped to node indices.
  *  `a` is the positive / power / anode terminal, `b` the negative / ground / cathode. */
@@ -319,4 +320,81 @@ export function solveDC(circuit: SolverCircuit): SolverState {
   }
 
   return { ok: true, nodeVoltages, branchCurrents }
+}
+
+// --- netlist → circuit adapter -----------------------------------------------
+
+/** A placed part with electrical behaviour, plus any live-state overrides, ready to
+ *  map onto the netlist. `key` MUST match the part-instance key the netlist uses in
+ *  its terminals (`"board"` for the MCU, else the placed part's instance id). */
+export interface CircuitComponent {
+  key: string
+  /** The part's electrical model + terminal hints (from `parts.yml`). */
+  electrical: PartElectrical
+  /** Live supply voltage override — a bench PSU's set-point wins over the nominal. */
+  supplyV?: number
+  /** Live switch state — whether a `switch` element is conducting. */
+  closed?: boolean
+}
+
+/**
+ * Build a {@link SolverCircuit} from an extracted {@link Netlist} and the electrical
+ * parts on the board. Pure — the solver stays testable without the board machinery.
+ *
+ * Each netlist node becomes a solver node; the ground node is the first one the
+ * netlist classified as `ground`. Every non-`passive` component becomes a two-
+ * terminal element whose `+`/`−` map to the nodes its terminal pins sit on —
+ * resolved by `electrical.terminals` (pin names) or, absent that, the part's
+ * `pwr` / `gnd` pin roles (per the schema). A component that isn't wired in, or
+ * whose two terminals can't be resolved to distinct nodes, is skipped (it has no
+ * electrical effect until wired).
+ */
+export function buildCircuit(netlist: Netlist, components: CircuitComponent[]): SolverCircuit {
+  const nodeCount = netlist.nodes.length
+
+  // Per-instance terminals with the node index they resolve to.
+  const byKey = new Map<string, { name: string; role: TerminalRole; node: number }[]>()
+  netlist.nodes.forEach((node, i) => {
+    for (const t of node.terminals) {
+      const list = byKey.get(t.key)
+      if (list) list.push({ name: t.name, role: t.role, node: i })
+      else byKey.set(t.key, [{ name: t.name, role: t.role, node: i }])
+    }
+  })
+
+  // Ground = the first ground-classified node; -1 ⇒ the solver degrades ('no-ground').
+  const ground = netlist.nodes.findIndex((n) => n.kind === 'ground')
+
+  const elements: SolverElement[] = []
+  for (const comp of components) {
+    const el = comp.electrical
+    if (!el || el.model === 'passive') continue
+    const terms = byKey.get(comp.key)
+    if (!terms) continue // this part isn't wired into any node yet
+
+    const resolve = (byName: string | undefined, byRole: TerminalRole): number | undefined => {
+      if (byName) {
+        const m = terms.find((t) => t.name === byName)
+        if (m) return m.node
+      }
+      return terms.find((t) => t.role === byRole)?.node
+    }
+    const a = resolve(el.terminals?.positive, 'pwr')
+    const b = resolve(el.terminals?.negative, 'gnd')
+    if (a === undefined || b === undefined || a === b) continue
+
+    elements.push({
+      id: comp.key,
+      model: el.model,
+      a,
+      b,
+      vf: el.vf,
+      resistanceOhms: el.resistanceOhms,
+      supplyV: comp.supplyV ?? el.supplyV,
+      currentDrawA: el.currentDrawA,
+      closed: comp.closed
+    })
+  }
+
+  return { nodeCount, ground, elements }
 }

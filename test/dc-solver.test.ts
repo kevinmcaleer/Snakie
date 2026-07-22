@@ -1,5 +1,17 @@
 import { describe, it, expect } from 'vitest'
-import { solveDC, solveLinear, type SolverCircuit } from '../src/shared/dc-solver'
+import { solveDC, solveLinear, buildCircuit, type SolverCircuit, type CircuitComponent } from '../src/shared/dc-solver'
+import type { Netlist, NetlistNode, NetlistTerminal, TerminalRole } from '../src/shared/netlist'
+
+// Minimal netlist fixtures (only the fields the adapter reads).
+const term = (key: string, name: string, role: TerminalRole, index = 0): NetlistTerminal => ({
+  endpoint: `${key}.${name}#${index}`,
+  key,
+  index,
+  name,
+  role
+})
+const node = (id: string, kind: NetlistNode['kind'], ...terminals: NetlistTerminal[]): NetlistNode => ({ id, kind, terminals })
+const netlist = (...nodes: NetlistNode[]): Netlist => ({ nodes, edges: [], nodeOf: {}, dangling: [] })
 
 /**
  * DC solver (#603) — known-answer circuits, hand-computed. Every expectation is a
@@ -202,5 +214,89 @@ describe('solveDC — graceful degradation (never NaN)', () => {
     expect(r.ok).toBe(false)
     expect(r.reason).toBe('singular')
     expect(r.nodeVoltages.every((v) => Number.isFinite(v))).toBe(true)
+  })
+})
+
+describe('buildCircuit — netlist → SolverCircuit (adapter)', () => {
+  it('maps a battery → resistor → LED and solves end-to-end (terminals by name)', () => {
+    // N0 ground: board GND + battery − + LED cathode. N1 rail: battery + + R1.a.
+    // N2: R1.b + LED anode.
+    const nl = netlist(
+      node('N0', 'ground', term('board', 'GND', 'gnd'), term('bat', '-', 'gnd'), term('led1', 'K', 'other')),
+      node('N1', 'power', term('bat', '+', 'pwr'), term('r1', 'a', 'other')),
+      node('N2', 'signal', term('r1', 'b', 'other'), term('led1', 'A', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'bat', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } },
+      { key: 'r1', electrical: { model: 'resistor', resistanceOhms: 1000, terminals: { positive: 'a', negative: 'b' } } },
+      { key: 'led1', electrical: { model: 'led', vf: 2, terminals: { positive: 'A', negative: 'K' } } }
+    ]
+    const circuit = buildCircuit(nl, comps)
+    expect(circuit.nodeCount).toBe(3)
+    expect(circuit.ground).toBe(0) // N0 is the ground-classified node
+    expect(circuit.elements.map((e) => e.id).sort()).toEqual(['bat', 'led1', 'r1'])
+
+    const r = solveDC(circuit)
+    expect(r.ok).toBe(true)
+    expect(r.branchCurrents.led1).toBeGreaterThan(0.0029)
+    expect(r.branchCurrents.led1).toBeLessThan(0.003)
+  })
+
+  it('infers ± terminals from pwr/gnd roles when no terminals field is given', () => {
+    const nl = netlist(
+      node('N0', 'ground', term('bat', 'GND', 'gnd'), term('r', 'n', 'other')),
+      node('N1', 'power', term('bat', 'VCC', 'pwr'), term('r', 'p', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'bat', electrical: { model: 'source', supplyV: 5 } }, // no terminals → role inference
+      { key: 'r', electrical: { model: 'resistor', resistanceOhms: 1000, terminals: { positive: 'p', negative: 'n' } } }
+    ]
+    const r = solveDC(buildCircuit(nl, comps))
+    expect(r.ok).toBe(true)
+    expect(r.branchCurrents.r).toBeCloseTo(0.005, 6)
+  })
+
+  it("a bench-PSU supplyV override wins over the part's nominal", () => {
+    const nl = netlist(
+      node('N0', 'ground', term('psu', '-', 'gnd'), term('r', 'n', 'other')),
+      node('N1', 'power', term('psu', '+', 'pwr'), term('r', 'p', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'psu', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } }, supplyV: 3.3 },
+      { key: 'r', electrical: { model: 'resistor', resistanceOhms: 330, terminals: { positive: 'p', negative: 'n' } } }
+    ]
+    const r = solveDC(buildCircuit(nl, comps))
+    expect(r.nodeVoltages[1]).toBeCloseTo(3.3, 6) // the live 3.3V, not the 5V nominal
+    expect(r.branchCurrents.r).toBeCloseTo(0.01, 6) // 3.3V / 330Ω
+  })
+
+  it('skips passive parts, unwired parts, and self-shorted terminals', () => {
+    const nl = netlist(
+      node('N0', 'ground', term('bat', '-', 'gnd')),
+      node('N1', 'power', term('bat', '+', 'pwr'), term('short', 'a', 'other'), term('short', 'b', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'bat', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } },
+      { key: 'deco', electrical: { model: 'passive' } }, // passive → skipped
+      { key: 'ghost', electrical: { model: 'resistor', resistanceOhms: 100, terminals: { positive: 'x', negative: 'y' } } }, // not in netlist → skipped
+      { key: 'short', electrical: { model: 'resistor', resistanceOhms: 100, terminals: { positive: 'a', negative: 'b' } } } // both on N1 → skipped
+    ]
+    const circuit = buildCircuit(nl, comps)
+    expect(circuit.elements.map((e) => e.id)).toEqual(['bat'])
+  })
+
+  it('a netlist with no ground node ⇒ ground -1 ⇒ solver degrades, not NaN', () => {
+    const nl = netlist(
+      node('N0', 'power', term('bat', '+', 'pwr')),
+      node('N1', 'signal', term('bat', '-', 'gnd'), term('r', 'p', 'other'), term('r2', 'n', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'bat', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } }
+    ]
+    const circuit = buildCircuit(nl, comps)
+    expect(circuit.ground).toBe(-1)
+    const r = solveDC(circuit)
+    expect(r.ok).toBe(false)
+    expect(r.reason).toBe('no-ground')
   })
 })
