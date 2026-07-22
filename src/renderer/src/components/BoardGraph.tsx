@@ -959,8 +959,9 @@ export function BoardGraph({
 
         <div className="boardgraph__actions">
           {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
-              ✓ when clean. Only where wiring exists (the node graph). */}
-          {wiringEnabled && effectiveView === 'graph' && (
+              ✓ when clean. Shown wherever the full circuit is visible — the
+              Breadboard + node graph (not the abstract Schematic). */}
+          {wiringEnabled && effectiveView !== 'schematic' && (
             <ErcBadge summary={ercSum} open={ercOpen} onToggle={() => setErcOpen((o) => !o)} />
           )}
           {/* LIVE doubles as the on/off control for device polling (#97). OFF:
@@ -1016,8 +1017,9 @@ export function BoardGraph({
       {wiringEnabled && <DriverInstallBanner needs={driverNeeds} />}
 
       <div className="boardgraph__body">
-      {/* ERC issues panel (#601) — floats over the board, anchored to the body. */}
-      {wiringEnabled && effectiveView === 'graph' && ercOpen && (
+      {/* ERC issues panel (#601) — floats over the board, anchored to the body.
+          Available in the Breadboard + node-graph views (not the Schematic). */}
+      {wiringEnabled && effectiveView !== 'schematic' && ercOpen && (
         <ErcPanel issues={ercIssues} onClose={() => setErcOpen(false)} />
       )}
       {effectiveView !== 'graph' ? (
