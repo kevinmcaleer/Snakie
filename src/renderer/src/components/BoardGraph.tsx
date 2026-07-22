@@ -18,11 +18,11 @@ import {
 } from './board-defs'
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
-import { buildNetlist } from '../../../shared/netlist'
+import { buildNetlist, type TerminalRole } from '../../../shared/netlist'
 import { runErc, ercSummary } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
 import { useDcSolver } from './useDcSolver'
-import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
+import { voltageColour, formatVoltage, wireCurrent } from '../../../shared/circuit-probe'
 import { ErcBadge, ErcPanel } from './ErcPanel'
 import {
   authoredPads,
@@ -499,6 +499,43 @@ export function BoardGraph({
     })
     return m
   }, [netlistData, solverState])
+
+  // Signed current per wire (#604), for the current-flow animation: each electrical
+  // part's ± terminal endpoint maps to its solver element, then a leaf wire off that
+  // terminal carries the element's branch current (see `wireCurrent`).
+  const currentByWire = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!netlistData || !solverState?.ok) return m
+    // endpoint → { element id, terminal } for every electrical part's ± pins.
+    const epEl = new Map<string, { id: string; terminal: 'a' | 'b' }>()
+    const termsByKey = new Map<string, { name: string; role: TerminalRole; endpoint: string }[]>()
+    for (const node of netlistData.netlist.nodes) {
+      for (const t of node.terminals) {
+        const list = termsByKey.get(t.key)
+        const e = { name: t.name, role: t.role, endpoint: t.endpoint }
+        if (list) list.push(e)
+        else termsByKey.set(t.key, [e])
+      }
+    }
+    netlistData.partDefs.forEach((pdef, key) => {
+      const el = pdef.electrical
+      if (!el || el.model === 'passive') return
+      const terms = termsByKey.get(key)
+      if (!terms) return
+      const pos =
+        (el.terminals?.positive && terms.find((t) => t.name === el.terminals!.positive)) ||
+        terms.find((t) => t.role === 'pwr')
+      const neg =
+        (el.terminals?.negative && terms.find((t) => t.name === el.terminals!.negative)) ||
+        terms.find((t) => t.role === 'gnd')
+      if (pos) epEl.set(pos.endpoint, { id: key, terminal: 'a' })
+      if (neg) epEl.set(neg.endpoint, { id: key, terminal: 'b' })
+    })
+    for (const c of robot?.connections ?? []) {
+      m.set(c.id, wireCurrent(c.from, c.to, solverState.branchCurrents, epEl))
+    }
+    return m
+  }, [netlistData, solverState, robot])
   const [ercOpen, setErcOpen] = useState(false)
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
@@ -1073,6 +1110,7 @@ export function BoardGraph({
                 solverCircuit
                   ? {
                       byEndpoint: endpointVoltage,
+                      currentByWire,
                       ref: overlayRefV,
                       on: voltsOverlay,
                       ready: !!solverState?.ok,

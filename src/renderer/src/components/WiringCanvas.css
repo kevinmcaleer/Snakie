@@ -225,6 +225,26 @@
   pointer-events: none;
 }
 
+/* Current-flow animation (#604): white dots travelling along a wire in the
+   direction of conventional current, speed set per-wire via animation-duration. */
+.wc__flow {
+  animation-name: wc-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+  opacity: 0.92;
+}
+@keyframes wc-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc__flow {
+    animation: none;
+  }
+}
+
 /* Grab handles on the selected wire's ends (#…) — accent dots you drag to
    re-attach that end to another pin. */
 .wc__wire-handle {

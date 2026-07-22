@@ -587,6 +587,9 @@ export interface WiringCanvasProps {
    *  toggle. Absent ⇒ no solvable circuit (no electrical parts wired up). */
   voltage?: {
     byEndpoint: Map<string, number>
+    /** Signed current per wire id (#604) — drives the travelling-dash flow animation
+     *  (magnitude → speed + thickness, sign → direction). */
+    currentByWire: Map<string, number>
     ref: number
     /** The overlay toggle state. */
     on: boolean
@@ -1905,6 +1908,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     strokeWidth={isSel ? 3.6 : 3}
                     className="wc__wire"
                   />
+                  {/* Current-flow (#604): travelling white dashes − → +, faster +
+                      thicker with more current, reversed for negative flow. */}
+                  {voltage?.on &&
+                    (() => {
+                      const i = voltage.currentByWire.get(c.id)
+                      if (i === undefined || Math.abs(i) < 1e-6) return null
+                      const mag = Math.abs(i)
+                      const dur = Math.max(0.35, Math.min(3, 0.5 / Math.max(0.02, mag * 5)))
+                      return (
+                        <path
+                          d={p.d}
+                          fill="none"
+                          stroke="#fff"
+                          strokeWidth={Math.min(4, 1.5 + mag * 2)}
+                          strokeDasharray="1 9"
+                          strokeLinecap="round"
+                          className="wc__flow"
+                          style={{ animationDuration: `${dur}s`, animationDirection: i < 0 ? 'reverse' : 'normal' }}
+                        />
+                      )
+                    })()}
                   {v !== undefined && (
                     <text x={p.mx} y={p.my - 3} textAnchor="middle" className="wc__volt-badge">
                       {formatVoltage(v)}
