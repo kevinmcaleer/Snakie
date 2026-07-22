@@ -329,6 +329,21 @@ const DRAG_DEADZONE_PX = 3
 const WIRE_CLEARANCE = 40
 
 /** Snap any angle to the nearest of 0/90/180/270 (#176). */
+/**
+ * Whether a keydown on the wiring canvas should delete the currently-selected
+ * part: the Delete or Backspace key, and NOT while the user is typing in an
+ * editable field (the rename input, project name/description). Pure, so the guard
+ * is unit-testable without a DOM.
+ */
+export function shouldDeleteSelectedPart(
+  key: string,
+  target: { tagName?: string; isContentEditable?: boolean } | null
+): boolean {
+  if (key !== 'Delete' && key !== 'Backspace') return false
+  if (target?.isContentEditable) return false
+  return !/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')
+}
+
 function normRot(deg?: number): 0 | 90 | 180 | 270 {
   return ((((Math.round((deg ?? 0) / 90) * 90) % 360) + 360) % 360) as 0 | 90 | 180 | 270
 }
@@ -594,6 +609,10 @@ interface Drag {
 
 export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
+  // The focusable canvas root — focused when a part is selected so the Delete /
+  // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
+  // a Delete pressed in the code editor, and two board views don't cross-fire).
+  const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
   // The SVG's pixel size, so the graph-paper grid fills the letterbox margins
@@ -1221,8 +1240,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // a click on empty space clears the selection. Either way, end any rename.
     if (d?.kind === 'box' && !d.moved) {
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
-      setSelectedKey(renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null)
+      const nextSel = renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null
+      setSelectedKey(nextSel)
       setRenameText(null)
+      // Focus the canvas so the Delete/Backspace shortcut targets THIS view (only
+      // when a part is actually selected — don't steal focus on a clear-click).
+      if (nextSel) rootRef.current?.focus()
       // A touch tap set `hover` while dragRef still suppressed the chips — make
       // sure the tap's end repaints even when the selection didn't change (#525).
       force((n) => n + 1)
@@ -1589,10 +1612,19 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   return (
     <div
+      ref={rootRef}
       className={`wc wc--${renderMode}${dropActive ? ' wc--drop' : ''}`}
+      tabIndex={-1}
       onDragOver={onDropPart ? onCanvasDragOver : undefined}
       onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
       onDrop={onDropPart ? onCanvasDrop : undefined}
+      onKeyDown={(e) => {
+        // Delete / Backspace removes the selected part (not while typing).
+        if (selectedKey && shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
+          e.preventDefault()
+          removePart(selectedKey)
+        }
+      }}
     >
       <div className="wc__stage">
         <svg

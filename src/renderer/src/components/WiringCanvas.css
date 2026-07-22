@@ -14,6 +14,13 @@
   color: var(--text);
 }
 
+/* The canvas is programmatically focused (tabIndex -1) so Delete/Backspace can
+   remove the selected part — it's not a tab stop, so suppress the focus ring
+   (the selection ring is the visible affordance). */
+.wc:focus {
+  outline: none;
+}
+
 /* The pan/zoom mat — the SVG fills it; controls + empty state float on top. */
 .wc__stage {
   position: relative;
