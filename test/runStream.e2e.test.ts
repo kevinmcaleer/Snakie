@@ -26,6 +26,8 @@ describe('runStream — streaming program output (#612)', () => {
     expect(out).not.toContain('===')
     expect(out).not.toContain('raw REPL')
     expect(out).not.toMatch(/^OK/m)
+    // …and it ends at a fresh `>>>` prompt so the REPL reads as ready for input.
+    expect(out.trimEnd().endsWith('>>>')).toBe(true)
   }, 30000)
 
   it('streams a traceback (stderr) without echoing the source', async () => {

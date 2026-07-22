@@ -144,6 +144,9 @@ port.on('message', async (msg: InMsg): Promise<void> => {
       const text = String((err as Error)?.message ?? err)
       collect(enc.encode(text.endsWith('\n') ? text : text + '\n'))
     } finally {
+      // A fresh friendly-REPL prompt so the user sees the REPL is ready for
+      // another command after the program finishes (#612).
+      collect(enc.encode('\r\n>>> '))
       flush()
       port.postMessage({ type: 'done', id: msg.id })
     }
