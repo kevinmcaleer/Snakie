@@ -431,7 +431,9 @@ export function pinThroughHoles(
 ): { cx: number; cy: number; r: number }[] {
   if (shape === 'round') return []
   if (shape === 'header') return [{ cx, cy, r: size / 2 - 3.5 }]
-  if (shape === 'octagonal') return [{ cx, cy, r: size * 0.17 }] // square pin hole
+  // Octagonal pads are opaque copper and draw their OWN dark square pin-hole, so
+  // they need no mask cut (a cut would punch a round see-through over the square).
+  if (shape === 'octagonal') return []
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -1171,12 +1173,14 @@ export function PartBody({
           const boxedActive = boxAll || boxedPins instanceof Set
           const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
           const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-          const size = padSize
+          const shape = pinShapeOf(rp.pin)
+          // Octagonal servo/DuPont header pads draw at a fixed physical 2.4mm — big
+          // and close like the real thing — not the density-scaled generic pad size.
+          const size = shape === 'octagonal' && connPxPerMm > 0 ? 2.4 * connPxPerMm : padSize
           const cx = px(rp.x)
           const cy = py(rp.y)
           const stroke = sel ? '#fff' : '#0008'
           const sw = sel ? 3 : 1
-          const shape = pinShapeOf(rp.pin)
           let pad: JSX.Element
           if (shape === 'round') {
             pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />

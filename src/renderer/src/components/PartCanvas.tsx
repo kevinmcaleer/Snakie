@@ -2172,13 +2172,16 @@ export function PartCanvas({
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-            // Pad shrinks with the pitch so dense boards don't overlap (#…).
-            const size = 12 * pinScale
+            const shape = pinShapeOf(rp.pin)
+            // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
+            // octagonal servo/DuPont header pads, which draw at a fixed physical
+            // 2.4mm — big and close like the real thing.
+            const size =
+              shape === 'octagonal' && connPxPerMm > 0 ? 2.4 * connPxPerMm : 12 * pinScale
             const cx = px(rp.x)
             const cy = py(rp.y)
             const stroke = sel ? '#fff' : '#0008'
             const sw = sel ? 3 : 1
-            const shape = pinShapeOf(rp.pin)
             const pinLabel = rp.pin.label || rp.pin.name
             // Show the GP## GPIO next to the pin when the silk label differs from
             // it (so the actual GPIO is always visible in the editor).
