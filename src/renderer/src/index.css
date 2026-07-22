@@ -1980,8 +1980,10 @@ body {
   gap: 0.35rem;
   text-transform: none;
   letter-spacing: normal;
-  /* Allow the control to shrink within the (wrapping) shell header so its
+  /* Grow to use the header's spare width (so the dropdown fills the space instead
+   * of being a fixed narrow box), but shrink freely (min-width: 0) so the
    * Connect/Disconnect button is never pushed off-screen (issue #85). */
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1994,10 +1996,13 @@ body {
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   padding: 0.3rem 0.4rem;
-  /* Cap the width but let the dropdown shrink (min-width: 0) so a long port
-   * label can't push the Connect button out of the header (issue #85). */
+  /* Fill the control's spare width (up to a cap so it never looks absurdly long),
+   * but shrink freely (min-width: 0) so a long port label can't push the Connect
+   * button out of the header (issue #85). */
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 14rem;
+  max-width: 16rem;
+  text-overflow: ellipsis;
 }
 
 .conn-control__select:disabled {
