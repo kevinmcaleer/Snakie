@@ -2153,11 +2153,16 @@ export function PartCanvas({
             }
             const lo = rp.pin.labelOffset
             const dragTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
-            // Shrink the number-box + label with the pad on a tight pitch, pivoted
-            // at the pin (so it stays anchored to its pad), keeping any hand-placed
-            // drag offset unscaled (#…).
-            const scaleTf = pinScale !== 1 ? `translate(${cx} ${cy}) scale(${pinScale}) translate(${-cx} ${-cy})` : undefined
-            const labelTf = [dragTf, scaleTf].filter(Boolean).join(' ') || undefined
+            // Shrink the number-box + label on a tight pitch — pivoted at the BOARD
+            // EDGE the annotation is anchored to (via boxedPinLabel), NOT the pin. A
+            // pin set in from the edge (e.g. the Servo 2040's headers at y≈0.17) keeps
+            // its label out in the margin instead of being dragged inward over the
+            // image. Any hand-placed drag offset stays unscaled (#…).
+            const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
+            const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
+            const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
+            const scaleTf = pinScale !== 1 ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})` : undefined
+            const labelTf = [scaleTf, dragTf].filter(Boolean).join(' ') || undefined
             const labelDraggable = interactive && !locked.pins
             return (
               <g key={`p${i}`}>
