@@ -1404,6 +1404,29 @@
   opacity: 0.85;
 }
 
+/* Pin Type column (#…): an always-visible, colour-coded role tag aligned to the
+   right of every pin row so io/pwr/gnd/other read down the list as a column. */
+.pe__flattype {
+  flex: 0 0 auto;
+  min-width: 2.4rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pe__flattype--io {
+  color: var(--accent, #c8912a);
+}
+.pe__flattype--pwr {
+  color: #d0524a;
+}
+.pe__flattype--gnd {
+  color: var(--text-muted);
+}
+
 .pe__flatspacer {
   flex: 1 1 auto;
 }

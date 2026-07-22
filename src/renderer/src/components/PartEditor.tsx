@@ -1247,7 +1247,8 @@ function LayersPanel({
                 <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                   <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                 </button>
-                <span className="pe__flathelp">{rp.pin.type}</span>
+                {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
+                <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
               </li>
             ))}
           </ul>
