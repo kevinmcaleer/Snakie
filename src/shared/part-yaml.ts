@@ -43,7 +43,7 @@ import type {
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
 const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
-const ELECTRICAL_MODELS: ElectricalModel[] = ['source', 'resistor', 'led', 'diode', 'switch', 'consumer', 'passive']
+const ELECTRICAL_MODELS: ElectricalModel[] = ['source', 'resistor', 'led', 'diode', 'switch', 'consumer', 'potentiometer', 'passive']
 const SPI_SIGNALS = ['RX', 'CSn', 'SCK', 'TX']
 
 /** Coerce a raw `signals` map from YAML into a clean {@link PartPinSignals}. */
@@ -215,6 +215,8 @@ export function coerceElectrical(raw: unknown): PartElectrical | null {
     if (negative !== undefined) term.negative = negative
     if (term.positive !== undefined || term.negative !== undefined) el.terminals = term
   }
+  const wiper = str(r.wiper)
+  if (wiper !== undefined) el.wiper = wiper
   // A bare `passive` block with no params carries no information — drop it so an
   // empty/garbage block doesn't round-trip as noise.
   if (model === 'passive' && Object.keys(el).length === 1) return null

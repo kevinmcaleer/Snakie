@@ -387,6 +387,7 @@ export type ElectricalModel =
   | 'diode' //    plain diode (forward-voltage drop, one-way)
   | 'switch' //   button / switch (open or closed between two pins)
   | 'consumer' // a current sink with a typical + stall draw (servo, motor, sensor)
+  | 'potentiometer' // a 3-pin variable divider: track VCC↔GND, a draggable wiper tap
   | 'passive' //  no electrical model (wires-through / mechanical / decorative)
 
 /**
@@ -404,8 +405,12 @@ export interface PartElectrical {
   model: ElectricalModel
   /** Forward voltage drop in **volts** — `led` / `diode`. */
   vf?: number
-  /** Fixed resistance in **ohms** — `resistor`, or a `source`'s internal resistance. */
+  /** Fixed resistance in **ohms** — `resistor`, a `source`'s internal resistance, or
+   *  a `potentiometer`'s full track resistance. */
   resistanceOhms?: number
+  /** The wiper pin NAME of a `potentiometer` (the divider tap between the two
+   *  terminals). Its 0..1 position is interactive state, not part metadata. */
+  wiper?: string
   /** Nominal supply voltage in **volts** — `source` (a battery's nominal, a PSU's
    *  default set-point). */
   supplyV?: number

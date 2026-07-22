@@ -288,6 +288,26 @@ describe('buildCircuit — netlist → SolverCircuit (adapter)', () => {
     expect(r.branchCurrents.r).toBeCloseTo(0.01, 6) // 3.3V / 330Ω
   })
 
+  it('a potentiometer divides the rail by its wiper position', () => {
+    const nl = netlist(
+      node('N0', 'ground', term('bat', '-', 'gnd'), term('pot', 'GND', 'gnd')),
+      node('N1', 'power', term('bat', '+', 'pwr'), term('pot', 'VCC', 'pwr')),
+      node('N2', 'signal', term('pot', 'OUT', 'io'))
+    )
+    const comps = (t: number): CircuitComponent[] => [
+      { key: 'bat', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } },
+      {
+        key: 'pot',
+        electrical: { model: 'potentiometer', resistanceOhms: 10000, wiper: 'OUT', terminals: { positive: 'VCC', negative: 'GND' } },
+        wiperPos: t
+      }
+    ]
+    // The pot expands into two resistors → the wiper (N2) reads 5V·t.
+    expect(solveDC(buildCircuit(nl, comps(0.5))).nodeVoltages[2]).toBeCloseTo(2.5, 4)
+    expect(solveDC(buildCircuit(nl, comps(0.2))).nodeVoltages[2]).toBeCloseTo(1.0, 4)
+    expect(solveDC(buildCircuit(nl, comps(0.9))).nodeVoltages[2]).toBeCloseTo(4.5, 3)
+  })
+
   it('skips passive parts, unwired parts, and self-shorted terminals', () => {
     const nl = netlist(
       node('N0', 'ground', term('bat', '-', 'gnd')),

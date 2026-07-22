@@ -59,8 +59,9 @@ labels:
     color: "#dfeaf5"
 help: help.md
 electrical:
-  model: resistor
+  model: potentiometer
   resistanceOhms: 10000
+  wiper: OUT
   terminals:
     positive: VCC
     negative: GND

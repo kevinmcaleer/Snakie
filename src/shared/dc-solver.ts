@@ -344,6 +344,9 @@ export interface CircuitComponent {
   supplyV?: number
   /** Live switch state — whether a `switch` element is conducting. */
   closed?: boolean
+  /** Live wiper position 0..1 of a `potentiometer` (0 = wiper at −, 1 = at +).
+   *  Absent ⇒ centred (0.5). */
+  wiperPos?: number
 }
 
 /**
@@ -399,6 +402,31 @@ export function buildCircuit(netlist: Netlist, components: CircuitComponent[]): 
       }
       return terms.find((t) => t.role === byRole)?.node
     }
+    // A potentiometer is a 3-terminal divider — expand it into TWO resistors either
+    // side of the wiper tap (VCC↔wiper = R·(1−t), wiper↔GND = R·t), so the wiper
+    // reads VCC·t. Interactive: `wiperPos` re-solves as it's dragged.
+    if (el.model === 'potentiometer') {
+      const vcc = resolve(el.terminals?.positive, 'pwr')
+      const gnd = resolve(el.terminals?.negative, 'gnd')
+      const wiper = el.wiper
+        ? terms.find((t) => t.name === el.wiper)?.node
+        : terms.find((t) => t.role === 'io')?.node
+      if (
+        vcc !== undefined &&
+        gnd !== undefined &&
+        wiper !== undefined &&
+        vcc !== gnd &&
+        wiper !== vcc &&
+        wiper !== gnd
+      ) {
+        const R = Math.max(1, el.resistanceOhms ?? 10000)
+        const t = Math.max(0, Math.min(1, comp.wiperPos ?? 0.5))
+        elements.push({ id: `${comp.key}#top`, model: 'resistor', a: vcc, b: wiper, resistanceOhms: Math.max(1, R * (1 - t)) })
+        elements.push({ id: `${comp.key}#bot`, model: 'resistor', a: wiper, b: gnd, resistanceOhms: Math.max(1, R * t) })
+      }
+      continue
+    }
+
     const a = resolve(el.terminals?.positive, 'pwr')
     const b = resolve(el.terminals?.negative, 'gnd')
     if (a === undefined || b === undefined || a === b) continue

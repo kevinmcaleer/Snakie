@@ -450,14 +450,18 @@ export function BoardGraph({
   }, [netlistData])
   const ercSum = useMemo(() => ercSummary(ercIssues), [ercIssues])
 
+  // Interactive potentiometer wiper positions (#605), 0..1 per placed pot instance —
+  // dragging a slider re-solves the circuit.
+  const [wiperPositions, setWiperPositions] = useState<Map<string, number>>(new Map())
+
   // DC solver (#603): map the netlist + the electrical parts to a SolverCircuit and
-  // solve it off-thread. `solverState` (node voltages + branch currents) is held for
-  // #604 (probes + current-flow); there is no visible physics yet.
+  // solve it off-thread. `solverState` (node voltages + branch currents) drives the
+  // #604 overlay/probes; a pot's live wiper position feeds in here.
   const solverCircuit = useMemo(() => {
     if (!netlistData) return null
     const components: CircuitComponent[] = []
     netlistData.partDefs.forEach((pdef, key) => {
-      if (pdef.electrical) components.push({ key, electrical: pdef.electrical })
+      if (pdef.electrical) components.push({ key, electrical: pdef.electrical, wiperPos: wiperPositions.get(key) })
     })
     if (components.length === 0) return null
     try {
@@ -465,8 +469,20 @@ export function BoardGraph({
     } catch {
       return null
     }
-  }, [netlistData])
+  }, [netlistData, wiperPositions])
   const solverState = useDcSolver(solverCircuit)
+
+  // Placed potentiometers (#605) — drive the wiper-slider panel.
+  const placedPots = useMemo(() => {
+    const pots: { key: string; label: string }[] = []
+    netlistData?.partDefs.forEach((pdef, key) => {
+      if (pdef.electrical?.model === 'potentiometer') {
+        const rp = robot?.parts?.find((p) => p.id === key)
+        pots.push({ key, label: rp?.label || pdef.name || 'Potentiometer' })
+      }
+    })
+    return pots
+  }, [netlistData, robot])
 
   // Node-voltage overlay (#604): a toggle that recolours each used pad/wire by its
   // SOLVED voltage (blue = ground → red = rail). `padVoltage` maps a board pad index
@@ -1091,6 +1107,31 @@ export function BoardGraph({
           Available in the Breadboard + node-graph views (not the Schematic). */}
       {wiringEnabled && effectiveView !== 'schematic' && ercOpen && (
         <ErcPanel issues={ercIssues} onClose={() => setErcOpen(false)} />
+      )}
+      {/* Interactive potentiometers (#605): a wiper slider per placed pot — drag to
+          turn it, the sim re-solves and the wiper's output voltage follows. */}
+      {placedPots.length > 0 && effectiveView === 'lifelike' && (
+        <div className="boardgraph__pots" role="group" aria-label="Potentiometers">
+          {placedPots.map((p) => {
+            const t = wiperPositions.get(p.key) ?? 0.5
+            return (
+              <label key={p.key} className="boardgraph__pot">
+                <span className="boardgraph__pot-name">{p.label}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(t * 100)}
+                  onChange={(e) =>
+                    setWiperPositions((m) => new Map(m).set(p.key, Number(e.target.value) / 100))
+                  }
+                  aria-label={`${p.label} wiper`}
+                />
+                <span className="boardgraph__pot-val">{Math.round(t * 100)}%</span>
+              </label>
+            )
+          })}
+        </div>
       )}
       {effectiveView !== 'graph' ? (
         <>
