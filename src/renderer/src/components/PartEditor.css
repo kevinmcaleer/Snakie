@@ -1426,6 +1426,40 @@
 .pe__flattype--gnd {
   color: var(--text-muted);
 }
+.pe__flattype--group {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+/* Servo-header group row: an expand caret + bold header name + a small "S/V/G"
+   sub-label; its members indent under it when expanded. */
+.pe__flatcaret {
+  flex: 0 0 auto;
+  width: 1rem;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+.pe__flatcaret:hover {
+  color: var(--text);
+}
+.pe__flatrow--group .pe__item-name {
+  font-weight: 600;
+}
+.pe__flatsub {
+  margin-left: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+.pe__flatrow--member {
+  padding-left: 1.1rem;
+}
 
 .pe__flatspacer {
   flex: 1 1 auto;

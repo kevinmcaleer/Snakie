@@ -985,6 +985,9 @@ function LayersPanel({
   const [dragRow, setDragRow] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // Which servo-header groups are expanded in the pin list (collapsed by default so
+  // a board of servo headers reads as one row each, not three).
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
   // The Pins list reads best sorted: by board number when a pin has one (numbered
   // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
@@ -1262,15 +1265,61 @@ function LayersPanel({
         {isOpen('pins') && (
           <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
-            {sortedPins.map((rp) => (
-              <li key={`p${rp.hi}-${rp.pi}`} className={`pe__flatrow pe__flatrow--pin${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}>
-                <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
-                  <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
-                </button>
-                {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
-                <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
-              </li>
-            ))}
+            {(() => {
+              // A single flat pin row (used for ungrouped pins + expanded members).
+              const pinRow = (rp: (typeof sortedPins)[number], member = false): JSX.Element => (
+                <li
+                  key={`p${rp.hi}-${rp.pi}`}
+                  className={`pe__flatrow pe__flatrow--pin${member ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                >
+                  <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+                    <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
+                  </button>
+                  {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
+                  <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
+                </li>
+              )
+              // Servo-header groups collapse to ONE row (expandable); ungrouped pins
+              // render inline. Members within a group read Signal → V+ → GND.
+              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
+              const seen = new Set<string>()
+              const rows: JSX.Element[] = []
+              for (const rp of sortedPins) {
+                const g = rp.pin.group
+                if (!g) {
+                  rows.push(pinRow(rp))
+                  continue
+                }
+                if (seen.has(g)) continue
+                seen.add(g)
+                const members = sortedPins
+                  .filter((p) => p.pin.group === g)
+                  .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
+                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
+                const open = !!expandedGroups[g]
+                const active = members.some((p) => selEq({ type: 'pin', hi: p.hi, pi: p.pi }))
+                rows.push(
+                  <li key={`g${g}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`}>
+                    <button
+                      type="button"
+                      className="pe__flatcaret"
+                      onClick={() => setExpandedGroups((s) => ({ ...s, [g]: !open }))}
+                      aria-expanded={open}
+                      title={open ? 'Collapse header' : 'Expand header'}
+                    >
+                      {open ? '▾' : '▸'}
+                    </button>
+                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: signal.hi, pi: signal.pi })}>
+                      <span className="pe__item-name">{signal.pin.name || 'Header'}</span>
+                      <span className="pe__flatsub">servo · S/V/G</span>
+                    </button>
+                    <span className="pe__flattype pe__flattype--group">header</span>
+                  </li>
+                )
+                if (open) for (const m of members) rows.push(pinRow(m, true))
+              }
+              return rows
+            })()}
           </ul>
         )}
       </div>
@@ -1732,6 +1781,18 @@ function SelectionInspector({
             i === selection.hi ? { ...h, pins: h.pins.map((pp, j) => (j === selection.pi ? { ...pp, ...p } : pp)) } : h
           )
         }))
+      // Break this pin's servo-header group apart so its pads move individually.
+      const ungroup = (): void => {
+        const g = pin.group
+        if (!g) return
+        setPart((d) => ({
+          ...d,
+          headers: d.headers.map((h) => ({
+            ...h,
+            pins: h.pins.map((pp) => (pp.group === g ? { ...pp, group: undefined } : pp))
+          }))
+        }))
+      }
       const toggleCap = (c: PartPinCapability): void => {
         const has = pin.capabilities?.includes(c)
         updatePin({ capabilities: has ? (pin.capabilities ?? []).filter((x) => x !== c) : [...(pin.capabilities ?? []), c] })
@@ -1857,6 +1918,13 @@ function SelectionInspector({
             />
             <span>Hide label (servo V+/GND row)</span>
           </label>
+          {/* Part of a servo-header group → offer to break it apart (the pads then
+              move individually). Shown only for grouped pins. */}
+          {pin.group && (
+            <button type="button" className="pe__btn" onClick={ungroup} title="Break this servo header into individual pins">
+              Ungroup servo header
+            </button>
+          )}
           {/* Rotation applies to EVERY pin — it turns the silk label (and the
               half-hole on castellated pads). Shown for all shapes so the label can
               be aimed any of the four ways; the degree readout confirms it saved. */}
