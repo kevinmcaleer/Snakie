@@ -38,6 +38,7 @@ headers:
         rotation: 270
         x: 0.13267336527506512
         y: 0.16666666666666666
+        group: servo-1
       - name: S2
         type: io
         number: 2
@@ -51,6 +52,7 @@ headers:
         rotation: 270
         x: 0.1718611145019531
         y: 0.16666666666666666
+        group: servo-2
       - name: S3
         type: io
         number: 3
@@ -64,6 +66,7 @@ headers:
         rotation: 270
         x: 0.21393140157063803
         y: 0.16666666666666666
+        group: servo-3
       - name: S4
         type: io
         number: 4
@@ -77,6 +80,7 @@ headers:
         rotation: 270
         x: 0.24750679016113283
         y: 0.16666666666666666
+        group: servo-4
       - name: S5
         type: io
         number: 5
@@ -90,6 +94,7 @@ headers:
         rotation: 270
         x: 0.2885508219401042
         y: 0.16683953784760971
+        group: servo-5
       - name: S6
         type: io
         number: 6
@@ -103,6 +108,7 @@ headers:
         rotation: 270
         x: 0.32819015502929694
         y: 0.16666666666666666
+        group: servo-6
       - name: S7
         type: io
         number: 7
@@ -116,6 +122,7 @@ headers:
         rotation: 270
         x: 0.3945326995849609
         y: 0.16683953784760971
+        group: servo-7
       - name: S8
         type: io
         number: 8
@@ -129,6 +136,7 @@ headers:
         rotation: 270
         x: 0.4337205251057943
         y: 0.16683953784760971
+        group: servo-8
       - name: S9
         type: io
         number: 9
@@ -142,6 +150,7 @@ headers:
         rotation: 270
         x: 0.46696365356445313
         y: 0.16683953784760971
+        group: servo-9
       - name: 5V
         type: pwr
         shape: round
@@ -285,108 +294,126 @@ headers:
         labelHidden: true
         x: 0.13267336527506512
         y: 0.227143
+        group: servo-1
       - name: G1
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.13267336527506512
         y: 0.287619
+        group: servo-1
       - name: V2
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.1718611145019531
         y: 0.227143
+        group: servo-2
       - name: G2
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.1718611145019531
         y: 0.287619
+        group: servo-2
       - name: V3
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.21393140157063803
         y: 0.227143
+        group: servo-3
       - name: G3
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.21393140157063803
         y: 0.287619
+        group: servo-3
       - name: V4
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.24750679016113283
         y: 0.227143
+        group: servo-4
       - name: G4
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.24750679016113283
         y: 0.287619
+        group: servo-4
       - name: V5
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.2885508219401042
         y: 0.227316
+        group: servo-5
       - name: G5
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.2885508219401042
         y: 0.287792
+        group: servo-5
       - name: V6
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.32819015502929694
         y: 0.227143
+        group: servo-6
       - name: G6
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.32819015502929694
         y: 0.287619
+        group: servo-6
       - name: V7
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.3945326995849609
         y: 0.227316
+        group: servo-7
       - name: G7
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.3945326995849609
         y: 0.287792
+        group: servo-7
       - name: V8
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.4337205251057943
         y: 0.227316
+        group: servo-8
       - name: G8
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.4337205251057943
         y: 0.287792
+        group: servo-8
       - name: V9
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.46696365356445313
         y: 0.227316
+        group: servo-9
       - name: G9
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.46696365356445313
         y: 0.287792
+        group: servo-9
   - edge: right
     pins:
       - name: S10
@@ -402,6 +429,7 @@ headers:
         rotation: 270
         x: 0.5
         y: 0.16666666666666666
+        group: servo-10
       - name: S11
         type: io
         number: 11
@@ -415,6 +443,7 @@ headers:
         rotation: 270
         x: 0.5447998555501301
         y: 0.16666666666666666
+        group: servo-11
       - name: S12
         type: io
         number: 12
@@ -428,6 +457,7 @@ headers:
         rotation: 270
         x: 0.5893844604492188
         y: 0.16666666666666666
+        group: servo-12
       - name: S13
         type: io
         number: 13
@@ -441,6 +471,7 @@ headers:
         rotation: 270
         x: 0.6556911214192708
         y: 0.16666666666666666
+        group: servo-13
       - name: S14
         type: io
         number: 14
@@ -454,6 +485,7 @@ headers:
         rotation: 270
         x: 0.7000000000000001
         y: 0.16666666666666666
+        group: servo-14
       - name: S15
         type: io
         number: 15
@@ -467,6 +499,7 @@ headers:
         rotation: 270
         x: 0.733132832845052
         y: 0.16666666666666666
+        group: servo-15
       - name: S16
         type: io
         number: 16
@@ -480,6 +513,7 @@ headers:
         rotation: 270
         x: 0.7727515665690103
         y: 0.16666666666666666
+        group: servo-16
       - name: S17
         type: io
         number: 17
@@ -493,6 +527,7 @@ headers:
         rotation: 270
         x: 0.8109605916341146
         y: 0.16666666666666666
+        group: servo-17
       - name: S18
         type: io
         number: 18
@@ -506,114 +541,133 @@ headers:
         rotation: 270
         x: 0.8541892496744791
         y: 0.16666666666666666
+        group: servo-18
       - name: V10
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.5
         y: 0.227143
+        group: servo-10
       - name: G10
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.5
         y: 0.287619
+        group: servo-10
       - name: V11
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.5447998555501301
         y: 0.227143
+        group: servo-11
       - name: G11
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.5447998555501301
         y: 0.287619
+        group: servo-11
       - name: V12
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.5893844604492188
         y: 0.227143
+        group: servo-12
       - name: G12
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.5893844604492188
         y: 0.287619
+        group: servo-12
       - name: V13
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.6556911214192708
         y: 0.227143
+        group: servo-13
       - name: G13
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.6556911214192708
         y: 0.287619
+        group: servo-13
       - name: V14
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.7000000000000001
         y: 0.227143
+        group: servo-14
       - name: G14
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.7000000000000001
         y: 0.287619
+        group: servo-14
       - name: V15
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.733132832845052
         y: 0.227143
+        group: servo-15
       - name: G15
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.733132832845052
         y: 0.287619
+        group: servo-15
       - name: V16
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.7727515665690103
         y: 0.227143
+        group: servo-16
       - name: G16
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.7727515665690103
         y: 0.287619
+        group: servo-16
       - name: V17
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.8109605916341146
         y: 0.227143
+        group: servo-17
       - name: G17
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.8109605916341146
         y: 0.287619
+        group: servo-17
       - name: V18
         type: pwr
         shape: octagonal
         labelHidden: true
         x: 0.8541892496744791
         y: 0.227143
+        group: servo-18
       - name: G18
         type: gnd
         shape: octagonal
         labelHidden: true
         x: 0.8541892496744791
         y: 0.287619
+        group: servo-18
   - edge: bottom
     pins:
       - name: INT
