@@ -775,6 +775,27 @@
   filter: brightness(0.94);
 }
 
+/* Active state for the node-voltage overlay toggle (#604). */
+.boardgraph__vbtn.is-active {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
+
+/* Voltage badge drawn over each node dot when the overlay is on (#604). White with
+   a dark outline so it reads over the board photo or bare PCB in any theme. */
+.boardgraph__volt-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 10px;
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.6px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 /* The 100%↔fit toggle shows a number/percent, so it's a wider pill. */
 .boardgraph__vbtn--pct {
   min-width: 48px;

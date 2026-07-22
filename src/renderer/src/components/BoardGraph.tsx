@@ -22,6 +22,7 @@ import { buildNetlist } from '../../../shared/netlist'
 import { runErc, ercSummary } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
 import { useDcSolver } from './useDcSolver'
+import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
 import { ErcBadge, ErcPanel } from './ErcPanel'
 import {
   authoredPads,
@@ -463,6 +464,27 @@ export function BoardGraph({
     }
   }, [netlistData])
   const solverState = useDcSolver(solverCircuit)
+
+  // Node-voltage overlay (#604): a toggle that recolours each used pad/wire by its
+  // SOLVED voltage (blue = ground → red = rail). `padVoltage` maps a board pad index
+  // (== the wiring endpoint index == layoutPads order) to its node's voltage.
+  const [voltsOverlay, setVoltsOverlay] = useState(false)
+  const padVoltage = useMemo(() => {
+    const m = new Map<number, number>()
+    if (!netlistData || !solverState?.ok) return m
+    netlistData.netlist.nodes.forEach((node, i) => {
+      const v = solverState.nodeVoltages[i] ?? 0
+      for (const t of node.terminals) if (t.key === 'board') m.set(t.index, v)
+    })
+    return m
+  }, [netlistData, solverState])
+  // Reference for the colour scale: the highest rail (so a 3.3V and a 12V circuit
+  // both read full-scale), floored at 5V so a lone logic rail isn't washed out.
+  const overlayRefV = useMemo(
+    () => (solverState?.ok ? Math.max(5, ...solverState.nodeVoltages.map((v) => Math.abs(v))) : 5),
+    [solverState]
+  )
+  const overlayActive = voltsOverlay && !!solverState?.ok && padVoltage.size > 0
   const [ercOpen, setErcOpen] = useState(false)
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
@@ -1173,22 +1195,37 @@ export function BoardGraph({
                   )}
                 </g>
 
-                {/* Drooping noodle wires from each node dot to its REAL pad. */}
+                {/* Drooping noodle wires from each node dot to its REAL pad. With the
+                    voltage overlay ON (#604) a wire/dot is coloured by its SOLVED node
+                    voltage instead of its pin-type colour. */}
                 <g fill="none" strokeLinecap="round" filter="url(#bg-glow)" opacity="0.92">
-                  {rows.map((r, i) => (
-                    <path
-                      key={`wire-${i}`}
-                      d={wirePathFor(r.side, r.y, r.pad)}
-                      stroke={r.color}
-                      strokeWidth="2.6"
-                    />
-                  ))}
+                  {rows.map((r, i) => {
+                    const v = overlayActive ? padVoltage.get(pads.indexOf(r.pad)) : undefined
+                    return (
+                      <path
+                        key={`wire-${i}`}
+                        d={wirePathFor(r.side, r.y, r.pad)}
+                        stroke={v !== undefined ? voltageColour(v, overlayRefV) : r.color}
+                        strokeWidth="2.6"
+                      />
+                    )
+                  })}
                 </g>
-                {/* Node-side solder dots. */}
+                {/* Node-side solder dots (+ a voltage badge over each in overlay mode). */}
                 <g>
-                  {rows.map((r, i) => (
-                    <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
-                  ))}
+                  {rows.map((r, i) => {
+                    const v = overlayActive ? padVoltage.get(pads.indexOf(r.pad)) : undefined
+                    return (
+                      <g key={`dot-${i}`}>
+                        <circle cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={v !== undefined ? voltageColour(v, overlayRefV) : r.color} />
+                        {v !== undefined && (
+                          <text x={dotXFor(r.side)} y={r.y - 8} textAnchor="middle" className="boardgraph__volt-badge">
+                            {formatVoltage(v)}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })}
                 </g>
                 {/* Pin labels + variable names OVER the wires (#…): the board body
                     was drawn under the wires with its labels hidden; re-draw ONLY
@@ -1339,6 +1376,28 @@ export function BoardGraph({
                   />
                 </svg>
               </button>
+              {/* Node-voltage overlay toggle (#604) — only when there's a solvable
+                  circuit (electrical parts wired up). */}
+              {solverCircuit && (
+                <button
+                  type="button"
+                  className={`boardgraph__vbtn${voltsOverlay ? ' is-active' : ''}`}
+                  onClick={() => setVoltsOverlay((o) => !o)}
+                  aria-pressed={voltsOverlay}
+                  title={
+                    voltsOverlay
+                      ? 'Hide node voltages'
+                      : solverState?.ok
+                        ? 'Show node voltages (Circuit Sim)'
+                        : 'Node voltages — power + ground a circuit to see them'
+                  }
+                  aria-label="Toggle node-voltage overlay"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+                  </svg>
+                </button>
+              )}
               <span className="boardgraph__vsep" aria-hidden="true" />
               <div className="boardgraph__export">
                 <button
