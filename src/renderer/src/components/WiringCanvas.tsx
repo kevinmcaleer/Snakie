@@ -1317,10 +1317,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (d?.kind === 'stretch') {
       // Release an elastic stretch → snap back with a decaying wobble (a no-move
       // click already selected the wire on pointer-down, so nothing else to do).
-      if (d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
-        const c = robot.connections.find((x) => x.id === d.boxKey)
-        const en = c ? wireEnds(c) : null
-        if (en) startWobble(d.boxKey, d.liveX - (en.ax + en.bx) / 2, d.liveY - (en.ay + en.by) / 2)
+      if (d.moved && d.boxKey && d.liveX != null && d.liveY != null && d.startX != null && d.startY != null) {
+        // Wobble decays the FINAL drag delta back to zero.
+        startWobble(d.boxKey, d.liveX - d.startX, d.liveY - d.startY)
       }
       force((n) => n + 1)
       return
@@ -1356,9 +1355,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const w = toWorld(e)
       const target = dotAt(w.x, w.y, e.pointerType === 'touch' ? TOUCH_DOT_TOL : DOT_TOL)
       if (d.reconnectId) {
-        // Re-attaching an existing wire's end: land it on a new pin, else snap back
-        // (dropped on empty space ⇒ the wire is left untouched).
+        // Re-attaching an existing wire's end: land it on a new pin, else DELETE it —
+        // a disconnected end dropped on empty space removes the wire (a release back on
+        // its own pin re-attaches it, so a plain grab-and-release is a no-op).
         if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
+        else removeConnection(d.reconnectId)
       } else if (target && target.endpoint !== d.from) {
         addConnection(d.from, target.endpoint)
       }
@@ -1607,7 +1608,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // either end's node moves (the anchors recompute each render). ----
   const wirePath = (
     c: RobotConnection,
-    pull?: { x: number; y: number }
+    pull?: { dx: number; dy: number }
   ): { d: string; mx: number; my: number } | null => {
     if (renderMode === 'schematic') {
       const pts = wireRoutes.get(c.id)
@@ -1642,16 +1643,16 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     const mx = (e.ax + e.bx) / 2
     const my = (e.ay + e.by) / 2
-    // Elastic pull (#…): bow BOTH control points toward the pulled point so the
-    // whole noodle stretches like a rubber band; 1.3× so the belly reaches the
-    // cursor. The wobble animation feeds a decaying-oscillation pull here.
+    // Elastic pull (#…): move the belly by the drag DELTA (dx,dy) — not toward an
+    // absolute point — so it starts at 0 (no jump) and tracks the cursor. The Bézier
+    // midpoint is 0.75·(control-point offset), so scale by 1/0.75 to make the belly
+    // follow 1:1. The wobble animation feeds a decaying-oscillation delta here.
     if (pull) {
-      const px = (pull.x - mx) * 1.3
-      const py = (pull.y - my) * 1.3
-      c1x += px
-      c1y += py
-      c2x += px
-      c2y += py
+      const k = 1 / 0.75
+      c1x += pull.dx * k
+      c1y += pull.dy * k
+      c2x += pull.dx * k
+      c2y += pull.dy * k
     }
     return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx, my }
   }
@@ -1844,21 +1845,23 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               }
               // Elastic pull (#…): an active stretch follows the cursor; after
               // release the wobble decays the pulled belly back to rest.
-              let pull: { x: number; y: number } | undefined
-              if (drag?.kind === 'stretch' && drag.moved && drag.boxKey === c.id && drag.liveX != null && drag.liveY != null) {
-                // Only bend once the user actually DRAGS — a plain click just selects
-                // (otherwise the belly jumps to the click point on pointer-down).
-                pull = { x: drag.liveX, y: drag.liveY }
+              let pull: { dx: number; dy: number } | undefined
+              if (
+                drag?.kind === 'stretch' &&
+                drag.moved &&
+                drag.boxKey === c.id &&
+                drag.liveX != null &&
+                drag.liveY != null &&
+                drag.startX != null &&
+                drag.startY != null
+              ) {
+                // Delta since the grab — starts at 0 (no jump), tracks the cursor.
+                pull = { dx: drag.liveX - drag.startX, dy: drag.liveY - drag.startY }
               } else if (wobbleRef.current?.wireId === c.id) {
-                const en = wireEnds(c)
-                if (en) {
-                  const mx = (en.ax + en.bx) / 2
-                  const my = (en.ay + en.by) / 2
-                  const el = performance.now() - wobbleRef.current.start
-                  const damp = Math.exp(-el / 150)
-                  const osc = Math.cos(el / 42)
-                  pull = { x: mx + wobbleRef.current.ox * damp * osc, y: my + wobbleRef.current.oy * damp * osc }
-                }
+                const el = performance.now() - wobbleRef.current.start
+                const damp = Math.exp(-el / 150)
+                const osc = Math.cos(el / 42)
+                pull = { dx: wobbleRef.current.ox * damp * osc, dy: wobbleRef.current.oy * damp * osc }
               }
               const p = wirePath(c, pull)
               if (!p) return null
