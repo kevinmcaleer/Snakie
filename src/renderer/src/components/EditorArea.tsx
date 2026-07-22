@@ -1,7 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect } from 'react'
 import { EditorTabs } from './EditorTabs'
 import { FIND_EVENT } from './editorBridge'
+import { ChatIcon } from './ui-icons'
 import { useWorkspace } from '../store/workspace'
+
+export interface EditorAreaProps {
+  /** Whether the AI chat pane is open (drives the Chat toggle's state). */
+  chatOpen?: boolean
+  /** Toggle the AI chat pane. Absent (e.g. on the web) ⇒ no Chat button. The
+   *  Chat toggle lives here, left of Find, rather than the console header (#…). */
+  onToggleChat?: () => void
+}
 
 // Code-split Monaco: the editor (multi-MB chunk) is only loaded once a file is
 // open, keeping it out of the initial renderer bundle. Until then EditorArea
@@ -36,7 +45,7 @@ function isRobotFile(name: string | undefined): boolean {
  * placeholder and never fetch the editor chunk; opening a file triggers the
  * dynamic import, with a matching fallback shown while it streams in.
  */
-export function EditorArea(): JSX.Element {
+export function EditorArea({ chatOpen = false, onToggleChat }: EditorAreaProps = {}): JSX.Element {
   const { openFiles, activeId } = useWorkspace()
   const hasFiles = openFiles.length > 0
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -83,16 +92,35 @@ export function EditorArea(): JSX.Element {
     >
       <div className="editor-header">
         <EditorTabs />
-        {hasFiles && !showData && !showRobot && (
+        {(onToggleChat || (hasFiles && !showData && !showRobot)) && (
           <div className="editor-header__actions">
-            <button
-              type="button"
-              className="btn btn--sm btn--ghost"
-              onClick={openFind}
-              title="Find & Replace (Ctrl/Cmd-F, Ctrl/Cmd-H)"
-            >
-              Find
-            </button>
+            {/* Chat toggle — moved here from the console header (which was too
+                busy). Sits to the LEFT of Find. Desktop + Code workspace only. */}
+            {onToggleChat && (
+              <button
+                type="button"
+                className={`btn btn--sm btn--ghost${chatOpen ? ' is-active' : ''}`}
+                onClick={onToggleChat}
+                title={chatOpen ? 'Hide the AI chat panel' : 'Show the AI chat panel'}
+                aria-label={chatOpen ? 'Hide chat' : 'Show chat'}
+                aria-pressed={chatOpen}
+              >
+                <span className="btn__glyph" aria-hidden="true">
+                  <ChatIcon size={13} />
+                </span>
+                <span>Chat</span>
+              </button>
+            )}
+            {hasFiles && !showData && !showRobot && (
+              <button
+                type="button"
+                className="btn btn--sm btn--ghost"
+                onClick={openFind}
+                title="Find & Replace (Ctrl/Cmd-F, Ctrl/Cmd-H)"
+              >
+                Find
+              </button>
+            )}
           </div>
         )}
       </div>

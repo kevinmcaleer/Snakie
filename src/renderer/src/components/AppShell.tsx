@@ -1106,7 +1106,10 @@ export function AppShell(): JSX.Element {
               >
                 <Panel order={1} minSize={20}>
                   <div className="shell__editor-region">
-                    <EditorArea />
+                    <EditorArea
+                      chatOpen={!rightCollapsed}
+                      onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
+                    />
                   </div>
                 </Panel>
 
@@ -1124,7 +1127,6 @@ export function AppShell(): JSX.Element {
                 >
                   <ShellPanel
                     chatOpen={!rightCollapsed}
-                    onToggleChat={IS_WEB ? undefined : () => toggle(rightRef)}
                     onCollapse={() => {
                       if (!exitFocus()) toggle(shellRef)
                     }}
