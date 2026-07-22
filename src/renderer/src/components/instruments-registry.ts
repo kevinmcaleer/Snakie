@@ -205,6 +205,17 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['neopixel', 'ws2812', 'led']
   },
   {
+    id: 'psu',
+    name: 'Bench PSU',
+    accent: '#3ad07a',
+    border: 'rgba(58,208,122,.5)',
+    // a supply box with two terminal posts
+    icon: 'M4 7 h16 v9 H4 Z M9 16 v3 M15 16 v3 M8 11 h3 M9.5 9.5 v3',
+    group: 'output',
+    kind: 'singleton',
+    description: 'An adjustable bench supply — set output voltage + current limit (Circuit Sim).'
+  },
+  {
     id: 'servo',
     name: 'Servo',
     accent: '#ffd166',

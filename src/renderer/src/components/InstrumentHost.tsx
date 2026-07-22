@@ -26,6 +26,7 @@ import { ImuInstrument } from './ImuInstrument'
 import { EnvInstrument } from './EnvInstrument'
 import { DataLoggerInstrument } from './DataLoggerInstrument'
 import { LedInstrument } from './LedInstrument'
+import { PsuInstrument } from './PsuInstrument'
 import { ServoInstrument } from './ServoInstrument'
 import { PoseInstrument } from './PoseInstrument'
 import { PotentiometerInstrument } from './PotentiometerInstrument'
@@ -983,6 +984,8 @@ export function renderSingleton(
       return <DataLoggerInstrument {...p} />
     case 'led':
       return <LedInstrument {...p} />
+    case 'psu':
+      return <PsuInstrument {...p} />
     case 'servo':
       return <ServoInstrument {...p} />
     case 'poses':
