@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -2199,6 +2199,8 @@ export function PartCanvas({
                   <circle cx={cx} cy={cy} r={Math.max(0.8, size / 2 - 3.5 * pinScale)} fill="var(--bc-mat, #0c0f12)" />
                 </>
               )
+            } else if (shape === 'octagonal') {
+              pad = octagonalPad(cx, cy, size, fill, stroke, sw)
             } else {
               pad = (
                 <>
@@ -2227,7 +2229,9 @@ export function PartCanvas({
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
                 {/* The pin's label annotation (number box + label + chips) — a single
                     group so it can be DRAGGED to a hand-placed spot (#…), stored as
-                    `labelOffset` and applied here as a translate. */}
+                    `labelOffset` and applied here as a translate. `labelHidden` pins
+                    (a servo header's V+/GND rows) draw the pad only — no annotation. */}
+                {!rp.pin.labelHidden && (
                 <g
                   transform={labelTf}
                   className={labelDraggable ? 'pcv__pinlabel--drag' : undefined}
@@ -2260,6 +2264,7 @@ export function PartCanvas({
                     rp.pin.buses
                   )}
                 </g>
+                )}
               </g>
             )
           })}

@@ -1825,6 +1825,17 @@ function SelectionInspector({
               ))}
             </select>
           </label>
+          {/* Suppress the silk annotation for the repeated V+/GND rows of a servo /
+              DuPont header block — the pad + its role stay, only the label is hidden
+              (the shared legend / photo carries the +/− marking). */}
+          <label className="pe__field" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.4rem' }}>
+            <input
+              type="checkbox"
+              checked={pin.labelHidden === true}
+              onChange={(e) => updatePin({ labelHidden: e.target.checked ? true : undefined })}
+            />
+            <span>Hide label (servo V+/GND row)</span>
+          </label>
           {/* Rotation applies to EVERY pin — it turns the silk label (and the
               half-hole on castellated pads). Shown for all shapes so the label can
               be aimed any of the four ways; the degree readout confirms it saved. */}

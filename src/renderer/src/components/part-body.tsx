@@ -386,6 +386,41 @@ export function castellatedPad(
 /** The drilled through-hole(s) of a pin pad — the bits that should cut through the
  *  PCB + image (NOT the copper) for a realistic board (#171). Empty for a solid
  *  SMD (round) pad. Mirrors the dark hole circles each pad shape draws. */
+/** An octagonal through-hole header pad — a copper octagon with a SQUARE pin/hole
+ *  at its centre (the classic servo / 0.1" DuPont header look). `fill` tints it by
+ *  the pin's electrical role, so a red V+ row and a dark GND row read at a glance. */
+export function octagonalPad(
+  cx: number,
+  cy: number,
+  size: number,
+  fill: string,
+  stroke: string,
+  sw: number,
+  holeFill = 'var(--bc-mat, #0c0f12)'
+): JSX.Element {
+  const s = size / 2
+  const c = s * 0.414 // regular-octagon corner cut (√2 − 1)
+  const pts = [
+    [cx - s + c, cy - s],
+    [cx + s - c, cy - s],
+    [cx + s, cy - s + c],
+    [cx + s, cy + s - c],
+    [cx + s - c, cy + s],
+    [cx - s + c, cy + s],
+    [cx - s, cy + s - c],
+    [cx - s, cy - s + c]
+  ]
+    .map((p) => p.join(','))
+    .join(' ')
+  const h = size * 0.17 // square pin/hole half-size
+  return (
+    <>
+      <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={sw} />
+      <rect x={cx - h} y={cy - h} width={h * 2} height={h * 2} fill={holeFill} />
+    </>
+  )
+}
+
 export function pinThroughHoles(
   shape: PartPinShape,
   cx: number,
@@ -396,6 +431,7 @@ export function pinThroughHoles(
 ): { cx: number; cy: number; r: number }[] {
   if (shape === 'round') return []
   if (shape === 'header') return [{ cx, cy, r: size / 2 - 3.5 }]
+  if (shape === 'octagonal') return [{ cx, cy, r: size * 0.17 }] // square pin hole
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -1155,6 +1191,8 @@ export function PartBody({
                 <circle cx={cx} cy={cy} r={size * 0.26} fill="var(--bc-mat, #0c0f12)" />
               </>
             )
+          } else if (shape === 'octagonal') {
+            pad = octagonalPad(cx, cy, size, fill, stroke, sw)
           } else {
             pad = (
               <>
@@ -1194,7 +1232,7 @@ export function PartBody({
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
-              {!bodyOnly && (
+              {!bodyOnly && !rp.pin.labelHidden && (
               <g transform={labelGroupTf}>
               {boxThis ? (
                 <g transform={boxedCounter}>

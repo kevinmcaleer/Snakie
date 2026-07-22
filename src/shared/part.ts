@@ -75,8 +75,10 @@ export type PartPackage = 'THT' | 'SMD'
  *  - `castellated`— a castellated edge pad (the plated half-moon look)
  *  - `header`     — a through-hole header pad: a copper annular ring with the
  *                   drill hole showing (where pin headers are soldered)
+ *  - `octagonal`  — an octagonal header pad with a SQUARE pin/hole, the classic
+ *                   look of servo / DuPont-style 0.1" headers (Signal/V+/GND rows)
  */
-export type PartPinShape = 'square' | 'round' | 'castellated' | 'header'
+export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal'
 
 /** Which edge of the board outline a pin/header sits on. */
 export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
@@ -109,8 +111,13 @@ export interface PartPin {
    * {@link shape}` === 'castellated'`; still read for backward compatibility.
    */
   castellated?: boolean
-  /** How the pad is drawn (square / round / castellated / header). */
+  /** How the pad is drawn (square / round / castellated / header / octagonal). */
   shape?: PartPinShape
+  /** Suppress this pin's silk annotation (number box + label + capability chips)
+   *  while keeping the pad + its electrical role. Used for the repeated V+/GND pins
+   *  of a servo/DuPont header block, where labelling every one is noise — only the
+   *  signal pins are labelled and the power/ground rows read from a shared legend. */
+  labelHidden?: boolean
   /**
    * Castellation outward direction in degrees: 0 = right, 90 = down, 180 = left,
    * 270 = up. Absent ⇒ derived from the pin's side (left/right by x). Only affects

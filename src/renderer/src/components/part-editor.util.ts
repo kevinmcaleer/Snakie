@@ -72,14 +72,15 @@ export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
 export const PACKAGES: PartPackage[] = ['THT', 'SMD']
 
 /** Pad shapes the editor offers, in UI order. */
-export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
+export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header', 'octagonal']
 
 /** Human labels for each pad shape. */
 export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
   square: 'Square',
   round: 'Round',
   castellated: 'Castellated',
-  header: 'Header hole'
+  header: 'Header hole',
+  octagonal: 'Octagonal (servo)'
 }
 
 /** Component shape kinds the Shapes dropdown offers, in UI order. */
@@ -292,6 +293,7 @@ function normalisePin(pin: PartPin): PartPin {
   if (label && label !== name) out.label = label
   if (pin.castellated === true) out.castellated = true
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
+  if (pin.labelHidden === true) out.labelHidden = true
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
