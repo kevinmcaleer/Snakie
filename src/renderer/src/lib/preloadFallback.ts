@@ -105,6 +105,7 @@ if (!w.api) {
       interrupt: P(undefined),
       softReset: P(undefined),
       sendData: P(undefined),
+      runProgram: P(undefined),
       listDir: P([]),
       readFile: P(''),
       writeFile: P(undefined),

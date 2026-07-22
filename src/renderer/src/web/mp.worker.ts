@@ -24,6 +24,7 @@ type InMsg =
   | { type: 'init' }
   | { type: 'feed'; id: number; data: string }
   | { type: 'run'; id: number; code: string }
+  | { type: 'runStream'; id: number; code: string }
 
 const enc = new TextEncoder()
 
@@ -135,6 +136,25 @@ self.onmessage = async (e: MessageEvent<InMsg>): Promise<void> => {
       postMessage({ type: 'result', id: msg.id, error: String(err) })
     } finally {
       capturing = null
+    }
+  }
+  // Run a whole user PROGRAM with its output STREAMING to the terminal (#612):
+  // execute directly (no REPL echo, no paste-mode `===` framing). A Python
+  // exception's traceback streams via the stderr → collect path, so it's not
+  // surfaced as a transport error.
+  if (msg.type === 'runStream') {
+    flush()
+    capturing = null
+    try {
+      mp.runPython(msg.code)
+    } catch (err) {
+      // `runPython` throws a Python exception WITHOUT printing the traceback to
+      // stderr — surface it to the terminal so the user still sees the error.
+      const text = String((err as Error)?.message ?? err)
+      collect(enc.encode(text.endsWith('\n') ? text : text + '\n'))
+    } finally {
+      flush()
+      postMessage({ type: 'done', id: msg.id })
     }
   }
 }

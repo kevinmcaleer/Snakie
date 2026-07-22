@@ -60,6 +60,7 @@ export function createWebDeviceRouter(): Record<string, unknown> {
     exec: async (code: string) => call(active, 'exec', code),
     eval: async (code: string) => call(active, 'eval', code),
     sendData: async (data: string) => call(active, 'sendData', data),
+    runProgram: async (code: string) => call(active, 'runProgram', code),
     sendControl: async (target: string, payload?: string) => call(active, 'sendControl', target, payload),
     interrupt: async () => call(active, 'interrupt'),
     softReset: async () => call(active, 'softReset'),

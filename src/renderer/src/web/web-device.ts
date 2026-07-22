@@ -134,6 +134,12 @@ export function createWebDeviceApi(): Record<string, unknown> {
       if (runtime) await runtime.feed(data)
     },
 
+    runProgram: async (code: string) => {
+      // Run the whole program with output streaming, no REPL echo / paste framing
+      // (#612) — the sim executes it directly on the interpreter.
+      if (runtime) await runtime.runStream(code)
+    },
+
     sendControl: async () => undefined, // no telemetry consumer on the sim yet (#464)
 
     interrupt: async () => {

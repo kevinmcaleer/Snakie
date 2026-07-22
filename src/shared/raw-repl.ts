@@ -92,8 +92,10 @@ type Pending = {
 export class RawReplClient {
   private rxBuffer: Uint8Array = new Uint8Array(0)
   private pending: Pending | null = null
+  /** Active while {@link runProgram} streams a program's output (framing stripped). */
+  private streamPending: { resolve: () => void; reject: (e: Error) => void } | null = null
   private inRawRepl = false
-  /** While an exec drives the raw REPL, its bytes must NOT reach the console. */
+  /** While an exec/run drives the raw REPL, its framing must NOT reach the console. */
   private execActive = false
   private opQueue: Promise<unknown> = Promise.resolve()
 
@@ -111,8 +113,39 @@ export class RawReplClient {
 
   private handleData(chunk: Uint8Array): void {
     this.rxBuffer = concat(this.rxBuffer, chunk)
-    this.tryResolvePending()
+    if (this.streamPending) this.pumpStream()
+    else this.tryResolvePending()
     if (!this.execActive) this.onConsole(chunk)
+  }
+
+  /** Forward buffered program output to the console up to the next `\x04`, which
+   *  terminates stdout (then stderr); the terminator is stripped. See #612. */
+  private pumpStream(): void {
+    const idx = this.rxBuffer.indexOf(4)
+    if (idx === -1) {
+      if (this.rxBuffer.length > 0) {
+        this.onConsole(this.rxBuffer)
+        this.rxBuffer = new Uint8Array(0)
+      }
+      return
+    }
+    const out = this.rxBuffer.slice(0, idx)
+    if (out.length > 0) this.onConsole(out)
+    this.rxBuffer = this.rxBuffer.slice(idx + 1)
+    const done = this.streamPending
+    this.streamPending = null
+    done?.resolve()
+  }
+
+  /** Stream one `\x04`-terminated segment (stdout, then stderr) to the console.
+   *  No timeout — a running program may print indefinitely; it ends on completion
+   *  or Stop (which yields the terminating `\x04`). */
+  private streamUntilCtrlD(): Promise<void> {
+    if (this.streamPending) return Promise.reject(new Error('A stream is already in progress'))
+    return new Promise<void>((resolve, reject) => {
+      this.streamPending = { resolve, reject }
+      this.pumpStream()
+    })
   }
 
   private tryResolvePending(): void {
@@ -206,6 +239,39 @@ export class RawReplClient {
     const { stdout, stderr } = await this.exec(code, timeoutMs)
     if (stderr.trim().length > 0) throw new Error(stderr.trim())
     return stdout
+  }
+
+  /**
+   * Run a whole user PROGRAM, streaming only its output to the console (#612) —
+   * raw REPL (no source echo, no `===` paste banner), forwarding just the
+   * program's stdout + stderr while stripping the `OK`/`\x04`/`>` framing. Mirrors
+   * the desktop {@link MicroPythonDevice.runProgram}.
+   */
+  runProgram(code: string): Promise<void> {
+    const op = this.opQueue.then(() => this.runLocked(code))
+    this.opQueue = op.catch(() => undefined)
+    return op
+  }
+
+  private async runLocked(code: string): Promise<void> {
+    this.execActive = true
+    try {
+      const enteredHere = !this.inRawRepl
+      if (enteredHere) await this.enterRawRepl()
+      try {
+        await this.write(code)
+        await this.write(CTRL_D)
+        const ack = await this.readUntil('OK')
+        if (!dec.decode(ack).includes('OK')) throw new Error('Device did not acknowledge the program (no "OK")')
+        await this.streamUntilCtrlD() // stdout
+        await this.streamUntilCtrlD() // stderr (tracebacks)
+        await this.readUntil('>')
+      } finally {
+        if (enteredHere) await this.exitRawRepl().catch(() => undefined)
+      }
+    } finally {
+      this.execActive = false
+    }
   }
 
   // ── Filesystem helpers (same snippets as the desktop) ──────────────────────

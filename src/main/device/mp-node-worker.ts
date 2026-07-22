@@ -25,6 +25,7 @@ type InMsg =
   | { type: 'init' }
   | { type: 'feed'; id: number; data: string }
   | { type: 'run'; id: number; code: string }
+  | { type: 'runStream'; id: number; code: string }
 
 const port = parentPort
 if (!port) throw new Error('mp-node-worker must run as a worker_threads Worker')
@@ -125,6 +126,26 @@ port.on('message', async (msg: InMsg): Promise<void> => {
       port.postMessage({ type: 'result', id: msg.id, error: String(err) })
     } finally {
       capturing = null
+    }
+  }
+  // Run a whole user PROGRAM with its output STREAMING to the terminal (#612):
+  // execute directly (not through the REPL), so there is no source echo and no
+  // paste-mode `===` framing — just the program's stdout/stderr via `collect`. A
+  // Python exception's traceback streams through the stderr → collect path, so we
+  // never surface it as a transport error (that program ran; it just raised).
+  if (msg.type === 'runStream') {
+    flush()
+    capturing = null
+    try {
+      instance.runPython(msg.code)
+    } catch (err) {
+      // `runPython` throws a Python exception WITHOUT printing the traceback to
+      // stderr — surface it to the terminal so the user still sees the error.
+      const text = String((err as Error)?.message ?? err)
+      collect(enc.encode(text.endsWith('\n') ? text : text + '\n'))
+    } finally {
+      flush()
+      port.postMessage({ type: 'done', id: msg.id })
     }
   }
 })

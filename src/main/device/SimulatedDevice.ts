@@ -172,10 +172,18 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     return stdout
   }
 
-  /** Feed user keystrokes / Run paste-mode payloads to the real MicroPython REPL. */
+  /** Feed user keystrokes to the real MicroPython REPL. */
   async sendData(data: string): Promise<void> {
     if (this.state !== 'connected') return
     await this.runtime.feed(data)
+  }
+
+  /** Run a whole user PROGRAM, streaming only its output (#612) — executed
+   *  directly on the interpreter, so the REPL never echoes the source or the
+   *  paste-mode `===` framing. */
+  async runProgram(code: string): Promise<void> {
+    if (this.state !== 'connected') return
+    await this.runtime.runStream(code)
   }
 
   /** Record an IDE→board control command (latest-wins per target). */

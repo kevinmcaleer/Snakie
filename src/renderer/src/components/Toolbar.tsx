@@ -110,11 +110,11 @@ export function Toolbar(): JSX.Element {
   const canRun = activeFile != null && !connecting
 
   /**
-   * Execute the active file on the device using MicroPython paste mode:
-   *   Ctrl-E (\x05) enters paste mode, the file content is streamed verbatim,
-   *   then Ctrl-D (\x04) executes it. Device output flows back to the Shell
-   *   terminal automatically via its existing `onData` subscription — so we
-   *   never need a handle to the terminal here.
+   * Execute the active file on the device via `device.runProgram` — the raw-REPL
+   * streaming run (#612). Unlike the old paste-mode path (`\x05…\x04`), the REPL
+   * does NOT echo the program source or the `paste mode / ===` framing; only the
+   * program's own output streams back to the Shell terminal via its existing
+   * `onData` subscription.
    */
   // Track whether a program is running so the Stop button can double as Reset.
   // Set on Run; cleared when the user Stops (interrupts) or the device drops.
@@ -149,8 +149,10 @@ export function Toolbar(): JSX.Element {
     // attach-console control grab only this run's output (issue #78).
     markRun()
     setRunning(true)
-    const payload = `\x05${activeFile.content}\x04`
-    window.api.device.sendData(payload).catch(reporter('run', { notify: "Couldn't send your program to the board." }))
+    // Raw-REPL streaming run — no source echo, no `===` paste framing (#612).
+    window.api.device
+      .runProgram(activeFile.content)
+      .catch(reporter('run', { notify: "Couldn't send your program to the board." }))
   }, [connected, activeFile, markRun])
 
   // Stop is dual-purpose: interrupt a running program (Ctrl-C); or, when nothing

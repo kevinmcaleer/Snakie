@@ -10,7 +10,7 @@
  * which is the only way to stop a tight loop without SharedArrayBuffer (absent on
  * GitHub Pages). A reboot resets the sim's RAM filesystem, exactly like a reconnect.
  */
-type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void }
+type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void; kind: 'feed' | 'run' | 'runStream' }
 type OutMsg =
   | { type: 'out'; bytes: Uint8Array }
   | { type: 'ready' }
@@ -78,12 +78,12 @@ export class WorkerMicroPythonRuntime {
     else p.resolve(msg.type === 'result' ? msg.value : undefined)
   }
 
-  private request<T>(payload: { type: 'feed' | 'run'; data?: string; code?: string }): Promise<T> {
+  private request<T>(payload: { type: 'feed' | 'run' | 'runStream'; data?: string; code?: string }): Promise<T> {
     if (!this.worker) return Promise.reject(new Error('MicroPython worker is not running'))
     const id = this.nextId++
     this.busy++
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject })
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, kind: payload.type })
       this.worker!.postMessage({ ...payload, id })
     })
   }
@@ -96,6 +96,10 @@ export class WorkerMicroPythonRuntime {
     return this.request<string>({ type: 'run', code })
   }
 
+  runStream(code: string): Promise<void> {
+    return this.request<void>({ type: 'runStream', code })
+  }
+
   /** Stop whatever's running. Idle → a gentle Ctrl-C (keeps state); running → reboot. */
   async interrupt(): Promise<void> {
     if (this.busy <= 0) {
@@ -106,7 +110,12 @@ export class WorkerMicroPythonRuntime {
   }
 
   private async reboot(): Promise<void> {
-    for (const p of this.pending.values()) p.reject(new Error('interrupted'))
+    // The running feed / runStream IS the user's program — Stopping it is a normal
+    // completion (resolve); genuine runs (FS ops) didn't finish (reject).
+    for (const p of this.pending.values()) {
+      if (p.kind === 'feed' || p.kind === 'runStream') p.resolve(undefined)
+      else p.reject(new Error('interrupted'))
+    }
     this.pending.clear()
     this.busy = 0
     this.worker?.terminate()

@@ -76,6 +76,10 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     timer: NodeJS.Timeout
   } | null = null
 
+  /** Active while {@link runProgram} streams a program's stdout/stderr to the
+   *  console — bytes are forwarded (framing stripped) until a `\x04` terminator. */
+  private streamPending: { resolve: () => void; reject: (err: Error) => void } | null = null
+
   /**
    * Serializes raw-REPL operations. Each `exec` chains onto this promise so two
    * callers never interleave on the wire.
@@ -208,15 +212,49 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   // ---------------------------------------------------------------------------
 
   private handleData(chunk: Buffer): void {
-    // Always buffer for the raw-REPL reader (readUntil).
+    // Always buffer for the raw-REPL reader (readUntil / stream pump).
     this.rxBuffer = Buffer.concat([this.rxBuffer, chunk])
-    this.tryResolvePending()
-    // Forward raw bytes to the renderer REPL — EXCEPT while an internal `exec`
-    // is in flight. Exec drives the raw REPL (banners, Ctrl-C interrupts, our
-    // live-value probes like `<<SNKV>>0:9922`); that machine traffic must not
-    // pollute the user's console. User typing + Run go through `sendData` (the
-    // friendly REPL), not `exec`, so they still stream through.
+    if (this.streamPending) this.pumpStream()
+    else this.tryResolvePending()
+    // Forward raw bytes to the renderer REPL — EXCEPT while an internal `exec` or
+    // a program `runProgram` is in flight. Exec drives the raw REPL (banners,
+    // Ctrl-C interrupts, live-value probes like `<<SNKV>>0:9922`) and runProgram
+    // forwards ONLY the program's own stdout/stderr via `pumpStream` (framing
+    // stripped) — so neither machine traffic nor the raw-REPL framing pollutes the
+    // user's console. User typing goes through `sendData` (friendly REPL).
     if (!this.execActive) this.emit('data', chunk)
+  }
+
+  /** During a {@link runProgram} stream, forward buffered program output to the
+   *  console up to the next `\x04` terminator (which ends stdout, then stderr),
+   *  stripping the terminator. Resolves the stream when it's seen. */
+  private pumpStream(): void {
+    const idx = this.rxBuffer.indexOf(0x04)
+    if (idx === -1) {
+      // No terminator yet — the program is still printing; forward it all live.
+      if (this.rxBuffer.length > 0) {
+        this.emit('data', this.rxBuffer)
+        this.rxBuffer = Buffer.alloc(0)
+      }
+      return
+    }
+    const out = this.rxBuffer.subarray(0, idx)
+    if (out.length > 0) this.emit('data', out)
+    this.rxBuffer = this.rxBuffer.subarray(idx + 1) // drop the \x04
+    const done = this.streamPending
+    this.streamPending = null
+    done?.resolve()
+  }
+
+  /** Wait for one `\x04`-terminated segment (stdout, then stderr), forwarding it to
+   *  the console as it streams. No timeout — a running program may print forever;
+   *  it ends when the program finishes or is Stopped (which yields the `\x04`). */
+  private streamUntilCtrlD(): Promise<void> {
+    if (this.streamPending) return Promise.reject(new Error('A stream is already in progress'))
+    return new Promise<void>((resolve, reject) => {
+      this.streamPending = { resolve, reject }
+      this.pumpStream() // drain anything already buffered (e.g. output right after "OK")
+    })
   }
 
   private tryResolvePending(): void {
@@ -233,6 +271,12 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   }
 
   private failPending(err: Error): void {
+    // A program streaming when the port drops must not hang its run promise.
+    if (this.streamPending) {
+      const { reject } = this.streamPending
+      this.streamPending = null
+      reject(err)
+    }
     if (!this.pending) return
     clearTimeout(this.pending.timer)
     const { reject } = this.pending
@@ -387,6 +431,51 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
           // Best-effort return to friendly REPL.
           await this.exitRawRepl().catch(() => undefined)
         }
+      }
+    } finally {
+      this.execActive = false
+    }
+  }
+
+  /**
+   * Run a whole user PROGRAM, streaming only its output to the console (#612).
+   *
+   * Unlike {@link sendData} paste mode (which the friendly REPL echoes back with a
+   * `paste mode…` banner + `=== ` line prefixes), this uses the RAW REPL, which
+   * does not echo the source: enter raw REPL, send the code, then forward only the
+   * program's stdout + stderr to the terminal while stripping the `OK` / `\x04` /
+   * `>` protocol framing. Resolves when the program finishes; a `while True:` loop
+   * resolves only when Stopped (the interrupt yields the terminating `\x04`).
+   */
+  runProgram(code: string): Promise<void> {
+    const op = this.opQueue.then(() => this.runLocked(code))
+    this.opQueue = op.catch(() => undefined)
+    return op
+  }
+
+  private async runLocked(code: string): Promise<void> {
+    if (!this.isConnected()) throw new Error('Not connected')
+    // Suppress the raw-REPL framing broadcast; the program's own output reaches the
+    // console via pumpStream instead.
+    this.execActive = true
+    try {
+      const enteredHere = !this.inRawRepl
+      if (enteredHere) await this.enterRawRepl()
+      try {
+        await this.write(code)
+        await this.write(CTRL_D)
+        // Acknowledge (strips the "OK"); the raw-REPL banner was already consumed.
+        const ack = await this.readUntil('OK')
+        if (!ack.toString('binary').includes('OK')) {
+          throw new Error('Device did not acknowledge the program (no "OK")')
+        }
+        // Stream stdout, then stderr (tracebacks), live to the console.
+        await this.streamUntilCtrlD()
+        await this.streamUntilCtrlD()
+        // Consume the trailing prompt so the buffer is clean for the next op.
+        await this.readUntil('>')
+      } finally {
+        if (enteredHere) await this.exitRawRepl().catch(() => undefined)
       }
     } finally {
       this.execActive = false

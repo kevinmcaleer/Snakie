@@ -115,4 +115,31 @@ describe('RawReplClient', () => {
     expect(a.stdout).toBe('a')
     expect(b.stdout).toBe('a')
   })
+
+  it('runProgram streams ONLY the program output — no source echo, no === / framing (#612)', async () => {
+    const s = setup() as unknown as { board: MockBoard; client: RawReplClient; console: string }
+    s.board.nextStdout = 'hello\nworld\n'
+    s.board.nextStderr = ''
+    await s.client.runProgram('print("hello")\nprint("world")')
+    // The program's own stdout reached the console…
+    expect(s.console).toBe('hello\nworld\n')
+    // …and NONE of the raw-REPL framing or the source did (the #612 bug).
+    expect(s.console).not.toContain('OK')
+    expect(s.console).not.toContain('raw REPL')
+    expect(s.console).not.toContain('print(') // no source echo
+    expect(s.console).not.toContain('===') // no paste-mode banner/prefixes
+    expect(s.console).not.toContain('\x04')
+    expect(s.console).not.toContain('>')
+  })
+
+  it('runProgram streams a traceback (stderr) to the console, still no echo (#612)', async () => {
+    const s = setup() as unknown as { board: MockBoard; client: RawReplClient; console: string }
+    s.board.nextStdout = ''
+    s.board.nextStderr = 'Traceback (most recent call last):\n  NameError: boom\n'
+    await s.client.runProgram('boom')
+    expect(s.console).toContain('NameError: boom')
+    expect(s.console).not.toContain('boom\n===') // not the echoed source
+    expect(s.console).not.toContain('OK')
+    expect(s.console).not.toContain('\x04')
+  })
 })

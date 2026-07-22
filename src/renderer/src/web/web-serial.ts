@@ -217,6 +217,7 @@ export function createWebSerialBackend(): Record<string, unknown> {
     exec: async (code: string) => need().exec(code),
     eval: async (code: string) => need().eval(code),
     sendData: async (data: string) => need().sendData(data),
+    runProgram: async (code: string) => need().runProgram(code),
     sendControl: async (target: string, payload?: string) => need().sendControl(target, payload ?? ''),
     interrupt: async () => need().interrupt(),
     softReset: async () => need().softReset(),
