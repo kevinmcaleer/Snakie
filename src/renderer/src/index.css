@@ -1686,9 +1686,12 @@ body {
  * ones now live in the dock region, right of chat; undocked ones float in an
  * app-root layer over the whole window.) */
 .shell__editor-region {
+  /* The Soft Shell card rule below sizes this as `position:absolute; inset:5px`.
+     Setting width/height:100% here fought that inset (with `left` + `width` both
+     set, `width` wins and `right` is ignored), so the card overflowed its slot's
+     right/bottom by 5px and those rounded corners were CROPPED (#614 follow-up).
+     Let the inset control the box. */
   position: relative;
-  width: 100%;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -2292,9 +2295,13 @@ body {
   background: var(--panel, var(--bg-elevated));
 }
 /* The instrument dock is a flex sibling (fixed width), so it cards via margin —
-   flexbox subtracts the margin, no overflow. */
+   flexbox subtracts the margin, no overflow. Match the panels' outer margin
+   (~11px = the shell__panels padding + each card's inset) on the top/right/bottom;
+   its LEFT gap to the panel group comes from the last panel's own right margin, so
+   0 here keeps the dock consistent with the other cards instead of tighter (#614
+   follow-up). */
 .shell__main .shell__dock {
-  margin: 5px;
+  margin: 11px 11px 11px 0;
   border-radius: 14px;
   border: 1px solid var(--shellbd, var(--border));
   box-shadow:
