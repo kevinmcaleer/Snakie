@@ -626,6 +626,9 @@ interface Drag {
   from?: string
   cx?: number
   cy?: number
+  /** When set, this wire drag is RE-attaching an existing wire (its id) — the grabbed
+   *  end moves to the released pin, or snaps back if dropped on empty space (#…). */
+  reconnectId?: string
   /** pinch (two-finger touch, #525): starting finger distance + view snapshot */
   pinchDist?: number
   pinchScale?: number
@@ -1076,6 +1079,26 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   const removeConnection = (id: string): void =>
     persist({ ...robot, connections: robot.connections.filter((c) => c.id !== id) })
+  // Re-attach a wire's grabbed end to a new pin: drop the OLD connection + add the
+  // new one in ONE persist (separate remove+add would clobber via stale closures).
+  const reconnectWire = (oldId: string, from: string, to: string): void => {
+    if (from === to) return
+    const id = connectionId(from, to)
+    const rest = robot.connections.filter(
+      (c) => c.id !== oldId && c.id !== id && !(c.from === to && c.to === from)
+    )
+    const net: RobotNet =
+      pinNet(from) === 'vcc' || pinNet(to) === 'vcc'
+        ? 'vcc'
+        : pinNet(from) === 'gnd' || pinNet(to) === 'gnd'
+          ? 'gnd'
+          : 'signal'
+    const conn: RobotConnection = { id, from, to, net }
+    if (net === 'signal') {
+      conn.color = signalColor(rest.filter((c) => (c.net ?? 'signal') === 'signal').length)
+    }
+    persist({ ...robot, connections: [...rest, conn] })
+  }
   const setConnectionColor = (id: string, color: string): void =>
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
@@ -1291,7 +1314,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (d?.kind === 'wire' && d.from) {
       const w = toWorld(e)
       const target = dotAt(w.x, w.y, e.pointerType === 'touch' ? TOUCH_DOT_TOL : DOT_TOL)
-      if (target && target.endpoint !== d.from) addConnection(d.from, target.endpoint)
+      if (d.reconnectId) {
+        // Re-attaching an existing wire's end: land it on a new pin, else snap back
+        // (dropped on empty space ⇒ the wire is left untouched).
+        if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
+      } else if (target && target.endpoint !== d.from) {
+        addConnection(d.from, target.endpoint)
+      }
       force((n) => n + 1)
     }
   }
@@ -1758,6 +1787,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               }
               const p = wirePath(c)
               if (!p) return null
+              // While this wire's end is being re-attached, hide it — only the live
+              // drag wire shows until it lands (or snaps back).
+              if (drag?.reconnectId === c.id) return null
               // Node-voltage overlay (#604): colour the wire by its solved voltage
               // (both ends share a node) + badge the value at its midpoint.
               const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
@@ -1819,6 +1851,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 />
               )
             })()}
+
+            {/* Drag handles on the SELECTED wire's ends — grab one to detach that
+                end and re-attach it to another pin (#…). Hidden mid-drag. */}
+            {selectedWire &&
+              !drag &&
+              (() => {
+                const c = robot.connections.find((x) => x.id === selectedWire)
+                if (!c) return null
+                const e = wireEnds(c)
+                if (!e) return null
+                const grab =
+                  (fixedEndpoint: string) => (ev: ReactPointerEvent<SVGCircleElement>) => {
+                    ev.stopPropagation()
+                    ;(ev.target as Element).setPointerCapture?.(ev.pointerId)
+                    const w = toWorld(ev)
+                    dragRef.current = { kind: 'wire', from: fixedEndpoint, reconnectId: c.id, cx: w.x, cy: w.y }
+                    setSelectedWire(null)
+                    force((n) => n + 1)
+                  }
+                return (
+                  <g>
+                    <circle cx={e.ax} cy={e.ay} r={6} className="wc__wire-handle" onPointerDown={grab(c.to)} />
+                    <circle cx={e.bx} cy={e.by} r={6} className="wc__wire-handle" onPointerDown={grab(c.from)} />
+                  </g>
+                )
+              })()}
 
             {/* Selection ring around the selected part (#176). */}
             {selPart && (

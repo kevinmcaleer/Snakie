@@ -225,6 +225,18 @@
   pointer-events: none;
 }
 
+/* Grab handles on the selected wire's ends (#…) — accent dots you drag to
+   re-attach that end to another pin. */
+.wc__wire-handle {
+  fill: var(--accent, #e6ab30);
+  stroke: #fff;
+  stroke-width: 1.6;
+  cursor: grab;
+}
+.wc__wire-handle:active {
+  cursor: grabbing;
+}
+
 .wc__zoom-pct {
   min-width: 2.6rem;
   text-align: center;
