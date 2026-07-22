@@ -955,7 +955,29 @@ export function PartBody({
   // never dwarf the pitch on a small render (the mini board) or look tiny on a big
   // one — consistent across the mini board + breadboard. Falls back to the legacy
   // fixed size when the part has no mm dimensions.
-  const padSize = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
+  const physicalPad = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
+  // Some boards pack pins FAR tighter than the nominal pitch (e.g. the Servo 2040's
+  // 3-pin servo clusters render barely one pad-width apart), so a physical 1.9mm pad
+  // and the fixed 14px number box collide. Measure the tightest ACTUAL centre-to-
+  // centre pin gap and shrink the pads + number boxes + labels together to fit it —
+  // a no-op on comfortably-pitched boards, where `pinScale` stays 1.
+  let minPinGapPx = Infinity
+  for (let i = 0; i < pins.length; i++) {
+    for (let j = i + 1; j < pins.length; j++) {
+      const d = Math.hypot((pins[i].x - pins[j].x) * box.w, (pins[i].y - pins[j].y) * box.h)
+      if (d > 0.5 && d < minPinGapPx) minPinGapPx = d
+    }
+  }
+  // A pad never exceeds ~0.82× the tightest gap, so neighbouring pads never touch.
+  const padSize = Number.isFinite(minPinGapPx)
+    ? Math.max(3, Math.min(physicalPad, minPinGapPx * 0.82))
+    : physicalPad
+  // The fixed 14px number box wants ~21px of gap; below that, scale the annotations
+  // (number box + label + chips) down about the pin so a dense row stays legible.
+  // The floor is low (0.25) because very dense boards (Servo 2040 packed on a small
+  // board-body box) need an aggressive shrink to stop the number boxes overlapping;
+  // they stay readable via the view's zoom. Comfortable boards keep pinScale = 1.
+  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 21)) : 1
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -1116,17 +1138,25 @@ export function PartBody({
             boxThis && bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
+          // Shrink the annotation (number box + label + chips) about the board edge
+          // on a tight-pitch board so a dense row stays legible (no-op at scale 1),
+          // matching the pad cap above.
+          const densityTf =
+            pinScale !== 1
+              ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})`
+              : undefined
           // Manual label placement (#…): shift the whole annotation by the pin's
           // saved labelOffset (a fraction of the board box).
           const lo = rp.pin.labelOffset
           const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+          const labelGroupTf = [densityTf, labelShift].filter(Boolean).join(' ') || undefined
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
               {!bodyOnly && (
-              <g transform={labelShift}>
+              <g transform={labelGroupTf}>
               {boxThis ? (
                 <g transform={boxedCounter}>
                   {boxedPinLabel(

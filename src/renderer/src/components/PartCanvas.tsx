@@ -408,7 +408,7 @@ export function PartCanvas({
       ? Math.min(minPinGapPx, nominalPitchPx)
       : minPinGapPx
     : nominalPitchPx
-  const pinScale = pitchPx > 0 ? Math.max(0.4, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
+  const pinScale = pitchPx > 0 ? Math.max(0.25, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
   /** A hole's drawn (and collision) radius in viewBox units. */
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
