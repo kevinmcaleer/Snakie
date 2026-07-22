@@ -34,7 +34,10 @@ class MockBoard implements SerialTransport {
         this.buf = ''
         this.emit('\r\nraw REPL; CTRL-B to exit\r\n>')
       } else if (ch === '\x02') {
+        // Ctrl-B → back to the friendly REPL, which REPRINTS its banner + prompt
+        // (this is the #612 "looks like a reboot" source we must suppress).
         this.raw = false
+        this.emit('\r\nMicroPython v9.9.9 on 2026; MockBoard with RP2\r\nType "help()" for more information.\r\n>>> ')
       } else if (ch === '\x04' && this.raw) {
         // Ctrl-D in raw mode → execute the buffered code, frame the response.
         this.buf = ''
@@ -121,15 +124,18 @@ describe('RawReplClient', () => {
     s.board.nextStdout = 'hello\nworld\n'
     s.board.nextStderr = ''
     await s.client.runProgram('print("hello")\nprint("world")')
-    // The program's own stdout reached the console…
-    expect(s.console).toBe('hello\nworld\n')
+    // The program's own stdout reached the console, then a clean `>>>` prompt…
+    expect(s.console).toBe('hello\nworld\n\r\n>>> ')
     // …and NONE of the raw-REPL framing or the source did (the #612 bug).
     expect(s.console).not.toContain('OK')
     expect(s.console).not.toContain('raw REPL')
     expect(s.console).not.toContain('print(') // no source echo
     expect(s.console).not.toContain('===') // no paste-mode banner/prefixes
     expect(s.console).not.toContain('\x04')
-    expect(s.console).not.toContain('>')
+    // The friendly-REPL banner that Ctrl-B reprints must NOT leak (looks like a
+    // reboot after every run) — only the single clean prompt we add.
+    expect(s.console).not.toContain('MicroPython v')
+    expect(s.console).not.toContain('help()')
   })
 
   it('runProgram streams a traceback (stderr) to the console, still no echo (#612)', async () => {

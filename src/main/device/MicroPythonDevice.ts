@@ -375,6 +375,12 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   async exitRawRepl(): Promise<void> {
     await this.write(CTRL_B)
     this.inRawRepl = false
+    // Ctrl-B returns to the friendly REPL, which REPRINTS its `MicroPython v… /
+    // Type "help()"…` banner + `>>>` prompt. Consume it here (still inside the
+    // caller's execActive window) so it never leaks to the console after an exec
+    // or a Run — otherwise every run looks like the board rebooted (#612). Short
+    // timeout + swallow: a board that doesn't reprint just falls through.
+    await this.readUntil('>>> ', 2000).catch(() => undefined)
   }
 
   /**
@@ -475,7 +481,13 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
         // Consume the trailing prompt so the buffer is clean for the next op.
         await this.readUntil('>')
       } finally {
-        if (enteredHere) await this.exitRawRepl().catch(() => undefined)
+        if (enteredHere) {
+          await this.exitRawRepl().catch(() => undefined)
+          // Show a fresh friendly-REPL prompt so the user sees the program ended
+          // and they're back at the REPL (the reprinted banner is suppressed by
+          // exitRawRepl, so this replaces it with just a clean `>>>`).
+          this.emit('data', Buffer.from('\r\n>>> '))
+        }
       }
     } finally {
       this.execActive = false
