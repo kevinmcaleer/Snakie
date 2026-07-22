@@ -371,8 +371,19 @@ export function buildCircuit(netlist: Netlist, components: CircuitComponent[]): 
     }
   })
 
-  // Ground = the first ground-classified node; -1 ⇒ the solver degrades ('no-ground').
-  const ground = netlist.nodes.findIndex((n) => n.kind === 'ground')
+  // Ground = the ground-classified node with the MOST terminals — i.e. the main
+  // ground RAIL that sources/loads actually return to. Picking merely the *first*
+  // ground node grabbed isolated GND pins (an unconnected part's ground), which
+  // left the real ground floating symmetrically about it via Gmin (the tell-tale
+  // "ground reads −V/2, rail reads +V/2"). -1 ⇒ no ground ⇒ degrade ('no-ground').
+  let ground = -1
+  let groundTerms = 0
+  netlist.nodes.forEach((n, i) => {
+    if (n.kind === 'ground' && n.terminals.length > groundTerms) {
+      groundTerms = n.terminals.length
+      ground = i
+    }
+  })
 
   const elements: SolverElement[] = []
   for (const comp of components) {

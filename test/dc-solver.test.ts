@@ -303,6 +303,27 @@ describe('buildCircuit — netlist → SolverCircuit (adapter)', () => {
     expect(circuit.elements.map((e) => e.id)).toEqual(['bat'])
   })
 
+  it('anchors ground on the MAIN rail, not an isolated GND pin (no symmetric float)', () => {
+    // N0 is an isolated ground pin (first); N1 is the real ground rail the source
+    // returns to. Anchoring N0 would float the circuit symmetrically (ground −2.5,
+    // rail +2.5); anchoring the busy rail keeps ground at 0 and the rail at the full 5V.
+    const nl = netlist(
+      node('N0', 'ground', term('sensor', 'GND', 'gnd')),
+      node('N1', 'ground', term('psu', '-', 'gnd'), term('board', 'GND', 'gnd'), term('r', 'n', 'other')),
+      node('N2', 'power', term('psu', '+', 'pwr'), term('r', 'p', 'other'))
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'psu', electrical: { model: 'source', supplyV: 5, terminals: { positive: '+', negative: '-' } } },
+      { key: 'r', electrical: { model: 'resistor', resistanceOhms: 1000, terminals: { positive: 'p', negative: 'n' } } }
+    ]
+    const circuit = buildCircuit(nl, comps)
+    expect(circuit.ground).toBe(1) // the busy rail, not the isolated pin N0
+    const r = solveDC(circuit)
+    expect(r.nodeVoltages[1]).toBeCloseTo(0, 6) // main ground = 0V
+    expect(r.nodeVoltages[2]).toBeCloseTo(5, 4) // rail = full 5V (NOT a floated 2.5)
+    expect(Math.abs(r.nodeVoltages[0])).toBeLessThan(0.01) // isolated pin ≈ 0, not −2.5
+  })
+
   it('a netlist with no ground node ⇒ ground -1 ⇒ solver degrades, not NaN', () => {
     const nl = netlist(
       node('N0', 'power', term('bat', '+', 'pwr')),
