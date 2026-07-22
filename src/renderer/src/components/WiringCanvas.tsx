@@ -607,7 +607,7 @@ export interface WiringCanvasProps {
 }
 
 interface Drag {
-  kind: 'box' | 'pan' | 'wire' | 'pinch'
+  kind: 'box' | 'pan' | 'wire' | 'pinch' | 'stretch'
   /** box drag */
   boxKey?: string
   startX?: number
@@ -696,6 +696,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // The selected WIRE (connection id), mutually exclusive with a selected part —
   // click a wire to select it (highlighted), Delete removes it (#…).
   const [selectedWire, setSelectedWire] = useState<string | null>(null)
+  // Elastic wire wobble (#…): after a stretch drag releases, the pulled belly decays
+  // back to rest with a damped oscillation, driven by requestAnimationFrame ticks.
+  const wobbleRef = useRef<{ wireId: string; ox: number; oy: number; start: number } | null>(null)
+  const wobbleRafRef = useRef<number | null>(null)
+  const startWobble = (wireId: string, ox: number, oy: number): void => {
+    wobbleRef.current = { wireId, ox, oy, start: performance.now() }
+    const tick = (): void => {
+      if (!wobbleRef.current) return
+      if (performance.now() - wobbleRef.current.start > 650) wobbleRef.current = null
+      else wobbleRafRef.current = requestAnimationFrame(tick)
+      force((n) => n + 1)
+    }
+    if (wobbleRafRef.current != null) cancelAnimationFrame(wobbleRafRef.current)
+    wobbleRafRef.current = requestAnimationFrame(tick)
+  }
+  useEffect(
+    () => () => {
+      if (wobbleRafRef.current != null) cancelAnimationFrame(wobbleRafRef.current)
+    },
+    []
+  )
   // Inline rename: the draft alias being typed, or null when not renaming.
   const [renameText, setRenameText] = useState<string | null>(null)
   // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
@@ -1226,6 +1247,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     const d = dragRef.current
     if (!d) return
+    if (d.kind === 'stretch') {
+      // Elastic stretch: the wire's belly follows the cursor until release.
+      const w = toWorld(e)
+      d.liveX = w.x
+      d.liveY = w.y
+      if (Math.hypot(w.x - (d.startX ?? w.x), w.y - (d.startY ?? w.y)) > 3) d.moved = true
+      force((n) => n + 1)
+      return
+    }
     if (d.kind === 'pinch') {
       if (touchPtsRef.current.size < 2) return
       const [a, b] = [...touchPtsRef.current.values()]
@@ -1284,6 +1314,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     const d = dragRef.current
     dragRef.current = null
+    if (d?.kind === 'stretch') {
+      // Release an elastic stretch → snap back with a decaying wobble (a no-move
+      // click already selected the wire on pointer-down, so nothing else to do).
+      if (d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
+        const c = robot.connections.find((x) => x.id === d.boxKey)
+        const en = c ? wireEnds(c) : null
+        if (en) startWobble(d.boxKey, d.liveX - (en.ax + en.bx) / 2, d.liveY - (en.ay + en.by) / 2)
+      }
+      force((n) => n + 1)
+      return
+    }
     if (d?.kind === 'box' && d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
       moveBox(d.boxKey, d.liveX, d.liveY)
       return
@@ -1564,7 +1605,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // Breadboard (#182) — control points pushed out along each pin's normal give
   // clearance off the pad and curve cleanly to a far-side pin; it reflows live as
   // either end's node moves (the anchors recompute each render). ----
-  const wirePath = (c: RobotConnection): { d: string; mx: number; my: number } | null => {
+  const wirePath = (
+    c: RobotConnection,
+    pull?: { x: number; y: number }
+  ): { d: string; mx: number; my: number } | null => {
     if (renderMode === 'schematic') {
       const pts = wireRoutes.get(c.id)
       if (!pts || pts.length < 2) return null
@@ -1596,7 +1640,20 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       c2x = e.bx + e.box * WIRE_CLEARANCE
       c2y -= Math.sign(dy || 1) * vbow
     }
-    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx: (e.ax + e.bx) / 2, my: (e.ay + e.by) / 2 }
+    const mx = (e.ax + e.bx) / 2
+    const my = (e.ay + e.by) / 2
+    // Elastic pull (#…): bow BOTH control points toward the pulled point so the
+    // whole noodle stretches like a rubber band; 1.3× so the belly reaches the
+    // cursor. The wobble animation feeds a decaying-oscillation pull here.
+    if (pull) {
+      const px = (pull.x - mx) * 1.3
+      const py = (pull.y - my) * 1.3
+      c1x += px
+      c1y += py
+      c2x += px
+      c2y += py
+    }
+    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx, my }
   }
 
   const drag = dragRef.current
@@ -1785,7 +1842,23 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   }
                 }
               }
-              const p = wirePath(c)
+              // Elastic pull (#…): an active stretch follows the cursor; after
+              // release the wobble decays the pulled belly back to rest.
+              let pull: { x: number; y: number } | undefined
+              if (drag?.kind === 'stretch' && drag.boxKey === c.id && drag.liveX != null && drag.liveY != null) {
+                pull = { x: drag.liveX, y: drag.liveY }
+              } else if (wobbleRef.current?.wireId === c.id) {
+                const en = wireEnds(c)
+                if (en) {
+                  const mx = (en.ax + en.bx) / 2
+                  const my = (en.ay + en.by) / 2
+                  const el = performance.now() - wobbleRef.current.start
+                  const damp = Math.exp(-el / 150)
+                  const osc = Math.cos(el / 42)
+                  pull = { x: mx + wobbleRef.current.ox * damp * osc, y: my + wobbleRef.current.oy * damp * osc }
+                }
+              }
+              const p = wirePath(c, pull)
               if (!p) return null
               // While this wire's end is being re-attached, hide it — only the live
               // drag wire shows until it lands (or snaps back).
@@ -1804,12 +1877,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                     fill="none"
                     stroke="transparent"
                     strokeWidth={14}
-                    style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                    style={{ pointerEvents: 'stroke', cursor: 'grab' }}
                     onPointerDown={(e) => {
                       e.stopPropagation()
+                      ;(e.target as Element).setPointerCapture?.(e.pointerId)
                       setSelectedWire(c.id)
                       setSelectedKey(null)
                       rootRef.current?.focus()
+                      // Start an elastic stretch (a click with no move stays a select).
+                      const w = toWorld(e)
+                      dragRef.current = { kind: 'stretch', boxKey: c.id, startX: w.x, startY: w.y, liveX: w.x, liveY: w.y }
+                      force((n) => n + 1)
                     }}
                   />
                   {isSel && (
