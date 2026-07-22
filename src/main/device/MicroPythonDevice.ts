@@ -373,14 +373,23 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
 
   /** Leave raw REPL mode (Ctrl-B), returning to the friendly REPL. */
   async exitRawRepl(): Promise<void> {
-    await this.write(CTRL_B)
-    this.inRawRepl = false
     // Ctrl-B returns to the friendly REPL, which REPRINTS its `MicroPython v… /
-    // Type "help()"…` banner + `>>>` prompt. Consume it here (still inside the
-    // caller's execActive window) so it never leaks to the console after an exec
-    // or a Run — otherwise every run looks like the board rebooted (#612). Short
-    // timeout + swallow: a board that doesn't reprint just falls through.
-    await this.readUntil('>>> ', 2000).catch(() => undefined)
+    // Type "help()"…` banner + `>>>` prompt. Consume it so it never leaks to the
+    // console after an exec or a Run — otherwise every run looks like the board
+    // rebooted (#612). Hold the console-suppression flag OURSELVES for the whole
+    // Ctrl-B + banner-consume, so it works regardless of the caller's state (not
+    // just inside an execActive window). Short timeout + swallow: a board that
+    // doesn't reprint just falls through; drop any residue so nothing leaks late.
+    const prevExecActive = this.execActive
+    this.execActive = true
+    try {
+      await this.write(CTRL_B)
+      this.inRawRepl = false
+      await this.readUntil('>>> ', 2000).catch(() => undefined)
+      this.rxBuffer = Buffer.alloc(0)
+    } finally {
+      this.execActive = prevExecActive
+    }
   }
 
   /**

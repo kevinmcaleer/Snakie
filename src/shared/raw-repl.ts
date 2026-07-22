@@ -201,12 +201,20 @@ export class RawReplClient {
     this.inRawRepl = true
   }
   private async exitRawRepl(): Promise<void> {
-    await this.write(CTRL_B)
-    this.inRawRepl = false
     // Ctrl-B returns to the friendly REPL, which REPRINTS its banner + `>>>`
-    // prompt — consume it (still inside the execActive window) so it never leaks
-    // after an exec/Run and make a run look like a reboot (#612).
-    await this.readUntil('>>> ', 2000).catch(() => undefined)
+    // prompt — consume it so it never leaks after an exec/Run and make a run look
+    // like a reboot (#612). Hold the suppression flag ourselves for the whole
+    // Ctrl-B + consume so it's independent of the caller's state; drop residue.
+    const prevExecActive = this.execActive
+    this.execActive = true
+    try {
+      await this.write(CTRL_B)
+      this.inRawRepl = false
+      await this.readUntil('>>> ', 2000).catch(() => undefined)
+      this.rxBuffer = new Uint8Array(0)
+    } finally {
+      this.execActive = prevExecActive
+    }
   }
 
   exec(code: string, timeoutMs = 10000): Promise<ExecResult> {

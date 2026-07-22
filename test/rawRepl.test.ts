@@ -17,6 +17,9 @@ class MockBoard implements SerialTransport {
   /** stdout the next exec should return (default: empty). */
   nextStdout = ''
   nextStderr = ''
+  /** Deliver the Ctrl-B banner asynchronously (like real serial latency) rather
+   *  than synchronously inside write() — proves the suppression handles timing. */
+  asyncBanner = false
   closed = false
 
   onData(cb: (c: Uint8Array) => void): void {
@@ -37,7 +40,9 @@ class MockBoard implements SerialTransport {
         // Ctrl-B → back to the friendly REPL, which REPRINTS its banner + prompt
         // (this is the #612 "looks like a reboot" source we must suppress).
         this.raw = false
-        this.emit('\r\nMicroPython v9.9.9 on 2026; MockBoard with RP2\r\nType "help()" for more information.\r\n>>> ')
+        const banner = '\r\nMicroPython v9.9.9 on 2026; MockBoard with RP2\r\nType "help()" for more information.\r\n>>> '
+        if (this.asyncBanner) setTimeout(() => this.emit(banner), 5)
+        else this.emit(banner)
       } else if (ch === '\x04' && this.raw) {
         // Ctrl-D in raw mode → execute the buffered code, frame the response.
         this.buf = ''
@@ -134,6 +139,18 @@ describe('RawReplClient', () => {
     expect(s.console).not.toContain('\x04')
     // The friendly-REPL banner that Ctrl-B reprints must NOT leak (looks like a
     // reboot after every run) — only the single clean prompt we add.
+    expect(s.console).not.toContain('MicroPython v')
+    expect(s.console).not.toContain('help()')
+  })
+
+  it('suppresses the reprinted banner even when it arrives ASYNC after Ctrl-B (#612)', async () => {
+    const s = setup() as unknown as { board: MockBoard; client: RawReplClient; console: string }
+    s.board.asyncBanner = true // real serial latency: banner lands after write() resolves
+    s.board.nextStdout = 'ran\n'
+    await s.client.runProgram('print("ran")')
+    // Give the delayed banner time to arrive; it must NOT have leaked.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(s.console).toContain('ran\n')
     expect(s.console).not.toContain('MicroPython v')
     expect(s.console).not.toContain('help()')
   })
