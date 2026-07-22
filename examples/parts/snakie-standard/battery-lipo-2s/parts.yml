@@ -1,0 +1,62 @@
+id: battery-lipo-2s
+name: LiPo 2S (7.4 V)
+description: Two-cell lithium-polymer battery (~7.4 V nominal) — more headroom for motors and servos.
+manufacturer: Generic
+family: Power
+tags:
+  - battery
+  - lipo
+  - power
+  - source
+package: THT
+voltage: 7.4V
+version: 0.1.0
+pcbColor: "#3a2740"
+dimensions:
+  width: 44
+  height: 30
+shape:
+  kind: rect
+  cornerRadius: 3
+headers:
+  - edge: right
+    pins:
+      - name: V+
+        type: pwr
+        shape: header
+        x: 0.94
+        y: 0.34
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.94
+        y: 0.66
+electrical:
+  model: source
+  supplyV: 7.4
+  resistanceOhms: 0.12
+  maxCurrentA: 8.0
+  capacityMah: 1500
+  terminals:
+    positive: V+
+    negative: GND
+shapes:
+  - kind: rect
+    x: 0.08
+    y: 0.16
+    w: 0.72
+    h: 0.68
+    fill: "#241a2b"
+    stroke: "#7a5a9a"
+    strokeWidth: 1.2
+labels:
+  - text: LiPo 2S
+    x: 0.44
+    y: 0.42
+    fontSize: 10
+    color: "#efe6f5"
+  - text: 7.4V
+    x: 0.44
+    y: 0.64
+    fontSize: 9
+    color: "#c9b9d6"

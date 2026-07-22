@@ -1,0 +1,57 @@
+id: battery-coin-cr2032
+name: CR2032 Coin Cell
+description: 3 V lithium coin cell — tiny, low-current; good for RTC/keep-alive, not for motors.
+manufacturer: Generic
+family: Power
+tags:
+  - battery
+  - coin
+  - cr2032
+  - power
+  - source
+package: THT
+voltage: 3V
+version: 0.1.0
+pcbColor: "#2a2d33"
+dimensions:
+  width: 24
+  height: 24
+shape:
+  kind: rect
+  cornerRadius: 3
+headers:
+  - edge: right
+    pins:
+      - name: V+
+        type: pwr
+        shape: header
+        x: 0.92
+        y: 0.35
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.92
+        y: 0.65
+electrical:
+  model: source
+  supplyV: 3.0
+  resistanceOhms: 10
+  maxCurrentA: 0.02
+  capacityMah: 220
+  terminals:
+    positive: V+
+    negative: GND
+shapes:
+  - kind: circle
+    x: 0.42
+    y: 0.5
+    r: 0.34
+    fill: "#c9ccd1"
+    stroke: "#8a8f96"
+    strokeWidth: 1.5
+labels:
+  - text: CR2032
+    x: 0.42
+    y: 0.5
+    fontSize: 8
+    color: "#20242a"

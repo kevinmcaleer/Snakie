@@ -1,0 +1,65 @@
+id: bench-psu
+name: Bench Power Supply
+description: An adjustable bench supply — set the output voltage and a current limit. Wire V+ / GND to your circuit.
+manufacturer: Snakie
+family: Power
+tags:
+  - power
+  - psu
+  - supply
+  - bench
+  - source
+package: THT
+voltage: 0–30V
+version: 0.1.0
+pcbColor: "#20242a"
+dimensions:
+  width: 70
+  height: 40
+shape:
+  kind: rect
+  cornerRadius: 3
+headers:
+  - edge: bottom
+    pins:
+      - name: V+
+        type: pwr
+        shape: header
+        x: 0.36
+        y: 0.9
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.64
+        y: 0.9
+electrical:
+  model: source
+  supplyV: 5.0
+  supplyRange:
+    - 0
+    - 30
+  maxCurrentA: 3.0
+  resistanceOhms: 0.05
+  terminals:
+    positive: V+
+    negative: GND
+shapes:
+  - kind: rect
+    x: 0.14
+    y: 0.16
+    w: 0.72
+    h: 0.4
+    fill: "#0a0d10"
+    stroke: "#3ad07a"
+    strokeWidth: 1.4
+labels:
+  - text: BENCH PSU
+    x: 0.5
+    y: 0.72
+    fontSize: 9
+    color: "#e9edf1"
+  - text: 0–30V
+    x: 0.5
+    y: 0.36
+    fontSize: 11
+    color: "#3ad07a"
