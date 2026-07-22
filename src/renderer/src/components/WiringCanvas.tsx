@@ -690,6 +690,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
   // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // The selected WIRE (connection id), mutually exclusive with a selected part —
+  // click a wire to select it (highlighted), Delete removes it (#…).
+  const [selectedWire, setSelectedWire] = useState<string | null>(null)
   // Inline rename: the draft alias being typed, or null when not renaming.
   const [renameText, setRenameText] = useState<string | null>(null)
   // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
@@ -1268,6 +1271,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
       const nextSel = renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null
       setSelectedKey(nextSel)
+      setSelectedWire(null) // a part click clears any wire selection
       setRenameText(null)
       // Focus the canvas so the Delete/Backspace shortcut targets THIS view (only
       // when a part is actually selected — don't steal focus on a clear-click).
@@ -1279,6 +1283,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     if (d?.kind === 'pan' && !d.moved) {
       setSelectedKey(null)
+      setSelectedWire(null) // empty-space click clears the wire selection too
       setRenameText(null)
       force((n) => n + 1)
       return
@@ -1646,10 +1651,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
       onDrop={onDropPart ? onCanvasDrop : undefined}
       onKeyDown={(e) => {
-        // Delete / Backspace removes the selected part (not while typing).
-        if (selectedKey && shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
-          e.preventDefault()
-          removePart(selectedKey)
+        // Delete / Backspace removes the selected part OR the selected wire (not
+        // while typing). shouldDeleteSelectedPart just gates the key + typing guard.
+        if (shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
+          if (selectedWire) {
+            e.preventDefault()
+            removeConnection(selectedWire)
+            setSelectedWire(null)
+          } else if (selectedKey) {
+            e.preventDefault()
+            removePart(selectedKey)
+          }
         }
       }}
     >
@@ -1749,13 +1761,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // Node-voltage overlay (#604): colour the wire by its solved voltage
               // (both ends share a node) + badge the value at its midpoint.
               const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
+              const isSel = selectedWire === c.id
               return (
                 <g key={c.id}>
+                  {/* Wide, invisible hit path so the thin wire is easy to click to
+                      SELECT it (#…). Selecting clears any part selection + focuses the
+                      canvas so Delete/Backspace targets the wire. */}
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={14}
+                    style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      setSelectedWire(c.id)
+                      setSelectedKey(null)
+                      rootRef.current?.focus()
+                    }}
+                  />
+                  {isSel && (
+                    <path d={p.d} fill="none" stroke="var(--accent, #e6ab30)" strokeWidth={7} opacity={0.5} className="wc__wire-sel" />
+                  )}
                   <path
                     d={p.d}
                     fill="none"
                     stroke={v !== undefined ? voltageColour(v, voltage!.ref) : connectionColor(c, isDark)}
-                    strokeWidth={3}
+                    strokeWidth={isSel ? 3.6 : 3}
                     className="wc__wire"
                   />
                   {v !== undefined && (
