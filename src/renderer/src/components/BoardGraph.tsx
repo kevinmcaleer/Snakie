@@ -20,6 +20,8 @@ import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-e
 import { DriverInstallBanner } from './DriverInstallBanner'
 import { buildNetlist } from '../../../shared/netlist'
 import { runErc, ercSummary } from '../../../shared/erc'
+import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
+import { useDcSolver } from './useDcSolver'
 import { ErcBadge, ErcPanel } from './ErcPanel'
 import {
   authoredPads,
@@ -416,23 +418,51 @@ export function BoardGraph({
   // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
   const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])
 
-  // Circuit Sim ERC (#601): extract the netlist from the wiring + placed parts and
-  // run the electrical rules. Recomputed only when the wiring / parts / board
-  // change (not per live-value tick). Pure + no solver — static wiring checks.
-  const ercIssues = useMemo(() => {
-    if (!robot) return []
+  // Circuit Sim: extract the netlist ONCE from the wiring + placed parts (keyed by
+  // instance id, matching the netlist's terminal keys), shared by ERC (#601) and the
+  // DC solver (#603). Recomputed only when the wiring / parts / board change.
+  const netlistData = useMemo(() => {
+    if (!robot) return null
     const partDefs = new Map<string, PartDefinition>()
     for (const rp of robot.parts ?? []) {
       const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
       if (pdef) partDefs.set(rp.id, pdef)
     }
     try {
-      return runErc(buildNetlist(robot, def, partDefs), partDefs)
+      return { partDefs, netlist: buildNetlist(robot, def, partDefs) }
     } catch {
-      return [] // a malformed circuit must never crash the board view
+      return null // a malformed circuit must never crash the board view
     }
   }, [robot, libraries, def])
+
+  // ERC (#601): static electrical-rule checks over the netlist.
+  const ercIssues = useMemo(() => {
+    if (!netlistData) return []
+    try {
+      return runErc(netlistData.netlist, netlistData.partDefs)
+    } catch {
+      return []
+    }
+  }, [netlistData])
   const ercSum = useMemo(() => ercSummary(ercIssues), [ercIssues])
+
+  // DC solver (#603): map the netlist + the electrical parts to a SolverCircuit and
+  // solve it off-thread. `solverState` (node voltages + branch currents) is held for
+  // #604 (probes + current-flow); there is no visible physics yet.
+  const solverCircuit = useMemo(() => {
+    if (!netlistData) return null
+    const components: CircuitComponent[] = []
+    netlistData.partDefs.forEach((pdef, key) => {
+      if (pdef.electrical) components.push({ key, electrical: pdef.electrical })
+    })
+    if (components.length === 0) return null
+    try {
+      return buildCircuit(netlistData.netlist, components)
+    } catch {
+      return null
+    }
+  }, [netlistData])
+  const solverState = useDcSolver(solverCircuit)
   const [ercOpen, setErcOpen] = useState(false)
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
@@ -818,7 +848,14 @@ export function BoardGraph({
   }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageW, stageH, rotation])
 
   return (
-    <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
+    <div
+      className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`}
+      aria-label="Board View"
+      // Circuit Sim (#603): the DC solve's status, exposed for #604's probes + for
+      // debugging/e2e. `idle` = nothing to solve, `ok` = solved, else the degrade
+      // reason (no-ground / floating / singular / empty). No visible physics yet.
+      data-sim={solverState ? (solverState.ok ? 'ok' : solverState.reason ?? 'degraded') : 'idle'}
+    >
       <header className={`boardgraph__bar ${asWindow ? 'boardgraph__bar--drag' : ''}`}>
         {/* The 6-dot drag grip only means something in the frameless OS window
             (the bar is its drag region) — hide it in the embedded Board mode. */}
