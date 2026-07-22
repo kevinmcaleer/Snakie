@@ -182,6 +182,27 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
         resolve()
       })
     })
+    // Greet: print the board's MicroPython banner so a successful connection is
+    // visible (#612). The old "connected" banner was actually the raw-REPL probe's
+    // Ctrl-B banner LEAKING — now suppressed — so show it explicitly instead. Fire-
+    // and-forget so it never delays or fails the connection.
+    void this.greet()
+  }
+
+  /** Print the board's MicroPython greeting to the terminal on connect, rebuilt
+   *  from `os.uname()` so it matches the real banner (`MicroPython vX on DATE;
+   *  <board>`) — the connect cue the leaked Ctrl-B banner used to provide (#612). */
+  private async greet(): Promise<void> {
+    try {
+      const line = (
+        await this.eval("import os as _o; print('MicroPython v' + _o.uname().version + '; ' + _o.uname().machine)")
+      ).trim()
+      if (line && this.isConnected()) {
+        this.emit('data', Buffer.from(`\r\n${line}\r\nType "help()" for more information.\r\n>>> `))
+      }
+    } catch {
+      // Best-effort — a board that can't answer os.uname() just shows no banner.
+    }
   }
 
   /** Close the serial connection if open. */

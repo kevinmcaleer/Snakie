@@ -169,8 +169,17 @@ export function createWebSerialBackend(): Record<string, unknown> {
     await transport.open(115200)
     client = new RawReplClient(transport, emitData)
     setState('connected', p)
-    // Nudge the board to a fresh friendly prompt so the shell shows `>>>`.
-    await client.sendData('\r\x03').catch(() => undefined)
+    // Greet: print the board's MicroPython banner so a successful connection is
+    // visible (#612) — reconstructed from os.uname() like the desktop device (the
+    // old cue was the raw-REPL probe's Ctrl-B banner leaking, now suppressed).
+    // Fire-and-forget so it never delays or fails the connection.
+    void client
+      .eval("import os as _o; print('MicroPython v' + _o.uname().version + '; ' + _o.uname().machine)")
+      .then((line) => {
+        const t = line.trim()
+        if (t) emitData(enc.encode(`\r\n${t}\r\nType "help()" for more information.\r\n>>> `))
+      })
+      .catch(() => undefined)
   }
 
   return {
