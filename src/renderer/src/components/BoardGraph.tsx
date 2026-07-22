@@ -485,6 +485,17 @@ export function BoardGraph({
     [solverState]
   )
   const overlayActive = voltsOverlay && !!solverState?.ok && padVoltage.size > 0
+  // Endpoint → solved voltage, for colouring the Breadboard's wires + pads (each
+  // wire's two endpoints share a node, so a wire takes its node's voltage).
+  const endpointVoltage = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!netlistData || !solverState?.ok) return m
+    netlistData.netlist.nodes.forEach((node, i) => {
+      const v = solverState.nodeVoltages[i] ?? 0
+      for (const t of node.terminals) m.set(t.endpoint, v)
+    })
+    return m
+  }, [netlistData, solverState])
   const [ercOpen, setErcOpen] = useState(false)
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
@@ -1036,6 +1047,17 @@ export function BoardGraph({
               jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
+              voltage={
+                solverCircuit
+                  ? {
+                      byEndpoint: endpointVoltage,
+                      ref: overlayRefV,
+                      on: overlayActive,
+                      ready: !!solverState?.ok,
+                      toggle: () => setVoltsOverlay((o) => !o)
+                    }
+                  : undefined
+              }
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)

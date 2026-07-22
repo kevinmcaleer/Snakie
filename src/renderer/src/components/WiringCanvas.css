@@ -204,6 +204,27 @@
   background: rgba(63, 111, 143, 0.35);
 }
 
+/* Active node-voltage overlay toggle (#604) — accent so it's distinct from is-on. */
+.wc__zoom-btn.is-active {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
+
+/* Voltage badge over a wire midpoint when the overlay is on (#604) — white with a
+   dark outline so it reads over the board photo / paper in any theme. */
+.wc__volt-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
 .wc__zoom-pct {
   min-width: 2.6rem;
   text-align: center;

@@ -34,6 +34,7 @@ import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import { classifyBusWire } from '../../../shared/bus-wires'
+import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
 import './WiringCanvas.css'
 
 /**
@@ -581,6 +582,16 @@ export interface WiringCanvasProps {
    * this unset and keeps the roomier always-open defaults.
    */
   focusedChrome?: boolean
+  /** Circuit Sim node-voltage overlay (#604): a live endpoint→solved-voltage map, the
+   *  colour-scale reference (the top rail), whether it's on / has a valid solve, and a
+   *  toggle. Absent ⇒ no solvable circuit (no electrical parts wired up). */
+  voltage?: {
+    byEndpoint: Map<string, number>
+    ref: number
+    on: boolean
+    ready: boolean
+    toggle: () => void
+  }
 }
 
 interface Drag {
@@ -610,7 +621,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -1507,11 +1518,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // Breadboard (#182) — control points pushed out along each pin's normal give
   // clearance off the pad and curve cleanly to a far-side pin; it reflows live as
   // either end's node moves (the anchors recompute each render). ----
-  const wirePath = (c: RobotConnection): { d: string } | null => {
+  const wirePath = (c: RobotConnection): { d: string; mx: number; my: number } | null => {
     if (renderMode === 'schematic') {
       const pts = wireRoutes.get(c.id)
       if (!pts || pts.length < 2) return null
-      return { d: toSvgPath(pts) }
+      const mid = pts[Math.floor(pts.length / 2)]
+      return { d: toSvgPath(pts), mx: mid.x, my: mid.y }
     }
     const e = wireEnds(c)
     if (!e) return null
@@ -1538,7 +1550,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       c2x = e.bx + e.box * WIRE_CLEARANCE
       c2y -= Math.sign(dy || 1) * vbow
     }
-    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}` }
+    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx: (e.ax + e.bx) / 2, my: (e.ay + e.by) / 2 }
   }
 
   const drag = dragRef.current
@@ -1721,8 +1733,24 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               }
               const p = wirePath(c)
               if (!p) return null
+              // Node-voltage overlay (#604): colour the wire by its solved voltage
+              // (both ends share a node) + badge the value at its midpoint.
+              const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
               return (
-                <path key={c.id} d={p.d} fill="none" stroke={connectionColor(c, isDark)} strokeWidth={3} className="wc__wire" />
+                <g key={c.id}>
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke={v !== undefined ? voltageColour(v, voltage!.ref) : connectionColor(c, isDark)}
+                    strokeWidth={3}
+                    className="wc__wire"
+                  />
+                  {v !== undefined && (
+                    <text x={p.mx} y={p.my - 3} textAnchor="middle" className="wc__volt-badge">
+                      {formatVoltage(v)}
+                    </text>
+                  )}
+                </g>
               )
             })}
 
@@ -1942,6 +1970,30 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            {/* Node-voltage overlay toggle (#604) — only when there's a solvable circuit. */}
+            {voltage && (
+              <>
+                <span className="wc__zoom-sep" aria-hidden="true" />
+                <button
+                  type="button"
+                  className={`wc__zoom-btn${voltage.on ? ' is-active' : ''}`}
+                  onClick={voltage.toggle}
+                  aria-pressed={voltage.on}
+                  title={
+                    voltage.on
+                      ? 'Hide node voltages'
+                      : voltage.ready
+                        ? 'Show node voltages (Circuit Sim)'
+                        : 'Node voltages — power + ground a circuit to see them'
+                  }
+                  aria-label="Toggle node-voltage overlay"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+                  </svg>
+                </button>
+              </>
+            )}
             <span className="wc__zoom-sep" aria-hidden="true" />
             {/* Export image (PNG / SVG / PDF). */}
             <div className="wc__export">
