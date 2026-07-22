@@ -546,10 +546,17 @@ export function PartEditor({
     const lk = selectionLockKey(sel)
     if (lk && locked[lk]) return
     if (sel.type === 'pin') {
+      // A grouped pin (servo header) deletes its whole Signal/V+/GND trio.
+      const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
       setPart((d) => ({
         ...d,
         headers: d.headers
-          .map((h, i) => (i === sel.hi ? { ...h, pins: h.pins.filter((_, j) => j !== sel.pi) } : h))
+          .map((h, i) => ({
+            ...h,
+            pins: grp
+              ? h.pins.filter((p) => p.group !== grp)
+              : h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
+          }))
           .filter((h) => h.pins.length > 0)
       }))
     } else if (sel.type === 'hole') {
@@ -1235,6 +1242,19 @@ function LayersPanel({
           {lock('pins')}
           <span className="pe__layer-name">Pins</span>
           <span className="pe__layer-count">{counts.pins}</span>
+          <button
+            type="button"
+            className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
+            onClick={() => setTool('servo-header')}
+            title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
+            aria-label="Add servo header"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />
+              <rect x="4" y="4.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.7" />
+              <rect x="4" y="8.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.5" />
+            </svg>
+          </button>
           <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
             ＋
           </button>

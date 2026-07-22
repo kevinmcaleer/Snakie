@@ -294,6 +294,7 @@ function normalisePin(pin: PartPin): PartPin {
   if (pin.castellated === true) out.castellated = true
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
   if (pin.labelHidden === true) out.labelHidden = true
+  if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }

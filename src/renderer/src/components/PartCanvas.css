@@ -449,6 +449,7 @@
   cursor: grab;
 }
 .pcv__svg--interactive.pcv__tool-pin,
+.pcv__svg--interactive.pcv__tool-servo-header,
 .pcv__svg--interactive.pcv__tool-hole,
 .pcv__svg--interactive.pcv__tool-text,
 .pcv__svg--interactive.pcv__tool-shape {

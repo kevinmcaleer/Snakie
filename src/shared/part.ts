@@ -118,6 +118,10 @@ export interface PartPin {
    *  of a servo/DuPont header block, where labelling every one is noise — only the
    *  signal pins are labelled and the power/ground rows read from a shared legend. */
   labelHidden?: boolean
+  /** Group id tying this pin to the others of one servo/DuPont **header block** (its
+   *  Signal/V+/GND trio). Pins sharing a `group` move + delete as a unit and collapse
+   *  to one row in the pin list. Absent ⇒ a standalone pin. */
+  group?: string
   /**
    * Castellation outward direction in degrees: 0 = right, 90 = down, 180 = left,
    * 270 = up. Absent ⇒ derived from the pin's side (left/right by x). Only affects

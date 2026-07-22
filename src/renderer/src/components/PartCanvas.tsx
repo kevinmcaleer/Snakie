@@ -89,6 +89,7 @@ export type CanvasTool =
   | 'move'
   | 'shape'
   | 'pin'
+  | 'servo-header'
   | 'hole'
   | 'button'
   | 'text'
@@ -284,6 +285,9 @@ interface Drag {
   /** A modifier (shift/ctrl)-click on a pin: toggle its alignment-selection
    *  membership on a no-move release; a drag instead moves it (#170). */
   toggleSel?: boolean
+  /** When the dragged pin belongs to a servo-header group, the offsets of every
+   *  group pin from the dragged one — so the whole trio moves rigidly as a unit. */
+  groupOffsets?: { hi: number; pi: number; dx: number; dy: number }[]
 }
 
 export function PartCanvas({
@@ -745,6 +749,46 @@ export function PartCanvas({
     }))
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...newPins] } : h)) })
+  }
+
+  /** Drop a pre-wired servo/DuPont header at (nx, ny): a vertical Signal / V+ / GND
+   *  trio at the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-
+   *  hidden, all sharing a `group` so they move + delete as one unit. The signal's
+   *  GPIO is left for the user to set. */
+  const addServoHeader = (nx: number, ny: number): void => {
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    if (inHole(sx, sy)) {
+      onNotify?.("Can't place a servo header on a mounting hole.")
+      return
+    }
+    const groups = new Set<string>()
+    for (const h of part.headers) for (const p of h.pins) if (p.group) groups.add(p.group)
+    const idx = groups.size + 1
+    const gid = `servo-${idx}`
+    const trio: PartPin[] = [
+      { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
+      { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
+      { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
+    ]
+    const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
+    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trio] } : h)) })
+    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the signal pin
+  }
+
+  /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and
+   *  the rest follow by their captured offsets — so a servo header stays intact. */
+  const moveGroupTo = (offsets: { hi: number; pi: number; dx: number; dy: number }[], baseX: number, baseY: number): void => {
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const o = offsets.find((off) => off.hi === hi && off.pi === pi)
+          return o ? { ...p, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : p
+        })
+      }))
+    })
   }
 
   // --- multi-select + alignment (#…) ----------------------------------------
@@ -1454,6 +1498,7 @@ export function PartCanvas({
     }
     // Creation tools no-op on a locked layer.
     if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
+    if (tool === 'servo-header') return locked.pins ? undefined : addServoHeader(nx, ny)
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
     if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
@@ -1612,10 +1657,24 @@ export function PartCanvas({
     }
     let ox = 0
     let oy = 0
+    let groupOffsets: { hi: number; pi: number; dx: number; dy: number }[] | undefined
     if (hit.type === 'pin') {
       const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
       ox = rp?.x ?? nx
       oy = rp?.y ?? ny
+      // Grouped pin (servo header) → capture the whole trio's offsets so the group
+      // moves rigidly with the dragged pad.
+      const grp = part.headers[hit.hi]?.pins[hit.pi]?.group
+      if (grp) {
+        groupOffsets = []
+        part.headers.forEach((h, hi) =>
+          h.pins.forEach((p, pi) => {
+            if (p.group === grp && p.x !== undefined && p.y !== undefined) {
+              groupOffsets!.push({ hi, pi, dx: p.x - ox, dy: p.y - oy })
+            }
+          })
+        )
+      }
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
@@ -1638,7 +1697,7 @@ export function PartCanvas({
       ox = layer.x
       oy = layer.y
     }
-    dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy }
+    dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy, groupOffsets }
   }
 
   const viewBoxScale = (): number => {
@@ -1799,7 +1858,11 @@ export function PartCanvas({
       // Hold Shift for completely free movement — no alignment guides / snapping
       // (Ctrl/Cmd also disables it, mirroring the resize handler).
       const noSnap = e.shiftKey || e.ctrlKey || e.metaKey
-      if (d.sel.type === 'pin' && d.anchor) {
+      if (d.sel.type === 'pin' && d.groupOffsets) {
+        // Servo-header group: snap the dragged pad, move the whole trio rigidly.
+        moveGroupTo(d.groupOffsets, noSnap ? x : snapX(x), noSnap ? y : snapY(y))
+        setGuides(null)
+      } else if (d.sel.type === 'pin' && d.anchor) {
         // Ghost-array drag keeps its 2.54mm lock; no alignment guides.
         movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
         setGuides(null)
