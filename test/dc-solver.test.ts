@@ -66,9 +66,9 @@ describe('solveDC — resistive circuits', () => {
     }
     const r = solveDC(c)
     expect(r.ok).toBe(true)
-    expect(r.nodeVoltages[2]).toBeCloseTo(2.5, 9)
-    expect(r.branchCurrents.R1).toBeCloseTo(0.0025, 9) // 2.5mA through the series pair
-    expect(r.branchCurrents.R2).toBeCloseTo(0.0025, 9)
+    expect(r.nodeVoltages[2]).toBeCloseTo(2.5, 6) // 6 digits: Gmin perturbs a divided node by ~1e-7 (physically nil)
+    expect(r.branchCurrents.R1).toBeCloseTo(0.0025, 6) // 2.5mA through the series pair
+    expect(r.branchCurrents.R2).toBeCloseTo(0.0025, 6)
   })
 
   it('parallel resistors each draw independently', () => {
@@ -201,8 +201,10 @@ describe('solveDC — graceful degradation (never NaN)', () => {
     expect(r.reason).toBe('no-ground')
   })
 
-  it('a circuit with no path to ground ⇒ singular, not NaN', () => {
-    // Source + resistor float between nodes 1 and 2; ground (0) is unconnected.
+  it('a floating sub-circuit no longer blanks the whole solve (Gmin robustness)', () => {
+    // Source + resistor float between nodes 1 and 2; ground (0) is unconnected. Gmin
+    // ties both nodes weakly to ground, so it SOLVES (finite) instead of degrading —
+    // the point of Gmin: a dangling node must not blank the overlay for the whole board.
     const r = solveDC({
       nodeCount: 3,
       ground: 0,
@@ -211,9 +213,25 @@ describe('solveDC — graceful degradation (never NaN)', () => {
         { id: 'R1', model: 'resistor', a: 1, b: 2, resistanceOhms: 1000 }
       ]
     })
-    expect(r.ok).toBe(false)
-    expect(r.reason).toBe('singular')
+    expect(r.ok).toBe(true)
     expect(r.nodeVoltages.every((v) => Number.isFinite(v))).toBe(true)
+    expect(r.nodeVoltages[1] - r.nodeVoltages[2]).toBeCloseTo(5, 3) // the source constraint still holds
+  })
+
+  it('an isolated node settles to 0 without disturbing a driven rail (Gmin)', () => {
+    // node 1 is a driven 5V rail; node 2 has NO element on it → only Gmin ties it,
+    // so it settles to ~0 while the rail stays exactly 5V and nothing goes singular.
+    const r = solveDC({
+      nodeCount: 3,
+      ground: 0,
+      elements: [
+        { id: 'V1', model: 'source', a: 1, b: 0, supplyV: 5 },
+        { id: 'R1', model: 'resistor', a: 1, b: 0, resistanceOhms: 1000 }
+      ]
+    })
+    expect(r.ok).toBe(true)
+    expect(r.nodeVoltages[1]).toBeCloseTo(5, 6) // driven rail unchanged
+    expect(r.nodeVoltages[2]).toBeCloseTo(0, 6) // isolated node → ground
   })
 })
 

@@ -77,6 +77,11 @@ const R_OPEN = 1e12
 // Default on-resistance of a conducting diode/LED (a few ohms of bulk + lead).
 const R_DIODE_ON = 4
 const MAX_REGION_SWEEPS = 40
+// Gmin: a tiny conductance from EVERY node to ground (a SPICE staple, ~0.1nS/10GΩ).
+// It guarantees the matrix is never singular — a floating / dangling node just
+// settles near 0 instead of collapsing the WHOLE solve — while being negligible
+// against any real component conductance, so driven voltages are unchanged.
+const G_MIN = 1e-10
 
 /** Solve a linear system `A x = z` (A is n×n, row-major) by Gaussian elimination
  *  with partial pivoting. Returns the solution vector, or `null` if A is singular
@@ -251,6 +256,10 @@ export function solveDC(circuit: SolverCircuit): SolverState {
       }
       // 'passive' and anything else: no electrical contribution.
     }
+
+    // Gmin: tie every node to ground so a floating/dangling node can't make the
+    // system singular — it settles near 0 rather than blanking the whole solve.
+    for (let i = 0; i < n; i++) A[i][i] += G_MIN
 
     solution = solveLinear(A, z)
     if (!solution) return degrade(nodeCount, 'singular')
