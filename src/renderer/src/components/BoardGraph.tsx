@@ -129,6 +129,10 @@ export interface BoardGraphProps {
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
 const STORAGE_KEY = 'snakie.board.id'
+/** Last fully-resolved board def, cached at module scope so a remount paints the
+ *  right board immediately instead of flashing a built-in default while the async
+ *  library list loads (#615). */
+let cachedBoardDef: BoardDefinition | null = null
 /** localStorage key remembering the last-used view tab (graph / lifelike / schematic). */
 const VIEW_KEY = 'snakie.board.view'
 
@@ -400,7 +404,11 @@ export function BoardGraph({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot?.board, boards])
-  const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  // Prefer the module-cached def when the desired board isn't in the (initially
+  // built-ins-only) list yet, so a remount shows the right board first (#615).
+  const foundBoard = boards.find((b) => b.id === boardId)
+  const def = foundBoard ?? (cachedBoardDef?.id === boardId ? cachedBoardDef : undefined) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  if (foundBoard) cachedBoardDef = foundBoard
   // The source part behind the selected board (if any) — so the Breadboard view
   // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
   const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])

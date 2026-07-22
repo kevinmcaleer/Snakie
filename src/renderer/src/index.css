@@ -2255,6 +2255,11 @@ body {
 .shell__main .shell__panels {
   flex: 1 1 auto;
   min-width: 0;
+  /* Consistent spacing (#614): the outer parchment margin (this padding + each
+     card's 5px inset) matches the gap BETWEEN cards (two 5px insets + the thin
+     2px handle) — ~11–12px everywhere, instead of thin edges + fat inter-panel
+     gaps. */
+  padding: 6px;
 }
 
 /* ── Soft Shell cards (#…) ───────────────────────────────────────────────────
@@ -2308,54 +2313,35 @@ body {
   background: transparent;
   position: relative;
 }
+/* No dashed "stitch" on the dividers (#614) — the col-/row-resize cursor alone
+   signals a handle, so the dashes were just noise. The handle is a thin
+   transparent gap; a WIDER transparent `::before` keeps it easy to grab. Its
+   thin footprint (2px) + the workspace padding below make the gap BETWEEN panels
+   match the margin AROUND them (consistent spacing). */
 :root[data-theme] .shell__panels > .resize-handle {
-  width: 5px;
+  width: 2px;
 }
 :root[data-theme] .shell__vgroup > .resize-handle {
-  height: 5px;
+  height: 2px;
 }
 :root[data-theme] .shell__panels > .resize-handle::before,
 :root[data-theme] .shell__vgroup > .resize-handle::before {
   content: '';
   position: absolute;
-  opacity: 0.75;
-  transition: opacity 0.12s ease;
 }
-/* Vertical divider → vertical dashed thread (1px hairline). */
 :root[data-theme] .shell__panels > .resize-handle::before {
-  top: 10px;
-  bottom: 10px;
+  top: 0;
+  bottom: 0;
   left: 50%;
-  width: 1px;
+  width: 10px;
   transform: translateX(-50%);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--stitch, var(--shellbd)) 0 4px,
-    transparent 4px 8px
-  );
 }
-/* Horizontal divider → horizontal dashed thread (1px hairline). */
 :root[data-theme] .shell__vgroup > .resize-handle::before {
-  left: 10px;
-  right: 10px;
+  left: 0;
+  right: 0;
   top: 50%;
-  height: 1px;
+  height: 10px;
   transform: translateY(-50%);
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--stitch, var(--shellbd)) 0 4px,
-    transparent 4px 8px
-  );
-}
-:root[data-theme] .shell__panels > .resize-handle:hover::before,
-:root[data-theme] .shell__panels > .resize-handle[data-resize-handle-active]::before,
-:root[data-theme] .shell__vgroup > .resize-handle:hover::before,
-:root[data-theme] .shell__vgroup > .resize-handle[data-resize-handle-active]::before {
-  opacity: 1;
-}
-/* Files collapsed → no stitch on its divider (it reopens from the activity bar). */
-:root[data-theme] .shell__panels > .resize-handle--files.is-collapsed::before {
-  display: none;
 }
 
 /* The work area holds the always-mounted Code panel group and, for Electronics /

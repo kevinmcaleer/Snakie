@@ -38,6 +38,12 @@ import type {
  * robot.yml through the `robot:didChange` broadcast, so edits in either stay
  * in sync.
  */
+// Module-level caches (survive remounts / workspace switches) so the Electronics
+// board view paints the real board + placed parts on the FIRST render instead of
+// flashing built-in defaults while the async library / board lists load (#615).
+let cachedLibraries: PartLibraryWithParts[] = []
+let cachedUserBoards: BoardDefinition[] = []
+
 export function BoardPane(): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -58,11 +64,14 @@ export function BoardPane(): JSX.Element {
   }, [breadboardBg])
 
   // User-authored boards (Microcontroller-family parts saved to disk).
-  const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
+  const [userBoards, setUserBoards] = useState<BoardDefinition[]>(() => cachedUserBoards)
   const refreshUserBoards = useCallback((): void => {
     window.api.board
       .listUserBoards()
-      .then(setUserBoards)
+      .then((b) => {
+        cachedUserBoards = b
+        setUserBoards(b)
+      })
       .catch(() => setUserBoards([]))
   }, [])
   useEffect(() => {
@@ -70,10 +79,15 @@ export function BoardPane(): JSX.Element {
   }, [refreshUserBoards])
 
   // Installed part libraries (wiring canvas + add-to-project); refresh on save.
-  const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
+  const [libraries, setLibraries] = useState<PartLibraryWithParts[]>(() => cachedLibraries)
   useEffect(() => {
     const load = (): void => {
-      window.api.parts.listLibraries().then(setLibraries).catch(() => setLibraries([]))
+      window.api.parts.listLibraries()
+        .then((l) => {
+          cachedLibraries = l
+          setLibraries(l)
+        })
+        .catch(() => setLibraries([]))
     }
     load()
     window.addEventListener(PARTS_CHANGED_EVENT, load)

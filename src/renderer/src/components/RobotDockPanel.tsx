@@ -249,7 +249,7 @@ export function RobotDockPanel({
       {urdf === null ? (
         <div className="robotdock__loading">Loading 3D…</div>
       ) : (
-        <RobotView urdfContent={urdf} basePath={base} compact={!full} />
+        <RobotView urdfContent={urdf} basePath={base} compact={!full} homeOnMount={full} />
       )}
       {/* Embedded in the MiniViewer (#595) 3-D mode: a single pop-out button that
           switches to the Build workspace (mirrors the mini-board → Electronics). */}

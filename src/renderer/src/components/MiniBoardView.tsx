@@ -9,6 +9,7 @@ import {
 } from 'react'
 import { parsePins, PIN_TYPE_COLOR, PIN_TYPE_TAG } from './parse-pins'
 import { BUILTIN_BOARDS, DEFAULT_BOARD_ID, boardIdFromReplText } from './board-defs'
+import type { BoardDefinition } from '../../../shared/board'
 import {
   authoredPads,
   boardBox,
@@ -28,6 +29,13 @@ import './MiniBoardView.css'
 
 /** Shared with BoardView/BoardGraph so the full viewer adopts the same board. */
 const STORAGE_KEY = 'snakie.board.id'
+/** The last fully-resolved board definition, cached at module scope so it survives
+ *  a remount (every workspace switch remounts this view). `useBoards()` starts with
+ *  only the BUILT-INS, so a LIBRARY board (e.g. a XIAO) isn't in the list for the
+ *  first render — without this the view flashed the wrong default (pico2w) until the
+ *  async library load finished (#615). The cache lets a remount paint the right
+ *  board immediately. */
+let cachedBoardDef: BoardDefinition | null = null
 /** Virtual canvas the board is laid out within; the SVG viewBox crops to fit. */
 const VW = 520
 const VH = 320
@@ -283,7 +291,13 @@ export function MiniBoardView({
     return unsub
   }, [consoleStore])
 
-  const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  // Resolve the board for `boardId`. If it isn't in the (initially built-ins-only)
+  // list yet, prefer the module-cached def when it matches — so a remount shows the
+  // right board immediately instead of flashing the default (#615). Only fall back
+  // to a built-in when we have no better match at all.
+  const found = boards.find((b) => b.id === boardId)
+  const def = found ?? (cachedBoardDef?.id === boardId ? cachedBoardDef : undefined) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  if (found) cachedBoardDef = found
 
   // User picked a microcontroller from the header dropdown: adopt it, persist it,
   // broadcast (via main) so the full Board Viewer + other consumers follow, AND —

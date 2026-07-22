@@ -212,6 +212,10 @@ export interface RobotViewProps {
   basePath?: string
   /** Compact chrome for the small docked panel (a slimmer HUD). */
   compact?: boolean
+  /** Open at the HOME (zoomed-to-fit isometric) view instead of restoring the
+   *  preserved camera. Set for the Build workspace so switching to it always
+   *  frames the model fresh rather than keeping a stale camera (#615). */
+  homeOnMount?: boolean
 }
 
 /** A neutral material for a mesh (e.g. STL) that carries no URDF `<material>`. */
@@ -306,8 +310,12 @@ function lowestLinkPointLocal(robot: URDFRobot, link: string): [number, number, 
 export function RobotView({
   urdfContent,
   basePath,
-  compact = false
+  compact = false,
+  homeOnMount = false
 }: RobotViewProps = {}): JSX.Element {
+  // Read inside the once-per-mount 3-D effect without adding it to the deps.
+  const homeOnMountRef = useRef(homeOnMount)
+  homeOnMountRef.current = homeOnMount
   const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer, openFile } =
     useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -3313,7 +3321,18 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
     }
+    // The Build workspace opens at HOME (fit) rather than the preserved camera
+    // (#615): frame the model on the FIRST frame of this mount, then record it so a
+    // later async mesh-settle keeps the homed view (not a stale cached camera).
+    let homedForMount = false
     const framePreservingCamera = (robot: URDFRobot): void => {
+      if (homeOnMountRef.current && !homedForMount) {
+        homedForMount = true
+        frameModel(robot)
+        framedKeyRef.current = frameKey
+        recordCamera()
+        return
+      }
       const saved = cameraStateRef.current
       if (refitNextRef.current) {
         // A just-added object: reframe so it's actually in view (once).
