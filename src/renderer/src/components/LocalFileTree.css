@@ -92,13 +92,29 @@
  */
 .localtree__breadcrumb {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 0.1rem 0.05rem;
   padding: 0 0.6rem 0.4rem;
   flex: 0 0 auto;
+  min-width: 0;
+  overflow: hidden;
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* The `..` parent link never shrinks; the current folder takes the rest and
+   ellipsises (#616), so the path stays on ONE line however deep the folder is. */
+.localtree__crumb--up {
+  flex: 0 0 auto;
+}
+.localtree__crumb--current {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+  font-weight: 600;
+  color: var(--head, var(--text));
+  cursor: default;
 }
 
 .localtree__crumb-wrap {
