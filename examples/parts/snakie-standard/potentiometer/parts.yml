@@ -58,3 +58,9 @@ labels:
     fontSize: 9
     color: "#dfeaf5"
 help: help.md
+electrical:
+  model: resistor
+  resistanceOhms: 10000
+  terminals:
+    positive: VCC
+    negative: GND

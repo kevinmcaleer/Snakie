@@ -144,3 +144,11 @@ layerVisibility:
   holes: true
   pins: true
   components: true
+electrical:
+  model: consumer
+  currentDrawA: 0.1
+  stallCurrentA: 0.65
+  maxCurrentA: 0.65
+  terminals:
+    positive: VCC
+    negative: GND
