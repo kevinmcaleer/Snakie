@@ -87,7 +87,7 @@ describe('standard parts library (snakie-standard)', () => {
     { id: 'esp32-devkit', pads: 30, mcu: 'ESP32' },
     { id: 'tiny2350', pads: 16, mcu: 'RP2350' }, // authored via the build-part-from-image skill (#198)
     { id: 'motor2040', pads: 20, mcu: 'RP2040' }, // Pimoroni quad motor controller
-    { id: 'servo2040', pads: 42, mcu: 'RP2040' } // Pimoroni 18-ch servo controller (updated pinout)
+    { id: 'servo2040', pads: 78, mcu: 'RP2040' } // 18 servo S/V/G headers (octagonal) + I/O
   ]
 
   it('the Tiny 2350 ships a life-like background photo', () => {
