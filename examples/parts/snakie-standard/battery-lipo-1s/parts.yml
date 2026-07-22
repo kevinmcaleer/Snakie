@@ -10,27 +10,27 @@ tags:
   - source
 package: THT
 voltage: 3.7V
-version: 0.1.0
+version: 0.1.1
 pcbColor: "#3a2740"
 dimensions:
-  width: 40
-  height: 26
+  width: 46.7
+  height: 61.5
 shape:
   kind: rect
-  cornerRadius: 3
+  cornerRadius: 0
 headers:
   - edge: right
     pins:
       - name: V+
         type: pwr
         shape: header
-        x: 0.94
-        y: 0.34
+        x: 0.5599802456822258
+        y: 0.0020063557344324745
       - name: GND
         type: gnd
         shape: header
-        x: 0.94
-        y: 0.66
+        x: 0.471945368042069
+        y: 0.0020063557344324745
 electrical:
   model: source
   supplyV: 3.7
@@ -40,23 +40,26 @@ electrical:
   terminals:
     positive: V+
     negative: GND
-shapes:
-  - kind: rect
-    x: 0.08
-    y: 0.16
-    w: 0.72
-    h: 0.68
-    fill: "#241a2b"
-    stroke: "#7a5a9a"
-    strokeWidth: 1.2
 labels:
   - text: LiPo 1S
-    x: 0.44
-    y: 0.42
-    fontSize: 10
-    color: "#efe6f5"
+    x: 0.5220558622211033
+    y: 0.20426345376407395
+    fontSize: 20
+    color: "#ffffff"
   - text: 3.7V
-    x: 0.44
-    y: 0.64
-    fontSize: 9
-    color: "#c9b9d6"
+    x: 0.5220558622211033
+    y: 0.27949616376091446
+    fontSize: 20
+    color: "#ffffff"
+image: image.png
+imageLayer:
+  x: 0.01154561451996916
+  y: -0.00036452798282390897
+  w: 1
+  h: 1
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true
