@@ -790,6 +790,24 @@ export function pasteStyle(part: PartDefinition, target: StyleTarget, clip: Part
  * fields are only set when they carry content (so the YAML round-trip — which
  * prunes empties — deep-equals this result).
  */
+/** Copy a component's manual label placement (offset + rotation) onto the
+ *  normalised object — mirrors how pin labelOffset is preserved. Required because
+ *  normalisePart rebuilds LEDs/connectors field-by-field, so any un-copied field
+ *  is stripped on save. */
+function applyLabelPlacement(
+  src: { labelOffset?: { x: number; y: number }; labelRotation?: number },
+  dst: { labelOffset?: { x: number; y: number }; labelRotation?: number }
+): void {
+  const lo = src.labelOffset
+  if (lo && Number.isFinite(lo.x) && Number.isFinite(lo.y) && (lo.x !== 0 || lo.y !== 0)) {
+    dst.labelOffset = { x: clamp(lo.x, -1.5, 1.5), y: clamp(lo.y, -1.5, 1.5) }
+  }
+  if (typeof src.labelRotation === 'number' && Number.isFinite(src.labelRotation)) {
+    const r = (((Math.round(src.labelRotation / 90) * 90) % 360) + 360) % 360
+    if (r) dst.labelRotation = r
+  }
+}
+
 export function normalisePart(part: PartDefinition): PartDefinition {
   const headers: PartHeader[] = (Array.isArray(part.headers) ? part.headers : [])
     .map((h) => {
@@ -941,6 +959,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           if (col) led.color = col
         }
       }
+      if (typeof l.sizeMm === 'number' && Number.isFinite(l.sizeMm) && l.sizeMm > 0) led.sizeMm = l.sizeMm
+      applyLabelPlacement(l, led)
       return led
     })
   }
@@ -955,6 +975,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       }
       const label = text(c.label)
       if (label) conn.label = label
+      applyLabelPlacement(c, conn)
       return conn
     })
   }

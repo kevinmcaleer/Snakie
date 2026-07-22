@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, connectorGlyph, connectorLabel, connectorSize, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -570,6 +570,44 @@ export function PartCanvas({
       oy: lo.y
     }
     onSelect?.({ type: 'pin', hi: rp.hi, pi: rp.pi })
+  }
+  /** Set an onboard-LED / connector label's manual offset (a fraction of the board
+   *  box); undefined near zero so a label dragged home reverts to the default. */
+  const setCompLabelOffset = (
+    target: { type: 'led' | 'connector'; index: number },
+    x: number,
+    y: number
+  ): void => {
+    const off = Math.abs(x) < 0.004 && Math.abs(y) < 0.004 ? undefined : { x, y }
+    if (target.type === 'led') {
+      commit({
+        ...part,
+        onboardLeds: (part.onboardLeds ?? []).map((l, i) =>
+          i === target.index ? { ...l, labelOffset: off } : l
+        )
+      })
+    } else {
+      commit({
+        ...part,
+        connectors: (part.connectors ?? []).map((c, i) =>
+          i === target.index ? { ...c, labelOffset: off } : c
+        )
+      })
+    }
+  }
+  /** Begin dragging an LED/connector silk label to a hand-placed spot. */
+  const startCompLabelDrag = (
+    e: ReactPointerEvent,
+    sel: { type: 'led' | 'connector'; index: number },
+    curOffset?: { x: number; y: number }
+  ): void => {
+    if (!interactive || locked.components) return
+    e.stopPropagation()
+    svgRef.current?.setPointerCapture?.(e.pointerId)
+    const { nx, ny } = toNorm(e)
+    const lo = curOffset ?? { x: 0, y: 0 }
+    dragRef.current = { kind: 'move-label', sel, startNX: nx, startNY: ny, ox: lo.x, oy: lo.y }
+    onSelect?.(sel)
   }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
     const sx = presnapped ? nx : snapX(nx)
@@ -1613,6 +1651,11 @@ export function PartCanvas({
       setLabelOffset(d.sel.hi, d.sel.pi, d.ox + dx, d.oy + dy)
       return
     }
+    if (d.kind === 'move-label' && (d.sel?.type === 'led' || d.sel?.type === 'connector')) {
+      // Move the component's silk label by the drag delta (fraction of the box).
+      setCompLabelOffset(d.sel, d.ox + dx, d.oy + dy)
+      return
+    }
     if (d.kind === 'marquee') {
       setMarquee({ x0: d.startNX, y0: d.startNY, x1: nx, y1: ny })
       return
@@ -2359,10 +2402,18 @@ export function PartCanvas({
               const cx = px(led.x)
               const cy = py(led.y)
               const sel = isSel({ type: 'led', index: i })
+              const labelY = cy + 18
+              const draggable = interactive && !locked.components
               return (
                 <g key={`led${i}`}>
-                  {onboardLedGlyph(cx, cy, led, sel)}
-                  {styledText({ text: onboardLedLabel(led), cx, cy: cy + 18, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
+                  <g
+                    transform={componentLabelTransform(cx, labelY, box.w, box.h, led.labelOffset, led.labelRotation)}
+                    className={draggable ? 'pcv__pinlabel--drag' : undefined}
+                    onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'led', index: i }, led.labelOffset) : undefined}
+                  >
+                    {styledText({ text: onboardLedLabel(led), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                 </g>
               )
             }
@@ -2373,10 +2424,18 @@ export function PartCanvas({
               const cy = py(conn.y)
               const { h: connH } = connectorSize(conn, connPxPerMm)
               const sel = isSel({ type: 'connector', index: i })
+              const labelY = cy + connH / 2 + 11
+              const draggable = interactive && !locked.components
               return (
                 <g key={`conn${i}`}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
-                  {styledText({ text: connectorLabel(conn), cx, cy: cy + connH / 2 + 11, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  <g
+                    transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
+                    className={draggable ? 'pcv__pinlabel--drag' : undefined}
+                    onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'connector', index: i }, conn.labelOffset) : undefined}
+                  >
+                    {styledText({ text: connectorLabel(conn), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                 </g>
               )
             }

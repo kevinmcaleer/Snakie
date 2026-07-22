@@ -780,13 +780,24 @@ export function partButtonGlyph(cx: number, cy: number, size: number, selected =
  * red/green/blue cluster (RGB), with a selection ring in the editor. Read-only
  * everywhere else. `selected` drives the Part Editor highlight.
  */
-export function onboardLedGlyph(cx: number, cy: number, led: OnboardLed, selected = false): JSX.Element {
+export function onboardLedGlyph(
+  cx: number,
+  cy: number,
+  led: OnboardLed,
+  selected = false,
+  pxPerMm = 0
+): JSX.Element {
   const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
   if (led.kind === 'neopixel') {
-    // A 5050 addressable pixel: a white package with a glowing RGB centre.
+    // A 5050 addressable pixel: a white package with a glowing RGB centre. When the
+    // board has real dimensions and the pixel declares a physical size, scale the
+    // whole glyph so the package footprint is life-size (e.g. a 1.5mm pixel).
     const s = 7
+    const k = led.sizeMm && pxPerMm > 0 ? (led.sizeMm * pxPerMm) / (s * 2) : 1
+    const scaleTf =
+      k !== 1 ? `translate(${cx} ${cy}) scale(${k}) translate(${-cx} ${-cy})` : undefined
     return (
-      <g style={{ pointerEvents: 'none' }}>
+      <g style={{ pointerEvents: 'none' }} transform={scaleTf}>
         <circle cx={cx} cy={cy} r={10} fill="#fff" opacity={0.16} />
         <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} rx={2} fill="#f2f2f2" stroke="#b9bec6" strokeWidth={0.8} />
         <circle cx={cx} cy={cy - 2} r={2.1} fill="#ff5555" />
@@ -896,6 +907,26 @@ export function connectorLabel(conn: PartConnector): string {
     .map((p) => `${p.name} GP${p.gpio}`)
     .join(' · ')
   return sig ? `${name} · ${sig}` : name
+}
+
+/** Compose a component silk-label transform: manual drag offset (a fraction of the
+ *  board box) + author rotation about the label point, optionally followed by the
+ *  board view's upright counter-rotation. Shared by the Part Editor + Board View so
+ *  a movable/rotatable LED or connector label renders the same in both. */
+export function componentLabelTransform(
+  cx: number,
+  labelY: number,
+  boxW: number,
+  boxH: number,
+  labelOffset?: { x: number; y: number },
+  labelRotation?: number,
+  upright?: string
+): string | undefined {
+  const parts: string[] = []
+  if (labelOffset) parts.push(`translate(${labelOffset.x * boxW} ${labelOffset.y * boxH})`)
+  if (labelRotation) parts.push(`rotate(${labelRotation} ${cx} ${labelY})`)
+  if (upright) parts.push(upright)
+  return parts.length ? parts.join(' ') : undefined
 }
 
 /** The static life-like scene of a part, drawn into `box`. */
@@ -1353,14 +1384,22 @@ export function PartBody({
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>
-              {onboardLedGlyph(cx, cy, led, sel)}
+              {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
               {styledText({
                 text: onboardLedLabel(led),
                 cx,
                 cy: labelY,
                 fontSize: 9,
                 fill: sel ? '#fff' : '#cfd6dd',
-                transform: uprightRotate(cx, labelY)
+                transform: componentLabelTransform(
+                  cx,
+                  labelY,
+                  box.w,
+                  box.h,
+                  led.labelOffset,
+                  led.labelRotation,
+                  uprightRotate(cx, labelY)
+                )
               })}
             </g>
           )
@@ -1383,7 +1422,15 @@ export function PartBody({
                 cy: labelY,
                 fontSize: 9,
                 fill: sel ? '#fff' : '#cfd6dd',
-                transform: uprightRotate(cx, labelY)
+                transform: componentLabelTransform(
+                  cx,
+                  labelY,
+                  box.w,
+                  box.h,
+                  conn.labelOffset,
+                  conn.labelRotation,
+                  uprightRotate(cx, labelY)
+                )
               })}
             </g>
           )

@@ -154,6 +154,11 @@ export interface PartConnector {
   y: number
   /** The connector's contacts, in order — full pins (GND/3V3/SDA/SCL for QWIIC). */
   pins: PartPin[]
+  /** Manual label placement — a fraction of the board box, set by dragging the
+   *  connector's silk label in the Part Editor. Absent ⇒ default (below the body). */
+  labelOffset?: { x: number; y: number }
+  /** Silk-label rotation in degrees (0/90/180/270); e.g. 270 to read bottom-to-top. */
+  labelRotation?: number
 }
 
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
@@ -207,6 +212,14 @@ export interface OnboardLed {
   /** Normalised 0..1 position within the board outline. */
   x: number
   y: number
+  /** Physical footprint of the LED package in mm (square). Scales the glyph to the
+   *  board's real size (e.g. a 1.5mm pixel). Absent ⇒ legacy fixed on-screen size. */
+  sizeMm?: number
+  /** Manual label placement — a fraction of the board box, set by dragging the
+   *  LED's silk label in the Part Editor. Absent ⇒ default (below the body). */
+  labelOffset?: { x: number; y: number }
+  /** Silk-label rotation in degrees (0/90/180/270). */
+  labelRotation?: number
 }
 
 /** A vertex of the physical board outline, in normalised 0..1 coords. */

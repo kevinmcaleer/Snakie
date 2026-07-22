@@ -486,11 +486,13 @@ onboardLeds:
     x: 0.7472065635101834
     y: 0.7575462557328969
     gpio: 18
+    sizeMm: 1.5
 connectors:
   - kind: qwiic
     label: QW/ST
     x: 0.16183044433593752
     y: 0.9487516033838667
+    labelRotation: 270
     pins:
       - name: GND
         type: gnd
