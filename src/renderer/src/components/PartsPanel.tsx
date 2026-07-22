@@ -4,6 +4,7 @@ import { CollapsiblePanel } from './CollapsiblePanel'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
+import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
 import type {
@@ -55,7 +56,7 @@ function openEditor(libraryId: string, part: PartDefinition | null): void {
   )
 }
 
-type IconName = 'edit' | 'duplicate' | 'promote' | 'delete' | 'refresh' | 'folder'
+type IconName = 'edit' | 'duplicate' | 'promote' | 'delete' | 'refresh' | 'folder' | 'expand'
 
 /** Line-icon glyphs (16×16, currentColor) — hoisted so the record isn't rebuilt
  *  on every render. */
@@ -105,6 +106,17 @@ const ICON_PATHS: Record<IconName, JSX.Element> = {
       strokeWidth={1.3}
       strokeLinejoin="round"
     />
+  ),
+  // Expand to full screen (diagonal arrows out of the corners).
+  expand: (
+    <path
+      d="M6 2.5H3a.5.5 0 0 0-.5.5v3M10 2.5h3a.5.5 0 0 1 .5.5v3M6 13.5H3a.5.5 0 0 1-.5-.5v-3M10 13.5h3a.5.5 0 0 0 .5-.5v-3"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.3}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
   )
 }
 
@@ -122,9 +134,13 @@ export interface PartsPanelProps {
   /** When provided, the part detail shows an "Add to project" button that adds
    *  the part to robot.yml (wired by the board window). */
   onAddToProject?: (libraryId: string, part: PartDefinition) => void
+  /** Batch add from the full-screen catalog (#613). When provided, the panel
+   *  header shows a button that expands the library into the catalog. */
+  onAddManyToProject?: (items: { libraryId: string; part: PartDefinition }[]) => void
 }
 
-export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Element {
+export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelProps = {}): JSX.Element {
+  const [catalogOpen, setCatalogOpen] = useState(false)
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -397,7 +413,28 @@ export function PartsPanel({ onAddToProject }: PartsPanelProps = {}): JSX.Elemen
         >
           {actionIcon('folder')}
         </button>
+        {/* Expand the library into the full-screen catalog (#613) — only in a
+            project context (the board window), where parts can be added. */}
+        {onAddManyToProject && (
+          <button
+            type="button"
+            className="pl__btn pl__btn--icon"
+            onClick={() => setCatalogOpen(true)}
+            title="Open the full-screen parts catalog"
+            aria-label="Open the full-screen parts catalog"
+          >
+            {actionIcon('expand')}
+          </button>
+        )}
       </div>
+
+      {catalogOpen && onAddManyToProject && (
+        <PartCatalog
+          libraries={libraries}
+          onClose={() => setCatalogOpen(false)}
+          onAddMany={onAddManyToProject}
+        />
+      )}
 
       <div className="pl__search">
         <input

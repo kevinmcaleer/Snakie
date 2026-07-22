@@ -217,6 +217,26 @@ export function BoardPane(): JSX.Element {
     [robot, saveRobot, folder]
   )
 
+  // Add MANY parts at once (the full-screen catalog's "Add to project", #613) in a
+  // SINGLE robot update — calling addToProject in a loop would re-read the stale
+  // `robot` each time and only keep the last. Unique instance ids are assigned
+  // across the whole batch.
+  const addManyToProject = useCallback(
+    (items: { libraryId: string; part: PartDefinition }[]): void => {
+      if (items.length === 0) return
+      const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
+      const placed = items.map(({ libraryId, part }) => {
+        let id = part.id
+        let n = 2
+        while (ids.has(id)) id = `${part.id}${n++}`
+        ids.add(id)
+        return { id, lib: libraryId, part: part.id, label: part.name }
+      })
+      saveRobot({ ...robot, parts: [...robot.parts, ...placed] })
+    },
+    [robot, saveRobot]
+  )
+
   // The Part Editor overlay (opened from the pane's library dock, exactly like
   // the floating window — same window event).
   const [editing, setEditing] = useState<{
@@ -268,6 +288,7 @@ export function BoardPane(): JSX.Element {
         joints={joints}
         jointLimits={jointLimits}
         onAddToProject={addToProject}
+        onAddManyToProject={addManyToProject}
       />
       {editing && (
         <PartEditor

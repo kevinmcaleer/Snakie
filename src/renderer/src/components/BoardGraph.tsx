@@ -125,6 +125,8 @@ export interface BoardGraphProps {
    *  (a wiring-canvas world position for the body's top-left) is set when the part
    *  is dragged onto the canvas (#159); omitted for a click-add (auto-layout). */
   onAddToProject?: (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }) => void
+  /** Add many parts at once — the full-screen catalog's "Add to project" (#613). */
+  onAddManyToProject?: (items: { libraryId: string; part: PartDefinition }[]) => void
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -335,7 +337,8 @@ export function BoardGraph({
   joints,
   jointLimits,
   libraries,
-  onAddToProject
+  onAddToProject,
+  onAddManyToProject
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
@@ -1024,7 +1027,7 @@ export function BoardGraph({
                   </button>
                 </div>
                 <div className="boardgraph__dock-body">
-                  <PartsPanel onAddToProject={handleAddToProject} />
+                  <PartsPanel onAddToProject={handleAddToProject} onAddManyToProject={onAddManyToProject} />
                 </div>
               </aside>
             ) : (
