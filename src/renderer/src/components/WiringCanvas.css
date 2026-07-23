@@ -513,6 +513,13 @@
 
 .wc__wire {
   cursor: pointer;
+  /* The visible line sits ON TOP of the wide transparent hit-path that carries the
+     click/probe handler — let pointer events pass THROUGH it so a tap landing right
+     on the line still reaches the hit-path (else it fell through to pan). */
+  pointer-events: none;
+}
+.wc__wire-sel {
+  pointer-events: none;
 }
 
 /* Empty state — centred over the mat. */

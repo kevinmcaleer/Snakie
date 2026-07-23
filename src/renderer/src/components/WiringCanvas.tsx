@@ -720,17 +720,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     setMeterOpen(on)
     if (!on) setMeterReading(null)
   }
+  // A pad has a node voltage (vs ground). A wire additionally carries a well-defined
+  // current, so the meter fills BOTH readings (#620) — one tap, voltage + current.
   const probePad = (endpoint: string): void => {
-    const v = voltage?.byEndpoint.get(endpoint)
-    if (v === undefined) {
-      setMeterReading(null) // no solution — the meter shows its idle prompt
-      return
-    }
-    setMeterReading({ kind: 'voltage', value: v, label: endpointName(endpoint) })
+    setMeterReading({ label: endpointName(endpoint), voltage: voltage?.byEndpoint.get(endpoint) })
   }
   const probeWire = (id: string, from: string, to: string): void => {
-    const i = voltage?.currentByWire.get(id) ?? 0
-    setMeterReading({ kind: 'current', value: i, label: `${endpointName(from)} → ${endpointName(to)}` })
+    setMeterReading({
+      label: `${endpointName(from)} → ${endpointName(to)}`,
+      voltage: voltage?.byEndpoint.get(from),
+      current: voltage?.currentByWire.get(id) ?? 0
+    })
   }
   // Draggable placement for the floating meter (mirrors the code instruments).
   const meterFloat = useFloatPlacement({ x: 20, y: 52 }, () => {
