@@ -1146,19 +1146,14 @@ export function PartBody({
         </g>
       )}
 
-      {/* Layer 2: hole plating rings (on top of the cutout) */}
+      {/* Layer 2: a mounting hole is a bare cutout (punched by the mask) — no
+          border. A ring shows ONLY when it's selected (editor use). */}
       {visible.holes &&
-        holes.map((h, i) => (
-          <circle
-            key={`h${i}`}
-            cx={px(h.x)}
-            cy={py(h.y)}
-            r={holeR(h.diameter)}
-            fill="none"
-            stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'}
-            strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
-          />
-        ))}
+        holes.map((h, i) =>
+          isSel({ type: 'hole', index: i }) ? (
+            <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
+          ) : null
+        )}
       </>
       )}
 

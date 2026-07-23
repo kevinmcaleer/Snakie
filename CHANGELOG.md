@@ -76,6 +76,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Saving a part with no help no longer logs an ENOENT error** — removing an
   absent `help.md` is treated as success (the file is already gone), rather than
   reporting a scary (but harmless) `unlink` failure on every save.
+- **Mounting holes are a clean cutout** — the light plating ring that read as a
+  white border is gone; a hole now shows only the punched-through cutout (a ring
+  appears solely when the hole is selected in the Part Editor).
 
 ### Changed
 - **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE
