@@ -1025,3 +1025,73 @@
   font-weight: 800;
   fill: #1a1300;
 }
+
+/* Connections / Nets tab strip (#601) — sits in the table header row. */
+.wc__table-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+}
+.wc__tree-caret--btn {
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  color: var(--txt3, var(--text-muted));
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+.wc__tab {
+  padding: 0.14rem 0.5rem;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--txt3, var(--text-muted));
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.wc__tab:hover {
+  color: var(--txt2, var(--text));
+}
+.wc__tab.is-active {
+  color: var(--head, var(--text));
+  border-bottom-color: var(--accent, #e6ab30);
+}
+
+/* Nets tab: the rail chip, the truncated pin list, and the "show" (highlight) key. */
+.wc__net-rail {
+  font-weight: 700;
+}
+.wc__net-rail--ground {
+  color: var(--txt3, var(--text-muted));
+}
+.wc__net-rail--power {
+  color: var(--accent, #e6ab30);
+}
+.wc__net-members {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--txt2, var(--text));
+}
+.wc__net-show {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem;
+  color: var(--accent, #e6ab30);
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.wc__net-show:hover {
+  opacity: 1;
+}

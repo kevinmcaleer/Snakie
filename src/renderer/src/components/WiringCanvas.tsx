@@ -626,6 +626,27 @@ export interface WiringCanvasProps {
     label: string
     clear: () => void
   }
+  /** All nets (netlist nodes) in the model — powers the Connections panel's "Nets"
+   *  tab. Each is a node id, its kind + rail, solved voltage (if any), and the pins
+   *  on it. Absent ⇒ the Nets tab shows nothing (no solvable circuit / no board). */
+  nets?: NetRow[]
+  /** Highlight a net by node id (null clears) — the Nets tab's "show" action reuses
+   *  the ERC "Show me" spotlight. */
+  onHighlightNet?: (id: string | null) => void
+}
+
+/** One net (netlist node) row for the Connections panel's "Nets" tab. */
+export interface NetRow {
+  /** The node id (e.g. `N1`). */
+  id: string
+  /** `power` | `ground` | `signal`. */
+  kind: string
+  /** Rail label for a power/ground net (`GND`, `5V`, `3V3`), else undefined. */
+  rail?: string
+  /** Solved node voltage, when the DC solve succeeded. */
+  voltage?: number
+  /** The pin endpoints on this net (e.g. `board.VSYS`, `bat.V+`). */
+  members: string[]
 }
 
 interface Drag {
@@ -658,7 +679,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -2459,6 +2480,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       >
         <ConnectionsTable
           connections={robot.connections}
+          nets={nets}
+          onHighlightNet={onHighlightNet}
           isDark={isDark}
           onRemove={removeConnection}
           onColor={setConnectionColor}
@@ -2950,9 +2973,12 @@ function fmtEndpoint(ep: string): string {
   return hash >= 0 ? ep.slice(0, hash) : ep
 }
 
-/** The connections table beneath the canvas. */
+/** The connections/nets table beneath the canvas. Two tabs: the wires
+ *  (Connections, default) and every net in the model (Nets, #601). */
 function ConnectionsTable({
   connections,
+  nets,
+  onHighlightNet,
   isDark,
   onRemove,
   onColor,
@@ -2962,6 +2988,8 @@ function ConnectionsTable({
   onPin
 }: {
   connections: RobotConnection[]
+  nets?: NetRow[]
+  onHighlightNet?: (id: string | null) => void
   isDark: boolean
   onRemove: (id: string) => void
   onColor: (id: string, color: string) => void
@@ -2973,6 +3001,9 @@ function ConnectionsTable({
   pinned?: boolean
   onPin?: (v: boolean) => void
 }): JSX.Element {
+  // Opens on Connections; switching to Nets is opt-in (the wiring is the default view).
+  const [tab, setTab] = useState<'connections' | 'nets'>('connections')
+  const netCount = nets?.length ?? 0
   return (
     <div className="wc__table">
       <div className="wc__table-headrow">
@@ -2996,49 +3027,129 @@ function ConnectionsTable({
             </svg>
           </button>
         )}
-        <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
-          <span className="wc__tree-caret" aria-hidden="true">
-            {open ? '▾' : '▸'}
-          </span>
-          <span>Connections</span>
-          <span className="wc__table-count">{connections.length}</span>
-        </button>
+        {open ? (
+          <div className="wc__table-tabs" role="tablist" aria-label="Connections and nets">
+            <button
+              type="button"
+              className="wc__tree-caret wc__tree-caret--btn"
+              onClick={onToggle}
+              aria-label="Collapse"
+              title="Collapse"
+            >
+              ▾
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'connections'}
+              className={`wc__tab${tab === 'connections' ? ' is-active' : ''}`}
+              onClick={() => setTab('connections')}
+            >
+              Connections <span className="wc__table-count">{connections.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'nets'}
+              className={`wc__tab${tab === 'nets' ? ' is-active' : ''}`}
+              onClick={() => setTab('nets')}
+            >
+              Nets <span className="wc__table-count">{netCount}</span>
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
+            <span className="wc__tree-caret" aria-hidden="true">
+              ▸
+            </span>
+            <span>Connections</span>
+            <span className="wc__table-count">{connections.length}</span>
+          </button>
+        )}
       </div>
-      {!open ? null : connections.length === 0 ? (
-        <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
+      {!open ? null : tab === 'connections' ? (
+        connections.length === 0 ? (
+          <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>To</th>
+                <th>Net</th>
+                <th>Colour</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {connections.map((c) => (
+                <tr key={c.id}>
+                  <td className="wc__mono">{fmtEndpoint(c.from)}</td>
+                  <td className="wc__mono">{fmtEndpoint(c.to)}</td>
+                  <td>{c.net ?? 'signal'}</td>
+                  <td>
+                    <input
+                      type="color"
+                      className="wc__swatch"
+                      value={/^#[0-9a-f]{6}$/i.test(connectionColor(c, isDark)) ? connectionColor(c, isDark) : '#888888'}
+                      onChange={(e) => onColor(c.id, e.target.value)}
+                      title="Wire colour"
+                    />
+                  </td>
+                  <td>
+                    <button type="button" className="wc__del" onClick={() => onRemove(c.id)} title="Delete wire" aria-label="Delete wire">
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      ) : netCount === 0 ? (
+        <p className="wc__muted wc__table-empty">No nets yet — wire parts together and each electrically-joined group appears here.</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>From</th>
-              <th>To</th>
               <th>Net</th>
-              <th>Colour</th>
-              <th />
+              <th>Rail</th>
+              <th>Voltage</th>
+              <th>Pins</th>
+              {onHighlightNet && <th />}
             </tr>
           </thead>
           <tbody>
-            {connections.map((c) => (
-              <tr key={c.id}>
-                <td className="wc__mono">{fmtEndpoint(c.from)}</td>
-                <td className="wc__mono">{fmtEndpoint(c.to)}</td>
-                <td>{c.net ?? 'signal'}</td>
-                <td>
-                  <input
-                    type="color"
-                    className="wc__swatch"
-                    value={/^#[0-9a-f]{6}$/i.test(connectionColor(c, isDark)) ? connectionColor(c, isDark) : '#888888'}
-                    onChange={(e) => onColor(c.id, e.target.value)}
-                    title="Wire colour"
-                  />
-                </td>
-                <td>
-                  <button type="button" className="wc__del" onClick={() => onRemove(c.id)} title="Delete wire" aria-label="Delete wire">
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {nets!.map((n) => {
+              const members = n.members.map(fmtEndpoint).join(', ')
+              const rail = n.rail ?? (n.kind === 'ground' ? 'GND' : n.kind === 'power' ? 'PWR' : '—')
+              return (
+                <tr key={n.id}>
+                  <td className="wc__mono">{n.id}</td>
+                  <td className={`wc__net-rail wc__net-rail--${n.kind}`}>{rail}</td>
+                  <td className="wc__mono">{n.voltage !== undefined ? formatVoltage(n.voltage) : '—'}</td>
+                  <td className="wc__net-members" title={members}>
+                    {members}
+                  </td>
+                  {onHighlightNet && (
+                    <td>
+                      <button
+                        type="button"
+                        className="wc__net-show"
+                        onClick={() => onHighlightNet(n.id)}
+                        title={`Highlight net ${n.id} on the board`}
+                        aria-label={`Highlight net ${n.id}`}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="2" />
+                          <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}

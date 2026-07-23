@@ -573,6 +573,18 @@ export function BoardGraph({
     }
     return endpoints.size ? { endpoints, label: ids.join(', ') } : null
   }, [highlightNodes, netlistData])
+  // Every net (netlist node) for the Connections panel's "Nets" tab (#601) — its id,
+  // kind + rail, solved voltage (index-aligned to the solver), and the pins on it.
+  const netRows = useMemo(() => {
+    if (!netlistData) return []
+    return netlistData.netlist.nodes.map((node, i) => ({
+      id: node.id,
+      kind: node.kind as string,
+      rail: node.rail,
+      voltage: solverState?.ok ? solverState.nodeVoltages[i] : undefined,
+      members: node.terminals.map((t) => t.endpoint)
+    }))
+  }, [netlistData, solverState])
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
   // the consent-first install banner; empty (so hidden) without a robot/parts.
@@ -1191,6 +1203,8 @@ export function BoardGraph({
               highlight={
                 highlightNet ? { ...highlightNet, clear: () => setHighlightNodes(null) } : undefined
               }
+              nets={netRows}
+              onHighlightNet={(id) => setHighlightNodes(id ? [id] : null)}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)
