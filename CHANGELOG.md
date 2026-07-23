@@ -79,6 +79,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Mounting holes are a clean cutout** — the light plating ring that read as a
   white border is gone; a hole now shows only the punched-through cutout (a ring
   appears solely when the hole is selected in the Part Editor).
+- **Help / Report Bug panels open in the Electronics + Build workspaces.** These
+  "solo" workspaces gate their left panel on a store flag, so the top-right Help
+  button, the new-part help toast, and the Report Bug shelf button set the view but
+  never revealed the panel (only the ActivityBar's own Help button, which flips the
+  flag, worked). They now reveal the panel like everywhere else.
 
 ### Changed
 - **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE

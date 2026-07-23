@@ -101,6 +101,11 @@ function LeftRegion({
   )
 }
 
+/** Activity views whose left panel can open in a SOLO workspace (Electronics/Build),
+ *  carried in beside the Board/3-D surface — the "bottom" panels: Learn, Help and
+ *  Report Bug. Files/Packages/etc. have no panel in a solo workspace. */
+const SOLO_PANEL_VIEWS: ReadonlySet<ActivityView> = new Set(['learn', 'help', 'report-bug'])
+
 /**
  * Map each activity-bar view id to the component shown in the left sidebar.
  * FilePanel and InspectPanel bring their own region; the others are wrapped
@@ -299,7 +304,7 @@ export function AppShell(): JSX.Element {
   // tutorials or the Help library) shows there — carried in from another workspace
   // or opened from the activity bar — so a stale `filesCollapsed:false` for the
   // plain Files view can't resurface a file tree in Electronics/Build.
-  const isLessonView = activityView === 'learn' || activityView === 'help'
+  const isLessonView = SOLO_PANEL_VIEWS.has(activityView)
   const soloLessonOpen = soloWorkspace && isLessonView && !layout.workspace.filesCollapsed
   const dockOpen = layout.workspace.dockOpen
   // Transient editor focus (Robot pop-out): hide the board, instruments + console
@@ -1026,7 +1031,7 @@ export function AppShell(): JSX.Element {
             // Solo workspaces (Electronics/Build) have no RRP files panel — only a
             // lesson (Learn/Help) opens a sidebar there, driven by the store flag.
             if (soloWorkspace) {
-              const lessonView = view === 'learn' || view === 'help'
+              const lessonView = SOLO_PANEL_VIEWS.has(view)
               if (!lessonView) {
                 // Files/Packages/etc. have no panel in a solo workspace — remember
                 // the choice but keep the sidebar hidden.
