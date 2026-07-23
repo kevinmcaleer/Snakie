@@ -48,6 +48,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pin **density** (in both the editor and the Board View). Breadboard zoom raised to
   600%.
 - **Full-screen parts catalog with multi-select (#613).**
+- **"Already in my model" for a duplicated servo.** Dropping a servo into the
+  Electronics view appends a loose 3-D copy of its mesh — redundant when that servo
+  is already a joint in your URDF. The Build panel's Servos section now shows a
+  "remove duplicate 3-D copy" action on such a servo (matched to its loose link);
+  removing it leaves the servo bound to its existing joint via the picker right
+  there, so the electronics servo maps onto the modelled one instead of duplicating.
 
 ### Fixed
 - **Circuit Sim solver robustness.** A floating node no longer blanks the whole

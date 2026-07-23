@@ -1667,10 +1667,22 @@ export function RobotView({
       partLibs.find((l) => l.id === p.lib)?.parts.find((d) => d.id === p.part),
     [partLibs]
   )
-  const servoList = useMemo<BindableServo[]>(
-    () => bindableServos(placedParts, placedConns, resolvePartDef),
-    [placedParts, placedConns, resolvePartDef]
-  )
+  const servoList = useMemo<BindableServo[]>(() => {
+    const base = bindableServos(placedParts, placedConns, resolvePartDef)
+    // Tag each servo with the LOOSE mesh link its drop appended to the URDF (if the
+    // servo is already a joint in the model) — matched by the same sanitised part
+    // name attachPartMesh/uniqueLinkName use — so the panel can offer to drop the
+    // duplicate 3-D copy and bind instead (#).
+    const loose = looseLinks(content)
+    if (loose.length === 0) return base
+    const sanitize = (s: string): string => s.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
+    return base.map((s) => {
+      const part = placedParts.find((p) => p.id === s.id)
+      const nm = sanitize(resolvePartDef(part ?? ({} as RobotPart))?.name || part?.part || '')
+      const meshLink = nm ? loose.find((l) => l === nm || l.startsWith(`${nm}_`)) : undefined
+      return meshLink ? { ...s, meshLink } : s
+    })
+  }, [placedParts, placedConns, resolvePartDef, content])
 
   // Load the servo map whenever the project folder changes — for the docked mini
   // viewer too, so it animates on Run. (The full pose tool also refreshes it in
@@ -5254,6 +5266,7 @@ export function RobotView({
             bindableServos={servoList}
             jointOptions={movableNames}
             onBindServo={handleBindServo}
+            onRemoveMesh={handleDeleteLink}
             poses={poses}
             selected={selectedLink}
             onSelect={(link) => {

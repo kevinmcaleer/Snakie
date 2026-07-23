@@ -609,3 +609,22 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+
+/* "Remove duplicate 3-D copy" on a servo that's already a joint (#) — a subtle
+   amber affordance under the servo row; binding is the picker just above it. */
+.robotbuild__servo-dupmesh {
+  align-self: flex-start;
+  margin: 0.1rem 0 0.15rem 0.35rem;
+  padding: 0.08rem 0.4rem;
+  font-family: inherit;
+  font-size: 0.56rem;
+  color: var(--warn, #e6ab30);
+  background: color-mix(in srgb, var(--warn, #e6ab30) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn, #e6ab30) 40%, transparent);
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: left;
+}
+.robotbuild__servo-dupmesh:hover {
+  background: color-mix(in srgb, var(--warn, #e6ab30) 22%, transparent);
+}
