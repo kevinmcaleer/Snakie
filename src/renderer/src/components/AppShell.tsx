@@ -931,6 +931,7 @@ export function AppShell(): JSX.Element {
   // Which view the left sidebar shows, driven by the ActivityBar — remembered
   // per workspace (part of the layout store).
   const setActivityView = layout.setActivityView
+  const setLeftCollapsed = layout.setCollapsed
 
   // Settings dialog (issues #80/#81, tabbed in #83/#84) — opened from the
   // toolbar gear (Editor tab) or the chat's ⚙ (Chat tab, via settingsBus).
@@ -961,16 +962,18 @@ export function AppShell(): JSX.Element {
       const detail = (e as CustomEvent<HelpEventDetail>).detail
       if (!detail?.articleId) return
       setActivityView('help')
-      // Reveal the left sidebar if it's collapsed — otherwise switching to the
-      // help view has no visible effect (e.g. Board mode collapses the sidebar,
-      // so the Board's Help button appeared to do nothing). expand() is
-      // idempotent, so this is a no-op when the sidebar is already open.
+      // Reveal the left sidebar. A SOLO workspace (Electronics/Build) has no RRP
+      // files panel to expand and gates the lesson panel's rendering on the store's
+      // `filesCollapsed` flag — so the imperative expand was a no-op there and Help
+      // never appeared. Flip the store flag (what the ActivityBar's own Help button
+      // does), and also expand the RRP panel for the Code workspace. Both idempotent.
+      setLeftCollapsed('files', false)
       filesRef.current?.expand()
       setHelpTarget((prev) => ({ id: detail.articleId, nonce: (prev?.nonce ?? 0) + 1 }))
     }
     window.addEventListener(HELP_EVENT, handler)
     return () => window.removeEventListener(HELP_EVENT, handler)
-  }, [setActivityView])
+  }, [setActivityView, setLeftCollapsed])
 
   // The Parts Library + Part Editor live in the Board Viewer window now (it's the
   // only place that uses parts), so the main window no longer hosts them.
