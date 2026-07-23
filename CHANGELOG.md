@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-23
+
 ### Added
 - **Circuit Sim — the Board View now understands electricity (epic #597).** Wiring
   parts on the Breadboard builds a live **netlist**, and a family of tools read it:
@@ -3115,7 +3117,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...v0.34.0
