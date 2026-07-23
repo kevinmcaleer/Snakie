@@ -234,30 +234,6 @@
   stroke-width: 0.75px;
 }
 
-/* Probe readout pill (#604) — floats over the board with the multimeter / clamp
-   result while a probe mode is active. */
-.wc__probe-readout {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 4;
-  padding: 0.3rem 0.75rem;
-  border-radius: 999px;
-  font-family: var(--font-mono, monospace);
-  font-size: 0.74rem;
-  font-weight: 600;
-  color: #fff;
-  background: rgba(18, 22, 28, 0.92);
-  border: 1px solid var(--accent, #e6ab30);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
-  pointer-events: none;
-  white-space: nowrap;
-}
-.wc__probe-readout--clamp {
-  border-color: #4ea1ff;
-}
-
 /* Current-flow animation (#604): white dots travelling along a wire in the
    direction of conventional current, speed set per-wire via animation-duration. */
 .wc__flow {
