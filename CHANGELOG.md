@@ -68,6 +68,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   re-attached is deleted.
 - **Part Editor** selects the nearest pin under the cursor (not its right-hand
   neighbour), and labels stay at the board edge when density-scaled.
+- **Background removal keeps a photo's wide gamut.** Cleaning up a wide-gamut
+  Display P3 photo (e.g. an iPhone shot) no longer washes it out — the processing
+  canvas now works in P3 instead of the default sRGB, which had gamut-mapped the
+  image down and dropped its colour profile (an already-sRGB download was
+  unaffected).
 
 ### Changed
 - **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE
