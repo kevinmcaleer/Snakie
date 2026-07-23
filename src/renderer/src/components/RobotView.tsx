@@ -3269,7 +3269,7 @@ export function RobotView({
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
-    const frameModel = (robot: URDFRobot, animate = false, attempt = 0): void => {
+    const frameModel = (robot: URDFRobot, animate = false, attempt = 0): boolean => {
       // Flush world matrices BEFORE measuring — a dirty transform frames stale.
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
@@ -3281,7 +3281,7 @@ export function RobotView({
         if (attempt < 8 && robotRef.current === robot) {
           requestAnimationFrame(() => frameModel(robot, animate, attempt + 1))
         }
-        return
+        return false // couldn't frame yet (empty box) — caller must not treat this as done
       }
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
@@ -3299,7 +3299,7 @@ export function RobotView({
       layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
       if (animate) {
         flyTo(destPos, centre, 1, radius * 1.35, radius)
-        return
+        return true
       }
       halfView = radius * 1.35 // a little padding around the model (ortho)
       camera.position.copy(destPos)
@@ -3308,6 +3308,7 @@ export function RobotView({
       controls.update()
       setClip(radius)
       resize()
+      return true
     }
 
     // Frame a NEW robot isometrically, but PRESERVE the camera when the same file
@@ -3327,10 +3328,16 @@ export function RobotView({
     let homedForMount = false
     const framePreservingCamera = (robot: URDFRobot): void => {
       if (homeOnMountRef.current && !homedForMount) {
-        homedForMount = true
-        frameModel(robot)
-        framedKeyRef.current = frameKey
-        recordCamera()
+        // Frame HOME — but only mark it done (and record the camera) if it actually
+        // framed. The FIRST call fires before async meshes load, so the box is empty
+        // and frameModel bails to FRONT; marking "homed" then would let finalize()
+        // restore that front camera. Gating on success means finalize (after the
+        // meshes settle + the box is real) re-frames home properly. (#…)
+        if (frameModel(robot)) {
+          homedForMount = true
+          framedKeyRef.current = frameKey
+          recordCamera()
+        }
         return
       }
       const saved = cameraStateRef.current

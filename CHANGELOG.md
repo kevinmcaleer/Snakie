@@ -79,6 +79,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Mounting holes are a clean cutout** — the light plating ring that read as a
   white border is gone; a hole now shows only the punched-through cutout (a ring
   appears solely when the hole is selected in the Part Editor).
+- **Build 3-D view frames home on entry, not FRONT.** Switching into the Build
+  workspace framed the model from the default front camera instead of the isometric
+  home (zoom-to-fit) view: the first framing ran before the async meshes had loaded
+  (empty bounding box), bailed to front, yet still marked itself "done" so the
+  post-mesh re-frame just restored that front view. Framing is now only marked done
+  when it actually frames a real model, so it homes once the meshes settle.
+- **Build hierarchy sections no longer overlap / cut off.** The dock's header, mass
+  total and footer could shrink and collide with a tall Chain/Servos/Poses tree; the
+  chrome is now fixed (`flex: 0 0 auto`) so the tree is the sole scroller and every
+  section is reachable.
 - **Help / Report Bug panels open in the Electronics + Build workspaces.** These
   "solo" workspaces gate their left panel on a store flag, so the top-right Help
   button, the new-part help toast, and the Report Bug shelf button set the view but

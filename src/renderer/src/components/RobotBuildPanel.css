@@ -65,6 +65,9 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  /* Fixed chrome: never shrink, so the scrolling tree is the ONLY flexible child
+     (else a tall hierarchy squeezes/overlaps the header + foot). */
+  flex: 0 0 auto;
 }
 .robotbuild__title {
   flex: 1 1 auto;
@@ -533,6 +536,7 @@
   padding-top: 0.35rem;
   display: flex;
   gap: 0.3rem;
+  flex: 0 0 auto; /* fixed footer — the tree scrolls above it (see .robotbuild__head) */
 }
 .robotbuild__open,
 .robotbuild__stl {
@@ -593,6 +597,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: 0 0 auto; /* fixed row above the foot — the tree scrolls, this never shrinks */
   padding: 0.25rem 0.5rem;
   font-family: var(--font-mono, 'JetBrains Mono', monospace);
   font-size: 0.6rem;
