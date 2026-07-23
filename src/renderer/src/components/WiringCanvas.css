@@ -1095,3 +1095,19 @@
 .wc__net-show:hover {
   opacity: 1;
 }
+
+/* Clickable net id in the Connections tab — jumps to highlighting that net (#601). */
+.wc__net-chip {
+  padding: 0.04rem 0.4rem;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--head, var(--text));
+  background: color-mix(in srgb, var(--accent, #e6ab30) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #e6ab30) 45%, transparent);
+  cursor: pointer;
+}
+.wc__net-chip:hover {
+  background: color-mix(in srgb, var(--accent, #e6ab30) 30%, transparent);
+}

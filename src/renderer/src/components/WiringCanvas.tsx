@@ -3004,6 +3004,12 @@ function ConnectionsTable({
   // Opens on Connections; switching to Nets is opt-in (the wiring is the default view).
   const [tab, setTab] = useState<'connections' | 'nets'>('connections')
   const netCount = nets?.length ?? 0
+  // endpoint → its net id, so a wire row's Net cell can jump to highlighting that net.
+  const netOfEndpoint = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const n of nets ?? []) for (const ep of n.members) m.set(ep, n.id)
+    return m
+  }, [nets])
   return (
     <div className="wc__table">
       <div className="wc__table-headrow">
@@ -3086,7 +3092,23 @@ function ConnectionsTable({
                 <tr key={c.id}>
                   <td className="wc__mono">{fmtEndpoint(c.from)}</td>
                   <td className="wc__mono">{fmtEndpoint(c.to)}</td>
-                  <td>{c.net ?? 'signal'}</td>
+                  <td>
+                    {(() => {
+                      const nodeId = netOfEndpoint.get(c.from) ?? netOfEndpoint.get(c.to)
+                      return nodeId && onHighlightNet ? (
+                        <button
+                          type="button"
+                          className="wc__net-chip"
+                          onClick={() => onHighlightNet(nodeId)}
+                          title={`${c.net ?? 'signal'} net — click to highlight ${nodeId} on the board`}
+                        >
+                          {nodeId}
+                        </button>
+                      ) : (
+                        (c.net ?? 'signal')
+                      )
+                    })()}
+                  </td>
                   <td>
                     <input
                       type="color"
