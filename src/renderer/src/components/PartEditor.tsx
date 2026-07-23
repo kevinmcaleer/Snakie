@@ -43,12 +43,14 @@ import {
 import type {
   ComponentShape,
   ComponentShapeKind,
+  ElectricalModel,
   ImageLayer,
   MountingHole,
   OnboardLed,
   PartButton,
   PartConnector,
   PartDefinition,
+  PartElectrical,
   PartHeader,
   PartLabel,
   PartLibrary,
@@ -1563,7 +1565,179 @@ function Inspector(props: InspectorProps): JSX.Element {
           </select>
         </label>
       </section>
+
+      {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
+      <ElectricalSection part={part} patch={patch} names={props.names} />
     </>
+  )
+}
+
+const ELECTRICAL_MODELS: { value: ElectricalModel; label: string }[] = [
+  { value: 'passive', label: 'Passive (no model)' },
+  { value: 'source', label: 'Source (battery / PSU)' },
+  { value: 'regulator', label: 'Regulator (LDO / buck)' },
+  { value: 'consumer', label: 'Consumer (load)' },
+  { value: 'resistor', label: 'Resistor' },
+  { value: 'potentiometer', label: 'Potentiometer' },
+  { value: 'led', label: 'LED' },
+  { value: 'diode', label: 'Diode' },
+  { value: 'switch', label: 'Switch / button' }
+]
+
+/** Keys of {@link PartElectrical} that hold a single number, for the shared field helper. */
+type ElectricalNumKey =
+  | 'vf'
+  | 'resistanceOhms'
+  | 'supplyV'
+  | 'maxCurrentA'
+  | 'capacityMah'
+  | 'currentDrawA'
+  | 'stallCurrentA'
+  | 'outputV'
+  | 'dropoutV'
+
+/**
+ * The **Electrical** inspector section (#600) — the in-app editor for a part's
+ * {@link PartElectrical} block, so behaviour no longer has to be hand-authored in
+ * `parts.yml`. A model dropdown reveals only the fields that model reads; terminals
+ * and rails are picked from the part's own pins so they can't be mistyped.
+ */
+function ElectricalSection({
+  part,
+  patch,
+  names
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  names: string[]
+}): JSX.Element {
+  const el: PartElectrical = part.electrical ?? { model: 'passive' }
+  const model = el.model
+  // Patch the block; picking `passive` with nothing else drops it (keeps YAML clean).
+  const setEl = (p: Partial<PartElectrical>): void => {
+    const next = { ...el, ...p }
+    if (next.model === 'passive') patch({ electrical: undefined })
+    else patch({ electrical: next })
+  }
+  const num = (key: ElectricalNumKey, label: string, step = 'any', hint?: string): JSX.Element => (
+    <label className="pe__field">
+      <span>{label}</span>
+      <input
+        type="number"
+        step={step}
+        value={el[key] ?? ''}
+        placeholder={hint}
+        onChange={(e) => setEl({ [key]: e.target.value === '' ? undefined : Number(e.target.value) } as Partial<PartElectrical>)}
+      />
+    </label>
+  )
+  const pinSelect = (
+    label: string,
+    value: string | undefined,
+    onChange: (v: string | undefined) => void
+  ): JSX.Element => (
+    <label className="pe__field">
+      <span>{label}</span>
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">—</option>
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+  const setTerminal = (side: 'positive' | 'negative', v: string | undefined): void =>
+    setEl({ terminals: { ...el.terminals, [side]: v } })
+  // The +/− pin pickers, labelled for the model (anode/cathode for diodes, etc.).
+  const terminals = (posLabel = '+ terminal', negLabel = '− terminal'): JSX.Element => (
+    <div className="pe__row">
+      {pinSelect(posLabel, el.terminals?.positive, (v) => setTerminal('positive', v))}
+      {pinSelect(negLabel, el.terminals?.negative, (v) => setTerminal('negative', v))}
+    </div>
+  )
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">Electrical</h3>
+      <label className="pe__field">
+        <span>Model</span>
+        <select value={model} onChange={(e) => setEl({ model: e.target.value as ElectricalModel })}>
+          {ELECTRICAL_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {model === 'source' && (
+        <>
+          <div className="pe__row">
+            {num('supplyV', 'Supply (V)')}
+            {num('capacityMah', 'Capacity (mAh)')}
+          </div>
+          <div className="pe__row">
+            {num('resistanceOhms', 'Internal R (Ω)')}
+            {num('maxCurrentA', 'Max current (A)')}
+          </div>
+          {terminals()}
+        </>
+      )}
+
+      {model === 'regulator' && (
+        <>
+          <div className="pe__row">
+            {pinSelect('Input rail', el.inputRail, (v) => setEl({ inputRail: v }))}
+            {pinSelect('Output rail', el.outputRail, (v) => setEl({ outputRail: v }))}
+          </div>
+          <div className="pe__row">
+            {num('outputV', 'Output (V)')}
+            {num('dropoutV', 'Dropout (V)')}
+          </div>
+          {num('maxCurrentA', 'Max current (A)')}
+          <p className="pe__hint">Holds the output rail at its voltage, drawn from the input rail (only when powered).</p>
+        </>
+      )}
+
+      {model === 'consumer' && (
+        <>
+          <div className="pe__row">
+            {num('currentDrawA', 'Typical draw (A)')}
+            {num('stallCurrentA', 'Peak / stall (A)')}
+          </div>
+          {num('maxCurrentA', 'Max current (A)')}
+          {terminals()}
+        </>
+      )}
+
+      {model === 'resistor' && (
+        <>
+          {num('resistanceOhms', 'Resistance (Ω)')}
+          {terminals()}
+        </>
+      )}
+
+      {model === 'potentiometer' && (
+        <>
+          {num('resistanceOhms', 'Track (Ω)')}
+          {pinSelect('Wiper pin', el.wiper, (v) => setEl({ wiper: v }))}
+          {terminals('VCC pin', 'GND pin')}
+        </>
+      )}
+
+      {(model === 'led' || model === 'diode') && (
+        <>
+          {num('vf', 'Forward drop Vf (V)')}
+          {terminals('Anode (+)', 'Cathode (−)')}
+        </>
+      )}
+
+      {model === 'switch' && terminals('Pin A', 'Pin B')}
+
+      {model === 'passive' && <p className="pe__hint">No electrical behaviour — the part is drawn but wires pass through it.</p>}
+    </section>
   )
 }
 
