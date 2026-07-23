@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
+import { StereoEffect } from 'three/examples/jsm/effects/StereoEffect.js'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
@@ -309,6 +310,25 @@ function lowestLinkPointLocal(robot: URDFRobot, link: string): [number, number, 
   return [local.x, local.y, local.z]
 }
 
+/** Stereo 3-D mode (#521): red/cyan or red/green anaglyph, or side-by-side. */
+type StereoMode = 'rc' | 'rg' | 'sbs'
+const STEREO_MODES: { value: StereoMode; label: string }[] = [
+  { value: 'rc', label: 'Red / Cyan' },
+  { value: 'rg', label: 'Red / Green' },
+  { value: 'sbs', label: 'Side-by-side' }
+]
+// AnaglyphEffect colour matrices (fed to its public colorMatrixLeft/Right).
+// Red/Cyan = three's Dubois matrices (best colour); Red/Green = greyscale left→red,
+// right→green (avoids retinal rivalry with red/green glasses).
+const ANAGLYPH_RC_LEFT = [0.4561, -0.0400822, -0.0152161, 0.500484, -0.0378246, -0.0205971, 0.176381, -0.0157589, -0.00546856]
+const ANAGLYPH_RC_RIGHT = [-0.0434706, 0.378476, -0.0721527, -0.0879388, 0.73364, -0.112961, -0.00155529, -0.0184503, 1.2264]
+const ANAGLYPH_RG_LEFT = [0.299, 0, 0, 0.587, 0, 0, 0.114, 0, 0]
+const ANAGLYPH_RG_RIGHT = [0, 0.299, 0, 0, 0.587, 0, 0, 0.114, 0]
+/** Depth = StereoCamera eye separation. Human IPD ≈ 0.064; clamp for comfort. */
+const STEREO_DEPTH_MIN = 0.01
+const STEREO_DEPTH_MAX = 0.12
+const STEREO_DEPTH_DEFAULT = 0.064
+
 export function RobotView({
   urdfContent,
   basePath,
@@ -428,6 +448,13 @@ export function RobotView({
   const [stereo3d, setStereo3d] = useLocalStorage('snakie.robot.stereo3d', false)
   const stereoRef = useRef(stereo3d)
   stereoRef.current = stereo3d
+  // 3-D type (#624) + depth/eye-separation (#625), persisted; read by the render loop.
+  const [stereoMode, setStereoMode] = useLocalStorage<StereoMode>('snakie.robot.stereoMode', 'rc')
+  const [stereoDepth, setStereoDepth] = useLocalStorage('snakie.robot.stereoDepth', STEREO_DEPTH_DEFAULT)
+  const stereoModeRef = useRef(stereoMode)
+  stereoModeRef.current = stereoMode
+  const stereoDepthRef = useRef(stereoDepth)
+  stereoDepthRef.current = stereoDepth
   const toggleStereo = (): void => {
     const next = !stereo3d
     if (next && projection === 'ortho') {
@@ -2690,14 +2717,33 @@ export function RobotView({
     renderer.outputColorSpace = THREE.SRGBColorSpace
     mount.appendChild(renderer.domElement)
 
-    // Stereoscopic 3-D (#622): a red/cyan anaglyph effect wrapping the plain render.
-    // Sized in resize(); every render goes through renderFrame() so toggling stereo
-    // is just a per-frame branch (no scene rebuild). Only the main scene is stereo —
-    // the ViewCube overlay renders normally after.
+    // Stereoscopic 3-D (#521): an anaglyph effect (red/cyan #622 or red/green #624)
+    // and a side-by-side effect, wrapping the plain render. Sized in resize(); every
+    // live frame goes through renderFrame() so toggling stereo / mode / depth is just
+    // a per-frame branch (no scene rebuild). Only the main scene is stereo — the
+    // ViewCube overlay renders normally after.
     const anaglyph = new AnaglyphEffect(renderer)
+    const stereoSbs = new StereoEffect(renderer)
+    let appliedAnaglyphMode = '' // avoid re-uploading the colour matrices every frame
     const renderFrame = (): void => {
-      if (stereoRef.current) anaglyph.render(scene, camera)
-      else renderer.render(scene, camera)
+      if (!stereoRef.current || !(camera instanceof THREE.PerspectiveCamera)) {
+        renderer.render(scene, camera) // off, or ortho (no parallax) → plain render
+        return
+      }
+      const depth = stereoDepthRef.current
+      if (stereoModeRef.current === 'sbs') {
+        stereoSbs.setEyeSeparation(depth)
+        stereoSbs.render(scene, camera)
+        return
+      }
+      anaglyph.eyeSep = depth // #625 depth
+      if (stereoModeRef.current !== appliedAnaglyphMode) {
+        appliedAnaglyphMode = stereoModeRef.current
+        const rg = appliedAnaglyphMode === 'rg'
+        anaglyph.colorMatrixLeft.fromArray(rg ? ANAGLYPH_RG_LEFT : ANAGLYPH_RC_LEFT)
+        anaglyph.colorMatrixRight.fromArray(rg ? ANAGLYPH_RG_RIGHT : ANAGLYPH_RC_RIGHT)
+      }
+      anaglyph.render(scene, camera)
     }
 
     const controls = new OrbitControls(camera, renderer.domElement)
@@ -2799,7 +2845,8 @@ export function RobotView({
       // updateStyle defaults true → the canvas CSS size fits the container while
       // the drawing buffer scales by the pixel ratio.
       renderer.setSize(w, h)
-      anaglyph.setSize(w, h) // keep the stereo effect's render targets in step (#622)
+      anaglyph.setSize(w, h) // keep the stereo effects' render targets in step (#521)
+      stereoSbs.setSize(w, h)
       const aspect = w / h
       if (camera instanceof THREE.OrthographicCamera) {
         // Keep `halfView` world units visible vertically, widen by the aspect.
@@ -4945,6 +4992,8 @@ export function RobotView({
         else mat?.dispose()
       })
       anaglyph.dispose()
+      // StereoEffect allocates no GPU resources (just wraps a StereoCamera) — nothing
+      // to dispose.
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
@@ -5132,6 +5181,36 @@ export function RobotView({
                 />
               </svg>
             </button>
+          </div>
+        )}
+        {/* 3-D glasses settings (#624 mode + #625 depth) — shown when 3-D is on. */}
+        {!isEmpty && !error && !compact && stereo3d && (
+          <div className="robotview__stereo-ctl" role="group" aria-label="3-D glasses settings">
+            <select
+              className="robotview__stereo-mode"
+              value={stereoMode}
+              onChange={(e) => setStereoMode(e.target.value as StereoMode)}
+              title="3-D glasses type"
+              aria-label="3-D glasses type"
+            >
+              {STEREO_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <label className="robotview__stereo-depth" title="3-D depth (eye separation)">
+              <span aria-hidden="true">Depth</span>
+              <input
+                type="range"
+                min={STEREO_DEPTH_MIN}
+                max={STEREO_DEPTH_MAX}
+                step={0.002}
+                value={stereoDepth}
+                onChange={(e) => setStereoDepth(Number(e.target.value))}
+                aria-label="3-D depth"
+              />
+            </label>
           </div>
         )}
         {!isEmpty && !error && !compact && (

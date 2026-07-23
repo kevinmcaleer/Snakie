@@ -516,3 +516,45 @@
   color: #ffc2bb;
   border-color: #b23b2e;
 }
+
+/* 3-D glasses settings panel (#624 mode + #625 depth) — top-right under the nav
+   zone, shown only while 3-D is on. */
+.robotview__stereo-ctl {
+  position: absolute;
+  top: 200px;
+  right: 10px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0.4rem;
+  background: rgba(20, 21, 24, 0.86);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme='skeuomorph'] .robotview__stereo-ctl {
+  background: rgba(231, 226, 211, 0.94);
+}
+.robotview__stereo-mode {
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.12rem 0.2rem;
+  cursor: pointer;
+}
+.robotview__stereo-depth {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robotview__stereo-depth input[type='range'] {
+  width: 78px;
+  accent-color: var(--accent, #e6ab30);
+}

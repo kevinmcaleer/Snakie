@@ -47,6 +47,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   connector labels, real-size neopixels, and pin pads/labels that scale to the actual
   pin **density** (in both the editor and the Board View). Breadboard zoom raised to
   600%.
+- **3-D glasses view for the Build workspace (epic #521).** A glasses-icon toggle
+  (in the Build toolbar's nav-zone and the mini-viewer, right of Home) renders the
+  model stereoscopically — **red/cyan** or **red/green** anaglyph, or **side-by-side**
+  — with a **depth slider** (eye separation) to dial the effect up or down. The
+  choice + depth persist. Enabling it switches to perspective (parallax needs it);
+  it wraps the existing render with no scene rebuild. (True RealD/polarized cinema
+  glasses need a polarized display and aren't reproducible on a normal monitor.)
 - **Full-screen parts catalog with multi-select (#613).**
 - **"Already in my model" for a duplicated servo.** Dropping a servo into the
   Electronics view appends a loose 3-D copy of its mesh — redundant when that servo
