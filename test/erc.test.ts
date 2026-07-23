@@ -53,6 +53,27 @@ describe('ERC — shorts + rail conflicts', () => {
     expect(conflict!.message).toMatch(/5V|3V3/)
   })
 
+  it('does NOT flag generic supply labels (V+, VCC) sharing a 5V rail (no false positive)', () => {
+    // A battery's V+, a device's VCC and the board's 5V are the SAME supply — wiring
+    // them together is correct. Only KNOWN, different voltages (5V ↔ 3V3) conflict.
+    const BAT = part('bat', { model: 'source', supplyV: 6, terminals: { positive: 'V+', negative: 'GND' } }, [
+      { name: 'V+', type: 'pwr' },
+      { name: 'GND', type: 'gnd' }
+    ])
+    const DEV = part('dev', { model: 'consumer', currentDrawA: 0.1, terminals: { positive: 'VCC', negative: 'GND' } }, [
+      { name: 'VCC', type: 'pwr' },
+      { name: 'GND', type: 'gnd' }
+    ])
+    const issues = erc(
+      [w('a', ep('bat', 'V+', 0), ep('board', '5V', 0)), w('b', ep('dev', 'VCC', 0), ep('board', '5V', 0))],
+      [
+        ['bat', BAT],
+        ['dev', DEV]
+      ]
+    )
+    expect(issues.find((i) => i.rule === 'rail-conflict')).toBeUndefined()
+  })
+
   it('a clean GPIO→resistor→LED→GND circuit raises no short/conflict', () => {
     const issues = erc(
       [

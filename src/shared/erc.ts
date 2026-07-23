@@ -60,6 +60,28 @@ function partName(id: string, partDefs: Map<string, PartDefinition>): string {
   return def?.name || id
 }
 
+/** Nominal voltage of a KNOWN, fixed supply-rail label. Generic supply names
+ *  (`VCC` / `VDD` / `V+` / `VIN` / `VSYS` / `VBAT` / `PWR` / `+`) are deliberately
+ *  ABSENT — they're wildcards: a battery's `V+`, a sensor's `VCC` and a `5V` label
+ *  are the SAME supply, not a short. Only labels that pin a specific voltage go here. */
+const RAIL_VOLTS: Record<string, number> = {
+  '1V8': 1.8,
+  '1.8V': 1.8,
+  '2V5': 2.5,
+  '2.5V': 2.5,
+  '3V3': 3.3,
+  '3.3V': 3.3,
+  '5V': 5,
+  '5.0V': 5,
+  VBUS: 5,
+  '9V': 9,
+  '12V': 12
+}
+/** The fixed voltage a rail label pins, or `undefined` for a generic/variable rail. */
+function railVoltage(rail: string): number | undefined {
+  return RAIL_VOLTS[rail.toUpperCase()]
+}
+
 // --- individual rules --------------------------------------------------------
 
 /** Rule: a node that ties a power terminal directly to a ground terminal is a
@@ -89,15 +111,27 @@ function checkShorts(netlist: Netlist): ErcIssue[] {
 function checkRailConflicts(netlist: Netlist): ErcIssue[] {
   const out: ErcIssue[] = []
   for (const node of netlist.nodes) {
-    const rails = new Set(node.terminals.filter((t) => t.role === 'pwr').map((t) => t.rail).filter(Boolean))
-    if (rails.size > 1) {
-      const list = [...rails].join(' and ')
+    const rails = [
+      ...new Set(node.terminals.filter((t) => t.role === 'pwr').map((t) => t.rail).filter(Boolean) as string[])
+    ]
+    // A REAL conflict is two rails at KNOWN, DIFFERENT voltages (e.g. 3V3 ↔ 5V).
+    // Generic supply labels (V+/VCC/VDD/VIN…) are wildcards — a battery's `V+`, a
+    // device's `VCC` and a `5V` label are one supply, so bridging them is correct,
+    // not a short. (A false positive erodes trust more than a missed warning — see
+    // the file header; the old rule flagged every distinct LABEL and cried wolf.)
+    const known = rails
+      .map((rail) => ({ rail, v: railVoltage(rail) }))
+      .filter((x): x is { rail: string; v: number } => x.v !== undefined)
+    const distinctV = new Set(known.map((k) => k.v))
+    if (distinctV.size > 1) {
+      const list = known.map((k) => k.rail).join(' and ')
+      const volts = [...distinctV].sort((a, b) => a - b).map((v) => `${v}V`).join(' vs ')
       out.push({
         rule: 'rail-conflict',
         severity: 'error',
         title: 'Different power rails shorted together',
-        message: `${list} are wired to the same node (${node.id}).`,
-        why: 'Each rail is a separate supply at a different voltage. Joining them forces current from the higher into the lower — it can back-feed a regulator or exceed a device’s voltage rating.',
+        message: `${list} are wired to the same node (${node.id}) — ${volts}.`,
+        why: 'These rails sit at different fixed voltages. Bridging them forces current from the higher into the lower — it can back-feed a regulator or exceed a device’s voltage rating. (A generic V+/VCC pin sharing a 5V or 3V3 rail is fine — that’s the same supply.)',
         nodes: [node.id]
       })
     }
