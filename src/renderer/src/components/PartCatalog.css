@@ -173,10 +173,14 @@
 .pcat__card {
   position: relative;
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  /* Product-card layout: a big full-width image on top, text below. */
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
   background: #fbfcfa;
-  border: 1.5px solid #dcdfd8;
+  /* No visible border by default (kept transparent so the checked-state teal border
+     doesn't shift the layout); selection reads from the checkbox + shadow. */
+  border: 1.5px solid transparent;
   border-radius: 12px;
   box-shadow: 0 1px 2px rgba(20, 30, 25, 0.05);
   cursor: pointer;
@@ -186,7 +190,7 @@
     background 0.16s ease;
 }
 .pcat__card:hover {
-  border-color: #c3c8bf;
+  box-shadow: 0 4px 14px rgba(20, 30, 25, 0.12);
 }
 .pcat__card.is-checked {
   background: #fff;
@@ -242,8 +246,9 @@
 /* --- card image --- */
 .pcat__card-img {
   flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
+  /* Full card width, a generous product-photo height. */
+  width: 100%;
+  height: 150px;
   display: flex;
   align-items: center;
   justify-content: center;

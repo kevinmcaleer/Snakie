@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Full-screen parts catalog cards show a big product photo.** Each card is now a
+  vertical layout with a **full-width image** on top (was a 56px thumbnail beside the
+  text) and **no default border** — the teal border/checkmark still marks a selected
+  card.
+
 ## [0.36.0] - 2026-07-23
 
 ### Added
