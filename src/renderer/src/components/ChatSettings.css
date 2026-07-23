@@ -118,3 +118,23 @@
   color: var(--danger);
   line-height: 1.4;
 }
+
+/* "X models found" indicator after Detect Models button. */
+.chat-settings__found {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Text input for local LLM base URL / model name. */
+.chat-settings__input-text {
+  appearance: none;
+  width: 100%;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.55rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, 'JetBrains Mono', monospace;
+}
