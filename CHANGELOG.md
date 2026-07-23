@@ -6,6 +6,74 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Circuit Sim — the Board View now understands electricity (epic #597).** Wiring
+  parts on the Breadboard builds a live **netlist**, and a family of tools read it:
+  - **Electrical Rules Check (#601).** A live badge + panel that flags wiring
+    mistakes — power shorted to ground, two genuinely-different rails bridged, an LED
+    with no series resistor, an I²C bus with no pull-ups — each with a plain-English
+    "why it matters." A **"Show me"** button (and a clickable net id) spotlights the
+    offending net on the board: its wires glow yellow, the rest grey out, the node id
+    is labelled; any click dismisses it.
+  - **DC solver (#603).** An off-thread modified-nodal-analysis engine that solves
+    node voltages + branch currents from the netlist.
+  - **Node-voltage overlay + current flow (#604).** Colours each wire by its solved
+    voltage (blue ground → red rail → violet negative), shows the reading in a
+    colour-matched pill **on** the wire, and animates current as travelling dashes
+    (speed + direction from the current). Says *why* it's blank (floating / no
+    ground) instead of a silent no-op.
+  - **Floating multimeter (#620).** A draggable DMM over the board — tap a pad for
+    its voltage, a wire for its voltage **and** current (the old current clamp is
+    folded in). Reuses the instrument meter's look but reads the solver, and keeps
+    its own state separate from the Code-workspace instrument.
+  - **Electrical models for parts (#600, #605, #606).** Parts declare behaviour —
+    `source`, `resistor`, `led`, `diode`, `switch`, `consumer`, `potentiometer`,
+    `regulator`, `passive` — and the standard loads/supplies are modelled (servo,
+    motor and ultrasonic consumers; battery / PSU sources; a potentiometer). An
+    **interactive potentiometer** re-solves the circuit as you drag its wiper, and an
+    **on-board regulator** (e.g. the Pico's 3V3) makes a board's regulated pins
+    actually source current, drawn from its input rail.
+  - **Electrical section in the Part Editor (#600).** Author a part's electrical
+    model in-app — a model dropdown reveals just that model's fields, and terminals /
+    rails are picked from the part's own pins — instead of hand-editing `parts.yml`.
+  - **Nets tab in the Connections panel (#601).** Lists every net in the model (id,
+    rail, solved voltage, and the pins joined on it); each row jumps to the board
+    highlight, and the Connections tab's Net column is now a clickable net-id chip
+    that does the same.
+- **Part Editor — dense boards & headers.** Servo/DuPont **header groups** (octagonal
+  S/V/G pads placed, moved and deleted as one unit, drawn at a fixed physical size;
+  the Servo 2040's 54 servo pads collapse into 18 header units), an always-visible
+  colour-coded **Type column** in the pin list, **movable + rotatable** LED and
+  connector labels, real-size neopixels, and pin pads/labels that scale to the actual
+  pin **density** (in both the editor and the Board View). Breadboard zoom raised to
+  600%.
+- **Full-screen parts catalog with multi-select (#613).**
+
+### Fixed
+- **Circuit Sim solver robustness.** A floating node no longer blanks the whole
+  overlay (a tiny Gmin leak keeps the matrix solvable); a floating load reads ~0 V
+  instead of a ±1e8 garbage value; the solve anchors on the **main** ground rail
+  rather than an isolated GND pin (which floated the circuit symmetrically); and the
+  board's own electrical model (its regulator) is fed into the solver so its rails
+  come alive.
+- **ERC no longer cries wolf on generic supplies (#601).** "Different power rails
+  shorted" now fires only for KNOWN, different voltages (3V3 ↔ 5V) — a battery's
+  `V+`, a device's `VCC` and a `5V` label sharing a node are the same supply, not a
+  short.
+- **Multimeter wire taps register** (the visible wire no longer swallows the tap),
+  and a single tap shows both voltage and current (#620).
+- **Interactive Breadboard wires.** Wires are selectable + deletable, stretch
+  elastically 1:1 with the cursor (only on a drag, no jump) and wobble back on
+  release; a wire's end can be dragged onto another pin, and one dragged off and not
+  re-attached is deleted.
+- **Part Editor** selects the nearest pin under the cursor (not its right-hand
+  neighbour), and labels stay at the board edge when density-scaled.
+
+### Changed
+- **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE
+  readings now live on the Breadboard, which shows every part (the node graph only
+  showed the board).
+
 ## [0.35.1] - 2026-07-21
 
 ### Fixed
