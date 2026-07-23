@@ -617,6 +617,15 @@ export interface WiringCanvasProps {
     byPad: Map<number, { text: string; asserted: boolean }>
     connected: boolean
   }
+  /** ERC "Show me" net highlight (#601): the endpoint set of a net to spotlight —
+   *  its wires drawn bright yellow with the rest greyed, plus its node id labelled.
+   *  Any click on the board calls `clear`. Absent ⇒ nothing highlighted. */
+  highlight?: {
+    endpoints: Set<string>
+    /** The node id(s) shown on the net (e.g. `N1`). */
+    label: string
+    clear: () => void
+  }
 }
 
 interface Drag {
@@ -649,7 +658,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -1234,6 +1243,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    // A net highlight (ERC "Show me") is dismissed by any click on the board — the
+    // first click just clears it and does nothing else.
+    if (highlight) {
+      highlight.clear()
+      return
+    }
     const touch = e.pointerType === 'touch'
     if (touch) {
       touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -1776,6 +1791,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       )
     : null
 
+  // The first wire on a highlighted net (ERC "Show me") — carries the net-id label.
+  const isHiWire = (c: RobotConnection): boolean =>
+    !!highlight && (highlight.endpoints.has(c.from) || highlight.endpoints.has(c.to))
+  const firstHiId = highlight ? robot.connections.find(isHiWire)?.id : undefined
+
   return (
     <div
       ref={rootRef}
@@ -1934,6 +1954,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // (both ends share a node) + badge the value at its midpoint.
               const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
               const isSel = selectedWire === c.id
+              // ERC "Show me" (#601): this net's wires glow yellow, the rest grey out.
+              const isHi = isHiWire(c)
+              const dimmed = !!highlight && !isHi
               return (
                 <g key={c.id}>
                   {/* Wide, invisible hit path so the thin wire is easy to click to
@@ -1965,11 +1988,22 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   {isSel && (
                     <path d={p.d} fill="none" stroke="var(--accent, #e6ab30)" strokeWidth={7} opacity={0.5} className="wc__wire-sel" />
                   )}
+                  {/* Highlight glow behind a "Show me" net's wires. */}
+                  {isHi && <path d={p.d} fill="none" stroke="#ffe14d" strokeWidth={12} opacity={0.4} className="wc__wire-hi" />}
                   <path
                     d={p.d}
                     fill="none"
-                    stroke={v !== undefined ? voltageColour(v, voltage!.ref) : connectionColor(c, isDark)}
-                    strokeWidth={isSel ? 3.6 : 3}
+                    stroke={
+                      isHi
+                        ? '#ffe14d'
+                        : dimmed
+                          ? '#7b8494'
+                          : v !== undefined
+                            ? voltageColour(v, voltage!.ref)
+                            : connectionColor(c, isDark)
+                    }
+                    strokeWidth={isHi ? 5 : isSel ? 3.6 : 3}
+                    opacity={dimmed ? 0.16 : 1}
                     className="wc__wire"
                   />
                   {/* Current-flow (#604): travelling white dashes − → +, faster +
@@ -2015,6 +2049,21 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                           />
                           <text x={p.mx} y={p.my} textAnchor="middle" dominantBaseline="central" className="wc__volt-badge">
                             {label}
+                          </text>
+                        </g>
+                      )
+                    })()}
+                  {/* Net-id label on the highlighted net (#601) — the diagram has no
+                      net names otherwise, so the ERC "Show me" pins one here. */}
+                  {isHi &&
+                    c.id === firstHiId &&
+                    (() => {
+                      const w = highlight!.label.length * 7.4 + 16
+                      return (
+                        <g className="wc__net-tag" pointerEvents="none">
+                          <rect x={p.mx - w / 2} y={p.my - 11} width={w} height={22} rx={11} className="wc__net-tag-bg" />
+                          <text x={p.mx} y={p.my} textAnchor="middle" dominantBaseline="central" className="wc__net-tag-txt">
+                            {highlight!.label}
                           </text>
                         </g>
                       )

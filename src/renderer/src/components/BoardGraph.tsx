@@ -557,6 +557,22 @@ export function BoardGraph({
     return m
   }, [netlistData, solverState, robot])
   const [ercOpen, setErcOpen] = useState(false)
+  // ERC "Show me" (#601): the node id(s) an issue points at, highlighted on the
+  // board (that net drawn bright, the rest greyed) — since net names aren't visible
+  // in the diagram otherwise. Cleared by any click on the board.
+  const [highlightNodes, setHighlightNodes] = useState<string[] | null>(null)
+  const highlightNet = useMemo(() => {
+    if (!highlightNodes || !netlistData) return null
+    const endpoints = new Set<string>()
+    const ids: string[] = []
+    for (const node of netlistData.netlist.nodes) {
+      if (highlightNodes.includes(node.id)) {
+        ids.push(node.id)
+        for (const t of node.terminals) endpoints.add(t.endpoint)
+      }
+    }
+    return endpoints.size ? { endpoints, label: ids.join(', ') } : null
+  }, [highlightNodes, netlistData])
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
   // the consent-first install banner; empty (so hidden) without a robot/parts.
@@ -1110,7 +1126,14 @@ export function BoardGraph({
       {/* ERC issues panel (#601) — floats over the board, anchored to the body.
           Available in the Breadboard + node-graph views (not the Schematic). */}
       {wiringEnabled && effectiveView !== 'schematic' && ercOpen && (
-        <ErcPanel issues={ercIssues} onClose={() => setErcOpen(false)} />
+        <ErcPanel
+          issues={ercIssues}
+          onClose={() => setErcOpen(false)}
+          onShowNet={(nodes) => {
+            setHighlightNodes(nodes)
+            setErcOpen(false) // close the panel so the highlighted net is unobstructed
+          }}
+        />
       )}
       {/* Interactive potentiometers (#605): a wiper slider per placed pot — drag to
           turn it, the sim re-solves and the wiper's output voltage follows. */}
@@ -1165,6 +1188,9 @@ export function BoardGraph({
                   : undefined
               }
               live={liveOn ? { byPad: liveByPad, connected: liveConnected } : undefined}
+              highlight={
+                highlightNet ? { ...highlightNet, clear: () => setHighlightNodes(null) } : undefined
+              }
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)

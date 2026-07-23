@@ -234,3 +234,26 @@
   font-size: 16px;
   font-weight: 900;
 }
+
+/* "Show me" — highlights the issue's net on the board (#601). */
+.erc__show {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: 0.4rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 6px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--head, #e6e8ec);
+  background: color-mix(in srgb, var(--accent, #e6ab30) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #e6ab30) 55%, transparent);
+  cursor: pointer;
+}
+.erc__show:hover {
+  background: color-mix(in srgb, var(--accent, #e6ab30) 30%, transparent);
+}
+.erc__show svg {
+  color: var(--accent, #e6ab30);
+}

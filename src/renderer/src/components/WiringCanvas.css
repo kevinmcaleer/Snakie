@@ -1005,3 +1005,23 @@
 .wc__pin.is-pinned {
   color: var(--green, #34ad4f);
 }
+
+/* ERC "Show me" net highlight (#601): the net's wires glow, its node id is pinned. */
+.wc__wire-hi {
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(255, 225, 77, 0.9));
+}
+.wc__net-tag {
+  pointer-events: none;
+}
+.wc__net-tag-bg {
+  fill: #ffe14d;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1;
+}
+.wc__net-tag-txt {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 800;
+  fill: #1a1300;
+}

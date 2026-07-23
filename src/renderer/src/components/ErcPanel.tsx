@@ -57,7 +57,8 @@ export function ErcBadge({
 }
 
 /** One issue card: severity chip + title + message + "why it matters". */
-function IssueCard({ issue }: { issue: ErcIssue }): JSX.Element {
+function IssueCard({ issue, onShowNet }: { issue: ErcIssue; onShowNet?: (nodes: string[]) => void }): JSX.Element {
+  const canShow = onShowNet && issue.nodes && issue.nodes.length > 0
   return (
     <li className={`erc__row erc__row--${issue.severity}`}>
       <span className={`erc__sev erc__sev--${issue.severity}`} title={SEV_LABEL[issue.severity]} aria-label={SEV_LABEL[issue.severity]}>
@@ -69,13 +70,35 @@ function IssueCard({ issue }: { issue: ErcIssue }): JSX.Element {
         <div className="erc__row-why">
           <span className="erc__why-label">Why it matters:</span> {issue.why}
         </div>
+        {canShow && (
+          <button
+            type="button"
+            className="erc__show"
+            onClick={() => onShowNet!(issue.nodes!)}
+            title="Highlight this net on the board"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="2" />
+              <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+            </svg>
+            Show me
+          </button>
+        )}
       </div>
     </li>
   )
 }
 
-/** The expandable issues panel. */
-export function ErcPanel({ issues, onClose }: { issues: ErcIssue[]; onClose: () => void }): JSX.Element {
+/** The expandable issues panel. `onShowNet` highlights an issue's net on the board. */
+export function ErcPanel({
+  issues,
+  onClose,
+  onShowNet
+}: {
+  issues: ErcIssue[]
+  onClose: () => void
+  onShowNet?: (nodes: string[]) => void
+}): JSX.Element {
   return (
     <div className="erc__panel" role="dialog" aria-label="Electrical Rules Check">
       <div className="erc__panel-head">
@@ -92,7 +115,7 @@ export function ErcPanel({ issues, onClose }: { issues: ErcIssue[]; onClose: () 
       ) : (
         <ul className="erc__list">
           {issues.map((issue, i) => (
-            <IssueCard key={`${issue.rule}-${i}`} issue={issue} />
+            <IssueCard key={`${issue.rule}-${i}`} issue={issue} onShowNet={onShowNet} />
           ))}
         </ul>
       )}
