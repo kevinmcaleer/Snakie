@@ -68,11 +68,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   re-attached is deleted.
 - **Part Editor** selects the nearest pin under the cursor (not its right-hand
   neighbour), and labels stay at the board edge when density-scaled.
-- **Background removal keeps a photo's wide gamut.** Cleaning up a wide-gamut
-  Display P3 photo (e.g. an iPhone shot) no longer washes it out — the processing
-  canvas now works in P3 instead of the default sRGB, which had gamut-mapped the
-  image down and dropped its colour profile (an already-sRGB download was
-  unaffected).
+- **Imported HDR photos no longer look washed out.** iPhone photos are often HDR
+  (Display P3 with a PQ transfer + gain map), which renders flat / desaturated in
+  Snakie's SDR board UI next to a plain-sRGB image. Importing a part image now
+  flattens it to SDR sRGB (tone-mapping the HDR down, gamut-mapping P3 → sRGB), so
+  it displays consistently; already-SDR images pass through unchanged.
+- **Saving a part with no help no longer logs an ENOENT error** — removing an
+  absent `help.md` is treated as success (the file is already gone), rather than
+  reporting a scary (but harmless) `unlink` failure on every save.
 
 ### Changed
 - **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE

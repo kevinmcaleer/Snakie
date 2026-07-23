@@ -294,6 +294,37 @@ function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
   }
 }
 
+/**
+ * Flatten an imported image to SDR sRGB. iPhone photos are frequently **HDR** —
+ * Display P3 with a PQ transfer + gain map — and Snakie's board UI is SDR, so the
+ * HDR encoding renders flat / desaturated (washed out) next to a plain-sRGB image.
+ * Drawing to a default (sRGB, SDR) canvas tone-maps the HDR down and gamut-maps
+ * P3 → sRGB, giving a standard image that looks the same everywhere. PNGs stay PNG
+ * (crisp edges / transparency); everything else re-encodes as JPEG (small). Returns
+ * the original untouched on any failure — an import must never be blocked.
+ */
+function flattenImportedImage(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(dataUrl)
+      ctx.drawImage(img, 0, 0)
+      try {
+        const png = /^data:image\/png/i.test(dataUrl)
+        resolve(png ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92))
+      } catch {
+        resolve(dataUrl) // tainted canvas etc. — keep the original bytes
+      }
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
 export function PartEditor({
   libraryId,
   initial,
@@ -436,10 +467,13 @@ export function PartEditor({
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result === 'string') {
-        patch({ imageData: reader.result })
-        setImageOriginal(reader.result) // a fresh upload is the new pristine original
+        // Flatten HDR (iPhone Display-P3/PQ) photos to SDR sRGB so they don't render
+        // washed out in the SDR board UI; already-SDR images pass through unchanged.
+        const flat = await flattenImportedImage(reader.result)
+        patch({ imageData: flat })
+        setImageOriginal(flat) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
@@ -476,18 +510,12 @@ export function PartEditor({
         const canvas = document.createElement('canvas')
         canvas.width = img.naturalWidth
         canvas.height = img.naturalHeight
-        // Work in Display P3, not the default sRGB. iPhone photos are wide-gamut P3;
-        // a default sRGB canvas gamut-maps them down and the re-encoded PNG drops the
-        // profile, so a background-removed photo looks washed out on a P3 display.
-        // A P3 context keeps the gamut and tags the exported PNG; sRGB sources are a
-        // subset of P3, so they round-trip unchanged. (An older engine that ignores
-        // the option just falls back to the previous sRGB behaviour.)
-        const ctx = canvas.getContext('2d', { colorSpace: 'display-p3' })
+        const ctx = canvas.getContext('2d')
         if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(null)
         ctx.drawImage(img, 0, 0)
         let data: ImageData
         try {
-          data = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'display-p3' })
+          data = ctx.getImageData(0, 0, canvas.width, canvas.height)
         } catch {
           return resolve(null) // e.g. a tainted canvas
         }
