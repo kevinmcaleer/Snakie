@@ -1991,11 +1991,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                         />
                       )
                     })()}
-                  {v !== undefined && (
-                    <text x={p.mx} y={p.my - 3} textAnchor="middle" className="wc__volt-badge">
-                      {formatVoltage(v)}
-                    </text>
-                  )}
+                  {/* Voltage label as a pill ON the wire, filled with the wire's OWN
+                      voltage colour (#620) — so with many wires bunched together it's
+                      unambiguous which reading belongs to which wire. */}
+                  {v !== undefined &&
+                    (() => {
+                      const label = formatVoltage(v)
+                      const w = label.length * 5.6 + 10
+                      const h = 14
+                      return (
+                        <g className="wc__volt-tag">
+                          <rect
+                            x={p.mx - w / 2}
+                            y={p.my - h / 2}
+                            width={w}
+                            height={h}
+                            rx={h / 2}
+                            ry={h / 2}
+                            className="wc__volt-pill"
+                            fill={voltageColour(v, voltage!.ref)}
+                          />
+                          <text x={p.mx} y={p.my} textAnchor="middle" dominantBaseline="central" className="wc__volt-badge">
+                            {label}
+                          </text>
+                        </g>
+                      )
+                    })()}
                 </g>
               )
             })}

@@ -224,6 +224,15 @@
   stroke-linejoin: round;
   pointer-events: none;
 }
+/* The pill behind the reading — filled inline with the wire's voltage colour so the
+   label reads AS that wire. A thin dark edge separates adjacent pills (#620). */
+.wc__volt-tag {
+  pointer-events: none;
+}
+.wc__volt-pill {
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 0.75px;
+}
 
 /* Probe readout pill (#604) — floats over the board with the multimeter / clamp
    result while a probe mode is active. */
