@@ -2725,18 +2725,27 @@ export function RobotView({
     const anaglyph = new AnaglyphEffect(renderer)
     const stereoSbs = new StereoEffect(renderer)
     let appliedAnaglyphMode = '' // avoid re-uploading the colour matrices every frame
+    const _fullSize = new THREE.Vector2()
     const renderFrame = (): void => {
-      if (!stereoRef.current || !(camera instanceof THREE.PerspectiveCamera)) {
-        renderer.render(scene, camera) // off, or ortho (no parallax) → plain render
-        return
-      }
-      const depth = stereoDepthRef.current
-      if (stereoModeRef.current === 'sbs') {
-        stereoSbs.setEyeSeparation(depth)
+      const persp = camera instanceof THREE.PerspectiveCamera
+      // Side-by-side sets its own scissor/viewport per half.
+      if (stereoRef.current && persp && stereoModeRef.current === 'sbs') {
+        stereoSbs.setEyeSeparation(stereoDepthRef.current)
         stereoSbs.render(scene, camera)
         return
       }
-      anaglyph.eyeSep = depth // #625 depth
+      // Every other path is full-frame. StereoEffect leaves the viewport clamped to a
+      // HALF (it resets scissor-test but not the viewport), so switching AWAY from SBS
+      // would draw only half the screen (the rest goes black). Restore the full
+      // viewport + scissor first.
+      renderer.setScissorTest(false)
+      renderer.getSize(_fullSize)
+      renderer.setViewport(0, 0, _fullSize.x, _fullSize.y)
+      if (!stereoRef.current || !persp) {
+        renderer.render(scene, camera) // off, or ortho (no parallax) → plain render
+        return
+      }
+      anaglyph.eyeSep = stereoDepthRef.current // #625 depth
       if (stereoModeRef.current !== appliedAnaglyphMode) {
         appliedAnaglyphMode = stereoModeRef.current
         const rg = appliedAnaglyphMode === 'rg'
