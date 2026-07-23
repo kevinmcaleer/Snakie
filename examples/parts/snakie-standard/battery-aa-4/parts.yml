@@ -1,6 +1,7 @@
 id: battery-aa-4
 name: 4×AA Battery Pack
 description: Four AA cells in series (~6 V) — a common untethered supply for motors and servos.
+help: help.md
 manufacturer: Generic
 family: Power
 tags:
@@ -10,7 +11,7 @@ tags:
   - source
 package: THT
 voltage: 6V
-version: 0.1.1
+version: 0.1.4
 pcbColor: "#26292e"
 dimensions:
   width: 31.5
@@ -31,15 +32,6 @@ headers:
         shape: header
         x: 0.31829996744791655
         y: 0.05103449204388788
-electrical:
-  model: source
-  supplyV: 6.0
-  resistanceOhms: 0.3
-  maxCurrentA: 2.0
-  capacityMah: 2400
-  terminals:
-    positive: V+
-    negative: GND
 labels:
   - text: 4×AA
     x: 0.5132899136013456
@@ -52,6 +44,15 @@ labels:
     fontSize: 20
     color: "#c0c4c8"
 image: image.png
+electrical:
+  model: source
+  resistanceOhms: 0.3
+  supplyV: 6
+  maxCurrentA: 2
+  capacityMah: 2400
+  terminals:
+    positive: V+
+    negative: GND
 layerVisibility:
   pcb: false
   image: true
