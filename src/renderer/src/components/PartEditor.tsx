@@ -476,12 +476,18 @@ export function PartEditor({
         const canvas = document.createElement('canvas')
         canvas.width = img.naturalWidth
         canvas.height = img.naturalHeight
-        const ctx = canvas.getContext('2d')
+        // Work in Display P3, not the default sRGB. iPhone photos are wide-gamut P3;
+        // a default sRGB canvas gamut-maps them down and the re-encoded PNG drops the
+        // profile, so a background-removed photo looks washed out on a P3 display.
+        // A P3 context keeps the gamut and tags the exported PNG; sRGB sources are a
+        // subset of P3, so they round-trip unchanged. (An older engine that ignores
+        // the option just falls back to the previous sRGB behaviour.)
+        const ctx = canvas.getContext('2d', { colorSpace: 'display-p3' })
         if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(null)
         ctx.drawImage(img, 0, 0)
         let data: ImageData
         try {
-          data = ctx.getImageData(0, 0, canvas.width, canvas.height)
+          data = ctx.getImageData(0, 0, canvas.width, canvas.height, { colorSpace: 'display-p3' })
         } catch {
           return resolve(null) // e.g. a tainted canvas
         }
