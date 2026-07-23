@@ -8,7 +8,10 @@ const term = (key: string, name: string, role: TerminalRole, index = 0): Netlist
   key,
   index,
   name,
-  role
+  role,
+  // Mirror the real netlist's railOf(): grounds → GND, power pins → their upper-cased
+  // label. The regulator resolves its input/output rails off this terminal rail.
+  ...(role === 'gnd' ? { rail: 'GND' } : role === 'pwr' ? { rail: name.toUpperCase() } : {})
 })
 const node = (id: string, kind: NetlistNode['kind'], ...terminals: NetlistTerminal[]): NetlistNode => ({ id, kind, terminals })
 const netlist = (...nodes: NetlistNode[]): Netlist => ({ nodes, edges: [], nodeOf: {}, dangling: [] })
@@ -359,6 +362,28 @@ describe('buildCircuit — netlist → SolverCircuit (adapter)', () => {
     const r = solveDC(buildCircuit(nl, comps))
     expect(r.nodeVoltages[2]).toBeCloseTo(0, 6) // 3V3 dead — regulator gated off
     expect(r.branchCurrents['board#reg']).toBe(0)
+  })
+
+  it('regulates the board rail even when a load shares its node, and powers that load', () => {
+    // The real circuit: battery → VSYS → on-board regulator → 3V3 → a 3.3V sensor.
+    // The 3V3 node ALSO carries the sensor's VCC pin, so the node's aggregate rail is
+    // ambiguous — the regulator must resolve 3V3 by the BOARD's own terminal. And once
+    // 3V3 is driven, the consumer on it must actually draw (not read as floating).
+    const nl = netlist(
+      { ...node('N0', 'ground', term('bat', '-', 'gnd'), term('board', 'GND', 'gnd'), term('sensor', 'GND', 'gnd')), rail: 'GND' },
+      { ...node('N1', 'power', term('bat', '+', 'pwr'), term('board', 'VSYS', 'pwr')), rail: 'VSYS' },
+      // Aggregate rail deliberately 'VCC' (the load's label) — the fragile case.
+      { ...node('N2', 'power', term('board', '3V3', 'pwr'), term('sensor', 'VCC', 'pwr')), rail: 'VCC' }
+    )
+    const comps: CircuitComponent[] = [
+      { key: 'bat', electrical: { model: 'source', supplyV: 6, terminals: { positive: '+', negative: '-' } } },
+      { key: 'board', electrical: { model: 'regulator', inputRail: 'VSYS', outputRail: '3V3', outputV: 3.3 } },
+      { key: 'sensor', electrical: { model: 'consumer', currentDrawA: 0.015, terminals: { positive: 'VCC', negative: 'GND' } } }
+    ]
+    const r = solveDC(buildCircuit(nl, comps))
+    expect(r.nodeVoltages[1]).toBeCloseTo(6, 6) // VSYS held by the battery
+    expect(r.nodeVoltages[2]).toBeCloseTo(3.3, 6) // 3V3 regulated despite the node's 'VCC' rail
+    expect(r.branchCurrents.sensor).toBeCloseTo(0.015, 6) // sensor is powered → draws its 15mA
   })
 
   it('skips passive parts, unwired parts, and self-shorted terminals', () => {

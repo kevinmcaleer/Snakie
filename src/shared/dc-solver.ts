@@ -511,11 +511,14 @@ export function buildCircuit(netlist: Netlist, components: CircuitComponent[]): 
     // so e.g. a board's 3V3 pins actually source current, drawn from VBUS. Rails are
     // resolved by the netlist's rail label (all like-named power pads = one node).
     if (el.model === 'regulator') {
+      // Resolve a rail to its node by the BOARD terminal's OWN rail label, not the
+      // node's aggregate rail — the output node also carries the load's VCC pin, so
+      // the node-level rail can read `VCC` instead of `3V3` and miss.
       const railNode = (rail: string | undefined): number | undefined => {
         if (!rail) return undefined
         const R = rail.toUpperCase()
-        const i = netlist.nodes.findIndex(
-          (nd) => (nd.rail ?? '').toUpperCase() === R && nd.terminals.some((t) => t.key === comp.key)
+        const i = netlist.nodes.findIndex((nd) =>
+          nd.terminals.some((t) => t.key === comp.key && (t.rail ?? '').toUpperCase() === R)
         )
         return i >= 0 ? i : undefined
       }

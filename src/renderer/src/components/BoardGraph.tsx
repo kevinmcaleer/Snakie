@@ -460,6 +460,10 @@ export function BoardGraph({
   const solverCircuit = useMemo(() => {
     if (!netlistData) return null
     const components: CircuitComponent[] = []
+    // The board's OWN electrical block (e.g. the Pico's 3V3 regulator) is keyed
+    // `board` to match the netlist's board terminals — without this the regulator
+    // never enters the solver and its regulated rail stays dead.
+    if (boardPart?.electrical) components.push({ key: 'board', electrical: boardPart.electrical })
     netlistData.partDefs.forEach((pdef, key) => {
       if (pdef.electrical) components.push({ key, electrical: pdef.electrical, wiperPos: wiperPositions.get(key) })
     })
@@ -469,7 +473,7 @@ export function BoardGraph({
     } catch {
       return null
     }
-  }, [netlistData, wiperPositions])
+  }, [netlistData, wiperPositions, boardPart])
   const solverState = useDcSolver(solverCircuit)
 
   // Placed potentiometers (#605) — drive the wiper-slider panel.
