@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
@@ -419,12 +420,22 @@ export function RobotView({
   // Camera projection — PERSPECTIVE is the default view (the ViewCube dropdown
   // toggles it). Changing it rebuilds the 3-D effect + re-frames.
   const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
-  // Stereoscopic 3-D glasses (#521 / #622): render the scene as a red/cyan anaglyph
-  // when on. Held in a ref the render loop reads each frame, so toggling doesn't
-  // rebuild the scene. Parallax needs perspective — enabling it prefers persp.
-  const [stereo3d, setStereo3d] = useState(false)
+  // Stereoscopic 3-D glasses (#521): render the scene as a red/cyan anaglyph when on.
+  // Held in a ref the render loop reads each frame, so toggling doesn't rebuild the
+  // scene. Persisted (#623) so it survives a workspace switch / restart, and shared
+  // by the full view + mini-viewer. Parallax needs perspective — enabling it prefers
+  // persp.
+  const [stereo3d, setStereo3d] = useLocalStorage('snakie.robot.stereo3d', false)
   const stereoRef = useRef(stereo3d)
   stereoRef.current = stereo3d
+  const toggleStereo = (): void => {
+    const next = !stereo3d
+    if (next && projection === 'ortho') {
+      refitNextRef.current = true
+      setProjection('persp')
+    }
+    setStereo3d(next)
+  }
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -5020,6 +5031,28 @@ export function RobotView({
             </svg>
           </button>
         )}
+        {/* 3-D glasses toggle in the mini-viewer, right of Home (#521 / #623). */}
+        {!isEmpty && !error && compact && (
+          <button
+            type="button"
+            className={`robotview__miniglasses${stereo3d ? ' is-on' : ''}`}
+            aria-pressed={stereo3d}
+            onClick={toggleStereo}
+            title={stereo3d ? '3-D glasses ON (red/cyan) — click to turn off' : 'View in 3-D with red/cyan glasses'}
+            aria-label="Toggle 3-D glasses view"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <path
+                d="M3 8h18M3 8v3.5a3 3 0 0 0 6 0V8M15 8v3.5a3 3 0 0 0 6 0V8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         {!isEmpty && !error && compact && dockPoses.length > 0 && (
           // Saved-pose preview dropdown (#409). Controlled to "" so it resets to the
           // placeholder after a pick — re-selecting the same pose re-applies it.
@@ -5080,16 +5113,7 @@ export function RobotView({
               type="button"
               className={`robotview__glasses${stereo3d ? ' is-on' : ''}`}
               aria-pressed={stereo3d}
-              onClick={() => {
-                setStereo3d((v) => {
-                  const next = !v
-                  if (next && projection === 'ortho') {
-                    refitNextRef.current = true
-                    setProjection('persp')
-                  }
-                  return next
-                })
-              }}
+              onClick={toggleStereo}
               title={
                 stereo3d
                   ? '3-D glasses ON (red/cyan anaglyph) — click to turn off'
