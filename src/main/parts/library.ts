@@ -324,6 +324,16 @@ export async function ensureLibrary(meta: PartLibrary): Promise<WriteResult> {
   }
 }
 
+/** Unlink a file that may already be gone. An absent file IS the desired end state,
+ *  so `ENOENT` is silent (not the noisy error we were logging on every help-less
+ *  save); any other failure is reported but never thrown — a save shouldn't fail
+ *  because a stale asset couldn't be cleaned up. */
+async function unlinkQuietly(path: string, label: string): Promise<void> {
+  await fsp.unlink(path).catch((err: NodeJS.ErrnoException) => {
+    if (err?.code !== 'ENOENT') reporter(label)(err)
+  })
+}
+
 /**
  * Write a part to `<parts>/<libraryId>/<partId>/parts.yml` (+ image asset).
  * Auto-creates the library folder. The part's `imageData` (a data URL) is
@@ -351,10 +361,10 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     try {
       const prev = partFromYaml(await fsp.readFile(join(partDir, 'parts.yml'), 'utf-8'))
       if (prev.image && isContainedFile(partDir, prev.image)) {
-        await fsp.unlink(join(partDir, prev.image)).catch(reporter('parts: remove old image'))
+        await unlinkQuietly(join(partDir, prev.image), 'parts: remove old image')
       }
       if (prev.help && isContainedFile(partDir, prev.help)) {
-        await fsp.unlink(join(partDir, prev.help)).catch(reporter('parts: remove old help'))
+        await unlinkQuietly(join(partDir, prev.help), 'parts: remove old help')
       }
     } catch {
       // No existing part / unreadable → nothing to clean up.
@@ -380,7 +390,7 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
       await fsp.writeFile(join(partDir, 'help.md'), helpText, 'utf-8')
       toWrite.help = 'help.md'
     } else {
-      await fsp.unlink(join(partDir, 'help.md')).catch(reporter('parts: remove help'))
+      await unlinkQuietly(join(partDir, 'help.md'), 'parts: remove help')
       delete toWrite.help
     }
 

@@ -21,10 +21,12 @@ import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
+  ElectricalModel,
   OnboardLed,
   PartConnector,
   PartDefinition,
   PartEdge,
+  PartElectrical,
   PartFeature,
   PartHeader,
   PartLabel,
@@ -41,6 +43,7 @@ import type {
 
 const PIN_TYPES: PartPinType[] = ['pwr', 'gnd', 'io', 'other']
 const CAPABILITIES: PartPinCapability[] = ['digital', 'pwm', 'adc', 'spi', 'i2c', 'uart']
+const ELECTRICAL_MODELS: ElectricalModel[] = ['source', 'resistor', 'led', 'diode', 'switch', 'consumer', 'potentiometer', 'regulator', 'passive']
 const SPI_SIGNALS = ['RX', 'CSn', 'SCK', 'TX']
 
 /** Coerce a raw `signals` map from YAML into a clean {@link PartPinSignals}. */
@@ -161,6 +164,71 @@ function coercePin(raw: unknown): PartPin | null {
     if (lx !== undefined && ly !== undefined) pin.labelOffset = { x: lx, y: ly }
   }
   return pin
+}
+
+/** Coerce a positive finite number (drops zero/negative/garbage) — used for the
+ *  electrical params where a non-positive value is meaningless. */
+function posNum(v: unknown): number | undefined {
+  const n = num(v)
+  return n !== undefined && n > 0 ? n : undefined
+}
+
+/**
+ * Coerce a raw `electrical` block into a clean {@link PartElectrical}. Returns
+ * null when there's no recognisable model / no params, so a garbage or bare block
+ * is dropped rather than half-populated. Only positive, finite params survive.
+ * Exported so `normalisePart` (the save-time whitelist) reuses the SAME validator
+ * — one source of truth, so the field can't be dropped or drift on save.
+ */
+export function coerceElectrical(raw: unknown): PartElectrical | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const model = ELECTRICAL_MODELS.includes(r.model as ElectricalModel)
+    ? (r.model as ElectricalModel)
+    : 'passive'
+  const el: PartElectrical = { model }
+  const vf = posNum(r.vf)
+  if (vf !== undefined) el.vf = vf
+  const resistanceOhms = posNum(r.resistanceOhms)
+  if (resistanceOhms !== undefined) el.resistanceOhms = resistanceOhms
+  const supplyV = num(r.supplyV) // a supply can legitimately be negative (e.g. -12V)
+  if (supplyV !== undefined) el.supplyV = supplyV
+  if (Array.isArray(r.supplyRange) && r.supplyRange.length === 2) {
+    const lo = num(r.supplyRange[0])
+    const hi = num(r.supplyRange[1])
+    if (lo !== undefined && hi !== undefined && hi >= lo) el.supplyRange = [lo, hi]
+  }
+  const maxCurrentA = posNum(r.maxCurrentA)
+  if (maxCurrentA !== undefined) el.maxCurrentA = maxCurrentA
+  const capacityMah = posNum(r.capacityMah)
+  if (capacityMah !== undefined) el.capacityMah = capacityMah
+  const currentDrawA = posNum(r.currentDrawA)
+  if (currentDrawA !== undefined) el.currentDrawA = currentDrawA
+  const stallCurrentA = posNum(r.stallCurrentA)
+  if (stallCurrentA !== undefined) el.stallCurrentA = stallCurrentA
+  if (r.terminals && typeof r.terminals === 'object') {
+    const t = r.terminals as Record<string, unknown>
+    const positive = str(t.positive)
+    const negative = str(t.negative)
+    const term: { positive?: string; negative?: string } = {}
+    if (positive !== undefined) term.positive = positive
+    if (negative !== undefined) term.negative = negative
+    if (term.positive !== undefined || term.negative !== undefined) el.terminals = term
+  }
+  const wiper = str(r.wiper)
+  if (wiper !== undefined) el.wiper = wiper
+  const inputRail = str(r.inputRail)
+  if (inputRail !== undefined) el.inputRail = inputRail
+  const outputRail = str(r.outputRail)
+  if (outputRail !== undefined) el.outputRail = outputRail
+  const outputV = num(r.outputV) // regulated output can be any level; keep as-is
+  if (outputV !== undefined) el.outputV = outputV
+  const dropoutV = posNum(r.dropoutV)
+  if (dropoutV !== undefined) el.dropoutV = dropoutV
+  // A bare `passive` block with no params carries no information — drop it so an
+  // empty/garbage block doesn't round-trip as noise.
+  if (model === 'passive' && Object.keys(el).length === 1) return null
+  return el
 }
 
 /** Coerce one raw component-shape object from YAML into a {@link ComponentShape}. */
@@ -322,6 +390,9 @@ export function partToYaml(part: PartDefinition): string {
     com_xyz: part.com_xyz,
     // Ground-contact points in mm (#569).
     contacts: part.contacts,
+    // Electrical behaviour for the Circuit Sim (#597 / #600). Coerced on write too
+    // so a bare/garbage block is dropped even if the caller didn't normalise first.
+    electrical: coerceElectrical(part.electrical) ?? undefined,
     schematic: part.schematic,
     i2cAddresses: part.i2cAddresses,
     library: part.library,
@@ -588,6 +659,10 @@ export function partFromYaml(text: string): PartDefinition {
       }
     }
   }
+
+  // Electrical behaviour (#597 / #600) — coerced/validated; garbage → dropped.
+  const electrical = coerceElectrical(raw.electrical)
+  if (electrical) part.electrical = electrical
 
   // I²C address list (#214): accepts numbers or hex strings ("0x76"), 7-bit range.
   if (Array.isArray(raw.i2cAddresses)) {

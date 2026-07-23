@@ -187,6 +187,35 @@
   color: var(--accent-ink);
   border-color: var(--accent-ink);
 }
+/* 3-D glasses toggle in the mini-viewer — right of Home (#521 / #623). */
+.robotview__miniglasses {
+  position: absolute;
+  top: 0.35rem;
+  left: calc(0.35rem + 28px);
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.78);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  cursor: pointer;
+}
+:root[data-theme='skeuomorph'] .robotview__miniglasses {
+  background: rgba(231, 226, 211, 0.9);
+}
+.robotview__miniglasses:hover {
+  color: var(--accent-ink);
+  border-color: var(--accent-ink);
+}
+.robotview__miniglasses.is-on {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
 /* Saved-pose preview dropdown in the compact/docked viewer (#409). Top-right, just
    LEFT of the 24px Home button. Its width is capped so, growing leftward from the
    right anchor, it can never reach the top-left New/Open/Pop-out action row on a
@@ -255,6 +284,43 @@
   pointer-events: auto;
 }
 :root[data-theme='skeuomorph'] .robotview__proj {
+  background: rgba(231, 226, 211, 0.92);
+  color: var(--text, #34373d);
+}
+
+/* 3-D glasses toggle (#521 / #622) — sits under the projection dropdown in the
+   nav zone; hidden until hover like its neighbour, but stays visible (accent) when
+   ON so it can be turned back off. */
+.robotview__glasses {
+  position: absolute;
+  top: 178px;
+  right: 0;
+  width: 30px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.82);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.robotview__navzone:hover .robotview__glasses,
+.robotview__glasses:focus,
+.robotview__glasses.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.robotview__glasses.is-on {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
+:root[data-theme='skeuomorph'] .robotview__glasses {
   background: rgba(231, 226, 211, 0.92);
   color: var(--text, #34373d);
 }
@@ -449,4 +515,46 @@
 .robotview__hud-com--unstable {
   color: #ffc2bb;
   border-color: #b23b2e;
+}
+
+/* 3-D glasses settings panel (#624 mode + #625 depth) — top-right under the nav
+   zone, shown only while 3-D is on. */
+.robotview__stereo-ctl {
+  position: absolute;
+  top: 200px;
+  right: 10px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.35rem 0.4rem;
+  background: rgba(20, 21, 24, 0.86);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme='skeuomorph'] .robotview__stereo-ctl {
+  background: rgba(231, 226, 211, 0.94);
+}
+.robotview__stereo-mode {
+  font-family: inherit;
+  font-size: 0.6rem;
+  color: var(--text, #cdd2d9);
+  background: var(--bg-sunken, rgba(0, 0, 0, 0.25));
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 4px;
+  padding: 0.12rem 0.2rem;
+  cursor: pointer;
+}
+.robotview__stereo-depth {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-family: inherit;
+  font-size: 0.56rem;
+  color: var(--text-muted, #9aa0a6);
+}
+.robotview__stereo-depth input[type='range'] {
+  width: 78px;
+  accent-color: var(--accent, #e6ab30);
 }

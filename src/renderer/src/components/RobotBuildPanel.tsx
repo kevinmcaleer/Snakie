@@ -104,6 +104,9 @@ export interface RobotBuildPanelProps {
   jointOptions: string[]
   /** Bind a servo's GPIO to a joint (`''` unbinds). */
   onBindServo: (pin: string, joint: string) => void
+  /** Remove a loose URDF link — the duplicate 3-D mesh a servo drop appended when the
+   *  servo is already modelled as a joint (`meshLink` on the servo). */
+  onRemoveMesh?: (link: string) => void
   poses: NamedPoseLike[]
   selected: string | null
   onSelect: (link: string | null) => void
@@ -668,6 +671,7 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
     bindableServos,
     jointOptions,
     onBindServo,
+    onRemoveMesh,
     onOpenPose,
     onNewPose,
     rootLink,
@@ -905,6 +909,19 @@ export function RobotBuildPanel(props: RobotBuildPanelProps): JSX.Element {
                       </>
                     )}
                   </div>
+                  {/* "Already in my model" (#): the drop appended a loose 3-D copy of
+                      this servo, but it's already a joint — remove the duplicate and
+                      bind its pin to the existing joint (the picker above). */}
+                  {s.meshLink && onRemoveMesh && (
+                    <button
+                      type="button"
+                      className="robotbuild__servo-dupmesh"
+                      title={`Already a joint in your model? Dropping this servo also added a loose 3-D copy ("${s.meshLink}"). Remove that copy — then bind GP${s.pin ?? '?'} to the joint above.`}
+                      onClick={() => onRemoveMesh(s.meshLink as string)}
+                    >
+                      ⌦ remove duplicate 3-D copy
+                    </button>
+                  )}
                 </li>
               )
             })}

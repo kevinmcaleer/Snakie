@@ -568,26 +568,29 @@ export function LocalFileTree(): JSX.Element {
 
       {root ? (
         <>
-          {/* Breadcrumb of the working folder: each ancestor re-roots the tree. */}
-          <nav className="localtree__breadcrumb" aria-label="Working folder path">
-            {crumbs.map((crumb, i) => (
-              <span className="localtree__crumb-wrap" key={crumb.path}>
-                {i > 0 && (
-                  <span className="localtree__crumb-sep" aria-hidden>
-                    /
-                  </span>
-                )}
+          {/* Working folder as a SINGLE line (#616): `.. / <folder>` — a `..` that
+              re-roots to the parent + the current folder name, truncated with an
+              ellipsis to fit instead of wrapping the full ancestor path over lines.
+              The full path is on the row's hover title. */}
+          <nav className="localtree__breadcrumb" aria-label="Working folder path" title={root ?? undefined}>
+            {crumbs.length > 1 && (
+              <>
                 <button
-                  className="localtree__crumb"
-                  onClick={() => openFolderPath(crumb.path)}
-                  title={crumb.path}
-                  aria-current={i === crumbs.length - 1 ? 'true' : undefined}
-                  disabled={i === crumbs.length - 1}
+                  className="localtree__crumb localtree__crumb--up"
+                  onClick={() => openFolderPath(crumbs[crumbs.length - 2].path)}
+                  title={`Up to ${crumbs[crumbs.length - 2].label}`}
+                  aria-label={`Up to ${crumbs[crumbs.length - 2].label}`}
                 >
-                  {crumb.label}
+                  ..
                 </button>
-              </span>
-            ))}
+                <span className="localtree__crumb-sep" aria-hidden>
+                  /
+                </span>
+              </>
+            )}
+            <span className="localtree__crumb localtree__crumb--current" aria-current="true">
+              {crumbs[crumbs.length - 1]?.label ?? root}
+            </span>
           </nav>
 
           {error && <div className="localtree__error">{error}</div>}

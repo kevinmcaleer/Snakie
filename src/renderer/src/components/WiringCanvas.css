@@ -14,6 +14,13 @@
   color: var(--text);
 }
 
+/* The canvas is programmatically focused (tabIndex -1) so Delete/Backspace can
+   remove the selected part — it's not a tab stop, so suppress the focus ring
+   (the selection ring is the visible affordance). */
+.wc:focus {
+  outline: none;
+}
+
 /* The pan/zoom mat — the SVG fills it; controls + empty state float on top. */
 .wc__stage {
   position: relative;
@@ -195,6 +202,68 @@
   color: #7fc4f0;
   border-color: #3f6f8f;
   background: rgba(63, 111, 143, 0.35);
+}
+
+/* Active node-voltage overlay toggle (#604) — accent so it's distinct from is-on. */
+.wc__zoom-btn.is-active {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
+
+/* Voltage badge over a wire midpoint when the overlay is on (#604) — white with a
+   dark outline so it reads over the board photo / paper in any theme. */
+.wc__volt-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 9px;
+  font-weight: 700;
+  fill: #fff;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.72);
+  stroke-width: 2.4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+/* The pill behind the reading — filled inline with the wire's voltage colour so the
+   label reads AS that wire. A thin dark edge separates adjacent pills (#620). */
+.wc__volt-tag {
+  pointer-events: none;
+}
+.wc__volt-pill {
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 0.75px;
+}
+
+/* Current-flow animation (#604): white dots travelling along a wire in the
+   direction of conventional current, speed set per-wire via animation-duration. */
+.wc__flow {
+  animation-name: wc-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  pointer-events: none;
+  opacity: 0.92;
+}
+@keyframes wc-flow {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wc__flow {
+    animation: none;
+  }
+}
+
+/* Grab handles on the selected wire's ends (#…) — accent dots you drag to
+   re-attach that end to another pin. */
+.wc__wire-handle {
+  fill: var(--accent, #e6ab30);
+  stroke: #fff;
+  stroke-width: 1.6;
+  cursor: grab;
+}
+.wc__wire-handle:active {
+  cursor: grabbing;
 }
 
 .wc__zoom-pct {
@@ -444,6 +513,13 @@
 
 .wc__wire {
   cursor: pointer;
+  /* The visible line sits ON TOP of the wide transparent hit-path that carries the
+     click/probe handler — let pointer events pass THROUGH it so a tap landing right
+     on the line still reaches the hit-path (else it fell through to pan). */
+  pointer-events: none;
+}
+.wc__wire-sel {
+  pointer-events: none;
 }
 
 /* Empty state — centred over the mat. */
@@ -928,4 +1004,110 @@
 
 .wc__pin.is-pinned {
   color: var(--green, #34ad4f);
+}
+
+/* ERC "Show me" net highlight (#601): the net's wires glow, its node id is pinned. */
+.wc__wire-hi {
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgba(255, 225, 77, 0.9));
+}
+.wc__net-tag {
+  pointer-events: none;
+}
+.wc__net-tag-bg {
+  fill: #ffe14d;
+  stroke: rgba(0, 0, 0, 0.55);
+  stroke-width: 1;
+}
+.wc__net-tag-txt {
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 800;
+  fill: #1a1300;
+}
+
+/* Connections / Nets tab strip (#601) — sits in the table header row. */
+.wc__table-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  width: 100%;
+}
+.wc__tree-caret--btn {
+  background: none;
+  border: none;
+  padding: 0 0.15rem;
+  color: var(--txt3, var(--text-muted));
+  cursor: pointer;
+  font-size: 0.72rem;
+}
+.wc__tab {
+  padding: 0.14rem 0.5rem;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--txt3, var(--text-muted));
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+}
+.wc__tab:hover {
+  color: var(--txt2, var(--text));
+}
+.wc__tab.is-active {
+  color: var(--head, var(--text));
+  border-bottom-color: var(--accent, #e6ab30);
+}
+
+/* Nets tab: the rail chip, the truncated pin list, and the "show" (highlight) key. */
+.wc__net-rail {
+  font-weight: 700;
+}
+.wc__net-rail--ground {
+  color: var(--txt3, var(--text-muted));
+}
+.wc__net-rail--power {
+  color: var(--accent, #e6ab30);
+}
+.wc__net-members {
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  color: var(--txt2, var(--text));
+}
+.wc__net-show {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.1rem;
+  color: var(--accent, #e6ab30);
+  background: none;
+  border: none;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.wc__net-show:hover {
+  opacity: 1;
+}
+
+/* Clickable net id in the Connections tab — jumps to highlighting that net (#601). */
+.wc__net-chip {
+  padding: 0.04rem 0.4rem;
+  border-radius: 999px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--head, var(--text));
+  background: color-mix(in srgb, var(--accent, #e6ab30) 16%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent, #e6ab30) 45%, transparent);
+  cursor: pointer;
+}
+.wc__net-chip:hover {
+  background: color-mix(in srgb, var(--accent, #e6ab30) 30%, transparent);
 }

@@ -3,80 +3,803 @@ name: Pimoroni Servo 2040
 description: RP2040 18-channel servo controller with current sensing, 6 sensor inputs and a Qw/ST connector
 manufacturer: Pimoroni
 family: Microcontroller
-mcu: RP2040
-partNumber: PIM613
-package: Board
-pinSpacing: 2.54
-voltage: 3.3V
-version: 0.1.0
-pcbColor: "#12181f"
-# Board is 62 x 42 mm (landscape). Authored portrait-friendly: the 18 servo
-# signal outputs run down the two side rails (1-9 left, 10-18 right); the Qw/ST
-# I2C connector + utility pins sit along the bottom.
-aspect: 1.476
-dimensions:
-  width: 62
-  height: 42
-shape:
-  kind: rect
-  cornerRadius: 0.05
-# GPIO map verified against Pimoroni's firmware header
-# (pimoroni-pico/libraries/servo2040/servo2040.hpp): SERVO_1..18 = GP0..GP17,
-# LED_DATA(WS2812 x6)=GP18, I2C_INT=GP19, I2C_SDA=GP20, I2C_SCL=GP21,
-# ADC_ADDR_0/1/2=GP22/24/25 (internal analog mux), USER_SW=GP23,
-# ADC0/1/2=GP26/27/28, SHARED_ADC=GP29 (current/voltage/sensor sensing via mux).
-# Servo outputs are dedicated PWM; the pwm channel is A for even GPIO, B for odd.
-headers:
-  - edge: left
-    pins:
-      - { number: 1, name: S1, type: io, gpio: 0, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
-      - { number: 2, name: S2, type: io, gpio: 1, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
-      - { number: 3, name: S3, type: io, gpio: 2, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
-      - { number: 4, name: S4, type: io, gpio: 3, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
-      - { number: 5, name: S5, type: io, gpio: 4, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
-      - { number: 6, name: S6, type: io, gpio: 5, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
-      - { number: 7, name: S7, type: io, gpio: 6, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
-      - { number: 8, name: S8, type: io, gpio: 7, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 180 }
-      - { number: 9, name: S9, type: io, gpio: 8, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 180 }
-  - edge: right
-    pins:
-      - { number: 10, name: S10, type: io, gpio: 9, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
-      - { number: 11, name: S11, type: io, gpio: 10, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
-      - { number: 12, name: S12, type: io, gpio: 11, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
-      - { number: 13, name: S13, type: io, gpio: 12, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
-      - { number: 14, name: S14, type: io, gpio: 13, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
-      - { number: 15, name: S15, type: io, gpio: 14, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
-      - { number: 16, name: S16, type: io, gpio: 15, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
-      - { number: 17, name: S17, type: io, gpio: 16, capabilities: [digital, pwm], signals: { pwm: A }, shape: header, rotation: 0 }
-      - { number: 18, name: S18, type: io, gpio: 17, capabilities: [digital, pwm], signals: { pwm: B }, shape: header, rotation: 0 }
-  - edge: bottom
-    pins:
-      - { number: 19, name: INT, type: io, gpio: 19, capabilities: [digital], shape: header, rotation: 90 }
-      - { number: 20, name: USER, type: io, gpio: 23, capabilities: [digital], shape: header, rotation: 90 }
-      - { number: 21, name: A0, type: io, gpio: 26, capabilities: [digital, pwm, adc], signals: { pwm: A }, buses: { adc: 0 }, shape: header, rotation: 90 }
-      - { number: 22, name: A1, type: io, gpio: 27, capabilities: [digital, pwm, adc], signals: { pwm: B }, buses: { adc: 1 }, shape: header, rotation: 90 }
-      - { number: 23, name: A2, type: io, gpio: 28, capabilities: [digital, pwm, adc], signals: { pwm: A }, buses: { adc: 2 }, shape: header, rotation: 90 }
-# Qw/ST (Qwiic / STEMMA QT) I2C0 socket: SDA=GP20, SCL=GP21.
-connectors:
-  - kind: qwiic
-    label: QW/ST
-    x: 0.5
-    y: 0.92
-    pins:
-      - { name: GND, type: gnd }
-      - { name: "3V3", type: pwr }
-      - { name: SDA, type: io, gpio: 20, capabilities: [i2c], signals: { i2c: SDA }, buses: { i2c: 0 } }
-      - { name: SCL, type: io, gpio: 21, capabilities: [i2c], signals: { i2c: SCL }, buses: { i2c: 0 } }
-# 6 addressable RGB LEDs (WS2812) on GP18; onboard user button on GP23.
-onboardLeds:
-  - { kind: neopixel, gpio: 18, x: 0.5, y: 0.12 }
 tags:
   - rp2040
   - servo
   - motor
   - robotics
   - pimoroni
+pinSpacing: 2.54
+voltage: 3.3V
+partNumber: PIM613
+version: 0.1.3
+mcu: RP2040
+pcbColor: "#12181f"
+aspect: 1.476
+dimensions:
+  width: 62.2
+  height: 42
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: S1
+        type: io
+        number: 1
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.13267336527506512
+        y: 0.16666666666666666
+        group: servo-1
+      - name: S2
+        type: io
+        number: 2
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.1718611145019531
+        y: 0.16666666666666666
+        group: servo-2
+      - name: S3
+        type: io
+        number: 3
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.21393140157063803
+        y: 0.16666666666666666
+        group: servo-3
+      - name: S4
+        type: io
+        number: 4
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.24750679016113283
+        y: 0.16666666666666666
+        group: servo-4
+      - name: S5
+        type: io
+        number: 5
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.2885508219401042
+        y: 0.16683953784760971
+        group: servo-5
+      - name: S6
+        type: io
+        number: 6
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.32819015502929694
+        y: 0.16666666666666666
+        group: servo-6
+      - name: S7
+        type: io
+        number: 7
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.3945326995849609
+        y: 0.16683953784760971
+        group: servo-7
+      - name: S8
+        type: io
+        number: 8
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.4337205251057943
+        y: 0.16683953784760971
+        group: servo-8
+      - name: S9
+        type: io
+        number: 9
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.46696365356445313
+        y: 0.16683953784760971
+        group: servo-9
+      - name: 5V
+        type: pwr
+        shape: round
+        x: 0.24443547566731771
+        y: 0.9676461472284227
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.28206978928883875
+        y: 0.9676328630762251
+      - name: 3v3
+        type: pwr
+        shape: round
+        x: 0.31974165462493903
+        y: 0.9713675889233184
+      - name: SDA
+        type: io
+        gpio: 20
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        shape: round
+        x: 0.35703814539591483
+        y: 0.9646104419892331
+      - name: SCL
+        type: io
+        gpio: 21
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        shape: round
+        x: 0.395532842839559
+        y: 0.9703055585517887
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.46989287838564486
+        y: 0.9741392739407346
+      - name: SWCLK
+        type: other
+        shape: round
+        x: 0.625510881250281
+        y: 0.973382200914778
+      - name: SWDIO
+        type: other
+        shape: round
+        x: 0.6556911214192708
+        y: 0.9741392739407346
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.7000000000000001
+        y: 0.9741392739407346
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.7727515665690103
+        y: 0.9741392739407346
+      - name: GND
+        type: gnd
+        shape: round
+        x: 0.8541892496744791
+        y: 0.9741392739407346
+      - name: RST
+        type: other
+        shape: round
+        x: 0.733132832845052
+        y: 0.9741392739407346
+      - name: BOOT
+        type: other
+        shape: round
+        x: 0.8109605916341146
+        y: 0.9741392739407346
+      - name: GP26
+        type: io
+        gpio: 26
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 0
+        x: 0.8616504519172933
+        y: 0.7702258349134264
+      - name: GP27
+        type: io
+        gpio: 27
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 1
+        x: 0.8605657774297343
+        y: 0.4624017945511549
+      - name: GP27
+        type: io
+        gpio: 27
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 1
+        x: 0.8610466581138875
+        y: 0.7064175144937985
+      - name: GP26
+        type: io
+        gpio: 26
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 0
+        x: 0.8610466581138875
+        y: 0.525535442738686
+      - name: GP28
+        type: io
+        gpio: 28
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 2
+        x: 0.8610466581138875
+        y: 0.6468927469006436
+      - name: GP29
+        type: io
+        gpio: 29
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 3
+        x: 0.8617082837481445
+        y: 0.584085719578221
+      - name: V1
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.13267336527506512
+        y: 0.227143
+        group: servo-1
+      - name: G1
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.13267336527506512
+        y: 0.287619
+        group: servo-1
+      - name: V2
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.1718611145019531
+        y: 0.227143
+        group: servo-2
+      - name: G2
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.1718611145019531
+        y: 0.287619
+        group: servo-2
+      - name: V3
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.21393140157063803
+        y: 0.227143
+        group: servo-3
+      - name: G3
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.21393140157063803
+        y: 0.287619
+        group: servo-3
+      - name: V4
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.24750679016113283
+        y: 0.227143
+        group: servo-4
+      - name: G4
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.24750679016113283
+        y: 0.287619
+        group: servo-4
+      - name: V5
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.2885508219401042
+        y: 0.227316
+        group: servo-5
+      - name: G5
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.2885508219401042
+        y: 0.287792
+        group: servo-5
+      - name: V6
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.32819015502929694
+        y: 0.227143
+        group: servo-6
+      - name: G6
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.32819015502929694
+        y: 0.287619
+        group: servo-6
+      - name: V7
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.3945326995849609
+        y: 0.227316
+        group: servo-7
+      - name: G7
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.3945326995849609
+        y: 0.287792
+        group: servo-7
+      - name: V8
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.4337205251057943
+        y: 0.227316
+        group: servo-8
+      - name: G8
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.4337205251057943
+        y: 0.287792
+        group: servo-8
+      - name: V9
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.46696365356445313
+        y: 0.227316
+        group: servo-9
+      - name: G9
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.46696365356445313
+        y: 0.287792
+        group: servo-9
+  - edge: right
+    pins:
+      - name: S10
+        type: io
+        number: 10
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.5
+        y: 0.16666666666666666
+        group: servo-10
+      - name: S11
+        type: io
+        number: 11
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.5447998555501301
+        y: 0.16666666666666666
+        group: servo-11
+      - name: S12
+        type: io
+        number: 12
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.5893844604492188
+        y: 0.16666666666666666
+        group: servo-12
+      - name: S13
+        type: io
+        number: 13
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.6556911214192708
+        y: 0.16666666666666666
+        group: servo-13
+      - name: S14
+        type: io
+        number: 14
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.7000000000000001
+        y: 0.16666666666666666
+        group: servo-14
+      - name: S15
+        type: io
+        number: 15
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.733132832845052
+        y: 0.16666666666666666
+        group: servo-15
+      - name: S16
+        type: io
+        number: 16
+        gpio: 15
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.7727515665690103
+        y: 0.16666666666666666
+        group: servo-16
+      - name: S17
+        type: io
+        number: 17
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        rotation: 270
+        x: 0.8109605916341146
+        y: 0.16666666666666666
+        group: servo-17
+      - name: S18
+        type: io
+        number: 18
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: B
+        shape: octagonal
+        rotation: 270
+        x: 0.8541892496744791
+        y: 0.16666666666666666
+        group: servo-18
+      - name: V10
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.5
+        y: 0.227143
+        group: servo-10
+      - name: G10
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.5
+        y: 0.287619
+        group: servo-10
+      - name: V11
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.5447998555501301
+        y: 0.227143
+        group: servo-11
+      - name: G11
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.5447998555501301
+        y: 0.287619
+        group: servo-11
+      - name: V12
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.5893844604492188
+        y: 0.227143
+        group: servo-12
+      - name: G12
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.5893844604492188
+        y: 0.287619
+        group: servo-12
+      - name: V13
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.6556911214192708
+        y: 0.227143
+        group: servo-13
+      - name: G13
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.6556911214192708
+        y: 0.287619
+        group: servo-13
+      - name: V14
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.7000000000000001
+        y: 0.227143
+        group: servo-14
+      - name: G14
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.7000000000000001
+        y: 0.287619
+        group: servo-14
+      - name: V15
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.733132832845052
+        y: 0.227143
+        group: servo-15
+      - name: G15
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.733132832845052
+        y: 0.287619
+        group: servo-15
+      - name: V16
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.7727515665690103
+        y: 0.227143
+        group: servo-16
+      - name: G16
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.7727515665690103
+        y: 0.287619
+        group: servo-16
+      - name: V17
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.8109605916341146
+        y: 0.227143
+        group: servo-17
+      - name: G17
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.8109605916341146
+        y: 0.287619
+        group: servo-17
+      - name: V18
+        type: pwr
+        shape: octagonal
+        labelHidden: true
+        x: 0.8541892496744791
+        y: 0.227143
+        group: servo-18
+      - name: G18
+        type: gnd
+        shape: octagonal
+        labelHidden: true
+        x: 0.8541892496744791
+        y: 0.287619
+        group: servo-18
+  - edge: bottom
+    pins:
+      - name: INT
+        type: io
+        number: 19
+        gpio: 19
+        capabilities:
+          - digital
+        shape: header
+        rotation: 90
+        x: 0.4337205251057943
+        y: 0.9673287116156684
+      - name: USER
+        type: io
+        number: 20
+        gpio: 23
+        capabilities:
+          - digital
+        shape: header
+        rotation: 180
+        x: 0.057563883463541694
+        y: 0.7813607497442335
+      - name: A0
+        type: io
+        number: 21
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: A
+        buses:
+          adc: 0
+        shape: header
+        rotation: 90
+        x: 0.5077083836474756
+        y: 0.9673287116156684
+      - name: A1
+        type: io
+        number: 22
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: B
+        buses:
+          adc: 1
+        shape: header
+        rotation: 90
+        x: 0.5535396847532098
+        y: 0.9676014108058728
+      - name: A2
+        type: io
+        number: 23
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        signals:
+          pwm: A
+        buses:
+          adc: 2
+        shape: header
+        rotation: 90
+        x: 0.5893844604492188
+        y: 0.9676461472284227
+mountingHoles:
+  - x: 0.06566599527994792
+    y: 0.06234221951923672
+    diameter: 1
+  - x: 0.9134111531575521
+    y: 0.061916632516043506
+    diameter: 1
+  - x: 0.9134111531575521
+    y: 0.9424985501728361
+    diameter: 1
+  - x: 0.06566599527994792
+    y: 0.9424985501728361
+    diameter: 1
+onboardLeds:
+  - kind: neopixel
+    x: 0.7472065635101834
+    y: 0.7575462557328969
+    gpio: 18
+    sizeMm: 1.5
+connectors:
+  - kind: qwiic
+    label: QW/ST
+    x: 0.16183044433593752
+    y: 0.9487516033838667
+    labelRotation: 270
+    pins:
+      - name: GND
+        type: gnd
+      - name: 3V3
+        type: pwr
+      - name: SDA
+        type: io
+        gpio: 20
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 0
+      - name: SCL
+        type: io
+        gpio: 21
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 0
+image: image.png
+imageLayer:
+  x: 0.005648295084635491
+  y: -0.00285443922262818
+  w: 0.9510153198242184
+  h: 1.0098463564435756
+  opacity: 1
+help: help.md
 library:
   module: servo
   docs: https://github.com/pimoroni/pimoroni-pico/tree/main/micropython/examples/servo2040
-help: help.md
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

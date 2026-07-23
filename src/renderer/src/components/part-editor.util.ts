@@ -42,6 +42,7 @@ import {
   type PolygonPoint
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
+import { coerceElectrical } from '../../../shared/part-yaml'
 
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
@@ -71,14 +72,15 @@ export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
 export const PACKAGES: PartPackage[] = ['THT', 'SMD']
 
 /** Pad shapes the editor offers, in UI order. */
-export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
+export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header', 'octagonal']
 
 /** Human labels for each pad shape. */
 export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
   square: 'Square',
   round: 'Round',
   castellated: 'Castellated',
-  header: 'Header hole'
+  header: 'Header hole',
+  octagonal: 'Octagonal (servo)'
 }
 
 /** Component shape kinds the Shapes dropdown offers, in UI order. */
@@ -291,6 +293,8 @@ function normalisePin(pin: PartPin): PartPin {
   if (label && label !== name) out.label = label
   if (pin.castellated === true) out.castellated = true
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
+  if (pin.labelHidden === true) out.labelHidden = true
+  if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
@@ -789,6 +793,24 @@ export function pasteStyle(part: PartDefinition, target: StyleTarget, clip: Part
  * fields are only set when they carry content (so the YAML round-trip — which
  * prunes empties — deep-equals this result).
  */
+/** Copy a component's manual label placement (offset + rotation) onto the
+ *  normalised object — mirrors how pin labelOffset is preserved. Required because
+ *  normalisePart rebuilds LEDs/connectors field-by-field, so any un-copied field
+ *  is stripped on save. */
+function applyLabelPlacement(
+  src: { labelOffset?: { x: number; y: number }; labelRotation?: number },
+  dst: { labelOffset?: { x: number; y: number }; labelRotation?: number }
+): void {
+  const lo = src.labelOffset
+  if (lo && Number.isFinite(lo.x) && Number.isFinite(lo.y) && (lo.x !== 0 || lo.y !== 0)) {
+    dst.labelOffset = { x: clamp(lo.x, -1.5, 1.5), y: clamp(lo.y, -1.5, 1.5) }
+  }
+  if (typeof src.labelRotation === 'number' && Number.isFinite(src.labelRotation)) {
+    const r = (((Math.round(src.labelRotation / 90) * 90) % 360) + 360) % 360
+    if (r) dst.labelRotation = r
+  }
+}
+
 export function normalisePart(part: PartDefinition): PartDefinition {
   const headers: PartHeader[] = (Array.isArray(part.headers) ? part.headers : [])
     .map((h) => {
@@ -940,6 +962,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           if (col) led.color = col
         }
       }
+      if (typeof l.sizeMm === 'number' && Number.isFinite(l.sizeMm) && l.sizeMm > 0) led.sizeMm = l.sizeMm
+      applyLabelPlacement(l, led)
       return led
     })
   }
@@ -954,6 +978,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       }
       const label = text(c.label)
       if (label) conn.label = label
+      applyLabelPlacement(c, conn)
       return conn
     })
   }
@@ -988,6 +1013,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     )
     if (pts.length) out.contacts = pts.map((p) => [p[0], p[1], p[2]])
   }
+  // Electrical behaviour (#597 / #600) — reuse the shared coercer so the save-time
+  // whitelist keeps the SAME fields the YAML round-trip does (no silent drop).
+  const electrical = coerceElectrical(part.electrical)
+  if (electrical) out.electrical = electrical
   if (
     part.imageLayer &&
     [part.imageLayer.x, part.imageLayer.y, part.imageLayer.w, part.imageLayer.h].every(

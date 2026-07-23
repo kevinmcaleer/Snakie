@@ -1,0 +1,198 @@
+/* Bench PSU instrument (#602). Unique `psu__` prefix (instrument CSS is global).
+   Mirrors the LED panel's control/readout conventions + the Multimeter's 7-seg
+   LCD (DSEG7 with ghost backing). Reads on the instrument's dark screen in both
+   skins; the accent comes from the registry via --accent. */
+
+.psu {
+  --accent: #3ad07a;
+  --accent-border: rgba(58, 208, 122, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+/* --- the LCD screen (two seven-seg lines + annunciators) --- */
+.psu__screen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+}
+
+.psu__seg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.psu__seg-row--off {
+  opacity: 0.5;
+}
+
+.psu__seg {
+  position: relative;
+  flex: 1;
+  height: 34px;
+}
+.psu__seg--a {
+  height: 26px;
+}
+.psu__seg-ghost,
+.psu__seg-live {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  font-family: 'DSEG7-Classic', var(--font-mono), 'JetBrains Mono', monospace;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+.psu__seg-row .psu__seg-ghost,
+.psu__seg-row .psu__seg-live {
+  font-size: 30px;
+}
+.psu__seg-row--a .psu__seg-ghost,
+.psu__seg-row--a .psu__seg-live {
+  font-size: 22px;
+}
+.psu__seg-ghost {
+  color: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.psu__seg-live {
+  color: var(--accent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.psu__seg-unit {
+  font-size: 13px;
+  font-weight: 800;
+  color: color-mix(in srgb, var(--accent) 65%, #9aa0a8);
+  padding-bottom: 3px;
+}
+
+.psu__annun {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.psu__annun-lamp {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #3a4048;
+}
+.psu__annun-lamp.is-on {
+  color: var(--accent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.psu__annun-lamp--cc.is-on {
+  color: #e6ab30;
+  text-shadow: 0 0 6px rgba(230, 171, 48, 0.55);
+}
+.psu__annun-lamp--off.is-on {
+  color: #9aa0a8;
+  text-shadow: none;
+}
+
+/* --- controls --- */
+.psu__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.psu__slider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.psu__slider-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #5a5f67;
+  white-space: nowrap;
+  min-width: 84px;
+}
+.psu__slider input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 0;
+}
+.psu__slider-val {
+  font-size: 11px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--accent) 70%, #c7cbd1);
+  min-width: 58px;
+  text-align: right;
+}
+
+.psu__output {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 32px;
+  margin-top: 2px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #9aa0a8;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.psu__output--on {
+  color: #0b1410;
+  background: var(--accent);
+  border-color: var(--accent-border);
+}
+.psu__output-led {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #2a2f36;
+}
+.psu__output--on .psu__output-led {
+  background: #0b1410;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+}
+
+/* --- bottom readout strip --- */
+.psu__readout {
+  display: flex;
+  align-items: stretch;
+  padding: 9px 4px;
+  border-radius: 8px;
+  background: #0c0e10;
+  border: 1px solid #1c1f22;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+.psu__cell {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+.psu__cell-lbl {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: #5a5f67;
+}
+.psu__cell-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--accent) 70%, #9aa0a8);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.psu__div {
+  width: 1px;
+  align-self: stretch;
+  background: #1c1f22;
+}

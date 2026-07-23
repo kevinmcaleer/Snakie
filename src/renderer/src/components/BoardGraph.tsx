@@ -18,6 +18,12 @@ import {
 } from './board-defs'
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
+import { buildNetlist, type TerminalRole } from '../../../shared/netlist'
+import { runErc, ercSummary } from '../../../shared/erc'
+import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
+import { useDcSolver } from './useDcSolver'
+import { voltageColour, formatVoltage, wireCurrent } from '../../../shared/circuit-probe'
+import { ErcBadge, ErcPanel } from './ErcPanel'
 import {
   authoredPads,
   boardBox,
@@ -122,10 +128,16 @@ export interface BoardGraphProps {
    *  (a wiring-canvas world position for the body's top-left) is set when the part
    *  is dragged onto the canvas (#159); omitted for a click-add (auto-layout). */
   onAddToProject?: (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }) => void
+  /** Add many parts at once — the full-screen catalog's "Add to project" (#613). */
+  onAddManyToProject?: (items: { libraryId: string; part: PartDefinition }[]) => void
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
 const STORAGE_KEY = 'snakie.board.id'
+/** Last fully-resolved board def, cached at module scope so a remount paints the
+ *  right board immediately instead of flashing a built-in default while the async
+ *  library list loads (#615). */
+let cachedBoardDef: BoardDefinition | null = null
 /** localStorage key remembering the last-used view tab (graph / lifelike / schematic). */
 const VIEW_KEY = 'snakie.board.view'
 
@@ -328,7 +340,8 @@ export function BoardGraph({
   joints,
   jointLimits,
   libraries,
-  onAddToProject
+  onAddToProject,
+  onAddManyToProject
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
@@ -344,7 +357,10 @@ export function BoardGraph({
   const [viewType, setViewType] = useState<'graph' | WiringRenderMode>(() => {
     try {
       const saved = window.localStorage.getItem(VIEW_KEY)
-      if (saved === 'graph' || saved === 'lifelike' || saved === 'schematic') return saved
+      // The node-graph view is retired (#…): everything it did (ERC, node-voltage
+      // overlay, LIVE) now lives on the Breadboard. A stale saved 'graph' migrates
+      // to the Breadboard.
+      if (saved === 'lifelike' || saved === 'schematic') return saved
     } catch {
       // Ignore storage read failures (disabled / quota).
     }
@@ -397,10 +413,178 @@ export function BoardGraph({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [robot?.board, boards])
-  const def = boards.find((b) => b.id === boardId) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  // Prefer the module-cached def when the desired board isn't in the (initially
+  // built-ins-only) list yet, so a remount shows the right board first (#615).
+  const foundBoard = boards.find((b) => b.id === boardId)
+  const def = foundBoard ?? (cachedBoardDef?.id === boardId ? cachedBoardDef : undefined) ?? boards[0] ?? BUILTIN_BOARDS[0]
+  if (foundBoard) cachedBoardDef = foundBoard
   // The source part behind the selected board (if any) — so the Breadboard view
   // draws it life-like (image + x/y pins) rather than the edge-laid fallback.
   const boardPart = useMemo(() => boardPartFor(libraries ?? [], def.id), [libraries, def.id])
+
+  // Circuit Sim: extract the netlist ONCE from the wiring + placed parts (keyed by
+  // instance id, matching the netlist's terminal keys), shared by ERC (#601) and the
+  // DC solver (#603). Recomputed only when the wiring / parts / board change.
+  const netlistData = useMemo(() => {
+    if (!robot) return null
+    const partDefs = new Map<string, PartDefinition>()
+    for (const rp of robot.parts ?? []) {
+      const pdef = (libraries ?? []).find((l) => l.id === rp.lib)?.parts.find((p) => p.id === rp.part)
+      if (pdef) partDefs.set(rp.id, pdef)
+    }
+    try {
+      return { partDefs, netlist: buildNetlist(robot, def, partDefs) }
+    } catch {
+      return null // a malformed circuit must never crash the board view
+    }
+  }, [robot, libraries, def])
+
+  // ERC (#601): static electrical-rule checks over the netlist.
+  const ercIssues = useMemo(() => {
+    if (!netlistData) return []
+    try {
+      return runErc(netlistData.netlist, netlistData.partDefs)
+    } catch {
+      return []
+    }
+  }, [netlistData])
+  const ercSum = useMemo(() => ercSummary(ercIssues), [ercIssues])
+
+  // Interactive potentiometer wiper positions (#605), 0..1 per placed pot instance —
+  // dragging a slider re-solves the circuit.
+  const [wiperPositions, setWiperPositions] = useState<Map<string, number>>(new Map())
+
+  // DC solver (#603): map the netlist + the electrical parts to a SolverCircuit and
+  // solve it off-thread. `solverState` (node voltages + branch currents) drives the
+  // #604 overlay/probes; a pot's live wiper position feeds in here.
+  const solverCircuit = useMemo(() => {
+    if (!netlistData) return null
+    const components: CircuitComponent[] = []
+    // The board's OWN electrical block (e.g. the Pico's 3V3 regulator) is keyed
+    // `board` to match the netlist's board terminals — without this the regulator
+    // never enters the solver and its regulated rail stays dead.
+    if (boardPart?.electrical) components.push({ key: 'board', electrical: boardPart.electrical })
+    netlistData.partDefs.forEach((pdef, key) => {
+      if (pdef.electrical) components.push({ key, electrical: pdef.electrical, wiperPos: wiperPositions.get(key) })
+    })
+    if (components.length === 0) return null
+    try {
+      return buildCircuit(netlistData.netlist, components)
+    } catch {
+      return null
+    }
+  }, [netlistData, wiperPositions, boardPart])
+  const solverState = useDcSolver(solverCircuit)
+
+  // Placed potentiometers (#605) — drive the wiper-slider panel.
+  const placedPots = useMemo(() => {
+    const pots: { key: string; label: string }[] = []
+    netlistData?.partDefs.forEach((pdef, key) => {
+      if (pdef.electrical?.model === 'potentiometer') {
+        const rp = robot?.parts?.find((p) => p.id === key)
+        pots.push({ key, label: rp?.label || pdef.name || 'Potentiometer' })
+      }
+    })
+    return pots
+  }, [netlistData, robot])
+
+  // Node-voltage overlay (#604): a toggle that recolours each used pad/wire by its
+  // SOLVED voltage (blue = ground → red = rail). `padVoltage` maps a board pad index
+  // (== the wiring endpoint index == layoutPads order) to its node's voltage.
+  const [voltsOverlay, setVoltsOverlay] = useState(false)
+  const padVoltage = useMemo(() => {
+    const m = new Map<number, number>()
+    if (!netlistData || !solverState?.ok) return m
+    netlistData.netlist.nodes.forEach((node, i) => {
+      const v = solverState.nodeVoltages[i] ?? 0
+      for (const t of node.terminals) if (t.key === 'board') m.set(t.index, v)
+    })
+    return m
+  }, [netlistData, solverState])
+  // Reference for the colour scale: the highest rail (so a 3.3V and a 12V circuit
+  // both read full-scale), floored at 5V so a lone logic rail isn't washed out.
+  const overlayRefV = useMemo(
+    () => (solverState?.ok ? Math.max(5, ...solverState.nodeVoltages.map((v) => Math.abs(v))) : 5),
+    [solverState]
+  )
+  const overlayActive = voltsOverlay && !!solverState?.ok && padVoltage.size > 0
+  // Endpoint → solved voltage, for colouring the Breadboard's wires + pads (each
+  // wire's two endpoints share a node, so a wire takes its node's voltage).
+  const endpointVoltage = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!netlistData || !solverState?.ok) return m
+    netlistData.netlist.nodes.forEach((node, i) => {
+      const v = solverState.nodeVoltages[i] ?? 0
+      for (const t of node.terminals) m.set(t.endpoint, v)
+    })
+    return m
+  }, [netlistData, solverState])
+
+  // Signed current per wire (#604), for the current-flow animation: each electrical
+  // part's ± terminal endpoint maps to its solver element, then a leaf wire off that
+  // terminal carries the element's branch current (see `wireCurrent`).
+  const currentByWire = useMemo(() => {
+    const m = new Map<string, number>()
+    if (!netlistData || !solverState?.ok) return m
+    // endpoint → { element id, terminal } for every electrical part's ± pins.
+    const epEl = new Map<string, { id: string; terminal: 'a' | 'b' }>()
+    const termsByKey = new Map<string, { name: string; role: TerminalRole; endpoint: string }[]>()
+    for (const node of netlistData.netlist.nodes) {
+      for (const t of node.terminals) {
+        const list = termsByKey.get(t.key)
+        const e = { name: t.name, role: t.role, endpoint: t.endpoint }
+        if (list) list.push(e)
+        else termsByKey.set(t.key, [e])
+      }
+    }
+    netlistData.partDefs.forEach((pdef, key) => {
+      const el = pdef.electrical
+      if (!el || el.model === 'passive') return
+      const terms = termsByKey.get(key)
+      if (!terms) return
+      const pos =
+        (el.terminals?.positive && terms.find((t) => t.name === el.terminals!.positive)) ||
+        terms.find((t) => t.role === 'pwr')
+      const neg =
+        (el.terminals?.negative && terms.find((t) => t.name === el.terminals!.negative)) ||
+        terms.find((t) => t.role === 'gnd')
+      if (pos) epEl.set(pos.endpoint, { id: key, terminal: 'a' })
+      if (neg) epEl.set(neg.endpoint, { id: key, terminal: 'b' })
+    })
+    for (const c of robot?.connections ?? []) {
+      m.set(c.id, wireCurrent(c.from, c.to, solverState.branchCurrents, epEl))
+    }
+    return m
+  }, [netlistData, solverState, robot])
+  const [ercOpen, setErcOpen] = useState(false)
+  // ERC "Show me" (#601): the node id(s) an issue points at, highlighted on the
+  // board (that net drawn bright, the rest greyed) — since net names aren't visible
+  // in the diagram otherwise. Cleared by any click on the board.
+  const [highlightNodes, setHighlightNodes] = useState<string[] | null>(null)
+  const highlightNet = useMemo(() => {
+    if (!highlightNodes || !netlistData) return null
+    const endpoints = new Set<string>()
+    const ids: string[] = []
+    for (const node of netlistData.netlist.nodes) {
+      if (highlightNodes.includes(node.id)) {
+        ids.push(node.id)
+        for (const t of node.terminals) endpoints.add(t.endpoint)
+      }
+    }
+    return endpoints.size ? { endpoints, label: ids.join(', ') } : null
+  }, [highlightNodes, netlistData])
+  // Every net (netlist node) for the Connections panel's "Nets" tab (#601) — its id,
+  // kind + rail, solved voltage (index-aligned to the solver), and the pins on it.
+  const netRows = useMemo(() => {
+    if (!netlistData) return []
+    return netlistData.netlist.nodes.map((node, i) => ({
+      id: node.id,
+      kind: node.kind as string,
+      rail: node.rail,
+      voltage: solverState?.ok ? solverState.nodeVoltages[i] : undefined,
+      members: node.terminals.map((t) => t.endpoint)
+    }))
+  }, [netlistData, solverState])
 
   // Placed parts that declare MicroPython drivers needing install (#184). Drives
   // the consent-first install banner; empty (so hidden) without a robot/parts.
@@ -633,6 +817,26 @@ export function BoardGraph({
     return m
   }, [usedByCode])
 
+  // LIVE readings keyed by board pad index (#…): the same code-used pins the node
+  // graph shows, mapped to their board pads so the Breadboard can badge each with
+  // its live device value. Empty when LIVE is off.
+  const liveByPad = useMemo(() => {
+    const m = new Map<number, { text: string; asserted: boolean }>()
+    if (!liveOn) return m
+    for (const r of rows) {
+      const lv = liveValues.get(r.index)
+      if (!lv) continue
+      const disp = liveValueDisplay(r.conn.type, lv)
+      const mark = (pad: (typeof pads)[number]): void => {
+        const idx = pads.indexOf(pad)
+        if (idx >= 0) m.set(idx, { text: disp.text, asserted: disp.asserted })
+      }
+      mark(r.pad)
+      for (const ep of r.extraPads) mark(ep)
+    }
+    return m
+  }, [rows, pads, liveValues, liveOn])
+
   // Stage extent spans BOTH the node column and the physical board (with its
   // edge labels + USB nub), so zoom-to-fit always frames the whole drawing.
   // Derived from geometry, NOT the connection count — so large N grows the node
@@ -785,7 +989,14 @@ export function BoardGraph({
   }, [exportFmt, rows, def, box, pads, usedPadKeys, ledLit, stageW, stageH, rotation])
 
   return (
-    <div className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`} aria-label="Board View">
+    <div
+      className={`boardgraph ${asWindow ? 'boardgraph--window' : ''}`}
+      aria-label="Board View"
+      // Circuit Sim (#603): the DC solve's status, exposed for #604's probes + for
+      // debugging/e2e. `idle` = nothing to solve, `ok` = solved, else the degrade
+      // reason (no-ground / floating / singular / empty). No visible physics yet.
+      data-sim={solverState ? (solverState.ok ? 'ok' : solverState.reason ?? 'degraded') : 'idle'}
+    >
       <header className={`boardgraph__bar ${asWindow ? 'boardgraph__bar--drag' : ''}`}>
         {/* The 6-dot drag grip only means something in the frameless OS window
             (the bar is its drag region) — hide it in the embedded Board mode. */}
@@ -804,7 +1015,6 @@ export function BoardGraph({
           <div className="boardgraph__viewtabs" role="tablist" aria-label="Board view type">
             {(
               [
-                ['graph', 'Node graph'],
                 ['lifelike', 'Breadboard'],
                 ['schematic', 'Schematic']
               ] as const
@@ -866,11 +1076,17 @@ export function BoardGraph({
         <span className="boardgraph__chip">{def.mcu}</span>
 
         <div className="boardgraph__actions">
+          {/* ERC badge (#601): worst-severity + counts over the wiring, or a quiet
+              ✓ when clean. Shown wherever the full circuit is visible — the
+              Breadboard + node graph (not the abstract Schematic). */}
+          {wiringEnabled && effectiveView !== 'schematic' && (
+            <ErcBadge summary={ercSum} open={ercOpen} onToggle={() => setErcOpen((o) => !o)} />
+          )}
           {/* LIVE doubles as the on/off control for device polling (#97). OFF:
               dim LED, idle placeholders, device untouched. ON: lit when a board
               is connected (green, pulsing), amber while connecting/unreadable.
-              Only the node-graph shows per-pin values, so LIVE hides elsewhere. */}
-          {effectiveView === 'graph' && (
+              Shown on the node-graph + Breadboard (both display per-pin values). */}
+          {effectiveView !== 'schematic' && (
             <button
               type="button"
               className={`boardgraph__live ${liveOn ? 'is-on' : 'is-off'} ${
@@ -919,6 +1135,43 @@ export function BoardGraph({
       {wiringEnabled && <DriverInstallBanner needs={driverNeeds} />}
 
       <div className="boardgraph__body">
+      {/* ERC issues panel (#601) — floats over the board, anchored to the body.
+          Available in the Breadboard + node-graph views (not the Schematic). */}
+      {wiringEnabled && effectiveView !== 'schematic' && ercOpen && (
+        <ErcPanel
+          issues={ercIssues}
+          onClose={() => setErcOpen(false)}
+          onShowNet={(nodes) => {
+            setHighlightNodes(nodes)
+            setErcOpen(false) // close the panel so the highlighted net is unobstructed
+          }}
+        />
+      )}
+      {/* Interactive potentiometers (#605): a wiper slider per placed pot — drag to
+          turn it, the sim re-solves and the wiper's output voltage follows. */}
+      {placedPots.length > 0 && effectiveView === 'lifelike' && (
+        <div className="boardgraph__pots" role="group" aria-label="Potentiometers">
+          {placedPots.map((p) => {
+            const t = wiperPositions.get(p.key) ?? 0.5
+            return (
+              <label key={p.key} className="boardgraph__pot">
+                <span className="boardgraph__pot-name">{p.label}</span>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  value={Math.round(t * 100)}
+                  onChange={(e) =>
+                    setWiperPositions((m) => new Map(m).set(p.key, Number(e.target.value) / 100))
+                  }
+                  aria-label={`${p.label} wiper`}
+                />
+                <span className="boardgraph__pot-val">{Math.round(t * 100)}%</span>
+              </label>
+            )
+          })}
+        </div>
+      )}
       {effectiveView !== 'graph' ? (
         <>
           <div className="boardgraph__wiring">
@@ -933,6 +1186,25 @@ export function BoardGraph({
               jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
+              voltage={
+                solverCircuit
+                  ? {
+                      byEndpoint: endpointVoltage,
+                      currentByWire,
+                      ref: overlayRefV,
+                      on: voltsOverlay,
+                      ready: !!solverState?.ok,
+                      reason: solverState && !solverState.ok ? solverState.reason : undefined,
+                      toggle: () => setVoltsOverlay((o) => !o)
+                    }
+                  : undefined
+              }
+              live={liveOn ? { byPad: liveByPad, connected: liveConnected } : undefined}
+              highlight={
+                highlightNet ? { ...highlightNet, clear: () => setHighlightNodes(null) } : undefined
+              }
+              nets={netRows}
+              onHighlightNet={(id) => setHighlightNodes(id ? [id] : null)}
               onDropPart={onAddToProject ? handleAddToProject : undefined}
               onShowHelp={(id) => {
                 const rp = (robot?.parts ?? []).find((p) => p.id === id)
@@ -985,7 +1257,7 @@ export function BoardGraph({
                   </button>
                 </div>
                 <div className="boardgraph__dock-body">
-                  <PartsPanel onAddToProject={handleAddToProject} />
+                  <PartsPanel onAddToProject={handleAddToProject} onAddManyToProject={onAddManyToProject} />
                 </div>
               </aside>
             ) : (
@@ -1094,22 +1366,37 @@ export function BoardGraph({
                   )}
                 </g>
 
-                {/* Drooping noodle wires from each node dot to its REAL pad. */}
+                {/* Drooping noodle wires from each node dot to its REAL pad. With the
+                    voltage overlay ON (#604) a wire/dot is coloured by its SOLVED node
+                    voltage instead of its pin-type colour. */}
                 <g fill="none" strokeLinecap="round" filter="url(#bg-glow)" opacity="0.92">
-                  {rows.map((r, i) => (
-                    <path
-                      key={`wire-${i}`}
-                      d={wirePathFor(r.side, r.y, r.pad)}
-                      stroke={r.color}
-                      strokeWidth="2.6"
-                    />
-                  ))}
+                  {rows.map((r, i) => {
+                    const v = overlayActive ? padVoltage.get(pads.indexOf(r.pad)) : undefined
+                    return (
+                      <path
+                        key={`wire-${i}`}
+                        d={wirePathFor(r.side, r.y, r.pad)}
+                        stroke={v !== undefined ? voltageColour(v, overlayRefV) : r.color}
+                        strokeWidth="2.6"
+                      />
+                    )
+                  })}
                 </g>
-                {/* Node-side solder dots. */}
+                {/* Node-side solder dots (+ a voltage badge over each in overlay mode). */}
                 <g>
-                  {rows.map((r, i) => (
-                    <circle key={`dot-${i}`} cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={r.color} />
-                  ))}
+                  {rows.map((r, i) => {
+                    const v = overlayActive ? padVoltage.get(pads.indexOf(r.pad)) : undefined
+                    return (
+                      <g key={`dot-${i}`}>
+                        <circle cx={dotXFor(r.side)} cy={r.y} r="4.5" fill={v !== undefined ? voltageColour(v, overlayRefV) : r.color} />
+                        {v !== undefined && (
+                          <text x={dotXFor(r.side)} y={r.y - 8} textAnchor="middle" className="boardgraph__volt-badge">
+                            {formatVoltage(v)}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })}
                 </g>
                 {/* Pin labels + variable names OVER the wires (#…): the board body
                     was drawn under the wires with its labels hidden; re-draw ONLY
@@ -1260,6 +1547,28 @@ export function BoardGraph({
                   />
                 </svg>
               </button>
+              {/* Node-voltage overlay toggle (#604) — only when there's a solvable
+                  circuit (electrical parts wired up). */}
+              {solverCircuit && (
+                <button
+                  type="button"
+                  className={`boardgraph__vbtn${voltsOverlay ? ' is-active' : ''}`}
+                  onClick={() => setVoltsOverlay((o) => !o)}
+                  aria-pressed={voltsOverlay}
+                  title={
+                    voltsOverlay
+                      ? 'Hide node voltages'
+                      : solverState?.ok
+                        ? 'Show node voltages (Circuit Sim)'
+                        : 'Node voltages — power + ground a circuit to see them'
+                  }
+                  aria-label="Toggle node-voltage overlay"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+                  </svg>
+                </button>
+              )}
               <span className="boardgraph__vsep" aria-hidden="true" />
               <div className="boardgraph__export">
                 <button

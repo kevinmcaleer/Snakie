@@ -43,12 +43,14 @@ import {
 import type {
   ComponentShape,
   ComponentShapeKind,
+  ElectricalModel,
   ImageLayer,
   MountingHole,
   OnboardLed,
   PartButton,
   PartConnector,
   PartDefinition,
+  PartElectrical,
   PartHeader,
   PartLabel,
   PartLibrary,
@@ -292,6 +294,37 @@ function selectionLockKey(sel: CanvasSelection): keyof LayerLocks | null {
   }
 }
 
+/**
+ * Flatten an imported image to SDR sRGB. iPhone photos are frequently **HDR** —
+ * Display P3 with a PQ transfer + gain map — and Snakie's board UI is SDR, so the
+ * HDR encoding renders flat / desaturated (washed out) next to a plain-sRGB image.
+ * Drawing to a default (sRGB, SDR) canvas tone-maps the HDR down and gamut-maps
+ * P3 → sRGB, giving a standard image that looks the same everywhere. PNGs stay PNG
+ * (crisp edges / transparency); everything else re-encodes as JPEG (small). Returns
+ * the original untouched on any failure — an import must never be blocked.
+ */
+function flattenImportedImage(dataUrl: string): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const canvas = document.createElement('canvas')
+      canvas.width = img.naturalWidth
+      canvas.height = img.naturalHeight
+      const ctx = canvas.getContext('2d')
+      if (!ctx || canvas.width === 0 || canvas.height === 0) return resolve(dataUrl)
+      ctx.drawImage(img, 0, 0)
+      try {
+        const png = /^data:image\/png/i.test(dataUrl)
+        resolve(png ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.92))
+      } catch {
+        resolve(dataUrl) // tainted canvas etc. — keep the original bytes
+      }
+    }
+    img.onerror = () => resolve(dataUrl)
+    img.src = dataUrl
+  })
+}
+
 export function PartEditor({
   libraryId,
   initial,
@@ -434,10 +467,13 @@ export function PartEditor({
     const file = e.target.files?.[0]
     if (!file) return
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       if (typeof reader.result === 'string') {
-        patch({ imageData: reader.result })
-        setImageOriginal(reader.result) // a fresh upload is the new pristine original
+        // Flatten HDR (iPhone Display-P3/PQ) photos to SDR sRGB so they don't render
+        // washed out in the SDR board UI; already-SDR images pass through unchanged.
+        const flat = await flattenImportedImage(reader.result)
+        patch({ imageData: flat })
+        setImageOriginal(flat) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
         setTool('select')
@@ -546,10 +582,17 @@ export function PartEditor({
     const lk = selectionLockKey(sel)
     if (lk && locked[lk]) return
     if (sel.type === 'pin') {
+      // A grouped pin (servo header) deletes its whole Signal/V+/GND trio.
+      const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
       setPart((d) => ({
         ...d,
         headers: d.headers
-          .map((h, i) => (i === sel.hi ? { ...h, pins: h.pins.filter((_, j) => j !== sel.pi) } : h))
+          .map((h, i) => ({
+            ...h,
+            pins: grp
+              ? h.pins.filter((p) => p.group !== grp)
+              : h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
+          }))
           .filter((h) => h.pins.length > 0)
       }))
     } else if (sel.type === 'hole') {
@@ -978,6 +1021,9 @@ function LayersPanel({
   const [dragRow, setDragRow] = useState<number | null>(null)
   const [dragOver, setDragOver] = useState<number | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  // Which servo-header groups are expanded in the pin list (collapsed by default so
+  // a board of servo headers reads as one row each, not three).
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   const pins = resolvedPins(part)
   // The Pins list reads best sorted: by board number when a pin has one (numbered
   // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
@@ -1235,6 +1281,19 @@ function LayersPanel({
           {lock('pins')}
           <span className="pe__layer-name">Pins</span>
           <span className="pe__layer-count">{counts.pins}</span>
+          <button
+            type="button"
+            className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
+            onClick={() => setTool('servo-header')}
+            title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
+            aria-label="Add servo header"
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />
+              <rect x="4" y="4.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.7" />
+              <rect x="4" y="8.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.5" />
+            </svg>
+          </button>
           <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
             ＋
           </button>
@@ -1242,14 +1301,61 @@ function LayersPanel({
         {isOpen('pins') && (
           <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
-            {sortedPins.map((rp) => (
-              <li key={`p${rp.hi}-${rp.pi}`} className={`pe__flatrow pe__flatrow--pin${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}>
-                <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
-                  <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
-                </button>
-                <span className="pe__flathelp">{rp.pin.type}</span>
-              </li>
-            ))}
+            {(() => {
+              // A single flat pin row (used for ungrouped pins + expanded members).
+              const pinRow = (rp: (typeof sortedPins)[number], member = false): JSX.Element => (
+                <li
+                  key={`p${rp.hi}-${rp.pi}`}
+                  className={`pe__flatrow pe__flatrow--pin${member ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                >
+                  <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+                    <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
+                  </button>
+                  {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
+                  <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
+                </li>
+              )
+              // Servo-header groups collapse to ONE row (expandable); ungrouped pins
+              // render inline. Members within a group read Signal → V+ → GND.
+              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
+              const seen = new Set<string>()
+              const rows: JSX.Element[] = []
+              for (const rp of sortedPins) {
+                const g = rp.pin.group
+                if (!g) {
+                  rows.push(pinRow(rp))
+                  continue
+                }
+                if (seen.has(g)) continue
+                seen.add(g)
+                const members = sortedPins
+                  .filter((p) => p.pin.group === g)
+                  .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
+                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
+                const open = !!expandedGroups[g]
+                const active = members.some((p) => selEq({ type: 'pin', hi: p.hi, pi: p.pi }))
+                rows.push(
+                  <li key={`g${g}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`}>
+                    <button
+                      type="button"
+                      className="pe__flatcaret"
+                      onClick={() => setExpandedGroups((s) => ({ ...s, [g]: !open }))}
+                      aria-expanded={open}
+                      title={open ? 'Collapse header' : 'Expand header'}
+                    >
+                      {open ? '▾' : '▸'}
+                    </button>
+                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: signal.hi, pi: signal.pi })}>
+                      <span className="pe__item-name">{signal.pin.name || 'Header'}</span>
+                      <span className="pe__flatsub">servo · S/V/G</span>
+                    </button>
+                    <span className="pe__flattype pe__flattype--group">header</span>
+                  </li>
+                )
+                if (open) for (const m of members) rows.push(pinRow(m, true))
+              }
+              return rows
+            })()}
           </ul>
         )}
       </div>
@@ -1493,7 +1599,179 @@ function Inspector(props: InspectorProps): JSX.Element {
           </select>
         </label>
       </section>
+
+      {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
+      <ElectricalSection part={part} patch={patch} names={props.names} />
     </>
+  )
+}
+
+const ELECTRICAL_MODELS: { value: ElectricalModel; label: string }[] = [
+  { value: 'passive', label: 'Passive (no model)' },
+  { value: 'source', label: 'Source (battery / PSU)' },
+  { value: 'regulator', label: 'Regulator (LDO / buck)' },
+  { value: 'consumer', label: 'Consumer (load)' },
+  { value: 'resistor', label: 'Resistor' },
+  { value: 'potentiometer', label: 'Potentiometer' },
+  { value: 'led', label: 'LED' },
+  { value: 'diode', label: 'Diode' },
+  { value: 'switch', label: 'Switch / button' }
+]
+
+/** Keys of {@link PartElectrical} that hold a single number, for the shared field helper. */
+type ElectricalNumKey =
+  | 'vf'
+  | 'resistanceOhms'
+  | 'supplyV'
+  | 'maxCurrentA'
+  | 'capacityMah'
+  | 'currentDrawA'
+  | 'stallCurrentA'
+  | 'outputV'
+  | 'dropoutV'
+
+/**
+ * The **Electrical** inspector section (#600) — the in-app editor for a part's
+ * {@link PartElectrical} block, so behaviour no longer has to be hand-authored in
+ * `parts.yml`. A model dropdown reveals only the fields that model reads; terminals
+ * and rails are picked from the part's own pins so they can't be mistyped.
+ */
+function ElectricalSection({
+  part,
+  patch,
+  names
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  names: string[]
+}): JSX.Element {
+  const el: PartElectrical = part.electrical ?? { model: 'passive' }
+  const model = el.model
+  // Patch the block; picking `passive` with nothing else drops it (keeps YAML clean).
+  const setEl = (p: Partial<PartElectrical>): void => {
+    const next = { ...el, ...p }
+    if (next.model === 'passive') patch({ electrical: undefined })
+    else patch({ electrical: next })
+  }
+  const num = (key: ElectricalNumKey, label: string, step = 'any', hint?: string): JSX.Element => (
+    <label className="pe__field">
+      <span>{label}</span>
+      <input
+        type="number"
+        step={step}
+        value={el[key] ?? ''}
+        placeholder={hint}
+        onChange={(e) => setEl({ [key]: e.target.value === '' ? undefined : Number(e.target.value) } as Partial<PartElectrical>)}
+      />
+    </label>
+  )
+  const pinSelect = (
+    label: string,
+    value: string | undefined,
+    onChange: (v: string | undefined) => void
+  ): JSX.Element => (
+    <label className="pe__field">
+      <span>{label}</span>
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value || undefined)}>
+        <option value="">—</option>
+        {names.map((n) => (
+          <option key={n} value={n}>
+            {n}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+  const setTerminal = (side: 'positive' | 'negative', v: string | undefined): void =>
+    setEl({ terminals: { ...el.terminals, [side]: v } })
+  // The +/− pin pickers, labelled for the model (anode/cathode for diodes, etc.).
+  const terminals = (posLabel = '+ terminal', negLabel = '− terminal'): JSX.Element => (
+    <div className="pe__row">
+      {pinSelect(posLabel, el.terminals?.positive, (v) => setTerminal('positive', v))}
+      {pinSelect(negLabel, el.terminals?.negative, (v) => setTerminal('negative', v))}
+    </div>
+  )
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">Electrical</h3>
+      <label className="pe__field">
+        <span>Model</span>
+        <select value={model} onChange={(e) => setEl({ model: e.target.value as ElectricalModel })}>
+          {ELECTRICAL_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {model === 'source' && (
+        <>
+          <div className="pe__row">
+            {num('supplyV', 'Supply (V)')}
+            {num('capacityMah', 'Capacity (mAh)')}
+          </div>
+          <div className="pe__row">
+            {num('resistanceOhms', 'Internal R (Ω)')}
+            {num('maxCurrentA', 'Max current (A)')}
+          </div>
+          {terminals()}
+        </>
+      )}
+
+      {model === 'regulator' && (
+        <>
+          <div className="pe__row">
+            {pinSelect('Input rail', el.inputRail, (v) => setEl({ inputRail: v }))}
+            {pinSelect('Output rail', el.outputRail, (v) => setEl({ outputRail: v }))}
+          </div>
+          <div className="pe__row">
+            {num('outputV', 'Output (V)')}
+            {num('dropoutV', 'Dropout (V)')}
+          </div>
+          {num('maxCurrentA', 'Max current (A)')}
+          <p className="pe__hint">Holds the output rail at its voltage, drawn from the input rail (only when powered).</p>
+        </>
+      )}
+
+      {model === 'consumer' && (
+        <>
+          <div className="pe__row">
+            {num('currentDrawA', 'Typical draw (A)')}
+            {num('stallCurrentA', 'Peak / stall (A)')}
+          </div>
+          {num('maxCurrentA', 'Max current (A)')}
+          {terminals()}
+        </>
+      )}
+
+      {model === 'resistor' && (
+        <>
+          {num('resistanceOhms', 'Resistance (Ω)')}
+          {terminals()}
+        </>
+      )}
+
+      {model === 'potentiometer' && (
+        <>
+          {num('resistanceOhms', 'Track (Ω)')}
+          {pinSelect('Wiper pin', el.wiper, (v) => setEl({ wiper: v }))}
+          {terminals('VCC pin', 'GND pin')}
+        </>
+      )}
+
+      {(model === 'led' || model === 'diode') && (
+        <>
+          {num('vf', 'Forward drop Vf (V)')}
+          {terminals('Anode (+)', 'Cathode (−)')}
+        </>
+      )}
+
+      {model === 'switch' && terminals('Pin A', 'Pin B')}
+
+      {model === 'passive' && <p className="pe__hint">No electrical behaviour — the part is drawn but wires pass through it.</p>}
+    </section>
   )
 }
 
@@ -1711,6 +1989,18 @@ function SelectionInspector({
             i === selection.hi ? { ...h, pins: h.pins.map((pp, j) => (j === selection.pi ? { ...pp, ...p } : pp)) } : h
           )
         }))
+      // Break this pin's servo-header group apart so its pads move individually.
+      const ungroup = (): void => {
+        const g = pin.group
+        if (!g) return
+        setPart((d) => ({
+          ...d,
+          headers: d.headers.map((h) => ({
+            ...h,
+            pins: h.pins.map((pp) => (pp.group === g ? { ...pp, group: undefined } : pp))
+          }))
+        }))
+      }
       const toggleCap = (c: PartPinCapability): void => {
         const has = pin.capabilities?.includes(c)
         updatePin({ capabilities: has ? (pin.capabilities ?? []).filter((x) => x !== c) : [...(pin.capabilities ?? []), c] })
@@ -1825,6 +2115,24 @@ function SelectionInspector({
               ))}
             </select>
           </label>
+          {/* Suppress the silk annotation for the repeated V+/GND rows of a servo /
+              DuPont header block — the pad + its role stay, only the label is hidden
+              (the shared legend / photo carries the +/− marking). */}
+          <label className="pe__field" style={{ flexDirection: 'row', alignItems: 'center', gap: '0.4rem' }}>
+            <input
+              type="checkbox"
+              checked={pin.labelHidden === true}
+              onChange={(e) => updatePin({ labelHidden: e.target.checked ? true : undefined })}
+            />
+            <span>Hide label (servo V+/GND row)</span>
+          </label>
+          {/* Part of a servo-header group → offer to break it apart (the pads then
+              move individually). Shown only for grouped pins. */}
+          {pin.group && (
+            <button type="button" className="pe__btn" onClick={ungroup} title="Break this servo header into individual pins">
+              Ungroup servo header
+            </button>
+          )}
           {/* Rotation applies to EVERY pin — it turns the silk label (and the
               half-hole on castellated pads). Shown for all shapes so the label can
               be aimed any of the four ways; the degree readout confirms it saved. */}

@@ -39,7 +39,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, connectorGlyph, connectorLabel, connectorSize, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -89,6 +89,7 @@ export type CanvasTool =
   | 'move'
   | 'shape'
   | 'pin'
+  | 'servo-header'
   | 'hole'
   | 'button'
   | 'text'
@@ -265,6 +266,7 @@ interface Drag {
     | 'move-vertex'
     | 'move-shape-vertex'
     | 'create-array'
+    | 'servo-strip'
     | 'marquee'
   sel: CanvasSelection
   corner?: number
@@ -284,6 +286,9 @@ interface Drag {
   /** A modifier (shift/ctrl)-click on a pin: toggle its alignment-selection
    *  membership on a no-move release; a drag instead moves it (#170). */
   toggleSel?: boolean
+  /** When the dragged pin belongs to a servo-header group, the offsets of every
+   *  group pin from the dragged one — so the whole trio moves rigidly as a unit. */
+  groupOffsets?: { hi: number; pi: number; dx: number; dy: number }[]
 }
 
 export function PartCanvas({
@@ -317,6 +322,8 @@ export function PartCanvas({
   const [gridKey, setGridKey] = useState(false)
   // Live preview of the pins a "drag from the selected pin" gesture will create.
   const [createPreview, setCreatePreview] = useState<{ axis: 'x' | 'y'; dir: number; n: number } | null>(null)
+  // Live count while dragging out a servo-header strip (start pad + how many).
+  const [stripPreview, setStripPreview] = useState<{ x: number; y: number; n: number } | null>(null)
   // Multi-select of pins (marquee / shift-click) for the alignment toolbar.
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   // Multi-select of components (shapes + labels) — same marquee / shift-click
@@ -385,6 +392,30 @@ export function PartCanvas({
   // Board px-per-mm (from real dimensions) so physical parts like JST/QWIIC
   // connectors draw life-size; 0 when the part has no mm dimensions (legacy size).
   const connPxPerMm = part.dimensions && part.dimensions.width > 0 ? box.w / part.dimensions.width : 0
+  // The fixed pad + number-box + label sizes were tuned for a comfortable pin
+  // pitch. On a dense/large board they render tighter than those fixed sizes, so
+  // the holes, number boxes and labels overlap. `pinScale` shrinks them together
+  // when the pitch is tight, and is 1 at a comfortable pitch so normal boards are
+  // unchanged (#…). PIN_PITCH_REF ≈ the gap (px) the fixed 14px number-box wants.
+  const PIN_PITCH_REF = 21
+  // The nominal pitch (mm-pitch × px-per-mm) OVERESTIMATES the real room: pins are
+  // often packed tighter than the nominal pinSpacing (e.g. the Servo 2040's 3-pin
+  // servo clusters render ~9px apart, under the nominal 2.54mm ≈ 12px), so drive
+  // the scale off the ACTUAL tightest centre-to-centre gap between rendered pins.
+  const nominalPitchPx = connPxPerMm > 0 ? spacing * connPxPerMm : 0
+  let minPinGapPx = Infinity
+  for (let i = 0; i < pins.length; i++) {
+    for (let j = i + 1; j < pins.length; j++) {
+      const d = Math.hypot((pins[i].x - pins[j].x) * box.w, (pins[i].y - pins[j].y) * box.h)
+      if (d > 0.5 && d < minPinGapPx) minPinGapPx = d
+    }
+  }
+  const pitchPx = Number.isFinite(minPinGapPx)
+    ? nominalPitchPx > 0
+      ? Math.min(minPinGapPx, nominalPitchPx)
+      : minPinGapPx
+    : nominalPitchPx
+  const pinScale = pitchPx > 0 ? Math.max(0.25, Math.min(1, pitchPx / PIN_PITCH_REF)) : 1
   /** A hole's drawn (and collision) radius in viewBox units. */
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
@@ -547,6 +578,44 @@ export function PartCanvas({
     }
     onSelect?.({ type: 'pin', hi: rp.hi, pi: rp.pi })
   }
+  /** Set an onboard-LED / connector label's manual offset (a fraction of the board
+   *  box); undefined near zero so a label dragged home reverts to the default. */
+  const setCompLabelOffset = (
+    target: { type: 'led' | 'connector'; index: number },
+    x: number,
+    y: number
+  ): void => {
+    const off = Math.abs(x) < 0.004 && Math.abs(y) < 0.004 ? undefined : { x, y }
+    if (target.type === 'led') {
+      commit({
+        ...part,
+        onboardLeds: (part.onboardLeds ?? []).map((l, i) =>
+          i === target.index ? { ...l, labelOffset: off } : l
+        )
+      })
+    } else {
+      commit({
+        ...part,
+        connectors: (part.connectors ?? []).map((c, i) =>
+          i === target.index ? { ...c, labelOffset: off } : c
+        )
+      })
+    }
+  }
+  /** Begin dragging an LED/connector silk label to a hand-placed spot. */
+  const startCompLabelDrag = (
+    e: ReactPointerEvent,
+    sel: { type: 'led' | 'connector'; index: number },
+    curOffset?: { x: number; y: number }
+  ): void => {
+    if (!interactive || locked.components) return
+    e.stopPropagation()
+    svgRef.current?.setPointerCapture?.(e.pointerId)
+    const { nx, ny } = toNorm(e)
+    const lo = curOffset ?? { x: 0, y: 0 }
+    dragRef.current = { kind: 'move-label', sel, startNX: nx, startNY: ny, ox: lo.x, oy: lo.y }
+    onSelect?.(sel)
+  }
   const moveShapeTo = (index: number, nx: number, ny: number, presnapped = false): void => {
     const sx = presnapped ? nx : snapX(nx)
     const sy = presnapped ? ny : snapY(ny)
@@ -683,6 +752,53 @@ export function PartCanvas({
     }))
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...newPins] } : h)) })
+  }
+
+  /** One servo/DuPont header trio at (sx, sy): a vertical Signal / V+ / GND stack at
+   *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
+   *  all sharing `gid` so they move + delete as one unit. */
+  const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
+    { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
+    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
+    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
+  ]
+
+  /** Drop `n` pre-wired servo headers in a row starting at (nx, ny), spaced one pin
+   *  pitch apart along x (n = 1 for a plain click; more for a drag-strip). The
+   *  signals' GPIOs are left for the user to set. */
+  const addServoHeaders = (nx: number, ny: number, n = 1): void => {
+    const sx = snapX(nx)
+    const sy = snapY(ny)
+    if (inHole(sx, sy)) {
+      onNotify?.("Can't place a servo header on a mounting hole.")
+      return
+    }
+    const groups = new Set<string>()
+    for (const h of part.headers) for (const p of h.pins) if (p.group) groups.add(p.group)
+    let idx = groups.size
+    const trios: PartPin[] = []
+    for (let k = 0; k < Math.max(1, n); k++) {
+      idx += 1
+      trios.push(...servoTrio(clamp01(sx + k * stepNX), sy, `servo-${idx}`, idx))
+    }
+    const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
+    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)) })
+    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the first signal
+  }
+
+  /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and
+   *  the rest follow by their captured offsets — so a servo header stays intact. */
+  const moveGroupTo = (offsets: { hi: number; pi: number; dx: number; dy: number }[], baseX: number, baseY: number): void => {
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const o = offsets.find((off) => off.hi === hi && off.pi === pi)
+          return o ? { ...p, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : p
+        })
+      }))
+    })
   }
 
   // --- multi-select + alignment (#…) ----------------------------------------
@@ -1347,9 +1463,22 @@ export function PartCanvas({
         }
       }
     }
-    if (visible.pins && !locked.pins)
-      for (let i = pins.length - 1; i >= 0; i--)
-        if (dist(nx, ny, pins[i].x, pins[i].y) < HIT) return { type: 'pin', hi: pins[i].hi, pi: pins[i].pi }
+    if (visible.pins && !locked.pins) {
+      // Pick the NEAREST pin within HIT — not the first match. On a dense board
+      // (Servo 2040 renders ~9px pitch) HIT (14px) overlaps several pins, so
+      // returning the first in reverse order grabbed the neighbour to the RIGHT
+      // instead of the pad actually under the cursor.
+      let best = -1
+      let bestD = HIT
+      for (let i = 0; i < pins.length; i++) {
+        const d = dist(nx, ny, pins[i].x, pins[i].y)
+        if (d < bestD) {
+          bestD = d
+          best = i
+        }
+      }
+      if (best >= 0) return { type: 'pin', hi: pins[best].hi, pi: pins[best].pi }
+    }
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
@@ -1379,6 +1508,16 @@ export function PartCanvas({
     }
     // Creation tools no-op on a locked layer.
     if (tool === 'pin') return locked.pins ? undefined : addPin(nx, ny)
+    if (tool === 'servo-header') {
+      // Down starts a strip drag: a plain click places one header, dragging right
+      // lays a row of N at the pin pitch (committed on release).
+      if (locked.pins) return
+      const sx = snapX(nx)
+      const sy = snapY(ny)
+      dragRef.current = { kind: 'servo-strip', sel: null, startNX: sx, startNY: sy, ox: sx, oy: sy }
+      setStripPreview({ x: sx, y: sy, n: 1 })
+      return
+    }
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
     if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
@@ -1537,10 +1676,24 @@ export function PartCanvas({
     }
     let ox = 0
     let oy = 0
+    let groupOffsets: { hi: number; pi: number; dx: number; dy: number }[] | undefined
     if (hit.type === 'pin') {
       const rp = pins.find((p) => p.hi === hit.hi && p.pi === hit.pi)
       ox = rp?.x ?? nx
       oy = rp?.y ?? ny
+      // Grouped pin (servo header) → capture the whole trio's offsets so the group
+      // moves rigidly with the dragged pad.
+      const grp = part.headers[hit.hi]?.pins[hit.pi]?.group
+      if (grp) {
+        groupOffsets = []
+        part.headers.forEach((h, hi) =>
+          h.pins.forEach((p, pi) => {
+            if (p.group === grp && p.x !== undefined && p.y !== undefined) {
+              groupOffsets!.push({ hi, pi, dx: p.x - ox, dy: p.y - oy })
+            }
+          })
+        )
+      }
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
@@ -1563,7 +1716,7 @@ export function PartCanvas({
       ox = layer.x
       oy = layer.y
     }
-    dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy }
+    dragRef.current = { kind: 'move-obj', sel: hit, startNX: nx, startNY: ny, ox, oy, groupOffsets }
   }
 
   const viewBoxScale = (): number => {
@@ -1587,6 +1740,17 @@ export function PartCanvas({
     if (d.kind === 'move-label' && d.sel?.type === 'pin') {
       // Move the pin's label annotation by the drag delta (fraction of the box).
       setLabelOffset(d.sel.hi, d.sel.pi, d.ox + dx, d.oy + dy)
+      return
+    }
+    if (d.kind === 'move-label' && (d.sel?.type === 'led' || d.sel?.type === 'connector')) {
+      // Move the component's silk label by the drag delta (fraction of the box).
+      setCompLabelOffset(d.sel, d.ox + dx, d.oy + dy)
+      return
+    }
+    if (d.kind === 'servo-strip') {
+      // Drag right/left from the start pad to set how many headers the strip lays.
+      const n = Math.max(1, Math.min(64, Math.round(Math.abs(nx - d.startNX) / stepNX) + 1))
+      setStripPreview({ x: d.startNX, y: d.startNY, n })
       return
     }
     if (d.kind === 'marquee') {
@@ -1719,7 +1883,11 @@ export function PartCanvas({
       // Hold Shift for completely free movement — no alignment guides / snapping
       // (Ctrl/Cmd also disables it, mirroring the resize handler).
       const noSnap = e.shiftKey || e.ctrlKey || e.metaKey
-      if (d.sel.type === 'pin' && d.anchor) {
+      if (d.sel.type === 'pin' && d.groupOffsets) {
+        // Servo-header group: snap the dragged pad, move the whole trio rigidly.
+        moveGroupTo(d.groupOffsets, noSnap ? x : snapX(x), noSnap ? y : snapY(y))
+        setGuides(null)
+      } else if (d.sel.type === 'pin' && d.anchor) {
         // Ghost-array drag keeps its 2.54mm lock; no alignment guides.
         movePinTo(d.sel.hi, d.sel.pi, x, y, d.anchor)
         setGuides(null)
@@ -1762,8 +1930,16 @@ export function PartCanvas({
     dragRef.current = null
     const preview = createPreview
     setCreatePreview(null)
+    const strip = stripPreview
+    setStripPreview(null)
     setGuides(null) // drop any alignment guides
     if (!d || !interactive) return
+
+    // Servo-header strip → place N headers in a row (N=1 for a plain click).
+    if (d.kind === 'servo-strip') {
+      addServoHeaders(d.startNX, d.startNY, strip?.n ?? 1)
+      return
+    }
 
     // Marquee → select the pins + components whose centre is inside the box.
     if (d.kind === 'marquee') {
@@ -1932,7 +2108,7 @@ export function PartCanvas({
   const cutHoles = visible.holes && holes.length > 0
   // Pin/castellation through-holes to cut through the PCB + image + copper (#171).
   const pinHoleList = visible.pins
-    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12, rp.x, rp.pin.rotation))
+    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), 12 * pinScale, rp.x, rp.pin.rotation))
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
 
@@ -2073,31 +2249,31 @@ export function PartCanvas({
           </g>
         )}
 
-        {/* Layer 2: hole plating rings (on top of the cutout) */}
+        {/* Layer 2: hole selection ring only — a hole is a bare cutout (the mask
+            punches it out); a ring shows ONLY when it's selected, so it stays
+            grabbable in the editor without a border in normal use. */}
         {visible.holes &&
-          holes.map((h, i) => (
-            <circle
-              key={`h${i}`}
-              cx={px(h.x)}
-              cy={py(h.y)}
-              r={holeR(h.diameter)}
-              fill="none"
-              stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'}
-              strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
-            />
-          ))}
+          holes.map((h, i) =>
+            isSel({ type: 'hole', index: i }) ? (
+              <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
+            ) : null
+          )}
 
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-            const size = 12
+            const shape = pinShapeOf(rp.pin)
+            // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
+            // octagonal servo/DuPont header pads, which draw at a fixed physical
+            // 2.4mm — big and close like the real thing.
+            const size =
+              shape === 'octagonal' && connPxPerMm > 0 ? 2.4 * connPxPerMm : 12 * pinScale
             const cx = px(rp.x)
             const cy = py(rp.y)
             const stroke = sel ? '#fff' : '#0008'
             const sw = sel ? 3 : 1
-            const shape = pinShapeOf(rp.pin)
             const pinLabel = rp.pin.label || rp.pin.name
             // Show the GP## GPIO next to the pin when the silk label differs from
             // it (so the actual GPIO is always visible in the editor).
@@ -2115,19 +2291,31 @@ export function PartCanvas({
               pad = (
                 <>
                   <circle cx={cx} cy={cy} r={size / 2} fill="#c79a4e" stroke={stroke} strokeWidth={sw} />
-                  <circle cx={cx} cy={cy} r={size / 2 - 3.5} fill="var(--bc-mat, #0c0f12)" />
+                  <circle cx={cx} cy={cy} r={Math.max(0.8, size / 2 - 3.5 * pinScale)} fill="var(--bc-mat, #0c0f12)" />
                 </>
               )
+            } else if (shape === 'octagonal') {
+              pad = octagonalPad(cx, cy, size, fill, stroke, sw)
             } else {
               pad = (
                 <>
                   <rect x={cx - size / 2} y={cy - size / 2} width={size} height={size} rx={2} fill={fill} stroke={stroke} strokeWidth={sw} />
-                  <circle cx={cx} cy={cy} r={2.3} fill="var(--bc-mat, #0c0f12)" />
+                  <circle cx={cx} cy={cy} r={2.3 * pinScale} fill="var(--bc-mat, #0c0f12)" />
                 </>
               )
             }
             const lo = rp.pin.labelOffset
-            const labelTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+            const dragTf = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+            // Shrink the number-box + label on a tight pitch — pivoted at the BOARD
+            // EDGE the annotation is anchored to (via boxedPinLabel), NOT the pin. A
+            // pin set in from the edge (e.g. the Servo 2040's headers at y≈0.17) keeps
+            // its label out in the margin instead of being dragged inward over the
+            // image. Any hand-placed drag offset stays unscaled (#…).
+            const bdir = pinOutwardDir(rp.pin.rotation, rp.x, rp.y)
+            const epx = bdir === 'left' ? box.x : bdir === 'right' ? box.x + box.w : cx
+            const epy = bdir === 'top' ? box.y : bdir === 'bottom' ? box.y + box.h : cy
+            const scaleTf = pinScale !== 1 ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})` : undefined
+            const labelTf = [scaleTf, dragTf].filter(Boolean).join(' ') || undefined
             const labelDraggable = interactive && !locked.pins
             return (
               <g key={`p${i}`}>
@@ -2136,7 +2324,9 @@ export function PartCanvas({
                 {hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad}
                 {/* The pin's label annotation (number box + label + chips) — a single
                     group so it can be DRAGGED to a hand-placed spot (#…), stored as
-                    `labelOffset` and applied here as a translate. */}
+                    `labelOffset` and applied here as a translate. `labelHidden` pins
+                    (a servo header's V+/GND rows) draw the pad only — no annotation. */}
+                {!rp.pin.labelHidden && (
                 <g
                   transform={labelTf}
                   className={labelDraggable ? 'pcv__pinlabel--drag' : undefined}
@@ -2169,6 +2359,7 @@ export function PartCanvas({
                     rp.pin.buses
                   )}
                 </g>
+                )}
               </g>
             )
           })}
@@ -2192,6 +2383,42 @@ export function PartCanvas({
                   <circle key={`g${k}-${j}`} cx={px(s.x)} cy={py(s.y)} r={5} fill="#d6a531" opacity={opacity} />
                 ))
             })}
+          </g>
+        )}
+
+        {/* Live preview of a servo-header STRIP being dragged out: a faint S/V/G
+            column per header + a count badge. */}
+        {interactive && stripPreview && (
+          <g className="pcv__strip-preview" aria-hidden="true" style={{ pointerEvents: 'none' }}>
+            {Array.from({ length: stripPreview.n }, (_, k) => {
+              const x = clamp01(stripPreview.x + k * stepNX)
+              const r = connPxPerMm > 0 ? 1.2 * connPxPerMm : 5
+              return [0, 1, 2].map((row) => {
+                const y = clamp01(stripPreview.y + row * stepNY)
+                return (
+                  <circle
+                    key={`sp${k}-${row}`}
+                    cx={px(x)}
+                    cy={py(y)}
+                    r={r}
+                    fill={row === 0 ? '#d6a531' : row === 1 ? '#c0392b' : '#3a3f44'}
+                    stroke="#fff"
+                    strokeWidth={0.8}
+                    opacity={0.7}
+                  />
+                )
+              })
+            })}
+            <text
+              x={px(clamp01(stripPreview.x + (stripPreview.n - 1) * stepNX)) + 10}
+              y={py(stripPreview.y) - 6}
+              className="pcv__strip-count"
+              fill="#fff"
+              fontSize={11}
+              fontWeight={700}
+            >
+              ×{stripPreview.n}
+            </text>
           </g>
         )}
 
@@ -2324,10 +2551,18 @@ export function PartCanvas({
               const cx = px(led.x)
               const cy = py(led.y)
               const sel = isSel({ type: 'led', index: i })
+              const labelY = cy + 18
+              const draggable = interactive && !locked.components
               return (
                 <g key={`led${i}`}>
-                  {onboardLedGlyph(cx, cy, led, sel)}
-                  {styledText({ text: onboardLedLabel(led), cx, cy: cy + 18, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
+                  <g
+                    transform={componentLabelTransform(cx, labelY, box.w, box.h, led.labelOffset, led.labelRotation)}
+                    className={draggable ? 'pcv__pinlabel--drag' : undefined}
+                    onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'led', index: i }, led.labelOffset) : undefined}
+                  >
+                    {styledText({ text: onboardLedLabel(led), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                 </g>
               )
             }
@@ -2338,10 +2573,18 @@ export function PartCanvas({
               const cy = py(conn.y)
               const { h: connH } = connectorSize(conn, connPxPerMm)
               const sel = isSel({ type: 'connector', index: i })
+              const labelY = cy + connH / 2 + 11
+              const draggable = interactive && !locked.components
               return (
                 <g key={`conn${i}`}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
-                  {styledText({ text: connectorLabel(conn), cx, cy: cy + connH / 2 + 11, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  <g
+                    transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
+                    className={draggable ? 'pcv__pinlabel--drag' : undefined}
+                    onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'connector', index: i }, conn.labelOffset) : undefined}
+                  >
+                    {styledText({ text: connectorLabel(conn), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                 </g>
               )
             }

@@ -24,6 +24,12 @@ export interface ReplRuntime {
    */
   runCaptured(code: string): Promise<string>
   /**
+   * Run a whole user PROGRAM with its output STREAMING to the console (#612) —
+   * executed directly (no REPL echo, no paste-mode `===` framing). Resolves when
+   * the program finishes; a `while True:` loop resolves only on Stop (reboot).
+   */
+  runStream(code: string): Promise<void>
+  /**
    * Stop whatever's running (Stop button). When idle this is a gentle Ctrl-C
    * that keeps REPL state; when a program is running it reboots the interpreter
    * (the only way to break a no-yield / tight loop), resetting the RAM VFS —
@@ -34,7 +40,7 @@ export interface ReplRuntime {
   dispose(): void
 }
 
-type Pending = { resolve: (v: string) => void; reject: (e: Error) => void; kind: 'feed' | 'run' }
+type Pending = { resolve: (v: string) => void; reject: (e: Error) => void; kind: 'feed' | 'run' | 'runStream' }
 type OutMsg =
   | { type: 'out'; bytes: Uint8Array }
   | { type: 'ready' }
@@ -123,7 +129,9 @@ export class MicroPythonRuntime implements ReplRuntime {
     else p.resolve(msg.type === 'result' ? (msg.value ?? '') : '')
   }
 
-  private request(payload: { type: 'feed'; data: string } | { type: 'run'; code: string }): Promise<string> {
+  private request(
+    payload: { type: 'feed'; data: string } | { type: 'run'; code: string } | { type: 'runStream'; code: string }
+  ): Promise<string> {
     const worker = this.worker
     if (!worker) return Promise.reject(new Error('MicroPython runtime is not running'))
     const id = this.nextId++
@@ -142,6 +150,10 @@ export class MicroPythonRuntime implements ReplRuntime {
     return this.request({ type: 'run', code })
   }
 
+  async runStream(code: string): Promise<void> {
+    await this.request({ type: 'runStream', code })
+  }
+
   async interrupt(): Promise<void> {
     // Idle → a gentle Ctrl-C keeps REPL + VFS state. Busy (a program is running,
     // possibly a no-yield loop) → reboot the worker: the only way to break it.
@@ -158,7 +170,11 @@ export class MicroPythonRuntime implements ReplRuntime {
     // "couldn't send your program" from the Run button's catch). In-flight RUNs
     // (FS ops / probes) genuinely didn't complete — reject so callers can retry.
     for (const p of this.pending.values()) {
-      if (p.kind === 'feed') p.resolve('')
+      // The in-flight feed / runStream IS the running program (the Run) — Stopping
+      // it is a normal completion, so RESOLVE (rejecting would surface a spurious
+      // "couldn't send your program"). In-flight runs (FS ops / probes) genuinely
+      // didn't complete — reject so callers can retry.
+      if (p.kind === 'feed' || p.kind === 'runStream') p.resolve('')
       else p.reject(new Error('interrupted'))
     }
     this.pending.clear()

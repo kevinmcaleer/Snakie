@@ -86,6 +86,11 @@ export interface SnakieDevice {
   exec(code: string, timeoutMs?: number): Promise<ExecResult>
   eval(code: string, timeoutMs?: number): Promise<string>
   sendData(data: string): Promise<void>
+  /** Run a whole user PROGRAM, streaming ONLY its output to the console — no
+   *  source echo, no `===`/paste banner (#612). Runs via the raw REPL (serial) or
+   *  a direct exec (simulator); resolves when the program finishes (a `while True`
+   *  resolves only on Stop). Output arrives via the `data` event. */
+  runProgram(code: string): Promise<void>
   sendControl(target: string, payload?: string): Promise<void>
   interrupt(): Promise<void>
   softReset(): Promise<void>

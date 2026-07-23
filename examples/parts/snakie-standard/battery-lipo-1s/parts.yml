@@ -1,0 +1,65 @@
+id: battery-lipo-1s
+name: LiPo 1S (3.7 V)
+description: Single-cell lithium-polymer battery (~3.7 V nominal) with a JST connector — light, rechargeable.
+manufacturer: Generic
+family: Power
+tags:
+  - battery
+  - lipo
+  - power
+  - source
+package: THT
+voltage: 3.7V
+version: 0.1.1
+pcbColor: "#3a2740"
+dimensions:
+  width: 46.7
+  height: 61.5
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: right
+    pins:
+      - name: V+
+        type: pwr
+        shape: header
+        x: 0.5599802456822258
+        y: 0.0020063557344324745
+      - name: GND
+        type: gnd
+        shape: header
+        x: 0.471945368042069
+        y: 0.0020063557344324745
+electrical:
+  model: source
+  supplyV: 3.7
+  resistanceOhms: 0.09
+  maxCurrentA: 5.0
+  capacityMah: 1200
+  terminals:
+    positive: V+
+    negative: GND
+labels:
+  - text: LiPo 1S
+    x: 0.5220558622211033
+    y: 0.20426345376407395
+    fontSize: 20
+    color: "#ffffff"
+  - text: 3.7V
+    x: 0.5220558622211033
+    y: 0.27949616376091446
+    fontSize: 20
+    color: "#ffffff"
+image: image.png
+imageLayer:
+  x: 0.01154561451996916
+  y: -0.00036452798282390897
+  w: 1
+  h: 1
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

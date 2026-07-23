@@ -136,6 +136,7 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   ipcMain.handle('device:eval', (_e, code: string) => wrap(() => getActive().eval(code)))
 
   ipcMain.handle('device:sendData', (_e, data: string) => wrap(() => getActive().sendData(data)))
+  ipcMain.handle('device:runProgram', (_e, code: string) => wrap(() => getActive().runProgram(code)))
 
   // IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
   ipcMain.handle('device:sendControl', (_e, target: string, payload?: string) =>

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
+import { StereoEffect } from 'three/examples/jsm/effects/StereoEffect.js'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
@@ -212,6 +215,10 @@ export interface RobotViewProps {
   basePath?: string
   /** Compact chrome for the small docked panel (a slimmer HUD). */
   compact?: boolean
+  /** Open at the HOME (zoomed-to-fit isometric) view instead of restoring the
+   *  preserved camera. Set for the Build workspace so switching to it always
+   *  frames the model fresh rather than keeping a stale camera (#615). */
+  homeOnMount?: boolean
 }
 
 /** A neutral material for a mesh (e.g. STL) that carries no URDF `<material>`. */
@@ -303,11 +310,34 @@ function lowestLinkPointLocal(robot: URDFRobot, link: string): [number, number, 
   return [local.x, local.y, local.z]
 }
 
+/** Stereo 3-D mode (#521): red/cyan or red/green anaglyph, or side-by-side. */
+type StereoMode = 'rc' | 'rg' | 'sbs'
+const STEREO_MODES: { value: StereoMode; label: string }[] = [
+  { value: 'rc', label: 'Red / Cyan' },
+  { value: 'rg', label: 'Red / Green' },
+  { value: 'sbs', label: 'Side-by-side' }
+]
+// AnaglyphEffect colour matrices (fed to its public colorMatrixLeft/Right).
+// Red/Cyan = three's Dubois matrices (best colour); Red/Green = greyscale left→red,
+// right→green (avoids retinal rivalry with red/green glasses).
+const ANAGLYPH_RC_LEFT = [0.4561, -0.0400822, -0.0152161, 0.500484, -0.0378246, -0.0205971, 0.176381, -0.0157589, -0.00546856]
+const ANAGLYPH_RC_RIGHT = [-0.0434706, 0.378476, -0.0721527, -0.0879388, 0.73364, -0.112961, -0.00155529, -0.0184503, 1.2264]
+const ANAGLYPH_RG_LEFT = [0.299, 0, 0, 0.587, 0, 0, 0.114, 0, 0]
+const ANAGLYPH_RG_RIGHT = [0, 0.299, 0, 0, 0.587, 0, 0, 0.114, 0]
+/** Depth = StereoCamera eye separation. Human IPD ≈ 0.064; clamp for comfort. */
+const STEREO_DEPTH_MIN = 0.01
+const STEREO_DEPTH_MAX = 0.12
+const STEREO_DEPTH_DEFAULT = 0.064
+
 export function RobotView({
   urdfContent,
   basePath,
-  compact = false
+  compact = false,
+  homeOnMount = false
 }: RobotViewProps = {}): JSX.Element {
+  // Read inside the once-per-mount 3-D effect without adding it to the deps.
+  const homeOnMountRef = useRef(homeOnMount)
+  homeOnMountRef.current = homeOnMount
   const { openFiles, activeId, currentFolder, updateContent, saveFile, openBuffer, openFile } =
     useWorkspace()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
@@ -410,6 +440,29 @@ export function RobotView({
   // Camera projection — PERSPECTIVE is the default view (the ViewCube dropdown
   // toggles it). Changing it rebuilds the 3-D effect + re-frames.
   const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
+  // Stereoscopic 3-D glasses (#521): render the scene as a red/cyan anaglyph when on.
+  // Held in a ref the render loop reads each frame, so toggling doesn't rebuild the
+  // scene. Persisted (#623) so it survives a workspace switch / restart, and shared
+  // by the full view + mini-viewer. Parallax needs perspective — enabling it prefers
+  // persp.
+  const [stereo3d, setStereo3d] = useLocalStorage('snakie.robot.stereo3d', false)
+  const stereoRef = useRef(stereo3d)
+  stereoRef.current = stereo3d
+  // 3-D type (#624) + depth/eye-separation (#625), persisted; read by the render loop.
+  const [stereoMode, setStereoMode] = useLocalStorage<StereoMode>('snakie.robot.stereoMode', 'rc')
+  const [stereoDepth, setStereoDepth] = useLocalStorage('snakie.robot.stereoDepth', STEREO_DEPTH_DEFAULT)
+  const stereoModeRef = useRef(stereoMode)
+  stereoModeRef.current = stereoMode
+  const stereoDepthRef = useRef(stereoDepth)
+  stereoDepthRef.current = stereoDepth
+  const toggleStereo = (): void => {
+    const next = !stereo3d
+    if (next && projection === 'ortho') {
+      refitNextRef.current = true
+      setProjection('persp')
+    }
+    setStereo3d(next)
+  }
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -1659,10 +1712,22 @@ export function RobotView({
       partLibs.find((l) => l.id === p.lib)?.parts.find((d) => d.id === p.part),
     [partLibs]
   )
-  const servoList = useMemo<BindableServo[]>(
-    () => bindableServos(placedParts, placedConns, resolvePartDef),
-    [placedParts, placedConns, resolvePartDef]
-  )
+  const servoList = useMemo<BindableServo[]>(() => {
+    const base = bindableServos(placedParts, placedConns, resolvePartDef)
+    // Tag each servo with the LOOSE mesh link its drop appended to the URDF (if the
+    // servo is already a joint in the model) — matched by the same sanitised part
+    // name attachPartMesh/uniqueLinkName use — so the panel can offer to drop the
+    // duplicate 3-D copy and bind instead (#).
+    const loose = looseLinks(content)
+    if (loose.length === 0) return base
+    const sanitize = (s: string): string => s.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^_+|_+$/g, '')
+    return base.map((s) => {
+      const part = placedParts.find((p) => p.id === s.id)
+      const nm = sanitize(resolvePartDef(part ?? ({} as RobotPart))?.name || part?.part || '')
+      const meshLink = nm ? loose.find((l) => l === nm || l.startsWith(`${nm}_`)) : undefined
+      return meshLink ? { ...s, meshLink } : s
+    })
+  }, [placedParts, placedConns, resolvePartDef, content])
 
   // Load the servo map whenever the project folder changes — for the docked mini
   // viewer too, so it animates on Run. (The full pose tool also refreshes it in
@@ -2652,6 +2717,44 @@ export function RobotView({
     renderer.outputColorSpace = THREE.SRGBColorSpace
     mount.appendChild(renderer.domElement)
 
+    // Stereoscopic 3-D (#521): an anaglyph effect (red/cyan #622 or red/green #624)
+    // and a side-by-side effect, wrapping the plain render. Sized in resize(); every
+    // live frame goes through renderFrame() so toggling stereo / mode / depth is just
+    // a per-frame branch (no scene rebuild). Only the main scene is stereo — the
+    // ViewCube overlay renders normally after.
+    const anaglyph = new AnaglyphEffect(renderer)
+    const stereoSbs = new StereoEffect(renderer)
+    let appliedAnaglyphMode = '' // avoid re-uploading the colour matrices every frame
+    const _fullSize = new THREE.Vector2()
+    const renderFrame = (): void => {
+      const persp = camera instanceof THREE.PerspectiveCamera
+      // Side-by-side sets its own scissor/viewport per half.
+      if (stereoRef.current && persp && stereoModeRef.current === 'sbs') {
+        stereoSbs.setEyeSeparation(stereoDepthRef.current)
+        stereoSbs.render(scene, camera)
+        return
+      }
+      // Every other path is full-frame. StereoEffect leaves the viewport clamped to a
+      // HALF (it resets scissor-test but not the viewport), so switching AWAY from SBS
+      // would draw only half the screen (the rest goes black). Restore the full
+      // viewport + scissor first.
+      renderer.setScissorTest(false)
+      renderer.getSize(_fullSize)
+      renderer.setViewport(0, 0, _fullSize.x, _fullSize.y)
+      if (!stereoRef.current || !persp) {
+        renderer.render(scene, camera) // off, or ortho (no parallax) → plain render
+        return
+      }
+      anaglyph.eyeSep = stereoDepthRef.current // #625 depth
+      if (stereoModeRef.current !== appliedAnaglyphMode) {
+        appliedAnaglyphMode = stereoModeRef.current
+        const rg = appliedAnaglyphMode === 'rg'
+        anaglyph.colorMatrixLeft.fromArray(rg ? ANAGLYPH_RG_LEFT : ANAGLYPH_RC_LEFT)
+        anaglyph.colorMatrixRight.fromArray(rg ? ANAGLYPH_RG_RIGHT : ANAGLYPH_RC_RIGHT)
+      }
+      anaglyph.render(scene, camera)
+    }
+
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
@@ -2751,6 +2854,8 @@ export function RobotView({
       // updateStyle defaults true → the canvas CSS size fits the container while
       // the drawing buffer scales by the pixel ratio.
       renderer.setSize(w, h)
+      anaglyph.setSize(w, h) // keep the stereo effects' render targets in step (#521)
+      stereoSbs.setSize(w, h)
       const aspect = w / h
       if (camera instanceof THREE.OrthographicCamera) {
         // Keep `halfView` world units visible vertically, widen by the aspect.
@@ -3261,7 +3366,7 @@ export function RobotView({
 
     // Frame the model isometrically + (re)lay a ground grid under it. Called once
     // up-front (primitives) and again when async meshes arrive and grow the box.
-    const frameModel = (robot: URDFRobot, animate = false, attempt = 0): void => {
+    const frameModel = (robot: URDFRobot, animate = false, attempt = 0): boolean => {
       // Flush world matrices BEFORE measuring — a dirty transform frames stale.
       robot.updateMatrixWorld(true)
       const box = new THREE.Box3().setFromObject(robot)
@@ -3273,7 +3378,7 @@ export function RobotView({
         if (attempt < 8 && robotRef.current === robot) {
           requestAnimationFrame(() => frameModel(robot, animate, attempt + 1))
         }
-        return
+        return false // couldn't frame yet (empty box) — caller must not treat this as done
       }
       const size = box.getSize(new THREE.Vector3())
       const centre = box.getCenter(new THREE.Vector3())
@@ -3291,7 +3396,7 @@ export function RobotView({
       layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
       if (animate) {
         flyTo(destPos, centre, 1, radius * 1.35, radius)
-        return
+        return true
       }
       halfView = radius * 1.35 // a little padding around the model (ortho)
       camera.position.copy(destPos)
@@ -3300,6 +3405,7 @@ export function RobotView({
       controls.update()
       setClip(radius)
       resize()
+      return true
     }
 
     // Frame a NEW robot isometrically, but PRESERVE the camera when the same file
@@ -3313,7 +3419,24 @@ export function RobotView({
       const size = box.getSize(new THREE.Vector3())
       layGrid(Math.max(size.x, size.z) * 3 + 0.4, box.min.y)
     }
+    // The Build workspace opens at HOME (fit) rather than the preserved camera
+    // (#615): frame the model on the FIRST frame of this mount, then record it so a
+    // later async mesh-settle keeps the homed view (not a stale cached camera).
+    let homedForMount = false
     const framePreservingCamera = (robot: URDFRobot): void => {
+      if (homeOnMountRef.current && !homedForMount) {
+        // Frame HOME — but only mark it done (and record the camera) if it actually
+        // framed. The FIRST call fires before async meshes load, so the box is empty
+        // and frameModel bails to FRONT; marking "homed" then would let finalize()
+        // restore that front camera. Gating on success means finalize (after the
+        // meshes settle + the box is real) re-frames home properly. (#…)
+        if (frameModel(robot)) {
+          homedForMount = true
+          framedKeyRef.current = frameKey
+          recordCamera()
+        }
+        return
+      }
       const saved = cameraStateRef.current
       if (refitNextRef.current) {
         // A just-added object: reframe so it's actually in view (once).
@@ -4832,7 +4955,7 @@ export function RobotView({
           setComStatus(cs)
         }
       }
-      renderer.render(scene, camera)
+      renderFrame()
       if (viewCube) {
         viewCube.sync(camera.quaternion)
         viewCube.render()
@@ -4877,6 +5000,9 @@ export function RobotView({
         if (Array.isArray(mat)) mat.forEach((m) => m.dispose())
         else mat?.dispose()
       })
+      anaglyph.dispose()
+      // StereoEffect allocates no GPU resources (just wraps a StereoCamera) — nothing
+      // to dispose.
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
@@ -4963,6 +5089,28 @@ export function RobotView({
             </svg>
           </button>
         )}
+        {/* 3-D glasses toggle in the mini-viewer, right of Home (#521 / #623). */}
+        {!isEmpty && !error && compact && (
+          <button
+            type="button"
+            className={`robotview__miniglasses${stereo3d ? ' is-on' : ''}`}
+            aria-pressed={stereo3d}
+            onClick={toggleStereo}
+            title={stereo3d ? '3-D glasses ON (red/cyan) — click to turn off' : 'View in 3-D with red/cyan glasses'}
+            aria-label="Toggle 3-D glasses view"
+          >
+            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true">
+              <path
+                d="M3 8h18M3 8v3.5a3 3 0 0 0 6 0V8M15 8v3.5a3 3 0 0 0 6 0V8"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        )}
         {!isEmpty && !error && compact && dockPoses.length > 0 && (
           // Saved-pose preview dropdown (#409). Controlled to "" so it resets to the
           // placeholder after a pick — re-selecting the same pose re-applies it.
@@ -5017,6 +5165,61 @@ export function RobotView({
               <option value="ortho">Orthographic</option>
               <option value="persp">Perspective</option>
             </select>
+            {/* 3-D glasses (#521 / #622): red/cyan anaglyph. Parallax needs
+                perspective, so enabling it switches away from orthographic. */}
+            <button
+              type="button"
+              className={`robotview__glasses${stereo3d ? ' is-on' : ''}`}
+              aria-pressed={stereo3d}
+              onClick={toggleStereo}
+              title={
+                stereo3d
+                  ? '3-D glasses ON (red/cyan anaglyph) — click to turn off'
+                  : 'View in 3-D with red/cyan glasses'
+              }
+              aria-label="Toggle 3-D glasses view"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M3 8h18M3 8v3.5a3 3 0 0 0 6 0V8M15 8v3.5a3 3 0 0 0 6 0V8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        )}
+        {/* 3-D glasses settings (#624 mode + #625 depth) — shown when 3-D is on. */}
+        {!isEmpty && !error && !compact && stereo3d && (
+          <div className="robotview__stereo-ctl" role="group" aria-label="3-D glasses settings">
+            <select
+              className="robotview__stereo-mode"
+              value={stereoMode}
+              onChange={(e) => setStereoMode(e.target.value as StereoMode)}
+              title="3-D glasses type"
+              aria-label="3-D glasses type"
+            >
+              {STEREO_MODES.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+            <label className="robotview__stereo-depth" title="3-D depth (eye separation)">
+              <span aria-hidden="true">Depth</span>
+              <input
+                type="range"
+                min={STEREO_DEPTH_MIN}
+                max={STEREO_DEPTH_MAX}
+                step={0.002}
+                value={stereoDepth}
+                onChange={(e) => setStereoDepth(Number(e.target.value))}
+                aria-label="3-D depth"
+              />
+            </label>
           </div>
         )}
         {!isEmpty && !error && !compact && (
@@ -5228,6 +5431,7 @@ export function RobotView({
             bindableServos={servoList}
             jointOptions={movableNames}
             onBindServo={handleBindServo}
+            onRemoveMesh={handleDeleteLink}
             poses={poses}
             selected={selectedLink}
             onSelect={(link) => {

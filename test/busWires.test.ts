@@ -4,7 +4,7 @@ import {
   classifyBusWire,
   i2cBusForGpio,
   spiBusForGpio
-} from '../src/renderer/src/components/bus-wires'
+} from '../src/shared/bus-wires'
 
 describe('RP-family bus derivation (#217)', () => {
   it('I2C block from the GPIO (%4 rule)', () => {

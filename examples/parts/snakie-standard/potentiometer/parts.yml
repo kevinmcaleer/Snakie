@@ -58,3 +58,10 @@ labels:
     fontSize: 9
     color: "#dfeaf5"
 help: help.md
+electrical:
+  model: potentiometer
+  resistanceOhms: 10000
+  wiper: OUT
+  terminals:
+    positive: VCC
+    negative: GND

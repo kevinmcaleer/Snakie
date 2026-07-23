@@ -75,8 +75,10 @@ export type PartPackage = 'THT' | 'SMD'
  *  - `castellated`— a castellated edge pad (the plated half-moon look)
  *  - `header`     — a through-hole header pad: a copper annular ring with the
  *                   drill hole showing (where pin headers are soldered)
+ *  - `octagonal`  — an octagonal header pad with a SQUARE pin/hole, the classic
+ *                   look of servo / DuPont-style 0.1" headers (Signal/V+/GND rows)
  */
-export type PartPinShape = 'square' | 'round' | 'castellated' | 'header'
+export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal'
 
 /** Which edge of the board outline a pin/header sits on. */
 export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
@@ -109,8 +111,17 @@ export interface PartPin {
    * {@link shape}` === 'castellated'`; still read for backward compatibility.
    */
   castellated?: boolean
-  /** How the pad is drawn (square / round / castellated / header). */
+  /** How the pad is drawn (square / round / castellated / header / octagonal). */
   shape?: PartPinShape
+  /** Suppress this pin's silk annotation (number box + label + capability chips)
+   *  while keeping the pad + its electrical role. Used for the repeated V+/GND pins
+   *  of a servo/DuPont header block, where labelling every one is noise — only the
+   *  signal pins are labelled and the power/ground rows read from a shared legend. */
+  labelHidden?: boolean
+  /** Group id tying this pin to the others of one servo/DuPont **header block** (its
+   *  Signal/V+/GND trio). Pins sharing a `group` move + delete as a unit and collapse
+   *  to one row in the pin list. Absent ⇒ a standalone pin. */
+  group?: string
   /**
    * Castellation outward direction in degrees: 0 = right, 90 = down, 180 = left,
    * 270 = up. Absent ⇒ derived from the pin's side (left/right by x). Only affects
@@ -154,6 +165,11 @@ export interface PartConnector {
   y: number
   /** The connector's contacts, in order — full pins (GND/3V3/SDA/SCL for QWIIC). */
   pins: PartPin[]
+  /** Manual label placement — a fraction of the board box, set by dragging the
+   *  connector's silk label in the Part Editor. Absent ⇒ default (below the body). */
+  labelOffset?: { x: number; y: number }
+  /** Silk-label rotation in degrees (0/90/180/270); e.g. 270 to read bottom-to-top. */
+  labelRotation?: number
 }
 
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
@@ -207,6 +223,14 @@ export interface OnboardLed {
   /** Normalised 0..1 position within the board outline. */
   x: number
   y: number
+  /** Physical footprint of the LED package in mm (square). Scales the glyph to the
+   *  board's real size (e.g. a 1.5mm pixel). Absent ⇒ legacy fixed on-screen size. */
+  sizeMm?: number
+  /** Manual label placement — a fraction of the board box, set by dragging the
+   *  LED's silk label in the Part Editor. Absent ⇒ default (below the body). */
+  labelOffset?: { x: number; y: number }
+  /** Silk-label rotation in degrees (0/90/180/270). */
+  labelRotation?: number
 }
 
 /** A vertex of the physical board outline, in normalised 0..1 coords. */
@@ -349,6 +373,80 @@ export interface PartSchematic {
   aspect?: number
   /** The terminals, each linked to a physical pin by name. */
   pins: SchematicPin[]
+}
+
+/**
+ * The behavioural model a part uses in the Circuit Sim DC solver (epic #597).
+ * `passive` (default when absent) means the part has no electrical behaviour of
+ * its own — a mechanical/decorative part, or one whose pins just pass through.
+ */
+export type ElectricalModel =
+  | 'source' //   supplies a voltage (battery pack, bench PSU, a wall adapter)
+  | 'resistor' // fixed resistance between two pins
+  | 'led' //      light-emitting diode (forward-voltage drop + current → brightness)
+  | 'diode' //    plain diode (forward-voltage drop, one-way)
+  | 'switch' //   button / switch (open or closed between two pins)
+  | 'consumer' // a current sink with a typical + stall draw (servo, motor, sensor)
+  | 'potentiometer' // a 3-pin variable divider: track VCC↔GND, a draggable wiper tap
+  | 'regulator' // an on-board LDO/buck: input rail in, a fixed regulated rail out
+  | 'passive' //  no electrical model (wires-through / mechanical / decorative)
+
+/**
+ * Electrical metadata for a part (epic #597, issue #600) — the parameters the
+ * netlist/ERC/solver read to give a part real behaviour. Every field is optional
+ * so a part declares only what its {@link model} needs; the block is authored in
+ * `parts.yml` alongside the geometry and round-trips like the rest of the sidecar.
+ *
+ * Units are explicit in the field names (volts, ohms, amps, milliamp-hours) so a
+ * hand-authored file is unambiguous. Sized up-front (sources + consumers) so the
+ * power-input parts (#602) and consequence engine (#607) don't need re-authoring.
+ */
+export interface PartElectrical {
+  /** The behavioural model (defaults to `passive` when absent). */
+  model: ElectricalModel
+  /** Forward voltage drop in **volts** — `led` / `diode`. */
+  vf?: number
+  /** Fixed resistance in **ohms** — `resistor`, a `source`'s internal resistance, or
+   *  a `potentiometer`'s full track resistance. */
+  resistanceOhms?: number
+  /** The wiper pin NAME of a `potentiometer` (the divider tap between the two
+   *  terminals). Its 0..1 position is interactive state, not part metadata. */
+  wiper?: string
+  /** Nominal supply voltage in **volts** — `source` (a battery's nominal, a PSU's
+   *  default set-point). */
+  supplyV?: number
+  /** Adjustable supply range `[min, max]` in **volts** — an adjustable `source`
+   *  (bench PSU). Absent ⇒ a fixed supply at {@link supplyV}. */
+  supplyRange?: [number, number]
+  /** Rated maximum current in **amps** before the part is damaged — the threshold
+   *  the consequence engine (#607) trips "magic smoke" at. */
+  maxCurrentA?: number
+  /** Battery capacity in **milliamp-hours** — a `source` battery; feeds the
+   *  battery-life estimate (#607). */
+  capacityMah?: number
+  /** Typical steady current draw in **amps** — a `consumer` (a sensor's quiescent
+   *  draw, a servo's idle). */
+  currentDrawA?: number
+  /** Peak / stall current draw in **amps** — a `consumer` under load (a servo
+   *  stalled, a motor started); the worst-case figure for the power budget (#607). */
+  stallCurrentA?: number
+  /** The pin NAMES that carry the part's terminals, so the solver knows which pad
+   *  is which without guessing. `positive`/`negative` for a 2-terminal source or
+   *  passive; absent ⇒ inferred from pin roles (pwr/gnd). */
+  terminals?: { positive?: string; negative?: string }
+  /** The rail LABEL a `regulator` draws from (e.g. `VBUS`, `VSYS`, `VIN`) — the
+   *  netlist bonds a board's like-named power pads into one rail, so this names the
+   *  whole input net. The regulator only regulates when this rail is powered. */
+  inputRail?: string
+  /** The rail LABEL a `regulator` drives (e.g. `3V3`) — held at {@link outputV}
+   *  relative to ground, with the load current pulled back from {@link inputRail}
+   *  (so a board's on-board regulator makes its 3V3 pins actually source current). */
+  outputRail?: string
+  /** The regulated output voltage in **volts** — a `regulator` (e.g. `3.3`). */
+  outputV?: number
+  /** Dropout in **volts** — a `regulator` needs `input ≥ outputV + dropoutV` to
+   *  hold regulation (informational for now; the consequence engine #607 uses it). */
+  dropoutV?: number
 }
 
 /**
@@ -536,6 +634,13 @@ export interface PartDefinition {
    * where a link needs bespoke points). Absent ⇒ the part isn't a foot/wheel.
    */
   contacts?: [number, number, number][]
+
+  /**
+   * Electrical behaviour for the Circuit Sim (epic #597, #600). Absent ⇒ the part
+   * is electrically `passive` (no source/load/model) — it still appears in the
+   * netlist as connection points, it just has no I–V behaviour of its own.
+   */
+  electrical?: PartElectrical
 
   // --- Editor display state (persisted) ------------------------------------
   /**

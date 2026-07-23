@@ -386,6 +386,41 @@ export function castellatedPad(
 /** The drilled through-hole(s) of a pin pad — the bits that should cut through the
  *  PCB + image (NOT the copper) for a realistic board (#171). Empty for a solid
  *  SMD (round) pad. Mirrors the dark hole circles each pad shape draws. */
+/** An octagonal through-hole header pad — a copper octagon with a SQUARE pin/hole
+ *  at its centre (the classic servo / 0.1" DuPont header look). `fill` tints it by
+ *  the pin's electrical role, so a red V+ row and a dark GND row read at a glance. */
+export function octagonalPad(
+  cx: number,
+  cy: number,
+  size: number,
+  fill: string,
+  stroke: string,
+  sw: number,
+  holeFill = 'var(--bc-mat, #0c0f12)'
+): JSX.Element {
+  const s = size / 2
+  const c = s * 0.414 // regular-octagon corner cut (√2 − 1)
+  const pts = [
+    [cx - s + c, cy - s],
+    [cx + s - c, cy - s],
+    [cx + s, cy - s + c],
+    [cx + s, cy + s - c],
+    [cx + s - c, cy + s],
+    [cx - s + c, cy + s],
+    [cx - s, cy + s - c],
+    [cx - s, cy - s + c]
+  ]
+    .map((p) => p.join(','))
+    .join(' ')
+  const h = size * 0.17 // square pin/hole half-size
+  return (
+    <>
+      <polygon points={pts} fill={fill} stroke={stroke} strokeWidth={sw} />
+      <rect x={cx - h} y={cy - h} width={h * 2} height={h * 2} fill={holeFill} />
+    </>
+  )
+}
+
 export function pinThroughHoles(
   shape: PartPinShape,
   cx: number,
@@ -396,6 +431,9 @@ export function pinThroughHoles(
 ): { cx: number; cy: number; r: number }[] {
   if (shape === 'round') return []
   if (shape === 'header') return [{ cx, cy, r: size / 2 - 3.5 }]
+  // Octagonal pads are opaque copper and draw their OWN dark square pin-hole, so
+  // they need no mask cut (a cut would punch a round see-through over the square).
+  if (shape === 'octagonal') return []
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -497,7 +535,13 @@ export function boxedPinLabel(
     <>
       <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
       {shownNum && (
-        <text x={bx + B - 2.5} y={by + B - 3.7} textAnchor="end" className="pcv__pin-num">
+        <text
+          x={bx + B / 2}
+          y={by + B / 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="pcv__pin-num"
+        >
           {shownNum}
         </text>
       )}
@@ -774,13 +818,24 @@ export function partButtonGlyph(cx: number, cy: number, size: number, selected =
  * red/green/blue cluster (RGB), with a selection ring in the editor. Read-only
  * everywhere else. `selected` drives the Part Editor highlight.
  */
-export function onboardLedGlyph(cx: number, cy: number, led: OnboardLed, selected = false): JSX.Element {
+export function onboardLedGlyph(
+  cx: number,
+  cy: number,
+  led: OnboardLed,
+  selected = false,
+  pxPerMm = 0
+): JSX.Element {
   const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
   if (led.kind === 'neopixel') {
-    // A 5050 addressable pixel: a white package with a glowing RGB centre.
+    // A 5050 addressable pixel: a white package with a glowing RGB centre. When the
+    // board has real dimensions and the pixel declares a physical size, scale the
+    // whole glyph so the package footprint is life-size (e.g. a 1.5mm pixel).
     const s = 7
+    const k = led.sizeMm && pxPerMm > 0 ? (led.sizeMm * pxPerMm) / (s * 2) : 1
+    const scaleTf =
+      k !== 1 ? `translate(${cx} ${cy}) scale(${k}) translate(${-cx} ${-cy})` : undefined
     return (
-      <g style={{ pointerEvents: 'none' }}>
+      <g style={{ pointerEvents: 'none' }} transform={scaleTf}>
         <circle cx={cx} cy={cy} r={10} fill="#fff" opacity={0.16} />
         <rect x={cx - s} y={cy - s} width={s * 2} height={s * 2} rx={2} fill="#f2f2f2" stroke="#b9bec6" strokeWidth={0.8} />
         <circle cx={cx} cy={cy - 2} r={2.1} fill="#ff5555" />
@@ -892,6 +947,26 @@ export function connectorLabel(conn: PartConnector): string {
   return sig ? `${name} · ${sig}` : name
 }
 
+/** Compose a component silk-label transform: manual drag offset (a fraction of the
+ *  board box) + author rotation about the label point, optionally followed by the
+ *  board view's upright counter-rotation. Shared by the Part Editor + Board View so
+ *  a movable/rotatable LED or connector label renders the same in both. */
+export function componentLabelTransform(
+  cx: number,
+  labelY: number,
+  boxW: number,
+  boxH: number,
+  labelOffset?: { x: number; y: number },
+  labelRotation?: number,
+  upright?: string
+): string | undefined {
+  const parts: string[] = []
+  if (labelOffset) parts.push(`translate(${labelOffset.x * boxW} ${labelOffset.y * boxH})`)
+  if (labelRotation) parts.push(`rotate(${labelRotation} ${cx} ${labelY})`)
+  if (upright) parts.push(upright)
+  return parts.length ? parts.join(' ') : undefined
+}
+
 /** The static life-like scene of a part, drawn into `box`. */
 export function PartBody({
   part,
@@ -955,7 +1030,31 @@ export function PartBody({
   // never dwarf the pitch on a small render (the mini board) or look tiny on a big
   // one — consistent across the mini board + breadboard. Falls back to the legacy
   // fixed size when the part has no mm dimensions.
-  const padSize = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
+  const physicalPad = connPxPerMm > 0 ? Math.max(5, Math.min(16, 1.9 * connPxPerMm)) : 12
+  // Some boards pack pins FAR tighter than the nominal pitch (e.g. the Servo 2040's
+  // 3-pin servo clusters render barely one pad-width apart), so a physical 1.9mm pad
+  // and the fixed 14px number box collide. Measure the tightest ACTUAL centre-to-
+  // centre pin gap and shrink the pads + number boxes + labels together to fit it —
+  // a no-op on comfortably-pitched boards, where `pinScale` stays 1.
+  let minPinGapPx = Infinity
+  for (let i = 0; i < pins.length; i++) {
+    for (let j = i + 1; j < pins.length; j++) {
+      const d = Math.hypot((pins[i].x - pins[j].x) * box.w, (pins[i].y - pins[j].y) * box.h)
+      if (d > 0.5 && d < minPinGapPx) minPinGapPx = d
+    }
+  }
+  // A pad never exceeds ~0.82× the tightest gap, so neighbouring pads never touch.
+  const padSize = Number.isFinite(minPinGapPx)
+    ? Math.max(3, Math.min(physicalPad, minPinGapPx * 0.82))
+    : physicalPad
+  // Scale the annotations (number box + label + chips) down about the pin so a
+  // dense row stays legible. The divisor sets the target box/gap ratio: the fixed
+  // 14px number box fills ~0.78 of an 18px gap — as large as fits while still
+  // breathing. The floor is low (0.25) because very dense boards (Servo 2040 packed
+  // on a small board-body box) need an aggressive shrink to stop the number boxes
+  // overlapping; they stay readable via the view's zoom. Comfortable boards keep
+  // pinScale = 1.
+  const pinScale = Number.isFinite(minPinGapPx) ? Math.max(0.25, Math.min(1, minPinGapPx / 18)) : 1
   const holeR = (diameter: number): number =>
     part.dimensions && part.dimensions.width > 0
       ? Math.max(3, (diameter / part.dimensions.width) * box.w)
@@ -1047,19 +1146,14 @@ export function PartBody({
         </g>
       )}
 
-      {/* Layer 2: hole plating rings (on top of the cutout) */}
+      {/* Layer 2: a mounting hole is a bare cutout (punched by the mask) — no
+          border. A ring shows ONLY when it's selected (editor use). */}
       {visible.holes &&
-        holes.map((h, i) => (
-          <circle
-            key={`h${i}`}
-            cx={px(h.x)}
-            cy={py(h.y)}
-            r={holeR(h.diameter)}
-            fill="none"
-            stroke={isSel({ type: 'hole', index: i }) ? '#fff' : '#cfd6dd'}
-            strokeWidth={isSel({ type: 'hole', index: i }) ? 3 : 2}
-          />
-        ))}
+        holes.map((h, i) =>
+          isSel({ type: 'hole', index: i }) ? (
+            <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
+          ) : null
+        )}
       </>
       )}
 
@@ -1074,12 +1168,14 @@ export function PartBody({
           const boxedActive = boxAll || boxedPins instanceof Set
           const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
           const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
-          const size = padSize
+          const shape = pinShapeOf(rp.pin)
+          // Octagonal servo/DuPont header pads draw at a fixed physical 2.4mm — big
+          // and close like the real thing — not the density-scaled generic pad size.
+          const size = shape === 'octagonal' && connPxPerMm > 0 ? 2.4 * connPxPerMm : padSize
           const cx = px(rp.x)
           const cy = py(rp.y)
           const stroke = sel ? '#fff' : '#0008'
           const sw = sel ? 3 : 1
-          const shape = pinShapeOf(rp.pin)
           let pad: JSX.Element
           if (shape === 'round') {
             pad = <circle cx={cx} cy={cy} r={size / 2} fill={fill} stroke={stroke} strokeWidth={sw} />
@@ -1094,6 +1190,8 @@ export function PartBody({
                 <circle cx={cx} cy={cy} r={size * 0.26} fill="var(--bc-mat, #0c0f12)" />
               </>
             )
+          } else if (shape === 'octagonal') {
+            pad = octagonalPad(cx, cy, size, fill, stroke, sw)
           } else {
             pad = (
               <>
@@ -1116,17 +1214,25 @@ export function PartBody({
             boxThis && bodyScale !== 1
               ? `translate(${epx} ${epy}) scale(${1 / bodyScale}) translate(${-epx} ${-epy})`
               : undefined
+          // Shrink the annotation (number box + label + chips) about the board edge
+          // on a tight-pitch board so a dense row stays legible (no-op at scale 1),
+          // matching the pad cap above.
+          const densityTf =
+            pinScale !== 1
+              ? `translate(${epx} ${epy}) scale(${pinScale}) translate(${-epx} ${-epy})`
+              : undefined
           // Manual label placement (#…): shift the whole annotation by the pin's
           // saved labelOffset (a fraction of the board box).
           const lo = rp.pin.labelOffset
           const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
+          const labelGroupTf = [densityTf, labelShift].filter(Boolean).join(' ') || undefined
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
-              {!bodyOnly && (
-              <g transform={labelShift}>
+              {!bodyOnly && !rp.pin.labelHidden && (
+              <g transform={labelGroupTf}>
               {boxThis ? (
                 <g transform={boxedCounter}>
                   {boxedPinLabel(
@@ -1315,14 +1421,22 @@ export function PartBody({
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>
-              {onboardLedGlyph(cx, cy, led, sel)}
+              {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
               {styledText({
                 text: onboardLedLabel(led),
                 cx,
                 cy: labelY,
                 fontSize: 9,
                 fill: sel ? '#fff' : '#cfd6dd',
-                transform: uprightRotate(cx, labelY)
+                transform: componentLabelTransform(
+                  cx,
+                  labelY,
+                  box.w,
+                  box.h,
+                  led.labelOffset,
+                  led.labelRotation,
+                  uprightRotate(cx, labelY)
+                )
               })}
             </g>
           )
@@ -1345,7 +1459,15 @@ export function PartBody({
                 cy: labelY,
                 fontSize: 9,
                 fill: sel ? '#fff' : '#cfd6dd',
-                transform: uprightRotate(cx, labelY)
+                transform: componentLabelTransform(
+                  cx,
+                  labelY,
+                  box.w,
+                  box.h,
+                  conn.labelOffset,
+                  conn.labelRotation,
+                  uprightRotate(cx, labelY)
+                )
               })}
             </g>
           )

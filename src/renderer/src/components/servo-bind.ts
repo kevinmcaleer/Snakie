@@ -87,6 +87,10 @@ export interface BindableServo {
   id: string
   label: string
   pin: string | null
+  /** The name of a LOOSE URDF link this servo's dropped mesh created, if the servo
+   *  is already modelled as a joint — lets the panel offer "remove the 3-D copy".
+   *  Set by the Robot View (which has the URDF); absent otherwise. */
+  meshLink?: string
 }
 
 /**

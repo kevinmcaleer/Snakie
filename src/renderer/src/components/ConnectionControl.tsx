@@ -73,6 +73,11 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
         value={selected}
         disabled={connected || connecting}
         onChange={(e) => setSelected(e.target.value)}
+        // Refresh the port list as the dropdown is opened, so the manual refresh
+        // button is no longer needed (space-efficient header). onMouseDown fires
+        // before the native list renders; onFocus covers keyboard users.
+        onMouseDown={() => void refreshPorts()}
+        onFocus={() => void refreshPorts()}
         aria-label="Serial port"
       >
         {ports.length === 0 && <option value="">No ports</option>}
@@ -99,18 +104,6 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
           )
         })}
       </select>
-      {!connected && (
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => void refreshPorts()}
-          disabled={connecting}
-          title="Refresh ports"
-          aria-label="Refresh serial ports"
-        >
-          ⟳
-        </button>
-      )}
       <button
         type="button"
         className={`btn btn--sm ${connected ? 'btn--danger' : 'btn--primary'}`}

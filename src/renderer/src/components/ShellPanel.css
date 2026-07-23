@@ -199,7 +199,10 @@
   align-items: center;
   gap: 0.3rem;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  /* Inherit the header's light text (#eafff2) — a muted grey was unreadable on
+     the dark-green console header. */
+  color: inherit;
+  font-weight: 600;
   cursor: pointer;
   user-select: none;
 }

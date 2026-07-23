@@ -33,8 +33,19 @@ import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
-import { classifyBusWire } from './bus-wires'
+import { classifyBusWire } from '../../../shared/bus-wires'
+import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
+import { BoardMeter, type BoardMeterReading } from './BoardMeter'
+import { useFloatPlacement } from './InstrumentWindow'
 import './WiringCanvas.css'
+
+/** The pin NAME in an endpoint id (`board.3V3#54` → `3V3`, `sensor.VCC#0` → `VCC`). */
+function endpointName(ep: string): string {
+  const hash = ep.lastIndexOf('#')
+  const head = hash >= 0 ? ep.slice(0, hash) : ep
+  const dot = head.indexOf('.')
+  return dot >= 0 ? head.slice(dot + 1) : head
+}
 
 /**
  * WIRING STAGE (#139 / #140) — the Board Viewer's Life-like & Schematic views.
@@ -295,8 +306,11 @@ const DOT_TOL = DOT_R + 5
 const TOUCH_DOT_TOL = DOT_R + 15
 
 // Zoom bounds + per-click step for the viewport (shared by wheel + buttons).
+// Max is generous (600%) so dense boards like the Servo 2040 — which pack their
+// pin labels tightly even after density-scaling — can be zoomed in far enough to
+// read the number boxes + labels comfortably.
 const WC_MIN_ZOOM = 0.35
-const WC_MAX_ZOOM = 3
+const WC_MAX_ZOOM = 6
 const WC_ZOOM_STEP = 1.2
 const clampScale = (s: number): number => Math.min(WC_MAX_ZOOM, Math.max(WC_MIN_ZOOM, s))
 
@@ -329,6 +343,21 @@ const DRAG_DEADZONE_PX = 3
 const WIRE_CLEARANCE = 40
 
 /** Snap any angle to the nearest of 0/90/180/270 (#176). */
+/**
+ * Whether a keydown on the wiring canvas should delete the currently-selected
+ * part: the Delete or Backspace key, and NOT while the user is typing in an
+ * editable field (the rename input, project name/description). Pure, so the guard
+ * is unit-testable without a DOM.
+ */
+export function shouldDeleteSelectedPart(
+  key: string,
+  target: { tagName?: string; isContentEditable?: boolean } | null
+): boolean {
+  if (key !== 'Delete' && key !== 'Backspace') return false
+  if (target?.isContentEditable) return false
+  return !/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? '')
+}
+
 function normRot(deg?: number): 0 | 90 | 180 | 270 {
   return ((((Math.round((deg ?? 0) / 90) * 90) % 360) + 360) % 360) as 0 | 90 | 180 | 270
 }
@@ -563,10 +592,65 @@ export interface WiringCanvasProps {
    * this unset and keeps the roomier always-open defaults.
    */
   focusedChrome?: boolean
+  /** Circuit Sim node-voltage overlay (#604): a live endpoint→solved-voltage map, the
+   *  colour-scale reference (the top rail), whether it's on / has a valid solve, and a
+   *  toggle. Absent ⇒ no solvable circuit (no electrical parts wired up). */
+  voltage?: {
+    byEndpoint: Map<string, number>
+    /** Signed current per wire id (#604) — drives the travelling-dash flow animation
+     *  (magnitude → speed + thickness, sign → direction). */
+    currentByWire: Map<string, number>
+    ref: number
+    /** The overlay toggle state. */
+    on: boolean
+    /** Whether the DC solve succeeded (so there are voltages to show). */
+    ready: boolean
+    /** Why the solve degraded (when not ready) — surfaced so the user knows why
+     *  nothing colours: no ground, a floating node, a short, or nothing to solve. */
+    reason?: 'empty' | 'no-ground' | 'singular' | 'floating'
+    toggle: () => void
+  }
+  /** LIVE device readings (#…), keyed by board pad index — the running board's
+   *  per-pin values (digital/adc/pwm) badged on each code-used board pad. Absent /
+   *  empty ⇒ LIVE off. `connected` gates the "no board" placeholder. */
+  live?: {
+    byPad: Map<number, { text: string; asserted: boolean }>
+    connected: boolean
+  }
+  /** ERC "Show me" net highlight (#601): the endpoint set of a net to spotlight —
+   *  its wires drawn bright yellow with the rest greyed, plus its node id labelled.
+   *  Any click on the board calls `clear`. Absent ⇒ nothing highlighted. */
+  highlight?: {
+    endpoints: Set<string>
+    /** The node id(s) shown on the net (e.g. `N1`). */
+    label: string
+    clear: () => void
+  }
+  /** All nets (netlist nodes) in the model — powers the Connections panel's "Nets"
+   *  tab. Each is a node id, its kind + rail, solved voltage (if any), and the pins
+   *  on it. Absent ⇒ the Nets tab shows nothing (no solvable circuit / no board). */
+  nets?: NetRow[]
+  /** Highlight a net by node id (null clears) — the Nets tab's "show" action reuses
+   *  the ERC "Show me" spotlight. */
+  onHighlightNet?: (id: string | null) => void
+}
+
+/** One net (netlist node) row for the Connections panel's "Nets" tab. */
+export interface NetRow {
+  /** The node id (e.g. `N1`). */
+  id: string
+  /** `power` | `ground` | `signal`. */
+  kind: string
+  /** Rail label for a power/ground net (`GND`, `5V`, `3V3`), else undefined. */
+  rail?: string
+  /** Solved node voltage, when the DC solve succeeded. */
+  voltage?: number
+  /** The pin endpoints on this net (e.g. `board.VSYS`, `bat.V+`). */
+  members: string[]
 }
 
 interface Drag {
-  kind: 'box' | 'pan' | 'wire' | 'pinch'
+  kind: 'box' | 'pan' | 'wire' | 'pinch' | 'stretch'
   /** box drag */
   boxKey?: string
   startX?: number
@@ -585,6 +669,9 @@ interface Drag {
   from?: string
   cx?: number
   cy?: number
+  /** When set, this wire drag is RE-attaching an existing wire (its id) — the grabbed
+   *  end moves to the released pin, or snaps back if dropped on empty space (#…). */
+  reconnectId?: string
   /** pinch (two-finger touch, #525): starting finger distance + view snapshot */
   pinchDist?: number
   pinchScale?: number
@@ -592,8 +679,12 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
+  // The focusable canvas root — focused when a part is selected so the Delete /
+  // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
+  // a Delete pressed in the code editor, and two board views don't cross-fire).
+  const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<Drag | null>(null)
   const [view, setView] = useState({ tx: 0, ty: 0, scale: 1 })
   // The SVG's pixel size, so the graph-paper grid fills the letterbox margins
@@ -645,6 +736,58 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const [hover, setHover] = useState<{ key: string; pin: number | null } | null>(null)
   // The selected placed part (#176) — shows a mini-toolbar (rotate/rename/delete).
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  // The selected WIRE (connection id), mutually exclusive with a selected part —
+  // click a wire to select it (highlighted), Delete removes it (#…).
+  const [selectedWire, setSelectedWire] = useState<string | null>(null)
+  // Circuit-Sim floating multimeter (#620, replaces the #604 pill + clamp): ONE
+  // toggle opens a draggable DMM over the board. While open, tapping a PAD reads its
+  // node voltage and tapping a WIRE reads its current — both shown in the meter (the
+  // old separate clamp tool is folded in). Its state is entirely local here, so it
+  // never touches the Code-workspace instrument.
+  const [meterOpen, setMeterOpen] = useState(false)
+  const [meterReading, setMeterReading] = useState<BoardMeterReading | null>(null)
+  const toggleMeter = (on: boolean): void => {
+    setMeterOpen(on)
+    if (!on) setMeterReading(null)
+  }
+  // A pad has a node voltage (vs ground). A wire additionally carries a well-defined
+  // current, so the meter fills BOTH readings (#620) — one tap, voltage + current.
+  const probePad = (endpoint: string): void => {
+    setMeterReading({ label: endpointName(endpoint), voltage: voltage?.byEndpoint.get(endpoint) })
+  }
+  const probeWire = (id: string, from: string, to: string): void => {
+    setMeterReading({
+      label: `${endpointName(from)} → ${endpointName(to)}`,
+      voltage: voltage?.byEndpoint.get(from),
+      current: voltage?.currentByWire.get(id) ?? 0
+    })
+  }
+  // Draggable placement for the floating meter (mirrors the code instruments).
+  const meterFloat = useFloatPlacement({ x: 20, y: 52 }, () => {
+    const r = rootRef.current?.getBoundingClientRect()
+    return { w: r?.width ?? 800, h: r?.height ?? 600 }
+  })
+  // Elastic wire wobble (#…): after a stretch drag releases, the pulled belly decays
+  // back to rest with a damped oscillation, driven by requestAnimationFrame ticks.
+  const wobbleRef = useRef<{ wireId: string; ox: number; oy: number; start: number } | null>(null)
+  const wobbleRafRef = useRef<number | null>(null)
+  const startWobble = (wireId: string, ox: number, oy: number): void => {
+    wobbleRef.current = { wireId, ox, oy, start: performance.now() }
+    const tick = (): void => {
+      if (!wobbleRef.current) return
+      if (performance.now() - wobbleRef.current.start > 650) wobbleRef.current = null
+      else wobbleRafRef.current = requestAnimationFrame(tick)
+      force((n) => n + 1)
+    }
+    if (wobbleRafRef.current != null) cancelAnimationFrame(wobbleRafRef.current)
+    wobbleRafRef.current = requestAnimationFrame(tick)
+  }
+  useEffect(
+    () => () => {
+      if (wobbleRafRef.current != null) cancelAnimationFrame(wobbleRafRef.current)
+    },
+    []
+  )
   // Inline rename: the draft alias being typed, or null when not renaming.
   const [renameText, setRenameText] = useState<string | null>(null)
   // Whether a rename-input blur should commit (Esc sets it false to cancel cleanly,
@@ -1028,6 +1171,26 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   const removeConnection = (id: string): void =>
     persist({ ...robot, connections: robot.connections.filter((c) => c.id !== id) })
+  // Re-attach a wire's grabbed end to a new pin: drop the OLD connection + add the
+  // new one in ONE persist (separate remove+add would clobber via stale closures).
+  const reconnectWire = (oldId: string, from: string, to: string): void => {
+    if (from === to) return
+    const id = connectionId(from, to)
+    const rest = robot.connections.filter(
+      (c) => c.id !== oldId && c.id !== id && !(c.from === to && c.to === from)
+    )
+    const net: RobotNet =
+      pinNet(from) === 'vcc' || pinNet(to) === 'vcc'
+        ? 'vcc'
+        : pinNet(from) === 'gnd' || pinNet(to) === 'gnd'
+          ? 'gnd'
+          : 'signal'
+    const conn: RobotConnection = { id, from, to, net }
+    if (net === 'signal') {
+      conn.color = signalColor(rest.filter((c) => (c.net ?? 'signal') === 'signal').length)
+    }
+    persist({ ...robot, connections: [...rest, conn] })
+  }
   const setConnectionColor = (id: string, color: string): void =>
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
@@ -1101,6 +1264,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const onPointerDown = (e: ReactPointerEvent<SVGSVGElement>): void => {
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
+    // A net highlight (ERC "Show me") is dismissed by any click on the board — the
+    // first click just clears it and does nothing else.
+    if (highlight) {
+      highlight.clear()
+      return
+    }
     const touch = e.pointerType === 'touch'
     if (touch) {
       touchPtsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
@@ -1124,6 +1293,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const w = toWorld(e)
     // Fingers are far less precise than a mouse — grow the pin grab radius (#525).
     const dot = dotAt(w.x, w.y, touch ? TOUCH_DOT_TOL : DOT_TOL)
+    // Meter open (#620): a pad tap reads its voltage instead of wiring; a tap on
+    // empty space still pans (so you can reposition the board while probing).
+    if (meterOpen && dot) {
+      probePad(dot.endpoint)
+      return
+    }
     if (dot) {
       dragRef.current = { kind: 'wire', from: dot.endpoint, cx: w.x, cy: w.y }
       // Touch has no hover — surface the grabbed pin's chips like a mouse-over
@@ -1155,6 +1330,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     const d = dragRef.current
     if (!d) return
+    if (d.kind === 'stretch') {
+      // Elastic stretch: the wire's belly follows the cursor until release.
+      const w = toWorld(e)
+      d.liveX = w.x
+      d.liveY = w.y
+      if (Math.hypot(w.x - (d.startX ?? w.x), w.y - (d.startY ?? w.y)) > 3) d.moved = true
+      force((n) => n + 1)
+      return
+    }
     if (d.kind === 'pinch') {
       if (touchPtsRef.current.size < 2) return
       const [a, b] = [...touchPtsRef.current.values()]
@@ -1213,6 +1397,16 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     const d = dragRef.current
     dragRef.current = null
+    if (d?.kind === 'stretch') {
+      // Release an elastic stretch → snap back with a decaying wobble (a no-move
+      // click already selected the wire on pointer-down, so nothing else to do).
+      if (d.moved && d.boxKey && d.liveX != null && d.liveY != null && d.startX != null && d.startY != null) {
+        // Wobble decays the FINAL drag delta back to zero.
+        startWobble(d.boxKey, d.liveX - d.startX, d.liveY - d.startY)
+      }
+      force((n) => n + 1)
+      return
+    }
     if (d?.kind === 'box' && d.moved && d.boxKey && d.liveX != null && d.liveY != null) {
       moveBox(d.boxKey, d.liveX, d.liveY)
       return
@@ -1221,8 +1415,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // a click on empty space clears the selection. Either way, end any rename.
     if (d?.kind === 'box' && !d.moved) {
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
-      setSelectedKey(renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null)
+      const nextSel = renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null
+      setSelectedKey(nextSel)
+      setSelectedWire(null) // a part click clears any wire selection
       setRenameText(null)
+      // Focus the canvas so the Delete/Backspace shortcut targets THIS view (only
+      // when a part is actually selected — don't steal focus on a clear-click).
+      if (nextSel) rootRef.current?.focus()
       // A touch tap set `hover` while dragRef still suppressed the chips — make
       // sure the tap's end repaints even when the selection didn't change (#525).
       force((n) => n + 1)
@@ -1230,6 +1429,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     if (d?.kind === 'pan' && !d.moved) {
       setSelectedKey(null)
+      setSelectedWire(null) // empty-space click clears the wire selection too
       setRenameText(null)
       force((n) => n + 1)
       return
@@ -1237,7 +1437,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (d?.kind === 'wire' && d.from) {
       const w = toWorld(e)
       const target = dotAt(w.x, w.y, e.pointerType === 'touch' ? TOUCH_DOT_TOL : DOT_TOL)
-      if (target && target.endpoint !== d.from) addConnection(d.from, target.endpoint)
+      if (d.reconnectId) {
+        // Re-attaching an existing wire's end: land it on a new pin, else DELETE it —
+        // a disconnected end dropped on empty space removes the wire (a release back on
+        // its own pin re-attaches it, so a plain grab-and-release is a no-op).
+        if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
+        else removeConnection(d.reconnectId)
+      } else if (target && target.endpoint !== d.from) {
+        addConnection(d.from, target.endpoint)
+      }
       force((n) => n + 1)
     }
   }
@@ -1481,11 +1689,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // Breadboard (#182) — control points pushed out along each pin's normal give
   // clearance off the pad and curve cleanly to a far-side pin; it reflows live as
   // either end's node moves (the anchors recompute each render). ----
-  const wirePath = (c: RobotConnection): { d: string } | null => {
+  const wirePath = (
+    c: RobotConnection,
+    pull?: { dx: number; dy: number }
+  ): { d: string; mx: number; my: number } | null => {
     if (renderMode === 'schematic') {
       const pts = wireRoutes.get(c.id)
       if (!pts || pts.length < 2) return null
-      return { d: toSvgPath(pts) }
+      const mid = pts[Math.floor(pts.length / 2)]
+      return { d: toSvgPath(pts), mx: mid.x, my: mid.y }
     }
     const e = wireEnds(c)
     if (!e) return null
@@ -1512,7 +1724,20 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       c2x = e.bx + e.box * WIRE_CLEARANCE
       c2y -= Math.sign(dy || 1) * vbow
     }
-    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}` }
+    const mx = (e.ax + e.bx) / 2
+    const my = (e.ay + e.by) / 2
+    // Elastic pull (#…): move the belly by the drag DELTA (dx,dy) — not toward an
+    // absolute point — so it starts at 0 (no jump) and tracks the cursor. The Bézier
+    // midpoint is 0.75·(control-point offset), so scale by 1/0.75 to make the belly
+    // follow 1:1. The wobble animation feeds a decaying-oscillation delta here.
+    if (pull) {
+      const k = 1 / 0.75
+      c1x += pull.dx * k
+      c1y += pull.dy * k
+      c2x += pull.dx * k
+      c2y += pull.dy * k
+    }
+    return { d: `M ${e.ax} ${e.ay} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${e.bx} ${e.by}`, mx, my }
   }
 
   const drag = dragRef.current
@@ -1587,14 +1812,50 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       )
     : null
 
+  // The first wire on a highlighted net (ERC "Show me") — carries the net-id label.
+  const isHiWire = (c: RobotConnection): boolean =>
+    !!highlight && (highlight.endpoints.has(c.from) || highlight.endpoints.has(c.to))
+  const firstHiId = highlight ? robot.connections.find(isHiWire)?.id : undefined
+
   return (
     <div
+      ref={rootRef}
       className={`wc wc--${renderMode}${dropActive ? ' wc--drop' : ''}`}
+      tabIndex={-1}
       onDragOver={onDropPart ? onCanvasDragOver : undefined}
       onDragLeave={onDropPart ? onCanvasDragLeave : undefined}
       onDrop={onDropPart ? onCanvasDrop : undefined}
+      onKeyDown={(e) => {
+        // Escape closes the floating meter (#620).
+        if (e.key === 'Escape' && meterOpen) {
+          toggleMeter(false)
+          return
+        }
+        // Delete / Backspace removes the selected part OR the selected wire (not
+        // while typing). shouldDeleteSelectedPart just gates the key + typing guard.
+        if (shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
+          if (selectedWire) {
+            e.preventDefault()
+            removeConnection(selectedWire)
+            setSelectedWire(null)
+          } else if (selectedKey) {
+            e.preventDefault()
+            removePart(selectedKey)
+          }
+        }
+      }}
     >
       <div className="wc__stage">
+        {/* Floating multimeter (#620): the draggable DMM, shown while the meter
+            toggle is on. Tapping a pad/wire feeds its voltage/current reading. */}
+        {meterOpen && (
+          <BoardMeter
+            reading={meterReading}
+            refV={voltage?.ref ?? 5}
+            onClose={() => toggleMeter(false)}
+            float={meterFloat}
+          />
+        )}
         <svg
           ref={svgRef}
           className="wc__svg"
@@ -1635,6 +1896,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 <SubjectBody
                   key={s.key}
                   subject={s}
+                  liveByPad={live?.byPad}
                   capsPins={capsOn ? 'all' : undefined}
                   capsHoverPin={capsOn && hover ? hover.pin : null}
                   onHoverPart={(on) =>
@@ -1684,10 +1946,150 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   }
                 }
               }
-              const p = wirePath(c)
+              // Elastic pull (#…): an active stretch follows the cursor; after
+              // release the wobble decays the pulled belly back to rest.
+              let pull: { dx: number; dy: number } | undefined
+              if (
+                drag?.kind === 'stretch' &&
+                drag.moved &&
+                drag.boxKey === c.id &&
+                drag.liveX != null &&
+                drag.liveY != null &&
+                drag.startX != null &&
+                drag.startY != null
+              ) {
+                // Delta since the grab — starts at 0 (no jump), tracks the cursor.
+                pull = { dx: drag.liveX - drag.startX, dy: drag.liveY - drag.startY }
+              } else if (wobbleRef.current?.wireId === c.id) {
+                const el = performance.now() - wobbleRef.current.start
+                const damp = Math.exp(-el / 150)
+                const osc = Math.cos(el / 42)
+                pull = { dx: wobbleRef.current.ox * damp * osc, dy: wobbleRef.current.oy * damp * osc }
+              }
+              const p = wirePath(c, pull)
               if (!p) return null
+              // While this wire's end is being re-attached, hide it — only the live
+              // drag wire shows until it lands (or snaps back).
+              if (drag?.reconnectId === c.id) return null
+              // Node-voltage overlay (#604): colour the wire by its solved voltage
+              // (both ends share a node) + badge the value at its midpoint.
+              const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
+              const isSel = selectedWire === c.id
+              // ERC "Show me" (#601): this net's wires glow yellow, the rest grey out.
+              const isHi = isHiWire(c)
+              const dimmed = !!highlight && !isHi
               return (
-                <path key={c.id} d={p.d} fill="none" stroke={connectionColor(c, isDark)} strokeWidth={3} className="wc__wire" />
+                <g key={c.id}>
+                  {/* Wide, invisible hit path so the thin wire is easy to click to
+                      SELECT it (#…). Selecting clears any part selection + focuses the
+                      canvas so Delete/Backspace targets the wire. */}
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={14}
+                    style={{ pointerEvents: 'stroke', cursor: meterOpen ? 'crosshair' : 'grab' }}
+                    onPointerDown={(e) => {
+                      e.stopPropagation()
+                      // Meter open (#620): a wire tap reads its current, no drag.
+                      if (meterOpen) {
+                        probeWire(c.id, c.from, c.to)
+                        return
+                      }
+                      ;(e.target as Element).setPointerCapture?.(e.pointerId)
+                      setSelectedWire(c.id)
+                      setSelectedKey(null)
+                      rootRef.current?.focus()
+                      // Start an elastic stretch (a click with no move stays a select).
+                      const w = toWorld(e)
+                      dragRef.current = { kind: 'stretch', boxKey: c.id, startX: w.x, startY: w.y, liveX: w.x, liveY: w.y }
+                      force((n) => n + 1)
+                    }}
+                  />
+                  {isSel && (
+                    <path d={p.d} fill="none" stroke="var(--accent, #e6ab30)" strokeWidth={7} opacity={0.5} className="wc__wire-sel" />
+                  )}
+                  {/* Highlight glow behind a "Show me" net's wires. */}
+                  {isHi && <path d={p.d} fill="none" stroke="#ffe14d" strokeWidth={12} opacity={0.4} className="wc__wire-hi" />}
+                  <path
+                    d={p.d}
+                    fill="none"
+                    stroke={
+                      isHi
+                        ? '#ffe14d'
+                        : dimmed
+                          ? '#7b8494'
+                          : v !== undefined
+                            ? voltageColour(v, voltage!.ref)
+                            : connectionColor(c, isDark)
+                    }
+                    strokeWidth={isHi ? 5 : isSel ? 3.6 : 3}
+                    opacity={dimmed ? 0.16 : 1}
+                    className="wc__wire"
+                  />
+                  {/* Current-flow (#604): travelling white dashes − → +, faster +
+                      thicker with more current, reversed for negative flow. */}
+                  {voltage?.on &&
+                    (() => {
+                      const i = voltage.currentByWire.get(c.id)
+                      if (i === undefined || Math.abs(i) < 1e-6) return null
+                      const mag = Math.abs(i)
+                      const dur = Math.max(0.35, Math.min(3, 0.5 / Math.max(0.02, mag * 5)))
+                      return (
+                        <path
+                          d={p.d}
+                          fill="none"
+                          stroke="#fff"
+                          strokeWidth={Math.min(4, 1.5 + mag * 2)}
+                          strokeDasharray="1 9"
+                          strokeLinecap="round"
+                          className="wc__flow"
+                          style={{ animationDuration: `${dur}s`, animationDirection: i < 0 ? 'reverse' : 'normal' }}
+                        />
+                      )
+                    })()}
+                  {/* Voltage label as a pill ON the wire, filled with the wire's OWN
+                      voltage colour (#620) — so with many wires bunched together it's
+                      unambiguous which reading belongs to which wire. */}
+                  {v !== undefined &&
+                    (() => {
+                      const label = formatVoltage(v)
+                      const w = label.length * 5.6 + 10
+                      const h = 14
+                      return (
+                        <g className="wc__volt-tag">
+                          <rect
+                            x={p.mx - w / 2}
+                            y={p.my - h / 2}
+                            width={w}
+                            height={h}
+                            rx={h / 2}
+                            ry={h / 2}
+                            className="wc__volt-pill"
+                            fill={voltageColour(v, voltage!.ref)}
+                          />
+                          <text x={p.mx} y={p.my} textAnchor="middle" dominantBaseline="central" className="wc__volt-badge">
+                            {label}
+                          </text>
+                        </g>
+                      )
+                    })()}
+                  {/* Net-id label on the highlighted net (#601) — the diagram has no
+                      net names otherwise, so the ERC "Show me" pins one here. */}
+                  {isHi &&
+                    c.id === firstHiId &&
+                    (() => {
+                      const w = highlight!.label.length * 7.4 + 16
+                      return (
+                        <g className="wc__net-tag" pointerEvents="none">
+                          <rect x={p.mx - w / 2} y={p.my - 11} width={w} height={22} rx={11} className="wc__net-tag-bg" />
+                          <text x={p.mx} y={p.my} textAnchor="middle" dominantBaseline="central" className="wc__net-tag-txt">
+                            {highlight!.label}
+                          </text>
+                        </g>
+                      )
+                    })()}
+                </g>
               )
             })}
 
@@ -1711,6 +2113,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 />
               )
             })()}
+
+            {/* Drag handles on the SELECTED wire's ends — grab one to detach that
+                end and re-attach it to another pin (#…). Hidden mid-drag. */}
+            {selectedWire &&
+              !drag &&
+              (() => {
+                const c = robot.connections.find((x) => x.id === selectedWire)
+                if (!c) return null
+                const e = wireEnds(c)
+                if (!e) return null
+                const grab =
+                  (fixedEndpoint: string) => (ev: ReactPointerEvent<SVGCircleElement>) => {
+                    ev.stopPropagation()
+                    ;(ev.target as Element).setPointerCapture?.(ev.pointerId)
+                    const w = toWorld(ev)
+                    dragRef.current = { kind: 'wire', from: fixedEndpoint, reconnectId: c.id, cx: w.x, cy: w.y }
+                    setSelectedWire(null)
+                    force((n) => n + 1)
+                  }
+                return (
+                  <g>
+                    <circle cx={e.ax} cy={e.ay} r={6} className="wc__wire-handle" onPointerDown={grab(c.to)} />
+                    <circle cx={e.bx} cy={e.by} r={6} className="wc__wire-handle" onPointerDown={grab(c.from)} />
+                  </g>
+                )
+              })()}
 
             {/* Selection ring around the selected part (#176). */}
             {selPart && (
@@ -1872,7 +2300,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         )}
 
         <div className="wc__controls" role="toolbar" aria-label="Wiring view controls">
-          <span className="wc__hint">Drag from a pin to another pin to wire them.</span>
+          <span className="wc__hint">
+            {voltage?.on && !voltage.ready
+              ? voltage.reason === 'no-ground'
+                ? 'Node voltages: no ground — connect a battery/PSU − (or a GND rail) to a ground path.'
+                : voltage.reason === 'singular' || voltage.reason === 'floating'
+                  ? 'Node voltages: the circuit is floating — complete the loop from + back to −.'
+                  : 'Node voltages: nothing to solve yet — add a powered source (battery / bench PSU) with an electrical model.'
+              : 'Drag from a pin to another pin to wire them.'}
+          </span>
           <div className="wc__zoom">
             <button
               type="button"
@@ -1907,6 +2343,44 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </button>
+            {/* Node-voltage overlay toggle (#604) — only when there's a solvable circuit. */}
+            {voltage && (
+              <>
+                <span className="wc__zoom-sep" aria-hidden="true" />
+                <button
+                  type="button"
+                  className={`wc__zoom-btn${voltage.on ? ' is-active' : ''}`}
+                  onClick={voltage.toggle}
+                  aria-pressed={voltage.on}
+                  title={
+                    voltage.on
+                      ? 'Hide node voltages'
+                      : voltage.ready
+                        ? 'Show node voltages (Circuit Sim)'
+                        : 'Node voltages — power + ground a circuit to see them'
+                  }
+                  aria-label="Toggle node-voltage overlay"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor" />
+                  </svg>
+                </button>
+                {/* Multimeter (#620) — opens a floating DMM; tap a pad for its
+                    voltage, a wire for its current (the clamp is folded in here). */}
+                <button
+                  type="button"
+                  className={`wc__zoom-btn${meterOpen ? ' is-active' : ''}`}
+                  onClick={() => toggleMeter(!meterOpen)}
+                  aria-pressed={meterOpen}
+                  title="Multimeter — tap a pad to read its voltage, or a wire to read its current"
+                  aria-label="Multimeter"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M12 3v7m0 0 3.5 8.5A6 6 0 1 1 8.5 18.5z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+              </>
+            )}
             <span className="wc__zoom-sep" aria-hidden="true" />
             {/* Export image (PNG / SVG / PDF). */}
             <div className="wc__export">
@@ -2006,6 +2480,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       >
         <ConnectionsTable
           connections={robot.connections}
+          nets={nets}
+          onHighlightNet={onHighlightNet}
           isDark={isDark}
           onRemove={removeConnection}
           onColor={setConnectionColor}
@@ -2344,7 +2820,8 @@ function SubjectBody({
   onHoverPin,
   onHoverPart,
   capsPins,
-  capsHoverPin
+  capsHoverPin,
+  liveByPad
 }: {
   subject: Subject
   onHoverPin?: (index: number | null) => void
@@ -2353,6 +2830,9 @@ function SubjectBody({
   /** Which pins draw hover capability chips (forwarded to PartBody). */
   capsPins?: 'all' | ReadonlySet<number>
   capsHoverPin?: number | null
+  /** LIVE device readings by board pad index (#…) — appended to each used pad's
+   *  code-variable label so the Breadboard shows live values. */
+  liveByPad?: Map<number, { text: string; asserted: boolean }>
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -2408,9 +2888,17 @@ function SubjectBody({
               // Tell PartBody the applied rotation/scale so it keeps text upright
               // and pin labels a consistent size (#180). For the MCU, draw the
               // boxed pin annotation (number box + label + code variable).
+              // LIVE (#…): append the running board's per-pin reading to the code
+              // variable at each used pad — e.g. `servo 3.30 V` — so the Breadboard
+              // shows live device values, not just the node graph.
               const pinVars =
                 s.kind === 'board' && s.codeUsed
-                  ? new Map([...s.codeUsed].map(([i, u]) => [i, { variable: u.label, color: u.color }]))
+                  ? new Map(
+                      [...s.codeUsed].map(([i, u]) => {
+                        const lv = liveByPad?.get(i)
+                        return [i, { variable: lv ? `${u.label}  ${lv.text}` : u.label, color: u.color }]
+                      })
+                    )
                   : undefined
               const body = (
                 <PartBody
@@ -2485,9 +2973,12 @@ function fmtEndpoint(ep: string): string {
   return hash >= 0 ? ep.slice(0, hash) : ep
 }
 
-/** The connections table beneath the canvas. */
+/** The connections/nets table beneath the canvas. Two tabs: the wires
+ *  (Connections, default) and every net in the model (Nets, #601). */
 function ConnectionsTable({
   connections,
+  nets,
+  onHighlightNet,
   isDark,
   onRemove,
   onColor,
@@ -2497,6 +2988,8 @@ function ConnectionsTable({
   onPin
 }: {
   connections: RobotConnection[]
+  nets?: NetRow[]
+  onHighlightNet?: (id: string | null) => void
   isDark: boolean
   onRemove: (id: string) => void
   onColor: (id: string, color: string) => void
@@ -2508,6 +3001,15 @@ function ConnectionsTable({
   pinned?: boolean
   onPin?: (v: boolean) => void
 }): JSX.Element {
+  // Opens on Connections; switching to Nets is opt-in (the wiring is the default view).
+  const [tab, setTab] = useState<'connections' | 'nets'>('connections')
+  const netCount = nets?.length ?? 0
+  // endpoint → its net id, so a wire row's Net cell can jump to highlighting that net.
+  const netOfEndpoint = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const n of nets ?? []) for (const ep of n.members) m.set(ep, n.id)
+    return m
+  }, [nets])
   return (
     <div className="wc__table">
       <div className="wc__table-headrow">
@@ -2531,49 +3033,145 @@ function ConnectionsTable({
             </svg>
           </button>
         )}
-        <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
-          <span className="wc__tree-caret" aria-hidden="true">
-            {open ? '▾' : '▸'}
-          </span>
-          <span>Connections</span>
-          <span className="wc__table-count">{connections.length}</span>
-        </button>
+        {open ? (
+          <div className="wc__table-tabs" role="tablist" aria-label="Connections and nets">
+            <button
+              type="button"
+              className="wc__tree-caret wc__tree-caret--btn"
+              onClick={onToggle}
+              aria-label="Collapse"
+              title="Collapse"
+            >
+              ▾
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'connections'}
+              className={`wc__tab${tab === 'connections' ? ' is-active' : ''}`}
+              onClick={() => setTab('connections')}
+            >
+              Connections <span className="wc__table-count">{connections.length}</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={tab === 'nets'}
+              className={`wc__tab${tab === 'nets' ? ' is-active' : ''}`}
+              onClick={() => setTab('nets')}
+            >
+              Nets <span className="wc__table-count">{netCount}</span>
+            </button>
+          </div>
+        ) : (
+          <button type="button" className="wc__table-head wc__table-head--toggle" onClick={onToggle} aria-expanded={open}>
+            <span className="wc__tree-caret" aria-hidden="true">
+              ▸
+            </span>
+            <span>Connections</span>
+            <span className="wc__table-count">{connections.length}</span>
+          </button>
+        )}
       </div>
-      {!open ? null : connections.length === 0 ? (
-        <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
+      {!open ? null : tab === 'connections' ? (
+        connections.length === 0 ? (
+          <p className="wc__muted wc__table-empty">No wires yet — drag between two pins to connect them.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>From</th>
+                <th>To</th>
+                <th>Net</th>
+                <th>Colour</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {connections.map((c) => (
+                <tr key={c.id}>
+                  <td className="wc__mono">{fmtEndpoint(c.from)}</td>
+                  <td className="wc__mono">{fmtEndpoint(c.to)}</td>
+                  <td>
+                    {(() => {
+                      const nodeId = netOfEndpoint.get(c.from) ?? netOfEndpoint.get(c.to)
+                      return nodeId && onHighlightNet ? (
+                        <button
+                          type="button"
+                          className="wc__net-chip"
+                          onClick={() => onHighlightNet(nodeId)}
+                          title={`${c.net ?? 'signal'} net — click to highlight ${nodeId} on the board`}
+                        >
+                          {nodeId}
+                        </button>
+                      ) : (
+                        (c.net ?? 'signal')
+                      )
+                    })()}
+                  </td>
+                  <td>
+                    <input
+                      type="color"
+                      className="wc__swatch"
+                      value={/^#[0-9a-f]{6}$/i.test(connectionColor(c, isDark)) ? connectionColor(c, isDark) : '#888888'}
+                      onChange={(e) => onColor(c.id, e.target.value)}
+                      title="Wire colour"
+                    />
+                  </td>
+                  <td>
+                    <button type="button" className="wc__del" onClick={() => onRemove(c.id)} title="Delete wire" aria-label="Delete wire">
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )
+      ) : netCount === 0 ? (
+        <p className="wc__muted wc__table-empty">No nets yet — wire parts together and each electrically-joined group appears here.</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>From</th>
-              <th>To</th>
               <th>Net</th>
-              <th>Colour</th>
-              <th />
+              <th>Rail</th>
+              <th>Voltage</th>
+              <th>Pins</th>
+              {onHighlightNet && <th />}
             </tr>
           </thead>
           <tbody>
-            {connections.map((c) => (
-              <tr key={c.id}>
-                <td className="wc__mono">{fmtEndpoint(c.from)}</td>
-                <td className="wc__mono">{fmtEndpoint(c.to)}</td>
-                <td>{c.net ?? 'signal'}</td>
-                <td>
-                  <input
-                    type="color"
-                    className="wc__swatch"
-                    value={/^#[0-9a-f]{6}$/i.test(connectionColor(c, isDark)) ? connectionColor(c, isDark) : '#888888'}
-                    onChange={(e) => onColor(c.id, e.target.value)}
-                    title="Wire colour"
-                  />
-                </td>
-                <td>
-                  <button type="button" className="wc__del" onClick={() => onRemove(c.id)} title="Delete wire" aria-label="Delete wire">
-                    ✕
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {nets!.map((n) => {
+              const members = n.members.map(fmtEndpoint).join(', ')
+              const rail = n.rail ?? (n.kind === 'ground' ? 'GND' : n.kind === 'power' ? 'PWR' : '—')
+              return (
+                <tr key={n.id}>
+                  <td className="wc__mono">{n.id}</td>
+                  <td className={`wc__net-rail wc__net-rail--${n.kind}`}>{rail}</td>
+                  <td className="wc__mono">{n.voltage !== undefined ? formatVoltage(n.voltage) : '—'}</td>
+                  <td className="wc__net-members" title={members}>
+                    {members}
+                  </td>
+                  {onHighlightNet && (
+                    <td>
+                      <button
+                        type="button"
+                        className="wc__net-show"
+                        onClick={() => onHighlightNet(n.id)}
+                        title={`Highlight net ${n.id} on the board`}
+                        aria-label={`Highlight net ${n.id}`}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                          <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" fill="none" stroke="currentColor" strokeWidth="2" />
+                          <circle cx="12" cy="12" r="2.6" fill="currentColor" />
+                        </svg>
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       )}

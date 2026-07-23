@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { reporter } from '../lib/report-error'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
@@ -110,11 +110,11 @@ export function Toolbar(): JSX.Element {
   const canRun = activeFile != null && !connecting
 
   /**
-   * Execute the active file on the device using MicroPython paste mode:
-   *   Ctrl-E (\x05) enters paste mode, the file content is streamed verbatim,
-   *   then Ctrl-D (\x04) executes it. Device output flows back to the Shell
-   *   terminal automatically via its existing `onData` subscription — so we
-   *   never need a handle to the terminal here.
+   * Execute the active file on the device via `device.runProgram` — the raw-REPL
+   * streaming run (#612). Unlike the old paste-mode path (`\x05…\x04`), the REPL
+   * does NOT echo the program source or the `paste mode / ===` framing; only the
+   * program's own output streams back to the Shell terminal via its existing
+   * `onData` subscription.
    */
   // Track whether a program is running so the Stop button can double as Reset.
   // Set on Run; cleared when the user Stops (interrupts) or the device drops.
@@ -125,19 +125,48 @@ export function Toolbar(): JSX.Element {
     if (!connected) setRunning(false)
   }, [connected])
 
+  // Remember the last device the user was actually connected to: a REAL board's
+  // port, or null when it was the simulator. Drives Run's auto-connect so a
+  // dropped board doesn't silently switch to the sim (below).
+  const lastRealPortRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (status.state !== 'connected' || !status.path) return
+    lastRealPortRef.current = isVirtualPort(status.path) ? null : status.path
+  }, [status.state, status.path])
+
   const handleRun = useCallback(async (): Promise<void> => {
     if (!activeFile) return
-    // Nothing connected? (e.g. a page reload dropped the simulated device, or the
-    // user hasn't pressed Connect yet.) Boot the simulator and run on it, so Run
-    // never silently does nothing. A real board the user already connected wins —
-    // `connected` is true then and we skip straight to sending the program.
+    // Not connected? A real board the user already connected wins — `connected`
+    // is true then and we skip straight to running. Otherwise auto-connect, but
+    // PREFER a real board over the simulator: a Pico that briefly dropped (e.g. a
+    // servo current spike brown-out) should reconnect to the Pico, not silently
+    // switch to the offline simulator — that's the unexpected/annoying bit.
     if (!connected) {
       try {
         setConnecting(true)
         const ports = await window.api.device.listPorts()
-        const target = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
-        if (!target) throw new Error('No device is available to run on.')
-        await window.api.device.connect(target.path)
+        // Prefer the board we were last on, then any real board, over the sim.
+        const realBoard =
+          ports.find((p) => p.path === lastRealPortRef.current) ??
+          ports.find((p) => !isVirtualPort(p.path))
+        if (realBoard) {
+          await window.api.device.connect(realBoard.path)
+        } else if (lastRealPortRef.current) {
+          // A real board was in use and is now GONE — don't boot the sim behind
+          // the user's back. Tell them; they can reconnect, or pick the Simulator
+          // from the port menu to run without hardware on purpose.
+          reporter('run', {
+            notify:
+              'The board disconnected — reconnect it, or pick the Simulator from the port menu to run without hardware.'
+          })(new Error('board disconnected'))
+          return
+        } else {
+          // No real board has been used this session — boot the simulator so Run
+          // isn't a silent no-op for a first-time / no-hardware user.
+          const sim = ports.find((p) => isVirtualPort(p.path)) ?? ports[0]
+          if (!sim) throw new Error('No device is available to run on.')
+          await window.api.device.connect(sim.path)
+        }
       } catch (err) {
         reporter('connect', { notify: "Couldn't connect a device to run your program." })(err)
         return
@@ -149,8 +178,10 @@ export function Toolbar(): JSX.Element {
     // attach-console control grab only this run's output (issue #78).
     markRun()
     setRunning(true)
-    const payload = `\x05${activeFile.content}\x04`
-    window.api.device.sendData(payload).catch(reporter('run', { notify: "Couldn't send your program to the board." }))
+    // Raw-REPL streaming run — no source echo, no `===` paste framing (#612).
+    window.api.device
+      .runProgram(activeFile.content)
+      .catch(reporter('run', { notify: "Couldn't send your program to the board." }))
   }, [connected, activeFile, markRun])
 
   // Stop is dual-purpose: interrupt a running program (Ctrl-C); or, when nothing

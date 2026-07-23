@@ -872,17 +872,16 @@
 
 :root[data-theme='skeuomorph'] .region--shell .region__body--terminal {
   background: transparent;
-  padding: 8px;
+  /* The black console fills the whole area under the header — no inset gap. */
+  padding: 0;
 }
 
 :root[data-theme='skeuomorph'] .terminal {
   position: relative;
-  border-radius: 8px;
+  border-radius: 0;
   background: #080a07;
-  border: 1px solid #000;
-  box-shadow:
-    inset 0 3px 10px rgba(0, 0, 0, 0.85),
-    0 1px 0 #fff;
+  border: none;
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.85);
 }
 
 /* Glass sheen across the top of the recessed screen. */
@@ -891,7 +890,6 @@
   position: absolute;
   inset: 0 0 auto 0;
   height: 42%;
-  border-radius: 8px 8px 0 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent);
   pointer-events: none;
 }
@@ -1545,17 +1543,16 @@
 
 :root[data-theme='dark'] .region--shell .region__body--terminal {
   background: transparent;
-  padding: 8px;
+  /* The black console fills the whole area under the header — no inset gap. */
+  padding: 0;
 }
 
 :root[data-theme='dark'] .terminal {
   position: relative;
-  border-radius: 8px;
+  border-radius: 0;
   background: #080a07;
-  border: 1px solid #000;
-  box-shadow:
-    inset 0 3px 10px rgba(0, 0, 0, 0.9),
-    0 1px 0 rgba(255, 255, 255, 0.06);
+  border: none;
+  box-shadow: inset 0 3px 10px rgba(0, 0, 0, 0.9);
 }
 
 /* Glass sheen across the top of the recessed screen. */
@@ -1564,7 +1561,6 @@
   position: absolute;
   inset: 0 0 auto 0;
   height: 42%;
-  border-radius: 8px 8px 0 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent);
   pointer-events: none;
 }
@@ -1690,9 +1686,12 @@ body {
  * ones now live in the dock region, right of chat; undocked ones float in an
  * app-root layer over the whole window.) */
 .shell__editor-region {
+  /* The Soft Shell card rule below sizes this as `position:absolute; inset:5px`.
+     Setting width/height:100% here fought that inset (with `left` + `width` both
+     set, `width` wins and `right` is ignored), so the card overflowed its slot's
+     right/bottom by 5px and those rounded corners were CROPPED (#614 follow-up).
+     Let the inset control the box. */
   position: relative;
-  width: 100%;
-  height: 100%;
   min-height: 0;
   overflow: hidden;
 }
@@ -1981,8 +1980,10 @@ body {
   gap: 0.35rem;
   text-transform: none;
   letter-spacing: normal;
-  /* Allow the control to shrink within the (wrapping) shell header so its
+  /* Grow to use the header's spare width (so the dropdown fills the space instead
+   * of being a fixed narrow box), but shrink freely (min-width: 0) so the
    * Connect/Disconnect button is never pushed off-screen (issue #85). */
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -1995,10 +1996,13 @@ body {
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   padding: 0.3rem 0.4rem;
-  /* Cap the width but let the dropdown shrink (min-width: 0) so a long port
-   * label can't push the Connect button out of the header (issue #85). */
+  /* Fill the control's spare width (up to a cap so it never looks absurdly long),
+   * but shrink freely (min-width: 0) so a long port label can't push the Connect
+   * button out of the header (issue #85). */
+  flex: 1 1 auto;
   min-width: 0;
-  max-width: 14rem;
+  max-width: 16rem;
+  text-overflow: ellipsis;
 }
 
 .conn-control__select:disabled {
@@ -2259,6 +2263,11 @@ body {
 .shell__main .shell__panels {
   flex: 1 1 auto;
   min-width: 0;
+  /* Consistent spacing (#614): the outer parchment margin (this padding + each
+     card's 5px inset) matches the gap BETWEEN cards (two 5px insets + the thin
+     2px handle) — ~11–12px everywhere, instead of thin edges + fat inter-panel
+     gaps. */
+  padding: 6px;
 }
 
 /* ── Soft Shell cards (#…) ───────────────────────────────────────────────────
@@ -2291,9 +2300,13 @@ body {
   background: var(--panel, var(--bg-elevated));
 }
 /* The instrument dock is a flex sibling (fixed width), so it cards via margin —
-   flexbox subtracts the margin, no overflow. */
+   flexbox subtracts the margin, no overflow. Match the panels' outer margin
+   (~11px = the shell__panels padding + each card's inset) on the top/right/bottom;
+   its LEFT gap to the panel group comes from the last panel's own right margin, so
+   0 here keeps the dock consistent with the other cards instead of tighter (#614
+   follow-up). */
 .shell__main .shell__dock {
-  margin: 5px;
+  margin: 11px 11px 11px 0;
   border-radius: 14px;
   border: 1px solid var(--shellbd, var(--border));
   box-shadow:
@@ -2312,54 +2325,35 @@ body {
   background: transparent;
   position: relative;
 }
+/* No dashed "stitch" on the dividers (#614) — the col-/row-resize cursor alone
+   signals a handle, so the dashes were just noise. The handle is a thin
+   transparent gap; a WIDER transparent `::before` keeps it easy to grab. Its
+   thin footprint (2px) + the workspace padding below make the gap BETWEEN panels
+   match the margin AROUND them (consistent spacing). */
 :root[data-theme] .shell__panels > .resize-handle {
-  width: 5px;
+  width: 2px;
 }
 :root[data-theme] .shell__vgroup > .resize-handle {
-  height: 5px;
+  height: 2px;
 }
 :root[data-theme] .shell__panels > .resize-handle::before,
 :root[data-theme] .shell__vgroup > .resize-handle::before {
   content: '';
   position: absolute;
-  opacity: 0.75;
-  transition: opacity 0.12s ease;
 }
-/* Vertical divider → vertical dashed thread (1px hairline). */
 :root[data-theme] .shell__panels > .resize-handle::before {
-  top: 10px;
-  bottom: 10px;
+  top: 0;
+  bottom: 0;
   left: 50%;
-  width: 1px;
+  width: 10px;
   transform: translateX(-50%);
-  background-image: repeating-linear-gradient(
-    to bottom,
-    var(--stitch, var(--shellbd)) 0 4px,
-    transparent 4px 8px
-  );
 }
-/* Horizontal divider → horizontal dashed thread (1px hairline). */
 :root[data-theme] .shell__vgroup > .resize-handle::before {
-  left: 10px;
-  right: 10px;
+  left: 0;
+  right: 0;
   top: 50%;
-  height: 1px;
+  height: 10px;
   transform: translateY(-50%);
-  background-image: repeating-linear-gradient(
-    to right,
-    var(--stitch, var(--shellbd)) 0 4px,
-    transparent 4px 8px
-  );
-}
-:root[data-theme] .shell__panels > .resize-handle:hover::before,
-:root[data-theme] .shell__panels > .resize-handle[data-resize-handle-active]::before,
-:root[data-theme] .shell__vgroup > .resize-handle:hover::before,
-:root[data-theme] .shell__vgroup > .resize-handle[data-resize-handle-active]::before {
-  opacity: 1;
-}
-/* Files collapsed → no stitch on its divider (it reopens from the activity bar). */
-:root[data-theme] .shell__panels > .resize-handle--files.is-collapsed::before {
-  display: none;
 }
 
 /* The work area holds the always-mounted Code panel group and, for Electronics /

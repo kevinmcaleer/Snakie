@@ -6,6 +6,115 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-07-23
+
+### Added
+- **Circuit Sim — the Board View now understands electricity (epic #597).** Wiring
+  parts on the Breadboard builds a live **netlist**, and a family of tools read it:
+  - **Electrical Rules Check (#601).** A live badge + panel that flags wiring
+    mistakes — power shorted to ground, two genuinely-different rails bridged, an LED
+    with no series resistor, an I²C bus with no pull-ups — each with a plain-English
+    "why it matters." A **"Show me"** button (and a clickable net id) spotlights the
+    offending net on the board: its wires glow yellow, the rest grey out, the node id
+    is labelled; any click dismisses it.
+  - **DC solver (#603).** An off-thread modified-nodal-analysis engine that solves
+    node voltages + branch currents from the netlist.
+  - **Node-voltage overlay + current flow (#604).** Colours each wire by its solved
+    voltage (blue ground → red rail → violet negative), shows the reading in a
+    colour-matched pill **on** the wire, and animates current as travelling dashes
+    (speed + direction from the current). Says *why* it's blank (floating / no
+    ground) instead of a silent no-op.
+  - **Floating multimeter (#620).** A draggable DMM over the board — tap a pad for
+    its voltage, a wire for its voltage **and** current (the old current clamp is
+    folded in). Reuses the instrument meter's look but reads the solver, and keeps
+    its own state separate from the Code-workspace instrument.
+  - **Electrical models for parts (#600, #605, #606).** Parts declare behaviour —
+    `source`, `resistor`, `led`, `diode`, `switch`, `consumer`, `potentiometer`,
+    `regulator`, `passive` — and the standard loads/supplies are modelled (servo,
+    motor and ultrasonic consumers; battery / PSU sources; a potentiometer). An
+    **interactive potentiometer** re-solves the circuit as you drag its wiper, and an
+    **on-board regulator** (e.g. the Pico's 3V3) makes a board's regulated pins
+    actually source current, drawn from its input rail.
+  - **Electrical section in the Part Editor (#600).** Author a part's electrical
+    model in-app — a model dropdown reveals just that model's fields, and terminals /
+    rails are picked from the part's own pins — instead of hand-editing `parts.yml`.
+  - **Nets tab in the Connections panel (#601).** Lists every net in the model (id,
+    rail, solved voltage, and the pins joined on it); each row jumps to the board
+    highlight, and the Connections tab's Net column is now a clickable net-id chip
+    that does the same.
+- **Part Editor — dense boards & headers.** Servo/DuPont **header groups** (octagonal
+  S/V/G pads placed, moved and deleted as one unit, drawn at a fixed physical size;
+  the Servo 2040's 54 servo pads collapse into 18 header units), an always-visible
+  colour-coded **Type column** in the pin list, **movable + rotatable** LED and
+  connector labels, real-size neopixels, and pin pads/labels that scale to the actual
+  pin **density** (in both the editor and the Board View). Breadboard zoom raised to
+  600%.
+- **3-D glasses view for the Build workspace (epic #521).** A glasses-icon toggle
+  (in the Build toolbar's nav-zone and the mini-viewer, right of Home) renders the
+  model stereoscopically — **red/cyan** or **red/green** anaglyph, or **side-by-side**
+  — with a **depth slider** (eye separation) to dial the effect up or down. The
+  choice + depth persist. Enabling it switches to perspective (parallax needs it);
+  it wraps the existing render with no scene rebuild. (True RealD/polarized cinema
+  glasses need a polarized display and aren't reproducible on a normal monitor.)
+- **Full-screen parts catalog with multi-select (#613).**
+- **"Already in my model" for a duplicated servo.** Dropping a servo into the
+  Electronics view appends a loose 3-D copy of its mesh — redundant when that servo
+  is already a joint in your URDF. The Build panel's Servos section now shows a
+  "remove duplicate 3-D copy" action on such a servo (matched to its loose link);
+  removing it leaves the servo bound to its existing joint via the picker right
+  there, so the electronics servo maps onto the modelled one instead of duplicating.
+
+### Fixed
+- **Circuit Sim solver robustness.** A floating node no longer blanks the whole
+  overlay (a tiny Gmin leak keeps the matrix solvable); a floating load reads ~0 V
+  instead of a ±1e8 garbage value; the solve anchors on the **main** ground rail
+  rather than an isolated GND pin (which floated the circuit symmetrically); and the
+  board's own electrical model (its regulator) is fed into the solver so its rails
+  come alive.
+- **ERC no longer cries wolf on generic supplies (#601).** "Different power rails
+  shorted" now fires only for KNOWN, different voltages (3V3 ↔ 5V) — a battery's
+  `V+`, a device's `VCC` and a `5V` label sharing a node are the same supply, not a
+  short.
+- **Multimeter wire taps register** (the visible wire no longer swallows the tap),
+  and a single tap shows both voltage and current (#620).
+- **Interactive Breadboard wires.** Wires are selectable + deletable, stretch
+  elastically 1:1 with the cursor (only on a drag, no jump) and wobble back on
+  release; a wire's end can be dragged onto another pin, and one dragged off and not
+  re-attached is deleted.
+- **Part Editor** selects the nearest pin under the cursor (not its right-hand
+  neighbour), and labels stay at the board edge when density-scaled.
+- **Imported HDR photos no longer look washed out.** iPhone photos are often HDR
+  (Display P3 with a PQ transfer + gain map), which renders flat / desaturated in
+  Snakie's SDR board UI next to a plain-sRGB image. Importing a part image now
+  flattens it to SDR sRGB (tone-mapping the HDR down, gamut-mapping P3 → sRGB), so
+  it displays consistently; already-SDR images pass through unchanged.
+- **Saving a part with no help no longer logs an ENOENT error** — removing an
+  absent `help.md` is treated as success (the file is already gone), rather than
+  reporting a scary (but harmless) `unlink` failure on every save.
+- **Mounting holes are a clean cutout** — the light plating ring that read as a
+  white border is gone; a hole now shows only the punched-through cutout (a ring
+  appears solely when the hole is selected in the Part Editor).
+- **Build 3-D view frames home on entry, not FRONT.** Switching into the Build
+  workspace framed the model from the default front camera instead of the isometric
+  home (zoom-to-fit) view: the first framing ran before the async meshes had loaded
+  (empty bounding box), bailed to front, yet still marked itself "done" so the
+  post-mesh re-frame just restored that front view. Framing is now only marked done
+  when it actually frames a real model, so it homes once the meshes settle.
+- **Build hierarchy sections no longer overlap / cut off.** The dock's header, mass
+  total and footer could shrink and collide with a tall Chain/Servos/Poses tree; the
+  chrome is now fixed (`flex: 0 0 auto`) so the tree is the sole scroller and every
+  section is reachable.
+- **Help / Report Bug panels open in the Electronics + Build workspaces.** These
+  "solo" workspaces gate their left panel on a store flag, so the top-right Help
+  button, the new-part help toast, and the Report Bug shelf button set the view but
+  never revealed the panel (only the ActivityBar's own Help button, which flips the
+  flag, worked). They now reveal the panel like everywhere else.
+
+### Changed
+- **Retired the Node-graph board view.** The ERC, node-voltage overlay and LIVE
+  readings now live on the Breadboard, which shows every part (the node graph only
+  showed the board).
+
 ## [0.35.1] - 2026-07-21
 
 ### Fixed
@@ -3008,7 +3117,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...HEAD
+[0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...v0.35.0
 [0.34.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.33.1...v0.34.0

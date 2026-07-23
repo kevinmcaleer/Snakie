@@ -188,6 +188,9 @@ const device = {
   eval: (code: string): Promise<string> => unwrap(ipcRenderer.invoke('device:eval', code)),
   /** Send raw keystrokes to the friendly REPL (interactive terminal input). */
   sendData: (data: string): Promise<void> => unwrap(ipcRenderer.invoke('device:sendData', data)),
+  /** Run a whole user PROGRAM, streaming only its output — no source echo / paste
+   *  `===` framing (#612). Output arrives via the device data stream. */
+  runProgram: (code: string): Promise<void> => unwrap(ipcRenderer.invoke('device:runProgram', code)),
   /**
    * Write an IDE→board control line (issue #115): `SNKCMD <target> <payload>\n`.
    * The WRITE counterpart of the `SNK …` telemetry — the on-device `control`
