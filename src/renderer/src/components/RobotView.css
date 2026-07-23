@@ -259,6 +259,43 @@
   color: var(--text, #34373d);
 }
 
+/* 3-D glasses toggle (#521 / #622) — sits under the projection dropdown in the
+   nav zone; hidden until hover like its neighbour, but stays visible (accent) when
+   ON so it can be turned back off. */
+.robotview__glasses {
+  position: absolute;
+  top: 178px;
+  right: 0;
+  width: 30px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text, #cdd2d9);
+  background: rgba(20, 21, 24, 0.82);
+  border: 1px solid var(--border, #3a3d44);
+  border-radius: 5px;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.robotview__navzone:hover .robotview__glasses,
+.robotview__glasses:focus,
+.robotview__glasses.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.robotview__glasses.is-on {
+  color: #fff;
+  border-color: var(--accent, #e6ab30);
+  background: var(--accent, #e6ab30);
+}
+:root[data-theme='skeuomorph'] .robotview__glasses {
+  background: rgba(231, 226, 211, 0.92);
+  color: var(--text, #34373d);
+}
+
 /* Bottom-right zoom cluster — identical to the node-graph viewport control
    (.boardgraph__viewport-ctl) so every zoom control in the app matches. */
 /* Soft Shell glass — a warm parchment cluster in the light skin, dark glass in the

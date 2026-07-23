@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import type { ReactNode } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
@@ -418,6 +419,12 @@ export function RobotView({
   // Camera projection — PERSPECTIVE is the default view (the ViewCube dropdown
   // toggles it). Changing it rebuilds the 3-D effect + re-frames.
   const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
+  // Stereoscopic 3-D glasses (#521 / #622): render the scene as a red/cyan anaglyph
+  // when on. Held in a ref the render loop reads each frame, so toggling doesn't
+  // rebuild the scene. Parallax needs perspective — enabling it prefers persp.
+  const [stereo3d, setStereo3d] = useState(false)
+  const stereoRef = useRef(stereo3d)
+  stereoRef.current = stereo3d
   metaRef.current = jointMeta
   valuesRef.current = values
   overridesRef.current = overrides
@@ -2672,6 +2679,16 @@ export function RobotView({
     renderer.outputColorSpace = THREE.SRGBColorSpace
     mount.appendChild(renderer.domElement)
 
+    // Stereoscopic 3-D (#622): a red/cyan anaglyph effect wrapping the plain render.
+    // Sized in resize(); every render goes through renderFrame() so toggling stereo
+    // is just a per-frame branch (no scene rebuild). Only the main scene is stereo —
+    // the ViewCube overlay renders normally after.
+    const anaglyph = new AnaglyphEffect(renderer)
+    const renderFrame = (): void => {
+      if (stereoRef.current) anaglyph.render(scene, camera)
+      else renderer.render(scene, camera)
+    }
+
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
     controls.dampingFactor = 0.08
@@ -2771,6 +2788,7 @@ export function RobotView({
       // updateStyle defaults true → the canvas CSS size fits the container while
       // the drawing buffer scales by the pixel ratio.
       renderer.setSize(w, h)
+      anaglyph.setSize(w, h) // keep the stereo effect's render targets in step (#622)
       const aspect = w / h
       if (camera instanceof THREE.OrthographicCamera) {
         // Keep `halfView` world units visible vertically, widen by the aspect.
@@ -4870,7 +4888,7 @@ export function RobotView({
           setComStatus(cs)
         }
       }
-      renderer.render(scene, camera)
+      renderFrame()
       if (viewCube) {
         viewCube.sync(camera.quaternion)
         viewCube.render()
@@ -4915,6 +4933,7 @@ export function RobotView({
         if (Array.isArray(mat)) mat.forEach((m) => m.dispose())
         else mat?.dispose()
       })
+      anaglyph.dispose()
       renderer.dispose()
       if (renderer.domElement.parentNode === mount) mount.removeChild(renderer.domElement)
     }
@@ -5055,6 +5074,40 @@ export function RobotView({
               <option value="ortho">Orthographic</option>
               <option value="persp">Perspective</option>
             </select>
+            {/* 3-D glasses (#521 / #622): red/cyan anaglyph. Parallax needs
+                perspective, so enabling it switches away from orthographic. */}
+            <button
+              type="button"
+              className={`robotview__glasses${stereo3d ? ' is-on' : ''}`}
+              aria-pressed={stereo3d}
+              onClick={() => {
+                setStereo3d((v) => {
+                  const next = !v
+                  if (next && projection === 'ortho') {
+                    refitNextRef.current = true
+                    setProjection('persp')
+                  }
+                  return next
+                })
+              }}
+              title={
+                stereo3d
+                  ? '3-D glasses ON (red/cyan anaglyph) — click to turn off'
+                  : 'View in 3-D with red/cyan glasses'
+              }
+              aria-label="Toggle 3-D glasses view"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M3 8h18M3 8v3.5a3 3 0 0 0 6 0V8M15 8v3.5a3 3 0 0 0 6 0V8"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
           </div>
         )}
         {!isEmpty && !error && !compact && (
