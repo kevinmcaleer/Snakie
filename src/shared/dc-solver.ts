@@ -173,9 +173,12 @@ export function solveDC(circuit: SolverCircuit): SolverState {
 
   // Which nodes are POWERED — reachable from a source terminal through conducting
   // elements (a source ties both its nodes; resistors / closed switches carry on)?
-  // A regulator only regulates when its INPUT rail is powered; otherwise it would
-  // manufacture energy from a floating input, so it stays off.
+  // Used two ways: a regulator only regulates when its INPUT rail is powered (no
+  // manufacturing energy from a floating input), and a consumer only draws when its
+  // net is powered (a current sink on a Gmin-only-tied node would otherwise blow up
+  // to ±1e8 V — the "floating VCC" garbage reading).
   const powered = new Set<number>()
+  const activeRegIds = new Set<string>()
   {
     const adj = new Map<number, number[]>()
     const link = (a: number, b: number): void => {
@@ -184,25 +187,41 @@ export function solveDC(circuit: SolverCircuit): SolverState {
       adj.get(a)!.push(b)
       adj.get(b)!.push(a)
     }
-    const stack: number[] = []
+    const seeds: number[] = []
     for (const el of elements) {
       if (el.model === 'source') {
-        stack.push(el.a, el.b)
+        seeds.push(el.a, el.b)
         link(el.a, el.b)
       } else if (el.model === 'resistor') link(el.a, el.b)
       else if (el.model === 'switch' && el.closed) link(el.a, el.b)
     }
-    while (stack.length) {
-      const node = stack.pop()!
-      if (powered.has(node)) continue
-      powered.add(node)
-      for (const nb of adj.get(node) ?? []) if (!powered.has(nb)) stack.push(nb)
+    const flood = (from: number[]): void => {
+      const stack = [...from]
+      while (stack.length) {
+        const node = stack.pop()!
+        if (powered.has(node)) continue
+        powered.add(node)
+        for (const nb of adj.get(node) ?? []) if (!powered.has(nb)) stack.push(nb)
+      }
+    }
+    flood(seeds)
+    // A regulated rail is powered too: activate a regulator once its INPUT rail is
+    // powered, then flood its OUTPUT rail (and anything resistively hanging off it).
+    // Iterate to a fixpoint so a regulator fed by another regulator's rail resolves.
+    let changed = true
+    while (changed) {
+      changed = false
+      for (const el of elements) {
+        if (el.model !== 'regulator' || activeRegIds.has(el.id)) continue
+        if (powered.has(el.a)) {
+          activeRegIds.add(el.id)
+          flood([el.b])
+          changed = true
+        }
+      }
     }
   }
-  // Active regulators (input rail powered) each add one MNA branch-current unknown too.
-  const activeRegIds = new Set(
-    elements.filter((e) => e.model === 'regulator' && powered.has(e.a)).map((e) => e.id)
-  )
+  // Active regulators each add one MNA branch-current unknown alongside the sources.
   const m = vsources.length + activeRegIds.size
   const size = n + m
 
@@ -284,7 +303,9 @@ export function solveDC(circuit: SolverCircuit): SolverState {
       }
       if (el.model === 'consumer') {
         // A fixed load: a current source drawing `currentDrawA` from a (pwr) to b (gnd).
-        stampI(el.a, el.b, Math.max(0, el.currentDrawA ?? 0))
+        // Only draws when its net is actually powered — a sink on a floating rail has
+        // no supply to pull from and would drag that node to ±1e8 V against Gmin.
+        if (powered.has(el.a) && powered.has(el.b)) stampI(el.a, el.b, Math.max(0, el.currentDrawA ?? 0))
         continue
       }
       if (el.model === 'led' || el.model === 'diode') {
@@ -366,7 +387,8 @@ export function solveDC(circuit: SolverCircuit): SolverState {
         break
       }
       case 'consumer':
-        branchCurrents[el.id] = Math.max(0, el.currentDrawA ?? 0)
+        branchCurrents[el.id] =
+          powered.has(el.a) && powered.has(el.b) ? Math.max(0, el.currentDrawA ?? 0) : 0
         break
       case 'led':
       case 'diode': {

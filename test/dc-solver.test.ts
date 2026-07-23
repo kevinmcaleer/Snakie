@@ -185,6 +185,18 @@ describe('solveDC — switches, consumers', () => {
     expect(r.nodeVoltages[1]).toBeCloseTo(5, 9) // ideal rail holds
     expect(r.branchCurrents.Servo).toBeCloseTo(0.1, 9)
   })
+
+  it('a consumer on a FLOATING rail draws nothing (no ±1e8 V blow-up)', () => {
+    // A 15mA sink on node 1, which has NO source — only Gmin ties it to ground. Without
+    // gating, the sink drags node 1 to ~−1.5e8 V (0.015A ÷ 1e-10 S). Gated, it reads ~0.
+    const r = solveDC({
+      nodeCount: 2,
+      ground: 0,
+      elements: [{ id: 'sensor', model: 'consumer', a: 1, b: 0, currentDrawA: 0.015 }]
+    })
+    expect(Math.abs(r.nodeVoltages[1])).toBeLessThan(1) // NOT 1.5e8
+    expect(r.branchCurrents.sensor).toBe(0) // no supply → no draw
+  })
 })
 
 describe('solveDC — graceful degradation (never NaN)', () => {
