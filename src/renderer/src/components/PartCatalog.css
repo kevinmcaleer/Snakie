@@ -62,6 +62,20 @@
   border-radius: 9px;
   outline: none;
 }
+
+/* Library filter — matches the search field. */
+.pcat__lib {
+  height: 34px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 13px;
+  color: #1c2621;
+  background: #f4f6f2;
+  border: 1.5px solid #dcdfd8;
+  border-radius: 9px;
+  outline: none;
+  cursor: pointer;
+}
 .pcat__search:focus {
   border-color: #0b7a6b;
 }
@@ -252,7 +266,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f2ed;
+  /* White so the letterbox behind a contained product photo blends into the card
+     (the no-image placeholder paints its own pcbColor over this). */
+  background: #fff;
   border-radius: 8px;
   overflow: hidden;
 }

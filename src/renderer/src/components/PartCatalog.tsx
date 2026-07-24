@@ -33,6 +33,16 @@ const keyOf = (i: CatalogItem): string => `${i.libraryId}::${i.part.id}`
 export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps): JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
+  // Which library to show — 'all' (de-duped) or a single library id.
+  const [libraryId, setLibraryId] = useState<string>('all')
+
+  // De-dupe the libraries by id, and list LOCAL (user) libraries first so their
+  // part wins a duplicate-id tie in the "All libraries" view.
+  const libs = useMemo(() => {
+    const byId = new Map<string, PartLibraryWithParts>()
+    for (const l of libraries) if (!byId.has(l.id)) byId.set(l.id, l)
+    return [...byId.values()].sort((a, b) => (a.source === 'local' ? 0 : 1) - (b.source === 'local' ? 0 : 1))
+  }, [libraries])
 
   // Esc closes the catalog.
   useEffect(() => {
@@ -47,23 +57,31 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   // family/name the category grouping reads.
   const allItems = useMemo(
     () =>
-      libraries.flatMap((lib) =>
+      libs.flatMap((lib) =>
         (lib.parts ?? []).map((part) => ({ libraryId: lib.id, part, family: part.family, name: part.name }))
       ),
-    [libraries]
+    [libs]
   )
+
+  // The items for the chosen library — a single library, or (for 'all') every
+  // library de-duped by part id so a part shared across libraries appears once.
+  const visibleItems = useMemo(() => {
+    if (libraryId !== 'all') return allItems.filter((i) => i.libraryId === libraryId)
+    const seen = new Set<string>()
+    return allItems.filter((i) => (seen.has(i.part.id) ? false : (seen.add(i.part.id), true)))
+  }, [allItems, libraryId])
 
   const q = query.trim().toLowerCase()
   const filtered = useMemo(() => {
-    if (!q) return allItems
-    return allItems.filter(({ part }) => {
+    if (!q) return visibleItems
+    return visibleItems.filter(({ part }) => {
       const hay = [part.name, part.description, part.family, part.partNumber, ...(part.tags ?? [])]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
       return hay.includes(q)
     })
-  }, [allItems, q])
+  }, [visibleItems, q])
 
   // Group the filtered parts into shelves by category (same order as the panel).
   const shelves = useMemo(() => groupByCategory(filtered), [filtered])
@@ -91,6 +109,22 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
       <div className="pcat__panel">
         <header className="pcat__head">
           <span className="pcat__title">Parts Catalog</span>
+          {libs.length > 1 && (
+            <select
+              className="pcat__lib"
+              value={libraryId}
+              onChange={(e) => setLibraryId(e.target.value)}
+              aria-label="Filter by library"
+              title="Show one library"
+            >
+              <option value="all">All libraries</option>
+              {libs.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name || l.id}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             className="pcat__search"
             type="search"
