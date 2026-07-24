@@ -181,16 +181,16 @@ export const LockIcon = ({ size }: { size?: number }): JSX.Element =>
     size
   )
 
-/** An open padlock — an unlocked field/layer. The shackle hinges on the RIGHT
- *  and swings up-and-left (the mirror of the closed {@link LockIcon}, whose
- *  shackle sits centred), so "unlocked" reads at a glance from the icon itself,
- *  not just the button state (#…). */
+/** An open padlock — an unlocked field/layer. The shackle keeps its full closed
+ *  loop but is rotated about its LEFT leg (à la Font Awesome `lock-open`), so the
+ *  free leg swings up and OVERHANGS the body — "unlocked" reads from the icon
+ *  itself, not just the button state (#…). */
 export const UnlockIcon = ({ size }: { size?: number }): JSX.Element =>
   svg(
     g(
       <>
         <rect x="4.9" y="10.6" width="14.2" height="9.4" rx="1.8" />
-        <path d="M15.7 10.6V7a3.9 3.9 0 0 0-7-2.1" />
+        <path d="M8.9 11.6 6.95 8.26A3.7 3.7 0 0 1 13.36 4.56L14.71 6.9" />
       </>
     ),
     size
