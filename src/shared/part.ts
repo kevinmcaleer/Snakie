@@ -278,6 +278,8 @@ export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
  */
 export interface ComponentShape {
   kind: ComponentShapeKind
+  /** Group id — items sharing it form a group (move/rotate/delete together, #627). */
+  group?: string
   /** Optional label drawn centred on the shape. */
   label?: string
   /** Fill colour (any CSS colour). */
@@ -325,6 +327,8 @@ export interface PartLabel {
   text: string
   x: number
   y: number
+  /** Group id — items sharing it form a group (move/rotate/delete together, #627). */
+  group?: string
   /** Font size in SVG user units (the canvas viewBox is ~420 wide). */
   fontSize?: number
   /** Draw order within the Components layer (see {@link ComponentShape.z}). */
@@ -450,6 +454,19 @@ export interface PartElectrical {
 }
 
 /**
+ * A group of items in the Part Editor (#627). Items reference it by their `group`
+ * id; this registry names it and records nesting via {@link parent} (a group whose
+ * `parent` is another group's id is nested inside it). A group can therefore hold
+ * both loose items (their `group` = this id) and sub-groups (their `parent` = this id).
+ */
+export interface PartGroup {
+  id: string
+  name?: string
+  /** The id of the group this one is nested inside, if any. */
+  parent?: string
+}
+
+/**
  * A full, portable Part. The fields above the geometry line are the `parts.yml`
  * header the epic spells out (name, manufacturer, family, tags, package, pin
  * spacing, user key/values, voltage, part #); below it is everything the Board
@@ -518,6 +535,10 @@ export interface PartDefinition {
   onboardLeds?: OnboardLed[]
   /** Physical connectors (QWIIC / STEMMA QT / JST) drawn on the board. */
   connectors?: PartConnector[]
+  /** Groups (#627): items carry a `group` id; this registry names them + records
+   *  nesting (`parent`), so a group can hold items AND sub-groups. Membership is
+   *  the `group` id on items (robust to reorder), not index refs. */
+  groups?: PartGroup[]
   /** Onboard-LED pin token (name/gpio, e.g. `"LED"` or `"25"`). Legacy hint. */
   ledLabel?: string
 

@@ -34,6 +34,7 @@ import type {
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
+  PartGroup,
   PartLabel,
   PartPin,
   PartPinType,
@@ -190,6 +191,44 @@ function boardAspect(part: PartDefinition): number {
 
 /** The alignment/distribute modes the toolbar offers. */
 type AlignMode = 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom' | 'distX' | 'distY'
+
+/**
+ * Group / ungroup icon (#629): a rounded frame with four corner ticks (the classic
+ * "selection group" glyph). The ungroup variant dashes the frame so it reads as
+ * "break apart".
+ */
+function groupIcon(ungroup: boolean): JSX.Element {
+  const tick = (x: number, y: number, dx: number, dy: number): JSX.Element => (
+    <path
+      key={`${x},${y}`}
+      d={`M ${x + dx} ${y} L ${x} ${y} L ${x} ${y + dy}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+    />
+  )
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <rect
+        x={3}
+        y={3}
+        width={10}
+        height={10}
+        rx={1.4}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        opacity={0.5}
+        strokeDasharray={ungroup ? '2 1.6' : undefined}
+      />
+      {tick(2, 2, 2.2, 2.2)}
+      {tick(14, 2, -2.2, 2.2)}
+      {tick(2, 14, 2.2, -2.2)}
+      {tick(14, 14, -2.2, -2.2)}
+    </svg>
+  )
+}
 
 /**
  * A representative align/distribute icon (#170): a reference line on the alignment
@@ -954,6 +993,117 @@ export function PartCanvas({
 
   /** Total count of items in the alignment multi-selection (pins + components). */
   const alignCount = selectedPins.length + selComponents.length
+
+  // ── Grouping (#629) ──────────────────────────────────────────────────────
+  // Membership is by a `group` id stored on each item (pin/shape/label); the
+  // optional `groups` registry on the part records nesting (`parent`) + names,
+  // so a group survives re-ordering (ids, not indices).
+
+  const mkGroupId = (): string => `grp-${Math.random().toString(36).slice(2, 9)}`
+
+  /** Walk a group's `parent` chain to its outermost ancestor id. */
+  const groupRootOf = (gid: string | undefined): string | undefined => {
+    const registry = part.groups ?? []
+    let cur = gid
+    const seen = new Set<string>()
+    while (cur && !seen.has(cur)) {
+      seen.add(cur)
+      const parent = registry.find((g) => g.id === cur)?.parent
+      if (!parent) return cur
+      cur = parent
+    }
+    return cur
+  }
+
+  /** The `group` id of each currently-selected item (undefined = loose). */
+  const selectionGroupIds = (): (string | undefined)[] => {
+    const out: (string | undefined)[] = []
+    for (const s of selectedPins) out.push(part.headers[s.hi]?.pins[s.pi]?.group)
+    for (const c of selComponents)
+      out.push(c.type === 'shape' ? shapes[c.index]?.group : labels[c.index]?.group)
+    return out
+  }
+
+  /** If every selected item shares one non-empty group, that group id — else null. */
+  const selectionGroup = (): string | null => {
+    const ids = selectionGroupIds()
+    if (!ids.length || !ids[0]) return null
+    return ids.every((g) => g === ids[0]) ? (ids[0] as string) : null
+  }
+
+  /** Group the current multi-selection: loose items join a new group; any item
+   *  that already belongs to a group nests that group's whole tree inside it. */
+  const groupSelection = (): void => {
+    if (alignCount < 2) return
+    const gid = mkGroupId()
+    const nestRoots = new Set<string>()
+    const noteExisting = (g: string | undefined): void => {
+      if (!g) return
+      const root = groupRootOf(g)
+      if (root && root !== gid) nestRoots.add(root)
+    }
+    const pinSel = (hi: number, pi: number): boolean =>
+      selectedPins.some((s) => s.hi === hi && s.pi === pi)
+    const compSel = (type: 'shape' | 'label', index: number): boolean =>
+      selComponents.some((c) => c.type === type && c.index === index)
+
+    const nextHeaders = part.headers.map((h, hi) => ({
+      ...h,
+      pins: h.pins.map((p, pi) => {
+        if (!pinSel(hi, pi)) return p
+        if (p.group) {
+          noteExisting(p.group)
+          return p
+        }
+        return { ...p, group: gid }
+      })
+    }))
+    const nextShapes = shapes.map((s, i) => {
+      if (!compSel('shape', i)) return s
+      if (s.group) {
+        noteExisting(s.group)
+        return s
+      }
+      return { ...s, group: gid }
+    })
+    const nextLabels = labels.map((l, i) => {
+      if (!compSel('label', i)) return l
+      if (l.group) {
+        noteExisting(l.group)
+        return l
+      }
+      return { ...l, group: gid }
+    })
+    const registry = (part.groups ?? []).map((g) =>
+      nestRoots.has(g.id) ? { ...g, parent: gid } : g
+    )
+    registry.push({ id: gid })
+    commit({ ...part, headers: nextHeaders, shapes: nextShapes, labels: nextLabels, groups: registry })
+  }
+
+  /** Dissolve a group by one level: its members (and any sub-groups) are
+   *  re-parented to the group's own parent (loose when it was top-level). */
+  const ungroupSelection = (gid: string): void => {
+    const registry = part.groups ?? []
+    const parent = registry.find((g) => g.id === gid)?.parent
+    const relabel = (g: string | undefined): string | undefined => (g === gid ? parent : g)
+    const nextHeaders = part.headers.map((h) => ({
+      ...h,
+      pins: h.pins.map((p) => (p.group === gid ? { ...p, group: parent } : p))
+    }))
+    const nextShapes = shapes.map((s) => (s.group === gid ? { ...s, group: parent } : s))
+    const nextLabels = labels.map((l) => (l.group === gid ? { ...l, group: parent } : l))
+    const nextGroups = registry
+      .filter((g) => g.id !== gid)
+      .map((g): PartGroup => ({ ...g, parent: relabel(g.parent) }))
+    commit({
+      ...part,
+      headers: nextHeaders,
+      shapes: nextShapes,
+      labels: nextLabels,
+      groups: nextGroups.length ? nextGroups : undefined
+    })
+  }
 
   /** Container-pixel position of the LAST selected item, so the align toolbar can
    *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */
@@ -2849,6 +2999,7 @@ export function PartCanvas({
           const style = anchor
             ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
             : undefined
+          const selGroup = selectionGroup()
           return (
             <div className="pcv__align" role="toolbar" aria-label="Align selection" style={style}>
               <span className="pcv__align-count">{alignCount}</span>
@@ -2878,6 +3029,25 @@ export function PartCanvas({
               <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignCount < 3}>
                 {alignIcon('distY')}
               </button>
+              <span className="pcv__align-sep" />
+              <button
+                type="button"
+                className="pcv__align-btn"
+                onClick={groupSelection}
+                title={selGroup ? 'Group again (nest)' : 'Group selection'}
+              >
+                {groupIcon(false)}
+              </button>
+              {selGroup && (
+                <button
+                  type="button"
+                  className="pcv__align-btn"
+                  onClick={() => ungroupSelection(selGroup)}
+                  title="Ungroup"
+                >
+                  {groupIcon(true)}
+                </button>
+              )}
             </div>
           )
         })()}

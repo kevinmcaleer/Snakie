@@ -28,6 +28,7 @@ import type {
   PartEdge,
   PartElectrical,
   PartFeature,
+  PartGroup,
   PartHeader,
   PartLabel,
   PartLibrary,
@@ -157,6 +158,8 @@ function coercePin(raw: unknown): PartPin | null {
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
+  const group = str(r.group)
+  if (group) pin.group = group
   if (r.labelOffset && typeof r.labelOffset === 'object') {
     const lo = r.labelOffset as Record<string, unknown>
     const lx = num(lo.x)
@@ -240,6 +243,8 @@ function coerceShape(raw: unknown): ComponentShape | null {
   const y = num(r.y)
   if (x === undefined || y === undefined) return null
   const shape: ComponentShape = { kind, x, y }
+  const group = str(r.group)
+  if (group) shape.group = group
   const label = str(r.label)
   if (label) shape.label = label
   const fill = str(r.fill)
@@ -333,6 +338,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.rotation !== undefined) out.rotation = p.rotation
   if (p.x !== undefined) out.x = p.x
   if (p.y !== undefined) out.y = p.y
+  if (p.group) out.group = p.group
   if (p.labelOffset) out.labelOffset = { x: p.labelOffset.x, y: p.labelOffset.y }
   return out
 }
@@ -367,6 +373,7 @@ export function partToYaml(part: PartDefinition): string {
     features: part.features,
     shapes: part.shapes,
     labels: part.labels,
+    groups: part.groups,
     onboardLeds: part.onboardLeds,
     connectors: part.connectors?.map((c) => ({
       kind: c.kind,
@@ -533,10 +540,28 @@ export function partFromYaml(text: string): PartDefinition {
         if (al) out.align = al
         const col = str(rec?.color)
         if (col) out.color = col
+        const grp = str(rec?.group)
+        if (grp) out.group = grp
         return out
       })
       .filter((l): l is PartLabel => l !== null)
     if (labels.length) part.labels = labels
+  }
+  if (Array.isArray(raw.groups)) {
+    const groups = raw.groups
+      .map((g): PartGroup | null => {
+        const gr = g as Record<string, unknown>
+        const id = str(gr?.id)
+        if (!id) return null
+        const out: PartGroup = { id }
+        const name = str(gr?.name)
+        if (name) out.name = name
+        const parent = str(gr?.parent)
+        if (parent) out.parent = parent
+        return out
+      })
+      .filter((g): g is PartGroup => g !== null)
+    if (groups.length) part.groups = groups
   }
   if (Array.isArray(raw.onboardLeds)) {
     const leds = raw.onboardLeds

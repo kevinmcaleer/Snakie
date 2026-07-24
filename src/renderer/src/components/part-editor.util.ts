@@ -30,6 +30,7 @@ import {
   type OnboardLed,
   type PartConnector,
   type PartFeature,
+  type PartGroup,
   type PartHeader,
   type PartLabel,
   type PartPin,
@@ -315,6 +316,7 @@ function normalisePin(pin: PartPin): PartPin {
 function normaliseShape(s: ComponentShape): ComponentShape {
   const kind: ComponentShapeKind = COMPONENT_SHAPES.includes(s.kind) ? s.kind : 'rect'
   const out: ComponentShape = { kind, x: clamp(s.x, -0.2, 1.2), y: clamp(s.y, -0.2, 1.2) }
+  if (typeof s.group === 'string' && s.group.trim()) out.group = s.group.trim()
   const label = String(s.label ?? '').trim()
   if (label) out.label = label
   out.fill = typeof s.fill === 'string' && s.fill.trim() ? s.fill : DEFAULT_SHAPE_FILL
@@ -933,10 +935,29 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         if (l.underline) lbl.underline = true
         if (l.align === 'left' || l.align === 'center' || l.align === 'right') lbl.align = l.align
         if (typeof l.color === 'string' && l.color.trim()) lbl.color = l.color.trim()
+        if (typeof l.group === 'string' && l.group.trim()) lbl.group = l.group.trim()
         return lbl
       })
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
+  }
+  // Group registry (#627) — kept only for ids still referenced by an item's `group`
+  // or by a nested group's `parent`, so ungrouping/deleting leaves no orphan groups.
+  if (Array.isArray(part.groups) && part.groups.length) {
+    const referenced = new Set<string>()
+    for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) referenced.add(p.group)
+    for (const s of part.shapes ?? []) if (s.group) referenced.add(s.group)
+    for (const l of part.labels ?? []) if (l.group) referenced.add(l.group)
+    for (const g of part.groups) if (g.parent) referenced.add(g.parent)
+    const groups = part.groups
+      .filter((g) => g.id && referenced.has(g.id))
+      .map((g): PartGroup => {
+        const grp: PartGroup = { id: String(g.id) }
+        if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
+        if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
+        return grp
+      })
+    if (groups.length) out.groups = groups
   }
   if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
     out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {

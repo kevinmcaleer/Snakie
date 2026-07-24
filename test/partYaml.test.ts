@@ -198,6 +198,41 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(pin.gpio).toBeUndefined()
     expect(pin.capabilities).toBeUndefined()
   })
+
+  it('round-trips grouped items + a nested groups registry (#629)', () => {
+    const part = normalisePart({
+      id: 'g',
+      name: 'Grouped',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'S', type: 'io', number: 1, group: 'trio' },
+            { name: 'V', type: 'pwr', number: 2, group: 'trio' },
+            { name: 'G', type: 'gnd', number: 3, group: 'trio' }
+          ]
+        }
+      ],
+      shapes: [{ kind: 'rect', x: 0.2, y: 0.2, w: 0.2, h: 0.2, group: 'outer' }],
+      labels: [{ text: 'hi', x: 0.5, y: 0.5, group: 'outer' }],
+      groups: [{ id: 'trio', name: 'Servo header', parent: 'outer' }, { id: 'outer' }]
+    })
+    expect(part.headers[0].pins.every((p) => p.group === 'trio')).toBe(true)
+    expect(part.shapes?.[0].group).toBe('outer')
+    expect(part.labels?.[0].group).toBe('outer')
+    expect(part.groups).toEqual([{ id: 'trio', name: 'Servo header', parent: 'outer' }, { id: 'outer' }])
+    expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
+  })
+
+  it('drops an orphan group id nothing references (#629)', () => {
+    const part = normalisePart({
+      id: 'g',
+      name: 'Grouped',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', number: 1 }] }],
+      groups: [{ id: 'ghost', name: 'unused' }]
+    })
+    expect(part.groups).toBeUndefined()
+  })
 })
 
 describe('library.yml round-trip', () => {
