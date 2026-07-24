@@ -1127,11 +1127,9 @@ export function PartCanvas({
   /** Rotate a whole group tree 90° CW about its combined centre — pins rotate
    *  like the servo-header trio (position + own rotation), shapes/labels rotate
    *  their positions (+ a shape's own rotation) about the same centre (#630). */
-  const rotateGroup = (rootGid: string): void => {
+  const rotateMembers = (members: GroupMemberRef[]): void => {
     const W = part.dimensions?.width || 1
     const H = part.dimensions?.height || 1
-    const ids = groupTreeIds(part.groups, rootGid)
-    const members = groupMembers(part, ids)
     // Gather each member's physical centre (px in mm-ish part frame) to find the
     // pivot, then rotate every point about it. (dx,dy) → (−dy, dx) is 90° CW.
     const pts: { m: GroupMemberRef; cx: number; cy: number }[] = []
@@ -1195,18 +1193,49 @@ export function PartCanvas({
     })
   }
 
-  /** Delete a whole group tree: every member + the group registry entries. */
-  const deleteGroup = (rootGid: string): void => {
-    const ids = groupTreeIds(part.groups, rootGid)
-    const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
+  /** The current multi-selection as group-member refs (pins + shapes + labels). */
+  const selectionMembers = (): GroupMemberRef[] => [
+    ...selectedPins.map((s): GroupMemberRef => ({ kind: 'pin', hi: s.hi, pi: s.pi })),
+    ...selComponents.map((c): GroupMemberRef => ({ kind: c.type, index: c.index }))
+  ]
+
+  /** Rotate every selected item 90° about the selection's combined centre. Works
+   *  for a formal group (its members are all selected) or a loose multi-select. */
+  const rotateSelection = (): void => rotateMembers(selectionMembers())
+
+  /** Delete every selected item; drop any group registry entry left unreferenced. */
+  const deleteSelectionItems = (): void => {
+    const pinSel = new Set(selectedPins.map((s) => `${s.hi}:${s.pi}`))
+    const shapeSel = new Set(selComponents.filter((c) => c.type === 'shape').map((c) => c.index))
+    const labelSel = new Set(selComponents.filter((c) => c.type === 'label').map((c) => c.index))
+    if (!pinSel.size && !shapeSel.size && !labelSel.size) return
+    const nextHeaders = part.headers
+      .map((h, hi) => ({ ...h, pins: h.pins.filter((_, pi) => !pinSel.has(`${hi}:${pi}`)) }))
+      .filter((h) => h.pins.length > 0)
+    const nextShapes = shapes.filter((_, i) => !shapeSel.has(i))
+    const nextLabels = labels.filter((_, i) => !labelSel.has(i))
+    // Keep only group ids still referenced by a surviving item (plus their
+    // ancestor chain), so deleting a whole group drops its registry entry.
+    const referenced = new Set<string>()
+    const keepWithAncestors = (g: string | undefined): void => {
+      let cur = g
+      const seen = new Set<string>()
+      while (cur && !seen.has(cur)) {
+        seen.add(cur)
+        referenced.add(cur)
+        cur = (part.groups ?? []).find((x) => x.id === cur)?.parent
+      }
+    }
+    nextHeaders.forEach((h) => h.pins.forEach((p) => keepWithAncestors(p.group)))
+    nextShapes.forEach((s) => keepWithAncestors(s.group))
+    nextLabels.forEach((l) => keepWithAncestors(l.group))
+    const nextGroups = (part.groups ?? []).filter((g) => referenced.has(g.id))
     commit({
       ...part,
-      headers: part.headers
-        .map((h) => ({ ...h, pins: h.pins.filter((p) => !inTree(p.group)) }))
-        .filter((h) => h.pins.length > 0),
-      shapes: shapes.filter((s) => !inTree(s.group)),
-      labels: labels.filter((l) => !inTree(l.group)),
-      groups: (part.groups ?? []).filter((g) => !ids.has(g.id))
+      headers: nextHeaders,
+      shapes: nextShapes,
+      labels: nextLabels,
+      groups: nextGroups.length ? nextGroups : undefined
     })
     setSelectedPins([])
     setSelComponents([])
@@ -3242,35 +3271,34 @@ export function PartCanvas({
                 {groupIcon(false)}
               </button>
               {selGroup && (
-                <>
-                  <button
-                    type="button"
-                    className="pcv__align-btn"
-                    onClick={() => ungroupSelection(selGroup)}
-                    title="Ungroup"
-                  >
-                    {groupIcon(true)}
-                  </button>
-                  <button
-                    type="button"
-                    className="pcv__align-btn"
-                    onClick={() => rotateGroup(selGroup)}
-                    title="Rotate group 90°"
-                    aria-label="Rotate group 90 degrees"
-                  >
-                    {rotateIcon}
-                  </button>
-                  <button
-                    type="button"
-                    className="pcv__align-btn pcv__align-btn--danger"
-                    onClick={() => deleteGroup(selGroup)}
-                    title="Delete group"
-                    aria-label="Delete group"
-                  >
-                    {delIcon}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  className="pcv__align-btn"
+                  onClick={() => ungroupSelection(selGroup)}
+                  title="Ungroup"
+                >
+                  {groupIcon(true)}
+                </button>
               )}
+              <span className="pcv__align-sep" />
+              <button
+                type="button"
+                className="pcv__align-btn"
+                onClick={rotateSelection}
+                title={selGroup ? 'Rotate group 90°' : 'Rotate selection 90°'}
+                aria-label="Rotate selection 90 degrees"
+              >
+                {rotateIcon}
+              </button>
+              <button
+                type="button"
+                className="pcv__align-btn pcv__align-btn--danger"
+                onClick={deleteSelectionItems}
+                title={selGroup ? 'Delete group' : 'Delete selection'}
+                aria-label="Delete selection"
+              >
+                {delIcon}
+              </button>
             </div>
           )
         })()}
