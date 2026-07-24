@@ -2322,11 +2322,16 @@ export function PartCanvas({
         const minY = Math.min(m.y0, m.y1)
         const maxY = Math.max(m.y0, m.y1)
         const within = (x: number, y: number): boolean => x >= minX && x <= maxX && y >= minY && y <= maxY
-        const inside = locked.pins
-          ? []
-          : pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
+        // A layer contributes to the marquee only when it's both visible AND
+        // unlocked (matching every other hit-test path; a hidden layer's items
+        // shouldn't be rubber-band-selectable).
+        const pinsPickable = visible.pins && !locked.pins
+        const compsPickable = visible.components && !locked.components
+        const inside = pinsPickable
+          ? pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
+          : []
         const insideComps: { type: 'shape' | 'label'; index: number }[] = []
-        if (!locked.components) {
+        if (compsPickable) {
           shapes.forEach((_, i) => {
             const c = componentCenter('shape', i)
             if (c && within(c.cx, c.cy)) insideComps.push({ type: 'shape', index: i })
@@ -2335,6 +2340,39 @@ export function PartCanvas({
             const c = componentCenter('label', i)
             if (c && within(c.cx, c.cy)) insideComps.push({ type: 'label', index: i })
           })
+        }
+        // Expand any gathered member to its WHOLE group tree, so a marquee that
+        // touches part of a group selects the whole group, not the loose items
+        // inside it (recursive through nesting). Locked layers still contribute
+        // nothing.
+        const roots = new Set<string>()
+        const noteRoot = (g: string | undefined): void => {
+          if (g) roots.add(groupRootId(part.groups, g))
+        }
+        inside.forEach((s) => noteRoot(part.headers[s.hi]?.pins[s.pi]?.group))
+        insideComps.forEach((c) =>
+          noteRoot(c.type === 'shape' ? shapes[c.index]?.group : labels[c.index]?.group)
+        )
+        if (roots.size) {
+          const ids = new Set<string>()
+          roots.forEach((r) => groupTreeIds(part.groups, r).forEach((id) => ids.add(id)))
+          const havePins = new Set(inside.map((s) => `${s.hi}:${s.pi}`))
+          const haveComps = new Set(insideComps.map((c) => `${c.type}:${c.index}`))
+          for (const mem of groupMembers(part, ids)) {
+            if (mem.kind === 'pin' && pinsPickable) {
+              const k = `${mem.hi}:${mem.pi}`
+              if (!havePins.has(k)) {
+                havePins.add(k)
+                inside.push({ hi: mem.hi, pi: mem.pi })
+              }
+            } else if (mem.kind !== 'pin' && compsPickable) {
+              const k = `${mem.kind}:${mem.index}`
+              if (!haveComps.has(k)) {
+                haveComps.add(k)
+                insideComps.push({ type: mem.kind, index: mem.index })
+              }
+            }
+          }
         }
         setSelectedPins(inside)
         setSelComponents(insideComps)

@@ -1576,7 +1576,8 @@ function LayersPanel({
       <div className="pe__layer pe__layer--bg">
         <div className="pe__layer-head">
           {eye('image')}
-          <span className="pe__layer-name">Background image</span>
+          {lock('image')}
+          <span className="pe__layer-name">Background</span>
           <span className="pe__flathelp pe__flathelp--bg">{part.imageData ? 'photo' : 'none'}</span>
           <span className="pe__flatspacer" />
           {part.imageData && (
@@ -1697,7 +1698,6 @@ function LayersPanel({
       <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {eye('pcb')}
-          {lock('image')}
           <span className="pe__layer-name">PCB</span>
         </div>
         <div className="pe__layer-tools">
