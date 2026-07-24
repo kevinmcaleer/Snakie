@@ -221,6 +221,44 @@ describe('buildNetlist — robustness', () => {
   })
 })
 
+describe('connector pins as wire terminals', () => {
+  // A QWIIC breakout: one header pin, then a 4-pin QWIIC connector. Flattened
+  // endpoint indices: 0=X (header), then the connector pins 1=GND 2=3V3 3=SDA 4=SCL.
+  const QWIIC: PartDefinition = {
+    id: 'q',
+    name: 'QWIIC breakout',
+    headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io' }] }],
+    connectors: [
+      {
+        kind: 'qwiic',
+        x: 0.5,
+        y: 0.5,
+        pins: [
+          { name: 'GND', type: 'gnd' },
+          { name: '3V3', type: 'pwr' },
+          { name: 'SDA', type: 'io', capabilities: ['i2c'] },
+          { name: 'SCL', type: 'io', capabilities: ['i2c'] }
+        ]
+      }
+    ]
+  }
+
+  it('resolves a connector pin endpoint (appended after the header pins)', () => {
+    const defs = new Map<string, PartDefinition>([['q', QWIIC]])
+    const nl = buildNetlist(robot([wire('w', ep('board', 'GP0', 3), ep('q', 'SDA', 3))]), BOARD, defs)
+    expect(nl.dangling).toEqual([]) // q.SDA#3 resolves — it's the connector's SDA pin
+    const node = nodeAt(nl, ep('q', 'SDA', 3))
+    expect(node?.terminals.some((t) => t.name === 'SDA' && t.key === 'q')).toBe(true)
+    expect(node?.terminals.some((t) => t.name === 'GP0' && t.key === 'board')).toBe(true)
+  })
+
+  it('header pin indices are unchanged by the appended connector pins', () => {
+    const defs = new Map<string, PartDefinition>([['q', QWIIC]])
+    const nl = buildNetlist(robot([wire('w', ep('board', 'GP1', 4), ep('q', 'X', 0))]), BOARD, defs)
+    expect(nl.dangling).toEqual([]) // the header pin X is still index 0
+  })
+})
+
 describe('remapConnectionsForBoard (MCU swap)', () => {
   // A different board layout: GP0 sits at a NEW index, GP1 is absent, and there is
   // only one GND / 3V3. Flattened: 0=GND 1=3V3 2=GP0 3=5V.

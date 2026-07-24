@@ -125,11 +125,14 @@ function flattenBoardPads(board: BoardDefinition): BoardPad[] {
   return out
 }
 
-/** Flatten a part's pins in header→pin order (mirrors `resolvedPins`): the
- *  flattened position IS the wiring endpoint `#index`. */
-function flattenPartPins(part: PartDefinition): PartPin[] {
+/** Flatten a part's pins in header→pin order, THEN connector→pin order (mirrors
+ *  the wiring canvas). Headers come first so existing endpoint `#index`es are
+ *  unchanged; a connector's pins (SDA/SCL/GND/pwr of a QWIIC socket) are appended
+ *  so they're addressable wire terminals too. The flattened position IS `#index`. */
+export function flattenPartPins(part: PartDefinition): PartPin[] {
   const out: PartPin[] = []
   for (const header of part.headers ?? []) for (const pin of header.pins ?? []) out.push(pin)
+  for (const conn of part.connectors ?? []) for (const pin of conn.pins ?? []) out.push(pin)
   return out
 }
 
