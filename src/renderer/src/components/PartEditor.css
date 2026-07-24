@@ -1461,6 +1461,47 @@
   padding-left: 1.1rem;
 }
 
+/* Grouped Parts tree (#631): a group node + its nested member list. */
+.pe__grouprow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pe__flat--nested {
+  margin: 0;
+  padding: 0;
+}
+.pe__flatrow--partgroup .pe__item-name {
+  font-weight: 600;
+}
+.pe__group-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 0.2rem;
+  padding: 0.05rem 0.3rem;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+}
+.pe__group-ungroup {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.pe__group-ungroup:hover {
+  color: var(--text);
+}
+
 .pe__flatspacer {
   flex: 1 1 auto;
 }

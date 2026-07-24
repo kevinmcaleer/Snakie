@@ -27,6 +27,7 @@ import {
   PIN_TYPE_LABEL,
   blankPart,
   collectUsedColors,
+  dissolveGroup,
   groupRootId,
   groupTreeIds,
   normalisePart,
@@ -384,6 +385,10 @@ export function PartEditor({
   const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
+  // A "select this whole group" request from the Layers panel → the canvas selects
+  // every member (#631). The bumping nonce lets re-selecting the same group re-fire.
+  const [groupSelect, setGroupSelect] = useState<{ id: string; nonce: number } | null>(null)
+  const selectGroup = (id: string): void => setGroupSelect((g) => ({ id, nonce: (g?.nonce ?? 0) + 1 }))
   const [fitSignal, setFitSignal] = useState(0)
   const [status, setStatus] = useState<Status | null>(null)
   // Auto-dismiss the status notification (e.g. "Saved …") so it doesn't linger
@@ -874,6 +879,7 @@ export function PartEditor({
                   imageNativeAspect={imageNativeAspect}
                   tool={tool}
                   selection={selection}
+                  groupSelect={groupSelect ?? undefined}
                   onChange={setPart}
                   onSelect={setSelection}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
@@ -907,6 +913,7 @@ export function PartEditor({
                 setTool={setTool}
                 selection={selection}
                 setSelection={setSelection}
+                onSelectGroup={selectGroup}
                 onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}
@@ -995,6 +1002,8 @@ interface LayersPanelProps {
   setTool: (t: CanvasTool) => void
   selection: CanvasSelection
   setSelection: (s: CanvasSelection) => void
+  /** Select a whole group (its every member) from a Layers-panel group node (#631). */
+  onSelectGroup?: (gid: string) => void
   onDeleteSelected: () => void
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -1027,6 +1036,7 @@ function LayersPanel({
   setTool,
   selection,
   setSelection,
+  onSelectGroup,
   onDeleteSelected,
   fileInputRef,
   onPickImage,
@@ -1047,6 +1057,8 @@ function LayersPanel({
   // Which servo-header groups are expanded in the pin list (collapsed by default so
   // a board of servo headers reads as one row each, not three).
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  // The group node (in the Parts list) whose name is being edited inline (#631).
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
   const pins = resolvedPins(part)
   // The Pins list reads best sorted: by board number when a pin has one (numbered
   // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
@@ -1207,6 +1219,123 @@ function LayersPanel({
       −
     </button>
   )
+  // ── Grouped Parts tree (#631) ─────────────────────────────────────────────
+  // Loose items render inline; a grouped item collapses under its top-level group
+  // node, which nests its members + sub-groups recursively.
+  const groups = part.groups ?? []
+  const groupOfItem = (it: OrderedItem): string | undefined =>
+    it.kind === 'shape' ? shapes[it.index]?.group : it.kind === 'label' ? labels[it.index]?.group : undefined
+  type PartNode = { kind: 'item'; item: OrderedItem } | { kind: 'group'; id: string; children: PartNode[] }
+  const buildGroupNode = (gid: string): PartNode => ({
+    kind: 'group',
+    id: gid,
+    children: [
+      ...items.filter((it) => groupOfItem(it) === gid).map((it): PartNode => ({ kind: 'item', item: it })),
+      ...groups.filter((g) => g.parent === gid).map((g) => buildGroupNode(g.id))
+    ]
+  })
+  const partTree: PartNode[] = (() => {
+    const emitted = new Set<string>()
+    const out: PartNode[] = []
+    for (const it of items) {
+      const g = groupOfItem(it)
+      if (!g) {
+        out.push({ kind: 'item', item: it })
+        continue
+      }
+      const root = groupRootId(groups, g)
+      if (emitted.has(root)) continue
+      emitted.add(root)
+      out.push(buildGroupNode(root))
+    }
+    return out
+  })()
+  const countLeaves = (node: PartNode): number =>
+    node.kind === 'item' ? 1 : node.children.reduce((n, c) => n + countLeaves(c), 0)
+  const commitRename = (gid: string, text: string): void => {
+    const name = text.trim()
+    patch({ groups: groups.map((g) => (g.id === gid ? { ...g, name: name || undefined } : g)) })
+    setRenamingGroup(null)
+  }
+  const ungroupNode = (gid: string): void => {
+    const d = dissolveGroup(part, gid)
+    patch({ headers: d.headers, shapes: d.shapes, labels: d.labels, groups: d.groups })
+  }
+  const itemRowTree = (it: OrderedItem, depth: number): JSX.Element => {
+    const { name, sub, sel } = describe(it)
+    const active =
+      it.kind === 'shape'
+        ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
+        : selEq(sel)
+    return (
+      <li
+        key={`${it.kind}${it.index}`}
+        className={`pe__flatrow${active ? ' is-active' : ''}`}
+        style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
+      >
+        <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
+          <span className="pe__item-name">{name}</span>
+        </button>
+        <span className="pe__flathelp">{sub}</span>
+        <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
+          <TrashIcon size={13} />
+        </button>
+      </li>
+    )
+  }
+  const renderNode = (node: PartNode, depth: number): JSX.Element => {
+    if (node.kind === 'item') return itemRowTree(node.item, depth)
+    const g = groups.find((x) => x.id === node.id)
+    const open = isOpen(node.id)
+    return (
+      <li key={`grp-${node.id}`} className="pe__grouprow">
+        <div className="pe__flatrow pe__flatrow--partgroup" style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
+          <button
+            type="button"
+            className="pe__flatcaret"
+            onClick={() => setCollapsed((c) => ({ ...c, [node.id]: !c[node.id] }))}
+            aria-expanded={open}
+            title={open ? 'Collapse group' : 'Expand group'}
+          >
+            {open ? '▾' : '▸'}
+          </button>
+          {renamingGroup === node.id ? (
+            <input
+              className="pe__group-rename"
+              autoFocus
+              defaultValue={g?.name ?? ''}
+              placeholder="Group name"
+              onBlur={(e) => commitRename(node.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename(node.id, (e.target as HTMLInputElement).value)
+                else if (e.key === 'Escape') setRenamingGroup(null)
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="pe__flatname"
+              onClick={() => onSelectGroup?.(node.id)}
+              onDoubleClick={() => setRenamingGroup(node.id)}
+              title="Select group (double-click to rename)"
+            >
+              <span className="pe__item-name">{g?.name || 'Group'}</span>
+              <span className="pe__flatsub">group · {countLeaves(node)}</span>
+            </button>
+          )}
+          <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(node.id)} title="Ungroup" aria-label="Ungroup">
+            ⊟
+          </button>
+        </div>
+        {open && (
+          <ul className="pe__flat pe__flat--nested" role="list">
+            {node.children.map((c) => renderNode(c, depth + 1))}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
   const setShape = (kind: 'rect' | 'polygon'): void => {
     if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
       patch({
@@ -1258,7 +1387,11 @@ function LayersPanel({
       {isOpen('components') && (
         <ul className="pe__flat" role="list">
           {items.length === 0 && <li className="pe__layer-empty">No parts yet — use ＋ Add.</li>}
-          {items.map((it, ri) => {
+          {/* With groups, render the collapsible tree (drag-reorder is off inside
+              it); otherwise the flat, drag-reorderable list (#631). */}
+          {groups.length > 0 && items.length > 0
+            ? partTree.map((n) => renderNode(n, 0))
+            : items.map((it, ri) => {
             const { name, sub, sel } = describe(it)
             const active =
               it.kind === 'shape'

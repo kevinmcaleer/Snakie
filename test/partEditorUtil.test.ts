@@ -6,6 +6,7 @@ import {
   boardsFromLibraries,
   captureStyle,
   derivePinPosition,
+  dissolveGroup,
   groupMembers,
   groupRootId,
   groupTreeIds,
@@ -978,5 +979,35 @@ describe('group tree helpers (#630)', () => {
       { kind: 'pin', hi: 0, pi: 1 },
       { kind: 'shape', index: 0 }
     ])
+  })
+
+  it('dissolveGroup re-parents a nested group one level up', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [{ edge: 'left', pins: [{ name: 'S', type: 'io', group: 'C' }] }],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, group: 'B' }],
+      labels: [{ text: 'hi', x: 0.5, y: 0.5, group: 'A' }],
+      groups: [{ id: 'A' }, { id: 'B', parent: 'A' }, { id: 'C', parent: 'B' }]
+    }
+    // Dissolving the middle group B: its shape + its sub-group C move up to A.
+    const out = dissolveGroup(part, 'B')
+    expect(out.shapes?.[0].group).toBe('A')
+    expect(out.groups).toEqual([{ id: 'A' }, { id: 'C', parent: 'A' }])
+    // The pin (in C) is untouched; C now sits directly under A.
+    expect(out.headers[0].pins[0].group).toBe('C')
+  })
+
+  it('dissolveGroup makes a top-level group loose (drops the registry)', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, group: 'solo' }],
+      groups: [{ id: 'solo', name: 'Solo' }]
+    }
+    const out = dissolveGroup(part, 'solo')
+    expect(out.shapes?.[0].group).toBeUndefined()
+    expect(out.groups).toBeUndefined()
   })
 })

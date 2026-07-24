@@ -17,6 +17,7 @@ import {
   captureStyle,
   collectUsedColors,
   derivePinPosition,
+  dissolveGroup,
   groupMembers,
   groupRootId,
   groupTreeIds,
@@ -38,7 +39,6 @@ import type {
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
-  PartGroup,
   PartLabel,
   PartPin,
   PartPinType,
@@ -150,6 +150,9 @@ export interface PartCanvasProps {
   tool?: CanvasTool
   /** Current selection (interactive only). */
   selection?: CanvasSelection
+  /** A request to select a whole group by id (from the Layers panel) — the
+   *  `nonce` makes repeat selects of the same group re-fire the effect (#631). */
+  groupSelect?: { id: string; nonce: number }
   /** Snap placed/moved positions to the pin-spacing grid. */
   snap?: boolean
   /** Keep the image layer's width:height ratio fixed while resizing it. */
@@ -350,6 +353,7 @@ export function PartCanvas({
   readOnly = false,
   tool = 'select',
   selection = null,
+  groupSelect,
   snap = false,
   lockAspect = false,
   imageNativeAspect = null,
@@ -1104,27 +1108,7 @@ export function PartCanvas({
 
   /** Dissolve a group by one level: its members (and any sub-groups) are
    *  re-parented to the group's own parent (loose when it was top-level). */
-  const ungroupSelection = (gid: string): void => {
-    const registry = part.groups ?? []
-    const parent = registry.find((g) => g.id === gid)?.parent
-    const relabel = (g: string | undefined): string | undefined => (g === gid ? parent : g)
-    const nextHeaders = part.headers.map((h) => ({
-      ...h,
-      pins: h.pins.map((p) => (p.group === gid ? { ...p, group: parent } : p))
-    }))
-    const nextShapes = shapes.map((s) => (s.group === gid ? { ...s, group: parent } : s))
-    const nextLabels = labels.map((l) => (l.group === gid ? { ...l, group: parent } : l))
-    const nextGroups = registry
-      .filter((g) => g.id !== gid)
-      .map((g): PartGroup => ({ ...g, parent: relabel(g.parent) }))
-    commit({
-      ...part,
-      headers: nextHeaders,
-      shapes: nextShapes,
-      labels: nextLabels,
-      groups: nextGroups.length ? nextGroups : undefined
-    })
-  }
+  const ungroupSelection = (gid: string): void => commit(dissolveGroup(part, gid))
 
   // ── Group transforms (#630) ──────────────────────────────────────────────
   // "Selecting a group" resolves to its whole member tree (recursive through
@@ -1234,6 +1218,23 @@ export function PartCanvas({
     setSelComponents([])
     onSelect?.(null)
   }
+
+  // A Layers-panel "select group" request (#631): resolve the group's tree and
+  // select every member. The `nonce` lets re-selecting the same group re-fire.
+  useEffect(() => {
+    if (!groupSelect) return
+    const root = groupRootId(part.groups, groupSelect.id)
+    const first = groupMembers(part, groupTreeIds(part.groups, root))[0]
+    if (!first) return
+    const primary: CanvasSelection =
+      first.kind === 'pin'
+        ? { type: 'pin', hi: first.hi, pi: first.pi }
+        : first.kind === 'shape'
+          ? { type: 'shape', index: first.index }
+          : { type: 'label', index: first.index }
+    selectWholeGroup(root, primary)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupSelect?.nonce])
 
   /** Container-pixel position of the LAST selected item, so the align toolbar can
    *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */

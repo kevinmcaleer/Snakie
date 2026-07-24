@@ -549,6 +549,27 @@ export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMembe
   return out
 }
 
+/** Dissolve a group by one level: its members (+ any direct sub-groups) are
+ *  re-parented to the group's own parent — loose when it was top-level. Pure;
+ *  shared by the canvas Ungroup button + the Layers-panel ungroup (#630/#631). */
+export function dissolveGroup(part: PartDefinition, gid: string): PartDefinition {
+  const registry = part.groups ?? []
+  const parent = registry.find((g) => g.id === gid)?.parent
+  const nextGroups = registry
+    .filter((g) => g.id !== gid)
+    .map((g): PartGroup => (g.parent === gid ? { ...g, parent } : g))
+  return {
+    ...part,
+    headers: part.headers.map((h) => ({
+      ...h,
+      pins: h.pins.map((p) => (p.group === gid ? { ...p, group: parent } : p))
+    })),
+    shapes: (part.shapes ?? []).map((s) => (s.group === gid ? { ...s, group: parent } : s)),
+    labels: (part.labels ?? []).map((l) => (l.group === gid ? { ...l, group: parent } : l)),
+    groups: nextGroups.length ? nextGroups : undefined
+  }
+}
+
 /** The z a newly-created ITEM (any kind) should take to land on top. */
 export function nextItemZ(part: PartDefinition): number {
   const ord = orderedItems(part)
