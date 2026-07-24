@@ -18,7 +18,7 @@ import {
 } from './board-defs'
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
-import { buildNetlist, type TerminalRole } from '../../../shared/netlist'
+import { buildNetlist, remapConnectionsForBoard, type BoardRemap, type TerminalRole } from '../../../shared/netlist'
 import { runErc, ercSummary } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
 import { useDcSolver } from './useDcSolver'
@@ -658,9 +658,44 @@ export function BoardGraph({
   // Custom dropdown open state — a native <select> popup is unreliable inside a
   // frameless, always-on-top window with a drag region (same as BoardView).
   const [pickerOpen, setPickerOpen] = useState(false)
+  // Re-map the wiring onto a swapped-in board: board endpoints move to the pad
+  // with the same GPIO (power/ground by rail), wires with no counterpart drop.
+  // Returns the new robot + what was dropped, or null when there's nothing to remap.
+  const remapRobotToBoard = (id: string): { robot: RobotDefinition; remap: BoardRemap } | null => {
+    if (!(wiringEnabled && robot && robot.board !== id)) return null
+    const oldBoard = boards.find((b) => b.id === (robot.board ?? boardId)) ?? foundBoard ?? null
+    const newBoard = boards.find((b) => b.id === id) ?? null
+    const conns = robot.connections ?? []
+    if (!oldBoard || !newBoard || conns.length === 0) {
+      return { robot: { ...robot, board: id }, remap: { connections: conns, removed: [] } }
+    }
+    const remap = remapConnectionsForBoard(conns, oldBoard, newBoard)
+    return { robot: { ...robot, board: id, connections: remap.connections }, remap }
+  }
+
   const selectBoard = (id: string): void => {
-    setBoardId(id)
     setPickerOpen(false)
+    if (id === boardId) return
+    // In a wiring-enabled window, record the chosen board in robot.yml AND re-map
+    // the wiring to it. When some wires can't be re-mapped, confirm before dropping.
+    if (onChangeRobot) {
+      const next = remapRobotToBoard(id)
+      if (next) {
+        if (next.remap.removed.length > 0) {
+          const newName = boards.find((b) => b.id === id)?.name ?? id
+          const reasons = Array.from(new Set(next.remap.removed.flatMap((r) => r.reasons)))
+          const msg =
+            `Swap to ${newName}?\n\n` +
+            `${next.remap.connections.length} connection(s) will be kept — moved to the matching GPIO / rail where needed.\n\n` +
+            `${next.remap.removed.length} will be removed — no matching pin on ${newName}:\n` +
+            reasons.map((r) => `  • ${r}`).join('\n') +
+            `\n\nRemoved wires can't be recovered by swapping back.`
+          if (!window.confirm(msg)) return // cancelled — leave the board + wiring unchanged
+        }
+        onChangeRobot(next.robot)
+      }
+    }
+    setBoardId(id)
     try {
       window.localStorage.setItem(STORAGE_KEY, id)
     } catch {
@@ -668,12 +703,6 @@ export function BoardGraph({
     }
     // Tell the other window(s) so the main window's mini board view follows along.
     window.api.board.selectBoard(id)
-    // In a wiring-enabled window, record the chosen board in robot.yml too, so the
-    // selection takes effect immediately (not only as a side-effect of a later
-    // wire edit) and the picker, drawn board and file never diverge.
-    if (wiringEnabled && robot && onChangeRobot && robot.board !== id) {
-      onChangeRobot({ ...robot, board: id })
-    }
   }
 
   // Follow a board picked in ANOTHER view (the mini board / Code workspace): adopt
@@ -689,8 +718,14 @@ export function BoardGraph({
     } catch {
       // ignore storage failures
     }
-    if (wiringEnabled && robot && onChangeRobot && robot.board !== id) {
-      onChangeRobot({ ...robot, board: id })
+    // Re-map the wiring too (silently — the swap was made in another window, so a
+    // confirm here would be surprising; unmatched wires are dropped). Two full board
+    // views editing one robot.yml each run this, but the remap is idempotent (same
+    // old→new result, and a no-op once robot.board already matches), so the double
+    // write is benign. Dropping cleanly here also beats leaving wires dangling.
+    if (onChangeRobot) {
+      const next = remapRobotToBoard(id)
+      if (next) onChangeRobot(next.robot)
     }
   }
   useEffect(() => {

@@ -32,7 +32,7 @@
  */
 import type { BoardDefinition, BoardPad, BoardPadType } from './board'
 import type { PartDefinition, PartPin, PartPinCapability } from './part'
-import type { RobotDefinition } from './robot'
+import { connectionId, type RobotConnection, type RobotDefinition } from './robot'
 import { classifyBusWire, type BusWire } from './bus-wires'
 
 /** A pin's electrical role, normalised across board pads and part pins. */
@@ -206,6 +206,130 @@ function resolveTerminal(
   if (pin.gpio !== undefined) t.gpio = pin.gpio
   if (pin.capabilities && pin.capabilities.length) t.capabilities = pin.capabilities
   return t
+}
+
+// --- board swap: re-map wiring to a new MCU ----------------------------------
+
+/** A connection dropped by {@link remapConnectionsForBoard}, with why. */
+export interface RemovedConnection {
+  connection: RobotConnection
+  /** Human reasons a board endpoint couldn't be re-mapped (`GPIO 26`, `5V rail`). */
+  reasons: string[]
+}
+
+/** The result of re-mapping a robot's wiring onto a swapped-in board. */
+export interface BoardRemap {
+  /** Surviving connections, board endpoints rewritten to the new board's pads. */
+  connections: RobotConnection[]
+  /** Connections dropped because a board pad had no counterpart on the new board. */
+  removed: RemovedConnection[]
+}
+
+/** Why an old-board pad has no counterpart (shown in the swap confirm dialog). */
+function unmatchedReason(pad: BoardPad): string {
+  const role = boardPadRole(pad)
+  if (role === 'gnd') return 'GND'
+  if (role === 'pwr') return `${pad.label} rail`
+  if (role === 'io' && pad.gpio !== undefined) return `GPIO ${pad.gpio}`
+  return pad.label
+}
+
+/** Canonical rail key so near-equivalent supply labels match (`3.3V`≡`3V3`≡`3V`,
+ *  `5.0V`≡`5V`), while distinct rails stay distinct (`3V3`≠`5V`≠`VSYS`). */
+function canonRail(label: string): string {
+  const u = label.toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (u === '3V3' || u === '33V' || u === '3V') return '3V3'
+  if (u === '5V' || u === '50V') return '5V'
+  return u
+}
+
+/** The new-board pad index that should inherit an old-board pad's wire:
+ *  - ground → any ground pad (all bonded), preferring the same label;
+ *  - power  → a pad on the SAME rail (canonicalised label; 3V3 ≠ 5V);
+ *  - GPIO   → the pad with the same `gpio` number (may sit on a different pin);
+ *  - other / io-without-gpio → the pad with the same label (case-insensitive).
+ *  Returns its flattened index, or null when the new board has no counterpart. */
+function matchPadIndex(oldPad: BoardPad, newPads: BoardPad[]): number | null {
+  const role = boardPadRole(oldPad)
+  const find = (pred: (p: BoardPad) => boolean): number | null => {
+    const i = newPads.findIndex(pred)
+    return i >= 0 ? i : null
+  }
+  if (role === 'gnd') {
+    return (
+      find((p) => boardPadRole(p) === 'gnd' && p.label === oldPad.label) ??
+      find((p) => boardPadRole(p) === 'gnd')
+    )
+  }
+  if (role === 'pwr') {
+    const rail = canonRail(oldPad.label)
+    return find((p) => boardPadRole(p) === 'pwr' && canonRail(p.label) === rail)
+  }
+  if (role === 'io' && oldPad.gpio !== undefined) {
+    return find((p) => p.gpio === oldPad.gpio)
+  }
+  const label = oldPad.label.toUpperCase()
+  return find((p) => p.label.toUpperCase() === label)
+}
+
+/** Re-map one endpoint. Non-board endpoints (placed parts) pass through unchanged;
+ *  a board endpoint is rewritten to its matching new pad, or reported unmatched. */
+function remapEndpoint(
+  endpoint: string,
+  oldPads: BoardPad[],
+  newPads: BoardPad[]
+): { endpoint: string } | { unmatched: string } {
+  const { key, index } = parseEndpoint(endpoint)
+  if (key !== BOARD_KEY) return { endpoint }
+  const oldPad = oldPads[index]
+  if (!oldPad) return { unmatched: 'a removed pin' }
+  const ni = matchPadIndex(oldPad, newPads)
+  if (ni === null) return { unmatched: unmatchedReason(oldPad) }
+  return { endpoint: `${BOARD_KEY}.${newPads[ni].label}#${ni}` }
+}
+
+/**
+ * Re-map a robot's wiring when the MCU board is swapped. Each board endpoint moves
+ * to the pad carrying the SAME GPIO (power/ground matched by rail/type), so a wire
+ * follows its signal even when it lands on a different physical pin. A wire whose
+ * board pad has no counterpart on the new board is dropped (with a reason). Pure +
+ * tested; the UI confirms the removals before applying.
+ */
+export function remapConnectionsForBoard(
+  connections: RobotConnection[],
+  oldBoard: BoardDefinition,
+  newBoard: BoardDefinition
+): BoardRemap {
+  const oldPads = flattenBoardPads(oldBoard)
+  const newPads = flattenBoardPads(newBoard)
+  const kept: RobotConnection[] = []
+  const removed: RemovedConnection[] = []
+  // Merging pads (e.g. eight GND pads → one on the new board) can rewrite several
+  // wires onto the same endpoint. Drop the resulting self-loops + duplicates so we
+  // never persist wires the user could not draw (WiringCanvas rejects both).
+  const seen = new Set<string>()
+  for (const c of connections) {
+    const f = remapEndpoint(c.from, oldPads, newPads)
+    const t = remapEndpoint(c.to, oldPads, newPads)
+    const reasons: string[] = []
+    if ('unmatched' in f) reasons.push(f.unmatched)
+    if ('unmatched' in t) reasons.push(t.unmatched)
+    if (reasons.length) {
+      removed.push({ connection: c, reasons })
+      continue
+    }
+    const from = (f as { endpoint: string }).endpoint
+    const to = (t as { endpoint: string }).endpoint
+    if (from === to) continue // collapsed onto one pad — electrically a no-op
+    const key = [from, to].sort().join('|')
+    if (seen.has(key)) continue // duplicate / reverse-duplicate of a kept wire
+    seen.add(key)
+    // When an endpoint moved, recompute the id from the new endpoints so a later
+    // redraw of this wire doesn't create a duplicate (ids are `${from}__${to}`).
+    const moved = from !== c.from || to !== c.to
+    kept.push(moved ? { ...c, id: connectionId(from, to), from, to } : c)
+  }
+  return { connections: kept, removed }
 }
 
 // --- union-find --------------------------------------------------------------
