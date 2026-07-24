@@ -1578,7 +1578,6 @@ function LayersPanel({
           {eye('image')}
           {lock('image')}
           <span className="pe__layer-name">Background</span>
-          <span className="pe__flathelp pe__flathelp--bg">{part.imageData ? 'photo' : 'none'}</span>
           <span className="pe__flatspacer" />
           {part.imageData && (
             <div className="pe__addwrap">

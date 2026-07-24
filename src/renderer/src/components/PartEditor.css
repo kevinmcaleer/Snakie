@@ -1399,8 +1399,7 @@
 }
 
 .pe__flatrow:hover .pe__flathelp,
-.pe__flatrow:focus-within .pe__flathelp,
-.pe__flathelp--bg {
+.pe__flatrow:focus-within .pe__flathelp {
   opacity: 0.85;
 }
 
