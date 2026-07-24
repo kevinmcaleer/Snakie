@@ -25,7 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody, pinOutwardDir } from './part-body'
+import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
@@ -494,10 +494,13 @@ function boardLifelikePins(pads: PadPoint[]): PlacedPin[] {
   })
 }
 
-/** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint order). */
+/** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint
+ *  order), THEN the connector (QWIIC/JST) pins appended so they're wire terminals
+ *  too — the index continues after the header pins, mirroring `flattenPartPins` in
+ *  netlist.ts so a connector-pin endpoint's `#index` resolves the same both sides. */
 function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
   const rps = resolvedPins(def)
-  return pinPositions(def, box).map((pp) => {
+  const header: PlacedPin[] = pinPositions(def, box).map((pp) => {
     const rp = rps[pp.index]
     // A wire leaves along the pin's ORIENTATION (its rotation — the same direction
     // its silk label points), not its header edge, so it originates from the side
@@ -514,6 +517,37 @@ function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
       buses: rps[pp.index]?.pin.buses
     }
   })
+  // Connector pins — positioned along each connector's socket (matching the glyph
+  // in PartBody), turned by the connector's own body rotation. `connPxPerMm` is
+  // derived exactly as PartBody does so the dots sit on the drawn contacts.
+  const connPxPerMm = def.dimensions && def.dimensions.width > 0 ? box.w / def.dimensions.width : 0
+  const connectorPins: PlacedPin[] = []
+  let idx = header.length
+  for (const conn of def.connectors ?? []) {
+    const { n, w, h } = connectorSize(conn, connPxPerMm)
+    const ccx = box.x + conn.x * box.w
+    const ccy = box.y + conn.y * box.h
+    const rad = ((conn.rotation ?? 0) * Math.PI) / 180
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    conn.pins.forEach((pin, pi) => {
+      // Contact centre along the socket (== connectorGlyph), at the front edge, then
+      // rotate the offset + outward normal by the connector's rotation.
+      const dxL = -w / 2 + (w / (n + 1)) * (pi + 1)
+      const dyL = h / 2
+      connectorPins.push({
+        name: pin.name,
+        net: partPinNet(pin.type),
+        index: idx++,
+        anchors: [{ x: ccx + dxL * cos - dyL * sin, y: ccy + dxL * sin + dyL * cos, ox: -sin, oy: cos }],
+        label: { x: ccx + dxL * cos - dyL * sin, y: ccy + dxL * sin + dyL * cos, anchor: 'middle' as const },
+        caps: pin.capabilities,
+        signals: pin.signals,
+        buses: pin.buses
+      })
+    })
+  }
+  return [...header, ...connectorPins]
 }
 
 /** Schematic MCU pins: stub-end anchors from the IC-block layout (== pad order).
