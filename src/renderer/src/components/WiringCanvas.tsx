@@ -1270,6 +1270,14 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   const removeConnection = (id: string): void =>
     persist({ ...robot, connections: robot.connections.filter((c) => c.id !== id) })
+  // Remove a wire — or, if it's part of a cable, all of that cable's wires at once.
+  const removeWireOrCable = (id: string): void => {
+    const cable = robot.connections.find((c) => c.id === id)?.cable
+    persist({
+      ...robot,
+      connections: robot.connections.filter((c) => (cable ? c.cable !== cable : c.id !== id))
+    })
+  }
   // Re-attach a wire's grabbed end to a new pin: drop the OLD connection + add the
   // new one in ONE persist (separate remove+add would clobber via stale closures).
   const reconnectWire = (oldId: string, from: string, to: string): void => {
@@ -1858,6 +1866,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.
   const selSubject = renderMode === 'lifelike' && selectedKey ? subjByKey.get(selectedKey) : undefined
+  // The cable id of the selected wire (if any), so selecting / deleting acts on the
+  // whole QWIIC cable — every wire sharing that id highlights + goes together.
+  const selectedCable = selectedWire ? (robot.connections.find((c) => c.id === selectedWire)?.cable ?? null) : null
   const selPart = selSubject?.kind === 'part' ? selSubject : undefined
   // Servo → joint binding (#): if the selected part is a servo, which board GPIO its
   // signal is wired to and the URDF joint it currently drives (via robot.yml's map).
@@ -1940,7 +1951,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         if (shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
           if (selectedWire) {
             e.preventDefault()
-            removeConnection(selectedWire)
+            removeWireOrCable(selectedWire) // deletes the whole cable if it's cabled
             setSelectedWire(null)
           } else if (selectedKey) {
             e.preventDefault()
@@ -2078,7 +2089,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // Node-voltage overlay (#604): colour the wire by its solved voltage
               // (both ends share a node) + badge the value at its midpoint.
               const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
-              const isSel = selectedWire === c.id
+              const isSel = selectedWire === c.id || (!!selectedCable && c.cable === selectedCable)
               // ERC "Show me" (#601): this net's wires glow yellow, the rest grey out.
               const isHi = isHiWire(c)
               const dimmed = !!highlight && !isHi
@@ -2110,6 +2121,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                       force((n) => n + 1)
                     }}
                   />
+                  {/* Cable "jacket": a dark sleeve behind each cabled wire; the 4 run
+                      tight so their sleeves merge into one bundle with 4 wires on top. */}
+                  {c.cable && (
+                    <path d={p.d} fill="none" stroke="#0b0d12" strokeWidth={9} opacity={0.55} strokeLinecap="round" className="wc__cable-sleeve" style={{ pointerEvents: 'none' }} />
+                  )}
                   {isSel && (
                     <path d={p.d} fill="none" stroke="var(--accent, #e6ab30)" strokeWidth={7} opacity={0.5} className="wc__wire-sel" />
                   )}
@@ -2587,7 +2603,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           nets={nets}
           onHighlightNet={onHighlightNet}
           isDark={isDark}
-          onRemove={removeConnection}
+          onRemove={removeWireOrCable}
           onColor={setConnectionColor}
           open={connOpen}
           onToggle={() => {
