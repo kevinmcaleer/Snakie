@@ -30,6 +30,7 @@ import {
   dissolveGroup,
   groupRootId,
   groupTreeIds,
+  translateShape,
   normalisePart,
   orderedItems,
   applyItemOrder,
@@ -653,6 +654,50 @@ export function PartEditor({
     setSelection(null)
   }
 
+  // --- arrow-key nudge (#632) -----------------------------------------------
+  // Move the selected item — or, if it belongs to a group, the WHOLE group tree
+  // — by a small normalised delta. Shift = a coarser step.
+  const nudgeSelection = (dx: number, dy: number): void => {
+    const sel = selection
+    if (!sel) return
+    const lk = selectionLockKey(sel)
+    if (lk && locked[lk]) return
+    const clamp = (v: number): number => Math.min(1, Math.max(0, v))
+    const shiftPin = (p: (typeof part.headers)[number]['pins'][number]): typeof p =>
+      p.x != null && p.y != null ? { ...p, x: clamp(p.x + dx), y: clamp(p.y + dy) } : p
+    const selGroup =
+      sel.type === 'pin'
+        ? part.headers[sel.hi]?.pins[sel.pi]?.group
+        : sel.type === 'shape'
+          ? part.shapes?.[sel.index]?.group
+          : sel.type === 'label'
+            ? part.labels?.[sel.index]?.group
+            : undefined
+    if (selGroup) {
+      const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
+      const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
+      patch({
+        headers: part.headers.map((h) => ({ ...h, pins: h.pins.map((p) => (inTree(p.group) ? shiftPin(p) : p)) })),
+        shapes: (part.shapes ?? []).map((s) => (inTree(s.group) ? translateShape(s, dx, dy) : s)),
+        labels: (part.labels ?? []).map((l) => (inTree(l.group) ? { ...l, x: clamp(l.x + dx), y: clamp(l.y + dy) } : l))
+      })
+      return
+    }
+    // A loose single item.
+    if (sel.type === 'shape') {
+      patch({ shapes: (part.shapes ?? []).map((s, i) => (i === sel.index ? translateShape(s, dx, dy) : s)) })
+    } else if (sel.type === 'label') {
+      patch({ labels: (part.labels ?? []).map((l, i) => (i === sel.index ? { ...l, x: clamp(l.x + dx), y: clamp(l.y + dy) } : l)) })
+    } else if (sel.type === 'pin') {
+      patch({
+        headers: part.headers.map((h, hi) => ({
+          ...h,
+          pins: h.pins.map((p, pi) => (hi === sel.hi && pi === sel.pi ? shiftPin(p) : p))
+        }))
+      })
+    }
+  }
+
   // --- undo / redo (#187) ---------------------------------------------------
   // The property-rows table is editable state derived from part.properties, so
   // after an undo/redo (which restores the part) we resync it. The flag defers
@@ -696,6 +741,16 @@ export function PartEditor({
         if (typing) return
         e.preventDefault()
         redo()
+        return
+      }
+      // Arrow keys nudge the selected item / group (#632); Shift = a coarser step.
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (typing || !selection || mod) return
+        e.preventDefault()
+        const step = e.shiftKey ? 0.02 : 0.005
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+        nudgeSelection(dx, dy)
         return
       }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return

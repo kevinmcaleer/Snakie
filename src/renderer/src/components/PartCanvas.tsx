@@ -21,6 +21,7 @@ import {
   groupMembers,
   groupRootId,
   groupTreeIds,
+  translateShape,
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
@@ -963,13 +964,6 @@ export function PartCanvas({
   }
 
   /** Translate a shape (incl. polygon points) by a normalised delta. */
-  const translateShape = (s: ComponentShape, dx: number, dy: number): ComponentShape => ({
-    ...s,
-    x: clamp01(s.x + dx),
-    y: clamp01(s.y + dy),
-    points: s.points?.map((p) => ({ x: clamp01(p.x + dx), y: clamp01(p.y + dy) }))
-  })
-
   /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
   const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
     const pinSet = new Map<string, { x?: number; y?: number }>()

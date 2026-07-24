@@ -549,6 +549,18 @@ export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMembe
   return out
 }
 
+/** Translate a shape (and its polygon points) by a normalised delta, clamped to
+ *  the board. Shared by the canvas drag/align and the arrow-key nudge (#632). */
+export function translateShape(s: ComponentShape, dx: number, dy: number): ComponentShape {
+  const c = (v: number): number => Math.min(1, Math.max(0, v))
+  return {
+    ...s,
+    x: c(s.x + dx),
+    y: c(s.y + dy),
+    points: s.points?.map((p) => ({ x: c(p.x + dx), y: c(p.y + dy) }))
+  }
+}
+
 /** Dissolve a group by one level: its members (+ any direct sub-groups) are
  *  re-parented to the group's own parent — loose when it was top-level. Pure;
  *  shared by the canvas Ungroup button + the Layers-panel ungroup (#630/#631). */

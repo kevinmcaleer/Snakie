@@ -10,6 +10,7 @@ import {
   groupMembers,
   groupRootId,
   groupTreeIds,
+  translateShape,
   driverDeviceDirs,
   driverInstallMethod,
   insertPolygonPoint,
@@ -996,6 +997,24 @@ describe('group tree helpers (#630)', () => {
     expect(out.groups).toEqual([{ id: 'A' }, { id: 'C', parent: 'A' }])
     // The pin (in C) is untouched; C now sits directly under A.
     expect(out.headers[0].pins[0].group).toBe('C')
+  })
+
+  it('translateShape shifts x/y + polygon points and clamps to the board', () => {
+    const r = translateShape({ kind: 'rect', x: 0.4, y: 0.4 }, 0.1, -0.1)
+    expect(r.x).toBeCloseTo(0.5)
+    expect(r.y).toBeCloseTo(0.3)
+    // Clamp at the edges.
+    expect(translateShape({ kind: 'rect', x: 0.95, y: 0.02 }, 0.2, -0.2)).toMatchObject({ x: 1, y: 0 })
+    // Polygon points move too.
+    const poly = translateShape(
+      { kind: 'polygon', x: 0.2, y: 0.2, points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.3 }] },
+      0.05,
+      0.05
+    )
+    expect(poly.points?.[0].x).toBeCloseTo(0.15)
+    expect(poly.points?.[0].y).toBeCloseTo(0.15)
+    expect(poly.points?.[1].x).toBeCloseTo(0.35)
+    expect(poly.points?.[1].y).toBeCloseTo(0.35)
   })
 
   it('dissolveGroup makes a top-level group loose (drops the registry)', () => {
