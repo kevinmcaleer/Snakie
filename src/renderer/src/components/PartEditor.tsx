@@ -1114,37 +1114,40 @@ function LayersPanel({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   // The group node (in the Parts list) whose name is being edited inline (#631).
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
-  // Pin list sort order (#…): 'added' = insertion order (default); the others sort
-  // by board number / type / GPIO.
-  const [pinSort, setPinSort] = useState<'added' | 'number' | 'type' | 'gpio'>('added')
+  // Pin list sort (#…): click a column header to sort by it; `col: null` is the
+  // default insertion order. Clicking the active column toggles asc ⇄ desc.
+  type PinSortCol = 'number' | 'type' | 'gpio'
+  const [pinSort, setPinSort] = useState<{ col: PinSortCol | null; dir: 'asc' | 'desc' }>({ col: null, dir: 'asc' })
+  const cyclePinSort = (col: PinSortCol | null): void =>
+    setPinSort((s) => (col === null ? { col: null, dir: 'asc' } : s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }))
   const pins = resolvedPins(part)
   const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
-  // Sort the Pins list. 'added' keeps insertion order; 'number'/'gpio' put pins
-  // that HAVE that field first (ascending) and the rest at the bottom in insertion
-  // order; 'type' groups by role. Selection still keys off the stable hi/pi.
+  // Sort the Pins list. col=null keeps insertion order; 'number'/'gpio' put pins
+  // that HAVE that field first (ascending; the rest fall to the bottom in insertion
+  // order, regardless of direction); 'type' groups by role. Selection keys off hi/pi.
   const sortedPins = (() => {
     type Row = { rp: (typeof pins)[number]; i: number }
     const rows: Row[] = pins.map((rp, i) => ({ rp, i }))
+    const flip = pinSort.dir === 'desc' ? -1 : 1
     const byOptional = (a: Row, b: Row, val: (rp: Row['rp']) => number | undefined): number => {
       const av = val(a.rp)
       const bv = val(b.rp)
       const aHas = typeof av === 'number'
       const bHas = typeof bv === 'number'
-      if (aHas && bHas && av !== bv) return (av as number) - (bv as number)
-      if (aHas !== bHas) return aHas ? -1 : 1
+      if (aHas !== bHas) return aHas ? -1 : 1 // field-less pins always at the bottom
+      if (aHas && bHas && av !== bv) return flip * ((av as number) - (bv as number))
       return a.i - b.i
     }
-    const cmp: Record<typeof pinSort, (a: Row, b: Row) => number> = {
-      added: (a, b) => a.i - b.i,
+    const cmp: Record<PinSortCol, (a: Row, b: Row) => number> = {
       number: (a, b) => byOptional(a, b, (rp) => rp.pin.number),
       gpio: (a, b) => byOptional(a, b, (rp) => rp.pin.gpio),
       type: (a, b) => {
         const at = roleOrder[a.rp.pin.type] ?? 9
         const bt = roleOrder[b.rp.pin.type] ?? 9
-        return at !== bt ? at - bt : a.i - b.i
+        return at !== bt ? flip * (at - bt) : a.i - b.i
       }
     }
-    return rows.sort(cmp[pinSort]).map((x) => x.rp)
+    return (pinSort.col ? rows.sort(cmp[pinSort.col]) : rows).map((x) => x.rp)
   })()
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
@@ -1527,17 +1530,29 @@ function LayersPanel({
           </button>
         </div>
         {isOpen('pins') && pins.length > 1 && (
-          <div className="pe__pin-sortbar">
-            <label className="pe__pin-sort">
-              <span>Sort</span>
-              <select value={pinSort} onChange={(e) => setPinSort(e.target.value as typeof pinSort)} aria-label="Sort pins by">
-                <option value="added">Added</option>
-                <option value="number">Board #</option>
-                <option value="type">Type</option>
-                <option value="gpio">GPIO</option>
-              </select>
-            </label>
-          </div>
+          // Clickable column headers: click to sort by that column, click again to
+          // flip asc ⇄ desc; the "Pin" header resets to insertion order. The arrow
+          // (▲/▼) marks the active column + direction.
+          (() => {
+            const arrow = (col: PinSortCol): string => (pinSort.col === col ? (pinSort.dir === 'asc' ? ' ▲' : ' ▼') : '')
+            const cls = (col: PinSortCol | null): string => `pe__pin-col${pinSort.col === col ? ' is-sorted' : ''}`
+            return (
+              <div className="pe__pin-cols" role="row">
+                <button type="button" className={`${cls(null)} pe__pin-col--name`} onClick={() => cyclePinSort(null)} title="Sort in the order pins were added">
+                  Pin
+                </button>
+                <button type="button" className={`${cls('number')} pe__pin-col--num`} onClick={() => cyclePinSort('number')} title="Sort by board pin number">
+                  #{arrow('number')}
+                </button>
+                <button type="button" className={`${cls('gpio')} pe__pin-col--num`} onClick={() => cyclePinSort('gpio')} title="Sort by GPIO number">
+                  GP{arrow('gpio')}
+                </button>
+                <button type="button" className={`${cls('type')} pe__pin-col--type`} onClick={() => cyclePinSort('type')} title="Sort by pin type">
+                  Type{arrow('type')}
+                </button>
+              </div>
+            )
+          })()
         )}
         {isOpen('pins') && (
           <ul className="pe__flat pe__flat--pins" role="list">
@@ -1553,9 +1568,12 @@ function LayersPanel({
                   <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                     <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   </button>
-                  {/* Board number column (blank when the pin has none). */}
+                  {/* Board number + GPIO columns (blank when the pin has none). */}
                   <span className="pe__flatnum" title={typeof rp.pin.number === 'number' ? `Board pin ${rp.pin.number}` : 'No board number'}>
                     {typeof rp.pin.number === 'number' ? rp.pin.number : ''}
+                  </span>
+                  <span className="pe__flatnum" title={typeof rp.pin.gpio === 'number' ? `GPIO ${rp.pin.gpio}` : 'No GPIO'}>
+                    {typeof rp.pin.gpio === 'number' ? rp.pin.gpio : ''}
                   </span>
                   <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
                 </li>
