@@ -1043,11 +1043,13 @@ export function PartCanvas({
     return out
   }
 
-  /** If every selected item shares one non-empty group, that group id — else null. */
+  /** If every selected item belongs to one common top-level group, that group's
+   *  root id — else null. Compares ROOTS so a nested supergroup (its members carry
+   *  different immediate group ids, e.g. two servo trios) still counts as one. */
   const selectionGroup = (): string | null => {
-    const ids = selectionGroupIds()
-    if (!ids.length || !ids[0]) return null
-    return ids.every((g) => g === ids[0]) ? (ids[0] as string) : null
+    const roots = selectionGroupIds().map((g) => (g ? groupRootId(part.groups, g) : undefined))
+    if (!roots.length || !roots[0]) return null
+    return roots.every((r) => r === roots[0]) ? (roots[0] as string) : null
   }
 
   /** Group the current multi-selection: loose items join a new group; any item
@@ -1093,9 +1095,16 @@ export function PartCanvas({
       }
       return { ...l, group: gid }
     })
-    const registry = (part.groups ?? []).map((g) =>
-      nestRoots.has(g.id) ? { ...g, parent: gid } : g
-    )
+    // Nest each existing group's root under the new group. A servo-header trio
+    // carries a bare `group` id with NO registry entry, so register it here too —
+    // otherwise re-parenting a non-existent entry silently does nothing (#…).
+    const registry = [...(part.groups ?? [])]
+    const idxById = new Map(registry.map((g, i) => [g.id, i]))
+    for (const root of nestRoots) {
+      const at = idxById.get(root)
+      if (at !== undefined) registry[at] = { ...registry[at], parent: gid }
+      else registry.push({ id: root, parent: gid })
+    }
     registry.push({ id: gid })
     commit({ ...part, headers: nextHeaders, shapes: nextShapes, labels: nextLabels, groups: registry })
   }
@@ -1259,35 +1268,28 @@ export function PartCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSelect?.nonce])
 
-  /** Container-pixel position of the LAST selected item, so the align toolbar can
-   *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */
+  /** Container-pixel position of the selection's TOP-CENTRE, so the align toolbar
+   *  floats above the whole selection (not over its lowest pin — which would cover
+   *  the rest of a vertical header trio, #…). Null when it can't be resolved. */
   const alignAnchorPx = (): { left: number; top: number } | null => {
     const svg = svgRef.current
     if (!svg) return null
-    // Prefer the last component, else the last pin (matches selection recency).
-    let cx: number | undefined
-    let cy: number | undefined
-    const lastComp = selComponents[selComponents.length - 1]
-    if (lastComp) {
-      const c = componentCenter(lastComp.type, lastComp.index)
-      if (c) {
-        cx = c.cx
-        cy = c.cy
-      }
+    const centres: { cx: number; cy: number }[] = []
+    for (const s of selectedPins) {
+      const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+      if (rp) centres.push({ cx: rp.x, cy: rp.y })
     }
-    if (cx === undefined) {
-      const last = selectedPins[selectedPins.length - 1]
-      const rp = last && pins.find((p) => p.hi === last.hi && p.pi === last.pi)
-      if (rp) {
-        cx = rp.x
-        cy = rp.y
-      }
+    for (const c of selComponents) {
+      const ctr = componentCenter(c.type, c.index)
+      if (ctr) centres.push(ctr)
     }
     const ctm = svg.getScreenCTM()
-    if (cx === undefined || cy === undefined || !ctm) return null
+    if (!centres.length || !ctm) return null
+    const minY = Math.min(...centres.map((c) => c.cy))
+    const midX = (Math.min(...centres.map((c) => c.cx)) + Math.max(...centres.map((c) => c.cx))) / 2
     const pt = svg.createSVGPoint()
-    pt.x = view.tx + px(cx) * view.scale
-    pt.y = view.ty + py(cy) * view.scale
+    pt.x = view.tx + px(midX) * view.scale
+    pt.y = view.ty + py(minY) * view.scale
     const s = pt.matrixTransform(ctm)
     // The toolbar is absolutely positioned inside .pcv__wrap, so measure relative to
     // that container — not the SVG, which is flex-centred and may be letterboxed.
@@ -2703,7 +2705,8 @@ export function PartCanvas({
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             const sel =
               isSel({ type: 'pin', hi: rp.hi, pi: rp.pi }) ||
-              (!!selPinGroup && rp.pin.group === selPinGroup)
+              (!!selPinGroup && rp.pin.group === selPinGroup) ||
+              selectedPins.some((s) => s.hi === rp.hi && s.pi === rp.pi)
             const shape = pinShapeOf(rp.pin)
             // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
             // octagonal servo/DuPont header pads, which draw at a fixed physical
