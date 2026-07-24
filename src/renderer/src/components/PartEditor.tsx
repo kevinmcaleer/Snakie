@@ -1513,59 +1513,75 @@ function LayersPanel({
           <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
             {(() => {
-              // A single flat pin row (used for ungrouped pins + expanded members).
-              const pinRow = (rp: (typeof sortedPins)[number], member = false): JSX.Element => (
+              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
+              // A single flat pin row, indented by its depth in the tree.
+              const pinRow = (rp: (typeof sortedPins)[number], depth: number): JSX.Element => (
                 <li
                   key={`p${rp.hi}-${rp.pi}`}
-                  className={`pe__flatrow pe__flatrow--pin${member ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                  className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                  style={depth > 1 ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
                 >
                   <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                     <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   </button>
-                  {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
                   <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
                 </li>
               )
-              // Servo-header groups collapse to ONE row (expandable); ungrouped pins
-              // render inline. Members within a group read Signal → V+ → GND.
-              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
-              const seen = new Set<string>()
-              const rows: JSX.Element[] = []
+              // Build the pin GROUP tree: a servo trio (leaf group of pins) collapses
+              // to one row; a supergroup nests its trios beneath it (recursively).
+              type PinNode = { kind: 'pin'; rp: (typeof sortedPins)[number] } | { kind: 'group'; id: string; children: PinNode[] }
+              const pinGroups = part.groups ?? []
+              const buildGroup = (gid: string): PinNode => ({
+                kind: 'group',
+                id: gid,
+                children: [
+                  ...pinGroups.filter((g) => g.parent === gid).map((g) => buildGroup(g.id)),
+                  ...sortedPins
+                    .filter((p) => p.pin.group === gid)
+                    .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
+                    .map((rp): PinNode => ({ kind: 'pin', rp }))
+                ]
+              })
+              const emitted = new Set<string>()
+              const top: PinNode[] = []
               for (const rp of sortedPins) {
                 const g = rp.pin.group
                 if (!g) {
-                  rows.push(pinRow(rp))
+                  top.push({ kind: 'pin', rp })
                   continue
                 }
-                if (seen.has(g)) continue
-                seen.add(g)
-                const members = sortedPins
-                  .filter((p) => p.pin.group === g)
-                  .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
-                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
-                const open = !!expandedGroups[g]
+                const root = groupRootId(pinGroups, g)
+                if (emitted.has(root)) continue
+                emitted.add(root)
+                top.push(buildGroup(root))
+              }
+              const leafPins = (n: PinNode): (typeof sortedPins)[number][] =>
+                n.kind === 'pin' ? [n.rp] : n.children.flatMap(leafPins)
+              const renderNode = (node: PinNode, depth: number): JSX.Element[] => {
+                if (node.kind === 'pin') return [pinRow(node.rp, depth)]
+                const gid = node.id
+                const g = pinGroups.find((x) => x.id === gid)
+                const isTrio = node.children.length > 0 && node.children.every((c) => c.kind === 'pin')
+                const open = gid in expandedGroups ? expandedGroups[gid] : !isTrio // trios collapsed, supergroups open
+                const members = leafPins(node)
                 const active = members.some((p) => selEq({ type: 'pin', hi: p.hi, pi: p.pi }))
-                rows.push(
-                  <li key={`g${g}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`}>
-                    <button
-                      type="button"
-                      className="pe__flatcaret"
-                      onClick={() => setExpandedGroups((s) => ({ ...s, [g]: !open }))}
-                      aria-expanded={open}
-                      title={open ? 'Collapse header' : 'Expand header'}
-                    >
+                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
+                const rows: JSX.Element[] = [
+                  <li key={`g${gid}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`} style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}>
+                    <button type="button" className="pe__flatcaret" onClick={() => setExpandedGroups((s) => ({ ...s, [gid]: !open }))} aria-expanded={open} title={open ? 'Collapse' : 'Expand'}>
                       {open ? '▾' : '▸'}
                     </button>
-                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: signal.hi, pi: signal.pi })}>
-                      <span className="pe__item-name">{signal.pin.name || 'Header'}</span>
-                      <span className="pe__flatsub">servo · S/V/G</span>
+                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => onSelectGroup?.(gid)}>
+                      <span className="pe__item-name">{g?.name || (isTrio ? signal?.pin.name || 'Header' : 'Group')}</span>
+                      <span className="pe__flatsub">{isTrio ? 'servo · S/V/G' : `group · ${members.length}`}</span>
                     </button>
-                    <span className="pe__flattype pe__flattype--group">header</span>
+                    <span className="pe__flattype pe__flattype--group">{isTrio ? 'header' : 'group'}</span>
                   </li>
-                )
-                if (open) for (const m of members) rows.push(pinRow(m, true))
+                ]
+                if (open) for (const c of node.children) rows.push(...renderNode(c, depth + 1))
+                return rows
               }
-              return rows
+              return top.flatMap((n) => renderNode(n, 0))
             })()}
           </ul>
         )}

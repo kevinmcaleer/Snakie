@@ -1550,6 +1550,32 @@ export function PartCanvas({
   const selPinGroup =
     selection?.type === 'pin' ? part.headers[selection.hi]?.pins[selection.pi]?.group : undefined
 
+  // When the multi-selection is one coherent group, draw a single OUTLINE around
+  // the whole group instead of ringing each member (#…). The box is the members'
+  // centre bounds; a pixel margin is added at draw time to clear the pads.
+  const selectedGroupId = selectionGroup()
+  const groupOutline = ((): { minX: number; minY: number; maxX: number; maxY: number } | null => {
+    if (!selectedGroupId) return null
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const s of selectedPins) {
+      const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+      if (rp) {
+        xs.push(rp.x)
+        ys.push(rp.y)
+      }
+    }
+    for (const c of selComponents) {
+      const ctr = componentCenter(c.type, c.index)
+      if (ctr) {
+        xs.push(ctr.cx)
+        ys.push(ctr.cy)
+      }
+    }
+    if (!xs.length) return null
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
+  })()
+
   // --- text/label styling (the mini-toolbar "A" dropdown) -------------------
   interface LabelStyle {
     fontSize: number
@@ -2798,10 +2824,13 @@ export function PartCanvas({
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
+            // A selected group shows a single outline (below) instead of ringing
+            // each member — so suppress the per-pin ring when a group is selected.
             const sel =
-              isSel({ type: 'pin', hi: rp.hi, pi: rp.pi }) ||
-              (!!selPinGroup && rp.pin.group === selPinGroup) ||
-              selectedPins.some((s) => s.hi === rp.hi && s.pi === rp.pi)
+              !selectedGroupId &&
+              (isSel({ type: 'pin', hi: rp.hi, pi: rp.pi }) ||
+                (!!selPinGroup && rp.pin.group === selPinGroup) ||
+                selectedPins.some((s) => s.hi === rp.hi && s.pi === rp.pi))
             const shape = pinShapeOf(rp.pin)
             // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
             // octagonal servo/DuPont header pads, which draw at a fixed physical
@@ -3048,6 +3077,20 @@ export function PartCanvas({
           </g>
         )}
 
+        {/* A single outline around the selected group (instead of ringing each
+            member). Padded a few px to clear the pads. */}
+        {interactive && groupOutline && (
+          <rect
+            className="pcv__group-outline"
+            x={px(groupOutline.minX) - 11}
+            y={py(groupOutline.minY) - 11}
+            width={px(groupOutline.maxX) - px(groupOutline.minX) + 22}
+            height={py(groupOutline.maxY) - py(groupOutline.minY) + 22}
+            rx={7}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&
           features.map((f, i) => (
@@ -3149,7 +3192,8 @@ export function PartCanvas({
             }
             const i = c.index
             const s = shapes[i]
-            const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
+            // Suppressed while a group is selected — the group outline stands in.
+            const sel = !selectedGroupId && (isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex')
             const fill = s.fill ?? DEFAULT_SHAPE_FILL
             const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
             const sw = (s.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH) + (isSel({ type: 'shape', index: i }) ? 1.5 : 0)

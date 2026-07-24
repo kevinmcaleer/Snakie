@@ -107,6 +107,15 @@
   pointer-events: none;
 }
 
+/* Outline drawn around a selected group (in place of per-member rings). */
+.pcv__group-outline {
+  fill: none;
+  stroke: var(--accent, #4ea1ff);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+  pointer-events: none;
+}
+
 /* Alignment toolbar (appears when ≥2 pins are selected). */
 .pcv__align {
   position: absolute;
