@@ -963,6 +963,45 @@ export function PartCanvas({
     return out
   }
 
+  /** The `group` id of an align ref (undefined = loose). */
+  const groupOfRef = (ref: AlignRef): string | undefined =>
+    ref.kind === 'pin'
+      ? part.headers[ref.hi]?.pins[ref.pi]?.group
+      : ref.kind === 'shape'
+        ? shapes[ref.index]?.group
+        : labels[ref.index]?.group
+
+  /** Partition the selection into ALIGNMENT UNITS: each grouped item's whole group
+   *  (by root) is ONE rigid unit — aligned/distributed by its bounding-box centre,
+   *  with every member moved by the same delta — so a group aligns as a whole
+   *  rather than its members scattering. A loose item is its own unit (#…). */
+  type AlignUnit = { cx: number; cy: number; members: { ref: AlignRef; cx: number; cy: number }[] }
+  const alignUnits = (): AlignUnit[] => {
+    const byRoot = new Map<string, { ref: AlignRef; cx: number; cy: number }[]>()
+    const units: AlignUnit[] = []
+    for (const it of allAlignItems()) {
+      const g = groupOfRef(it.ref)
+      const root = g ? groupRootId(part.groups, g) : undefined
+      if (root) {
+        const arr = byRoot.get(root) ?? []
+        arr.push(it)
+        byRoot.set(root, arr)
+      } else {
+        units.push({ cx: it.cx, cy: it.cy, members: [it] })
+      }
+    }
+    for (const members of byRoot.values()) {
+      const xs = members.map((m) => m.cx)
+      const ys = members.map((m) => m.cy)
+      units.push({
+        cx: (Math.min(...xs) + Math.max(...xs)) / 2,
+        cy: (Math.min(...ys) + Math.max(...ys)) / 2,
+        members
+      })
+    }
+    return units
+  }
+
   /** Translate a shape (incl. polygon points) by a normalised delta. */
   /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
   const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
@@ -1001,31 +1040,46 @@ export function PartCanvas({
   }
 
   const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom' | 'centerX' | 'centerY'): void => {
-    const sel = allAlignItems()
-    if (sel.length < 2) return
+    const units = alignUnits()
+    if (units.length < 2) return
     const horiz = mode === 'left' || mode === 'right' || mode === 'centerX'
-    const vals = sel.map((s) => (horiz ? s.cx : s.cy))
+    const vals = units.map((u) => (horiz ? u.cx : u.cy))
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     // left/top → min edge, right/bottom → max edge, centerX/centerY → midpoint.
     const target = mode === 'left' || mode === 'top' ? min : mode === 'right' || mode === 'bottom' ? max : (min + max) / 2
-    commitAlignment(sel.map((s) => ({ ref: s.ref, tcx: horiz ? target : undefined, tcy: horiz ? undefined : target })))
+    const targets: { ref: AlignRef; tcx?: number; tcy?: number }[] = []
+    for (const u of units) {
+      // Move the whole unit by one delta so a group keeps its internal layout.
+      const delta = target - (horiz ? u.cx : u.cy)
+      for (const m of u.members) {
+        targets.push(horiz ? { ref: m.ref, tcx: m.cx + delta } : { ref: m.ref, tcy: m.cy + delta })
+      }
+    }
+    commitAlignment(targets)
   }
 
   const distributeSelected = (axis: 'x' | 'y'): void => {
-    const sel = allAlignItems()
-    if (sel.length < 3) return // ≥3 to space evenly (2 are already "distributed")
-    const sorted = [...sel].sort((a, b) => (axis === 'x' ? a.cx - b.cx : a.cy - b.cy))
+    const units = alignUnits()
+    if (units.length < 3) return // ≥3 units to space evenly (2 are already "distributed")
+    const sorted = [...units].sort((a, b) => (axis === 'x' ? a.cx - b.cx : a.cy - b.cy))
     const min = axis === 'x' ? sorted[0].cx : sorted[0].cy
     const max = axis === 'x' ? sorted[sorted.length - 1].cx : sorted[sorted.length - 1].cy
     const step = (max - min) / (sorted.length - 1)
-    commitAlignment(
-      sorted.map((s, i) => (axis === 'x' ? { ref: s.ref, tcx: min + i * step } : { ref: s.ref, tcy: min + i * step }))
-    )
+    const targets: { ref: AlignRef; tcx?: number; tcy?: number }[] = []
+    sorted.forEach((u, i) => {
+      const delta = min + i * step - (axis === 'x' ? u.cx : u.cy)
+      for (const m of u.members) {
+        targets.push(axis === 'x' ? { ref: m.ref, tcx: m.cx + delta } : { ref: m.ref, tcy: m.cy + delta })
+      }
+    })
+    commitAlignment(targets)
   }
 
-  /** Total count of items in the alignment multi-selection (pins + components). */
+  /** Total items in the multi-selection, and how many rigid UNITS they form (a
+   *  group counts once) — the unit count gates align (≥2) + distribute (≥3). */
   const alignCount = selectedPins.length + selComponents.length
+  const alignUnitCount = alignUnits().length
 
   // ── Grouping (#629) ──────────────────────────────────────────────────────
   // Membership is by a `group` id stored on each item (pin/shape/label); the
@@ -3238,30 +3292,30 @@ export function PartCanvas({
           return (
             <div className="pcv__align" role="toolbar" aria-label="Align selection" style={style}>
               <span className="pcv__align-count">{alignCount}</span>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges" disabled={alignUnitCount < 2}>
                 {alignIcon('left')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerX')} title="Align horizontal centres">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerX')} title="Align horizontal centres" disabled={alignUnitCount < 2}>
                 {alignIcon('centerX')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges" disabled={alignUnitCount < 2}>
                 {alignIcon('right')}
               </button>
               <span className="pcv__align-sep" />
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges" disabled={alignUnitCount < 2}>
                 {alignIcon('top')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerY')} title="Align vertical centres">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerY')} title="Align vertical centres" disabled={alignUnitCount < 2}>
                 {alignIcon('centerY')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges" disabled={alignUnitCount < 2}>
                 {alignIcon('bottom')}
               </button>
               <span className="pcv__align-sep" />
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={alignCount < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={alignUnitCount < 3}>
                 {alignIcon('distX')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignCount < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignUnitCount < 3}>
                 {alignIcon('distY')}
               </button>
               <span className="pcv__align-sep" />
