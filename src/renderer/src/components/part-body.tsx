@@ -925,6 +925,11 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // Real JST/QWIIC housings are a plain dark block with SHARP corners and no white
   // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
   // the current selection in the Part Editor, never a white border).
+  // Per-contact silk labels (SDA/SCL/GND/pwr) so a QWIIC socket's pinout is legible
+  // on the board — needed to assign SDA/SCL in code. Vertical + haloed to survive
+  // the tight contact pitch; only when the housing is big enough to read.
+  const labelFs = Math.max(4.5, Math.min(7, w / 8))
+  const showLabels = w >= 24
   return (
     <g style={{ pointerEvents: 'none' }}>
       <rect x={x0} y={y0} width={w} height={h} fill="#1c1f24" stroke={selected ? '#4ea1ff' : '#0b0d10'} strokeWidth={selected ? 2 : 1} />
@@ -932,6 +937,30 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
         const cxp = x0 + (w / (n + 1)) * (i + 1)
         return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill="#e6c34a" />
       })}
+      {showLabels &&
+        conn.pins.map((pin, i) => {
+          if (!pin.name || i >= n) return null
+          const cxp = x0 + (w / (n + 1)) * (i + 1)
+          const ly = y0 - 2 // reads upward, just above the housing
+          return (
+            <text
+              key={`lbl${i}`}
+              x={cxp}
+              y={ly}
+              transform={`rotate(-90 ${cxp} ${ly})`}
+              textAnchor="start"
+              fontSize={labelFs}
+              fontWeight={700}
+              fill="#eef1f4"
+              stroke="#0b1410"
+              strokeWidth={labelFs * 0.35}
+              style={{ paintOrder: 'stroke' }}
+              className="pb__conn-pinlabel"
+            >
+              {pin.name}
+            </text>
+          )
+        })}
     </g>
   )
 }
