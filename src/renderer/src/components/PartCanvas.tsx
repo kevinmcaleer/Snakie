@@ -2328,17 +2328,50 @@ export function PartCanvas({
       return
     }
     if (d.kind === 'move-group' && d.groupBundle) {
-      // Free rigid move of the whole group — base = the current pointer position.
-      moveGroupBundleTo(d.groupBundle, nx, ny)
-      setGuides(null)
+      // Rigid move of the whole group — base = the current pointer position. Shift
+      // axis-locks it to the dominant direction, with a rail guide along that axis.
+      let bx = nx
+      let by = ny
+      let rail: { x?: number; y?: number } | null = null
+      if (e.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          by = d.startNY
+          rail = { y: d.startNY }
+        } else {
+          bx = d.startNX
+          rail = { x: d.startNX }
+        }
+      }
+      moveGroupBundleTo(d.groupBundle, bx, by)
+      setGuides(rail)
       return
     }
     if (d.kind === 'move-obj' && d.sel) {
+      // Shift = axis-lock: constrain the drag to its dominant direction (locking the
+      // other coordinate to its start) and show a rail guide along that axis. Covers
+      // single items + servo-header trios (groupOffsets); the ghost-array drag keeps
+      // its own 2.54mm lock. (Ctrl/Cmd still gives free, un-snapped movement.)
+      if (e.shiftKey && !d.anchor) {
+        const horiz = Math.abs(dx) >= Math.abs(dy)
+        const lx = horiz ? d.ox + dx : d.ox
+        const ly = horiz ? d.oy : d.oy + dy
+        const s = d.sel
+        if (s.type === 'pin' && d.groupOffsets) moveGroupTo(d.groupOffsets, lx, ly)
+        else if (s.type === 'pin') movePinTo(s.hi, s.pi, lx, ly, undefined, true)
+        else if (s.type === 'hole') moveHoleTo(s.index, lx, ly, true)
+        else if (s.type === 'button') moveButtonTo(s.index, lx, ly, true)
+        else if (s.type === 'led') moveLedTo(s.index, lx, ly)
+        else if (s.type === 'connector') moveConnectorTo(s.index, lx, ly)
+        else if (s.type === 'shape') moveShapeTo(s.index, lx, ly, true)
+        else if (s.type === 'label') moveLabelTo(s.index, lx, ly, true)
+        else if (s.type === 'image') moveImage(lx, ly)
+        setGuides(horiz ? { y: d.oy } : { x: d.ox })
+        return
+      }
       const x = d.ox + dx
       const y = d.oy + dy
-      // Hold Shift for completely free movement — no alignment guides / snapping
-      // (Ctrl/Cmd also disables it, mirroring the resize handler).
-      const noSnap = e.shiftKey || e.ctrlKey || e.metaKey
+      // Ctrl/Cmd = completely free movement — no alignment guides / snapping.
+      const noSnap = e.ctrlKey || e.metaKey
       if (d.sel.type === 'pin' && d.groupOffsets) {
         // Servo-header group: snap the dragged pad, move the whole trio rigidly.
         moveGroupTo(d.groupOffsets, noSnap ? x : snapX(x), noSnap ? y : snapY(y))
@@ -2558,6 +2591,14 @@ export function PartCanvas({
 
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
     if (!interactive) return
+    // A plain two-finger trackpad drag (or mouse-wheel scroll) PANS the canvas,
+    // like the pan tool. Ctrl/⌘+wheel — and a trackpad pinch, which the OS reports
+    // as ctrl+wheel — ZOOMS about the cursor.
+    if (!e.ctrlKey && !e.metaKey) {
+      const s = viewBoxScale()
+      setView((v) => ({ ...v, tx: v.tx - e.deltaX / s, ty: v.ty - e.deltaY / s }))
+      return
+    }
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM()
     setView((v) => {
