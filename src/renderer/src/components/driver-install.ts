@@ -43,6 +43,16 @@ export async function installPartDriver(
     await window.api.device.writeFile(d.target.trim(), read.contents)
     return { ok: true }
   } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    const raw = err instanceof Error ? err.message : String(err)
+    // The board's MicroPython filesystem is full — OSError 28 (ENOSPC). Small boards
+    // (e.g. the SAMD21 XIAO) have very little flash for the /lib filesystem. Surface
+    // a clear reason instead of the raw device traceback.
+    if (/OSError:\s*28\b|ENOSPC|No space left/i.test(raw)) {
+      return {
+        ok: false,
+        message: `No space left on the board — its filesystem is full, so ${d.target.trim()} won't fit. Free up space (delete files in the Files panel) or use a board with more flash storage.`
+      }
+    }
+    return { ok: false, message: raw }
   }
 }
