@@ -1114,21 +1114,38 @@ function LayersPanel({
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   // The group node (in the Parts list) whose name is being edited inline (#631).
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  // Pin list sort order (#…): 'added' = insertion order (default); the others sort
+  // by board number / type / GPIO.
+  const [pinSort, setPinSort] = useState<'added' | 'number' | 'type' | 'gpio'>('added')
   const pins = resolvedPins(part)
-  // The Pins list reads best sorted: by board number when a pin has one (numbered
-  // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
-  // GP2 sorts before GP10). Selection still keys off the stable hi/pi.
-  const sortedPins = [...pins].sort((a, b) => {
-    const an = a.pin.number
-    const bn = b.pin.number
-    const aHas = typeof an === 'number'
-    const bHas = typeof bn === 'number'
-    if (aHas && bHas) return an - bn
-    if (aHas !== bHas) return aHas ? -1 : 1
-    const al = a.pin.label || a.pin.name || ''
-    const bl = b.pin.label || b.pin.name || ''
-    return al.localeCompare(bl, undefined, { numeric: true, sensitivity: 'base' })
-  })
+  const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
+  // Sort the Pins list. 'added' keeps insertion order; 'number'/'gpio' put pins
+  // that HAVE that field first (ascending) and the rest at the bottom in insertion
+  // order; 'type' groups by role. Selection still keys off the stable hi/pi.
+  const sortedPins = (() => {
+    type Row = { rp: (typeof pins)[number]; i: number }
+    const rows: Row[] = pins.map((rp, i) => ({ rp, i }))
+    const byOptional = (a: Row, b: Row, val: (rp: Row['rp']) => number | undefined): number => {
+      const av = val(a.rp)
+      const bv = val(b.rp)
+      const aHas = typeof av === 'number'
+      const bHas = typeof bv === 'number'
+      if (aHas && bHas && av !== bv) return (av as number) - (bv as number)
+      if (aHas !== bHas) return aHas ? -1 : 1
+      return a.i - b.i
+    }
+    const cmp: Record<typeof pinSort, (a: Row, b: Row) => number> = {
+      added: (a, b) => a.i - b.i,
+      number: (a, b) => byOptional(a, b, (rp) => rp.pin.number),
+      gpio: (a, b) => byOptional(a, b, (rp) => rp.pin.gpio),
+      type: (a, b) => {
+        const at = roleOrder[a.rp.pin.type] ?? 9
+        const bt = roleOrder[b.rp.pin.type] ?? 9
+        return at !== bt ? at - bt : a.i - b.i
+      }
+    }
+    return rows.sort(cmp[pinSort]).map((x) => x.rp)
+  })()
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
@@ -1509,11 +1526,23 @@ function LayersPanel({
             ＋
           </button>
         </div>
+        {isOpen('pins') && pins.length > 1 && (
+          <div className="pe__pin-sortbar">
+            <label className="pe__pin-sort">
+              <span>Sort</span>
+              <select value={pinSort} onChange={(e) => setPinSort(e.target.value as typeof pinSort)} aria-label="Sort pins by">
+                <option value="added">Added</option>
+                <option value="number">Board #</option>
+                <option value="type">Type</option>
+                <option value="gpio">GPIO</option>
+              </select>
+            </label>
+          </div>
+        )}
         {isOpen('pins') && (
           <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
             {(() => {
-              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
               // A single flat pin row, indented by its depth in the tree.
               const pinRow = (rp: (typeof sortedPins)[number], depth: number): JSX.Element => (
                 <li
@@ -1524,6 +1553,10 @@ function LayersPanel({
                   <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                     <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   </button>
+                  {/* Board number column (blank when the pin has none). */}
+                  <span className="pe__flatnum" title={typeof rp.pin.number === 'number' ? `Board pin ${rp.pin.number}` : 'No board number'}>
+                    {typeof rp.pin.number === 'number' ? rp.pin.number : ''}
+                  </span>
                   <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
                 </li>
               )
@@ -1536,7 +1569,10 @@ function LayersPanel({
                 id: gid,
                 children: [
                   ...pinGroups.filter((g) => g.parent === gid).map((g) => buildGroup(g.id)),
-                  ...sortedPins
+                  // A group's own members read by role (S → V → G); off the
+                  // insertion-ordered `pins` (not sortedPins) so same-type members
+                  // keep a stable order regardless of the list's sort dropdown.
+                  ...pins
                     .filter((p) => p.pin.group === gid)
                     .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
                     .map((rp): PinNode => ({ kind: 'pin', rp }))

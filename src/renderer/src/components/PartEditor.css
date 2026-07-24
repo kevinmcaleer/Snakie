@@ -1431,6 +1431,43 @@
   opacity: 0.7;
 }
 
+/* Board-number column in a pin row (blank when the pin has none). */
+.pe__flatnum {
+  flex: 0 0 auto;
+  min-width: 1.5rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+/* Pin-list sort control (a compact bar under the Pins header). */
+.pe__pin-sortbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.1rem 0.35rem 0.25rem;
+}
+.pe__pin-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.pe__pin-sort select {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.05rem 0.25rem;
+  cursor: pointer;
+}
+
 /* Servo-header group row: an expand caret + bold header name + a small "S/V/G"
    sub-label; its members indent under it when expanded. */
 .pe__flatcaret {
