@@ -1203,6 +1203,71 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     persist({ ...robot, connections: [...robot.connections, conn] })
   }
+
+  // --- QWIIC / I2C cable (#…) ------------------------------------------------
+  // A part's connector pins are appended after its header pins (partLifelikePins /
+  // netlist flattenPartPins). Resolve an endpoint to the CONNECTOR it belongs to
+  // (with each of its pins' endpoints), so a connector→connector drag can wire the
+  // whole cable at once.
+  type CablePin = { endpoint: string; name: string; type: string; i2c?: string }
+  type EndpointConn = { key: string; connIndex: number; pins: CablePin[] }
+  const parseEp = (ep: string): { key: string; index: number } => {
+    const hash = ep.lastIndexOf('#')
+    const index = hash >= 0 ? parseInt(ep.slice(hash + 1), 10) : -1
+    const head = hash >= 0 ? ep.slice(0, hash) : ep
+    const dot = head.indexOf('.')
+    return { key: dot >= 0 ? head.slice(0, dot) : head, index }
+  }
+  const endpointConnector = (endpoint: string): EndpointConn | null => {
+    const { key, index } = parseEp(endpoint)
+    const def = subjByKey.get(key)?.partDef
+    if (!def) return null
+    let acc = resolvedPins(def).length // connector pins are appended after headers
+    if (index < acc) return null
+    for (let ci = 0; ci < (def.connectors?.length ?? 0); ci++) {
+      const conn = def.connectors![ci]
+      if (index < acc + conn.pins.length) {
+        const pins = conn.pins.map((pin, pi) => ({
+          endpoint: `${key}.${pin.name}#${acc + pi}`,
+          name: pin.name,
+          type: pin.type as string,
+          i2c: pin.signals?.i2c
+        }))
+        return { key, connIndex: ci, pins }
+      }
+      acc += conn.pins.length
+    }
+    return null
+  }
+  /** Wire two connectors as one cable — SDA↔SDA, SCL↔SCL, GND↔GND, pwr↔pwr, the
+   *  4 wires sharing a cable id. Power is matched by TYPE (any pwr pin). */
+  const cableRole = (p: CablePin): 'sda' | 'scl' | 'gnd' | 'pwr' | null =>
+    p.i2c === 'SDA' || p.name.toUpperCase() === 'SDA'
+      ? 'sda'
+      : p.i2c === 'SCL' || p.name.toUpperCase() === 'SCL'
+        ? 'scl'
+        : p.type === 'gnd'
+          ? 'gnd'
+          : p.type === 'pwr'
+            ? 'pwr'
+            : null
+  const makeCable = (a: EndpointConn, b: EndpointConn): void => {
+    const cable = `cable-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    const netFor = { sda: 'signal', scl: 'signal', gnd: 'gnd', pwr: 'vcc' } as const
+    const has = (id: string, f: string, t: string): boolean =>
+      robot.connections.some((c) => c.id === id || (c.from === t && c.to === f))
+    const added: RobotConnection[] = []
+    for (const role of ['sda', 'scl', 'gnd', 'pwr'] as const) {
+      const pa = a.pins.find((p) => cableRole(p) === role)
+      const pb = b.pins.find((p) => cableRole(p) === role)
+      if (!pa || !pb || pa.endpoint === pb.endpoint) continue
+      const id = connectionId(pa.endpoint, pb.endpoint)
+      if (has(id, pa.endpoint, pb.endpoint)) continue
+      added.push({ id, from: pa.endpoint, to: pb.endpoint, net: netFor[role], cable })
+    }
+    if (added.length) persist({ ...robot, connections: [...robot.connections, ...added] })
+  }
+
   const removeConnection = (id: string): void =>
     persist({ ...robot, connections: robot.connections.filter((c) => c.id !== id) })
   // Re-attach a wire's grabbed end to a new pin: drop the OLD connection + add the
@@ -1478,7 +1543,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
         else removeConnection(d.reconnectId)
       } else if (target && target.endpoint !== d.from) {
-        addConnection(d.from, target.endpoint)
+        // Dragging between two DIFFERENT connectors wires the whole cable (SDA/SCL/
+        // GND/pwr as one bundle); otherwise it's a single pin-to-pin wire.
+        const ca = endpointConnector(d.from)
+        const cb = endpointConnector(target.endpoint)
+        if (ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)) makeCable(ca, cb)
+        else addConnection(d.from, target.endpoint)
       }
       force((n) => n + 1)
     }

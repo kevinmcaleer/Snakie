@@ -54,6 +54,8 @@ function coerceConnection(raw: unknown): RobotConnection | null {
   if (NETS.includes(r.net as RobotNet)) out.net = r.net as RobotNet
   const color = str(r.color)
   if (color) out.color = color
+  const cable = str(r.cable)
+  if (cable) out.cable = cable
   return out
 }
 
@@ -84,6 +86,7 @@ export function robotToYaml(def: RobotDefinition): string {
     const o: Record<string, unknown> = { id: c.id, from: c.from, to: c.to }
     if (c.net) o.net = c.net
     if (c.color) o.color = c.color
+    if (c.cable) o.cable = c.cable
     return o
   })
   return stringify(obj, { lineWidth: 0 })
