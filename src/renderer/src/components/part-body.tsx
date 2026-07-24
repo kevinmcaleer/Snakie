@@ -914,8 +914,10 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
 
 /** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
  *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight.
- *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size). */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0): JSX.Element {
+ *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).
+ *  `withLabels` draws the per-contact silk labels (SDA/SCL/…); the board view gates
+ *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
+export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0, withLabels = true): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
@@ -929,7 +931,7 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // on the board — needed to assign SDA/SCL in code. Vertical + haloed to survive
   // the tight contact pitch; only when the housing is big enough to read.
   const labelFs = Math.max(4.5, Math.min(7, w / 8))
-  const showLabels = w >= 24
+  const showLabels = withLabels && w >= 24
   return (
     <g style={{ pointerEvents: 'none' }}>
       <rect x={x0} y={y0} width={w} height={h} fill="#1c1f24" stroke={selected ? '#4ea1ff' : '#0b0d10'} strokeWidth={selected ? 2 : 1} />
@@ -1490,7 +1492,7 @@ export function PartBody({
             // Turn the connector (body, pins + label) about its centre when it has
             // a body rotation — mirrors the Part Editor (PartCanvas).
             <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
-              {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+              {connectorGlyph(cx, cy, conn, sel, connPxPerMm, capsPins === 'all')}
               {styledText({
                 text: connectorLabel(conn),
                 cx,
