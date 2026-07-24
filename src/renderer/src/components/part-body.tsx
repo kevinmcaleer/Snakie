@@ -1226,6 +1226,13 @@ export function PartBody({
           const lo = rp.pin.labelOffset
           const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
           const labelGroupTf = [densityTf, labelShift].filter(Boolean).join(' ') || undefined
+          // The "variable" text drawn after the number+name: the code variable when
+          // one is set, else the GP<gpio> on HOVER (so hovering an MCU shows its GPIO
+          // numbers between the name and the capability badges).
+          const isHovered = capsPins === 'all' || !!capsPins?.has(i)
+          const pinVar =
+            pinVariables?.get(i)?.variable ??
+            (isHovered && rp.pin.gpio != null ? `GP${rp.pin.gpio}` : undefined)
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
@@ -1242,7 +1249,7 @@ export function PartBody({
                     bdir,
                     String(rp.pin.number ?? rp.pin.gpio ?? ''),
                     rp.pin.label || rp.pin.name,
-                    pinVariables?.get(i)?.variable,
+                    pinVar,
                     pinVariables?.get(i)?.color ?? '#cfd6dd'
                   )}
                 </g>
@@ -1273,7 +1280,7 @@ export function PartBody({
                     rp.pin.label || rp.pin.name,
                     rp.pin.capabilities,
                     rp.pin.signals,
-                    boxThis ? pinVariables?.get(i)?.variable : undefined,
+                    boxThis ? pinVar : undefined,
                     rp.pin.buses,
                     bodyScale
                   )
