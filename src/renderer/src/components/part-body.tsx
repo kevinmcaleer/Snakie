@@ -1451,7 +1451,9 @@ export function PartBody({
           const labelY = cy + connH / 2 + 11
           const sel = isSel({ type: 'connector', index: i })
           return (
-            <g key={`conn${i}`}>
+            // Turn the connector (body, pins + label) about its centre when it has
+            // a body rotation — mirrors the Part Editor (PartCanvas).
+            <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
               {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
               {styledText({
                 text: connectorLabel(conn),
