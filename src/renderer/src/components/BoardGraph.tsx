@@ -130,6 +130,11 @@ export interface BoardGraphProps {
   onAddToProject?: (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }) => void
   /** Add many parts at once — the full-screen catalog's "Add to project" (#613). */
   onAddManyToProject?: (items: { libraryId: string; part: PartDefinition }[]) => void
+  /** A board swap punted here from the mini board view (because it would drop wires):
+   *  run the normal picker flow — with its confirm — for this id, then call
+   *  `onSwapConsumed`. */
+  pendingSwapBoard?: string | null
+  onSwapConsumed?: () => void
 }
 
 /** localStorage key shared with {@link BoardView} so board choice persists across both. */
@@ -341,7 +346,9 @@ export function BoardGraph({
   jointLimits,
   libraries,
   onAddToProject,
-  onAddManyToProject
+  onAddManyToProject,
+  pendingSwapBoard,
+  onSwapConsumed
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
@@ -704,6 +711,24 @@ export function BoardGraph({
     // Tell the other window(s) so the main window's mini board view follows along.
     window.api.board.selectBoard(id)
   }
+
+  // A swap punted here from the mini board view (its wiring would drop wires): run
+  // the normal picker flow so the confirm dialog appears in this wiring context.
+  // BoardPane only forwards this once robot.yml is loaded, so the remap sees the
+  // real wiring. The ref makes it run exactly once per id (guards StrictMode's
+  // double-invoke + a re-render before the parent clears it).
+  const consumedSwapRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!pendingSwapBoard) {
+      consumedSwapRef.current = null // reset so a later swap to the same id re-fires
+      return
+    }
+    if (consumedSwapRef.current === pendingSwapBoard) return
+    consumedSwapRef.current = pendingSwapBoard
+    if (pendingSwapBoard !== boardId) selectBoard(pendingSwapBoard)
+    onSwapConsumed?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingSwapBoard])
 
   // Follow a board picked in ANOTHER view (the mini board / Code workspace): adopt
   // it live, keep this window's localStorage fallback in step, and — when wiring is

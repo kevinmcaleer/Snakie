@@ -21,7 +21,10 @@ import {
 import { PartBody, padPinNumber, partBodyBox } from './part-body'
 import { boardPartFor } from './part-editor.util'
 import { useBoards } from './use-boards'
+import { remapConnectionsForBoard } from '../../../shared/netlist'
+import type { RobotDefinition } from '../../../shared/robot'
 import { useWorkspace } from '../store/workspace'
+import { useWorkspaceLayout } from '../store/layout'
 import { useConsole } from '../store/console'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { isVirtualPort } from '../../../shared/virtual-device'
@@ -204,6 +207,7 @@ export function MiniBoardView({
   // (`robot.yml`'s `board`) that the full Board View uses (#…), keeping the mini
   // board, the Board View and the Code workspace all on one board.
   const { currentFolder } = useWorkspace()
+  const { requestBoardSwap } = useWorkspaceLayout()
   const [boardId, setBoardId] = useState<string>(() => {
     try {
       return window.localStorage.getItem(STORAGE_KEY) ?? DEFAULT_BOARD_ID
@@ -310,24 +314,56 @@ export function MiniBoardView({
   // when a project is open — write it into robot.yml (the shared authority) so the
   // pick sticks for the wiring and can't be reverted by the robot.board adoption.
   const selectBoard = (id: string): void => {
-    setBoardId(id)
-    try {
-      window.localStorage.setItem(STORAGE_KEY, id)
-    } catch {
-      // ignore storage failures
-    }
-    window.api.board.selectBoard?.(id)
-    if (currentFolder) {
-      robotBoardRef.current = id
-      void (async () => {
+    if (id === boardId) return
+    void (async () => {
+      // Load the wiring so we can re-map it onto the new board — and decide whether
+      // the swap is clean (no project ⇒ nothing to re-map).
+      let robotDef: RobotDefinition | null = null
+      if (currentFolder) {
         try {
-          const def = await window.api.robot.load(currentFolder)
-          if (def.board !== id) await window.api.robot.save(currentFolder, { ...def, board: id })
+          robotDef = await window.api.robot.load(currentFolder)
         } catch {
-          // best-effort — the broadcast/localStorage still keep the views in sync
+          robotDef = null
         }
-      })()
-    }
+      }
+      const oldBoard = boards.find((b) => b.id === (robotDef?.board ?? boardId)) ?? null
+      const newBoard = boards.find((b) => b.id === id) ?? null
+      const conns = robotDef?.connections ?? []
+      const remap =
+        robotDef && oldBoard && newBoard && conns.length > 0
+          ? remapConnectionsForBoard(conns, oldBoard, newBoard)
+          : null
+
+      // Hand the swap to the Electronics view (for its confirm dialog) when wires
+      // would be dropped — OR when there ARE wires but we couldn't compute the remap
+      // here (e.g. the old board isn't resolvable), so we never silently dangle them.
+      if (conns.length > 0 && (!remap || remap.removed.length > 0)) {
+        requestBoardSwap(id)
+        return
+      }
+
+      // A clean swap (or nothing to re-map): adopt it here and stay in the mini view.
+      setBoardId(id)
+      try {
+        window.localStorage.setItem(STORAGE_KEY, id)
+      } catch {
+        // ignore storage failures
+      }
+      window.api.board.selectBoard?.(id)
+      if (robotDef && currentFolder) {
+        robotBoardRef.current = id
+        const next = remap
+          ? { ...robotDef, board: id, connections: remap.connections }
+          : { ...robotDef, board: id }
+        if (robotDef.board !== id || remap) {
+          try {
+            await window.api.robot.save(currentFolder, next)
+          } catch {
+            // best-effort — the broadcast/localStorage still keep the views in sync
+          }
+        }
+      }
+    })()
   }
 
   // The installed libraries, so we can resolve the board's SOURCE part and draw it
