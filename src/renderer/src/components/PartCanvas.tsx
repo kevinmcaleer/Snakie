@@ -1116,8 +1116,59 @@ export function PartCanvas({
    *  pads, the outward half-hole. Mirrors the pin inspector's Rotation control:
    *  an absent rotation first resolves to the pin's nearest-border direction, so
    *  the first click turns from what's drawn rather than from 0°. */
+  /** Rotate a whole pin group (e.g. a servo-header trio) 90° about its centre — each
+   *  pin's position turns about the group's PHYSICAL centre (aspect-correct, so a
+   *  vertical trio becomes a horizontal one) and its own rotation advances 90°, so
+   *  the unit rotates rigidly (#628). */
+  const rotatePinGroup = (grp: string): void => {
+    const W = part.dimensions?.width || 1
+    const H = part.dimensions?.height || 1
+    const members: { hi: number; pi: number; x: number; y: number; rot: number }[] = []
+    part.headers.forEach((h, hi) =>
+      h.pins.forEach((p, pi) => {
+        if (p.group === grp && p.x != null && p.y != null) {
+          const dir = pinOutwardDir(p.rotation, p.x, p.y)
+          const rot = p.rotation ?? { right: 0, bottom: 90, left: 180, top: 270 }[dir]
+          members.push({ hi, pi, x: p.x, y: p.y, rot })
+        }
+      })
+    )
+    if (members.length === 0) return
+    let cx = 0
+    let cy = 0
+    for (const m of members) {
+      cx += m.x * W
+      cy += m.y * H
+    }
+    cx /= members.length
+    cy /= members.length
+    const upd = new Map<string, { x: number; y: number; rotation: number }>()
+    for (const m of members) {
+      const dx = m.x * W - cx
+      const dy = m.y * H - cy
+      // 90° clockwise in the y-down part frame: (dx,dy) → (−dy, dx).
+      upd.set(`${m.hi}:${m.pi}`, {
+        x: clamp01((cx - dy) / W),
+        y: clamp01((cy + dx) / H),
+        rotation: (m.rot + 90) % 360
+      })
+    }
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const u = upd.get(`${hi}:${pi}`)
+          return u ? { ...p, x: u.x, y: u.y, rotation: u.rotation } : p
+        })
+      }))
+    })
+  }
   const rotatePin = (sel: CanvasSelection): void => {
     if (sel?.type !== 'pin') return
+    // A grouped pin (servo-header trio) rotates the WHOLE group as a unit (#628).
+    const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
+    if (grp) return rotatePinGroup(grp)
     const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
     const src = part.headers[sel.hi]?.pins[sel.pi]
     if (!rp || !src) return
@@ -1133,6 +1184,11 @@ export function PartCanvas({
       )
     })
   }
+
+  // The group of the primary-selected pin (a servo-header trio), so the WHOLE group
+  // highlights when any of its pins is selected (#628).
+  const selPinGroup =
+    selection?.type === 'pin' ? part.headers[selection.hi]?.pins[selection.pi]?.group : undefined
 
   // --- text/label styling (the mini-toolbar "A" dropdown) -------------------
   interface LabelStyle {
@@ -2263,7 +2319,9 @@ export function PartCanvas({
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
-            const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
+            const sel =
+              isSel({ type: 'pin', hi: rp.hi, pi: rp.pi }) ||
+              (!!selPinGroup && rp.pin.group === selPinGroup)
             const shape = pinShapeOf(rp.pin)
             // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
             // octagonal servo/DuPont header pads, which draw at a fixed physical
