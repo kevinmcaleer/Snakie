@@ -170,6 +170,9 @@ export interface PartConnector {
   labelOffset?: { x: number; y: number }
   /** Silk-label rotation in degrees (0/90/180/270); e.g. 270 to read bottom-to-top. */
   labelRotation?: number
+  /** Body rotation in degrees (0/90/180/270) — turns the connector body, its pins
+   *  and its silk label together. */
+  rotation?: number
 }
 
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */

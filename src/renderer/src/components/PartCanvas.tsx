@@ -1393,6 +1393,7 @@ export function PartCanvas({
   const deleteComponent = (sel: CanvasSelection): void => {
     if (sel?.type === 'shape') commit({ ...part, shapes: shapes.filter((_, i) => i !== sel.index) })
     else if (sel?.type === 'label') commit({ ...part, labels: labels.filter((_, i) => i !== sel.index) })
+    else if (sel?.type === 'connector') commit({ ...part, connectors: connectors.filter((_, i) => i !== sel.index) })
     onSelect?.(null)
   }
 
@@ -1469,6 +1470,10 @@ export function PartCanvas({
       const l = labels[sel.index]
       if (!l) return
       commit({ ...part, labels: labels.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
+    } else if (sel?.type === 'connector') {
+      const c = connectors[sel.index]
+      if (!c) return
+      commit({ ...part, connectors: connectors.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
     }
   }
 
@@ -1689,6 +1694,12 @@ export function PartCanvas({
     if (sel?.type === 'pin') {
       const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
       return rp ? { nx: rp.x, ny: rp.y - 6 / box.h } : null
+    }
+    if (sel?.type === 'connector') {
+      const c = connectors[sel.index]
+      if (!c) return null
+      const { h } = connectorSize(c, connPxPerMm)
+      return { nx: c.x, ny: c.y - h / 2 / box.h }
     }
     return null
   }
@@ -3157,7 +3168,9 @@ export function PartCanvas({
               const labelY = cy + connH / 2 + 11
               const draggable = interactive && !locked.components
               return (
-                <g key={`conn${i}`}>
+                // Rotate the whole connector — body, pins AND label — about its
+                // centre when it has a body rotation.
+                <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
                   <g
                     transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
@@ -3795,6 +3808,31 @@ export function PartCanvas({
               </div>
               {styleClipButtons(sel, 'hole')}
               <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete hole" onClick={() => deleteHole(sel.index)}>
+                {delIcon}
+              </button>
+            </div>
+          )
+        })()}
+
+      {/* Connector toolbar — rotate + delete for a selected QWIIC / JST connector. */}
+      {interactive &&
+        !locked.components &&
+        alignCount === 0 &&
+        selection?.type === 'connector' &&
+        (() => {
+          const sel = selection
+          const conn = connectors[sel.index]
+          if (!conn) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit connector" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate connector 90 degrees" onClick={() => rotateComponent(sel)}>
+                {rotateIcon}
+              </button>
+              <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete connector" onClick={() => deleteComponent(sel)}>
                 {delIcon}
               </button>
             </div>

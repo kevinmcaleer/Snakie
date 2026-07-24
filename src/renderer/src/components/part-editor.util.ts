@@ -1088,6 +1088,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       }
       const label = text(c.label)
       if (label) conn.label = label
+      if (typeof c.rotation === 'number' && Number.isFinite(c.rotation)) {
+        const r = (((Math.round(c.rotation / 90) * 90) % 360) + 360) % 360
+        if (r) conn.rotation = r
+      }
       applyLabelPlacement(c, conn)
       return conn
     })

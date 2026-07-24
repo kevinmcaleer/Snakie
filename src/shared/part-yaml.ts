@@ -380,6 +380,7 @@ export function partToYaml(part: PartDefinition): string {
       label: c.label,
       x: c.x,
       y: c.y,
+      rotation: c.rotation,
       pins: c.pins.map(pinToObj)
     })),
     ledLabel: part.ledLabel,
@@ -619,6 +620,8 @@ export function partFromYaml(text: string): PartDefinition {
         const conn: PartConnector = { kind, x, y, pins }
         const label = str(r.label)
         if (label) conn.label = label
+        const rot = num(r.rotation)
+        if (rot !== undefined) conn.rotation = rot
         return conn
       })
       .filter((c): c is PartConnector => c !== null)

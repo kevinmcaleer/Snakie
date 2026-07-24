@@ -224,6 +224,17 @@ describe('partToYaml / partFromYaml round-trip', () => {
     expect(normalisePart(partFromYaml(partToYaml(part)))).toEqual(part)
   })
 
+  it('round-trips a connector body rotation', () => {
+    const part = normalisePart({
+      id: 'c',
+      name: 'C',
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io' }] }],
+      connectors: [{ kind: 'qwiic', x: 0.5, y: 0.5, rotation: 90, pins: [{ name: 'GND', type: 'gnd' }] }]
+    })
+    expect(part.connectors?.[0].rotation).toBe(90)
+    expect(normalisePart(partFromYaml(partToYaml(part))).connectors?.[0].rotation).toBe(90)
+  })
+
   it('drops an orphan group id nothing references (#629)', () => {
     const part = normalisePart({
       id: 'g',
