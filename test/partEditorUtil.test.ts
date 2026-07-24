@@ -6,6 +6,9 @@ import {
   boardsFromLibraries,
   captureStyle,
   derivePinPosition,
+  groupMembers,
+  groupRootId,
+  groupTreeIds,
   driverDeviceDirs,
   driverInstallMethod,
   insertPolygonPoint,
@@ -915,5 +918,65 @@ describe('placedPartsNeedingDrivers', () => {
     ).toEqual([])
     expect(placedPartsNeedingDrivers(undefined, libraries)).toEqual([])
     expect(placedPartsNeedingDrivers({ parts: [] }, libraries)).toEqual([])
+  })
+})
+
+describe('group tree helpers (#630)', () => {
+  // A → B → C nesting: C's parent is B, B's parent is A.
+  const groups = [{ id: 'A' }, { id: 'B', parent: 'A' }, { id: 'C', parent: 'B' }]
+
+  it('groupRootId walks the parent chain to the outermost ancestor', () => {
+    expect(groupRootId(groups, 'C')).toBe('A')
+    expect(groupRootId(groups, 'B')).toBe('A')
+    expect(groupRootId(groups, 'A')).toBe('A')
+    expect(groupRootId(groups, 'unknown')).toBe('unknown')
+    expect(groupRootId(undefined, 'x')).toBe('x')
+  })
+
+  it('groupRootId is cycle-safe', () => {
+    const cyclic = [{ id: 'X', parent: 'Y' }, { id: 'Y', parent: 'X' }]
+    // Must terminate, not loop forever.
+    expect(['X', 'Y']).toContain(groupRootId(cyclic, 'X'))
+  })
+
+  it('groupTreeIds collects a group + all nested descendants', () => {
+    expect(groupTreeIds(groups, 'A')).toEqual(new Set(['A', 'B', 'C']))
+    expect(groupTreeIds(groups, 'B')).toEqual(new Set(['B', 'C']))
+    expect(groupTreeIds(groups, 'C')).toEqual(new Set(['C']))
+  })
+
+  it('groupMembers resolves every pin/shape/label whose group is in the id set', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'S', type: 'io', group: 'C' },
+            { name: 'V', type: 'pwr', group: 'C' },
+            { name: 'loose', type: 'gnd' }
+          ]
+        }
+      ],
+      shapes: [
+        { kind: 'rect', x: 0.1, y: 0.1, group: 'B' },
+        { kind: 'rect', x: 0.3, y: 0.3 }
+      ],
+      labels: [{ text: 'hi', x: 0.5, y: 0.5, group: 'A' }]
+    }
+    // The whole tree rooted at A picks up members at every level.
+    expect(groupMembers(part, groupTreeIds(groups, 'A'))).toEqual([
+      { kind: 'pin', hi: 0, pi: 0 },
+      { kind: 'pin', hi: 0, pi: 1 },
+      { kind: 'shape', index: 0 },
+      { kind: 'label', index: 0 }
+    ])
+    // Rooted at B: only B's shape + C's pins, not A's label.
+    expect(groupMembers(part, groupTreeIds(groups, 'B'))).toEqual([
+      { kind: 'pin', hi: 0, pi: 0 },
+      { kind: 'pin', hi: 0, pi: 1 },
+      { kind: 'shape', index: 0 }
+    ])
   })
 })

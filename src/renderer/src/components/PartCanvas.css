@@ -155,6 +155,12 @@
   cursor: default;
 }
 
+.pcv__align-btn--danger:hover {
+  color: #fff;
+  background: #c0392b;
+  border-color: #a5281b;
+}
+
 .pcv__align-sep {
   width: 1px;
   align-self: stretch;

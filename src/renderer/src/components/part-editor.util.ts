@@ -493,6 +493,62 @@ export function applyItemOrder(
   return { shapes, labels, buttons, onboardLeds: leds, connectors }
 }
 
+// --- grouping (#627) --------------------------------------------------------
+// Membership is a `group` id on each pin/shape/label; the `groups` registry
+// records nesting (`parent`) + names. These pure helpers resolve a group's tree
+// so move / rotate / delete / select act on every member, recursively (#630).
+
+export type GroupMemberRef =
+  | { kind: 'pin'; hi: number; pi: number }
+  | { kind: 'shape'; index: number }
+  | { kind: 'label'; index: number }
+
+/** Every group id in the subtree rooted at `rootId` (itself + nested descendants). */
+export function groupTreeIds(groups: PartGroup[] | undefined, rootId: string): Set<string> {
+  const ids = new Set<string>([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const g of groups ?? []) {
+      if (g.parent && ids.has(g.parent) && !ids.has(g.id)) {
+        ids.add(g.id)
+        changed = true
+      }
+    }
+  }
+  return ids
+}
+
+/** The outermost ancestor of a group (walk the `parent` chain; cycle-safe). */
+export function groupRootId(groups: PartGroup[] | undefined, gid: string): string {
+  const seen = new Set<string>()
+  let cur = gid
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const parent = (groups ?? []).find((g) => g.id === cur)?.parent
+    if (!parent) return cur
+    cur = parent
+  }
+  return cur
+}
+
+/** Every item (pin/shape/label) whose `group` id is in `ids`. */
+export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMemberRef[] {
+  const out: GroupMemberRef[] = []
+  part.headers?.forEach((h, hi) =>
+    h.pins.forEach((p, pi) => {
+      if (p.group && ids.has(p.group)) out.push({ kind: 'pin', hi, pi })
+    })
+  )
+  part.shapes?.forEach((s, i) => {
+    if (s.group && ids.has(s.group)) out.push({ kind: 'shape', index: i })
+  })
+  part.labels?.forEach((l, i) => {
+    if (l.group && ids.has(l.group)) out.push({ kind: 'label', index: i })
+  })
+  return out
+}
+
 /** The z a newly-created ITEM (any kind) should take to land on top. */
 export function nextItemZ(part: PartDefinition): number {
   const ord = orderedItems(part)

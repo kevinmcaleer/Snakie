@@ -27,6 +27,8 @@ import {
   PIN_TYPE_LABEL,
   blankPart,
   collectUsedColors,
+  groupRootId,
+  groupTreeIds,
   normalisePart,
   orderedItems,
   applyItemOrder,
@@ -581,17 +583,38 @@ export function PartEditor({
     // A locked layer's items can't be deleted (keyboard or the Layers trash).
     const lk = selectionLockKey(sel)
     if (lk && locked[lk]) return
+    // A grouped item (#630) deletes its whole group tree — every member pin,
+    // shape + label (recursively through nested sub-groups) + the registry entries.
+    const selGroup =
+      sel.type === 'pin'
+        ? part.headers[sel.hi]?.pins[sel.pi]?.group
+        : sel.type === 'shape'
+          ? part.shapes?.[sel.index]?.group
+          : sel.type === 'label'
+            ? part.labels?.[sel.index]?.group
+            : undefined
+    if (selGroup) {
+      const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
+      const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
+      setPart((d) => ({
+        ...d,
+        headers: d.headers
+          .map((h) => ({ ...h, pins: h.pins.filter((p) => !inTree(p.group)) }))
+          .filter((h) => h.pins.length > 0),
+        shapes: (d.shapes ?? []).filter((s) => !inTree(s.group)),
+        labels: (d.labels ?? []).filter((l) => !inTree(l.group)),
+        groups: (d.groups ?? []).filter((g) => !ids.has(g.id))
+      }))
+      setSelection(null)
+      return
+    }
     if (sel.type === 'pin') {
-      // A grouped pin (servo header) deletes its whole Signal/V+/GND trio.
-      const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
       setPart((d) => ({
         ...d,
         headers: d.headers
           .map((h, i) => ({
             ...h,
-            pins: grp
-              ? h.pins.filter((p) => p.group !== grp)
-              : h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
+            pins: h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
           }))
           .filter((h) => h.pins.length > 0)
       }))
