@@ -876,19 +876,20 @@
   border: var(--border-w) solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
-  opacity: 0.5;
+  /* Unlocked: a muted OPEN padlock. State is carried by the icon (open vs closed
+     shackle) + colour, not a pushed-in button look. */
+  opacity: 0.6;
 }
 
 .pe__lock:hover {
-  opacity: 0.9;
+  opacity: 1;
   border-color: var(--border);
 }
 
 .pe__lock.is-locked {
+  /* Locked: a full-strength CLOSED padlock in the accent colour. */
   opacity: 1;
   color: var(--accent, #e6ab30);
-  border-color: var(--border);
-  background: var(--bg-elevated);
 }
 
 .pe__layer-tools {
