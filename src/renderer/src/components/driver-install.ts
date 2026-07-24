@@ -35,6 +35,18 @@ export async function installPartDriver(
     if (!read.ok || read.contents == null) {
       return { ok: false, message: read.error || 'Could not read driver file.' }
     }
+    // Pre-flight space check: if the file clearly won't fit, say so UP FRONT with the
+    // exact numbers, rather than failing mid-write with a raw OSError 28. (Skipped when
+    // the board can't report free space; the write's own catch still handles it.)
+    const size = new TextEncoder().encode(read.contents).length
+    const space = await window.api.device.df().catch(() => null)
+    if (space && size > space.free) {
+      const kb = (n: number): string => `${Math.max(1, Math.round(n / 1024))} KB`
+      return {
+        ok: false,
+        message: `Not enough space on the board — ${d.target.trim()} needs ${kb(size)} but only ${kb(space.free)} is free. Free up space (delete files in the Files panel) or use a board with more flash storage.`
+      }
+    }
     // MicroPython has no recursive mkdir — create each ancestor folder in turn
     // (an "already exists" error is fine, so we swallow it).
     for (const dir of driverDeviceDirs(d.target)) {
