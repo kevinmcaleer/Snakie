@@ -331,6 +331,22 @@ export function i2cPinsValid(sda: number, scl: number): boolean {
   return i2cBlockForPins(sda, scl) !== null
 }
 
+/**
+ * The SCL that pairs with `sda` on the RP mux — always `sda + 1` — or `null` when
+ * `sda` isn't a valid I²C SDA pin. Lets the Display panel auto-pick the matching
+ * SCL when you change SDA, so you can't leave a valid SDA paired with a cross-bus
+ * SCL (the GP6 + GP1 trap the XIAO's onboard screen falls into).
+ */
+export function sclForSda(sda: number): number | null {
+  return i2cPinsValid(sda, sda + 1) ? sda + 1 : null
+}
+
+/** The SDA that pairs with `scl` on the RP mux — always `scl - 1` — or `null` when
+ *  `scl` isn't a valid I²C SCL pin (the mirror of {@link sclForSda}). */
+export function sdaForScl(scl: number): number | null {
+  return i2cPinsValid(scl - 1, scl) ? scl - 1 : null
+}
+
 // ---------------------------------------------------------------------------
 // RP2040 SPI SCK/MOSI(TX) pin mux — the basis for the ST7789 panel's INVALID-PIN
 // warning (mirrors `micropython/instruments.py::_spi_block_for_pins`). Each SPI

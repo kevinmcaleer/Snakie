@@ -14,6 +14,8 @@ import {
   geometryById,
   i2cBlockForPins,
   i2cPinsValid,
+  sclForSda,
+  sdaForScl,
   layoutText,
   readingToView,
   screenAddrPayload,
@@ -298,6 +300,25 @@ describe('i2cPinsValid', () => {
     expect(i2cPinsValid(2, 3)).toBe(true)
     expect(i2cPinsValid(0, 3)).toBe(false)
     expect(i2cPinsValid(7, 7)).toBe(false)
+  })
+})
+
+describe('sclForSda / sdaForScl (auto-pair the Display panel pins)', () => {
+  it('pairs a valid SDA with SDA+1 (both buses)', () => {
+    expect(sclForSda(0)).toBe(1) // I2C0
+    expect(sclForSda(6)).toBe(7) // I2C1 — the XIAO onboard screen
+    expect(sclForSda(26)).toBe(27)
+  })
+  it('pairs a valid SCL with SCL-1', () => {
+    expect(sdaForScl(1)).toBe(0)
+    expect(sdaForScl(7)).toBe(6)
+    expect(sdaForScl(27)).toBe(26)
+  })
+  it('returns null for a pin that is not a valid SDA/SCL', () => {
+    expect(sclForSda(1)).toBeNull() // 1 is an SCL, not an SDA
+    expect(sclForSda(22)).toBeNull() // not on the I²C mux
+    expect(sdaForScl(0)).toBeNull() // 0 is an SDA, not an SCL
+    expect(sdaForScl(8)).toBeNull()
   })
 })
 

@@ -18,6 +18,8 @@ import {
   i2cPinsValid,
   layoutText,
   readingToView,
+  sclForSda,
+  sdaForScl,
   screenAddrPayload,
   screenPinsPayload,
   screenSpiPayload,
@@ -187,16 +189,23 @@ export function DisplayInstrument({
 
   const onSdaChange = useCallback(
     (next: number): void => {
+      // Snap SCL to the pin's valid partner (SCL is always SDA+1 on the RP mux) so
+      // choosing a valid SDA can't leave a cross-bus SCL behind — the GP6 + GP1 trap
+      // that produced a "bad SDA pin" on the XIAO's onboard screen (should be GP6+GP7).
+      const nextScl = sclForSda(next) ?? scl
       setSda(next)
-      retargetPins(next, scl)
+      if (nextScl !== scl) setScl(nextScl)
+      retargetPins(next, nextScl)
     },
     [scl, retargetPins]
   )
 
   const onSclChange = useCallback(
     (next: number): void => {
+      const nextSda = sdaForScl(next) ?? sda
       setScl(next)
-      retargetPins(sda, next)
+      if (nextSda !== sda) setSda(nextSda)
+      retargetPins(nextSda, next)
     },
     [sda, retargetPins]
   )
