@@ -31,15 +31,6 @@ headers:
         shape: header
         x: 0.7601560505533712
         y: 0.0030997826071346712
-electrical:
-  model: source
-  supplyV: 7.4
-  resistanceOhms: 0.12
-  maxCurrentA: 8.0
-  capacityMah: 1500
-  terminals:
-    positive: V+
-    negative: GND
 labels:
   - text: LiPo 2S
     x: 0.5037064250695251
@@ -58,6 +49,15 @@ imageLayer:
   w: 1
   h: 1
   opacity: 1
+electrical:
+  model: source
+  resistanceOhms: 0.12
+  supplyV: 7.4
+  maxCurrentA: 8
+  capacityMah: 1500
+  terminals:
+    positive: V+
+    negative: GND
 layerVisibility:
   pcb: false
   image: true
