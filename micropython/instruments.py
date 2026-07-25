@@ -113,7 +113,7 @@ except ImportError:  # pragma: no cover - CPython simulator has no `machine`
 # against the copy installed on the board and offers a one-click UPDATE when they
 # differ (a legacy copy with no __version__ reads as out-of-date). Keep the
 # `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
-__version__ = "0.9.2"
+__version__ = "0.9.3"
 
 # The sentinel that prefixes every telemetry line. Kept short + ASCII so it is
 # cheap to print and easy for the IDE to detect / strip.
@@ -1143,8 +1143,8 @@ def _i2c_block_for_pins(sda, scl):
     A pair is valid only when both pins live in the SAME block's SDA/SCL sets
     (see the mux tables above): block 0 wants SDA∈{0,4,8,12,16,20} & SCL∈{1,5,9,
     13,17,21}; block 1 wants SDA∈{2,6,10,14,18,26} & SCL∈{3,7,11,15,19,27}. Any
-    cross-block pair or an unknown pin yields ``None`` (the IDE then warns and the
-    driver falls back to block 0). Pure + side-effect-free for unit tests.
+    cross-block pair or an unknown pin yields ``None`` (the IDE warns and the driver
+    raises a guided error). Pure + side-effect-free for unit tests.
     """
     try:
         sda = int(sda)
@@ -1156,6 +1156,23 @@ def _i2c_block_for_pins(sda, scl):
     if sda in _I2C1_SDA and scl in _I2C1_SCL:
         return 1
     return None
+
+
+def _pins_str(xs):
+    """`0/4/8` — a compact pin list for the guided pin-pair error messages."""
+    return "/".join(str(x) for x in xs)
+
+
+def _bad_i2c_pair_msg(sda, scl):
+    """A guided error for an SDA/SCL pair that isn't on one I²C block — names the
+    valid pins of each bus so the user can pick a matching pair (issue: XIAO I²C1)."""
+    return (
+        "SDA GP%s / SCL GP%s aren't a valid I2C pair. On the RP2040/RP2350 each pin "
+        "is fixed to one bus: I2C0 = SDA(%s)+SCL(%s); I2C1 = SDA(%s)+SCL(%s). Use two "
+        "pins from the same bus (the XIAO's onboard screen is SDA GP6 + SCL GP7 on I2C1)."
+        % (sda, scl, _pins_str(_I2C0_SDA), _pins_str(_I2C0_SCL),
+           _pins_str(_I2C1_SDA), _pins_str(_I2C1_SCL))
+    )
 
 
 # The RP2040 SPI pin mux: each block drives SCK/MOSI(TX) on a fixed set of GPIOs.
@@ -1173,7 +1190,7 @@ def _spi_block_for_pins(sck, mosi):
     Valid only when both pins live in the SAME block's SCK/TX sets: block 0 wants
     SCK∈{2,6,18,22} & MOSI∈{3,7,19,23}; block 1 wants SCK∈{10,14,26} & MOSI∈{11,15,
     27}. Any cross-block pair or unknown pin yields ``None`` (the IDE warns and the
-    driver falls back to block 0). Pure + side-effect-free for unit tests.
+    driver raises a guided error). Pure + side-effect-free for unit tests.
     """
     try:
         sck = int(sck)
@@ -1185,6 +1202,17 @@ def _spi_block_for_pins(sck, mosi):
     if sck in _SPI1_SCK and mosi in _SPI1_TX:
         return 1
     return None
+
+
+def _bad_spi_pair_msg(sck, mosi):
+    """A guided error for an SCK/MOSI pair that isn't on one SPI block."""
+    return (
+        "SCK GP%s / MOSI GP%s aren't a valid SPI pair. On the RP2040/RP2350 each pin "
+        "is fixed to one bus: SPI0 = SCK(%s)+MOSI(%s); SPI1 = SCK(%s)+MOSI(%s). Use two "
+        "pins from the same bus."
+        % (sck, mosi, _pins_str(_SPI0_SCK), _pins_str(_SPI0_TX),
+           _pins_str(_SPI1_SCK), _pins_str(_SPI1_TX))
+    )
 
 
 # The standard SSD1306 init sequence (matches the canonical MicroPython driver).
@@ -1369,8 +1397,8 @@ class Display:
     """Drive a real I²C SSD1306 OLED from ``screen`` commands + echo to the IDE.
 
     ``set_pins(sda, scl, addr=0x3C, w=128, h=64)`` derives the RP2040 I²C block
-    from the pins (via :func:`_i2c_block_for_pins`, block 0 if the pair is invalid
-    — the IDE warns), builds ``I2C(block, sda=Pin(sda), scl=Pin(scl))``, then a
+    from the pins (via :func:`_i2c_block_for_pins`; a cross-bus pair raises a guided
+    error), builds ``I2C(block, sda=Pin(sda), scl=Pin(scl))``, then a
     panel: the installed ``ssd1306.SSD1306_I2C`` if present, else the bundled
     :class:`_SSD1306`. ``text(lines)`` draws each row (``y = i*10``) on the real
     panel AND emits a ``SNK SCR <addr> text …`` line so the IDE mirrors it.
@@ -1388,19 +1416,22 @@ class Display:
     def set_pins(self, sda, scl, addr=0x3C, w=128, h=64):
         """(Re)build the I²C bus + the SSD1306 panel on ``sda``/``scl``.
 
-        Derives the I²C block from the pins (block 0 when the pair is invalid).
+        Derives the I²C block from the pins; a cross-bus pair raises a guided
+        ``ValueError`` naming the valid pins (on hardware only — inert under CPython).
         Prefers an installed ``ssd1306`` driver, falling back to the bundled
         :class:`_SSD1306`. Guards every hardware import so it is inert under
         CPython (the panel is left unbuilt; ``text`` still echoes telemetry).
         """
         self._addr = "0x%02X" % int(addr) if isinstance(addr, int) else str(addr)
         block = _i2c_block_for_pins(sda, scl)
-        if block is None:
-            block = 0  # invalid pair → fall back to block 0 (the IDE warns)
         try:
             from machine import Pin, I2C
         except ImportError:
             return  # no hardware (CPython) — inert; text() still echoes telemetry
+        if block is None:
+            # A cross-bus pair (e.g. SDA on I²C1, SCL on I²C0) — the hardware would
+            # raise a cryptic "bad SDA pin". Fail with a guided message instead.
+            raise ValueError(_bad_i2c_pair_msg(sda, scl))
         self._i2c = I2C(block, sda=Pin(int(sda)), scl=Pin(int(scl)))
         try:
             import ssd1306
@@ -1416,8 +1447,8 @@ class Display:
     def set_spi(self, sck, mosi, dc, rst, cs, w=240, h=240):
         """(Re)build an ST7789 colour TFT on an SPI bus (issue: SPI displays).
 
-        Derives the SPI block from ``sck``/``mosi`` (block 0 when invalid — the IDE
-        warns), builds ``SPI(block, sck=Pin(sck), mosi=Pin(mosi))`` at 30 MHz, then
+        Derives the SPI block from ``sck``/``mosi`` (a cross-bus pair raises a guided
+        error), builds ``SPI(block, sck=Pin(sck), mosi=Pin(mosi))`` at 30 MHz, then
         the bundled :class:`_ST7789` on ``dc``/``rst``/``cs`` at ``w``×``h``. ``cs``
         may be ``None`` / ``< 0`` (tied low, no CS pin). The echo label becomes
         ``st7789`` so the IDE's mirror tags the source. Guards every hardware import
@@ -1426,14 +1457,15 @@ class Display:
         """
         self._addr = "st7789"  # single-token label for the SNK SCR echo
         block = _spi_block_for_pins(sck, mosi)
-        if block is None:
-            block = 0  # invalid pair → block 0 (the IDE warns)
         cs_pin = None if cs is None or int(cs) < 0 else int(cs)
         try:
             from machine import Pin, SPI
         except ImportError:
             self._oled = None
             return  # no hardware (CPython) — inert; text() still echoes telemetry
+        if block is None:
+            self._oled = None  # cross-bus SCK/MOSI — guide instead of a cryptic error
+            raise ValueError(_bad_spi_pair_msg(sck, mosi))
         try:
             spi = SPI(block, baudrate=30_000_000, sck=Pin(int(sck)), mosi=Pin(int(mosi)))
             self._oled = _ST7789(spi, dc, cs_pin if cs_pin is not None else -1, rst, int(w), int(h))
