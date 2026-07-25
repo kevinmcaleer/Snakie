@@ -400,6 +400,14 @@ export interface LayoutStore {
   setFocus: (focus: boolean) => void
   /** Record a live panel-group layout (called from onLayout every drag frame). */
   recordSizes: (group: 'horizontal' | 'vertical', sizes: number[]) => void
+  /** A board id the Electronics view should swap to (from the mini board view when
+   *  the swap would drop wires — the confirm belongs in the wiring context). Held
+   *  until the Board View consumes it. Transient; never persisted. */
+  pendingBoardSwap: string | null
+  /** Ask the Electronics view to swap to `id` (switches to it + sets the pending). */
+  requestBoardSwap: (id: string) => void
+  /** Clear the pending board swap once the Board View has handled it. */
+  clearBoardSwap: () => void
 }
 
 const LayoutContext = createContext<LayoutStore | null>(null)
@@ -428,6 +436,9 @@ export function LayoutProvider({
   const [applyNonce, setApplyNonce] = useState(0)
   // Transient editor-focus (Robot pop-out) — never persisted.
   const [focus, setFocusState] = useState(false)
+  // A board swap the mini board view punted to the Electronics view for its confirm
+  // dialog (transient; never persisted).
+  const [pendingBoardSwap, setPendingBoardSwap] = useState<string | null>(null)
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const persist = useCallback((): void => {
@@ -561,6 +572,16 @@ export function LayoutProvider({
     })
   }, [])
 
+  // Punt a board swap to the Electronics view (for its confirm dialog) + go there.
+  const requestBoardSwap = useCallback(
+    (id: string): void => {
+      setPendingBoardSwap(id)
+      switchWorkspace('board')
+    },
+    [switchWorkspace]
+  )
+  const clearBoardSwap = useCallback((): void => setPendingBoardSwap(null), [])
+
   const store = useMemo<LayoutStore>(
     () => ({
       active,
@@ -574,7 +595,10 @@ export function LayoutProvider({
       setCollapsed,
       setDockOpen,
       setFocus,
-      recordSizes
+      recordSizes,
+      pendingBoardSwap,
+      requestBoardSwap,
+      clearBoardSwap
     }),
     [
       active,
@@ -588,7 +612,10 @@ export function LayoutProvider({
       setCollapsed,
       setDockOpen,
       setFocus,
-      recordSizes
+      recordSizes,
+      pendingBoardSwap,
+      requestBoardSwap,
+      clearBoardSwap
     ]
   )
 

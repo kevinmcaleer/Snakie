@@ -914,8 +914,10 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
 
 /** A connector glyph at (cx, cy): a dark JST-SH housing with gold contacts (a
  *  QWIIC / STEMMA QT / JST socket). `selected` drives the Part Editor highlight.
- *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size). */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0): JSX.Element {
+ *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).
+ *  `withLabels` draws the per-contact silk labels (SDA/SCL/…); the board view gates
+ *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
+export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0, withLabels = true): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
@@ -925,6 +927,11 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // Real JST/QWIIC housings are a plain dark block with SHARP corners and no white
   // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
   // the current selection in the Part Editor, never a white border).
+  // Per-contact silk labels (SDA/SCL/GND/pwr) so a QWIIC socket's pinout is legible
+  // on the board — needed to assign SDA/SCL in code. Vertical + haloed to survive
+  // the tight contact pitch; only when the housing is big enough to read.
+  const labelFs = Math.max(4.5, Math.min(7, w / 8))
+  const showLabels = withLabels && w >= 24
   return (
     <g style={{ pointerEvents: 'none' }}>
       <rect x={x0} y={y0} width={w} height={h} fill="#1c1f24" stroke={selected ? '#4ea1ff' : '#0b0d10'} strokeWidth={selected ? 2 : 1} />
@@ -932,6 +939,30 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
         const cxp = x0 + (w / (n + 1)) * (i + 1)
         return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill="#e6c34a" />
       })}
+      {showLabels &&
+        conn.pins.map((pin, i) => {
+          if (!pin.name || i >= n) return null
+          const cxp = x0 + (w / (n + 1)) * (i + 1)
+          const ly = y0 - 2 // reads upward, just above the housing
+          return (
+            <text
+              key={`lbl${i}`}
+              x={cxp}
+              y={ly}
+              transform={`rotate(-90 ${cxp} ${ly})`}
+              textAnchor="start"
+              fontSize={labelFs}
+              fontWeight={700}
+              fill="#eef1f4"
+              stroke="#0b1410"
+              strokeWidth={labelFs * 0.35}
+              style={{ paintOrder: 'stroke' }}
+              className="pb__conn-pinlabel"
+            >
+              {pin.name}
+            </text>
+          )
+        })}
     </g>
   )
 }
@@ -1226,6 +1257,13 @@ export function PartBody({
           const lo = rp.pin.labelOffset
           const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
           const labelGroupTf = [densityTf, labelShift].filter(Boolean).join(' ') || undefined
+          // The "variable" text drawn after the number+name: the code variable when
+          // one is set, else the GP<gpio> on HOVER (so hovering an MCU shows its GPIO
+          // numbers between the name and the capability badges).
+          const isHovered = capsPins === 'all' || !!capsPins?.has(i)
+          const pinVar =
+            pinVariables?.get(i)?.variable ??
+            (isHovered && rp.pin.gpio != null ? `GP${rp.pin.gpio}` : undefined)
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real
@@ -1242,7 +1280,7 @@ export function PartBody({
                     bdir,
                     String(rp.pin.number ?? rp.pin.gpio ?? ''),
                     rp.pin.label || rp.pin.name,
-                    pinVariables?.get(i)?.variable,
+                    pinVar,
                     pinVariables?.get(i)?.color ?? '#cfd6dd'
                   )}
                 </g>
@@ -1273,7 +1311,7 @@ export function PartBody({
                     rp.pin.label || rp.pin.name,
                     rp.pin.capabilities,
                     rp.pin.signals,
-                    boxThis ? pinVariables?.get(i)?.variable : undefined,
+                    boxThis ? pinVar : undefined,
                     rp.pin.buses,
                     bodyScale
                   )
@@ -1451,8 +1489,10 @@ export function PartBody({
           const labelY = cy + connH / 2 + 11
           const sel = isSel({ type: 'connector', index: i })
           return (
-            <g key={`conn${i}`}>
-              {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+            // Turn the connector (body, pins + label) about its centre when it has
+            // a body rotation — mirrors the Part Editor (PartCanvas).
+            <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
+              {connectorGlyph(cx, cy, conn, sel, connPxPerMm, capsPins === 'all')}
               {styledText({
                 text: connectorLabel(conn),
                 cx,

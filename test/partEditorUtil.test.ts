@@ -6,6 +6,11 @@ import {
   boardsFromLibraries,
   captureStyle,
   derivePinPosition,
+  dissolveGroup,
+  groupMembers,
+  groupRootId,
+  groupTreeIds,
+  translateShape,
   driverDeviceDirs,
   driverInstallMethod,
   insertPolygonPoint,
@@ -915,5 +920,113 @@ describe('placedPartsNeedingDrivers', () => {
     ).toEqual([])
     expect(placedPartsNeedingDrivers(undefined, libraries)).toEqual([])
     expect(placedPartsNeedingDrivers({ parts: [] }, libraries)).toEqual([])
+  })
+})
+
+describe('group tree helpers (#630)', () => {
+  // A → B → C nesting: C's parent is B, B's parent is A.
+  const groups = [{ id: 'A' }, { id: 'B', parent: 'A' }, { id: 'C', parent: 'B' }]
+
+  it('groupRootId walks the parent chain to the outermost ancestor', () => {
+    expect(groupRootId(groups, 'C')).toBe('A')
+    expect(groupRootId(groups, 'B')).toBe('A')
+    expect(groupRootId(groups, 'A')).toBe('A')
+    expect(groupRootId(groups, 'unknown')).toBe('unknown')
+    expect(groupRootId(undefined, 'x')).toBe('x')
+  })
+
+  it('groupRootId is cycle-safe', () => {
+    const cyclic = [{ id: 'X', parent: 'Y' }, { id: 'Y', parent: 'X' }]
+    // Must terminate, not loop forever.
+    expect(['X', 'Y']).toContain(groupRootId(cyclic, 'X'))
+  })
+
+  it('groupTreeIds collects a group + all nested descendants', () => {
+    expect(groupTreeIds(groups, 'A')).toEqual(new Set(['A', 'B', 'C']))
+    expect(groupTreeIds(groups, 'B')).toEqual(new Set(['B', 'C']))
+    expect(groupTreeIds(groups, 'C')).toEqual(new Set(['C']))
+  })
+
+  it('groupMembers resolves every pin/shape/label whose group is in the id set', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'S', type: 'io', group: 'C' },
+            { name: 'V', type: 'pwr', group: 'C' },
+            { name: 'loose', type: 'gnd' }
+          ]
+        }
+      ],
+      shapes: [
+        { kind: 'rect', x: 0.1, y: 0.1, group: 'B' },
+        { kind: 'rect', x: 0.3, y: 0.3 }
+      ],
+      labels: [{ text: 'hi', x: 0.5, y: 0.5, group: 'A' }]
+    }
+    // The whole tree rooted at A picks up members at every level.
+    expect(groupMembers(part, groupTreeIds(groups, 'A'))).toEqual([
+      { kind: 'pin', hi: 0, pi: 0 },
+      { kind: 'pin', hi: 0, pi: 1 },
+      { kind: 'shape', index: 0 },
+      { kind: 'label', index: 0 }
+    ])
+    // Rooted at B: only B's shape + C's pins, not A's label.
+    expect(groupMembers(part, groupTreeIds(groups, 'B'))).toEqual([
+      { kind: 'pin', hi: 0, pi: 0 },
+      { kind: 'pin', hi: 0, pi: 1 },
+      { kind: 'shape', index: 0 }
+    ])
+  })
+
+  it('dissolveGroup re-parents a nested group one level up', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [{ edge: 'left', pins: [{ name: 'S', type: 'io', group: 'C' }] }],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, group: 'B' }],
+      labels: [{ text: 'hi', x: 0.5, y: 0.5, group: 'A' }],
+      groups: [{ id: 'A' }, { id: 'B', parent: 'A' }, { id: 'C', parent: 'B' }]
+    }
+    // Dissolving the middle group B: its shape + its sub-group C move up to A.
+    const out = dissolveGroup(part, 'B')
+    expect(out.shapes?.[0].group).toBe('A')
+    expect(out.groups).toEqual([{ id: 'A' }, { id: 'C', parent: 'A' }])
+    // The pin (in C) is untouched; C now sits directly under A.
+    expect(out.headers[0].pins[0].group).toBe('C')
+  })
+
+  it('translateShape shifts x/y + polygon points and clamps to the board', () => {
+    const r = translateShape({ kind: 'rect', x: 0.4, y: 0.4 }, 0.1, -0.1)
+    expect(r.x).toBeCloseTo(0.5)
+    expect(r.y).toBeCloseTo(0.3)
+    // Clamp at the edges.
+    expect(translateShape({ kind: 'rect', x: 0.95, y: 0.02 }, 0.2, -0.2)).toMatchObject({ x: 1, y: 0 })
+    // Polygon points move too.
+    const poly = translateShape(
+      { kind: 'polygon', x: 0.2, y: 0.2, points: [{ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.3 }] },
+      0.05,
+      0.05
+    )
+    expect(poly.points?.[0].x).toBeCloseTo(0.15)
+    expect(poly.points?.[0].y).toBeCloseTo(0.15)
+    expect(poly.points?.[1].x).toBeCloseTo(0.35)
+    expect(poly.points?.[1].y).toBeCloseTo(0.35)
+  })
+
+  it('dissolveGroup makes a top-level group loose (drops the registry)', () => {
+    const part: PartDefinition = {
+      id: 'g',
+      name: 'G',
+      headers: [],
+      shapes: [{ kind: 'rect', x: 0.1, y: 0.1, group: 'solo' }],
+      groups: [{ id: 'solo', name: 'Solo' }]
+    }
+    const out = dissolveGroup(part, 'solo')
+    expect(out.shapes?.[0].group).toBeUndefined()
+    expect(out.groups).toBeUndefined()
   })
 })

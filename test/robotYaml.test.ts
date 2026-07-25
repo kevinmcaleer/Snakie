@@ -27,6 +27,18 @@ describe('robot.yml round-trip', () => {
     expect(robotFromYaml(robotToYaml(blankRobot()))).toEqual(blankRobot())
   })
 
+  it('round-trips a QWIIC cable id on the bundled wires', () => {
+    const def = {
+      ...blankRobot(),
+      connections: [
+        { id: 'a.SDA__b.SDA', from: 'a.SDA#3', to: 'b.SDA#3', net: 'signal' as const, cable: 'cable-x' },
+        { id: 'a.GND__b.GND', from: 'a.GND#1', to: 'b.GND#1', net: 'gnd' as const, cable: 'cable-x' }
+      ]
+    }
+    const back = robotFromYaml(robotToYaml(def))
+    expect(back.connections.map((c) => c.cable)).toEqual(['cable-x', 'cable-x'])
+  })
+
   it('round-trips the project name + description (and drops empties)', () => {
     const back = robotFromYaml(robotToYaml({ ...blankRobot(), name: 'Rover', description: 'A 2-wheel line follower' }))
     expect(back.name).toBe('Rover')

@@ -1,5 +1,4 @@
 id: esp32-devkit
-help: help.md
 name: ESP32 DevKit
 description: ESP32-WROOM-32 development board with 2.4GHz Wi-Fi + Bluetooth.
 manufacturer: Espressif
@@ -11,46 +10,400 @@ tags:
 package: THT
 pinSpacing: 2.54
 voltage: 2.3–3.6V
-version: 1.0.0
+version: 1.0.8
 mcu: ESP32
 pcbColor: "#1b2733"
 aspect: 0.42
-ledLabel: "2"
-features:
-  - { label: ESP32-WROOM-32, kind: wifi, x: 0.14, y: 0.05, w: 0.72, h: 0.22 }
-  - { label: USB, kind: usb, x: 0.36, y: 0.95, w: 0.28, h: 0.05 }
+dimensions:
+  width: 28.5
+  height: 52.4
 headers:
   - edge: left
     pins:
-      - { name: "3V3", type: pwr }
-      - { name: EN, type: other }
-      - { name: IO36, type: io, gpio: 36, capabilities: [digital, adc] }
-      - { name: IO39, type: io, gpio: 39, capabilities: [digital, adc] }
-      - { name: IO34, type: io, gpio: 34, capabilities: [digital, adc] }
-      - { name: IO35, type: io, gpio: 35, capabilities: [digital, adc] }
-      - { name: IO32, type: io, gpio: 32, capabilities: [digital, pwm, adc] }
-      - { name: IO33, type: io, gpio: 33, capabilities: [digital, pwm, adc] }
-      - { name: IO25, type: io, gpio: 25, capabilities: [digital, pwm, adc] }
-      - { name: IO26, type: io, gpio: 26, capabilities: [digital, pwm, adc] }
-      - { name: IO27, type: io, gpio: 27, capabilities: [digital, pwm, adc] }
-      - { name: IO14, type: io, gpio: 14, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO12, type: io, gpio: 12, capabilities: [digital, pwm, i2c, spi] }
-      - { name: GND, type: gnd }
-      - { name: IO13, type: io, gpio: 13, capabilities: [digital, pwm, i2c, spi] }
+      - name: 3V3
+        type: pwr
+        number: 1
+        shape: round
+        rotation: 180
+        x: 0.05528547911377707
+        y: 0.19869956567789382
+      - name: GND
+        type: gnd
+        number: 2
+        shape: round
+        x: 0.05528547911377707
+        y: 0.24806882896759133
+      - name: D15
+        type: io
+        number: 3
+        gpio: 15
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 3
+        shape: round
+        x: 0.05528547911377707
+        y: 0.29743809225728884
+      - name: D2
+        type: io
+        number: 4
+        gpio: 2
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 2
+        shape: round
+        x: 0.05528547911377707
+        y: 0.34680735554698633
+      - name: D4
+        type: io
+        number: 5
+        gpio: 4
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 1
+        shape: round
+        x: 0.05528547911377707
+        y: 0.39617661883668387
+      - name: RX2
+        type: io
+        number: 6
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 2
+          adc: 0
+        shape: round
+        x: 0.05528547911377707
+        y: 0.44554588212638135
+      - name: TX2
+        type: io
+        number: 7
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 2
+        shape: round
+        x: 0.05528547911377707
+        y: 0.49491514541607884
+      - name: D5
+        type: io
+        number: 8
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: CSn
+        buses:
+          spi: 0
+        shape: round
+        x: 0.05528547911377707
+        y: 0.5442844087057763
+      - name: D18
+        type: io
+        number: 9
+        gpio: 18
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: SCK
+        buses:
+          spi: 0
+        shape: round
+        x: 0.05528547911377707
+        y: 0.5936536719954739
+      - name: D19
+        type: io
+        number: 10
+        gpio: 19
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: RX
+        buses:
+          spi: 0
+        shape: round
+        x: 0.05528547911377707
+        y: 0.6430229352851713
+      - name: IO27
+        type: io
+        number: 11
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: round
+        x: 0.05528547911377707
+        y: 0.6923921985748689
+      - name: IO14
+        type: io
+        number: 12
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        shape: round
+        x: 0.05528547911377707
+        y: 0.7417614618645664
+      - name: IO12
+        type: io
+        number: 13
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        shape: round
+        x: 0.05528547911377707
+        y: 0.7911307251542639
+      - name: GND
+        type: gnd
+        number: 14
+        shape: round
+        x: 0.05528547911377707
+        y: 0.8404999884439613
+      - name: IO13
+        type: io
+        number: 15
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: TX
+        buses:
+          spi: 0
+        shape: round
+        rotation: 180
+        x: 0.05528547911377707
+        y: 0.8898692517336589
   - edge: right
     pins:
-      - { name: VIN, type: pwr }
-      - { name: GND, type: gnd }
-      - { name: IO23, type: io, gpio: 23, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO22, type: io, gpio: 22, capabilities: [digital, pwm, i2c, spi] }
-      - { name: TX0, type: io, gpio: 1, capabilities: [digital, uart] }
-      - { name: RX0, type: io, gpio: 3, capabilities: [digital, uart] }
-      - { name: IO21, type: io, gpio: 21, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO19, type: io, gpio: 19, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO18, type: io, gpio: 18, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO5, type: io, gpio: 5, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO17, type: io, gpio: 17, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO16, type: io, gpio: 16, capabilities: [digital, pwm, i2c, spi] }
-      - { name: IO4, type: io, gpio: 4, capabilities: [digital, pwm, i2c, spi, adc] }
-      - { name: IO0, type: io, gpio: 0, capabilities: [digital, pwm] }
-      - { name: IO2, type: io, gpio: 2, capabilities: [digital, pwm, adc] }
+      - name: VIN
+        type: pwr
+        number: 30
+        shape: round
+        rotation: 0
+        x: 0.94
+        y: 0.19869956567789382
+      - name: GND
+        type: gnd
+        number: 29
+        shape: round
+        x: 0.94
+        y: 0.24806882896759133
+      - name: D13
+        type: io
+        number: 28
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 4
+        shape: round
+        x: 0.94
+        y: 0.29743809225728884
+      - name: D12
+        type: io
+        number: 27
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 5
+        shape: round
+        x: 0.94
+        y: 0.34680735554698633
+      - name: D14
+        type: io
+        number: 26
+        gpio: 1
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 6
+        shape: round
+        x: 0.94
+        y: 0.39617661883668387
+      - name: D27
+        type: io
+        number: 25
+        gpio: 27
+        capabilities:
+          - digital
+          - adc
+        buses:
+          adc: 7
+        shape: round
+        x: 0.94
+        y: 0.44554588212638135
+      - name: D26
+        type: io
+        number: 24
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 9
+        shape: round
+        x: 0.94
+        y: 0.49491514541607884
+      - name: D25
+        type: io
+        number: 23
+        gpio: 25
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 8
+        shape: round
+        x: 0.94
+        y: 0.5442844087057763
+      - name: D33
+        type: io
+        number: 22
+        gpio: 33
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 5
+        shape: round
+        x: 0.94
+        y: 0.5936536719954739
+      - name: D32
+        type: io
+        number: 21
+        gpio: 32
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 4
+        shape: round
+        x: 0.94
+        y: 0.6430229352851713
+      - name: D35
+        type: io
+        number: 20
+        gpio: 135
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 7
+        shape: round
+        x: 0.94
+        y: 0.6923921985748689
+      - name: D34
+        type: io
+        number: 19
+        gpio: 34
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 6
+        shape: round
+        x: 0.94
+        y: 0.7417614618645664
+      - name: VN
+        type: io
+        number: 18
+        gpio: 39
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 3
+        shape: round
+        x: 0.94
+        y: 0.7911307251542639
+      - name: VP
+        type: io
+        number: 17
+        gpio: 36
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 0
+        shape: round
+        x: 0.94
+        y: 0.8404999884439613
+      - name: EN
+        type: other
+        number: 16
+        shape: round
+        rotation: 0
+        x: 0.94
+        y: 0.8898692517336589
+mountingHoles:
+  - x: 0.09386489784188348
+    y: 0.05629657995792545
+    diameter: 1.5
+  - x: 0.919667522418931
+    y: 0.05629657995792545
+    diameter: 1.5
+ledLabel: "2"
+image: image.jpg
+imageLayer:
+  x: -0.0020095022065775847
+  y: -0.00030357641056547036
+  w: 1
+  h: 1
+help: help.md
+electrical:
+  model: regulator
+  maxCurrentA: 0.3
+  terminals:
+    positive: VIN
+    negative: GND
+  inputRail: VIN
+  outputRail: 3V3
+  outputV: 3.3
+  dropoutV: 0.03
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

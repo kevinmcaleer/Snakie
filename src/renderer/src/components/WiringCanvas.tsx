@@ -25,7 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody, pinOutwardDir } from './part-body'
+import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
@@ -494,10 +494,13 @@ function boardLifelikePins(pads: PadPoint[]): PlacedPin[] {
   })
 }
 
-/** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint order). */
+/** Life-like part pins: real pad positions from {@link pinPositions} (== endpoint
+ *  order), THEN the connector (QWIIC/JST) pins appended so they're wire terminals
+ *  too — the index continues after the header pins, mirroring `flattenPartPins` in
+ *  netlist.ts so a connector-pin endpoint's `#index` resolves the same both sides. */
 function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
   const rps = resolvedPins(def)
-  return pinPositions(def, box).map((pp) => {
+  const header: PlacedPin[] = pinPositions(def, box).map((pp) => {
     const rp = rps[pp.index]
     // A wire leaves along the pin's ORIENTATION (its rotation — the same direction
     // its silk label points), not its header edge, so it originates from the side
@@ -514,6 +517,37 @@ function partLifelikePins(def: PartDefinition, box: Box): PlacedPin[] {
       buses: rps[pp.index]?.pin.buses
     }
   })
+  // Connector pins — positioned along each connector's socket (matching the glyph
+  // in PartBody), turned by the connector's own body rotation. `connPxPerMm` is
+  // derived exactly as PartBody does so the dots sit on the drawn contacts.
+  const connPxPerMm = def.dimensions && def.dimensions.width > 0 ? box.w / def.dimensions.width : 0
+  const connectorPins: PlacedPin[] = []
+  let idx = header.length
+  for (const conn of def.connectors ?? []) {
+    const { n, w, h } = connectorSize(conn, connPxPerMm)
+    const ccx = box.x + conn.x * box.w
+    const ccy = box.y + conn.y * box.h
+    const rad = ((conn.rotation ?? 0) * Math.PI) / 180
+    const cos = Math.cos(rad)
+    const sin = Math.sin(rad)
+    conn.pins.forEach((pin, pi) => {
+      // Contact centre along the socket (== connectorGlyph), at the front edge, then
+      // rotate the offset + outward normal by the connector's rotation.
+      const dxL = -w / 2 + (w / (n + 1)) * (pi + 1)
+      const dyL = h / 2
+      connectorPins.push({
+        name: pin.name,
+        net: partPinNet(pin.type),
+        index: idx++,
+        anchors: [{ x: ccx + dxL * cos - dyL * sin, y: ccy + dxL * sin + dyL * cos, ox: -sin, oy: cos }],
+        label: { x: ccx + dxL * cos - dyL * sin, y: ccy + dxL * sin + dyL * cos, anchor: 'middle' as const },
+        caps: pin.capabilities,
+        signals: pin.signals,
+        buses: pin.buses
+      })
+    })
+  }
+  return [...header, ...connectorPins]
 }
 
 /** Schematic MCU pins: stub-end anchors from the IC-block layout (== pad order).
@@ -1169,8 +1203,81 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     persist({ ...robot, connections: [...robot.connections, conn] })
   }
+
+  // --- QWIIC / I2C cable (#…) ------------------------------------------------
+  // A part's connector pins are appended after its header pins (partLifelikePins /
+  // netlist flattenPartPins). Resolve an endpoint to the CONNECTOR it belongs to
+  // (with each of its pins' endpoints), so a connector→connector drag can wire the
+  // whole cable at once.
+  type CablePin = { endpoint: string; name: string; type: string; i2c?: string }
+  type EndpointConn = { key: string; connIndex: number; pins: CablePin[] }
+  const parseEp = (ep: string): { key: string; index: number } => {
+    const hash = ep.lastIndexOf('#')
+    const index = hash >= 0 ? parseInt(ep.slice(hash + 1), 10) : -1
+    const head = hash >= 0 ? ep.slice(0, hash) : ep
+    const dot = head.indexOf('.')
+    return { key: dot >= 0 ? head.slice(0, dot) : head, index }
+  }
+  const endpointConnector = (endpoint: string): EndpointConn | null => {
+    const { key, index } = parseEp(endpoint)
+    const def = subjByKey.get(key)?.partDef
+    if (!def) return null
+    let acc = resolvedPins(def).length // connector pins are appended after headers
+    if (index < acc) return null
+    for (let ci = 0; ci < (def.connectors?.length ?? 0); ci++) {
+      const conn = def.connectors![ci]
+      if (index < acc + conn.pins.length) {
+        const pins = conn.pins.map((pin, pi) => ({
+          endpoint: `${key}.${pin.name}#${acc + pi}`,
+          name: pin.name,
+          type: pin.type as string,
+          i2c: pin.signals?.i2c
+        }))
+        return { key, connIndex: ci, pins }
+      }
+      acc += conn.pins.length
+    }
+    return null
+  }
+  /** Wire two connectors as one cable — SDA↔SDA, SCL↔SCL, GND↔GND, pwr↔pwr, the
+   *  4 wires sharing a cable id. Power is matched by TYPE (any pwr pin). */
+  const cableRole = (p: CablePin): 'sda' | 'scl' | 'gnd' | 'pwr' | null =>
+    p.i2c === 'SDA' || p.name.toUpperCase() === 'SDA'
+      ? 'sda'
+      : p.i2c === 'SCL' || p.name.toUpperCase() === 'SCL'
+        ? 'scl'
+        : p.type === 'gnd'
+          ? 'gnd'
+          : p.type === 'pwr'
+            ? 'pwr'
+            : null
+  const makeCable = (a: EndpointConn, b: EndpointConn): void => {
+    const cable = `cable-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
+    const netFor = { sda: 'signal', scl: 'signal', gnd: 'gnd', pwr: 'vcc' } as const
+    const has = (id: string, f: string, t: string): boolean =>
+      robot.connections.some((c) => c.id === id || (c.from === t && c.to === f))
+    const added: RobotConnection[] = []
+    for (const role of ['sda', 'scl', 'gnd', 'pwr'] as const) {
+      const pa = a.pins.find((p) => cableRole(p) === role)
+      const pb = b.pins.find((p) => cableRole(p) === role)
+      if (!pa || !pb || pa.endpoint === pb.endpoint) continue
+      const id = connectionId(pa.endpoint, pb.endpoint)
+      if (has(id, pa.endpoint, pb.endpoint)) continue
+      added.push({ id, from: pa.endpoint, to: pb.endpoint, net: netFor[role], cable })
+    }
+    if (added.length) persist({ ...robot, connections: [...robot.connections, ...added] })
+  }
+
   const removeConnection = (id: string): void =>
     persist({ ...robot, connections: robot.connections.filter((c) => c.id !== id) })
+  // Remove a wire — or, if it's part of a cable, all of that cable's wires at once.
+  const removeWireOrCable = (id: string): void => {
+    const cable = robot.connections.find((c) => c.id === id)?.cable
+    persist({
+      ...robot,
+      connections: robot.connections.filter((c) => (cable ? c.cable !== cable : c.id !== id))
+    })
+  }
   // Re-attach a wire's grabbed end to a new pin: drop the OLD connection + add the
   // new one in ONE persist (separate remove+add would clobber via stale closures).
   const reconnectWire = (oldId: string, from: string, to: string): void => {
@@ -1444,7 +1551,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
         else removeConnection(d.reconnectId)
       } else if (target && target.endpoint !== d.from) {
-        addConnection(d.from, target.endpoint)
+        // Dragging between two DIFFERENT connectors wires the whole cable (SDA/SCL/
+        // GND/pwr as one bundle); otherwise it's a single pin-to-pin wire.
+        const ca = endpointConnector(d.from)
+        const cb = endpointConnector(target.endpoint)
+        if (ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)) makeCable(ca, cb)
+        else addConnection(d.from, target.endpoint)
       }
       force((n) => n + 1)
     }
@@ -1754,6 +1866,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.
   const selSubject = renderMode === 'lifelike' && selectedKey ? subjByKey.get(selectedKey) : undefined
+  // The cable id of the selected wire (if any), so selecting / deleting acts on the
+  // whole QWIIC cable — every wire sharing that id highlights + goes together.
+  const selectedCable = selectedWire ? (robot.connections.find((c) => c.id === selectedWire)?.cable ?? null) : null
   const selPart = selSubject?.kind === 'part' ? selSubject : undefined
   // Servo → joint binding (#): if the selected part is a servo, which board GPIO its
   // signal is wired to and the URDF joint it currently drives (via robot.yml's map).
@@ -1836,7 +1951,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         if (shouldDeleteSelectedPart(e.key, e.target as HTMLElement)) {
           if (selectedWire) {
             e.preventDefault()
-            removeConnection(selectedWire)
+            removeWireOrCable(selectedWire) // deletes the whole cable if it's cabled
             setSelectedWire(null)
           } else if (selectedKey) {
             e.preventDefault()
@@ -1974,7 +2089,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // Node-voltage overlay (#604): colour the wire by its solved voltage
               // (both ends share a node) + badge the value at its midpoint.
               const v = voltage?.on ? voltage.byEndpoint.get(c.from) : undefined
-              const isSel = selectedWire === c.id
+              const isSel = selectedWire === c.id || (!!selectedCable && c.cable === selectedCable)
               // ERC "Show me" (#601): this net's wires glow yellow, the rest grey out.
               const isHi = isHiWire(c)
               const dimmed = !!highlight && !isHi
@@ -2006,6 +2121,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                       force((n) => n + 1)
                     }}
                   />
+                  {/* Cable "jacket": a dark sleeve behind each cabled wire; the 4 run
+                      tight so their sleeves merge into one bundle with 4 wires on top. */}
+                  {c.cable && (
+                    <path d={p.d} fill="none" stroke="#0b0d12" strokeWidth={9} opacity={0.55} strokeLinecap="round" className="wc__cable-sleeve" style={{ pointerEvents: 'none' }} />
+                  )}
                   {isSel && (
                     <path d={p.d} fill="none" stroke="var(--accent, #e6ab30)" strokeWidth={7} opacity={0.5} className="wc__wire-sel" />
                   )}
@@ -2483,7 +2603,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           nets={nets}
           onHighlightNet={onHighlightNet}
           isDark={isDark}
-          onRemove={removeConnection}
+          onRemove={removeWireOrCable}
           onColor={setConnectionColor}
           open={connOpen}
           onToggle={() => {

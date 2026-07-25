@@ -1,12 +1,11 @@
 id: n20-motor
-help: help.md
 name: N20 Motor
 manufacturer: Generic
 family: Motor
 package: THT
 pinSpacing: 2.54
 voltage: 6V
-version: 0.1.7
+version: 0.1.8
 pcbColor: "#0f5a2e"
 aspect: 0.5
 dimensions:
@@ -95,18 +94,19 @@ shapes:
     h: 0.020231798957375924
     z: 6
     cornerRadius: 0
-image: image.jpg
-layerVisibility:
-  pcb: false
-  image: false
-  holes: true
-  pins: true
-  components: true
+image: image.png
+help: help.md
 electrical:
   model: consumer
+  maxCurrentA: 0.32
   currentDrawA: 0.06
   stallCurrentA: 0.32
-  maxCurrentA: 0.32
   terminals:
     positive: VCC
     negative: GND
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: false

@@ -7,6 +7,7 @@ import { readRobotModel } from '../../../shared/krf'
 import { jointNames, jointDisplayLimits } from './robot-assembly'
 import { attachPartMesh } from './robot-part-mesh'
 import { useWorkspace } from '../store/workspace'
+import { useWorkspaceLayout } from '../store/layout'
 import { useEditorSettings } from '../store/settings'
 import type {
   BoardDefinition,
@@ -46,6 +47,7 @@ let cachedUserBoards: BoardDefinition[] = []
 
 export function BoardPane(): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
+  const { pendingBoardSwap, clearBoardSwap } = useWorkspaceLayout()
   const activeFile = openFiles.find((f) => f.id === activeId) ?? null
   const source = activeFile?.content ?? ''
   const fileName = activeFile?.name
@@ -98,6 +100,9 @@ export function BoardPane(): JSX.Element {
   // newer save; `robot:didChange` re-loads when ANY window saves it (so this
   // pane and the floating Board View stay in sync).
   const [robot, setRobot] = useState<RobotDefinition>(() => blankRobot())
+  // Gate the pending-swap forwarding on the REAL robot.yml being loaded — the pane
+  // mounts with a blank robot, and swapping against that would wipe the file (#…).
+  const [robotLoaded, setRobotLoaded] = useState(false)
   const saveSeqRef = useRef(0)
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
@@ -108,15 +113,24 @@ export function BoardPane(): JSX.Element {
     window.api.robot
       .load(folder)
       .then((d) => {
-        if (fresh()) setRobot(d)
+        if (fresh()) {
+          setRobot(d)
+          setRobotLoaded(true)
+        }
       })
       .catch(() => {
-        if (fresh()) setRobot(blankRobot())
+        // Leave robotLoaded false on a failed load, so a pending swap is never
+        // applied against a blank robot (which would wipe the file). Clear any
+        // punted swap so an unreadable robot.yml can't leave it stuck.
+        if (fresh()) {
+          setRobot(blankRobot())
+          clearBoardSwap()
+        }
       })
     return () => {
       live = false
     }
-  }, [folder, robotNonce])
+  }, [folder, robotNonce, clearBoardSwap])
 
   // The linked URDF's joint names, so a placed servo's inspector can offer a
   // "drives joint" picker (#) — mirrors the floating Board View window, which
@@ -289,6 +303,8 @@ export function BoardPane(): JSX.Element {
         jointLimits={jointLimits}
         onAddToProject={addToProject}
         onAddManyToProject={addManyToProject}
+        pendingSwapBoard={robotLoaded ? pendingBoardSwap : null}
+        onSwapConsumed={clearBoardSwap}
       />
       {editing && (
         <PartEditor

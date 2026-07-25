@@ -442,10 +442,11 @@ export function RobotView({
   const [projection, setProjection] = useState<'ortho' | 'persp'>('persp')
   // Stereoscopic 3-D glasses (#521): render the scene as a red/cyan anaglyph when on.
   // Held in a ref the render loop reads each frame, so toggling doesn't rebuild the
-  // scene. Persisted (#623) so it survives a workspace switch / restart, and shared
-  // by the full view + mini-viewer. Parallax needs perspective — enabling it prefers
-  // persp.
-  const [stereo3d, setStereo3d] = useLocalStorage('snakie.robot.stereo3d', false)
+  // scene. Shared by the full view + mini-viewer. Always starts OFF (the anaglyph is
+  // opt-in per session — the on/off is deliberately NOT persisted so the Build view
+  // opens flat by default; only the mode + depth below persist). Parallax needs
+  // perspective — enabling it prefers persp.
+  const [stereo3d, setStereo3d] = useState(false)
   const stereoRef = useRef(stereo3d)
   stereoRef.current = stereo3d
   // 3-D type (#624) + depth/eye-separation (#625), persisted; read by the render loop.

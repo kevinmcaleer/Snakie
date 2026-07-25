@@ -27,6 +27,10 @@ import {
   PIN_TYPE_LABEL,
   blankPart,
   collectUsedColors,
+  dissolveGroup,
+  groupRootId,
+  groupTreeIds,
+  translateShape,
   normalisePart,
   orderedItems,
   applyItemOrder,
@@ -382,6 +386,10 @@ export function PartEditor({
   const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
+  // A "select this whole group" request from the Layers panel → the canvas selects
+  // every member (#631). The bumping nonce lets re-selecting the same group re-fire.
+  const [groupSelect, setGroupSelect] = useState<{ id: string; nonce: number } | null>(null)
+  const selectGroup = (id: string): void => setGroupSelect((g) => ({ id, nonce: (g?.nonce ?? 0) + 1 }))
   const [fitSignal, setFitSignal] = useState(0)
   const [status, setStatus] = useState<Status | null>(null)
   // Auto-dismiss the status notification (e.g. "Saved …") so it doesn't linger
@@ -581,17 +589,38 @@ export function PartEditor({
     // A locked layer's items can't be deleted (keyboard or the Layers trash).
     const lk = selectionLockKey(sel)
     if (lk && locked[lk]) return
+    // A grouped item (#630) deletes its whole group tree — every member pin,
+    // shape + label (recursively through nested sub-groups) + the registry entries.
+    const selGroup =
+      sel.type === 'pin'
+        ? part.headers[sel.hi]?.pins[sel.pi]?.group
+        : sel.type === 'shape'
+          ? part.shapes?.[sel.index]?.group
+          : sel.type === 'label'
+            ? part.labels?.[sel.index]?.group
+            : undefined
+    if (selGroup) {
+      const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
+      const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
+      setPart((d) => ({
+        ...d,
+        headers: d.headers
+          .map((h) => ({ ...h, pins: h.pins.filter((p) => !inTree(p.group)) }))
+          .filter((h) => h.pins.length > 0),
+        shapes: (d.shapes ?? []).filter((s) => !inTree(s.group)),
+        labels: (d.labels ?? []).filter((l) => !inTree(l.group)),
+        groups: (d.groups ?? []).filter((g) => !ids.has(g.id))
+      }))
+      setSelection(null)
+      return
+    }
     if (sel.type === 'pin') {
-      // A grouped pin (servo header) deletes its whole Signal/V+/GND trio.
-      const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
       setPart((d) => ({
         ...d,
         headers: d.headers
           .map((h, i) => ({
             ...h,
-            pins: grp
-              ? h.pins.filter((p) => p.group !== grp)
-              : h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
+            pins: h.pins.filter((_, j) => !(i === sel.hi && j === sel.pi))
           }))
           .filter((h) => h.pins.length > 0)
       }))
@@ -623,6 +652,50 @@ export function PartEditor({
       removeImage()
     }
     setSelection(null)
+  }
+
+  // --- arrow-key nudge (#632) -----------------------------------------------
+  // Move the selected item — or, if it belongs to a group, the WHOLE group tree
+  // — by a small normalised delta. Shift = a coarser step.
+  const nudgeSelection = (dx: number, dy: number): void => {
+    const sel = selection
+    if (!sel) return
+    const lk = selectionLockKey(sel)
+    if (lk && locked[lk]) return
+    const clamp = (v: number): number => Math.min(1, Math.max(0, v))
+    const shiftPin = (p: (typeof part.headers)[number]['pins'][number]): typeof p =>
+      p.x != null && p.y != null ? { ...p, x: clamp(p.x + dx), y: clamp(p.y + dy) } : p
+    const selGroup =
+      sel.type === 'pin'
+        ? part.headers[sel.hi]?.pins[sel.pi]?.group
+        : sel.type === 'shape'
+          ? part.shapes?.[sel.index]?.group
+          : sel.type === 'label'
+            ? part.labels?.[sel.index]?.group
+            : undefined
+    if (selGroup) {
+      const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
+      const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
+      patch({
+        headers: part.headers.map((h) => ({ ...h, pins: h.pins.map((p) => (inTree(p.group) ? shiftPin(p) : p)) })),
+        shapes: (part.shapes ?? []).map((s) => (inTree(s.group) ? translateShape(s, dx, dy) : s)),
+        labels: (part.labels ?? []).map((l) => (inTree(l.group) ? { ...l, x: clamp(l.x + dx), y: clamp(l.y + dy) } : l))
+      })
+      return
+    }
+    // A loose single item.
+    if (sel.type === 'shape') {
+      patch({ shapes: (part.shapes ?? []).map((s, i) => (i === sel.index ? translateShape(s, dx, dy) : s)) })
+    } else if (sel.type === 'label') {
+      patch({ labels: (part.labels ?? []).map((l, i) => (i === sel.index ? { ...l, x: clamp(l.x + dx), y: clamp(l.y + dy) } : l)) })
+    } else if (sel.type === 'pin') {
+      patch({
+        headers: part.headers.map((h, hi) => ({
+          ...h,
+          pins: h.pins.map((p, pi) => (hi === sel.hi && pi === sel.pi ? shiftPin(p) : p))
+        }))
+      })
+    }
   }
 
   // --- undo / redo (#187) ---------------------------------------------------
@@ -668,6 +741,16 @@ export function PartEditor({
         if (typing) return
         e.preventDefault()
         redo()
+        return
+      }
+      // Arrow keys nudge the selected item / group (#632); Shift = a coarser step.
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (typing || !selection || mod) return
+        e.preventDefault()
+        const step = e.shiftKey ? 0.02 : 0.005
+        const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0
+        const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0
+        nudgeSelection(dx, dy)
         return
       }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
@@ -851,6 +934,7 @@ export function PartEditor({
                   imageNativeAspect={imageNativeAspect}
                   tool={tool}
                   selection={selection}
+                  groupSelect={groupSelect ?? undefined}
                   onChange={setPart}
                   onSelect={setSelection}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
@@ -884,6 +968,7 @@ export function PartEditor({
                 setTool={setTool}
                 selection={selection}
                 setSelection={setSelection}
+                onSelectGroup={selectGroup}
                 onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}
@@ -972,6 +1057,8 @@ interface LayersPanelProps {
   setTool: (t: CanvasTool) => void
   selection: CanvasSelection
   setSelection: (s: CanvasSelection) => void
+  /** Select a whole group (its every member) from a Layers-panel group node (#631). */
+  onSelectGroup?: (gid: string) => void
   onDeleteSelected: () => void
   fileInputRef: React.RefObject<HTMLInputElement>
   onPickImage: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -1004,6 +1091,7 @@ function LayersPanel({
   setTool,
   selection,
   setSelection,
+  onSelectGroup,
   onDeleteSelected,
   fileInputRef,
   onPickImage,
@@ -1024,21 +1112,43 @@ function LayersPanel({
   // Which servo-header groups are expanded in the pin list (collapsed by default so
   // a board of servo headers reads as one row each, not three).
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
+  // The group node (in the Parts list) whose name is being edited inline (#631).
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  // Pin list sort (#…): click a column header to sort by it; `col: null` is the
+  // default insertion order. Clicking the active column toggles asc ⇄ desc.
+  type PinSortCol = 'number' | 'type' | 'gpio'
+  const [pinSort, setPinSort] = useState<{ col: PinSortCol | null; dir: 'asc' | 'desc' }>({ col: null, dir: 'asc' })
+  const cyclePinSort = (col: PinSortCol | null): void =>
+    setPinSort((s) => (col === null ? { col: null, dir: 'asc' } : s.col === col ? { col, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { col, dir: 'asc' }))
   const pins = resolvedPins(part)
-  // The Pins list reads best sorted: by board number when a pin has one (numbered
-  // pins first, ascending), otherwise by the pin's label text (numeric-aware, so
-  // GP2 sorts before GP10). Selection still keys off the stable hi/pi.
-  const sortedPins = [...pins].sort((a, b) => {
-    const an = a.pin.number
-    const bn = b.pin.number
-    const aHas = typeof an === 'number'
-    const bHas = typeof bn === 'number'
-    if (aHas && bHas) return an - bn
-    if (aHas !== bHas) return aHas ? -1 : 1
-    const al = a.pin.label || a.pin.name || ''
-    const bl = b.pin.label || b.pin.name || ''
-    return al.localeCompare(bl, undefined, { numeric: true, sensitivity: 'base' })
-  })
+  const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
+  // Sort the Pins list. col=null keeps insertion order; 'number'/'gpio' put pins
+  // that HAVE that field first (ascending; the rest fall to the bottom in insertion
+  // order, regardless of direction); 'type' groups by role. Selection keys off hi/pi.
+  const sortedPins = (() => {
+    type Row = { rp: (typeof pins)[number]; i: number }
+    const rows: Row[] = pins.map((rp, i) => ({ rp, i }))
+    const flip = pinSort.dir === 'desc' ? -1 : 1
+    const byOptional = (a: Row, b: Row, val: (rp: Row['rp']) => number | undefined): number => {
+      const av = val(a.rp)
+      const bv = val(b.rp)
+      const aHas = typeof av === 'number'
+      const bHas = typeof bv === 'number'
+      if (aHas !== bHas) return aHas ? -1 : 1 // field-less pins always at the bottom
+      if (aHas && bHas && av !== bv) return flip * ((av as number) - (bv as number))
+      return a.i - b.i
+    }
+    const cmp: Record<PinSortCol, (a: Row, b: Row) => number> = {
+      number: (a, b) => byOptional(a, b, (rp) => rp.pin.number),
+      gpio: (a, b) => byOptional(a, b, (rp) => rp.pin.gpio),
+      type: (a, b) => {
+        const at = roleOrder[a.rp.pin.type] ?? 9
+        const bt = roleOrder[b.rp.pin.type] ?? 9
+        return at !== bt ? flip * (at - bt) : a.i - b.i
+      }
+    }
+    return (pinSort.col ? rows.sort(cmp[pinSort.col]) : rows).map((x) => x.rp)
+  })()
   const holes = part.mountingHoles ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
@@ -1184,6 +1294,123 @@ function LayersPanel({
       −
     </button>
   )
+  // ── Grouped Parts tree (#631) ─────────────────────────────────────────────
+  // Loose items render inline; a grouped item collapses under its top-level group
+  // node, which nests its members + sub-groups recursively.
+  const groups = part.groups ?? []
+  const groupOfItem = (it: OrderedItem): string | undefined =>
+    it.kind === 'shape' ? shapes[it.index]?.group : it.kind === 'label' ? labels[it.index]?.group : undefined
+  type PartNode = { kind: 'item'; item: OrderedItem } | { kind: 'group'; id: string; children: PartNode[] }
+  const buildGroupNode = (gid: string): PartNode => ({
+    kind: 'group',
+    id: gid,
+    children: [
+      ...items.filter((it) => groupOfItem(it) === gid).map((it): PartNode => ({ kind: 'item', item: it })),
+      ...groups.filter((g) => g.parent === gid).map((g) => buildGroupNode(g.id))
+    ]
+  })
+  const partTree: PartNode[] = (() => {
+    const emitted = new Set<string>()
+    const out: PartNode[] = []
+    for (const it of items) {
+      const g = groupOfItem(it)
+      if (!g) {
+        out.push({ kind: 'item', item: it })
+        continue
+      }
+      const root = groupRootId(groups, g)
+      if (emitted.has(root)) continue
+      emitted.add(root)
+      out.push(buildGroupNode(root))
+    }
+    return out
+  })()
+  const countLeaves = (node: PartNode): number =>
+    node.kind === 'item' ? 1 : node.children.reduce((n, c) => n + countLeaves(c), 0)
+  const commitRename = (gid: string, text: string): void => {
+    const name = text.trim()
+    patch({ groups: groups.map((g) => (g.id === gid ? { ...g, name: name || undefined } : g)) })
+    setRenamingGroup(null)
+  }
+  const ungroupNode = (gid: string): void => {
+    const d = dissolveGroup(part, gid)
+    patch({ headers: d.headers, shapes: d.shapes, labels: d.labels, groups: d.groups })
+  }
+  const itemRowTree = (it: OrderedItem, depth: number): JSX.Element => {
+    const { name, sub, sel } = describe(it)
+    const active =
+      it.kind === 'shape'
+        ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
+        : selEq(sel)
+    return (
+      <li
+        key={`${it.kind}${it.index}`}
+        className={`pe__flatrow${active ? ' is-active' : ''}`}
+        style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
+      >
+        <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
+          <span className="pe__item-name">{name}</span>
+        </button>
+        <span className="pe__flathelp">{sub}</span>
+        <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
+          <TrashIcon size={13} />
+        </button>
+      </li>
+    )
+  }
+  const renderNode = (node: PartNode, depth: number): JSX.Element => {
+    if (node.kind === 'item') return itemRowTree(node.item, depth)
+    const g = groups.find((x) => x.id === node.id)
+    const open = isOpen(node.id)
+    return (
+      <li key={`grp-${node.id}`} className="pe__grouprow">
+        <div className="pe__flatrow pe__flatrow--partgroup" style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
+          <button
+            type="button"
+            className="pe__flatcaret"
+            onClick={() => setCollapsed((c) => ({ ...c, [node.id]: !c[node.id] }))}
+            aria-expanded={open}
+            title={open ? 'Collapse group' : 'Expand group'}
+          >
+            {open ? '▾' : '▸'}
+          </button>
+          {renamingGroup === node.id ? (
+            <input
+              className="pe__group-rename"
+              autoFocus
+              defaultValue={g?.name ?? ''}
+              placeholder="Group name"
+              onBlur={(e) => commitRename(node.id, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename(node.id, (e.target as HTMLInputElement).value)
+                else if (e.key === 'Escape') setRenamingGroup(null)
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="pe__flatname"
+              onClick={() => onSelectGroup?.(node.id)}
+              onDoubleClick={() => setRenamingGroup(node.id)}
+              title="Select group (double-click to rename)"
+            >
+              <span className="pe__item-name">{g?.name || 'Group'}</span>
+              <span className="pe__flatsub">group · {countLeaves(node)}</span>
+            </button>
+          )}
+          <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(node.id)} title="Ungroup" aria-label="Ungroup">
+            ⊟
+          </button>
+        </div>
+        {open && (
+          <ul className="pe__flat pe__flat--nested" role="list">
+            {node.children.map((c) => renderNode(c, depth + 1))}
+          </ul>
+        )}
+      </li>
+    )
+  }
+
   const setShape = (kind: 'rect' | 'polygon'): void => {
     if (kind === 'polygon' && (part.polygon?.length ?? 0) < 3) {
       patch({
@@ -1235,7 +1462,11 @@ function LayersPanel({
       {isOpen('components') && (
         <ul className="pe__flat" role="list">
           {items.length === 0 && <li className="pe__layer-empty">No parts yet — use ＋ Add.</li>}
-          {items.map((it, ri) => {
+          {/* With groups, render the collapsible tree (drag-reorder is off inside
+              it); otherwise the flat, drag-reorderable list (#631). */}
+          {groups.length > 0 && items.length > 0
+            ? partTree.map((n) => renderNode(n, 0))
+            : items.map((it, ri) => {
             const { name, sub, sel } = describe(it)
             const active =
               it.kind === 'shape'
@@ -1298,63 +1529,113 @@ function LayersPanel({
             ＋
           </button>
         </div>
+        {isOpen('pins') && pins.length > 1 && (
+          // Clickable column headers: click to sort by that column, click again to
+          // flip asc ⇄ desc; the "Pin" header resets to insertion order. The arrow
+          // (▲/▼) marks the active column + direction.
+          (() => {
+            const arrow = (col: PinSortCol): string => (pinSort.col === col ? (pinSort.dir === 'asc' ? ' ▲' : ' ▼') : '')
+            const cls = (col: PinSortCol | null): string => `pe__pin-col${pinSort.col === col ? ' is-sorted' : ''}`
+            return (
+              <div className="pe__pin-cols" role="row">
+                <button type="button" className={`${cls(null)} pe__pin-col--name`} onClick={() => cyclePinSort(null)} title="Sort in the order pins were added">
+                  Pin
+                </button>
+                <button type="button" className={`${cls('number')} pe__pin-col--num`} onClick={() => cyclePinSort('number')} title="Sort by board pin number">
+                  #{arrow('number')}
+                </button>
+                <button type="button" className={`${cls('gpio')} pe__pin-col--num`} onClick={() => cyclePinSort('gpio')} title="Sort by GPIO number">
+                  GP{arrow('gpio')}
+                </button>
+                <button type="button" className={`${cls('type')} pe__pin-col--type`} onClick={() => cyclePinSort('type')} title="Sort by pin type">
+                  Type{arrow('type')}
+                </button>
+              </div>
+            )
+          })()
+        )}
         {isOpen('pins') && (
           <ul className="pe__flat pe__flat--pins" role="list">
             {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
             {(() => {
-              // A single flat pin row (used for ungrouped pins + expanded members).
-              const pinRow = (rp: (typeof sortedPins)[number], member = false): JSX.Element => (
+              // A single flat pin row, indented by its depth in the tree.
+              const pinRow = (rp: (typeof sortedPins)[number], depth: number): JSX.Element => (
                 <li
                   key={`p${rp.hi}-${rp.pi}`}
-                  className={`pe__flatrow pe__flatrow--pin${member ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                  className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+                  style={depth > 1 ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
                 >
                   <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                     <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   </button>
-                  {/* Always-visible, colour-coded Type column (io/pwr/gnd/other) (#…). */}
+                  {/* Board number + GPIO columns (blank when the pin has none). */}
+                  <span className="pe__flatnum" title={typeof rp.pin.number === 'number' ? `Board pin ${rp.pin.number}` : 'No board number'}>
+                    {typeof rp.pin.number === 'number' ? rp.pin.number : ''}
+                  </span>
+                  <span className="pe__flatnum" title={typeof rp.pin.gpio === 'number' ? `GPIO ${rp.pin.gpio}` : 'No GPIO'}>
+                    {typeof rp.pin.gpio === 'number' ? rp.pin.gpio : ''}
+                  </span>
                   <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
                 </li>
               )
-              // Servo-header groups collapse to ONE row (expandable); ungrouped pins
-              // render inline. Members within a group read Signal → V+ → GND.
-              const roleOrder: Record<string, number> = { io: 0, pwr: 1, gnd: 2, other: 3 }
-              const seen = new Set<string>()
-              const rows: JSX.Element[] = []
+              // Build the pin GROUP tree: a servo trio (leaf group of pins) collapses
+              // to one row; a supergroup nests its trios beneath it (recursively).
+              type PinNode = { kind: 'pin'; rp: (typeof sortedPins)[number] } | { kind: 'group'; id: string; children: PinNode[] }
+              const pinGroups = part.groups ?? []
+              const buildGroup = (gid: string): PinNode => ({
+                kind: 'group',
+                id: gid,
+                children: [
+                  ...pinGroups.filter((g) => g.parent === gid).map((g) => buildGroup(g.id)),
+                  // A group's own members read by role (S → V → G); off the
+                  // insertion-ordered `pins` (not sortedPins) so same-type members
+                  // keep a stable order regardless of the list's sort dropdown.
+                  ...pins
+                    .filter((p) => p.pin.group === gid)
+                    .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
+                    .map((rp): PinNode => ({ kind: 'pin', rp }))
+                ]
+              })
+              const emitted = new Set<string>()
+              const top: PinNode[] = []
               for (const rp of sortedPins) {
                 const g = rp.pin.group
                 if (!g) {
-                  rows.push(pinRow(rp))
+                  top.push({ kind: 'pin', rp })
                   continue
                 }
-                if (seen.has(g)) continue
-                seen.add(g)
-                const members = sortedPins
-                  .filter((p) => p.pin.group === g)
-                  .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
-                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
-                const open = !!expandedGroups[g]
+                const root = groupRootId(pinGroups, g)
+                if (emitted.has(root)) continue
+                emitted.add(root)
+                top.push(buildGroup(root))
+              }
+              const leafPins = (n: PinNode): (typeof sortedPins)[number][] =>
+                n.kind === 'pin' ? [n.rp] : n.children.flatMap(leafPins)
+              const renderNode = (node: PinNode, depth: number): JSX.Element[] => {
+                if (node.kind === 'pin') return [pinRow(node.rp, depth)]
+                const gid = node.id
+                const g = pinGroups.find((x) => x.id === gid)
+                const isTrio = node.children.length > 0 && node.children.every((c) => c.kind === 'pin')
+                const open = gid in expandedGroups ? expandedGroups[gid] : !isTrio // trios collapsed, supergroups open
+                const members = leafPins(node)
                 const active = members.some((p) => selEq({ type: 'pin', hi: p.hi, pi: p.pi }))
-                rows.push(
-                  <li key={`g${g}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`}>
-                    <button
-                      type="button"
-                      className="pe__flatcaret"
-                      onClick={() => setExpandedGroups((s) => ({ ...s, [g]: !open }))}
-                      aria-expanded={open}
-                      title={open ? 'Collapse header' : 'Expand header'}
-                    >
+                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
+                const rows: JSX.Element[] = [
+                  <li key={`g${gid}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`} style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}>
+                    <button type="button" className="pe__flatcaret" onClick={() => setExpandedGroups((s) => ({ ...s, [gid]: !open }))} aria-expanded={open} title={open ? 'Collapse' : 'Expand'}>
                       {open ? '▾' : '▸'}
                     </button>
-                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: signal.hi, pi: signal.pi })}>
-                      <span className="pe__item-name">{signal.pin.name || 'Header'}</span>
-                      <span className="pe__flatsub">servo · S/V/G</span>
+                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => onSelectGroup?.(gid)}>
+                      <span className="pe__item-name">{g?.name || (isTrio ? signal?.pin.name || 'Header' : 'Group')}</span>
+                      <span className="pe__flatsub">{isTrio ? 'servo · S/V/G' : `group · ${members.length}`}</span>
                     </button>
-                    <span className="pe__flattype pe__flattype--group">header</span>
+                    <span className="pe__flattype pe__flattype--group">{isTrio ? 'header' : 'group'}</span>
                   </li>
-                )
-                if (open) for (const m of members) rows.push(pinRow(m, true))
+                ]
+                if (open) for (const c of node.children) rows.push(...renderNode(c, depth + 1))
+                return rows
               }
-              return rows
+              return top.flatMap((n) => renderNode(n, 0))
             })()}
           </ul>
         )}
@@ -1365,8 +1646,8 @@ function LayersPanel({
       <div className="pe__layer pe__layer--bg">
         <div className="pe__layer-head">
           {eye('image')}
-          <span className="pe__layer-name">Background image</span>
-          <span className="pe__flathelp pe__flathelp--bg">{part.imageData ? 'photo' : 'none'}</span>
+          {lock('image')}
+          <span className="pe__layer-name">Background</span>
           <span className="pe__flatspacer" />
           {part.imageData && (
             <div className="pe__addwrap">
@@ -1486,7 +1767,6 @@ function LayersPanel({
       <div className={`pe__layer pe__layer--pcb${tool === 'shape' ? ' is-active' : ''}`}>
         <div className="pe__layer-head">
           {eye('pcb')}
-          {lock('image')}
           <span className="pe__layer-name">PCB</span>
         </div>
         <div className="pe__layer-tools">

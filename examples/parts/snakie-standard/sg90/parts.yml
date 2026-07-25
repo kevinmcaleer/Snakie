@@ -1,5 +1,4 @@
 id: sg90
-mass_g: 9
 name: SG90 Micro Servo
 description: 9g hobby micro servo, ~180° range, 50 Hz PWM control.
 manufacturer: TowerPro
@@ -15,9 +14,9 @@ partNumber: SG90
 properties:
   torque: 1.8 kg·cm @4.8V
   speed: 0.1 s/60°
-  rotation: "180°"
+  rotation: 180°
   signal: 50 Hz PWM (1–2 ms)
-version: 0.1.0
+version: 0.1.4
 pcbColor: "#2b6cb0"
 aspect: 0.38
 dimensions:
@@ -25,130 +24,142 @@ dimensions:
   height: 32.2
 shape:
   kind: rect
-  cornerRadius: 2
-# The 3 flying leads (orange signal / red VCC / brown GND). `type` drives the pad
-# colour; the true wire colours are the drawn `shapes` rects below.
+  cornerRadius: 0
 headers:
   - edge: left
     pins:
       - name: Signal
-        label: PWM
         type: io
-        gpio: 16
         capabilities:
           - digital
           - pwm
         signals:
           pwm: A
+        label: PWM
         shape: round
-        x: 0.09
-        y: 0.42
+        x: 0.33593686735618533
+        y: 0.9911576753504135
       - name: VCC
-        label: "+5V"
         type: pwr
+        label: +5V
         shape: round
-        x: 0.09
-        y: 0.5
+        x: 0.46333760330509194
+        y: 0.9911576753504135
       - name: GND
         type: gnd
         shape: round
-        x: 0.09
-        y: 0.58
+        x: 0.5907383392539985
+        y: 0.9911576753504135
+mountingHoles:
+  - x: 0.5114881664485802
+    y: 0.07762830397661995
+    diameter: 1.5
+  - x: 0.4571048990394937
+    y: 0.9242361629710477
+    diameter: 1.5
 shapes:
   - kind: rect
     x: 0.16
     y: 0.15
-    w: 0.68
-    h: 0.58
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
-    cornerRadius: 3
+    w: 0.68
+    h: 0.58
     z: 0
+    cornerRadius: 3
   - kind: rect
     x: 0.02
     y: 0.1
-    w: 0.96
-    h: 0.06
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
-    cornerRadius: 2
+    w: 0.96
+    h: 0.06
     z: 1
+    cornerRadius: 2
   - kind: rect
     x: 0.02
     y: 0.72
-    w: 0.96
-    h: 0.06
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
-    cornerRadius: 2
+    w: 0.96
+    h: 0.06
     z: 2
+    cornerRadius: 2
   - kind: circle
     x: 0.5
     y: 0.31
-    r: 0.15
     fill: "#f2f2f2"
     stroke: "#b9bec6"
     strokeWidth: 1
+    r: 0.15
     z: 3
   - kind: circle
     x: 0.5
     y: 0.31
-    r: 0.045
     fill: "#3a3f44"
+    stroke: "#8a8f96"
+    strokeWidth: 1
+    r: 0.045
     z: 4
   - kind: rect
-    x: 0.0
+    x: 0
     y: 0.412
+    fill: "#e8862b"
+    stroke: "#8a8f96"
+    strokeWidth: 1
     w: 0.16
     h: 0.016
-    fill: "#e8862b"
     z: 5
   - kind: rect
-    x: 0.0
+    x: 0
     y: 0.492
+    fill: "#c0392b"
+    stroke: "#8a8f96"
+    strokeWidth: 1
     w: 0.16
     h: 0.016
-    fill: "#c0392b"
     z: 6
   - kind: rect
-    x: 0.0
+    x: 0
     y: 0.572
+    fill: "#5a3a22"
+    stroke: "#8a8f96"
+    strokeWidth: 1
     w: 0.16
     h: 0.016
-    fill: "#5a3a22"
     z: 7
 labels:
   - text: SG90
     x: 0.5
     y: 0.55
     fontSize: 10
-    color: "#ffffff"
     z: 8
+    color: "#ffffff"
+image: image.png
+help: help.md
+mesh: model.stl
+meshUnits: mm
+mass_g: 9
+electrical:
+  model: consumer
+  maxCurrentA: 0.65
+  currentDrawA: 0.1
+  stallCurrentA: 0.65
+  terminals:
+    positive: VCC
+    negative: GND
 library:
   module: servo
 drivers:
   - source: servo.py
     target: lib/servo.py
     label: Servo driver
-help: help.md
-# A 3-D mesh for the Robot View (#406): dropping this part onto a design also drops
-# this STL into the project URDF as a loose link. Authored in millimetres.
-mesh: model.stl
-meshUnits: mm
 layerVisibility:
   pcb: false
-  image: false
+  image: true
   holes: true
   pins: true
-  components: true
-electrical:
-  model: consumer
-  currentDrawA: 0.1
-  stallCurrentA: 0.65
-  maxCurrentA: 0.65
-  terminals:
-    positive: VCC
-    negative: GND
+  components: false

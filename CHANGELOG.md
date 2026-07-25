@@ -6,6 +6,60 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-07-25
+
+### Added
+- **Part Editor grouping (epic #627).** Select multiple parts/shapes and **group**
+  them (nesting supported); a group then **moves, rotates, deletes, aligns and
+  distributes as one rigid unit** instead of scattering its members (#628–#632). The
+  **Layers panel** shows groups as a collapsible hierarchy, servo-header trios group +
+  rotate as a unit, and the multi-select toolbar carries **Rotate + Delete** even for
+  an informal selection. A grouped selection is drawn as a single **outline** on the
+  canvas and reflected in the Pins hierarchy.
+- **Nudge + precise placement.** Arrow keys **nudge** the selected item/group (#632);
+  **Shift-drag axis-locks** to the dominant axis with a rail guide; a **two-finger
+  drag pans** the canvas.
+- **Lockable Background layer.** The board's background photo is a **lockable layer**
+  (open/closed padlock) so a **marquee selects whole groups** without grabbing the
+  backdrop.
+- **Sortable Pins list.** A **board-# column** plus **clickable column headers**
+  (added order / board # / type / GPIO) with asc/desc arrows.
+- **Swap the microcontroller and keep your wiring.** Changing the MCU **re-maps every
+  wire by GPIO** (power/ground by rail/type), drops only the wires that can't be
+  mapped, and **confirms before dropping any**. Works from the mini-board too — it
+  hops to the Electronics view to confirm when wires would be lost, otherwise stays
+  put.
+- **QWIIC / STEMMA QT connectors.** Connectors are **rotatable** with a select toolbar
+  (rotate + delete), their pins are **real wire terminals** in the netlist and
+  **wireable dots** on the board, and dragging **one connector onto another wires all
+  four lines (SDA/SCL/GND/PWR) as a single bundled cable** that selects and deletes as
+  a unit. Hovering an MCU now labels each contact (**SDA/SCL/GND/PWR**) and shows each
+  pin's **GP<gpio>** so you know what to reference in code.
+- **Parts catalog.** A **library filter** to switch libraries (no more duplicate parts
+  showing across libraries), and **bigger product-photo cards** (#613) with a clean
+  white image area.
+- **Standard library refresh.** Reworked board artwork + real product photos across the
+  standard parts (Pico W / Pico 2 W, ESP32 DevKit, XIAO RP2040, SG90, LiPo batteries,
+  MX1508, N20 motor, …) and a new **HC-SR04 ultrasonic** sensor.
+
+### Changed
+- **3-D anaglyph glasses off by default in the Build view.** The stereoscopic view is
+  now **opt-in per session** — the Build view opens flat and the on/off state is no
+  longer persisted (the glasses *type* and *depth* still persist).
+- **Full-screen parts catalog cards show a big product photo.** Each card is now a
+  vertical layout with a **full-width image** on top (was a 56px thumbnail beside the
+  text) and **no default border** — the teal border/checkmark still marks a selected
+  card.
+
+### Fixed
+- **Driver install out-of-space.** A failed install now says the board is **out of
+  space** (instead of a raw `OSError: 28`), and a **pre-flight check** warns with the
+  exact KB needed vs free before it starts.
+- **Connector rotation** is applied in the **board view** too, not just the Part
+  Editor.
+- The lock icon reads clearly as **open vs closed** (it pivots at the leg like the
+  Font Awesome lock-open glyph), and the Background layer row drops a redundant tag.
+
 ## [0.36.0] - 2026-07-23
 
 ### Added
@@ -3117,7 +3171,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...HEAD
+[0.37.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1
 [0.35.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.34.0...v0.35.0

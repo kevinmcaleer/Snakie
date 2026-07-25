@@ -876,19 +876,20 @@
   border: var(--border-w) solid transparent;
   border-radius: var(--radius);
   cursor: pointer;
-  opacity: 0.5;
+  /* Unlocked: a muted OPEN padlock. State is carried by the icon (open vs closed
+     shackle) + colour, not a pushed-in button look. */
+  opacity: 0.6;
 }
 
 .pe__lock:hover {
-  opacity: 0.9;
+  opacity: 1;
   border-color: var(--border);
 }
 
 .pe__lock.is-locked {
+  /* Locked: a full-strength CLOSED padlock in the accent colour. */
   opacity: 1;
   color: var(--accent, #e6ab30);
-  border-color: var(--border);
-  background: var(--bg-elevated);
 }
 
 .pe__layer-tools {
@@ -1399,8 +1400,7 @@
 }
 
 .pe__flatrow:hover .pe__flathelp,
-.pe__flatrow:focus-within .pe__flathelp,
-.pe__flathelp--bg {
+.pe__flatrow:focus-within .pe__flathelp {
   opacity: 0.85;
 }
 
@@ -1431,6 +1431,61 @@
   opacity: 0.7;
 }
 
+/* Board-number + GPIO columns in a pin row (blank when the pin has none). */
+.pe__flatnum {
+  flex: 0 0 auto;
+  min-width: 1.6rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  opacity: 0.85;
+}
+
+/* Sortable column headers under the Pins header — widths mirror the row columns
+   so the right-aligned #/GP/Type headings line up over their values. */
+.pe__pin-cols {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem; /* match .pe__flatrow so the right-aligned columns line up */
+  padding: 0.05rem 0.2rem 0.15rem;
+  border-bottom: var(--border-w) solid var(--border);
+  margin-bottom: 0.15rem;
+}
+.pe__pin-col {
+  flex: 0 0 auto;
+  padding: 0.05rem 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  opacity: 0.75;
+  text-align: right;
+  white-space: nowrap;
+}
+.pe__pin-col:hover {
+  opacity: 1;
+}
+.pe__pin-col.is-sorted {
+  opacity: 1;
+  color: var(--accent, #c8912a);
+}
+.pe__pin-col--name {
+  flex: 1 1 auto;
+  text-align: left;
+}
+.pe__pin-col--num {
+  min-width: 1.6rem;
+}
+.pe__pin-col--type {
+  min-width: 2.4rem;
+}
+
 /* Servo-header group row: an expand caret + bold header name + a small "S/V/G"
    sub-label; its members indent under it when expanded. */
 .pe__flatcaret {
@@ -1459,6 +1514,47 @@
 }
 .pe__flatrow--member {
   padding-left: 1.1rem;
+}
+
+/* Grouped Parts tree (#631): a group node + its nested member list. */
+.pe__grouprow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pe__flat--nested {
+  margin: 0;
+  padding: 0;
+}
+.pe__flatrow--partgroup .pe__item-name {
+  font-weight: 600;
+}
+.pe__group-rename {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0 0.2rem;
+  padding: 0.05rem 0.3rem;
+  font: inherit;
+  font-size: 0.72rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+}
+.pe__group-ungroup {
+  flex: 0 0 auto;
+  width: 1.4rem;
+  height: 1.4rem;
+  padding: 0;
+  font-size: 0.8rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.pe__group-ungroup:hover {
+  color: var(--text);
 }
 
 .pe__flatspacer {

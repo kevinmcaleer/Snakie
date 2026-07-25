@@ -30,6 +30,7 @@ import {
   type OnboardLed,
   type PartConnector,
   type PartFeature,
+  type PartGroup,
   type PartHeader,
   type PartLabel,
   type PartPin,
@@ -315,6 +316,7 @@ function normalisePin(pin: PartPin): PartPin {
 function normaliseShape(s: ComponentShape): ComponentShape {
   const kind: ComponentShapeKind = COMPONENT_SHAPES.includes(s.kind) ? s.kind : 'rect'
   const out: ComponentShape = { kind, x: clamp(s.x, -0.2, 1.2), y: clamp(s.y, -0.2, 1.2) }
+  if (typeof s.group === 'string' && s.group.trim()) out.group = s.group.trim()
   const label = String(s.label ?? '').trim()
   if (label) out.label = label
   out.fill = typeof s.fill === 'string' && s.fill.trim() ? s.fill : DEFAULT_SHAPE_FILL
@@ -489,6 +491,95 @@ export function applyItemOrder(
     else connectors[it.index] = { ...connectors[it.index], z }
   })
   return { shapes, labels, buttons, onboardLeds: leds, connectors }
+}
+
+// --- grouping (#627) --------------------------------------------------------
+// Membership is a `group` id on each pin/shape/label; the `groups` registry
+// records nesting (`parent`) + names. These pure helpers resolve a group's tree
+// so move / rotate / delete / select act on every member, recursively (#630).
+
+export type GroupMemberRef =
+  | { kind: 'pin'; hi: number; pi: number }
+  | { kind: 'shape'; index: number }
+  | { kind: 'label'; index: number }
+
+/** Every group id in the subtree rooted at `rootId` (itself + nested descendants). */
+export function groupTreeIds(groups: PartGroup[] | undefined, rootId: string): Set<string> {
+  const ids = new Set<string>([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const g of groups ?? []) {
+      if (g.parent && ids.has(g.parent) && !ids.has(g.id)) {
+        ids.add(g.id)
+        changed = true
+      }
+    }
+  }
+  return ids
+}
+
+/** The outermost ancestor of a group (walk the `parent` chain; cycle-safe). */
+export function groupRootId(groups: PartGroup[] | undefined, gid: string): string {
+  const seen = new Set<string>()
+  let cur = gid
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const parent = (groups ?? []).find((g) => g.id === cur)?.parent
+    if (!parent) return cur
+    cur = parent
+  }
+  return cur
+}
+
+/** Every item (pin/shape/label) whose `group` id is in `ids`. */
+export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMemberRef[] {
+  const out: GroupMemberRef[] = []
+  part.headers?.forEach((h, hi) =>
+    h.pins.forEach((p, pi) => {
+      if (p.group && ids.has(p.group)) out.push({ kind: 'pin', hi, pi })
+    })
+  )
+  part.shapes?.forEach((s, i) => {
+    if (s.group && ids.has(s.group)) out.push({ kind: 'shape', index: i })
+  })
+  part.labels?.forEach((l, i) => {
+    if (l.group && ids.has(l.group)) out.push({ kind: 'label', index: i })
+  })
+  return out
+}
+
+/** Translate a shape (and its polygon points) by a normalised delta, clamped to
+ *  the board. Shared by the canvas drag/align and the arrow-key nudge (#632). */
+export function translateShape(s: ComponentShape, dx: number, dy: number): ComponentShape {
+  const c = (v: number): number => Math.min(1, Math.max(0, v))
+  return {
+    ...s,
+    x: c(s.x + dx),
+    y: c(s.y + dy),
+    points: s.points?.map((p) => ({ x: c(p.x + dx), y: c(p.y + dy) }))
+  }
+}
+
+/** Dissolve a group by one level: its members (+ any direct sub-groups) are
+ *  re-parented to the group's own parent — loose when it was top-level. Pure;
+ *  shared by the canvas Ungroup button + the Layers-panel ungroup (#630/#631). */
+export function dissolveGroup(part: PartDefinition, gid: string): PartDefinition {
+  const registry = part.groups ?? []
+  const parent = registry.find((g) => g.id === gid)?.parent
+  const nextGroups = registry
+    .filter((g) => g.id !== gid)
+    .map((g): PartGroup => (g.parent === gid ? { ...g, parent } : g))
+  return {
+    ...part,
+    headers: part.headers.map((h) => ({
+      ...h,
+      pins: h.pins.map((p) => (p.group === gid ? { ...p, group: parent } : p))
+    })),
+    shapes: (part.shapes ?? []).map((s) => (s.group === gid ? { ...s, group: parent } : s)),
+    labels: (part.labels ?? []).map((l) => (l.group === gid ? { ...l, group: parent } : l)),
+    groups: nextGroups.length ? nextGroups : undefined
+  }
 }
 
 /** The z a newly-created ITEM (any kind) should take to land on top. */
@@ -933,10 +1024,29 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         if (l.underline) lbl.underline = true
         if (l.align === 'left' || l.align === 'center' || l.align === 'right') lbl.align = l.align
         if (typeof l.color === 'string' && l.color.trim()) lbl.color = l.color.trim()
+        if (typeof l.group === 'string' && l.group.trim()) lbl.group = l.group.trim()
         return lbl
       })
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
+  }
+  // Group registry (#627) — kept only for ids still referenced by an item's `group`
+  // or by a nested group's `parent`, so ungrouping/deleting leaves no orphan groups.
+  if (Array.isArray(part.groups) && part.groups.length) {
+    const referenced = new Set<string>()
+    for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) referenced.add(p.group)
+    for (const s of part.shapes ?? []) if (s.group) referenced.add(s.group)
+    for (const l of part.labels ?? []) if (l.group) referenced.add(l.group)
+    for (const g of part.groups) if (g.parent) referenced.add(g.parent)
+    const groups = part.groups
+      .filter((g) => g.id && referenced.has(g.id))
+      .map((g): PartGroup => {
+        const grp: PartGroup = { id: String(g.id) }
+        if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
+        if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
+        return grp
+      })
+    if (groups.length) out.groups = groups
   }
   if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
     out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {
@@ -978,6 +1088,10 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       }
       const label = text(c.label)
       if (label) conn.label = label
+      if (typeof c.rotation === 'number' && Number.isFinite(c.rotation)) {
+        const r = (((Math.round(c.rotation / 90) * 90) % 360) + 360) % 360
+        if (r) conn.rotation = r
+      }
       applyLabelPlacement(c, conn)
       return conn
     })

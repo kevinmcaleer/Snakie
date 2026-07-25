@@ -41,6 +41,9 @@ export interface RobotConnection {
   net?: RobotNet
   /** Explicit colour override (any CSS colour). Falls back to the net colour. */
   color?: string
+  /** Cable id — the wires of a QWIIC/I2C cable share one id so they render as a
+   *  tight bundle and select/delete together (#…). */
+  cable?: string
 }
 
 /**

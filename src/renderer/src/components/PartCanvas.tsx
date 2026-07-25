@@ -17,6 +17,11 @@ import {
   captureStyle,
   collectUsedColors,
   derivePinPosition,
+  dissolveGroup,
+  groupMembers,
+  groupRootId,
+  groupTreeIds,
+  translateShape,
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
@@ -25,6 +30,7 @@ import {
   pasteStyle,
   pinShapeOf,
   resolvedPins,
+  type GroupMemberRef,
   type PartStyleClipboard,
   type ResolvedPin,
   type StyleTarget
@@ -145,6 +151,9 @@ export interface PartCanvasProps {
   tool?: CanvasTool
   /** Current selection (interactive only). */
   selection?: CanvasSelection
+  /** A request to select a whole group by id (from the Layers panel) — the
+   *  `nonce` makes repeat selects of the same group re-fire the effect (#631). */
+  groupSelect?: { id: string; nonce: number }
   /** Snap placed/moved positions to the pin-spacing grid. */
   snap?: boolean
   /** Keep the image layer's width:height ratio fixed while resizing it. */
@@ -190,6 +199,44 @@ function boardAspect(part: PartDefinition): number {
 
 /** The alignment/distribute modes the toolbar offers. */
 type AlignMode = 'left' | 'centerX' | 'right' | 'top' | 'centerY' | 'bottom' | 'distX' | 'distY'
+
+/**
+ * Group / ungroup icon (#629): a rounded frame with four corner ticks (the classic
+ * "selection group" glyph). The ungroup variant dashes the frame so it reads as
+ * "break apart".
+ */
+function groupIcon(ungroup: boolean): JSX.Element {
+  const tick = (x: number, y: number, dx: number, dy: number): JSX.Element => (
+    <path
+      key={`${x},${y}`}
+      d={`M ${x + dx} ${y} L ${x} ${y} L ${x} ${y + dy}`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+    />
+  )
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+      <rect
+        x={3}
+        y={3}
+        width={10}
+        height={10}
+        rx={1.4}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.2}
+        opacity={0.5}
+        strokeDasharray={ungroup ? '2 1.6' : undefined}
+      />
+      {tick(2, 2, 2.2, 2.2)}
+      {tick(14, 2, -2.2, 2.2)}
+      {tick(2, 14, 2.2, -2.2)}
+      {tick(14, 14, -2.2, -2.2)}
+    </svg>
+  )
+}
 
 /**
  * A representative align/distribute icon (#170): a reference line on the alignment
@@ -259,6 +306,7 @@ function clamp01(n: number): number {
 interface Drag {
   kind:
     | 'move-obj'
+    | 'move-group'
     | 'move-label'
     | 'pan'
     | 'resize-image'
@@ -289,6 +337,13 @@ interface Drag {
   /** When the dragged pin belongs to a servo-header group, the offsets of every
    *  group pin from the dragged one — so the whole trio moves rigidly as a unit. */
   groupOffsets?: { hi: number; pi: number; dx: number; dy: number }[]
+  /** A `move-group` drag: every member's offset from the pointer's start, so the
+   *  whole group tree (pins + shapes + labels, recursive) moves rigidly (#630). */
+  groupBundle?: {
+    pins: { hi: number; pi: number; dx: number; dy: number }[]
+    shapes: { index: number; dx: number; dy: number }[]
+    labels: { index: number; dx: number; dy: number }[]
+  }
 }
 
 export function PartCanvas({
@@ -299,6 +354,7 @@ export function PartCanvas({
   readOnly = false,
   tool = 'select',
   selection = null,
+  groupSelect,
   snap = false,
   lockAspect = false,
   imageNativeAspect = null,
@@ -801,6 +857,29 @@ export function PartCanvas({
     })
   }
 
+  /** Move a whole group tree (pins + shapes + labels) rigidly, each member placed
+   *  at `base + its captured offset`. One commit so undo treats it as one move. */
+  const moveGroupBundleTo = (bundle: NonNullable<Drag['groupBundle']>, baseX: number, baseY: number): void => {
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const o = bundle.pins.find((off) => off.hi === hi && off.pi === pi)
+          return o ? { ...p, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : p
+        })
+      })),
+      shapes: shapes.map((s, i) => {
+        const o = bundle.shapes.find((off) => off.index === i)
+        return o ? translateShape(s, baseX + o.dx - s.x, baseY + o.dy - s.y) : s
+      }),
+      labels: labels.map((l, i) => {
+        const o = bundle.labels.find((off) => off.index === i)
+        return o ? { ...l, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : l
+      })
+    })
+  }
+
   // --- multi-select + alignment (#…) ----------------------------------------
   const pinKey = (hi: number, pi: number): string => `${hi}-${pi}`
   const toggleSelectedPin = (hi: number, pi: number): void =>
@@ -884,14 +963,46 @@ export function PartCanvas({
     return out
   }
 
-  /** Translate a shape (incl. polygon points) by a normalised delta. */
-  const translateShape = (s: ComponentShape, dx: number, dy: number): ComponentShape => ({
-    ...s,
-    x: clamp01(s.x + dx),
-    y: clamp01(s.y + dy),
-    points: s.points?.map((p) => ({ x: clamp01(p.x + dx), y: clamp01(p.y + dy) }))
-  })
+  /** The `group` id of an align ref (undefined = loose). */
+  const groupOfRef = (ref: AlignRef): string | undefined =>
+    ref.kind === 'pin'
+      ? part.headers[ref.hi]?.pins[ref.pi]?.group
+      : ref.kind === 'shape'
+        ? shapes[ref.index]?.group
+        : labels[ref.index]?.group
 
+  /** Partition the selection into ALIGNMENT UNITS: each grouped item's whole group
+   *  (by root) is ONE rigid unit — aligned/distributed by its bounding-box centre,
+   *  with every member moved by the same delta — so a group aligns as a whole
+   *  rather than its members scattering. A loose item is its own unit (#…). */
+  type AlignUnit = { cx: number; cy: number; members: { ref: AlignRef; cx: number; cy: number }[] }
+  const alignUnits = (): AlignUnit[] => {
+    const byRoot = new Map<string, { ref: AlignRef; cx: number; cy: number }[]>()
+    const units: AlignUnit[] = []
+    for (const it of allAlignItems()) {
+      const g = groupOfRef(it.ref)
+      const root = g ? groupRootId(part.groups, g) : undefined
+      if (root) {
+        const arr = byRoot.get(root) ?? []
+        arr.push(it)
+        byRoot.set(root, arr)
+      } else {
+        units.push({ cx: it.cx, cy: it.cy, members: [it] })
+      }
+    }
+    for (const members of byRoot.values()) {
+      const xs = members.map((m) => m.cx)
+      const ys = members.map((m) => m.cy)
+      units.push({
+        cx: (Math.min(...xs) + Math.max(...xs)) / 2,
+        cy: (Math.min(...ys) + Math.max(...ys)) / 2,
+        members
+      })
+    }
+    return units
+  }
+
+  /** Translate a shape (incl. polygon points) by a normalised delta. */
   /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
   const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
     const pinSet = new Map<string, { x?: number; y?: number }>()
@@ -929,61 +1040,310 @@ export function PartCanvas({
   }
 
   const alignSelected = (mode: 'left' | 'right' | 'top' | 'bottom' | 'centerX' | 'centerY'): void => {
-    const sel = allAlignItems()
-    if (sel.length < 2) return
+    const units = alignUnits()
+    if (units.length < 2) return
     const horiz = mode === 'left' || mode === 'right' || mode === 'centerX'
-    const vals = sel.map((s) => (horiz ? s.cx : s.cy))
+    const vals = units.map((u) => (horiz ? u.cx : u.cy))
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     // left/top → min edge, right/bottom → max edge, centerX/centerY → midpoint.
     const target = mode === 'left' || mode === 'top' ? min : mode === 'right' || mode === 'bottom' ? max : (min + max) / 2
-    commitAlignment(sel.map((s) => ({ ref: s.ref, tcx: horiz ? target : undefined, tcy: horiz ? undefined : target })))
+    const targets: { ref: AlignRef; tcx?: number; tcy?: number }[] = []
+    for (const u of units) {
+      // Move the whole unit by one delta so a group keeps its internal layout.
+      const delta = target - (horiz ? u.cx : u.cy)
+      for (const m of u.members) {
+        targets.push(horiz ? { ref: m.ref, tcx: m.cx + delta } : { ref: m.ref, tcy: m.cy + delta })
+      }
+    }
+    commitAlignment(targets)
   }
 
   const distributeSelected = (axis: 'x' | 'y'): void => {
-    const sel = allAlignItems()
-    if (sel.length < 3) return // ≥3 to space evenly (2 are already "distributed")
-    const sorted = [...sel].sort((a, b) => (axis === 'x' ? a.cx - b.cx : a.cy - b.cy))
+    const units = alignUnits()
+    if (units.length < 3) return // ≥3 units to space evenly (2 are already "distributed")
+    const sorted = [...units].sort((a, b) => (axis === 'x' ? a.cx - b.cx : a.cy - b.cy))
     const min = axis === 'x' ? sorted[0].cx : sorted[0].cy
     const max = axis === 'x' ? sorted[sorted.length - 1].cx : sorted[sorted.length - 1].cy
     const step = (max - min) / (sorted.length - 1)
-    commitAlignment(
-      sorted.map((s, i) => (axis === 'x' ? { ref: s.ref, tcx: min + i * step } : { ref: s.ref, tcy: min + i * step }))
-    )
+    const targets: { ref: AlignRef; tcx?: number; tcy?: number }[] = []
+    sorted.forEach((u, i) => {
+      const delta = min + i * step - (axis === 'x' ? u.cx : u.cy)
+      for (const m of u.members) {
+        targets.push(axis === 'x' ? { ref: m.ref, tcx: m.cx + delta } : { ref: m.ref, tcy: m.cy + delta })
+      }
+    })
+    commitAlignment(targets)
   }
 
-  /** Total count of items in the alignment multi-selection (pins + components). */
+  /** Total items in the multi-selection, and how many rigid UNITS they form (a
+   *  group counts once) — the unit count gates align (≥2) + distribute (≥3). */
   const alignCount = selectedPins.length + selComponents.length
+  const alignUnitCount = alignUnits().length
 
-  /** Container-pixel position of the LAST selected item, so the align toolbar can
-   *  float just above it (#170). Null when it can't be resolved (CTM/ref missing). */
+  // ── Grouping (#629) ──────────────────────────────────────────────────────
+  // Membership is by a `group` id stored on each item (pin/shape/label); the
+  // optional `groups` registry on the part records nesting (`parent`) + names,
+  // so a group survives re-ordering (ids, not indices).
+
+  const mkGroupId = (): string => `grp-${Math.random().toString(36).slice(2, 9)}`
+
+  /** The `group` id of each currently-selected item (undefined = loose). */
+  const selectionGroupIds = (): (string | undefined)[] => {
+    const out: (string | undefined)[] = []
+    for (const s of selectedPins) out.push(part.headers[s.hi]?.pins[s.pi]?.group)
+    for (const c of selComponents)
+      out.push(c.type === 'shape' ? shapes[c.index]?.group : labels[c.index]?.group)
+    return out
+  }
+
+  /** If every selected item belongs to one common top-level group, that group's
+   *  root id — else null. Compares ROOTS so a nested supergroup (its members carry
+   *  different immediate group ids, e.g. two servo trios) still counts as one. */
+  const selectionGroup = (): string | null => {
+    const roots = selectionGroupIds().map((g) => (g ? groupRootId(part.groups, g) : undefined))
+    if (!roots.length || !roots[0]) return null
+    return roots.every((r) => r === roots[0]) ? (roots[0] as string) : null
+  }
+
+  /** Group the current multi-selection: loose items join a new group; any item
+   *  that already belongs to a group nests that group's whole tree inside it. */
+  const groupSelection = (): void => {
+    if (alignCount < 2) return
+    const gid = mkGroupId()
+    const nestRoots = new Set<string>()
+    const noteExisting = (g: string | undefined): void => {
+      if (!g) return
+      const root = groupRootId(part.groups, g)
+      if (root && root !== gid) nestRoots.add(root)
+    }
+    const pinSel = (hi: number, pi: number): boolean =>
+      selectedPins.some((s) => s.hi === hi && s.pi === pi)
+    const compSel = (type: 'shape' | 'label', index: number): boolean =>
+      selComponents.some((c) => c.type === type && c.index === index)
+
+    const nextHeaders = part.headers.map((h, hi) => ({
+      ...h,
+      pins: h.pins.map((p, pi) => {
+        if (!pinSel(hi, pi)) return p
+        if (p.group) {
+          noteExisting(p.group)
+          return p
+        }
+        return { ...p, group: gid }
+      })
+    }))
+    const nextShapes = shapes.map((s, i) => {
+      if (!compSel('shape', i)) return s
+      if (s.group) {
+        noteExisting(s.group)
+        return s
+      }
+      return { ...s, group: gid }
+    })
+    const nextLabels = labels.map((l, i) => {
+      if (!compSel('label', i)) return l
+      if (l.group) {
+        noteExisting(l.group)
+        return l
+      }
+      return { ...l, group: gid }
+    })
+    // Nest each existing group's root under the new group. A servo-header trio
+    // carries a bare `group` id with NO registry entry, so register it here too —
+    // otherwise re-parenting a non-existent entry silently does nothing (#…).
+    const registry = [...(part.groups ?? [])]
+    const idxById = new Map(registry.map((g, i) => [g.id, i]))
+    for (const root of nestRoots) {
+      const at = idxById.get(root)
+      if (at !== undefined) registry[at] = { ...registry[at], parent: gid }
+      else registry.push({ id: root, parent: gid })
+    }
+    registry.push({ id: gid })
+    commit({ ...part, headers: nextHeaders, shapes: nextShapes, labels: nextLabels, groups: registry })
+  }
+
+  /** Dissolve a group by one level: its members (and any sub-groups) are
+   *  re-parented to the group's own parent (loose when it was top-level). */
+  const ungroupSelection = (gid: string): void => commit(dissolveGroup(part, gid))
+
+  // ── Group transforms (#630) ──────────────────────────────────────────────
+  // "Selecting a group" resolves to its whole member tree (recursive through
+  // nested sub-groups) so move / rotate / delete act on every member.
+
+  /** Select every member of the tree rooted at the clicked item's group, and
+   *  report the clicked item as the primary selection (for the property panel +
+   *  the keyboard Delete). Returns the members so the caller can set up a drag. */
+  const selectWholeGroup = (rootGid: string, primary: CanvasSelection): GroupMemberRef[] => {
+    const ids = groupTreeIds(part.groups, rootGid)
+    const members = groupMembers(part, ids)
+    setSelectedPins(members.filter((m): m is Extract<GroupMemberRef, { kind: 'pin' }> => m.kind === 'pin').map((m) => ({ hi: m.hi, pi: m.pi })))
+    setSelComponents(
+      members
+        .filter((m): m is Extract<GroupMemberRef, { kind: 'shape' | 'label' }> => m.kind !== 'pin')
+        .map((m) => ({ type: m.kind, index: m.index }))
+    )
+    onSelect?.(primary)
+    return members
+  }
+
+  /** Rotate a whole group tree 90° CW about its combined centre — pins rotate
+   *  like the servo-header trio (position + own rotation), shapes/labels rotate
+   *  their positions (+ a shape's own rotation) about the same centre (#630). */
+  const rotateMembers = (members: GroupMemberRef[]): void => {
+    const W = part.dimensions?.width || 1
+    const H = part.dimensions?.height || 1
+    // Gather each member's physical centre (px in mm-ish part frame) to find the
+    // pivot, then rotate every point about it. (dx,dy) → (−dy, dx) is 90° CW.
+    const pts: { m: GroupMemberRef; cx: number; cy: number }[] = []
+    for (const m of members) {
+      if (m.kind === 'pin') {
+        const p = part.headers[m.hi]?.pins[m.pi]
+        if (p?.x == null || p?.y == null) continue
+        pts.push({ m, cx: p.x * W, cy: p.y * H })
+      } else {
+        const c = componentCenter(m.kind, m.index)
+        if (c) pts.push({ m, cx: c.cx * W, cy: c.cy * H })
+      }
+    }
+    if (!pts.length) return
+    const cx = pts.reduce((a, p) => a + p.cx, 0) / pts.length
+    const cy = pts.reduce((a, p) => a + p.cy, 0) / pts.length
+    const rotedCentre = (px0: number, py0: number): { x: number; y: number } => {
+      const dx = px0 - cx
+      const dy = py0 - cy
+      return { x: clamp01((cx - dy) / W), y: clamp01((cy + dx) / H) }
+    }
+    const pinUpd = new Map<string, { x: number; y: number; rotation: number }>()
+    const shapeUpd = new Map<number, { x: number; y: number; rotation: number }>()
+    const labelUpd = new Map<number, { x: number; y: number }>()
+    for (const { m, cx: mcx, cy: mcy } of pts) {
+      const r = rotedCentre(mcx, mcy)
+      if (m.kind === 'pin') {
+        const p = part.headers[m.hi].pins[m.pi]
+        const dir = pinOutwardDir(p.rotation, p.x!, p.y!)
+        const rot = p.rotation ?? { right: 0, bottom: 90, left: 180, top: 270 }[dir]
+        pinUpd.set(`${m.hi}:${m.pi}`, { x: r.x, y: r.y, rotation: (rot + 90) % 360 })
+      } else if (m.kind === 'shape') {
+        // A shape stores a corner/reference x/y; keep the centre-mapped delta so
+        // its body follows, and turn its own rotation a quarter.
+        const s = shapes[m.index]
+        const ctr = componentCenter('shape', m.index)
+        const offX = ctr ? ctr.cx - s.x : 0
+        const offY = ctr ? ctr.cy - s.y : 0
+        shapeUpd.set(m.index, { x: r.x - offX, y: r.y - offY, rotation: ((s.rotation ?? 0) + 90) % 360 })
+      } else {
+        labelUpd.set(m.index, { x: r.x, y: r.y })
+      }
+    }
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const u = pinUpd.get(`${hi}:${pi}`)
+          return u ? { ...p, x: u.x, y: u.y, rotation: u.rotation } : p
+        })
+      })),
+      shapes: shapes.map((s, i) => {
+        const u = shapeUpd.get(i)
+        return u ? { ...s, x: u.x, y: u.y, rotation: u.rotation } : s
+      }),
+      labels: labels.map((l, i) => {
+        const u = labelUpd.get(i)
+        return u ? { ...l, x: u.x, y: u.y } : l
+      })
+    })
+  }
+
+  /** The current multi-selection as group-member refs (pins + shapes + labels). */
+  const selectionMembers = (): GroupMemberRef[] => [
+    ...selectedPins.map((s): GroupMemberRef => ({ kind: 'pin', hi: s.hi, pi: s.pi })),
+    ...selComponents.map((c): GroupMemberRef => ({ kind: c.type, index: c.index }))
+  ]
+
+  /** Rotate every selected item 90° about the selection's combined centre. Works
+   *  for a formal group (its members are all selected) or a loose multi-select. */
+  const rotateSelection = (): void => rotateMembers(selectionMembers())
+
+  /** Delete every selected item; drop any group registry entry left unreferenced. */
+  const deleteSelectionItems = (): void => {
+    const pinSel = new Set(selectedPins.map((s) => `${s.hi}:${s.pi}`))
+    const shapeSel = new Set(selComponents.filter((c) => c.type === 'shape').map((c) => c.index))
+    const labelSel = new Set(selComponents.filter((c) => c.type === 'label').map((c) => c.index))
+    if (!pinSel.size && !shapeSel.size && !labelSel.size) return
+    const nextHeaders = part.headers
+      .map((h, hi) => ({ ...h, pins: h.pins.filter((_, pi) => !pinSel.has(`${hi}:${pi}`)) }))
+      .filter((h) => h.pins.length > 0)
+    const nextShapes = shapes.filter((_, i) => !shapeSel.has(i))
+    const nextLabels = labels.filter((_, i) => !labelSel.has(i))
+    // Keep only group ids still referenced by a surviving item (plus their
+    // ancestor chain), so deleting a whole group drops its registry entry.
+    const referenced = new Set<string>()
+    const keepWithAncestors = (g: string | undefined): void => {
+      let cur = g
+      const seen = new Set<string>()
+      while (cur && !seen.has(cur)) {
+        seen.add(cur)
+        referenced.add(cur)
+        cur = (part.groups ?? []).find((x) => x.id === cur)?.parent
+      }
+    }
+    nextHeaders.forEach((h) => h.pins.forEach((p) => keepWithAncestors(p.group)))
+    nextShapes.forEach((s) => keepWithAncestors(s.group))
+    nextLabels.forEach((l) => keepWithAncestors(l.group))
+    const nextGroups = (part.groups ?? []).filter((g) => referenced.has(g.id))
+    commit({
+      ...part,
+      headers: nextHeaders,
+      shapes: nextShapes,
+      labels: nextLabels,
+      groups: nextGroups.length ? nextGroups : undefined
+    })
+    setSelectedPins([])
+    setSelComponents([])
+    onSelect?.(null)
+  }
+
+  // A Layers-panel "select group" request (#631): resolve the group's tree and
+  // select every member. The `nonce` lets re-selecting the same group re-fire.
+  useEffect(() => {
+    if (!groupSelect) return
+    const root = groupRootId(part.groups, groupSelect.id)
+    const first = groupMembers(part, groupTreeIds(part.groups, root))[0]
+    if (!first) return
+    const primary: CanvasSelection =
+      first.kind === 'pin'
+        ? { type: 'pin', hi: first.hi, pi: first.pi }
+        : first.kind === 'shape'
+          ? { type: 'shape', index: first.index }
+          : { type: 'label', index: first.index }
+    selectWholeGroup(root, primary)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupSelect?.nonce])
+
+  /** Container-pixel position of the selection's TOP-CENTRE, so the align toolbar
+   *  floats above the whole selection (not over its lowest pin — which would cover
+   *  the rest of a vertical header trio, #…). Null when it can't be resolved. */
   const alignAnchorPx = (): { left: number; top: number } | null => {
     const svg = svgRef.current
     if (!svg) return null
-    // Prefer the last component, else the last pin (matches selection recency).
-    let cx: number | undefined
-    let cy: number | undefined
-    const lastComp = selComponents[selComponents.length - 1]
-    if (lastComp) {
-      const c = componentCenter(lastComp.type, lastComp.index)
-      if (c) {
-        cx = c.cx
-        cy = c.cy
-      }
+    const centres: { cx: number; cy: number }[] = []
+    for (const s of selectedPins) {
+      const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+      if (rp) centres.push({ cx: rp.x, cy: rp.y })
     }
-    if (cx === undefined) {
-      const last = selectedPins[selectedPins.length - 1]
-      const rp = last && pins.find((p) => p.hi === last.hi && p.pi === last.pi)
-      if (rp) {
-        cx = rp.x
-        cy = rp.y
-      }
+    for (const c of selComponents) {
+      const ctr = componentCenter(c.type, c.index)
+      if (ctr) centres.push(ctr)
     }
     const ctm = svg.getScreenCTM()
-    if (cx === undefined || cy === undefined || !ctm) return null
+    if (!centres.length || !ctm) return null
+    const minY = Math.min(...centres.map((c) => c.cy))
+    const midX = (Math.min(...centres.map((c) => c.cx)) + Math.max(...centres.map((c) => c.cx))) / 2
     const pt = svg.createSVGPoint()
-    pt.x = view.tx + px(cx) * view.scale
-    pt.y = view.ty + py(cy) * view.scale
+    pt.x = view.tx + px(midX) * view.scale
+    pt.y = view.ty + py(minY) * view.scale
     const s = pt.matrixTransform(ctm)
     // The toolbar is absolutely positioned inside .pcv__wrap, so measure relative to
     // that container — not the SVG, which is flex-centred and may be letterboxed.
@@ -1033,6 +1393,7 @@ export function PartCanvas({
   const deleteComponent = (sel: CanvasSelection): void => {
     if (sel?.type === 'shape') commit({ ...part, shapes: shapes.filter((_, i) => i !== sel.index) })
     else if (sel?.type === 'label') commit({ ...part, labels: labels.filter((_, i) => i !== sel.index) })
+    else if (sel?.type === 'connector') commit({ ...part, connectors: connectors.filter((_, i) => i !== sel.index) })
     onSelect?.(null)
   }
 
@@ -1109,6 +1470,10 @@ export function PartCanvas({
       const l = labels[sel.index]
       if (!l) return
       commit({ ...part, labels: labels.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
+    } else if (sel?.type === 'connector') {
+      const c = connectors[sel.index]
+      if (!c) return
+      commit({ ...part, connectors: connectors.map((x, i) => (i === sel.index ? { ...x, rotation: next(x.rotation) } : x)) })
     }
   }
 
@@ -1116,8 +1481,59 @@ export function PartCanvas({
    *  pads, the outward half-hole. Mirrors the pin inspector's Rotation control:
    *  an absent rotation first resolves to the pin's nearest-border direction, so
    *  the first click turns from what's drawn rather than from 0°. */
+  /** Rotate a whole pin group (e.g. a servo-header trio) 90° about its centre — each
+   *  pin's position turns about the group's PHYSICAL centre (aspect-correct, so a
+   *  vertical trio becomes a horizontal one) and its own rotation advances 90°, so
+   *  the unit rotates rigidly (#628). */
+  const rotatePinGroup = (grp: string): void => {
+    const W = part.dimensions?.width || 1
+    const H = part.dimensions?.height || 1
+    const members: { hi: number; pi: number; x: number; y: number; rot: number }[] = []
+    part.headers.forEach((h, hi) =>
+      h.pins.forEach((p, pi) => {
+        if (p.group === grp && p.x != null && p.y != null) {
+          const dir = pinOutwardDir(p.rotation, p.x, p.y)
+          const rot = p.rotation ?? { right: 0, bottom: 90, left: 180, top: 270 }[dir]
+          members.push({ hi, pi, x: p.x, y: p.y, rot })
+        }
+      })
+    )
+    if (members.length === 0) return
+    let cx = 0
+    let cy = 0
+    for (const m of members) {
+      cx += m.x * W
+      cy += m.y * H
+    }
+    cx /= members.length
+    cy /= members.length
+    const upd = new Map<string, { x: number; y: number; rotation: number }>()
+    for (const m of members) {
+      const dx = m.x * W - cx
+      const dy = m.y * H - cy
+      // 90° clockwise in the y-down part frame: (dx,dy) → (−dy, dx).
+      upd.set(`${m.hi}:${m.pi}`, {
+        x: clamp01((cx - dy) / W),
+        y: clamp01((cy + dx) / H),
+        rotation: (m.rot + 90) % 360
+      })
+    }
+    commit({
+      ...part,
+      headers: part.headers.map((h, hi) => ({
+        ...h,
+        pins: h.pins.map((p, pi) => {
+          const u = upd.get(`${hi}:${pi}`)
+          return u ? { ...p, x: u.x, y: u.y, rotation: u.rotation } : p
+        })
+      }))
+    })
+  }
   const rotatePin = (sel: CanvasSelection): void => {
     if (sel?.type !== 'pin') return
+    // A grouped pin (servo-header trio) rotates the WHOLE group as a unit (#628).
+    const grp = part.headers[sel.hi]?.pins[sel.pi]?.group
+    if (grp) return rotatePinGroup(grp)
     const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
     const src = part.headers[sel.hi]?.pins[sel.pi]
     if (!rp || !src) return
@@ -1133,6 +1549,37 @@ export function PartCanvas({
       )
     })
   }
+
+  // The group of the primary-selected pin (a servo-header trio), so the WHOLE group
+  // highlights when any of its pins is selected (#628).
+  const selPinGroup =
+    selection?.type === 'pin' ? part.headers[selection.hi]?.pins[selection.pi]?.group : undefined
+
+  // When the multi-selection is one coherent group, draw a single OUTLINE around
+  // the whole group instead of ringing each member (#…). The box is the members'
+  // centre bounds; a pixel margin is added at draw time to clear the pads.
+  const selectedGroupId = selectionGroup()
+  const groupOutline = ((): { minX: number; minY: number; maxX: number; maxY: number } | null => {
+    if (!selectedGroupId) return null
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const s of selectedPins) {
+      const rp = pins.find((p) => p.hi === s.hi && p.pi === s.pi)
+      if (rp) {
+        xs.push(rp.x)
+        ys.push(rp.y)
+      }
+    }
+    for (const c of selComponents) {
+      const ctr = componentCenter(c.type, c.index)
+      if (ctr) {
+        xs.push(ctr.cx)
+        ys.push(ctr.cy)
+      }
+    }
+    if (!xs.length) return null
+    return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
+  })()
 
   // --- text/label styling (the mini-toolbar "A" dropdown) -------------------
   interface LabelStyle {
@@ -1247,6 +1694,12 @@ export function PartCanvas({
     if (sel?.type === 'pin') {
       const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
       return rp ? { nx: rp.x, ny: rp.y - 6 / box.h } : null
+    }
+    if (sel?.type === 'connector') {
+      const c = connectors[sel.index]
+      if (!c) return null
+      const { h } = connectorSize(c, connPxPerMm)
+      return { nx: c.x, ny: c.y - h / 2 / box.h }
     }
     return null
   }
@@ -1674,6 +2127,40 @@ export function PartCanvas({
       }
       return
     }
+    // Grouped item (#630): a plain click selects the WHOLE group tree and drags
+    // it as a rigid unit. A servo-header trio (pins only) keeps its grid-snapping
+    // via the pin path below; a general group (any shape/label) free-moves.
+    const hitGroup =
+      hit.type === 'pin'
+        ? part.headers[hit.hi]?.pins[hit.pi]?.group
+        : hit.type === 'shape'
+          ? shapes[hit.index]?.group
+          : hit.type === 'label'
+            ? labels[hit.index]?.group
+            : undefined
+    if (hitGroup && !gridMod) {
+      const root = groupRootId(part.groups, hitGroup)
+      const members = selectWholeGroup(root, hit)
+      if (members.some((m) => m.kind !== 'pin')) {
+        const bundle: NonNullable<Drag['groupBundle']> = { pins: [], shapes: [], labels: [] }
+        for (const m of members) {
+          if (m.kind === 'pin') {
+            const p = part.headers[m.hi]?.pins[m.pi]
+            if (p?.x != null && p?.y != null) bundle.pins.push({ hi: m.hi, pi: m.pi, dx: p.x - nx, dy: p.y - ny })
+          } else if (m.kind === 'shape') {
+            const s = shapes[m.index]
+            bundle.shapes.push({ index: m.index, dx: s.x - nx, dy: s.y - ny })
+          } else {
+            const l = labels[m.index]
+            bundle.labels.push({ index: m.index, dx: l.x - nx, dy: l.y - ny })
+          }
+        }
+        dragRef.current = { kind: 'move-group', sel: hit, startNX: nx, startNY: ny, ox: nx, oy: ny, groupBundle: bundle }
+        return
+      }
+      // pins-only group → fall through to the pin groupOffsets path (snapping).
+    }
+
     let ox = 0
     let oy = 0
     let groupOffsets: { hi: number; pi: number; dx: number; dy: number }[] | undefined
@@ -1877,12 +2364,51 @@ export function PartCanvas({
       moveShapeVertexTo(d.sel.index, d.sel.vi, d.ox + dx, d.oy + dy)
       return
     }
+    if (d.kind === 'move-group' && d.groupBundle) {
+      // Rigid move of the whole group — base = the current pointer position. Shift
+      // axis-locks it to the dominant direction, with a rail guide along that axis.
+      let bx = nx
+      let by = ny
+      let rail: { x?: number; y?: number } | null = null
+      if (e.shiftKey) {
+        if (Math.abs(dx) >= Math.abs(dy)) {
+          by = d.startNY
+          rail = { y: d.startNY }
+        } else {
+          bx = d.startNX
+          rail = { x: d.startNX }
+        }
+      }
+      moveGroupBundleTo(d.groupBundle, bx, by)
+      setGuides(rail)
+      return
+    }
     if (d.kind === 'move-obj' && d.sel) {
+      // Shift = axis-lock: constrain the drag to its dominant direction (locking the
+      // other coordinate to its start) and show a rail guide along that axis. Covers
+      // single items + servo-header trios (groupOffsets); the ghost-array drag keeps
+      // its own 2.54mm lock. (Ctrl/Cmd still gives free, un-snapped movement.)
+      if (e.shiftKey && !d.anchor) {
+        const horiz = Math.abs(dx) >= Math.abs(dy)
+        const lx = horiz ? d.ox + dx : d.ox
+        const ly = horiz ? d.oy : d.oy + dy
+        const s = d.sel
+        if (s.type === 'pin' && d.groupOffsets) moveGroupTo(d.groupOffsets, lx, ly)
+        else if (s.type === 'pin') movePinTo(s.hi, s.pi, lx, ly, undefined, true)
+        else if (s.type === 'hole') moveHoleTo(s.index, lx, ly, true)
+        else if (s.type === 'button') moveButtonTo(s.index, lx, ly, true)
+        else if (s.type === 'led') moveLedTo(s.index, lx, ly)
+        else if (s.type === 'connector') moveConnectorTo(s.index, lx, ly)
+        else if (s.type === 'shape') moveShapeTo(s.index, lx, ly, true)
+        else if (s.type === 'label') moveLabelTo(s.index, lx, ly, true)
+        else if (s.type === 'image') moveImage(lx, ly)
+        setGuides(horiz ? { y: d.oy } : { x: d.ox })
+        return
+      }
       const x = d.ox + dx
       const y = d.oy + dy
-      // Hold Shift for completely free movement — no alignment guides / snapping
-      // (Ctrl/Cmd also disables it, mirroring the resize handler).
-      const noSnap = e.shiftKey || e.ctrlKey || e.metaKey
+      // Ctrl/Cmd = completely free movement — no alignment guides / snapping.
+      const noSnap = e.ctrlKey || e.metaKey
       if (d.sel.type === 'pin' && d.groupOffsets) {
         // Servo-header group: snap the dragged pad, move the whole trio rigidly.
         moveGroupTo(d.groupOffsets, noSnap ? x : snapX(x), noSnap ? y : snapY(y))
@@ -1951,11 +2477,16 @@ export function PartCanvas({
         const minY = Math.min(m.y0, m.y1)
         const maxY = Math.max(m.y0, m.y1)
         const within = (x: number, y: number): boolean => x >= minX && x <= maxX && y >= minY && y <= maxY
-        const inside = locked.pins
-          ? []
-          : pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
+        // A layer contributes to the marquee only when it's both visible AND
+        // unlocked (matching every other hit-test path; a hidden layer's items
+        // shouldn't be rubber-band-selectable).
+        const pinsPickable = visible.pins && !locked.pins
+        const compsPickable = visible.components && !locked.components
+        const inside = pinsPickable
+          ? pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
+          : []
         const insideComps: { type: 'shape' | 'label'; index: number }[] = []
-        if (!locked.components) {
+        if (compsPickable) {
           shapes.forEach((_, i) => {
             const c = componentCenter('shape', i)
             if (c && within(c.cx, c.cy)) insideComps.push({ type: 'shape', index: i })
@@ -1964,6 +2495,39 @@ export function PartCanvas({
             const c = componentCenter('label', i)
             if (c && within(c.cx, c.cy)) insideComps.push({ type: 'label', index: i })
           })
+        }
+        // Expand any gathered member to its WHOLE group tree, so a marquee that
+        // touches part of a group selects the whole group, not the loose items
+        // inside it (recursive through nesting). Locked layers still contribute
+        // nothing.
+        const roots = new Set<string>()
+        const noteRoot = (g: string | undefined): void => {
+          if (g) roots.add(groupRootId(part.groups, g))
+        }
+        inside.forEach((s) => noteRoot(part.headers[s.hi]?.pins[s.pi]?.group))
+        insideComps.forEach((c) =>
+          noteRoot(c.type === 'shape' ? shapes[c.index]?.group : labels[c.index]?.group)
+        )
+        if (roots.size) {
+          const ids = new Set<string>()
+          roots.forEach((r) => groupTreeIds(part.groups, r).forEach((id) => ids.add(id)))
+          const havePins = new Set(inside.map((s) => `${s.hi}:${s.pi}`))
+          const haveComps = new Set(insideComps.map((c) => `${c.type}:${c.index}`))
+          for (const mem of groupMembers(part, ids)) {
+            if (mem.kind === 'pin' && pinsPickable) {
+              const k = `${mem.hi}:${mem.pi}`
+              if (!havePins.has(k)) {
+                havePins.add(k)
+                inside.push({ hi: mem.hi, pi: mem.pi })
+              }
+            } else if (mem.kind !== 'pin' && compsPickable) {
+              const k = `${mem.kind}:${mem.index}`
+              if (!haveComps.has(k)) {
+                haveComps.add(k)
+                insideComps.push({ type: mem.kind, index: mem.index })
+              }
+            }
+          }
         }
         setSelectedPins(inside)
         setSelComponents(insideComps)
@@ -2064,6 +2628,14 @@ export function PartCanvas({
 
   const onWheel = (e: WheelEvent<SVGSVGElement>): void => {
     if (!interactive) return
+    // A plain two-finger trackpad drag (or mouse-wheel scroll) PANS the canvas,
+    // like the pan tool. Ctrl/⌘+wheel — and a trackpad pinch, which the OS reports
+    // as ctrl+wheel — ZOOMS about the cursor.
+    if (!e.ctrlKey && !e.metaKey) {
+      const s = viewBoxScale()
+      setView((v) => ({ ...v, tx: v.tx - e.deltaX / s, ty: v.ty - e.deltaY / s }))
+      return
+    }
     const svg = svgRef.current
     const ctm = svg?.getScreenCTM()
     setView((v) => {
@@ -2263,7 +2835,13 @@ export function PartCanvas({
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
-            const sel = isSel({ type: 'pin', hi: rp.hi, pi: rp.pi })
+            // A selected group shows a single outline (below) instead of ringing
+            // each member — so suppress the per-pin ring when a group is selected.
+            const sel =
+              !selectedGroupId &&
+              (isSel({ type: 'pin', hi: rp.hi, pi: rp.pi }) ||
+                (!!selPinGroup && rp.pin.group === selPinGroup) ||
+                selectedPins.some((s) => s.hi === rp.hi && s.pi === rp.pi))
             const shape = pinShapeOf(rp.pin)
             // Pad shrinks with the pitch so dense boards don't overlap (#…), EXCEPT
             // octagonal servo/DuPont header pads, which draw at a fixed physical
@@ -2510,6 +3088,20 @@ export function PartCanvas({
           </g>
         )}
 
+        {/* A single outline around the selected group (instead of ringing each
+            member). Padded a few px to clear the pads. */}
+        {interactive && groupOutline && (
+          <rect
+            className="pcv__group-outline"
+            x={px(groupOutline.minX) - 11}
+            y={py(groupOutline.minY) - 11}
+            width={px(groupOutline.maxX) - px(groupOutline.minX) + 22}
+            height={py(groupOutline.maxY) - py(groupOutline.minY) + 22}
+            rx={7}
+            style={{ pointerEvents: 'none' }}
+          />
+        )}
+
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
         {visible.components &&
           features.map((f, i) => (
@@ -2576,7 +3168,9 @@ export function PartCanvas({
               const labelY = cy + connH / 2 + 11
               const draggable = interactive && !locked.components
               return (
-                <g key={`conn${i}`}>
+                // Rotate the whole connector — body, pins AND label — about its
+                // centre when it has a body rotation.
+                <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
                   <g
                     transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
@@ -2611,7 +3205,8 @@ export function PartCanvas({
             }
             const i = c.index
             const s = shapes[i]
-            const sel = isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex'
+            // Suppressed while a group is selected — the group outline stands in.
+            const sel = !selectedGroupId && (isSel({ type: 'shape', index: i }) || selection?.type === 'shape-vertex')
             const fill = s.fill ?? DEFAULT_SHAPE_FILL
             const stroke = sel && isSel({ type: 'shape', index: i }) ? '#4ea1ff' : (s.stroke ?? DEFAULT_SHAPE_STROKE)
             const sw = (s.strokeWidth ?? DEFAULT_SHAPE_STROKE_WIDTH) + (isSel({ type: 'shape', index: i }) ? 1.5 : 0)
@@ -2791,34 +3386,73 @@ export function PartCanvas({
           const style = anchor
             ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
             : undefined
+          const selGroup = selectionGroup()
           return (
             <div className="pcv__align" role="toolbar" aria-label="Align selection" style={style}>
               <span className="pcv__align-count">{alignCount}</span>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('left')} title="Align left edges" disabled={alignUnitCount < 2}>
                 {alignIcon('left')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerX')} title="Align horizontal centres">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerX')} title="Align horizontal centres" disabled={alignUnitCount < 2}>
                 {alignIcon('centerX')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('right')} title="Align right edges" disabled={alignUnitCount < 2}>
                 {alignIcon('right')}
               </button>
               <span className="pcv__align-sep" />
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('top')} title="Align top edges" disabled={alignUnitCount < 2}>
                 {alignIcon('top')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerY')} title="Align vertical centres">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('centerY')} title="Align vertical centres" disabled={alignUnitCount < 2}>
                 {alignIcon('centerY')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges">
+              <button type="button" className="pcv__align-btn" onClick={() => alignSelected('bottom')} title="Align bottom edges" disabled={alignUnitCount < 2}>
                 {alignIcon('bottom')}
               </button>
               <span className="pcv__align-sep" />
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={alignCount < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('x')} title="Distribute horizontally" disabled={alignUnitCount < 3}>
                 {alignIcon('distX')}
               </button>
-              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignCount < 3}>
+              <button type="button" className="pcv__align-btn" onClick={() => distributeSelected('y')} title="Distribute vertically" disabled={alignUnitCount < 3}>
                 {alignIcon('distY')}
+              </button>
+              <span className="pcv__align-sep" />
+              <button
+                type="button"
+                className="pcv__align-btn"
+                onClick={groupSelection}
+                title={selGroup ? 'Group again (nest)' : 'Group selection'}
+              >
+                {groupIcon(false)}
+              </button>
+              {selGroup && (
+                <button
+                  type="button"
+                  className="pcv__align-btn"
+                  onClick={() => ungroupSelection(selGroup)}
+                  title="Ungroup"
+                >
+                  {groupIcon(true)}
+                </button>
+              )}
+              <span className="pcv__align-sep" />
+              <button
+                type="button"
+                className="pcv__align-btn"
+                onClick={rotateSelection}
+                title={selGroup ? 'Rotate group 90°' : 'Rotate selection 90°'}
+                aria-label="Rotate selection 90 degrees"
+              >
+                {rotateIcon}
+              </button>
+              <button
+                type="button"
+                className="pcv__align-btn pcv__align-btn--danger"
+                onClick={deleteSelectionItems}
+                title={selGroup ? 'Delete group' : 'Delete selection'}
+                aria-label="Delete selection"
+              >
+                {delIcon}
               </button>
             </div>
           )
@@ -3174,6 +3808,31 @@ export function PartCanvas({
               </div>
               {styleClipButtons(sel, 'hole')}
               <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete hole" onClick={() => deleteHole(sel.index)}>
+                {delIcon}
+              </button>
+            </div>
+          )
+        })()}
+
+      {/* Connector toolbar — rotate + delete for a selected QWIIC / JST connector. */}
+      {interactive &&
+        !locked.components &&
+        alignCount === 0 &&
+        selection?.type === 'connector' &&
+        (() => {
+          const sel = selection
+          const conn = connectors[sel.index]
+          if (!conn) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit connector" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate connector 90 degrees" onClick={() => rotateComponent(sel)}>
+                {rotateIcon}
+              </button>
+              <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete connector" onClick={() => deleteComponent(sel)}>
                 {delIcon}
               </button>
             </div>

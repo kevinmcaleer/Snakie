@@ -1,11 +1,10 @@
 id: mx1508
-help: help.md
 name: MX1508
 family: Breakout
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.2
+version: 0.1.3
 pcbColor: "#b33e42"
 aspect: 0.5
 dimensions:
@@ -135,6 +134,15 @@ imageLayer:
   y: -0.03272606743706563
   w: 1.0659733835856118
   h: 1.0659733835856118
+help: help.md
+electrical:
+  model: consumer
+  maxCurrentA: 2.5
+  currentDrawA: 0.4
+  stallCurrentA: 3
+  terminals:
+    positive: VCC
+    negative: GND
 layerVisibility:
   pcb: true
   image: true

@@ -181,13 +181,16 @@ export const LockIcon = ({ size }: { size?: number }): JSX.Element =>
     size
   )
 
-/** An open padlock — an unlocked field in the Part Editor. */
+/** An open padlock — an unlocked field/layer. The LEFT leg stays vertical and
+ *  seated in the body; the rest of the (still-closed) shackle pivots up off the
+ *  top of that leg so the free leg swings out and OVERHANGS the body — Font
+ *  Awesome `lock-open`. So "unlocked" reads from the icon, not the button state. */
 export const UnlockIcon = ({ size }: { size?: number }): JSX.Element =>
   svg(
     g(
       <>
         <rect x="4.9" y="10.6" width="14.2" height="9.4" rx="1.8" />
-        <path d="M8.3 10.6V7.9a3.7 3.7 0 0 1 7.2-1.2" />
+        <path d="M8.3 11.4V6.9A3.7 3.7 0 0 1 14.71 3.2L16.96 7.1" />
       </>
     ),
     size

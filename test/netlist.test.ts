@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildNetlist, parseEndpoint, type Netlist } from '../src/shared/netlist'
+import { buildNetlist, parseEndpoint, remapConnectionsForBoard, type Netlist } from '../src/shared/netlist'
 import type { BoardDefinition } from '../src/shared/board'
 import type { PartDefinition } from '../src/shared/part'
 import type { RobotConnection, RobotDefinition } from '../src/shared/robot'
@@ -218,5 +218,135 @@ describe('buildNetlist — robustness', () => {
     const build = (): Netlist =>
       buildNetlist(robot([wire('w', ep('board', 'GP0', 3), ep('r', '1', 0))]), BOARD, defs)
     expect(build().nodeOf).toEqual(build().nodeOf)
+  })
+})
+
+describe('connector pins as wire terminals', () => {
+  // A QWIIC breakout: one header pin, then a 4-pin QWIIC connector. Flattened
+  // endpoint indices: 0=X (header), then the connector pins 1=GND 2=3V3 3=SDA 4=SCL.
+  const QWIIC: PartDefinition = {
+    id: 'q',
+    name: 'QWIIC breakout',
+    headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io' }] }],
+    connectors: [
+      {
+        kind: 'qwiic',
+        x: 0.5,
+        y: 0.5,
+        pins: [
+          { name: 'GND', type: 'gnd' },
+          { name: '3V3', type: 'pwr' },
+          { name: 'SDA', type: 'io', capabilities: ['i2c'] },
+          { name: 'SCL', type: 'io', capabilities: ['i2c'] }
+        ]
+      }
+    ]
+  }
+
+  it('resolves a connector pin endpoint (appended after the header pins)', () => {
+    const defs = new Map<string, PartDefinition>([['q', QWIIC]])
+    const nl = buildNetlist(robot([wire('w', ep('board', 'GP0', 3), ep('q', 'SDA', 3))]), BOARD, defs)
+    expect(nl.dangling).toEqual([]) // q.SDA#3 resolves — it's the connector's SDA pin
+    const node = nodeAt(nl, ep('q', 'SDA', 3))
+    expect(node?.terminals.some((t) => t.name === 'SDA' && t.key === 'q')).toBe(true)
+    expect(node?.terminals.some((t) => t.name === 'GP0' && t.key === 'board')).toBe(true)
+  })
+
+  it('header pin indices are unchanged by the appended connector pins', () => {
+    const defs = new Map<string, PartDefinition>([['q', QWIIC]])
+    const nl = buildNetlist(robot([wire('w', ep('board', 'GP1', 4), ep('q', 'X', 0))]), BOARD, defs)
+    expect(nl.dangling).toEqual([]) // the header pin X is still index 0
+  })
+})
+
+describe('remapConnectionsForBoard (MCU swap)', () => {
+  // A different board layout: GP0 sits at a NEW index, GP1 is absent, and there is
+  // only one GND / 3V3. Flattened: 0=GND 1=3V3 2=GP0 3=5V.
+  const BOARD2: BoardDefinition = {
+    id: 'testmcu2',
+    name: 'Test MCU 2',
+    mcu: 'RP2040',
+    pcbColor: '#0f5a2e',
+    aspect: 0.6,
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { label: 'GND', type: 'gnd' },
+          { label: '3V3', type: 'vcc' },
+          { label: 'GP0', type: 'gpio', gpio: 0 },
+          { label: '5V', type: 'vcc' }
+        ]
+      }
+    ]
+  }
+
+  it('moves a GPIO wire to the SAME gpio on the new board (different index)', () => {
+    const r = remapConnectionsForBoard([wire('w', ep('board', 'GP0', 3), ep('led', 'A', 0))], BOARD, BOARD2)
+    expect(r.removed).toEqual([])
+    expect(r.connections[0].from).toBe('board.GP0#2') // GP0 moved from index 3 → 2
+    expect(r.connections[0].to).toBe('led.A#0') // part endpoint untouched
+  })
+
+  it('matches power by rail and ground to any ground pad', () => {
+    const r = remapConnectionsForBoard(
+      [
+        wire('p', ep('board', '3V3', 2), ep('sensor', 'VIN', 0)),
+        wire('g', ep('board', 'GND', 5), ep('sensor', 'GND', 1)), // old 2nd GND (index 5)
+        wire('v', ep('board', '5V', 0), ep('sensor', 'VIN', 0))
+      ],
+      BOARD,
+      BOARD2
+    )
+    expect(r.removed).toEqual([])
+    expect(r.connections.map((c) => c.from)).toEqual(['board.3V3#1', 'board.GND#0', 'board.5V#3'])
+  })
+
+  it('drops a wire whose GPIO is not on the new board, with a reason', () => {
+    const r = remapConnectionsForBoard([wire('w', ep('board', 'GP1', 4), ep('led', 'A', 0))], BOARD, BOARD2)
+    expect(r.connections).toEqual([])
+    expect(r.removed).toHaveLength(1)
+    expect(r.removed[0].reasons).toContain('GPIO 1')
+  })
+
+  it('leaves part-to-part wires untouched', () => {
+    const w = wire('rr', ep('r', '1', 0), ep('r', '2', 1))
+    const r = remapConnectionsForBoard([w], BOARD, BOARD2)
+    expect(r.connections).toEqual([w])
+    expect(r.removed).toEqual([])
+  })
+
+  it('keeps net / colour + recomputes the id from the new endpoints', () => {
+    const w: RobotConnection = { id: 'x', from: ep('board', 'GP0', 3), to: ep('led', 'A', 0), net: 'signal', color: '#abc' }
+    const r = remapConnectionsForBoard([w], BOARD, BOARD2)
+    // id follows the new endpoints (`${from}__${to}`) so a later redraw won't dupe.
+    expect(r.connections[0]).toEqual({ id: 'board.GP0#2__led.A#0', from: 'board.GP0#2', to: 'led.A#0', net: 'signal', color: '#abc' })
+  })
+
+  it('drops a self-loop when a board-to-board wire collapses onto one pad', () => {
+    // Both endpoints are GND; the new board has one GND, so from === to.
+    const r = remapConnectionsForBoard([wire('gg', ep('board', 'GND', 1), ep('board', 'GND', 5))], BOARD, BOARD2)
+    expect(r.connections).toEqual([])
+  })
+
+  it('de-duplicates wires that collapse to the same endpoint pair', () => {
+    const r = remapConnectionsForBoard(
+      [
+        wire('a', ep('led', 'K', 1), ep('board', 'GND', 1)), // → led.K#1 ↔ board.GND#0
+        wire('b', ep('led', 'K', 1), ep('board', 'GND', 5)) // → led.K#1 ↔ board.GND#0 (same pair)
+      ],
+      BOARD,
+      BOARD2
+    )
+    expect(r.connections).toHaveLength(1)
+    expect(r.connections[0].from).toBe('led.K#1')
+    expect(r.connections[0].to).toBe('board.GND#0')
+  })
+
+  it('matches near-equivalent power rail labels (3.3V ≡ 3V3)', () => {
+    const B3: BoardDefinition = { ...BOARD2, id: 'b3', headers: [{ edge: 'left', pins: [{ label: '3.3V', type: 'vcc' }] }] }
+    const r = remapConnectionsForBoard([wire('p', ep('board', '3V3', 2), ep('sensor', 'VIN', 0))], BOARD, B3)
+    expect(r.removed).toEqual([])
+    expect(r.connections[0].from).toBe('board.3.3V#0')
   })
 })
