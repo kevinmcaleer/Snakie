@@ -1336,8 +1336,13 @@
    on it manages barely 2:1. That's survivable for a single tool glyph and not for
    a row of pin names, numbers and type badges. */
 .pe__flatrow.is-active {
+  /* A lighter brass than `--accent`, which reads muddy at row size — especially
+     the skeuomorph skin's #b07d1e. Set here as its own token rather than reaching
+     for `--accent`, so the selected row can be tuned without moving links, the
+     active tool and the canvas peek marker with it. */
+  --pe-row-sel: #ddad4b;
   --pe-row-ink: #2b1d05;
-  background: var(--accent);
+  background: var(--pe-row-sel);
   color: var(--pe-row-ink);
 }
 
@@ -1382,7 +1387,7 @@
    the selected row the one row that doesn't respond to the pointer. Lift the
    brass instead so it still acknowledges the hover. */
 .pe__flatrow.is-active:hover {
-  background: color-mix(in srgb, var(--accent) 86%, #fff);
+  background: color-mix(in srgb, var(--pe-row-sel) 88%, #fff);
 }
 
 .pe__flatrow.is-dragging {
