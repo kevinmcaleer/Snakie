@@ -456,15 +456,22 @@ export function MiniBoardView({
   useLayoutEffect(() => {
     const g = contentRef.current
     if (!g) return
+    // Only the TOGGLE re-frames. A hover reveal keeps the current frame so the
+    // board doesn't resize under the pointer every time you pass over it — the
+    // labels may run past the edge for that moment, which is the trade. Skipping
+    // rather than measuring matters because any other dependency changing
+    // mid-hover would otherwise lock in the (larger) labelled bounds and keep
+    // them after the pointer leaves; ending the hover re-runs this and corrects.
+    if (pinoutHover && !pinoutPinned) return
     try {
       const b = g.getBBox()
       if (b.width > 0 && b.height > 0) setFrame({ x: b.x, y: b.y, w: b.width, h: b.height })
     } catch {
       // getBBox can throw if the content isn't laid out yet — keep the fallback.
     }
-    // `showPinout` is a dependency because the full pinout draws well outside the
-    // board outline — the frame has to grow to fit it or the labels clip.
-  }, [boardPart, def, source, isPython, pinVars, box, showPinout])
+    // `pinoutPinned` is a dependency because a pinned pinout draws well outside
+    // the board outline — the frame has to grow to fit it or the labels clip.
+  }, [boardPart, def, source, isPython, pinVars, box, pinoutPinned, pinoutHover])
   const M = 12
   const viewBox = {
     str: `${frame.x - M} ${frame.y - M} ${frame.w + M * 2} ${frame.h + M * 2}`,
