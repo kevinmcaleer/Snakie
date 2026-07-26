@@ -77,8 +77,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   state and un-hiding restores exactly what was showing before. The editor canvas
   honours both: hidden items don't draw, and a click falls through a hidden or
   locked item to whatever is underneath. Groups are **renameable in place** from
-  the layers panel. Clicking an item inside a group in the hierarchy **marks that
-  item on the board**, so you can see which member you picked — grouped behaviour
+  the layers panel. The **selected row is filled with the brass accent** — the
+  same signal the toolbar uses for the active tool — instead of being outlined.
+  Clicking an item inside a group in the hierarchy **marks that item on the
+  board**, so you can see which member you picked — grouped behaviour
   on the canvas is unchanged, a click there still grabs the whole group.
 
 ### Fixed

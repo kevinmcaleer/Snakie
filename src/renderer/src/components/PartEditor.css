@@ -1328,9 +1328,61 @@
   background: var(--bg-sunken);
 }
 
+/* The selected row is FILLED with the brass accent — the same signal the toolbar
+   uses for the active tool — rather than outlined. An outline round a 1.2rem row
+   is easy to miss in a long hierarchy; a filled row is unmissable while scanning.
+
+   Ink is dark rather than the toolbar's white: brass is a light colour, and white
+   on it manages barely 2:1. That's survivable for a single tool glyph and not for
+   a row of pin names, numbers and type badges. */
 .pe__flatrow.is-active {
-  background: var(--bg-elevated);
-  outline: 1px solid var(--text-muted);
+  --pe-row-ink: #2b1d05;
+  background: var(--accent);
+  color: var(--pe-row-ink);
+}
+
+/* Children set their own muted colours, so pull them all onto the ink. The type
+   badge included — its per-type hue is unreadable on brass and the row is already
+   telling you what's selected. */
+.pe__flatrow.is-active .pe__flatname,
+.pe__flatrow.is-active .pe__item-name,
+.pe__flatrow.is-active .pe__flatsub,
+.pe__flatrow.is-active .pe__flatnum,
+.pe__flatrow.is-active .pe__flattype,
+.pe__flatrow.is-active .pe__flathelp,
+.pe__flatrow.is-active .pe__grip,
+.pe__flatrow.is-active .pe__trash,
+.pe__flatrow.is-active .pe__group-edit,
+.pe__flatrow.is-active .pe__rowflag {
+  color: var(--pe-row-ink);
+}
+
+/* Muted children are deliberately faded; lift them so they stay legible on the
+   fill without competing with the name. */
+.pe__flatrow.is-active .pe__flatsub,
+.pe__flatrow.is-active .pe__flatnum,
+.pe__flatrow.is-active .pe__flattype {
+  opacity: 0.75;
+}
+
+/* A held eye/lock tints itself with the accent, which is invisible ON the accent.
+   Fall back to full-strength ink — the glyphs already differ (● vs ◌, closed vs
+   open padlock), so colour was never the only signal. */
+.pe__flatrow.is-active .pe__rowflag.is-on,
+.pe__flatrow.is-active .pe__group-edit {
+  opacity: 1;
+}
+
+.pe__flatrow.is-active .pe__rowflag:hover,
+.pe__flatrow.is-active .pe__group-edit:hover {
+  background: rgb(0 0 0 / 0.14);
+}
+
+/* The generic row :hover fill would otherwise be overridden away entirely, making
+   the selected row the one row that doesn't respond to the pointer. Lift the
+   brass instead so it still acknowledges the hover. */
+.pe__flatrow.is-active:hover {
+  background: color-mix(in srgb, var(--accent) 86%, #fff);
 }
 
 .pe__flatrow.is-dragging {
