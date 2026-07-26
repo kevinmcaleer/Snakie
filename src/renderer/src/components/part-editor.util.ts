@@ -35,6 +35,7 @@ import {
   type PartGroup,
   type PartHeader,
   type PartLabel,
+  type PartMount,
   type PartPin,
   type PartPinBuses,
   type PartPinCapability,
@@ -1099,6 +1100,35 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       applyLabelPlacement(c, conn)
       return conn
     })
+  }
+  // Board stacking (#166): the footprint this board plugs INTO, and the sockets it
+  // offers to boards above it. Mating is by footprint NAME, so both are just data.
+  set('footprint', text(part.footprint))
+  if (Array.isArray(part.mounts) && part.mounts.length) {
+    const mounts = part.mounts
+      .map((m): PartMount | null => {
+        const id = text(m?.id)
+        const footprint = text(m?.footprint)
+        if (!id || !footprint || typeof m.x !== 'number' || typeof m.y !== 'number') return null
+        const mount: PartMount = { id, footprint, x: clamp(m.x, 0, 1), y: clamp(m.y, 0, 1) }
+        const label = text(m.label)
+        if (label) mount.label = label
+        if (typeof m.rotation === 'number' && Number.isFinite(m.rotation)) {
+          const r = (((Math.round(m.rotation / 90) * 90) % 360) + 360) % 360
+          if (r) mount.rotation = r
+        }
+        if (m.pinMap) {
+          const pm: Record<string, string> = {}
+          for (const [k, v] of Object.entries(m.pinMap)) {
+            const to = text(v)
+            if (k && to) pm[k] = to
+          }
+          if (Object.keys(pm).length) mount.pinMap = pm
+        }
+        return mount
+      })
+      .filter((m): m is PartMount => m !== null)
+    if (mounts.length) out.mounts = mounts
   }
   set('ledLabel', text(part.ledLabel))
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)

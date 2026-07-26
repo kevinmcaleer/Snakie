@@ -226,6 +226,36 @@ export interface PartConnector {
   rotation?: number
 }
 
+/**
+ * A socket on a **carrier** board that another board plugs into — the female
+ * header block on a XIAO expansion base, or the Pico socket on a Pico Explorer.
+ *
+ * Mating is by **footprint name**, not geometry: the mount accepts any part whose
+ * {@link PartDefinition.footprint} equals this {@link footprint}, so a XIAO RP2350
+ * and a XIAO RP2040 both seat in a XIAO carrier without either part knowing about
+ * the other. Once seated, the two boards' **same-named pins are bonded** — the
+ * seated board's `D4` *is* the carrier's `D4` — which is what lets a Grove port on
+ * the carrier resolve to a GPIO on the MCU above it. Carriers that rename pins can
+ * override individual bonds with {@link pinMap}.
+ */
+export interface PartMount {
+  /** Unique id within this part; a placed instance references it as `mount`. */
+  id: string
+  /** The footprint family this socket accepts (e.g. `xiao`, `pico`). */
+  footprint: string
+  /** Normalised 0..1 centre of the SEATED board within this board's outline. */
+  x: number
+  y: number
+  /** Rotation of the seated board, in degrees (0/90/180/270). */
+  rotation?: number
+  /** Optional silk label for the socket (e.g. `XIAO`). */
+  label?: string
+  /** Bond overrides for a carrier whose own pin names differ from the seated
+   *  board's: seated pin name → this board's pin name. Anything not listed still
+   *  bonds by matching name. */
+  pinMap?: Record<string, string>
+}
+
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
   /** Normalised X within the board outline (0 = left edge, 1 = right edge). */
@@ -587,8 +617,21 @@ export interface PartDefinition {
   labels?: PartLabel[]
   /** Onboard indicator LEDs (single or RGB) tied to GPIO(s), drawn on the board. */
   onboardLeds?: OnboardLed[]
-  /** Physical connectors (QWIIC / STEMMA QT / JST) drawn on the board. */
+  /** Physical connectors (QWIIC / STEMMA QT / Grove / DuPont / JST) drawn on the
+   *  board. */
   connectors?: PartConnector[]
+  /**
+   * The header footprint this board **plugs into** — the shape of its pin headers
+   * as a family name (`xiao`, `pico`, `feather`). A board with a footprint can be
+   * seated in any carrier that declares a {@link PartMount} accepting it, so a
+   * XIAO RP2350 and a XIAO RP2040 both drop into a XIAO expansion base without
+   * either part knowing about the other. Absent ⇒ the board doesn't stack.
+   */
+  footprint?: string
+  /** Sockets on THIS board that accept another board on top (a carrier / shield
+   *  base — the XIAO expansion board, a Pico Explorer). Absent ⇒ nothing stacks
+   *  onto it. */
+  mounts?: PartMount[]
   /** Groups (#627): items carry a `group` id; this registry names them + records
    *  nesting (`parent`), so a group can hold items AND sub-groups. Membership is
    *  the `group` id on items (robust to reorder), not index refs. */

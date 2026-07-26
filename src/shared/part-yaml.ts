@@ -33,6 +33,7 @@ import type {
   PartHeader,
   PartLabel,
   PartLibrary,
+  PartMount,
   PartPin,
   PartPinBuses,
   PartPinCapability,
@@ -390,6 +391,16 @@ export function partToYaml(part: PartDefinition): string {
       labelRotation: c.labelRotation,
       pins: c.pins.map(pinToObj)
     })),
+    footprint: part.footprint,
+    mounts: part.mounts?.map((m) => ({
+      id: m.id,
+      footprint: m.footprint,
+      label: m.label,
+      x: m.x,
+      y: m.y,
+      rotation: m.rotation,
+      pinMap: m.pinMap ? { ...m.pinMap } : undefined
+    })),
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
@@ -643,6 +654,37 @@ export function partFromYaml(text: string): PartDefinition {
       })
       .filter((c): c is PartConnector => c !== null)
     if (connectors.length) part.connectors = connectors
+  }
+  assign('footprint', str(raw.footprint))
+  if (Array.isArray(raw.mounts)) {
+    const mounts = raw.mounts
+      .map((m): PartMount | null => {
+        if (!m || typeof m !== 'object') return null
+        const r = m as Record<string, unknown>
+        const id = str(r.id)
+        const footprint = str(r.footprint)
+        const x = num(r.x)
+        const y = num(r.y)
+        // A mount is meaningless without all four — an unnamed socket can't be
+        // referenced by a placed part, and one with no footprint accepts nothing.
+        if (!id || !footprint || x === undefined || y === undefined) return null
+        const mount: PartMount = { id, footprint, x, y }
+        const label = str(r.label)
+        if (label) mount.label = label
+        const rot = num(r.rotation)
+        if (rot !== undefined) mount.rotation = rot
+        if (r.pinMap && typeof r.pinMap === 'object') {
+          const pm: Record<string, string> = {}
+          for (const [k, v] of Object.entries(r.pinMap as Record<string, unknown>)) {
+            const to = str(v)
+            if (k && to) pm[k] = to
+          }
+          if (Object.keys(pm).length) mount.pinMap = pm
+        }
+        return mount
+      })
+      .filter((m): m is PartMount => m !== null)
+    if (mounts.length) part.mounts = mounts
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))

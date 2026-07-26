@@ -564,6 +564,47 @@ describe('connectors round-trip', () => {
   })
 })
 
+describe('board stacking (footprint + mounts) round-trip', () => {
+  it('keeps a carrier mount and the footprint a board plugs into', () => {
+    const carrier = normalisePart({
+      id: 'base',
+      name: 'Base',
+      headers: [{ edge: 'left', pins: [{ name: 'D4', type: 'io', gpio: 6 }] }],
+      mounts: [{ id: 'xiao', footprint: 'xiao', x: 0.5, y: 0.3, rotation: 0, label: 'XIAO' }]
+    })
+    expect(carrier.mounts?.[0]).toMatchObject({ id: 'xiao', footprint: 'xiao', label: 'XIAO' })
+    expect(partFromYaml(partToYaml(carrier)).mounts).toEqual(carrier.mounts)
+
+    const board = normalisePart({
+      id: 'xiao-rp2350',
+      name: 'XIAO',
+      footprint: 'xiao',
+      headers: [{ edge: 'left', pins: [{ name: 'D4', type: 'io', gpio: 6 }] }]
+    })
+    expect(partFromYaml(partToYaml(board)).footprint).toBe('xiao')
+  })
+
+  it('keeps a pinMap override for a carrier that renames pins', () => {
+    const part = normalisePart({
+      id: 'base',
+      name: 'Base',
+      headers: [{ edge: 'left', pins: [{ name: 'I2C_SDA', type: 'io', gpio: 6 }] }],
+      mounts: [{ id: 'xiao', footprint: 'xiao', x: 0.5, y: 0.3, pinMap: { D4: 'I2C_SDA' } }]
+    })
+    expect(partFromYaml(partToYaml(part)).mounts?.[0].pinMap).toEqual({ D4: 'I2C_SDA' })
+  })
+
+  it('drops a mount with no id, no footprint or no position', () => {
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'mounts:\n  - { footprint: xiao, x: 0.5, y: 0.5 }\n' +
+      '  - { id: a, x: 0.5, y: 0.5 }\n' +
+      '  - { id: b, footprint: xiao }\n' +
+      '  - { id: ok, footprint: pico, x: 0.5, y: 0.4 }\n'
+    expect(partFromYaml(yaml).mounts).toEqual([{ id: 'ok', footprint: 'pico', x: 0.5, y: 0.4 }])
+  })
+})
+
 describe('pin signal designations round-trip', () => {
   it('keeps per-capability signals (SDA/SCL, SPI CSn, UART TX, PWM A) through YAML', () => {
     const part = normalisePart({
