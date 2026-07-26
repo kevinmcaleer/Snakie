@@ -469,10 +469,26 @@ export function PartEditor({
   const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
   const [selection, setSelection] = useState<CanvasSelection>(null)
+  // The row the user clicked in the layers hierarchy. Purely a "which one is
+  // that?" marker on the canvas — selection semantics are untouched, so a canvas
+  // click still grabs the whole group and dragging still moves it as one unit.
+  // Cleared by any canvas-originated selection, since you're then pointing at the
+  // thing directly and the marker would just be stale.
+  const [peek, setPeek] = useState<CanvasSelection>(null)
+  /** Select from the LAYERS PANEL: also marks the row on the canvas. */
+  const selectFromPanel = (sel: CanvasSelection): void => {
+    setSelection(sel)
+    setPeek(sel)
+  }
   // A "select this whole group" request from the Layers panel → the canvas selects
   // every member (#631). The bumping nonce lets re-selecting the same group re-fire.
   const [groupSelect, setGroupSelect] = useState<{ id: string; nonce: number } | null>(null)
-  const selectGroup = (id: string): void => setGroupSelect((g) => ({ id, nonce: (g?.nonce ?? 0) + 1 }))
+  const selectGroup = (id: string): void => {
+    // Selecting the GROUP clears any individual member marker — the answer to
+    // "which one?" is now "all of them".
+    setPeek(null)
+    setGroupSelect((g) => ({ id, nonce: (g?.nonce ?? 0) + 1 }))
+  }
   const [fitSignal, setFitSignal] = useState(0)
   const [status, setStatus] = useState<Status | null>(null)
   // Auto-dismiss the status notification (e.g. "Saved …") so it doesn't linger
@@ -1039,7 +1055,11 @@ export function PartEditor({
                   selection={selection}
                   groupSelect={groupSelect ?? undefined}
                   onChange={setPart}
-                  onSelect={setSelection}
+                  peek={peek}
+                  onSelect={(sel) => {
+                    setSelection(sel)
+                    setPeek(null)
+                  }}
                   onNotify={(msg) => setStatus({ kind: 'info', text: msg })}
                   onEraseImageAt={eraseBgAt}
                   onToggleGrid={() => setShowGrid((g) => !g)}
@@ -1070,7 +1090,7 @@ export function PartEditor({
                 tool={tool}
                 setTool={setTool}
                 selection={selection}
-                setSelection={setSelection}
+                setSelection={selectFromPanel}
                 onSelectGroup={selectGroup}
                 onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
@@ -1114,7 +1134,7 @@ export function PartEditor({
                 tool={tool}
                 setTool={setTool}
                 selection={selection}
-                setSelection={setSelection}
+                setSelection={selectFromPanel}
                 onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
                 onPickImage={onPickImage}

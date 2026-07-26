@@ -145,6 +145,11 @@ export interface PartCanvasProps {
   visible?: LayerVisibility
   /** Per-layer edit lock. A locked layer can't be selected/moved/edited. */
   locked?: LayerLocks
+  /** The single item the user clicked in the LAYERS HIERARCHY. Drawn as its own
+   *  marker on top of any group outline, purely to answer "which one is that?".
+   *  It changes nothing about selection: a canvas click still picks up the whole
+   *  group, and dragging still moves the group as one unit. */
+  peek?: CanvasSelection
   /** Draw the pin-spacing grid behind the board. */
   showGrid?: boolean
   /** Non-interactive render (the Parts panel detail). */
@@ -352,6 +357,7 @@ export function PartCanvas({
   part,
   visible: visibleProp,
   locked = DEFAULT_LOCKS,
+  peek = null,
   showGrid = false,
   readOnly = false,
   tool = 'select',
@@ -1561,6 +1567,44 @@ export function PartCanvas({
   // the whole group instead of ringing each member (#…). The box is the members'
   // centre bounds; a pixel margin is added at draw time to clear the pads.
   const selectedGroupId = selectionGroup()
+  /** Where the peeked item sits, in normalised coords. Null when nothing is
+   *  peeked or the item has since gone. */
+  const peekPoint = ((): { x: number; y: number } | null => {
+    if (!peek) return null
+    if (peek.type === 'pin') {
+      const rp = pins.find((p) => p.hi === peek.hi && p.pi === peek.pi)
+      return rp ? { x: rp.x, y: rp.y } : null
+    }
+    const at = (o?: { x: number; y: number }): { x: number; y: number } | null => (o ? { x: o.x, y: o.y } : null)
+    switch (peek.type) {
+      case 'hole':
+        return at(holes[peek.index])
+      case 'button':
+        return at(buttons[peek.index])
+      case 'led':
+        return at(onboardLeds[peek.index])
+      case 'connector':
+        return at(connectors[peek.index])
+      case 'label':
+        return at(labels[peek.index])
+      case 'shape':
+      case 'shape-vertex': {
+        const sh = shapes[peek.index]
+        if (!sh) return null
+        // Rects carry w/h; circles carry r; polygons carry points. Centre on
+        // whichever it is so the marker lands ON the shape, not at its corner.
+        if (sh.kind === 'polygon' && sh.points?.length) {
+          const xs = sh.points.map((q) => q.x)
+          const ys = sh.points.map((q) => q.y)
+          return { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 }
+        }
+        return { x: sh.x + (sh.w ?? 0) / 2, y: sh.y + (sh.h ?? 0) / 2 }
+      }
+      default:
+        return null
+    }
+  })()
+
   const groupOutline = ((): { minX: number; minY: number; maxX: number; maxY: number } | null => {
     if (!selectedGroupId) return null
     const xs: number[] = []
@@ -3123,6 +3167,16 @@ export function PartCanvas({
             rx={7}
             style={{ pointerEvents: 'none' }}
           />
+        )}
+
+        {/* The item picked in the layers hierarchy. Sits OVER the group outline,
+            so selecting a member of a group shows both: the group that a canvas
+            click would grab, and which member you actually pointed at. */}
+        {interactive && peekPoint && (
+          <g className="pcv__peek" style={{ pointerEvents: 'none' }}>
+            <circle className="pcv__peek-halo" cx={px(peekPoint.x)} cy={py(peekPoint.y)} r={16} />
+            <circle className="pcv__peek-ring" cx={px(peekPoint.x)} cy={py(peekPoint.y)} r={9} />
+          </g>
         )}
 
         {/* Layer 4a: legacy feature chips (read-only; migrated to shapes on edit) */}
