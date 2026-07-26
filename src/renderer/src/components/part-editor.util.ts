@@ -2022,27 +2022,6 @@ export function withGroupFlag(
   return { groups: next }
 }
 
-/**
- * Set a flag on EVERY leaf under a bucket. Buckets aren't real objects — they're
- * a view over the ungrouped items — so a bucket toggle fans out to its members
- * rather than storing anything of its own.
- */
-export function withBucketFlag(
-  part: PartDefinition,
-  node: LayerNode,
-  flag: 'hidden' | 'locked',
-  value: boolean
-): Partial<PartDefinition> {
-  let patch: Partial<PartDefinition> = {}
-  let working = part
-  for (const child of node.children) {
-    if (!child.item) continue
-    const p = withItemFlag(working, child.item, flag, value)
-    working = { ...working, ...p }
-    patch = { ...patch, ...p }
-  }
-  return patch
-}
 
 /**
  * Name (or rename) a group.

@@ -5,7 +5,6 @@ import { partFromYaml } from '../src/shared/part-yaml'
 import {
   normalisePart,
   partLayerTree,
-  withBucketFlag,
   withGroupFlag,
   withGroupName,
   withItemFlag,
@@ -219,14 +218,7 @@ describe('hide / lock mutations', () => {
     expect(find(partLayerTree(next), 'pin:0')!.locked).toBe(true)
   })
 
-  it('a bucket toggle fans out to every item in it', () => {
-    const part = base()
-    const pins = partLayerTree(part).find((n) => n.id === 'bucket:pins')!
-    const next = normalisePart({ ...part, ...withBucketFlag(part, pins, 'hidden', true) })
-    // Only the UNGROUPED pin is in that bucket, so only it is hidden.
-    expect(next.headers[0].pins[1].hidden).toBe(true)
-    expect(next.headers[0].pins[0].hidden).toBeUndefined()
-  })
+
 })
 
 describe('naming a group', () => {

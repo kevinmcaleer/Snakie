@@ -1571,6 +1571,12 @@ export function PartCanvas({
    *  peeked or the item has since gone. */
   const peekPoint = ((): { x: number; y: number } | null => {
     if (!peek) return null
+    // Never mark something that isn't drawn. The marker points AT an item, so on
+    // a hidden layer it becomes a circle floating over nothing — which reads as
+    // "adding that did something strange" rather than "that layer is off".
+    const layer: keyof LayerVisibility =
+      peek.type === 'pin' ? 'pins' : peek.type === 'hole' ? 'holes' : 'components'
+    if (visible[layer] === false) return null
     if (peek.type === 'pin') {
       const rp = pins.find((p) => p.hi === peek.hi && p.pi === peek.pi)
       return rp ? { x: rp.x, y: rp.y } : null

@@ -34,7 +34,6 @@ import {
   normalisePart,
   orderedItems,
   partLayerTree,
-  withBucketFlag,
   withGroupFlag,
   withGroupName,
   withItemFlag,
@@ -49,6 +48,7 @@ import {
   withPinPositions,
   withShapesFromFeatures
   ,type HierItem,
+  type LayerBucket,
   type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
@@ -1663,7 +1663,7 @@ function LayersPanel({
           >
             {open ? '▾' : '▸'}
           </button>
-          {flagRow(node, (flag, value) => patch(withBucketFlag(part, node, flag, value)), node.label.toLowerCase())}
+          {bucketFlags(node.bucket!)}
           <span className="pe__layer-name">{node.label}</span>
           <span className="pe__layer-count">{node.children.length}</span>
           {isComponents && (
@@ -1800,6 +1800,48 @@ function LayersPanel({
         }
     )
   ]
+
+  /**
+   * Eye + padlock for a BUCKET row. These drive the part's coarse per-layer
+   * flags — `layerVisibility` (persisted) and the editor's layer lock — NOT the
+   * members' own flags.
+   *
+   * Two reasons. A bucket is a view over the ungrouped items, so it has no state
+   * of its own to store; and fanning the toggle out across every member would
+   * clobber per-item flags the user set deliberately. It also keeps
+   * `layerVisibility` reachable: it's persisted in every parts.yml and still
+   * gates rendering, so leaving it without UI stranded any part saved with a
+   * layer switched off.
+   */
+  const bucketFlags = (bucket: LayerBucket): JSX.Element => {
+    const key = bucket as keyof LayerVisibility
+    const shownLayer = visible[key] !== false
+    const lockedLayer = !!locked[key as keyof LayerLocks]
+    return (
+      <>
+        <button
+          type="button"
+          className={`pe__rowflag${shownLayer ? '' : ' is-on'}`}
+          onClick={() => toggleVis(key)}
+          title={shownLayer ? `Hide all ${bucket}` : `Show all ${bucket}`}
+          aria-label={shownLayer ? `Hide all ${bucket}` : `Show all ${bucket}`}
+          aria-pressed={!shownLayer}
+        >
+          {shownLayer ? '●' : '◌'}
+        </button>
+        <button
+          type="button"
+          className={`pe__rowflag${lockedLayer ? ' is-on' : ''}`}
+          onClick={() => toggleLock(key as keyof LayerLocks)}
+          title={lockedLayer ? `Unlock ${bucket}` : `Lock ${bucket}`}
+          aria-label={lockedLayer ? `Unlock ${bucket}` : `Lock ${bucket}`}
+          aria-pressed={lockedLayer}
+        >
+          {lockedLayer ? <LockIcon size={11} /> : <UnlockIcon size={11} />}
+        </button>
+      </>
+    )
+  }
 
   const hierRow = (node: LayerNode, depth: number): JSX.Element => {
     if (node.kind === 'group') return groupRowHier(node, depth)
