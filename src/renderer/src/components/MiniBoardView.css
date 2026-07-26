@@ -199,6 +199,20 @@
   border-color: #565b63;
 }
 
+/* Pin-labels toggle, held on. Tinted with the theme accent (never a hardcoded
+   gold) so it reads in both the dark and skeuomorph skins. */
+.mini-board__zoom-btn.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, #26282d);
+}
+
+.mini-board__zoom-btn.is-on:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, #26282d);
+}
+
 .mini-board__mcu {
   font-family: var(--font-mono), monospace;
   font-size: 12px;

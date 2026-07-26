@@ -199,3 +199,59 @@ describe('connectorSize (mm-accurate connector scaling)', () => {
     expect(s.h).toBeCloseTo(2.54 * pxPerMm, 5)
   })
 })
+
+describe('full-pinout props (the mini board’s pin-labels toggle)', () => {
+  // The mini board is normally a USED-pin summary; showing the whole pinout is
+  // `boxedPins` + `capsPins: 'all'`. Guard that combination actually produces a
+  // readable pinout, since that is the entire point of the toggle.
+  const MCU: PartDefinition = {
+    ...blankPart(),
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { number: 5, name: 'D4', type: 'io', gpio: 6, capabilities: ['i2c'], signals: { i2c: 'SDA' }, buses: { i2c: 1 } },
+          { number: 6, name: 'D5', type: 'io', gpio: 7, capabilities: ['i2c'], signals: { i2c: 'SCL' }, buses: { i2c: 1 } },
+          { number: 7, name: '3V3', type: 'pwr' }
+        ]
+      }
+    ]
+  }
+  const full = (): string =>
+    renderToStaticMarkup(createElement(PartBody, { part: MCU, box, boxedPins: true, capsPins: 'all' as const }))
+
+  it('shows every pin’s name, GP number and I²C bus/signal badge', () => {
+    const html = full()
+    expect(html).toContain('D4')
+    expect(html).toContain('D5')
+    expect(html).toContain('GP6')
+    expect(html).toContain('GP7')
+    // The badge that answers "am I on the right I2C pins?".
+    expect(html).toContain('I2C1 SDA')
+    expect(html).toContain('I2C1 SCL')
+  })
+
+  it('shows neither GP numbers nor badges without the toggle (the used-pin summary)', () => {
+    const summary = renderToStaticMarkup(
+      createElement(PartBody, { part: MCU, box, boxedPins: new Set<number>() })
+    )
+    expect(summary).not.toContain('GP6')
+    expect(summary).not.toContain('I2C1 SDA')
+  })
+
+  it('keeps a used pin’s code variable in preference to its GP number', () => {
+    // A pin the program uses keeps showing `i2c`/`sda` etc. — the toggle must not
+    // replace the thing the mini board exists to show.
+    const html = renderToStaticMarkup(
+      createElement(PartBody, {
+        part: MCU,
+        box,
+        boxedPins: true,
+        capsPins: 'all' as const,
+        pinVariables: new Map([[0, { variable: 'sda', color: '#0f0' }]])
+      })
+    )
+    expect(html).toContain('sda')
+    expect(html).toContain('GP7') // the other pins still fall back to GP<n>
+  })
+})

@@ -59,6 +59,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   contacts the two sockets share, so Grove UART, digital and analog ports wire up
   properly instead of getting power and ground alone.
 
+- **Pin labels on the mini board.** Hovering the mini board now reveals the full
+  pinout — every pin's number, name, `GP<n>` and capability badges (`I2C1 SDA`,
+  `PWM A`, `ADC2`) — so you can check you're on the right I²C pins without
+  switching to the Electronics view. A **pin-labels toggle** in the mini board's
+  zoom toolbar keeps them up while you read, and is remembered between sessions.
+  Pins your code uses still show their variable name in preference to `GP<n>`.
+
 ### Fixed
 - A connector's **silk label placement** (its dragged offset and rotation) was
   dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
