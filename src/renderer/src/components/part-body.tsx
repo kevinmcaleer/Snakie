@@ -91,7 +91,6 @@ export function capabilityChips(
   if (chips.length === 0) return null
   const B = 14 // pin-number box (matches boxedPinLabel)
   const G = 3 // gap (matches boxedPinLabel)
-  const C = 3.5 // re-centre for rotated top/bottom glyphs (matches boxedPinLabel)
   const h = 12
   const fs = 8.5
   const cg = 2 // gap between chips
@@ -132,11 +131,17 @@ export function capabilityChips(
     transform = `translate(${na.x - stripW}, ${na.y})`
   } else if (dir === 'top') {
     const labelY = box.y - G - B - G // label baseline; rotated -90 it runs upward
-    na = { x: cx + C, y: labelY - labelW - G - varW }
+    // NB: no `C` here. `boxedPinLabel` shifts its rotated TEXT by C because the
+    // glyphs hang off one side of the baseline, so the baseline has to sit half a
+    // cap-height off the pin line for the text to straddle it. This strip is a
+    // RECT already centred on local y=0, so the same shift just pushes the whole
+    // strip off the pin line — which is what made the chips sit left of centre on
+    // bottom pins and right of centre on top ones.
+    na = { x: cx, y: labelY - labelW - G - varW }
     transform = `translate(${na.x}, ${na.y}) rotate(-90)`
   } else {
     const labelY = box.y + box.h + G + B + G // rotated +90 it runs downward
-    na = { x: cx - C, y: labelY + labelW + G + varW }
+    na = { x: cx, y: labelY + labelW + G + varW }
     transform = `translate(${na.x}, ${na.y}) rotate(90)`
   }
   // Counter-scale (like the pin labels) so chips keep a constant on-screen size —

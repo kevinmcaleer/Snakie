@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PartBody, capabilityChipsAt, connectorSize } from '../src/renderer/src/components/part-body'
+import { PartBody, capabilityChips, capabilityChipsAt, connectorSize } from '../src/renderer/src/components/part-body'
 import { blankPart } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -253,5 +253,45 @@ describe('full-pinout props (the mini board’s pin-labels toggle)', () => {
     )
     expect(html).toContain('sda')
     expect(html).toContain('GP7') // the other pins still fall back to GP<n>
+  })
+})
+
+describe('capability chips sit on the pin line when rotated', () => {
+  // Top/bottom pins draw their chips rotated ±90°. The strip is a rect centred on
+  // its own y=0, so the transform's translate-x IS the strip's centre line and
+  // must equal the pin's cx. It used to carry boxedPinLabel's ±3.5 baseline
+  // compensation, which only makes sense for text hanging off a baseline — that
+  // pushed the chips off centre (left on bottom pins, right on top ones).
+  const box = { x: 0, y: 0, w: 200, h: 200 }
+  const cx = 100
+  const chips = (dir: 'top' | 'bottom' | 'left' | 'right'): string =>
+    renderToStaticMarkup(
+      capabilityChips(box, cx, 40, dir, 'D4', ['i2c'], { i2c: 'SDA' }, undefined, { i2c: 1 }) ??
+        createElement('g')
+    )
+
+  it('centres the strip on the pin for a TOP pin', () => {
+    expect(chips('top')).toContain(`translate(${cx},`)
+  })
+
+  it('centres the strip on the pin for a BOTTOM pin', () => {
+    expect(chips('bottom')).toContain(`translate(${cx},`)
+  })
+
+  it('top and bottom land on the SAME line — no ±offset between them', () => {
+    const tx = (html: string): string => /translate\((-?[\d.]+),/.exec(html)?.[1] ?? ''
+    expect(tx(chips('top'))).toBe(tx(chips('bottom')))
+    expect(tx(chips('top'))).toBe(String(cx))
+  })
+
+  it('still rotates the two in opposite directions (labels read outward)', () => {
+    expect(chips('top')).toContain('rotate(-90)')
+    expect(chips('bottom')).toContain('rotate(90)')
+  })
+
+  it('leaves left/right pins on their pin line too (unrotated, unchanged)', () => {
+    // cy = 40 is the pin line for a horizontal pin; the strip centres on it.
+    expect(chips('right')).toContain(', 40)')
+    expect(chips('left')).toContain(', 40)')
   })
 })

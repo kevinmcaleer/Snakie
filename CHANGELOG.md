@@ -82,6 +82,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   on the canvas is unchanged, a click there still grabs the whole group.
 
 ### Fixed
+- **Capability chips sat off the pin line on top/bottom pins.** The `PWM A` /
+  `SDA` / `SCL` badges on a vertically-rotated pin were drawn ~3.5px off centre —
+  left of the pin on bottom pins, right of it on top ones — so they didn't line up
+  with the pin, its label, or each other.
 - **Renaming a group that had no registry entry did nothing.** Groups can exist
   purely as an id on their items — the servo2040's 18 servo headers are authored
   that way — and the rename mapped over the registry, silently dropping the new
