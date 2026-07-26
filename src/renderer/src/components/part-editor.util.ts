@@ -22,6 +22,8 @@ import {
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
   coerceGroveVariant,
+  itemHidden,
+  itemLocked,
   type ComponentShape,
   type ComponentShapeKind,
   type DriverFile,
@@ -1780,4 +1782,176 @@ export function schematicSymbolLayout(
   bySide.bottom.forEach((vt, i) => place(vt, 'bottom', bX[i], boxH, bX[i], boxH + stub))
   terminals.sort((a, b) => a.flatIndex - b.flatIndex)
   return { box: { w: boxW, h: boxH }, terminals }
+}
+
+// --- The single layer hierarchy (#…) ----------------------------------------
+// One tree for everything the Part Editor can select, so a Grove connector and
+// its contacts (or a servo header's S/V/G trio) sit together and move together.
+//
+// Shape of the tree, decided deliberately:
+//   * GROUPS sit at the top level and may mix kinds — that is the whole point.
+//     A nested group appears inside its parent.
+//   * UNGROUPED items fall into kind BUCKETS (Components / Pins / Mounting
+//     holes). Without them a 78-pad board buries its three interesting rows in
+//     a wall of pins; with them, the servo2040 reads as 18 servo-header groups
+//     plus a short bucket of loose I/O.
+// The rule is positional, not clever: grouped ⇒ top level, ungrouped ⇒ bucket.
+
+/** Every kind of thing that can appear as a leaf in the hierarchy. */
+export type HierItemKind = OrderedItemKind | 'pin' | 'hole'
+
+/** A leaf's identity: its kind plus its index in that kind's array. Pins use the
+ *  FLAT index across headers (the same one endpoints and `resolvedPins` use). */
+export interface HierItem {
+  kind: HierItemKind
+  index: number
+}
+
+export type LayerBucket = 'components' | 'pins' | 'holes'
+
+export interface LayerNode {
+  /** Stable key for React and for remembering which rows are collapsed. */
+  id: string
+  kind: 'group' | 'bucket' | 'item'
+  label: string
+  children: LayerNode[]
+  /** Leaf nodes only — what a click selects. */
+  item?: HierItem
+  /** Group nodes only. */
+  groupId?: string
+  /** Bucket nodes only. */
+  bucket?: LayerBucket
+  /** EFFECTIVE state, with the group ancestry resolved — what the canvas obeys. */
+  hidden: boolean
+  locked: boolean
+  /** The node's OWN flag — what its eye/lock toggle writes. Differs from the
+   *  effective state whenever an ancestor group is hidden or locked, which is how
+   *  the row shows "hidden because the group is" without clobbering its own flag. */
+  ownHidden: boolean
+  ownLocked: boolean
+}
+
+const BUCKET_LABEL: Record<LayerBucket, string> = {
+  components: 'Components',
+  pins: 'Pins',
+  holes: 'Mounting holes'
+}
+
+/** Every leaf in the part, with the flags and label the tree needs. */
+function hierLeaves(part: PartDefinition): { node: LayerNode; group?: string }[] {
+  const out: { node: LayerNode; group?: string }[] = []
+  const push = (kind: HierItemKind, index: number, label: string, flags: PartItemFlags): void => {
+    out.push({
+      group: flags.group,
+      node: {
+        id: `${kind}:${index}`,
+        kind: 'item',
+        label,
+        children: [],
+        item: { kind, index },
+        hidden: itemHidden(part.groups, flags),
+        locked: itemLocked(part.groups, flags),
+        ownHidden: !!flags.hidden,
+        ownLocked: !!flags.locked
+      }
+    })
+  }
+  // Components, in their existing paint order so the tree matches the canvas.
+  for (const it of orderedItems(part)) {
+    if (it.kind === 'shape') {
+      const s = (part.shapes ?? [])[it.index]
+      push('shape', it.index, s?.label || s?.kind || 'Shape', s ?? {})
+    } else if (it.kind === 'label') {
+      const l = (part.labels ?? [])[it.index]
+      push('label', it.index, l?.text || 'Label', l ?? {})
+    } else if (it.kind === 'button') {
+      const b = (part.buttons ?? [])[it.index]
+      push('button', it.index, b?.label || 'Button', b ?? {})
+    } else if (it.kind === 'led') {
+      const l = (part.onboardLeds ?? [])[it.index]
+      push('led', it.index, l?.label || l?.kind || 'LED', l ?? {})
+    } else if (it.kind === 'connector') {
+      const c = (part.connectors ?? [])[it.index]
+      push('connector', it.index, c?.label || c?.kind?.toUpperCase() || 'Connector', c ?? {})
+    }
+  }
+  resolvedPins(part).forEach((rp, i) => push('pin', i, rp.pin.name || `Pin ${i + 1}`, rp.pin))
+  ;(part.mountingHoles ?? []).forEach((h, i) => push('hole', i, `Hole ${i + 1}`, h))
+  return out
+}
+
+/**
+ * Build the Part Editor's single layer hierarchy.
+ *
+ * Groups come first (they are the structure worth seeing), then the buckets of
+ * whatever is left. An EMPTY bucket is omitted; an empty group is not, because a
+ * group with nothing in it is a thing the user is mid-way through filling.
+ */
+export function partLayerTree(part: PartDefinition): LayerNode[] {
+  const leaves = hierLeaves(part)
+  const registry = part.groups ?? []
+  // An item may reference a group id that was never written to the `groups`
+  // registry — the servo2040's 18 servo-header trios are authored exactly that
+  // way, with `group: servo-1` on the pins and no registry at all. Synthesise
+  // those, or each header scatters into the pin bucket and the tree becomes the
+  // wall of 78 rows the buckets exist to prevent. First-seen order, so headers
+  // list in board order.
+  const registered = new Set(registry.map((g) => g.id))
+  const synthesised: PartGroup[] = []
+  for (const l of leaves) {
+    if (l.group && !registered.has(l.group) && !synthesised.some((g) => g.id === l.group)) {
+      synthesised.push({ id: l.group })
+    }
+  }
+  const groups: PartGroup[] = [...registry, ...synthesised]
+
+  const groupNode = (g: PartGroup): LayerNode => {
+    const flags: PartItemFlags = { group: g.parent, hidden: g.hidden, locked: g.locked }
+    return {
+      id: `group:${g.id}`,
+      kind: 'group',
+      label: g.name || g.id,
+      groupId: g.id,
+      children: [
+        ...groups.filter((c) => c.parent === g.id).map(groupNode),
+        ...leaves.filter((l) => l.group === g.id).map((l) => l.node)
+      ],
+      hidden: itemHidden(groups, flags),
+      locked: itemLocked(groups, flags),
+      ownHidden: !!g.hidden,
+      ownLocked: !!g.locked
+    }
+  }
+
+  // A group whose `parent` doesn't exist would otherwise vanish from the tree —
+  // treat it as top-level rather than losing it and everything inside it.
+  const known = new Set(groups.map((g) => g.id))
+  const roots = groups.filter((g) => !g.parent || !known.has(g.parent))
+
+  const bucketOf = (k: HierItemKind): LayerBucket =>
+    k === 'pin' ? 'pins' : k === 'hole' ? 'holes' : 'components'
+
+  const buckets: LayerNode[] = (['components', 'pins', 'holes'] as LayerBucket[])
+    .map((b): LayerNode => {
+      const kids = leaves
+        .filter((l) => !l.group || !known.has(l.group))
+        .filter((l) => bucketOf(l.node.item!.kind) === b)
+        .map((l) => l.node)
+      return {
+        id: `bucket:${b}`,
+        kind: 'bucket',
+        label: BUCKET_LABEL[b],
+        bucket: b,
+        children: kids,
+        // A bucket is a view, not a thing — it has no flags of its own. It reads
+        // as hidden/locked only when everything inside it is.
+        hidden: kids.length > 0 && kids.every((k) => k.hidden),
+        locked: kids.length > 0 && kids.every((k) => k.locked),
+        ownHidden: false,
+        ownLocked: false
+      }
+    })
+    .filter((b) => b.children.length > 0)
+
+  return [...roots.map(groupNode), ...buckets]
 }
