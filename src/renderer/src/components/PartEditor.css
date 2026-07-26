@@ -1699,3 +1699,33 @@
 .pe__flatrow--hole .pe__flathelp {
   margin-left: auto;
 }
+
+/* Rename pencil on a group row. Sits quiet until the row is hovered, so a long
+   list of servo headers doesn't read as a column of icons. */
+.pe__group-edit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.pe__flatrow--partgroup:hover .pe__group-edit,
+.pe__group-edit:focus-visible {
+  opacity: 0.75;
+}
+
+.pe__group-edit:hover {
+  color: var(--accent);
+  opacity: 1;
+  background: var(--card);
+}

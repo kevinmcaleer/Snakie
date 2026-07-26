@@ -36,6 +36,7 @@ import {
   partLayerTree,
   withBucketFlag,
   withGroupFlag,
+  withGroupName,
   withItemFlag,
   applyItemOrder,
   nextItemZ,
@@ -1452,8 +1453,7 @@ function LayersPanel({
   const groupFlags = (groupId: string, what: string): JSX.Element | null =>
     flagRow(nodeById.get(`group:${groupId}`), (flag, value) => patch(withGroupFlag(part, groupId, flag, value)), what)
   const commitRename = (gid: string, text: string): void => {
-    const name = text.trim()
-    patch({ groups: groups.map((g) => (g.id === gid ? { ...g, name: name || undefined } : g)) })
+    patch(withGroupName(part, gid, text))
     setRenamingGroup(null)
   }
   const ungroupNode = (gid: string): void => {
@@ -1573,7 +1573,11 @@ function LayersPanel({
               className="pe__group-rename"
               autoFocus
               defaultValue={g?.name ?? ''}
-              placeholder="Group name"
+              /* An unnamed group falls back to its id, so show that as the ghost
+                 text — it's what the row currently reads, and clearing the field
+                 returns to it rather than storing a blank. */
+              placeholder={gid}
+              onFocus={(e) => e.currentTarget.select()}
               onBlur={(e) => commitRename(gid, e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') commitRename(gid, (e.target as HTMLInputElement).value)
@@ -1581,16 +1585,31 @@ function LayersPanel({
               }}
             />
           ) : (
-            <button
-              type="button"
-              className="pe__flatname"
-              onClick={() => onSelectGroup?.(gid)}
-              onDoubleClick={() => setRenamingGroup(gid)}
-              title="Select group (double-click to rename)"
-            >
-              <span className="pe__item-name">{node.label}</span>
-              <span className="pe__flatsub">group · {leaves(node)}</span>
-            </button>
+            <>
+              <button
+                type="button"
+                className="pe__flatname"
+                onClick={() => onSelectGroup?.(gid)}
+                onDoubleClick={() => setRenamingGroup(gid)}
+                title="Select group (double-click, or the pencil, to rename)"
+              >
+                <span className="pe__item-name">{node.label}</span>
+                <span className="pe__flatsub">group · {leaves(node)}</span>
+              </button>
+              {/* Explicit rename. Double-click works too, but it's undiscoverable
+                  — and click alone has to stay as "select the group". */}
+              <button
+                type="button"
+                className="pe__group-edit"
+                onClick={() => setRenamingGroup(gid)}
+                title={`Rename ${node.label}`}
+                aria-label={`Rename ${node.label}`}
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+                  <path d="M8.2 1.3l2.5 2.5-6 6-3 .5.5-3z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>
           )}
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟

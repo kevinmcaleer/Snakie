@@ -7,6 +7,7 @@ import {
   partLayerTree,
   withBucketFlag,
   withGroupFlag,
+  withGroupName,
   withItemFlag,
   type HierItem,
   type LayerNode
@@ -225,5 +226,46 @@ describe('hide / lock mutations', () => {
     // Only the UNGROUPED pin is in that bucket, so only it is hidden.
     expect(next.headers[0].pins[1].hidden).toBe(true)
     expect(next.headers[0].pins[0].hidden).toBeUndefined()
+  })
+})
+
+describe('naming a group', () => {
+  it('renames a group that is already in the registry', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      groups: [{ id: 'g', name: 'Old' }],
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', group: 'g' }] }]
+    })
+    const next = normalisePart({ ...part, ...withGroupName(part, 'g', 'Grove I2C') })
+    expect(next.groups).toEqual([{ id: 'g', name: 'Grove I2C' }])
+    expect(partLayerTree(next)[0].label).toBe('Grove I2C')
+  })
+
+  it('names a SYNTHESISED group, registering it on the way', () => {
+    // The bug this guards: a group can exist only as an id on its items (the
+    // servo2040 has `group: servo-1` on pins and no registry), and mapping over
+    // the registry would drop the name for exactly those groups.
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'S', type: 'io', group: 'servo-1' }] }]
+    })
+    expect(part.groups).toBeUndefined()
+    const next = normalisePart({ ...part, ...withGroupName(part, 'servo-1', 'Left shoulder') })
+    expect(next.groups).toEqual([{ id: 'servo-1', name: 'Left shoulder' }])
+    expect(partLayerTree(next)[0].label).toBe('Left shoulder')
+  })
+
+  it('an empty name falls back to the group id rather than storing a blank', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      groups: [{ id: 'servo-1', name: 'Temp' }],
+      headers: [{ edge: 'left', pins: [{ name: 'S', type: 'io', group: 'servo-1' }] }]
+    })
+    const next = normalisePart({ ...part, ...withGroupName(part, 'servo-1', '   ') })
+    expect(next.groups?.[0].name).toBeUndefined()
+    expect(partLayerTree(next)[0].label).toBe('servo-1')
   })
 })

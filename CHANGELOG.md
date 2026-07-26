@@ -68,7 +68,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   Only the toggle re-frames the board — a hover reveal leaves it exactly where it
   is, so the board never resizes under the pointer.
 
+- **One layer hierarchy in the Part Editor.** The separate *Parts*, *Pins* and
+  *Mounting holes* lists are now a single tree: groups at the top — which may
+  **mix kinds**, so a Grove connector sits with its contacts and a servo header
+  with its S/V/G trio — then a bucket per kind for whatever is ungrouped. Every
+  item and every group carries its **own hide and lock**, resolved through the
+  group ancestry, so hiding a group hides its members without clobbering their own
+  state and un-hiding restores exactly what was showing before. The editor canvas
+  honours both: hidden items don't draw, and a click falls through a hidden or
+  locked item to whatever is underneath. Groups are **renameable in place** from
+  the layers panel.
+
 ### Fixed
+- **Renaming a group that had no registry entry did nothing.** Groups can exist
+  purely as an id on their items — the servo2040's 18 servo headers are authored
+  that way — and the rename mapped over the registry, silently dropping the new
+  name for exactly those groups.
 - **Editor hover help ran off the screen.** A long signature or docstring sized
   the hover widget past the edge of the editor pane, leaving most of it
   unreadable. The hover is now capped to the pane's own width and its content

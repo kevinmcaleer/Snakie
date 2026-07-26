@@ -2043,3 +2043,22 @@ export function withBucketFlag(
   }
   return patch
 }
+
+/**
+ * Name (or rename) a group.
+ *
+ * Registers the group first if it isn't in the registry. Groups can exist purely
+ * as an id referenced by items — the servo2040 carries `group: servo-1` on its
+ * pins and no `groups:` block at all — and mapping over the registry would
+ * silently drop the new name for exactly those. An empty name clears back to the
+ * id rather than storing `""`.
+ */
+export function withGroupName(part: PartDefinition, groupId: string, name: string): Partial<PartDefinition> {
+  const clean = name.trim()
+  const groups = part.groups ?? []
+  return {
+    groups: groups.some((g) => g.id === groupId)
+      ? groups.map((g) => (g.id === groupId ? { ...g, name: clean || undefined } : g))
+      : [...groups, { id: groupId, name: clean || undefined }]
+  }
+}
