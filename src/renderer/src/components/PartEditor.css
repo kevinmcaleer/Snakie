@@ -1684,3 +1684,18 @@
 .pe__holerow .pe__item {
   flex: 1 1 auto;
 }
+
+/* --- the single hierarchy list ------------------------------------------- */
+/* Bucket rows read as headers rather than items: slightly heavier, with the
+   name taking the slack so the add/delete chips sit right. */
+.pe__flatrow--bucket {
+  font-weight: 600;
+}
+
+.pe__flatrow--bucket .pe__layer-name {
+  flex: 1 1 auto;
+}
+
+.pe__flatrow--hole .pe__flathelp {
+  margin-left: auto;
+}

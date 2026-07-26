@@ -1,7 +1,7 @@
 # Part Editor — the single layer hierarchy
 
-Status: **model, tree, per-row hide/lock and canvas enforcement done. The
-structural merge of Parts + Pins into one list is the last piece.**
+Status: **done.** Model, tree, per-row hide/lock, canvas enforcement and the
+merge into one list have all landed.
 
 ## Why
 
@@ -80,37 +80,26 @@ Tests: `test/partLayerTree.test.ts`, including an assertion against the real
 
 ## Outstanding
 
-### 1. Merge the panel into ONE list (`PartEditor.tsx`, `LayersPanel`)
+### 1. The panel — DONE
 
-Per-row eye + lock are **done** — every row (component, grouped component, pin,
-servo-header group, mounting hole) carries them, driven by `partLayerTree` for
-effective state and `withItemFlag`/`withGroupFlag` for the write. What remains is
-structural: the *Parts* and *Pins* sections are still separate lists rather than
-one tree from `partLayerTree`.
+`LayersPanel` renders ONE list from `partLayerTree`: groups first, then the three
+buckets. The old *Parts* and *Pins* sections, their per-layer eye/lock, and the
+duplicate *Mounting holes* section under the inspector are gone.
 
-That was left deliberately. Those sections carry a lot of behaviour worth keeping
-— pin column sorting, servo-trio collapsing, drag-reorder, group rename — and
-re-implementing it from scratch risks losing it. The merge should MOVE those row
-renderers under the bucket nodes, not rewrite them.
+The row renderers were RELOCATED, not rewritten, so what they carried survives:
+pin number/GPIO/type columns and their sorting, group rename on double-click,
+ungroup, and drag-reorder of the component stack (still offered only when no
+group exists, exactly as before — reordering a subset of the z-stack while groups
+nest isn't well defined).
 
-Replace the current *Parts* + *Pins* sections with one tree from
-`partLayerTree`. Today `LayersPanel` has two variants (`'layers'` = Parts+Pins,
-`'board'` = holes/PCB/image); the board-level rows (PCB, Background image) are
-**not** items and should stay as they are.
+Two things the panel does that the tree deliberately doesn't:
 
-Must keep, per the user: the **`+ Header`** button and the **sort-headers**
-control, now belonging to the Pins bucket.
-
-Each row (group, bucket, item) gets an eye and a lock. Toggling writes the
-row's **own** flag. A row whose effective state differs from its own (because an
-ancestor group is hidden/locked) should read as inherited rather than looking
-toggled.
-
-`lock` is currently renderer-only `useState<LayerLocks>` keyed by layer — that
-whole mechanism is superseded and should go, along with `DEFAULT_LOCKS`.
-
-Keep `part.layerVisibility` working: it's in every shipped `parts.yml`, and
-`pcb`/`image` still need it. Treat it as a coarse master above the per-item flags.
+- It shows **all three buckets even when empty**. `partLayerTree` omits an empty
+  bucket, which is right for a general tree and wrong for the panel — the empty
+  bucket is exactly where you go to create the first pin or hole.
+- Bucket rows get an add chip (`＋ Add` menu / `＋` pin / servo header / `＋`
+  hole) and a `−` delete enabled when the selection belongs to that bucket. Row
+  -level trash stays on component rows only; on 78 pins it would be noise.
 
 ### 2. Canvas enforcement — DONE
 

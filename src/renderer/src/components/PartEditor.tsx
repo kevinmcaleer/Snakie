@@ -34,6 +34,7 @@ import {
   normalisePart,
   orderedItems,
   partLayerTree,
+  withBucketFlag,
   withGroupFlag,
   withItemFlag,
   applyItemOrder,
@@ -47,6 +48,7 @@ import {
   withPinPositions,
   withShapesFromFeatures
   ,type HierItem,
+  type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
 import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, itemLocked } from '../../../shared/part'
@@ -1211,7 +1213,6 @@ function LayersPanel({
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   // Which servo-header groups are expanded in the pin list (collapsed by default so
   // a board of servo headers reads as one row each, not three).
-  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({})
   // The group node (in the Parts list) whose name is being edited inline (#631).
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
   // Pin list sort (#…): click a column header to sort by it; `col: null` is the
@@ -1255,17 +1256,6 @@ function LayersPanel({
   const connectors = part.connectors ?? []
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
-  const counts = {
-    components: shapes.length + labels.length,
-    pins: pins.length,
-    holes: holes.length,
-    buttons: buttons.length,
-    leds: onboardLeds.length,
-    connectors: connectors.length,
-    image: part.imageData ? 1 : 0
-  }
-  /** Append an onboard LED at the board centre and select it (type set in the
-   *  inspector: LED / RGB / NeoPixel). New parts land on TOP of the layer stack. */
   const addLed = (kind: 'single' | 'rgb' | 'neopixel' = 'single'): void => {
     const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
@@ -1375,25 +1365,8 @@ function LayersPanel({
     </button>
   )
   const isOpen = (id: string): boolean => !collapsed[id]
-  const caret = (id: string): JSX.Element => (
-    <button type="button" className="pe__layer-caret" onClick={() => setCollapsed((c) => ({ ...c, [id]: !c[id] }))} aria-expanded={isOpen(id)} title={isOpen(id) ? 'Collapse' : 'Expand'}>
-      {isOpen(id) ? '▾' : '▸'}
-    </button>
-  )
   const selEq = (a: CanvasSelection): boolean => JSON.stringify(a) === JSON.stringify(selection)
   /** A `−` button that deletes the selected item, enabled when `active`. */
-  const delBtn = (active: boolean): JSX.Element => (
-    <button
-      type="button"
-      className="pe__chip pe__chip--del"
-      disabled={!active}
-      onClick={onDeleteSelected}
-      title={active ? 'Delete the selected item' : 'Select an item to delete it'}
-      aria-label="Delete selected item"
-    >
-      −
-    </button>
-  )
   // ── Grouped Parts tree (#631) ─────────────────────────────────────────────
   // Loose items render inline; a grouped item collapses under its top-level group
   // node, which nests its members + sub-groups recursively.
@@ -1478,35 +1451,6 @@ function LayersPanel({
   /** Eye + padlock for one GROUP row. */
   const groupFlags = (groupId: string, what: string): JSX.Element | null =>
     flagRow(nodeById.get(`group:${groupId}`), (flag, value) => patch(withGroupFlag(part, groupId, flag, value)), what)
-  const groupOfItem = (it: OrderedItem): string | undefined =>
-    it.kind === 'shape' ? shapes[it.index]?.group : it.kind === 'label' ? labels[it.index]?.group : undefined
-  type PartNode = { kind: 'item'; item: OrderedItem } | { kind: 'group'; id: string; children: PartNode[] }
-  const buildGroupNode = (gid: string): PartNode => ({
-    kind: 'group',
-    id: gid,
-    children: [
-      ...items.filter((it) => groupOfItem(it) === gid).map((it): PartNode => ({ kind: 'item', item: it })),
-      ...groups.filter((g) => g.parent === gid).map((g) => buildGroupNode(g.id))
-    ]
-  })
-  const partTree: PartNode[] = (() => {
-    const emitted = new Set<string>()
-    const out: PartNode[] = []
-    for (const it of items) {
-      const g = groupOfItem(it)
-      if (!g) {
-        out.push({ kind: 'item', item: it })
-        continue
-      }
-      const root = groupRootId(groups, g)
-      if (emitted.has(root)) continue
-      emitted.add(root)
-      out.push(buildGroupNode(root))
-    }
-    return out
-  })()
-  const countLeaves = (node: PartNode): number =>
-    node.kind === 'item' ? 1 : node.children.reduce((n, c) => n + countLeaves(c), 0)
   const commitRename = (gid: string, text: string): void => {
     const name = text.trim()
     patch({ groups: groups.map((g) => (g.id === gid ? { ...g, name: name || undefined } : g)) })
@@ -1539,12 +1483,80 @@ function LayersPanel({
       </li>
     )
   }
-  const renderNode = (node: PartNode, depth: number): JSX.Element => {
-    if (node.kind === 'item') return itemRowTree(node.item, depth)
-    const g = groups.find((x) => x.id === node.id)
-    const open = isOpen(node.id)
+  /** A `−` that deletes the current selection, enabled when it belongs to this
+   *  bucket. Lives on the bucket header rather than on every row: a row-level
+   *  trash on 78 pins is noise, and Delete already works from the canvas. */
+  const delBtn = (active: boolean): JSX.Element => (
+    <button
+      type="button"
+      className="pe__chip pe__chip--del"
+      disabled={!active}
+      onClick={onDeleteSelected}
+      title={active ? 'Delete the selected item' : 'Select an item in here to delete it'}
+      aria-label="Delete selected item"
+    >
+      −
+    </button>
+  )
+
+  // --- the single hierarchy (#…) ---------------------------------------------
+  // One list: GROUPS at the top (mixing kinds — a Grove connector with its
+  // contacts, a servo header's S/V/G trio), then a bucket per kind for whatever
+  // is ungrouped. The row renderers below are the SAME ones the old split Parts
+  // and Pins sections used, relocated rather than rewritten, so pin columns,
+  // sorting and group rename all survive the merge.
+
+  /** One pin row — name, board number, GPIO, type, plus its eye + padlock. */
+  const pinRowHier = (rp: ResolvedPin, depth: number): JSX.Element => (
+    <li
+      key={`p${rp.hi}-${rp.pi}`}
+      className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+      style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
+    >
+      {itemFlags({ kind: 'pin', index: flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1 }, rp.pin.name || 'pin')}
+      <button type="button" className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
+        <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
+      </button>
+      <span className="pe__flatnum" title={typeof rp.pin.number === 'number' ? `Board pin ${rp.pin.number}` : 'No board number'}>
+        {typeof rp.pin.number === 'number' ? rp.pin.number : ''}
+      </span>
+      <span className="pe__flatnum" title={typeof rp.pin.gpio === 'number' ? `GPIO ${rp.pin.gpio}` : 'No GPIO'}>
+        {typeof rp.pin.gpio === 'number' ? rp.pin.gpio : ''}
+      </span>
+      <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
+    </li>
+  )
+
+  const holeRowHier = (index: number, depth: number): JSX.Element => {
+    const h = holes[index]
     return (
-      <li key={`grp-${node.id}`} className="pe__grouprow">
+      <li
+        key={`hole${index}`}
+        className={`pe__flatrow pe__flatrow--hole${selEq({ type: 'hole', index }) ? ' is-active' : ''}`}
+        style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
+      >
+        {itemFlags({ kind: 'hole', index }, `hole ${index + 1}`)}
+        <button type="button" className="pe__flatname" onClick={() => setSelection({ type: 'hole', index })}>
+          <span className="pe__item-name">Hole {index + 1}</span>
+        </button>
+        <span className="pe__flathelp">⌀{h?.diameter}mm</span>
+      </li>
+    )
+  }
+
+  /** Whether ANY group exists — drag-reorder of the flat component list is only
+   *  offered when there are none, exactly as before the merge (reordering a
+   *  subset of the z-stack while groups nest is not well defined). */
+  const anyGroups = layerTree.some((n) => n.kind === 'group')
+
+  const groupRowHier = (node: LayerNode, depth: number): JSX.Element => {
+    const gid = node.groupId!
+    const g = groups.find((x) => x.id === gid)
+    const open = isOpen(node.id)
+    const leaves = (n: LayerNode): number =>
+      n.children.reduce((sum, c) => sum + (c.kind === 'item' ? 1 : leaves(c)), 0)
+    return (
+      <li key={node.id} className="pe__grouprow">
         <div className="pe__flatrow pe__flatrow--partgroup" style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
           <button
             type="button"
@@ -1555,15 +1567,16 @@ function LayersPanel({
           >
             {open ? '▾' : '▸'}
           </button>
-          {renamingGroup === node.id ? (
+          {groupFlags(gid, node.label)}
+          {renamingGroup === gid ? (
             <input
               className="pe__group-rename"
               autoFocus
               defaultValue={g?.name ?? ''}
               placeholder="Group name"
-              onBlur={(e) => commitRename(node.id, e.target.value)}
+              onBlur={(e) => commitRename(gid, e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename(node.id, (e.target as HTMLInputElement).value)
+                if (e.key === 'Enter') commitRename(gid, (e.target as HTMLInputElement).value)
                 else if (e.key === 'Escape') setRenamingGroup(null)
               }}
             />
@@ -1571,26 +1584,194 @@ function LayersPanel({
             <button
               type="button"
               className="pe__flatname"
-              onClick={() => onSelectGroup?.(node.id)}
-              onDoubleClick={() => setRenamingGroup(node.id)}
+              onClick={() => onSelectGroup?.(gid)}
+              onDoubleClick={() => setRenamingGroup(gid)}
               title="Select group (double-click to rename)"
             >
-              <span className="pe__item-name">{g?.name || 'Group'}</span>
-              <span className="pe__flatsub">group · {countLeaves(node)}</span>
+              <span className="pe__item-name">{node.label}</span>
+              <span className="pe__flatsub">group · {leaves(node)}</span>
             </button>
           )}
-          {groupFlags(node.id, g?.name || 'group')}
-          <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(node.id)} title="Ungroup" aria-label="Ungroup">
+          <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>
         </div>
+        {open && <ul className="pe__flat pe__flat--nested" role="list">{node.children.map((c) => hierRow(c, depth + 1))}</ul>}
+      </li>
+    )
+  }
+
+  const bucketRowHier = (node: LayerNode, depth: number): JSX.Element => {
+    const open = isOpen(node.id)
+    const isPins = node.bucket === 'pins'
+    const isComponents = node.bucket === 'components'
+    // Pins keep their sort: order the bucket's rows the way the columns say.
+    const order = isPins
+      ? sortedPins.filter((rp) => !rp.pin.group).map((rp) => `pin:${flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1}`)
+      : null
+    const kids = order
+      ? order.map((id) => node.children.find((c) => c.id === id)).filter((c): c is LayerNode => !!c)
+      : node.children
+    return (
+      <li key={node.id} className="pe__grouprow">
+        <div className={`pe__flatrow pe__flatrow--bucket${isPins && tool === 'pin' ? ' is-active' : ''}`} style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
+          <button
+            type="button"
+            className="pe__flatcaret"
+            onClick={() => setCollapsed((c) => ({ ...c, [node.id]: !c[node.id] }))}
+            aria-expanded={open}
+            title={open ? 'Collapse' : 'Expand'}
+          >
+            {open ? '▾' : '▸'}
+          </button>
+          {flagRow(node, (flag, value) => patch(withBucketFlag(part, node, flag, value)), node.label.toLowerCase())}
+          <span className="pe__layer-name">{node.label}</span>
+          <span className="pe__layer-count">{node.children.length}</span>
+          {isComponents && (
+            <div className="pe__addwrap">
+              <button type="button" className={`pe__chip pe__chip--add${addOpen ? ' is-active' : ''}`} onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen} aria-haspopup="menu" title="Add a part">
+                ＋ Add
+              </button>
+              {addOpen && (
+                <>
+                  <div className="pe__addback" onClick={() => setAddOpen(false)} aria-hidden />
+                  <div className="pe__addmenu" role="menu">
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('button') }} title="Click the board to place a push-button">Button</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addLed() }} title="Add an onboard LED (set LED / RGB / NeoPixel + GPIO in the inspector)">LED</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+          {node.bucket === 'holes' && (
+            <button type="button" className={`pe__chip pe__chip--add${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
+              ＋
+            </button>
+          )}
+          {isPins && (
+            <>
+              <button
+                type="button"
+                className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
+                onClick={() => setTool('servo-header')}
+                title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
+                aria-label="Add servo header"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                  <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />
+                  <rect x="4" y="4.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.7" />
+                  <rect x="4" y="8.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.5" />
+                </svg>
+              </button>
+              <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
+                ＋
+              </button>
+            </>
+          )}
+          {delBtn(
+            isPins
+              ? selection?.type === 'pin'
+              : node.bucket === 'holes'
+                ? selection?.type === 'hole'
+                : selection != null &&
+                  ['shape', 'shape-vertex', 'label', 'button', 'led', 'connector'].includes(selection.type)
+          )}
+        </div>
+        {open && isPins && kids.length > 1 && (() => {
+          const arrow = (col: PinSortCol): string => (pinSort.col === col ? (pinSort.dir === 'asc' ? ' ▲' : ' ▼') : '')
+          const cls = (col: PinSortCol | null): string => `pe__pin-col${pinSort.col === col ? ' is-sorted' : ''}`
+          return (
+            <div className="pe__pin-cols" role="row">
+              <button type="button" className={`${cls(null)} pe__pin-col--name`} onClick={() => cyclePinSort(null)} title="Sort in the order pins were added">Pin</button>
+              <button type="button" className={`${cls('number')} pe__pin-col--num`} onClick={() => cyclePinSort('number')} title="Sort by board pin number">#{arrow('number')}</button>
+              <button type="button" className={`${cls('gpio')} pe__pin-col--num`} onClick={() => cyclePinSort('gpio')} title="Sort by GPIO number">GP{arrow('gpio')}</button>
+              <button type="button" className={`${cls('type')} pe__pin-col--type`} onClick={() => cyclePinSort('type')} title="Sort by pin type">Type{arrow('type')}</button>
+            </div>
+          )
+        })()}
         {open && (
-          <ul className="pe__flat pe__flat--nested" role="list">
-            {node.children.map((c) => renderNode(c, depth + 1))}
+          <ul className={`pe__flat pe__flat--nested${isPins ? ' pe__flat--pins' : ''}`} role="list">
+            {/* No groups anywhere ⇒ the component stack is still drag-reorderable,
+                exactly as it was before the merge. */}
+            {isComponents && !anyGroups
+              ? items.map((it, ri) => {
+                  const { name, sub, sel } = describe(it)
+                  const active =
+                    it.kind === 'shape'
+                      ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
+                      : selEq(sel)
+                  return (
+                    <li
+                      key={`${it.kind}${it.index}`}
+                      className={`pe__flatrow${active ? ' is-active' : ''}${dragOver === ri ? ' is-dragover' : ''}${dragRow === ri ? ' is-dragging' : ''}`}
+                      draggable
+                      onDragStart={() => setDragRow(ri)}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        if (dragOver !== ri) setDragOver(ri)
+                      }}
+                      onDrop={() => dropRow(ri)}
+                      onDragEnd={() => {
+                        setDragRow(null)
+                        setDragOver(null)
+                      }}
+                    >
+                      <span className="pe__grip" aria-hidden title="Drag to reorder (top = on top)">⋮⋮</span>
+                      {itemFlags({ kind: it.kind, index: it.index }, name)}
+                      <button type="button" className="pe__flatname" onClick={() => setSelection(sel)}>
+                        <span className="pe__item-name">{name}</span>
+                      </button>
+                      <span className="pe__flathelp">{sub}</span>
+                      <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
+                        <TrashIcon size={13} />
+                      </button>
+                    </li>
+                  )
+                })
+              : kids.map((c) => hierRow(c, depth + 1))}
           </ul>
         )}
       </li>
     )
+  }
+
+  /** The rows the panel shows: every group, then ALL THREE buckets even when
+   *  empty. `partLayerTree` omits an empty bucket — right for a general tree,
+   *  wrong for the panel, where the empty bucket is exactly where you go to
+   *  create the first pin or hole. */
+  const panelNodes: LayerNode[] = [
+    ...layerTree.filter((n) => n.kind === 'group'),
+    ...(['components', 'pins', 'holes'] as const).map(
+      (b): LayerNode =>
+        layerTree.find((n) => n.bucket === b) ?? {
+          id: `bucket:${b}`,
+          kind: 'bucket',
+          label: b === 'components' ? 'Components' : b === 'pins' ? 'Pins' : 'Mounting holes',
+          bucket: b,
+          children: [],
+          hidden: false,
+          locked: false,
+          ownHidden: false,
+          ownLocked: false
+        }
+    )
+  ]
+
+  const hierRow = (node: LayerNode, depth: number): JSX.Element => {
+    if (node.kind === 'group') return groupRowHier(node, depth)
+    if (node.kind === 'bucket') return bucketRowHier(node, depth)
+    const it = node.item!
+    if (it.kind === 'pin') {
+      const rp = pins[it.index]
+      return rp ? pinRowHier(rp, depth) : <li key={node.id} />
+    }
+    if (it.kind === 'hole') return holeRowHier(it.index, depth)
+    return itemRowTree({ kind: it.kind, index: it.index, z: 0 }, depth)
   }
 
   const setShape = (kind: 'rect' | 'polygon'): void => {
@@ -1615,218 +1796,15 @@ function LayersPanel({
 
       {variant !== 'board' && (
         <>
-      {/* Flat, drag-reorderable list of every part on the board (#132). Top of the
-          list = highest z = painted last (on top) = wins the click. The old fixed
-          per-type layers are gone; parts stack freely and you drag to reorder. */}
-      <div className={`pe__flat-head${tool === 'rect' || tool === 'circle' || tool === 'cpoly' || tool === 'text' ? ' is-active' : ''}`}>
-        {eye('components')}
-        {lock('components')}
-        <span className="pe__layer-name">Parts</span>
-        <span className="pe__layer-count">{items.length}</span>
-        <div className="pe__addwrap">
-          <button type="button" className={`pe__chip pe__chip--add${addOpen ? ' is-active' : ''}`} onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen} aria-haspopup="menu" title="Add a part">
-            ＋ Add
-          </button>
-          {addOpen && (
-            <>
-              <div className="pe__addback" onClick={() => setAddOpen(false)} aria-hidden />
-              <div className="pe__addmenu" role="menu">
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('button') }} title="Click the board to place a push-button">Button</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addLed() }} title="Add an onboard LED (set LED / RGB / NeoPixel + GPIO in the inspector)">LED</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-      {isOpen('components') && (
-        <ul className="pe__flat" role="list">
-          {items.length === 0 && <li className="pe__layer-empty">No parts yet — use ＋ Add.</li>}
-          {/* With groups, render the collapsible tree (drag-reorder is off inside
-              it); otherwise the flat, drag-reorderable list (#631). */}
-          {groups.length > 0 && items.length > 0
-            ? partTree.map((n) => renderNode(n, 0))
-            : items.map((it, ri) => {
-            const { name, sub, sel } = describe(it)
-            const active =
-              it.kind === 'shape'
-                ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
-                : selEq(sel)
-            return (
-              <li
-                key={`${it.kind}${it.index}`}
-                className={`pe__flatrow${active ? ' is-active' : ''}${dragOver === ri ? ' is-dragover' : ''}${dragRow === ri ? ' is-dragging' : ''}`}
-                draggable={!locked.components}
-                onDragStart={() => setDragRow(ri)}
-                onDragOver={(e) => {
-                  e.preventDefault()
-                  if (dragOver !== ri) setDragOver(ri)
-                }}
-                onDrop={() => dropRow(ri)}
-                onDragEnd={() => {
-                  setDragRow(null)
-                  setDragOver(null)
-                }}
-              >
-                <span className="pe__grip" aria-hidden title="Drag to reorder (top = on top)">
-                  ⋮⋮
-                </span>
-                {itemFlags({ kind: it.kind, index: it.index }, name)}
-                <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
-                  <span className="pe__item-name">{name}</span>
-                </button>
-                <span className="pe__flathelp">{sub}</span>
-                <button type="button" className="pe__trash" onClick={() => removeItem(it.kind, it.index)} title={`Remove ${name}`} aria-label={`Remove ${name}`}>
-                  <TrashIcon size={13} />
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-
-      {/* Pins — one collapsible group. Hover helper = the pin's role (io/pwr/gnd). */}
-      <div className={`pe__layer${tool === 'pin' ? ' is-active' : ''}`}>
-        <div className="pe__layer-head">
-          {caret('pins')}
-          {eye('pins')}
-          {lock('pins')}
-          <span className="pe__layer-name">Pins</span>
-          <span className="pe__layer-count">{counts.pins}</span>
-          <button
-            type="button"
-            className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
-            onClick={() => setTool('servo-header')}
-            title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
-            aria-label="Add servo header"
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />
-              <rect x="4" y="4.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.7" />
-              <rect x="4" y="8.5" width="4" height="3" rx="0.6" fill="currentColor" opacity="0.5" />
-            </svg>
-          </button>
-          <button type="button" className={`pe__chip pe__chip--add${tool === 'pin' ? ' is-active' : ''}`} onClick={() => setTool('pin')} title="Click the board to add a pin">
-            ＋
-          </button>
-        </div>
-        {isOpen('pins') && pins.length > 1 && (
-          // Clickable column headers: click to sort by that column, click again to
-          // flip asc ⇄ desc; the "Pin" header resets to insertion order. The arrow
-          // (▲/▼) marks the active column + direction.
-          (() => {
-            const arrow = (col: PinSortCol): string => (pinSort.col === col ? (pinSort.dir === 'asc' ? ' ▲' : ' ▼') : '')
-            const cls = (col: PinSortCol | null): string => `pe__pin-col${pinSort.col === col ? ' is-sorted' : ''}`
-            return (
-              <div className="pe__pin-cols" role="row">
-                <button type="button" className={`${cls(null)} pe__pin-col--name`} onClick={() => cyclePinSort(null)} title="Sort in the order pins were added">
-                  Pin
-                </button>
-                <button type="button" className={`${cls('number')} pe__pin-col--num`} onClick={() => cyclePinSort('number')} title="Sort by board pin number">
-                  #{arrow('number')}
-                </button>
-                <button type="button" className={`${cls('gpio')} pe__pin-col--num`} onClick={() => cyclePinSort('gpio')} title="Sort by GPIO number">
-                  GP{arrow('gpio')}
-                </button>
-                <button type="button" className={`${cls('type')} pe__pin-col--type`} onClick={() => cyclePinSort('type')} title="Sort by pin type">
-                  Type{arrow('type')}
-                </button>
-              </div>
-            )
-          })()
-        )}
-        {isOpen('pins') && (
-          <ul className="pe__flat pe__flat--pins" role="list">
-            {pins.length === 0 && <li className="pe__layer-empty">No pins yet.</li>}
-            {(() => {
-              // A single flat pin row, indented by its depth in the tree.
-              const pinRow = (rp: (typeof sortedPins)[number], depth: number): JSX.Element => (
-                <li
-                  key={`p${rp.hi}-${rp.pi}`}
-                  className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
-                  style={depth > 1 ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
-                >
-                  {itemFlags({ kind: 'pin', index: flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1 }, rp.pin.name || 'pin')}
-                  <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
-                    <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
-                  </button>
-                  {/* Board number + GPIO columns (blank when the pin has none). */}
-                  <span className="pe__flatnum" title={typeof rp.pin.number === 'number' ? `Board pin ${rp.pin.number}` : 'No board number'}>
-                    {typeof rp.pin.number === 'number' ? rp.pin.number : ''}
-                  </span>
-                  <span className="pe__flatnum" title={typeof rp.pin.gpio === 'number' ? `GPIO ${rp.pin.gpio}` : 'No GPIO'}>
-                    {typeof rp.pin.gpio === 'number' ? rp.pin.gpio : ''}
-                  </span>
-                  <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
-                </li>
-              )
-              // Build the pin GROUP tree: a servo trio (leaf group of pins) collapses
-              // to one row; a supergroup nests its trios beneath it (recursively).
-              type PinNode = { kind: 'pin'; rp: (typeof sortedPins)[number] } | { kind: 'group'; id: string; children: PinNode[] }
-              const pinGroups = part.groups ?? []
-              const buildGroup = (gid: string): PinNode => ({
-                kind: 'group',
-                id: gid,
-                children: [
-                  ...pinGroups.filter((g) => g.parent === gid).map((g) => buildGroup(g.id)),
-                  // A group's own members read by role (S → V → G); off the
-                  // insertion-ordered `pins` (not sortedPins) so same-type members
-                  // keep a stable order regardless of the list's sort dropdown.
-                  ...pins
-                    .filter((p) => p.pin.group === gid)
-                    .sort((a, b) => (roleOrder[a.pin.type] ?? 9) - (roleOrder[b.pin.type] ?? 9))
-                    .map((rp): PinNode => ({ kind: 'pin', rp }))
-                ]
-              })
-              const emitted = new Set<string>()
-              const top: PinNode[] = []
-              for (const rp of sortedPins) {
-                const g = rp.pin.group
-                if (!g) {
-                  top.push({ kind: 'pin', rp })
-                  continue
-                }
-                const root = groupRootId(pinGroups, g)
-                if (emitted.has(root)) continue
-                emitted.add(root)
-                top.push(buildGroup(root))
-              }
-              const leafPins = (n: PinNode): (typeof sortedPins)[number][] =>
-                n.kind === 'pin' ? [n.rp] : n.children.flatMap(leafPins)
-              const renderNode = (node: PinNode, depth: number): JSX.Element[] => {
-                if (node.kind === 'pin') return [pinRow(node.rp, depth)]
-                const gid = node.id
-                const g = pinGroups.find((x) => x.id === gid)
-                const isTrio = node.children.length > 0 && node.children.every((c) => c.kind === 'pin')
-                const open = gid in expandedGroups ? expandedGroups[gid] : !isTrio // trios collapsed, supergroups open
-                const members = leafPins(node)
-                const active = members.some((p) => selEq({ type: 'pin', hi: p.hi, pi: p.pi }))
-                const signal = members.find((p) => p.pin.type === 'io') ?? members[0]
-                const rows: JSX.Element[] = [
-                  <li key={`g${gid}`} className={`pe__flatrow pe__flatrow--group${active ? ' is-active' : ''}`} style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}>
-                    <button type="button" className="pe__flatcaret" onClick={() => setExpandedGroups((s) => ({ ...s, [gid]: !open }))} aria-expanded={open} title={open ? 'Collapse' : 'Expand'}>
-                      {open ? '▾' : '▸'}
-                    </button>
-                    {groupFlags(gid, g?.name || 'header')}
-                    <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => onSelectGroup?.(gid)}>
-                      <span className="pe__item-name">{g?.name || (isTrio ? signal?.pin.name || 'Header' : 'Group')}</span>
-                      <span className="pe__flatsub">{isTrio ? 'servo · S/V/G' : `group · ${members.length}`}</span>
-                    </button>
-                    <span className="pe__flattype pe__flattype--group">{isTrio ? 'header' : 'group'}</span>
-                  </li>
-                ]
-                if (open) for (const c of node.children) rows.push(...renderNode(c, depth + 1))
-                return rows
-              }
-              return top.flatMap((n) => renderNode(n, 0))
-            })()}
-          </ul>
-        )}
-      </div>
+      {/* ONE hierarchy (#…). Groups sit at the top and may mix kinds — a Grove
+          connector with its contacts, a servo header's S/V/G trio — and whatever
+          is ungrouped falls into a kind bucket, so a 78-pad board stays
+          navigable. Every row carries its own eye + padlock; the toggle writes
+          that row's OWN flag, so un-hiding a group restores exactly what was
+          showing before. */}
+      <ul className="pe__flat pe__flat--hier" role="list">
+        {panelNodes.map((n) => hierRow(n, 0))}
+      </ul>
 
       {/* Background image — PINNED to the bottom of the stack (painted under every
           part). Pick / replace, a background eraser + a remover live here (#132). */}
@@ -1920,35 +1898,6 @@ function LayersPanel({
 
       {variant === 'board' && (
         <>
-      {/* Mounting holes */}
-      <div className={`pe__layer${tool === 'hole' ? ' is-active' : ''}`}>
-        <div className="pe__layer-head">
-          {caret('holes')}
-          {eye('holes')}
-          {lock('holes')}
-          <span className="pe__layer-name">Mounting holes</span>
-          <span className="pe__layer-count">{counts.holes}</span>
-          <button type="button" className={`pe__chip pe__chip--add${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Click the board to add a mounting hole (pins can't sit in holes)">
-            ＋
-          </button>
-          {delBtn(selection?.type === 'hole' && !locked.holes)}
-        </div>
-        {isOpen('holes') && (
-          <ul className="pe__layer-list">
-            {holes.length === 0 && <li className="pe__layer-empty">No holes yet.</li>}
-            {holes.map((h, i) => (
-              <li key={`h${i}`} className="pe__holerow">
-                {itemFlags({ kind: 'hole', index: i }, `hole ${i + 1}`)}
-                <button type="button" disabled={locked.holes} className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
-                  <span className="pe__item-name">Hole {i + 1}</span>
-                  <span className="pe__item-sub">⌀{h.diameter}mm</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
       {/* PCB body (outline + fill) — its own toggle so board-less parts (motors)
           can hide it independently of the photo. Buttons + the background image now
           live in the flat Parts list above (#132). */}
