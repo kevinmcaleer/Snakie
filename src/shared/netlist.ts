@@ -416,6 +416,41 @@ export function buildNetlist(
     })
   }
 
+  // 1b. Board stacking (#166): a part seated in a carrier's mount is electrically
+  //     the carrier wherever the two share a pin name — that is exactly what
+  //     pushing a board into a header socket does. Without these bonds a Grove
+  //     port on the carrier has no path to the GPIO on the board plugged in above
+  //     it, and the whole carrier reads as unconnected.
+  for (const seated of robot.parts ?? []) {
+    if (!seated.mountedOn || !seated.mount) continue
+    const seatedDef = partDefs.get(seated.id)
+    const carrierDef = partDefs.get(seated.mountedOn)
+    if (!seatedDef || !carrierDef) continue
+    const mount = (carrierDef.mounts ?? []).find((m) => m.id === seated.mount)
+    // Bond only when the seat exists AND the board actually fits it. A stale or
+    // hand-edited reference must never silently fuse two unrelated boards' pins.
+    if (!mount || !seatedDef.footprint || mount.footprint !== seatedDef.footprint) continue
+    // Carrier pin name → endpoint. First occurrence wins: a carrier shouldn't
+    // repeat a socket pin name, and if it does, the first is the socket's own.
+    const carrierEndpoint = new Map<string, string>()
+    flattenPartPins(carrierDef).forEach((pin, i) => {
+      if (pin.name && !carrierEndpoint.has(pin.name)) {
+        carrierEndpoint.set(pin.name, `${seated.mountedOn}.${pin.name}#${i}`)
+      }
+    })
+    flattenPartPins(seatedDef).forEach((pin, i) => {
+      if (!pin.name) return
+      // `pinMap` covers a carrier that renames pins (its `I2C_SDA` is the board's
+      // `D4`); everything else bonds by matching name.
+      const to = carrierEndpoint.get(mount.pinMap?.[pin.name] ?? pin.name)
+      if (!to) return
+      const from = `${seated.id}.${pin.name}#${i}`
+      if (!register(from) || !register(to)) return
+      uf.union(from, to)
+      edges.push({ id: `mount:${seated.id}:${pin.name}`, from, to, internal: true })
+    })
+  }
+
   // 2. Every user-drawn wire joins its two endpoints. Unresolvable endpoints are
   //    surfaced as dangling (the wire is skipped, not silently swallowed).
   for (const conn of robot.connections ?? []) {

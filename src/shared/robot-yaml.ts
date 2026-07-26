@@ -41,6 +41,14 @@ function coercePart(raw: unknown): RobotPart | null {
     const snapped = (((Math.round(rotation / 90) * 90) % 360) + 360) % 360
     if (snapped) out.rotation = snapped // drop a no-op 0
   }
+  // Seated in a carrier (#166). Both halves or neither: a `mountedOn` with no
+  // mount id can't be placed, and a `mount` with no carrier refers to nothing.
+  const mountedOn = str(r.mountedOn)
+  const mount = str(r.mount)
+  if (mountedOn && mount) {
+    out.mountedOn = mountedOn
+    out.mount = mount
+  }
   return out
 }
 
@@ -80,6 +88,10 @@ export function robotToYaml(def: RobotDefinition): string {
     if (p.x !== undefined) o.x = p.x
     if (p.y !== undefined) o.y = p.y
     if (p.rotation) o.rotation = p.rotation // omit 0
+    if (p.mountedOn && p.mount) {
+      o.mountedOn = p.mountedOn
+      o.mount = p.mount
+    }
     return o
   })
   obj.connections = (def.connections ?? []).map((c) => {

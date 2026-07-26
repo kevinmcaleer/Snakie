@@ -437,6 +437,9 @@ interface Subject {
    *  box + title/✕ decorations track the visible body. */
   bodyDX?: number
   bodyDY?: number
+  /** True when this part is SEATED in a carrier's mount (#166) — its position is
+   *  derived from the carrier, so dragging it un-seats it rather than moving it. */
+  seated?: boolean
   pads?: PadPoint[]
   usedPadKeys?: Set<string>
   ledLit?: boolean
@@ -923,7 +926,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const boardFitW = boardPart ? partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H }).w : BOARD_BODY_W
   const boardMmW = boardPart?.dimensions?.width
   const pxPerMm = boardMmW && boardMmW > 0 ? boardFitW / boardMmW : PX_PER_MM_DEFAULT
-  robot.parts.forEach((rp, i) => {
+  // Board stacking (#166): a seated board has no position of its own — it's drawn
+  // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
+  // part's ORIGINAL index so the default scatter positions don't shift. One level
+  // of nesting is all that's supported (a carrier can't itself be seated).
+  const placedBody = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const orderedParts = robot.parts
+    .map((rp, i) => ({ rp, i }))
+    .sort((a, b) => (a.rp.mountedOn ? 1 : 0) - (b.rp.mountedOn ? 1 : 0))
+  /** Where a seated board's body centre sits: its mount's normalised point within
+   *  the carrier's drawn body. Null when the carrier isn't placed or the mount is
+   *  stale, in which case the board falls back to its own position. */
+  const seatCentre = (rp: RobotPart): { x: number; y: number } | null => {
+    if (!rp.mountedOn || !rp.mount) return null
+    const carrier = robot.parts.find((p) => p.id === rp.mountedOn)
+    const body = placedBody.get(rp.mountedOn)
+    if (!carrier || !body) return null
+    const mount = resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
+    if (!mount) return null
+    return { x: body.x + mount.x * body.w, y: body.y + mount.y * body.h }
+  }
+  orderedParts.forEach(({ rp, i }) => {
     const def = resolvePart(rp.lib, rp.part)
     const x = rp.x ?? 420 + (i % 2) * 230
     const y = rp.y ?? 90 + Math.floor(i / 2) * 240
@@ -969,15 +992,22 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         rot === 90 || rot === 270
           ? { x: cx - bh / 2, y: cy - bw / 2, w: bh, h: bw }
           : { x: 0, y: 0, w: bw, h: bh }
+      // Seated in a carrier? Put the body centre on the mount point instead of
+      // wherever the part was last dropped, so it follows the carrier around.
+      const seat = seatCentre(rp)
+      const px = seat ? seat.x - (aabb.x + aabb.w / 2) : x
+      const py = seat ? seat.y - (aabb.y + aabb.h / 2) : y
+      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h })
       subjects.push({
         key: rp.id,
         kind: 'part',
         title: rp.label || def.name || rp.id,
-        x,
-        y,
+        x: px,
+        y: py,
         w: aabb.w,
         h: aabb.h,
         mode: 'lifelike',
+        seated: !!seat,
         // Anchors live in CANVAS coords: scale to the body, then rotate about its
         // centre so dots + wires stay attached to the rotated pads.
         pins: partLifelikePins(def, nativeBox).map((p) => ({
@@ -994,7 +1024,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         rotation: rot,
         bodyDX: aabb.x,
         bodyDY: aabb.y,
-        hit: hitRegion('lifelike', x + aabb.x, y + aabb.y, aabb.w, aabb.h)
+        hit: hitRegion('lifelike', px + aabb.x, py + aabb.y, aabb.w, aabb.h)
       })
     } else {
       // The part drawn as its REAL schematic symbol.
@@ -1179,12 +1209,58 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
   }
 
+  /**
+   * A carrier mount the dropped part could seat in (#166): the part must declare
+   * the mount's footprint, and the mount must be free. Returns the carrier + mount
+   * ids, or null when the drop isn't over a compatible empty socket.
+   */
+  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
+    const rp = robot.parts.find((p) => p.id === key)
+    const footprint = rp && resolvePart(rp.lib, rp.part)?.footprint
+    if (!footprint) return null
+    for (const carrier of robot.parts) {
+      if (carrier.id === key) continue
+      const body = placedBody.get(carrier.id)
+      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
+      if (!body || !mounts?.length) continue
+      for (const m of mounts) {
+        if (m.footprint !== footprint) continue
+        // One board per socket — a taken mount isn't a drop target.
+        if (robot.parts.some((p) => p.id !== key && p.mountedOn === carrier.id && p.mount === m.id)) continue
+        const mx = body.x + m.x * body.w
+        const my = body.y + m.y * body.h
+        // Generous radius: you're aiming at a socket, not a pixel.
+        if (Math.hypot(cx - mx, cy - my) <= Math.min(body.w, body.h) * 0.55) {
+          return { carrier: carrier.id, mount: m.id }
+        }
+      }
+    }
+    return null
+  }
+
   const moveBox = (key: string, x: number, y: number): void => {
     const snapped = snapOrigin(key, x, y)
     x = snapped.x
     y = snapped.y
-    if (key === 'board') persist({ ...robot, boardX: x, boardY: y })
-    else persist({ ...robot, parts: robot.parts.map((p) => (p.id === key ? { ...p, x, y } : p)) })
+    if (key === 'board') {
+      persist({ ...robot, boardX: x, boardY: y })
+      return
+    }
+    // Dropping a board onto a compatible free socket SEATS it — from then on its
+    // position comes from the carrier. Dropping it anywhere else un-seats it, so
+    // dragging a seated board off its carrier is how you take it back out.
+    const s = subjByKey.get(key)
+    const seat = mountUnder(key, x + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2, y + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2)
+    persist({
+      ...robot,
+      parts: robot.parts.map((p) =>
+        p.id === key
+          ? seat
+            ? { ...p, x, y, mountedOn: seat.carrier, mount: seat.mount }
+            : { ...p, x, y, mountedOn: undefined, mount: undefined }
+          : p
+      )
+    })
   }
   const addConnection = (from: string, to: string): void => {
     if (from === to) return
@@ -2324,6 +2400,72 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             })}
 
             {/* The live wire being dragged. */}
+            {/* Dragging a board that plugs in: ring every empty compatible socket,
+                and fill the one it would drop into. Without this a mount is
+                invisible until you happen to let go in the right place. */}
+            {drag?.kind === 'box' &&
+              drag.moved &&
+              drag.boxKey &&
+              (() => {
+                const dragged = robot.parts.find((p) => p.id === drag.boxKey)
+                const footprint = dragged && resolvePart(dragged.lib, dragged.part)?.footprint
+                if (!footprint) return null
+                const s = subjByKey.get(drag.boxKey)
+                const cx = (s?.x ?? 0) + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2
+                const cy = (s?.y ?? 0) + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2
+                const target = mountUnder(drag.boxKey, cx, cy)
+                return (
+                  <g style={{ pointerEvents: 'none' }} className="wc__mount-targets">
+                    {robot.parts.flatMap((carrier) => {
+                      if (carrier.id === drag.boxKey) return []
+                      const body = placedBody.get(carrier.id)
+                      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts ?? []
+                      if (!body) return []
+                      return mounts
+                        .filter((m) => m.footprint === footprint)
+                        .filter(
+                          (m) =>
+                            !robot.parts.some(
+                              (p) => p.id !== drag.boxKey && p.mountedOn === carrier.id && p.mount === m.id
+                            )
+                        )
+                        .map((m) => {
+                          const isOver = target?.carrier === carrier.id && target?.mount === m.id
+                          const r = Math.min(body.w, body.h) * 0.5
+                          return (
+                            <g key={`mt${carrier.id}${m.id}`}>
+                              <circle
+                                cx={body.x + m.x * body.w}
+                                cy={body.y + m.y * body.h}
+                                r={r}
+                                fill={isOver ? '#3ec46d' : 'none'}
+                                fillOpacity={isOver ? 0.16 : 0}
+                                stroke="#3ec46d"
+                                strokeWidth={isOver ? 3 : 1.5}
+                                strokeDasharray={isOver ? undefined : '6 5'}
+                                opacity={isOver ? 0.95 : 0.5}
+                              />
+                              <text
+                                x={body.x + m.x * body.w}
+                                y={body.y + m.y * body.h - r - 6}
+                                textAnchor="middle"
+                                fontSize={11}
+                                fontWeight={700}
+                                fill="#d8f5e3"
+                                stroke="#08301c"
+                                strokeWidth={3.5}
+                                style={{ paintOrder: 'stroke' }}
+                              >
+                                {m.label || m.footprint}
+                              </text>
+                            </g>
+                          )
+                        })
+                    })}
+                  </g>
+                )
+              })()}
+
             {/* Seated plug shells, drawn over the wires so the lead's four
                 conductors disappear into the housing the way they really do. */}
             {cablePlugs.map(({ t, kind, angle }, i) => {

@@ -21,12 +21,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   header always reads Signal · V+ · GND. This is the groundwork for seating cables
   the right way round rather than merely joining them pin-to-pin.
 
-- **Board stacking model.** A board can declare the header `footprint` it plugs
-  into (`xiao`, `pico`, …) and a carrier board can declare `mounts` that accept
-  that footprint, with same-named pins bonding automatically. Mating is by name
-  rather than geometry, so a XIAO RP2350 and a XIAO RP2040 both seat in the same
-  expansion base and a new carrier only has to name the family it accepts. (Data
-  model; seating and stacked rendering follow.)
+- **Board stacking — plug a board into a carrier.** Drag a XIAO over a XIAO
+  Expansion Base (or a Pico over a Pico Explorer) and its socket rings green;
+  drop it and the board **seats**, drawn stacked on the carrier and moving with it
+  from then on. Dragging it off takes it back out. A board declares the header
+  `footprint` it plugs into (`xiao`, `pico`, …); a carrier declares `mounts` that
+  accept that footprint. Mating is by name rather than geometry, so a XIAO RP2350
+  and a XIAO RP2040 both seat in the same base, and a new carrier only has to name
+  the family it accepts.
+- **A seated board is electrically the carrier** at every pin they share by name —
+  which is what a header socket does. So a module wired to a Grove port on the
+  expansion base now resolves through to the real GPIO on the board plugged in
+  above it, with no hand-wiring of the socket. `pinMap` covers carriers that rename
+  pins, and a board that doesn't fit its mount is never bonded.
 - **Seven new standard parts** for the Seeed Grove ecosystem: **XIAO Expansion
   Base** (the carrier — OLED, RTC, buzzer, SD, four Grove ports, and a XIAO
   socket), **Grove 6-Axis Accel & Gyro** (LSM6DS3), **Grove I²C Motor Driver**

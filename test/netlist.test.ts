@@ -350,3 +350,156 @@ describe('remapConnectionsForBoard (MCU swap)', () => {
     expect(r.connections[0].from).toBe('board.3.3V#0')
   })
 })
+
+// --- board stacking (#166) ---------------------------------------------------
+
+/** A tiny "XIAO": declares the footprint it plugs into. */
+const XIAO: PartDefinition = {
+  id: 'xiao',
+  name: 'XIAO',
+  footprint: 'xiao',
+  headers: [
+    {
+      edge: 'left',
+      pins: [
+        { name: 'D4', type: 'io', gpio: 6, capabilities: ['i2c'] },
+        { name: 'D5', type: 'io', gpio: 7, capabilities: ['i2c'] },
+        { name: '3V3', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    }
+  ]
+}
+
+/** A carrier with a XIAO socket and a Grove port hanging off D4/D5. */
+const CARRIER: PartDefinition = {
+  id: 'base',
+  name: 'Base',
+  mounts: [{ id: 'xiao', footprint: 'xiao', x: 0.5, y: 0.3 }],
+  headers: [
+    {
+      edge: 'left',
+      pins: [
+        { name: 'D4', type: 'io' },
+        { name: 'D5', type: 'io' },
+        { name: '3V3', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    }
+  ],
+  connectors: [
+    {
+      kind: 'grove',
+      variant: 'i2c',
+      x: 0.2,
+      y: 0.9,
+      pins: [
+        { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } },
+        { name: 'SDA', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SDA' } },
+        { name: 'VCC', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    }
+  ]
+}
+
+const seatedRobot = (over: Partial<RobotDefinition['parts'][number]> = {}): RobotDefinition => ({
+  parts: [
+    { id: 'base1', lib: 'l', part: 'base' },
+    { id: 'xiao1', lib: 'l', part: 'xiao', mountedOn: 'base1', mount: 'xiao', ...over }
+  ],
+  connections: []
+})
+
+const STACK_DEFS = new Map<string, PartDefinition>([
+  ['base1', CARRIER],
+  ['xiao1', XIAO]
+])
+
+describe('buildNetlist — board stacking (#166)', () => {
+  it('bonds a seated board to the carrier at every same-named pin', () => {
+    const nl = buildNetlist(seatedRobot(), null, STACK_DEFS)
+    for (const [pin, i] of [
+      ['D4', 0],
+      ['D5', 1],
+      ['3V3', 2],
+      ['GND', 3]
+    ] as const) {
+      expect(nl.nodeOf[ep('xiao1', pin, i)]).toBe(nl.nodeOf[ep('base1', pin, i)])
+    }
+  })
+
+  it('gives the carrier’s Grove port a path to the GPIO on the board above it', () => {
+    // The whole point: wire a module to the carrier's Grove SDA and it should land
+    // on the seated board's D4 (GP6) without the user wiring the socket by hand.
+    const nl = buildNetlist(
+      {
+        ...seatedRobot(),
+        connections: [wire('w', ep('base1', 'SDA', 5), ep('base1', 'D4', 0))]
+      },
+      null,
+      STACK_DEFS
+    )
+    const node = nodeAt(nl, ep('base1', 'SDA', 5))
+    expect(node?.terminals.map((t) => t.endpoint)).toContain(ep('xiao1', 'D4', 0))
+    expect(node?.terminals.find((t) => t.endpoint === ep('xiao1', 'D4', 0))?.gpio).toBe(6)
+  })
+
+  it('marks the bonds internal, so they read as the socket and not as user wires', () => {
+    const nl = buildNetlist(seatedRobot(), null, STACK_DEFS)
+    const bonds = nl.edges.filter((e) => e.id.startsWith('mount:'))
+    expect(bonds).toHaveLength(4)
+    expect(bonds.every((e) => e.internal)).toBe(true)
+  })
+
+  it('refuses to bond when the board does not fit the mount', () => {
+    const wrong = new Map(STACK_DEFS)
+    wrong.set('xiao1', { ...XIAO, footprint: 'feather' })
+    // Wire both D4s to something so the terminals are registered either way —
+    // otherwise "no node" and "different node" look the same.
+    const conns = [
+      wire('a', ep('xiao1', 'D4', 0), ep('xiao1', 'GND', 3)),
+      wire('b', ep('base1', 'D4', 0), ep('base1', 'GND', 3))
+    ]
+    const nl = buildNetlist({ ...seatedRobot(), connections: conns }, null, wrong)
+    expect(nl.edges.filter((e) => e.id.startsWith('mount:'))).toEqual([])
+    expect(nl.nodeOf[ep('xiao1', 'D4', 0)]).toBeDefined()
+    expect(nl.nodeOf[ep('xiao1', 'D4', 0)]).not.toBe(nl.nodeOf[ep('base1', 'D4', 0)])
+    // A feather does not become a XIAO just because it was dropped on the socket.
+    const fitted = buildNetlist({ ...seatedRobot(), connections: conns }, null, STACK_DEFS)
+    expect(fitted.nodeOf[ep('xiao1', 'D4', 0)]).toBe(fitted.nodeOf[ep('base1', 'D4', 0)])
+  })
+
+  it('refuses to bond a board with no footprint, or a mount id that does not exist', () => {
+    const noFootprint = new Map(STACK_DEFS)
+    noFootprint.set('xiao1', { ...XIAO, footprint: undefined })
+    expect(
+      buildNetlist(seatedRobot(), null, noFootprint).edges.filter((e) => e.id.startsWith('mount:'))
+    ).toEqual([])
+    expect(
+      buildNetlist(seatedRobot({ mount: 'nope' }), null, STACK_DEFS).edges.filter((e) =>
+        e.id.startsWith('mount:')
+      )
+    ).toEqual([])
+  })
+
+  it('honours a pinMap for a carrier that renames the socket pins', () => {
+    const renamed: PartDefinition = {
+      ...CARRIER,
+      mounts: [{ id: 'xiao', footprint: 'xiao', x: 0.5, y: 0.3, pinMap: { D4: 'I2C_SDA' } }],
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'I2C_SDA', type: 'io' },
+            { name: 'D5', type: 'io' },
+            { name: '3V3', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    }
+    const nl = buildNetlist(seatedRobot(), null, new Map([['base1', renamed], ['xiao1', XIAO]]))
+    expect(nl.nodeOf[ep('xiao1', 'D4', 0)]).toBe(nl.nodeOf[ep('base1', 'I2C_SDA', 0)])
+  })
+})
