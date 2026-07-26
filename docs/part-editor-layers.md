@@ -1,6 +1,7 @@
 # Part Editor — the single layer hierarchy
 
-Status: **model + tree done, panel UI + canvas enforcement outstanding.**
+Status: **model, tree and per-row hide/lock done. Structural merge of the panel
+into one list, and canvas enforcement, outstanding.**
 
 ## Why
 
@@ -79,7 +80,18 @@ Tests: `test/partLayerTree.test.ts`, including an assertion against the real
 
 ## Outstanding
 
-### 1. Layers panel UI (`PartEditor.tsx`, `LayersPanel`)
+### 1. Merge the panel into ONE list (`PartEditor.tsx`, `LayersPanel`)
+
+Per-row eye + lock are **done** — every row (component, grouped component, pin,
+servo-header group, mounting hole) carries them, driven by `partLayerTree` for
+effective state and `withItemFlag`/`withGroupFlag` for the write. What remains is
+structural: the *Parts* and *Pins* sections are still separate lists rather than
+one tree from `partLayerTree`.
+
+That was left deliberately. Those sections carry a lot of behaviour worth keeping
+— pin column sorting, servo-trio collapsing, drag-reorder, group rename — and
+re-implementing it from scratch risks losing it. The merge should MOVE those row
+renderers under the bucket nodes, not rewrite them.
 
 Replace the current *Parts* + *Pins* sections with one tree from
 `partLayerTree`. Today `LayersPanel` has two variants (`'layers'` = Parts+Pins,

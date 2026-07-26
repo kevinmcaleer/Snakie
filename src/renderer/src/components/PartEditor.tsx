@@ -33,6 +33,9 @@ import {
   translateShape,
   normalisePart,
   orderedItems,
+  partLayerTree,
+  withGroupFlag,
+  withItemFlag,
   applyItemOrder,
   nextItemZ,
   type OrderedItem,
@@ -43,6 +46,8 @@ import {
   validatePart,
   withPinPositions,
   withShapesFromFeatures
+  ,type HierItem,
+  type LayerNode
 } from './part-editor.util'
 import { GROVE_VARIANTS, PART_CONNECTOR_KINDS } from '../../../shared/part'
 import type {
@@ -1372,6 +1377,86 @@ function LayersPanel({
   // Loose items render inline; a grouped item collapses under its top-level group
   // node, which nests its members + sub-groups recursively.
   const groups = part.groups ?? []
+
+  // --- per-row hide / lock (#…) ---------------------------------------------
+  // The single hierarchy gives every item and group its own hidden/locked flag.
+  // Rows read their EFFECTIVE state from the tree (so a member of a hidden group
+  // shows as hidden) but their toggle writes only the row's OWN flag — that is
+  // what lets un-hiding a group restore exactly what was showing before.
+  const layerTree = partLayerTree(part)
+  const nodeById = (() => {
+    const m = new Map<string, LayerNode>()
+    const walk = (ns: LayerNode[]): void => {
+      for (const n of ns) {
+        m.set(n.id, n)
+        walk(n.children)
+      }
+    }
+    walk(layerTree)
+    return m
+  })()
+  /** Flat pin index (what the hierarchy keys pins by) from a header/pin pair. */
+  const flatPin = (() => {
+    const m = new Map<string, number>()
+    pins.forEach((rp, i) => m.set(`${rp.hi}-${rp.pi}`, i))
+    return m
+  })()
+
+  const flagRow = (
+    node: LayerNode | undefined,
+    onSet: (flag: 'hidden' | 'locked', value: boolean) => void,
+    what: string
+  ): JSX.Element | null => {
+    if (!node) return null
+    // Inherited = hidden/locked by an ancestor group. Shown as active but not
+    // clearable here, because the flag it would clear isn't the one in force.
+    const inheritedHide = node.hidden && !node.ownHidden
+    const inheritedLock = node.locked && !node.ownLocked
+    return (
+      <>
+        <button
+          type="button"
+          className={`pe__rowflag${node.hidden ? ' is-on' : ''}${inheritedHide ? ' is-inherited' : ''}`}
+          onClick={() => onSet('hidden', !node.ownHidden)}
+          title={
+            inheritedHide
+              ? `Hidden because its group is — unhide the group to show ${what}`
+              : node.ownHidden
+                ? `Show ${what}`
+                : `Hide ${what}`
+          }
+          aria-label={node.ownHidden ? `Show ${what}` : `Hide ${what}`}
+          aria-pressed={node.hidden}
+        >
+          {node.hidden ? '◌' : '●'}
+        </button>
+        <button
+          type="button"
+          className={`pe__rowflag${node.locked ? ' is-on' : ''}${inheritedLock ? ' is-inherited' : ''}`}
+          onClick={() => onSet('locked', !node.ownLocked)}
+          title={
+            inheritedLock
+              ? `Locked because its group is — unlock the group to edit ${what}`
+              : node.ownLocked
+                ? `Unlock ${what}`
+                : `Lock ${what}`
+          }
+          aria-label={node.ownLocked ? `Unlock ${what}` : `Lock ${what}`}
+          aria-pressed={node.locked}
+        >
+          {node.locked ? <LockIcon size={11} /> : <UnlockIcon size={11} />}
+        </button>
+      </>
+    )
+  }
+
+  /** Eye + padlock for one ITEM row. */
+  const itemFlags = (item: HierItem, what: string): JSX.Element | null =>
+    flagRow(nodeById.get(`${item.kind}:${item.index}`), (flag, value) => patch(withItemFlag(part, item, flag, value)), what)
+
+  /** Eye + padlock for one GROUP row. */
+  const groupFlags = (groupId: string, what: string): JSX.Element | null =>
+    flagRow(nodeById.get(`group:${groupId}`), (flag, value) => patch(withGroupFlag(part, groupId, flag, value)), what)
   const groupOfItem = (it: OrderedItem): string | undefined =>
     it.kind === 'shape' ? shapes[it.index]?.group : it.kind === 'label' ? labels[it.index]?.group : undefined
   type PartNode = { kind: 'item'; item: OrderedItem } | { kind: 'group'; id: string; children: PartNode[] }
@@ -1422,6 +1507,7 @@ function LayersPanel({
         className={`pe__flatrow${active ? ' is-active' : ''}`}
         style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
       >
+        {itemFlags({ kind: it.kind, index: it.index }, name)}
         <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
           <span className="pe__item-name">{name}</span>
         </button>
@@ -1472,6 +1558,7 @@ function LayersPanel({
               <span className="pe__flatsub">group · {countLeaves(node)}</span>
             </button>
           )}
+          {groupFlags(node.id, g?.name || 'group')}
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(node.id)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>
@@ -1567,6 +1654,7 @@ function LayersPanel({
                 <span className="pe__grip" aria-hidden title="Drag to reorder (top = on top)">
                   ⋮⋮
                 </span>
+                {itemFlags({ kind: it.kind, index: it.index }, name)}
                 <button type="button" className="pe__flatname" disabled={locked.components} onClick={() => setSelection(sel)}>
                   <span className="pe__item-name">{name}</span>
                 </button>
@@ -1641,6 +1729,7 @@ function LayersPanel({
                   className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
                   style={depth > 1 ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
                 >
+                  {itemFlags({ kind: 'pin', index: flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1 }, rp.pin.name || 'pin')}
                   <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => setSelection({ type: 'pin', hi: rp.hi, pi: rp.pi })}>
                     <span className="pe__item-name">{rp.pin.name || '(pin)'}</span>
                   </button>
@@ -1701,6 +1790,7 @@ function LayersPanel({
                     <button type="button" className="pe__flatcaret" onClick={() => setExpandedGroups((s) => ({ ...s, [gid]: !open }))} aria-expanded={open} title={open ? 'Collapse' : 'Expand'}>
                       {open ? '▾' : '▸'}
                     </button>
+                    {groupFlags(gid, g?.name || 'header')}
                     <button type="button" disabled={locked.pins} className="pe__flatname" onClick={() => onSelectGroup?.(gid)}>
                       <span className="pe__item-name">{g?.name || (isTrio ? signal?.pin.name || 'Header' : 'Group')}</span>
                       <span className="pe__flatsub">{isTrio ? 'servo · S/V/G' : `group · ${members.length}`}</span>
@@ -1826,7 +1916,8 @@ function LayersPanel({
           <ul className="pe__layer-list">
             {holes.length === 0 && <li className="pe__layer-empty">No holes yet.</li>}
             {holes.map((h, i) => (
-              <li key={`h${i}`}>
+              <li key={`h${i}`} className="pe__holerow">
+                {itemFlags({ kind: 'hole', index: i }, `hole ${i + 1}`)}
                 <button type="button" disabled={locked.holes} className={`pe__item${selEq({ type: 'hole', index: i }) ? ' is-active' : ''}`} onClick={() => setSelection({ type: 'hole', index: i })}>
                   <span className="pe__item-name">Hole {i + 1}</span>
                   <span className="pe__item-sub">⌀{h.diameter}mm</span>

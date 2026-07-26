@@ -1955,3 +1955,91 @@ export function partLayerTree(part: PartDefinition): LayerNode[] {
 
   return [...roots.map(groupNode), ...buckets]
 }
+
+/** Map a hierarchy leaf back to the pin's (header, pin) indices — `HierItem`
+ *  carries the FLAT pin index, but the part stores pins per header. */
+export function pinAt(part: PartDefinition, flatIndex: number): { hi: number; pi: number } | null {
+  const rp = resolvedPins(part)[flatIndex]
+  return rp ? { hi: rp.hi, pi: rp.pi } : null
+}
+
+/**
+ * Set `hidden` or `locked` on one item, returning the fields to patch.
+ *
+ * Writes the item's OWN flag only — never a group's, and never its siblings'. A
+ * row that reads as hidden because its group is stays untouched, so un-hiding the
+ * group brings back exactly what was showing before.
+ */
+export function withItemFlag(
+  part: PartDefinition,
+  item: HierItem,
+  flag: 'hidden' | 'locked',
+  value: boolean
+): Partial<PartDefinition> {
+  const set = <T extends object>(arr: T[] | undefined, index: number): T[] =>
+    (arr ?? []).map((el, i) => (i === index ? { ...el, [flag]: value || undefined } : el))
+  switch (item.kind) {
+    case 'shape':
+      return { shapes: set(part.shapes, item.index) }
+    case 'label':
+      return { labels: set(part.labels, item.index) }
+    case 'button':
+      return { buttons: set(part.buttons, item.index) }
+    case 'led':
+      return { onboardLeds: set(part.onboardLeds, item.index) }
+    case 'connector':
+      return { connectors: set(part.connectors, item.index) }
+    case 'hole':
+      return { mountingHoles: set(part.mountingHoles, item.index) }
+    case 'pin': {
+      const at = pinAt(part, item.index)
+      if (!at) return {}
+      return {
+        headers: (part.headers ?? []).map((h, hi) =>
+          hi === at.hi ? { ...h, pins: set(h.pins, at.pi) } : h
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Set `hidden`/`locked` on a GROUP. A group id referenced by items but absent
+ * from the registry (the servo2040's headers) is registered on the way, so the
+ * flag has somewhere to live instead of being silently discarded.
+ */
+export function withGroupFlag(
+  part: PartDefinition,
+  groupId: string,
+  flag: 'hidden' | 'locked',
+  value: boolean
+): Partial<PartDefinition> {
+  const groups = part.groups ?? []
+  const known = groups.some((g) => g.id === groupId)
+  const next = known
+    ? groups.map((g) => (g.id === groupId ? { ...g, [flag]: value || undefined } : g))
+    : [...groups, { id: groupId, [flag]: value || undefined }]
+  return { groups: next }
+}
+
+/**
+ * Set a flag on EVERY leaf under a bucket. Buckets aren't real objects — they're
+ * a view over the ungrouped items — so a bucket toggle fans out to its members
+ * rather than storing anything of its own.
+ */
+export function withBucketFlag(
+  part: PartDefinition,
+  node: LayerNode,
+  flag: 'hidden' | 'locked',
+  value: boolean
+): Partial<PartDefinition> {
+  let patch: Partial<PartDefinition> = {}
+  let working = part
+  for (const child of node.children) {
+    if (!child.item) continue
+    const p = withItemFlag(working, child.item, flag, value)
+    working = { ...working, ...p }
+    patch = { ...patch, ...p }
+  }
+  return patch
+}

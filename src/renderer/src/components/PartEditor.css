@@ -1630,3 +1630,57 @@
 .pe__help-preview[open] > summary {
   margin-bottom: 0.45rem;
 }
+
+/* --- per-row hide / lock (the single layer hierarchy) --------------------- */
+/* One pair per row: eye then padlock, sitting before the row's name so every
+   row's controls line up down the panel regardless of indent. */
+.pe__rowflag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.pe__rowflag:hover {
+  color: var(--text);
+  opacity: 1;
+  background: var(--card);
+}
+
+/* Held on — hidden or locked. Accent, never a hardcoded gold, so it reads in
+   both the dark and skeuomorph skins. */
+.pe__rowflag.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Inherited from an ancestor group: on, but not this row's to clear. Dashed so
+   it's visibly different from a flag the row owns. */
+.pe__rowflag.is-inherited {
+  opacity: 0.7;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -1px;
+}
+
+/* A hole row is a flex line so its flags sit beside the button, not above it. */
+.pe__holerow {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.pe__holerow .pe__item {
+  flex: 1 1 auto;
+}

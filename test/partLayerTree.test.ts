@@ -2,7 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { partFromYaml } from '../src/shared/part-yaml'
-import { normalisePart, partLayerTree, type LayerNode } from '../src/renderer/src/components/part-editor.util'
+import {
+  normalisePart,
+  partLayerTree,
+  withBucketFlag,
+  withGroupFlag,
+  withItemFlag,
+  type HierItem,
+  type LayerNode
+} from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
 /**
@@ -134,5 +142,88 @@ describe('partLayerTree', () => {
     expect(pins!.children.length).toBe(78 - 18 * 3)
     // Top level is 18 groups + whatever buckets are non-empty — not 78 rows.
     expect(tree.length).toBeLessThan(25)
+  })
+})
+
+describe('hide / lock mutations', () => {
+  const base = (): PartDefinition =>
+    normalisePart({
+      id: 'p',
+      name: 'P',
+      groups: [{ id: 'g', name: 'G' }],
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'A', type: 'io', group: 'g' },
+            { name: 'B', type: 'io' }
+          ]
+        }
+      ],
+      connectors: [{ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.9, group: 'g', pins: [{ name: 'SCL', type: 'io' }] }],
+      mountingHoles: [{ x: 0.1, y: 0.1, diameter: 2 }],
+      labels: [{ text: 'U1', x: 0.5, y: 0.5 }]
+    })
+
+  it('hides one item without touching its siblings or its group', () => {
+    const part = base()
+    const next = normalisePart({ ...part, ...withItemFlag(part, { kind: 'pin', index: 1 }, 'hidden', true) })
+    expect(next.headers[0].pins[1].hidden).toBe(true)
+    expect(next.headers[0].pins[0].hidden).toBeUndefined()
+    expect(next.groups?.[0].hidden).toBeUndefined()
+  })
+
+  it('reaches every kind, including the ones that had no group before', () => {
+    const part = base()
+    const kinds: [HierItem, (p: PartDefinition) => unknown][] = [
+      [{ kind: 'connector', index: 0 }, (p) => p.connectors?.[0].locked],
+      [{ kind: 'hole', index: 0 }, (p) => p.mountingHoles?.[0].locked],
+      [{ kind: 'label', index: 0 }, (p) => p.labels?.[0].locked],
+      [{ kind: 'pin', index: 0 }, (p) => p.headers[0].pins[0].locked]
+    ]
+    for (const [item, read] of kinds) {
+      const next = normalisePart({ ...part, ...withItemFlag(part, item, 'locked', true) })
+      expect(read(next)).toBe(true)
+    }
+  })
+
+  it('clearing a flag removes it rather than writing false', () => {
+    // `hidden: false` would survive the round-trip as noise in every parts.yml.
+    const part = normalisePart({ ...base(), ...withItemFlag(base(), { kind: 'pin', index: 1 }, 'hidden', true) })
+    const off = normalisePart({ ...part, ...withItemFlag(part, { kind: 'pin', index: 1 }, 'hidden', false) })
+    expect('hidden' in off.headers[0].pins[1]).toBe(false)
+  })
+
+  it('hiding a group hides its members’ EFFECTIVE state, not their own flags', () => {
+    const part = base()
+    const next = normalisePart({ ...part, ...withGroupFlag(part, 'g', 'hidden', true) })
+    const pin = find(partLayerTree(next), 'pin:0')!
+    expect([pin.hidden, pin.ownHidden]).toEqual([true, false])
+    // ...and un-hiding restores exactly what was showing before.
+    const back = normalisePart({ ...next, ...withGroupFlag(next, 'g', 'hidden', false) })
+    expect(find(partLayerTree(back), 'pin:0')!.hidden).toBe(false)
+  })
+
+  it('registers a synthesised group when one of its flags is set', () => {
+    // The servo2040 has `group: servo-1` on pins and no registry at all; without
+    // registering it here the toggle would have nowhere to write.
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'S', type: 'io', group: 'servo-1' }] }]
+    })
+    expect(part.groups).toBeUndefined()
+    const next = normalisePart({ ...part, ...withGroupFlag(part, 'servo-1', 'locked', true) })
+    expect(next.groups).toEqual([{ id: 'servo-1', locked: true }])
+    expect(find(partLayerTree(next), 'pin:0')!.locked).toBe(true)
+  })
+
+  it('a bucket toggle fans out to every item in it', () => {
+    const part = base()
+    const pins = partLayerTree(part).find((n) => n.id === 'bucket:pins')!
+    const next = normalisePart({ ...part, ...withBucketFlag(part, pins, 'hidden', true) })
+    // Only the UNGROUPED pin is in that bucket, so only it is hidden.
+    expect(next.headers[0].pins[1].hidden).toBe(true)
+    expect(next.headers[0].pins[0].hidden).toBeUndefined()
   })
 })
