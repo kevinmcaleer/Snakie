@@ -11,7 +11,7 @@ import {
   type LayerVisibility,
   type LayerLocks
 } from './PartCanvas'
-import { pinOutwardDir } from './part-body'
+import { connectorDefaultName, pinOutwardDir } from './part-body'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
@@ -44,15 +44,18 @@ import {
   withPinPositions,
   withShapesFromFeatures
 } from './part-editor.util'
+import { GROVE_VARIANTS, PART_CONNECTOR_KINDS } from '../../../shared/part'
 import type {
   ComponentShape,
   ComponentShapeKind,
   ElectricalModel,
+  GroveVariant,
   ImageLayer,
   MountingHole,
   OnboardLed,
   PartButton,
   PartConnector,
+  PartConnectorKind,
   PartDefinition,
   PartElectrical,
   PartHeader,
@@ -104,6 +107,64 @@ const JST_PINS: PartPin[] = [
   { name: 'PIN3', type: 'io' },
   { name: 'PIN4', type: 'io' }
 ]
+/** Grove is ONE 4-pin housing wired four different ways. Contact order is the
+ *  Grove standard and never varies — signal 1 · signal 2 · VCC · GND, which is
+ *  the yellow · white · red · black of every Grove cable. Getting the order right
+ *  here is what lets a cable be seated the correct way round later. */
+const GROVE_PINS: Record<GroveVariant, PartPin[]> = {
+  i2c: [
+    { name: 'SCL', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SCL' } },
+    { name: 'SDA', type: 'io', capabilities: ['i2c'], signals: { i2c: 'SDA' } },
+    { name: 'VCC', type: 'pwr' },
+    { name: 'GND', type: 'gnd' }
+  ],
+  uart: [
+    { name: 'RX', type: 'io', capabilities: ['uart'], signals: { uart: 'RX' } },
+    { name: 'TX', type: 'io', capabilities: ['uart'], signals: { uart: 'TX' } },
+    { name: 'VCC', type: 'pwr' },
+    { name: 'GND', type: 'gnd' }
+  ],
+  digital: [
+    { name: 'D0', type: 'io', capabilities: ['digital'] },
+    { name: 'D1', type: 'io', capabilities: ['digital'] },
+    { name: 'VCC', type: 'pwr' },
+    { name: 'GND', type: 'gnd' }
+  ],
+  analog: [
+    { name: 'A0', type: 'io', capabilities: ['adc'] },
+    { name: 'A1', type: 'io', capabilities: ['adc'] },
+    { name: 'VCC', type: 'pwr' },
+    { name: 'GND', type: 'gnd' }
+  ]
+}
+/** A 3-way servo / DuPont header block in the orientation the lead expects:
+ *  contact 1 = Signal, then V+, then GND — the orange · red · brown of a servo
+ *  lead. Plugging one on backwards is the classic beginner mistake, so the order
+ *  is fixed here and the housing draws a pin-1 marker. */
+const SERVO_PINS: PartPin[] = [
+  { name: 'SIG', type: 'io', capabilities: ['pwm'] },
+  { name: 'V+', type: 'pwr' },
+  { name: 'GND', type: 'gnd' }
+]
+/** Inspector heading + picker labels per connector kind. */
+const CONN_KIND_TITLE: Record<PartConnectorKind, string> = {
+  qwiic: 'QWIIC / STEMMA QT',
+  jst: 'JST connector',
+  grove: 'Grove port',
+  dupont: 'Servo / DuPont header'
+}
+const CONN_KIND_LABEL: Record<PartConnectorKind, string> = {
+  qwiic: 'QWIIC',
+  jst: 'JST',
+  grove: 'Grove',
+  dupont: 'Servo / DuPont'
+}
+const GROVE_VARIANT_LABEL: Record<GroveVariant, string> = {
+  i2c: 'I²C',
+  uart: 'UART',
+  digital: 'Digital',
+  analog: 'Analog'
+}
 /** Deep-clone connector prefill pins so connectors don't share nested refs. */
 const cloneConnPins = (pins: PartPin[]): PartPin[] =>
   pins.map((p) => ({
@@ -111,6 +172,19 @@ const cloneConnPins = (pins: PartPin[]): PartPin[] =>
     capabilities: p.capabilities ? [...p.capabilities] : undefined,
     signals: p.signals ? { ...p.signals } : undefined
   }))
+/** The standard contacts for a connector kind — Grove's four wirings, a 3-way
+ *  servo block, QWIIC's I2C four, or four blank JST pins. Used both when adding a
+ *  connector and by the inspector's "Standard contacts" reset. */
+const standardConnPins = (kind: PartConnectorKind, variant?: GroveVariant): PartPin[] =>
+  cloneConnPins(
+    kind === 'grove'
+      ? GROVE_PINS[variant ?? 'i2c']
+      : kind === 'dupont'
+        ? SERVO_PINS
+        : kind === 'jst'
+          ? JST_PINS
+          : QWIIC_PINS
+  )
 
 /**
  * PART EDITOR (#130, layered-canvas redesign)
@@ -1171,10 +1245,11 @@ function LayersPanel({
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
   }
-  /** Append a connector (QWIIC/STEMMA QT or generic JST) at the centre + select it. */
-  const addConnector = (kind: 'qwiic' | 'jst'): void => {
-    const pins = cloneConnPins(kind === 'qwiic' ? QWIIC_PINS : JST_PINS)
-    const next = [...connectors, { kind, x: 0.5, y: 0.5, pins, z: nextItemZ(part) }]
+  /** Append a connector at the centre + select it, prefilled with its kind's
+   *  standard contacts (in the standard order — that order IS the orientation). */
+  const addConnector = (kind: PartConnectorKind, variant?: GroveVariant): void => {
+    const pins = standardConnPins(kind, variant)
+    const next = [...connectors, { kind, variant, x: 0.5, y: 0.5, pins, z: nextItemZ(part) }]
     patch({ connectors: next })
     setSelection({ type: 'connector', index: next.length - 1 })
   }
@@ -1221,8 +1296,7 @@ function LayersPanel({
       }
       case 'connector': {
         const c = connectors[it.index]
-        const word = c.kind === 'qwiic' ? 'QWIIC' : 'JST'
-        return { name: `${c.label || word} ${it.index + 1}`, sub: `${c.pins.length}-pin`, sel: { type: 'connector', index: it.index } }
+        return { name: `${c.label || connectorDefaultName(c)} ${it.index + 1}`, sub: `${c.pins.length}-pin`, sel: { type: 'connector', index: it.index } }
       }
     }
   }
@@ -1452,7 +1526,9 @@ function LayersPanel({
                 <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('button') }} title="Click the board to place a push-button">Button</button>
                 <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addLed() }} title="Add an onboard LED (set LED / RGB / NeoPixel + GPIO in the inspector)">LED</button>
                 <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
-                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / JST connector (switch kind in the inspector)">Connector</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
+                <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
                 <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
               </div>
             </>
@@ -2581,7 +2657,7 @@ function SelectionInspector({
   } else if (selection.type === 'connector') {
     const conn = (part.connectors ?? [])[selection.index]
     if (conn) {
-      title = conn.kind === 'qwiic' ? 'QWIIC / STEMMA QT' : 'JST connector'
+      title = CONN_KIND_TITLE[conn.kind]
       const upd = (p: Partial<PartConnector>): void =>
         patch({ connectors: (part.connectors ?? []).map((c, i) => (i === selection.index ? { ...c, ...p } : c)) })
       const updPin = (pi: number, p: Partial<PartPin>): void =>
@@ -2594,15 +2670,59 @@ function SelectionInspector({
       }
       body = (
         <>
+          <div className="pe__row">
+            <label className="pe__field">
+              <span>Kind</span>
+              {/* Changing the kind swaps the HOUSING only — the contacts are left
+                  alone so a hand-assigned pinout survives. Use "Standard contacts"
+                  below to reset them to the new kind's default wiring. */}
+              <select
+                value={conn.kind}
+                onChange={(e) => upd({ kind: e.target.value as PartConnectorKind })}
+              >
+                {PART_CONNECTOR_KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {CONN_KIND_LABEL[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {conn.kind === 'grove' && (
+              <label className="pe__field">
+                <span>Port type</span>
+                <select
+                  value={conn.variant ?? 'i2c'}
+                  onChange={(e) => upd({ variant: e.target.value as GroveVariant })}
+                >
+                  {GROVE_VARIANTS.map((v) => (
+                    <option key={v} value={v}>
+                      {GROVE_VARIANT_LABEL[v]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
           <label className="pe__field">
             <span>Label</span>
             <input
               type="text"
               value={conn.label ?? ''}
               onChange={(e) => upd({ label: e.target.value || undefined })}
-              placeholder={conn.kind === 'qwiic' ? 'QWIIC' : 'JST'}
+              placeholder={connectorDefaultName(conn)}
             />
           </label>
+          {/* Contact ORDER is the connector's orientation — contact 1 is the end
+              the housing's pin-1 marker sits at. Resetting restores the standard
+              order for the kind, which is what lets a cable seat the right way. */}
+          <button
+            type="button"
+            className="pe__btn"
+            onClick={() => upd({ pins: standardConnPins(conn.kind, conn.variant) })}
+            title="Replace the contacts with this kind's standard wiring, in the standard order"
+          >
+            Standard contacts
+          </button>
           {/* Each contact is a full pin — assign GP## (+ I2C bus for SDA/SCL). */}
           {conn.pins.map((p, pi) => (
             <div key={pi} className="pe__conn-pin">

@@ -92,6 +92,54 @@ describe('PartBody onboard LEDs + connectors', () => {
     }
     expect(render(part)).toContain('QWIIC · SDA GP4')
   })
+
+  it('names a Grove port by its variant, like the silk on a Seeed board', () => {
+    const part: PartDefinition = {
+      ...blankPart(),
+      connectors: [
+        {
+          kind: 'grove',
+          variant: 'i2c',
+          x: 0.5,
+          y: 0.9,
+          pins: [
+            { name: 'SCL', type: 'io', gpio: 7, capabilities: ['i2c'], signals: { i2c: 'SCL' } },
+            { name: 'SDA', type: 'io', gpio: 6, capabilities: ['i2c'], signals: { i2c: 'SDA' } },
+            { name: 'VCC', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    }
+    expect(render(part)).toContain('GROVE I2C · SCL GP7 · SDA GP6')
+  })
+
+  it('names a 3-way DuPont block SERVO', () => {
+    const part: PartDefinition = {
+      ...blankPart(),
+      connectors: [
+        {
+          kind: 'dupont',
+          x: 0.5,
+          y: 0.5,
+          pins: [
+            { name: 'SIG', type: 'io', gpio: 15, capabilities: ['pwm'] },
+            { name: 'V+', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    }
+    expect(render(part)).toContain('SERVO · SIG GP15')
+  })
+
+  it('draws a Grove shell in its off-white housing colour, not the dark JST one', () => {
+    const grove: PartDefinition = {
+      ...blankPart(),
+      connectors: [{ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.5, pins: [{ name: 'SCL', type: 'io' }] }]
+    }
+    expect(render(grove)).toContain('#f1efe6')
+  })
 })
 
 describe('connectorSize (mm-accurate connector scaling)', () => {
@@ -120,5 +168,34 @@ describe('connectorSize (mm-accurate connector scaling)', () => {
 
   it('scales linearly with px-per-mm', () => {
     expect(connectorSize(conn4, 20).w).toBeCloseTo(connectorSize(conn4, 10).w * 2, 5)
+  })
+
+  it('draws a Grove socket at its real ~11.8 × 6.6 mm footprint', () => {
+    const grove = { ...conn4, kind: 'grove' as const, variant: 'i2c' as const }
+    const pxPerMm = 10
+    const s = connectorSize(grove, pxPerMm)
+    // (4-1)*2.0 + 2*2.9 = 11.8mm wide, 6.6mm deep.
+    expect(s.w).toBeCloseTo(11.8 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(6.6 * pxPerMm, 5)
+    // A Grove shell dwarfs a QWIIC — that size difference is the visual tell.
+    expect(s.w).toBeGreaterThan(connectorSize(conn4, pxPerMm).w * 2)
+  })
+
+  it('draws a 3-way DuPont header one 2.54 mm cell per pin', () => {
+    const servo = {
+      kind: 'dupont' as const,
+      x: 0.5,
+      y: 0.5,
+      pins: [
+        { name: 'SIG', type: 'io' as const },
+        { name: 'V+', type: 'pwr' as const },
+        { name: 'GND', type: 'gnd' as const }
+      ]
+    }
+    const pxPerMm = 10
+    const s = connectorSize(servo, pxPerMm)
+    // (3-1)*2.54 + 2*1.27 = 7.62mm — exactly three 0.1" cells.
+    expect(s.w).toBeCloseTo(7.62 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(2.54 * pxPerMm, 5)
   })
 })

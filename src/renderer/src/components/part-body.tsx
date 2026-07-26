@@ -888,12 +888,46 @@ export function onboardLedLabel(led: OnboardLed): string {
 
 /** Real-world footprint of a connector housing, in **mm** — so it can be drawn
  *  to scale on a board with accurate dimensions. QWIIC / STEMMA QT are the JST-SH
- *  1.0 mm-pitch family; a plain JST here is the 2.0 mm-pitch PH family. Values are
- *  the visible top-down housing (a touch larger than the contact span). */
+ *  1.0 mm-pitch family; a plain JST here is the 2.0 mm-pitch PH family; Grove is
+ *  Seeed's 4-way 2.0 mm keyed shell; DuPont is a 0.1" male header strip. Values
+ *  are the visible top-down housing (a touch larger than the contact span). */
 function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
-  return conn.kind === 'jst'
-    ? { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 }
-    : { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+  switch (conn.kind) {
+    case 'grove':
+      // Seeed Grove: 4-way 2.0 mm shell, ~11.8 × 6.6 mm where it meets the board.
+      return { pitch: 2.0, sideMargin: 2.9, depthMm: 6.6 }
+    case 'dupont':
+      // 0.1" male header strip — one 2.54 mm square cell per pin.
+      return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
+    case 'jst':
+      return { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 }
+    default:
+      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+  }
+}
+
+/**
+ * Per-kind housing palette. `male` distinguishes a **header block you push a lead
+ * ONTO** (DuPont/servo — a black base with square gold pins) from a **socket you
+ * plug INTO** (QWIIC/JST/Grove — a shell with recessed contacts), because the two
+ * are drawn differently and only the socket gets a shell lip.
+ */
+function connectorStyle(kind: PartConnector['kind']): {
+  shell: string
+  edge: string
+  contact: string
+  male: boolean
+} {
+  switch (kind) {
+    case 'grove':
+      // Grove's instantly-recognisable off-white keyed shell.
+      return { shell: '#f1efe6', edge: '#8e8a7e', contact: '#e6c34a', male: false }
+    case 'dupont':
+      return { shell: '#15181c', edge: '#0b0d10', contact: '#e6c34a', male: true }
+    default:
+      // QWIIC / STEMMA QT and plain JST — dark JST-SH / JST-PH housings.
+      return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
+  }
 }
 
 /**
@@ -919,11 +953,13 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
  *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
 export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0, withLabels = true): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
+  const { shell, edge, contact, male } = connectorStyle(conn.kind)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
-  // Contacts scale with the housing; a thin gold pin at each pitch position.
-  const contactW = Math.max(1, w * 0.09)
-  const contactInset = h * 0.2
+  // Contacts scale with the housing. A socket gets thin recessed blades; a male
+  // header gets a chunky square pin filling most of its 2.54 mm cell.
+  const contactW = male ? Math.max(1, (w / n) * 0.34) : Math.max(1, w * 0.09)
+  const contactInset = male ? h * 0.28 : h * 0.2
   // Real JST/QWIIC housings are a plain dark block with SHARP corners and no white
   // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
   // the current selection in the Part Editor, never a white border).
@@ -932,13 +968,36 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // the tight contact pitch; only when the housing is big enough to read.
   const labelFs = Math.max(4.5, Math.min(7, w / 8))
   const showLabels = withLabels && w >= 24
+  // Contact 1 is the ORIENTATION reference: a cable can only seat one way round, so
+  // mark it the way a PCB does — pin 1 square, the rest plain. Drawn as a hairline
+  // box around the first contact, big enough to spot without shouting.
+  const p1x = x0 + (w / (n + 1)) * 1
+  const markR = Math.max(1.5, Math.min(contactW * 1.5, h * 0.42))
+  const showMark = w >= 14
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <rect x={x0} y={y0} width={w} height={h} fill="#1c1f24" stroke={selected ? '#4ea1ff' : '#0b0d10'} strokeWidth={selected ? 2 : 1} />
+      <rect x={x0} y={y0} width={w} height={h} fill={shell} stroke={selected ? '#4ea1ff' : edge} strokeWidth={selected ? 2 : 1} />
+      {/* Grove's shell has a visible opening lip along its mating face — the cue
+          that tells you which way the plug goes in. */}
+      {conn.kind === 'grove' && h >= 6 && (
+        <rect x={x0 + w * 0.06} y={y0 + h * 0.12} width={w * 0.88} height={h * 0.34} fill="#d9d5c7" stroke="none" />
+      )}
       {Array.from({ length: n }, (_, i) => {
         const cxp = x0 + (w / (n + 1)) * (i + 1)
-        return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill="#e6c34a" />
+        return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={contact} />
       })}
+      {showMark && (
+        <rect
+          x={p1x - markR}
+          y={cy - markR}
+          width={markR * 2}
+          height={markR * 2}
+          fill="none"
+          stroke={male ? '#eef1f4' : edge === '#0b0d10' ? '#eef1f4' : '#4a4638'}
+          strokeWidth={Math.max(0.5, markR * 0.22)}
+          opacity={0.85}
+        />
+      )}
       {showLabels &&
         conn.pins.map((pin, i) => {
           if (!pin.name || i >= n) return null
@@ -967,10 +1026,26 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   )
 }
 
+/** The default silk name for a connector when the author hasn't set one. A Grove
+ *  port names its variant too (`GROVE I2C`), because that's what the silk on a
+ *  Seeed board says and it's what tells you what the port is wired to. */
+export function connectorDefaultName(conn: PartConnector): string {
+  switch (conn.kind) {
+    case 'grove':
+      return conn.variant ? `GROVE ${conn.variant.toUpperCase()}` : 'GROVE'
+    case 'dupont':
+      return conn.pins.length === 3 ? 'SERVO' : 'HDR'
+    case 'jst':
+      return 'JST'
+    default:
+      return 'QWIIC'
+  }
+}
+
 /** The silk label for a connector: its name + the GPIOs of its signal pins —
  *  e.g. `QWIIC · SDA GP4 · SCL GP5`. */
 export function connectorLabel(conn: PartConnector): string {
-  const name = conn.label || (conn.kind === 'qwiic' ? 'QWIIC' : 'JST')
+  const name = conn.label || connectorDefaultName(conn)
   const sig = conn.pins
     .filter((p) => p.type === 'io' && p.gpio != null)
     .map((p) => `${p.name} GP${p.gpio}`)

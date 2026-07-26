@@ -6,6 +6,26 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Grove and DuPont/servo connectors.** Part connectors gain two kinds alongside
+  QWIIC and JST: **Grove** — Seeed's 4-way 2.0 mm keyed socket, drawn in its
+  off-white shell at its real 11.8 × 6.6 mm footprint, with a **port type**
+  (I²C / UART / digital / analog) that names it the way a Seeed board's silk does —
+  and **DuPont**, a 0.1" male header block drawn one 2.54 mm cell per pin, for
+  servo leads. Add either from the Part Editor's ＋ Add menu (**Grove port**,
+  **Servo header**) prefilled with the kind's standard contacts, or switch an
+  existing connector's kind in the inspector.
+- **Connectors are oriented.** A connector's contact order is now meaningful —
+  contact 1 is the end the housing's **pin-1 marker** sits at, drawn the way a PCB
+  marks it — so a Grove port always reads signal · signal · VCC · GND and a servo
+  header always reads Signal · V+ · GND. This is the groundwork for seating cables
+  the right way round rather than merely joining them pin-to-pin.
+
+### Fixed
+- A connector's **silk label placement** (its dragged offset and rotation) was
+  dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
+  omitted both, so the label snapped back to its default position on reload.
+
 ## [0.37.0] - 2026-07-25
 
 ### Added

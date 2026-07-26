@@ -17,6 +17,7 @@
  */
 
 import { parse, stringify } from 'yaml'
+import { coerceConnectorKind, coerceGroveVariant } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -375,12 +376,18 @@ export function partToYaml(part: PartDefinition): string {
     labels: part.labels,
     groups: part.groups,
     onboardLeds: part.onboardLeds,
+    // NB: field-by-field, so every new PartConnector field must be added HERE and
+    // in the parser below or it's silently dropped on save (this is how connector
+    // label placement used to be lost).
     connectors: part.connectors?.map((c) => ({
       kind: c.kind,
+      variant: c.variant,
       label: c.label,
       x: c.x,
       y: c.y,
       rotation: c.rotation,
+      labelOffset: c.labelOffset ? { x: c.labelOffset.x, y: c.labelOffset.y } : undefined,
+      labelRotation: c.labelRotation,
       pins: c.pins.map(pinToObj)
     })),
     ledLabel: part.ledLabel,
@@ -613,15 +620,25 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num(r.x)
         const y = num(r.y)
         if (x === undefined || y === undefined) return null
-        const kind: PartConnector['kind'] = r.kind === 'jst' ? 'jst' : 'qwiic'
+        const kind = coerceConnectorKind(r.kind)
         const pins = Array.isArray(r.pins)
           ? r.pins.map(coercePin).filter((p): p is PartPin => p !== null)
           : []
         const conn: PartConnector = { kind, x, y, pins }
+        const variant = coerceGroveVariant(r.variant)
+        if (variant) conn.variant = variant
         const label = str(r.label)
         if (label) conn.label = label
         const rot = num(r.rotation)
         if (rot !== undefined) conn.rotation = rot
+        if (r.labelOffset && typeof r.labelOffset === 'object') {
+          const lo = r.labelOffset as Record<string, unknown>
+          const lx = num(lo.x)
+          const ly = num(lo.y)
+          if (lx !== undefined && ly !== undefined) conn.labelOffset = { x: lx, y: ly }
+        }
+        const labelRot = num(r.labelRotation)
+        if (labelRot !== undefined) conn.labelRotation = labelRot
         return conn
       })
       .filter((c): c is PartConnector => c !== null)

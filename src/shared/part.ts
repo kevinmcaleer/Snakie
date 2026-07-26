@@ -147,18 +147,69 @@ export interface PartHeader {
 }
 
 /**
+ * The physical family of a connector housing. Each kind has its own pitch, shell
+ * colour and keying, so a board's sockets read as the real thing:
+ *  - `qwiic`  — QWIIC / STEMMA QT: a 4-pin JST-SH 1.0 mm I2C socket (black shell)
+ *  - `jst`    — a generic JST-PH 2.0 mm header
+ *  - `grove`  — Seeed's 4-pin 2.0 mm keyed socket (white shell). Its {@link
+ *               PartConnector.variant} says which of the four standard signal
+ *               sets the port carries.
+ *  - `dupont` — a 0.1" (2.54 mm) male header block a DuPont / servo lead pushes
+ *               onto. **Oriented**: contact 1 is the marked end, so a 3-way servo
+ *               block reads Signal · V+ · GND in a fixed order and a lead plugged
+ *               the wrong way round is a mistake we can show rather than allow.
+ */
+export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont'
+
+/** Every connector kind, in picker order (the first is the default). */
+export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = ['qwiic', 'jst', 'grove', 'dupont']
+
+/**
+ * Which standard signal set a **Grove** socket carries. Grove ports are all the
+ * same 4-pin housing wired four different ways — the silk on a Seeed board says
+ * which — so the variant drives the default label and contact names:
+ *  - `i2c`     — SCL · SDA · VCC · GND
+ *  - `uart`    — RX · TX · VCC · GND
+ *  - `digital` — D(n) · D(n+1) · VCC · GND
+ *  - `analog`  — A(n) · A(n+1) · VCC · GND
+ */
+export type GroveVariant = 'i2c' | 'uart' | 'digital' | 'analog'
+
+/** Every Grove variant, in picker order (the first is the default). */
+export const GROVE_VARIANTS: readonly GroveVariant[] = ['i2c', 'uart', 'digital', 'analog']
+
+/** Validate a connector `kind` off untrusted YAML/JSON. Both the parts.yml parser
+ *  and the Part Editor's normaliser go through here, so adding a kind above is the
+ *  only edit needed — neither whitelist can silently downgrade it to `qwiic`. */
+export function coerceConnectorKind(v: unknown): PartConnectorKind {
+  return PART_CONNECTOR_KINDS.includes(v as PartConnectorKind) ? (v as PartConnectorKind) : 'qwiic'
+}
+
+/** Validate a Grove `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
+export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
+  return GROVE_VARIANTS.includes(v as GroveVariant) ? (v as GroveVariant) : undefined
+}
+
+/**
  * A physical connector on the board drawn as a placed body — e.g. a **QWIIC** /
- * **STEMMA QT** 4-pin JST-SH I2C socket, or a generic **jst** header. Its
- * {@link pins} are full {@link PartPin}s, so a QWIIC's SDA/SCL carry a GPIO +
- * `i2c` capability/signal/bus just like any other pin, alongside 3V3 / GND.
+ * **STEMMA QT** 4-pin JST-SH I2C socket, a **Grove** port, a **DuPont** / servo
+ * header block, or a generic **jst** header. Its {@link pins} are full
+ * {@link PartPin}s, so a QWIIC's SDA/SCL carry a GPIO + `i2c`
+ * capability/signal/bus just like any other pin, alongside 3V3 / GND.
+ *
+ * **Contact order is the orientation.** `pins[0]` is contact 1 — the end the
+ * housing's key/pin-1 marker sits at — so a cable can be seated the right way
+ * round rather than merely joined pin-to-pin.
  */
 export interface PartConnector {
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
-  /** `qwiic` (STEMMA QT — a 4-pin JST-SH I2C socket) or a generic `jst` header. */
-  kind: 'qwiic' | 'jst'
-  /** Silk label (defaults to `"QWIIC"` / `"JST"`). */
+  /** The connector family — see {@link PartConnectorKind}. */
+  kind: PartConnectorKind
+  /** For `grove`: which signal set the port carries. Ignored by other kinds. */
+  variant?: GroveVariant
+  /** Silk label (defaults to the kind's name — `"QWIIC"` / `"GROVE"` / …). */
   label?: string
   /** Normalised 0..1 position of the connector body within the outline. */
   x: number

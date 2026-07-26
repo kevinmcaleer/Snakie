@@ -20,6 +20,8 @@ import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../..
 import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
+  coerceConnectorKind,
+  coerceGroveVariant,
   type ComponentShape,
   type ComponentShapeKind,
   type DriverFile,
@@ -1079,13 +1081,15 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   }
   if (Array.isArray(part.connectors) && part.connectors.length) {
     out.connectors = part.connectors.map((c): PartConnector => {
-      const kind: PartConnector['kind'] = c.kind === 'jst' ? 'jst' : 'qwiic'
+      const kind = coerceConnectorKind(c.kind)
       const conn: PartConnector = {
         kind,
         x: clamp(c.x, 0, 1),
         y: clamp(c.y, 0, 1),
         pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
       }
+      const variant = coerceGroveVariant(c.variant)
+      if (variant) conn.variant = variant
       const label = text(c.label)
       if (label) conn.label = label
       if (typeof c.rotation === 'number' && Number.isFinite(c.rotation)) {

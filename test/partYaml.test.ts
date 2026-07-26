@@ -472,6 +472,96 @@ describe('connectors round-trip', () => {
     const conns = partFromYaml(yaml).connectors
     expect(conns).toEqual([{ kind: 'jst', x: 0.2, y: 0.2, pins: [{ name: 'A', type: 'io', gpio: 1 }] }])
   })
+
+  // Grove + DuPont join qwiic/jst. Both whitelist sites (this parser and
+  // normalisePart) share coerceConnectorKind, so neither can silently downgrade a
+  // new kind to `qwiic` — the trap that ate the battery electrical block.
+  it('keeps a Grove port and its variant through YAML and normalisePart', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      connectors: [
+        {
+          kind: 'grove',
+          variant: 'i2c',
+          x: 0.5,
+          y: 0.9,
+          pins: [
+            { name: 'SCL', type: 'io', gpio: 7, capabilities: ['i2c'], signals: { i2c: 'SCL' }, buses: { i2c: 1 } },
+            { name: 'SDA', type: 'io', gpio: 6, capabilities: ['i2c'], signals: { i2c: 'SDA' }, buses: { i2c: 1 } },
+            { name: 'VCC', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    })
+    expect(part.connectors?.[0]).toMatchObject({ kind: 'grove', variant: 'i2c' })
+    const back = partFromYaml(partToYaml(part)).connectors
+    expect(back).toEqual(part.connectors)
+    // Contact ORDER is the orientation — it must survive the round-trip intact.
+    expect(back?.[0].pins.map((p) => p.name)).toEqual(['SCL', 'SDA', 'VCC', 'GND'])
+  })
+
+  it('keeps a DuPont/servo header in Signal · V+ · GND order', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      connectors: [
+        {
+          kind: 'dupont',
+          x: 0.3,
+          y: 0.5,
+          pins: [
+            { name: 'SIG', type: 'io', gpio: 15, capabilities: ['pwm'] },
+            { name: 'V+', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    })
+    const back = partFromYaml(partToYaml(part)).connectors
+    expect(back).toEqual(part.connectors)
+    expect(back?.[0].kind).toBe('dupont')
+    expect(back?.[0].pins.map((p) => p.name)).toEqual(['SIG', 'V+', 'GND'])
+  })
+
+  it('falls back to qwiic for an unknown kind, and drops an unknown grove variant', () => {
+    const yaml =
+      'id: p\nheaders:\n  - edge: left\n    pins:\n      - name: GP0\n        type: io\n        gpio: 0\n' +
+      'connectors:\n  - { kind: molex, x: 0.1, y: 0.1, pins: [{ name: A, type: io }] }\n' +
+      '  - { kind: grove, variant: spi, x: 0.2, y: 0.2, pins: [{ name: B, type: io }] }\n'
+    const conns = partFromYaml(yaml).connectors
+    expect(conns?.[0].kind).toBe('qwiic')
+    expect(conns?.[1]).toMatchObject({ kind: 'grove' })
+    expect(conns?.[1].variant).toBeUndefined()
+  })
+
+  // Regression: the serialiser rebuilds connectors field-by-field and used to omit
+  // labelOffset/labelRotation, so a silk label dragged in the Part Editor was lost
+  // on save even though normalisePart preserved it.
+  it('keeps a connector silk label placement through YAML', () => {
+    const part = normalisePart({
+      id: 'p',
+      name: 'P',
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', gpio: 0 }] }],
+      connectors: [
+        {
+          kind: 'grove',
+          variant: 'uart',
+          x: 0.5,
+          y: 0.5,
+          labelOffset: { x: 0.12, y: -0.08 },
+          labelRotation: 270,
+          pins: [{ name: 'RX', type: 'io' }]
+        }
+      ]
+    })
+    expect(part.connectors?.[0]).toMatchObject({ labelOffset: { x: 0.12, y: -0.08 }, labelRotation: 270 })
+    const back = partFromYaml(partToYaml(part)).connectors
+    expect(back).toEqual(part.connectors)
+  })
 })
 
 describe('pin signal designations round-trip', () => {
