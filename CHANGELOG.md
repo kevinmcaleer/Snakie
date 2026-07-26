@@ -69,6 +69,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is, so the board never resizes under the pointer.
 
 ### Fixed
+- **Editor hover help ran off the screen.** A long signature or docstring sized
+  the hover widget past the edge of the editor pane, leaving most of it
+  unreadable. The hover is now capped to the pane's own width and its content
+  wraps — including signatures and fenced code, which Monaco renders as
+  non-wrapping `pre` and which were what actually pushed it off. A tall wrapped
+  hover scrolls instead of running off the bottom.
 - A connector's **silk label placement** (its dragged offset and rotation) was
   dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
   omitted both, so the label snapped back to its default position on reload.

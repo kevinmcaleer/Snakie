@@ -1941,6 +1941,56 @@ body {
   height: 100%;
 }
 
+/* Hover help must stay INSIDE the editor. Monaco sizes the hover widget to its
+ * content and lets it run past the editor's right edge, so a long signature or
+ * docstring ends up off-screen and unreadable — the editor pane is only part of
+ * the window. Cap it to the pane's own width and let the content wrap instead.
+ *
+ * `container-type: inline-size` is what makes `cqw` below mean "of the editor
+ * pane"; without a declared container, container units silently fall back to the
+ * VIEWPORT, which is the very thing we're trying not to measure against. Only
+ * inline-size (not `size`), so the pane's height is left entirely alone.
+ * `.editor-host` is already `position: relative`, so it was the containing block
+ * for Monaco's absolutely-positioned widgets before this and still is.
+ *
+ * Applies to both skins and both hover flavours (mouse and keyboard-invoked),
+ * hence no theme scoping. */
+.editor-host {
+  container-type: inline-size;
+}
+
+/* `!important` is load-bearing, not laziness: Monaco's ContentHoverWidget writes
+ * `style.maxWidth` / `style.maxHeight` INLINE on both the container and the
+ * contents from its own available-space maths — and sets them to `none` while it
+ * measures. Inline styles beat any selector, so without `!important` the cap is
+ * simply ignored and the widget sizes itself off the pane again. */
+.editor-host .monaco-editor .monaco-hover,
+.editor-host .monaco-editor .monaco-hover .monaco-hover-content {
+  max-width: min(46rem, 88cqw) !important;
+}
+
+.editor-host .monaco-editor .monaco-hover {
+  /* Wrapping makes the widget taller; scroll rather than run off the bottom. */
+  max-height: 60vh !important;
+  overflow-y: auto;
+}
+
+/* Prose wraps on its own; long unbroken tokens (paths, URLs, dotted names) must
+ * be allowed to break, or one of them forces the widget past its max-width. */
+.editor-host .monaco-editor .monaco-hover .monaco-hover-content {
+  overflow-wrap: anywhere;
+}
+
+/* Monaco renders signatures and fenced code in the hover as `white-space: pre`,
+ * which cannot wrap — that is what actually pushes the widget off-screen. Let
+ * them wrap while keeping their significant leading whitespace. */
+.editor-host .monaco-editor .monaco-hover .monaco-tokenized-source,
+.editor-host .monaco-editor .monaco-hover code,
+.editor-host .monaco-editor .monaco-hover pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .editor-empty {
   display: flex;
   align-items: center;
