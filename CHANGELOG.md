@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-07-26
+
 ### Added
 - **Grove and DuPont/servo connectors.** Part connectors gain two kinds alongside
   QWIIC and JST: **Grove** — Seeed's 4-way 2.0 mm keyed socket, drawn in its
@@ -83,7 +85,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   board**, so you can see which member you picked — grouped behaviour
   on the canvas is unchanged, a click there still grabs the whole group.
 
+- **Servo 2040 gains its six sensor headers**, and its help explains why 18
+  servos need PIO rather than hardware PWM (GP16/GP17 share PWM channels with
+  GP0/GP1, so servo 17 would mirror servo 1). The **XIAO Expansion Base** is
+  rebuilt from a photo of the real board, with pins on the actual pads.
+
 ### Fixed
+- **Pin labels read upside down on a part rotated 180°** in the Electronics
+  workspace. Boxed labels countered the body's scale but never its rotation. Left
+  and right pins now flip upright in place; top/bottom pins land at 90°/270° and
+  are left alone, which reads fine on its side.
+- **A part layer switched off could never be switched back on.** Merging the
+  layers panel dropped the per-layer show/hide toggles, but `layerVisibility` is
+  persisted in every `parts.yml` and still gates rendering — so anything added to
+  a hidden layer silently didn't appear. The toggle now lives on the bucket rows.
 - **Capability chips sat off the pin line on top/bottom pins.** The `PWM A` /
   `SDA` / `SCL` badges on a vertically-rotated pin were drawn ~3.5px off centre —
   left of the pin on bottom pins, right of it on top ones — so they didn't line up
@@ -3270,7 +3285,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1
