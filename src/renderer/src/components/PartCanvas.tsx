@@ -35,11 +35,13 @@ import {
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
+import { itemHidden, itemLocked } from '../../../shared/part'
 import type {
   ComponentShape,
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
+  PartItemFlags,
   PartLabel,
   PartPin,
   PartPinType,
@@ -1889,6 +1891,19 @@ export function PartCanvas({
     }
     return inside
   }
+  /** Can this item be picked up? A hidden item isn't drawn, and a locked one is
+   *  deliberately immovable — either way a click must fall THROUGH it to whatever
+   *  is underneath, rather than selecting something invisible or unmovable.
+   *  Resolves the group ancestry, so hiding or locking a group protects every
+   *  item inside it. */
+  const pickable = (item: PartItemFlags): boolean =>
+    !itemHidden(part.groups, item) && !itemLocked(part.groups, item)
+
+  /** Should this item draw? Resolves the group ancestry, so hiding a group hides
+   *  everything inside it. Editor-canvas only — `hidden` is an authoring aid, so
+   *  the Board View and mini board still draw the part in full. */
+  const shown = (item: PartItemFlags): boolean => !itemHidden(part.groups, item)
+
   const hitTest = (nx: number, ny: number): CanvasSelection => {
     // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
     // The SVG paints connectors → LEDs → buttons ON TOP of shapes/labels, which
@@ -1904,14 +1919,18 @@ export function PartCanvas({
       for (let k = items.length - 1; k >= 0; k--) {
         const it = items[k]
         if (it.kind === 'connector') {
+          if (!pickable(connectors[it.index])) continue
           if (dist(nx, ny, connectors[it.index].x, connectors[it.index].y) < HIT) return { type: 'connector', index: it.index }
         } else if (it.kind === 'led') {
+          if (!pickable(onboardLeds[it.index])) continue
           if (dist(nx, ny, onboardLeds[it.index].x, onboardLeds[it.index].y) < HIT) return { type: 'led', index: it.index }
         } else if (it.kind === 'button') {
+          if (!pickable(buttons[it.index])) continue
           if (dist(nx, ny, buttons[it.index].x, buttons[it.index].y) < HIT) return { type: 'button', index: it.index }
         } else if (it.kind === 'label') {
+          if (!pickable(labels[it.index])) continue
           if (dist(nx, ny, labels[it.index].x, labels[it.index].y) < HIT * 1.4) return { type: 'label', index: it.index }
-        } else if (inShape(shapes[it.index], nx, ny)) {
+        } else if (pickable(shapes[it.index]) && inShape(shapes[it.index], nx, ny)) {
           return { type: 'shape', index: it.index }
         }
       }
@@ -1924,6 +1943,7 @@ export function PartCanvas({
       let best = -1
       let bestD = HIT
       for (let i = 0; i < pins.length; i++) {
+        if (!pickable(pins[i].pin)) continue
         const d = dist(nx, ny, pins[i].x, pins[i].y)
         if (d < bestD) {
           bestD = d
@@ -1934,7 +1954,7 @@ export function PartCanvas({
     }
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
-        if (dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+        if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -2785,9 +2805,11 @@ export function PartCanvas({
           <mask id={maskId}>
             <rect x={box.x - 40} y={box.y - 40} width={box.w + 80} height={box.h + 80} fill="white" />
             {cutHoles &&
-              holes.map((h, i) => (
-                <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
-              ))}
+              holes.map((h, i) =>
+                shown(h) ? (
+                  <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+                ) : null
+              )}
             {pinHoleList.map((h, i) => (
               <circle key={`ph${i}`} cx={h.cx} cy={h.cy} r={h.r} fill="black" />
             ))}
@@ -2826,7 +2848,7 @@ export function PartCanvas({
             grabbable in the editor without a border in normal use. */}
         {visible.holes &&
           holes.map((h, i) =>
-            isSel({ type: 'hole', index: i }) ? (
+            shown(h) && isSel({ type: 'hole', index: i }) ? (
               <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
             ) : null
           )}
@@ -2834,6 +2856,7 @@ export function PartCanvas({
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
+            if (!shown(rp.pin)) return null
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             // A selected group shows a single outline (below) instead of ringing
             // each member — so suppress the per-pin ring when a group is selected.
@@ -3117,6 +3140,18 @@ export function PartCanvas({
             can be stacked (top of the Components list = highest z = drawn last). */}
         {visible.components &&
           orderedItems(part).map((c) => {
+            // A hidden item — or anything inside a hidden group — doesn't draw.
+            const src =
+              c.kind === 'button'
+                ? buttons[c.index]
+                : c.kind === 'led'
+                  ? onboardLeds[c.index]
+                  : c.kind === 'connector'
+                    ? connectors[c.index]
+                    : c.kind === 'label'
+                      ? labels[c.index]
+                      : shapes[c.index]
+            if (src && !shown(src)) return null
             if (c.kind === 'button') {
               const i = c.index
               const b = buttons[i]

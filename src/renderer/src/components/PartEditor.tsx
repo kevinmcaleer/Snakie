@@ -49,7 +49,7 @@ import {
   ,type HierItem,
   type LayerNode
 } from './part-editor.util'
-import { GROVE_VARIANTS, PART_CONNECTOR_KINDS } from '../../../shared/part'
+import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, itemLocked } from '../../../shared/part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -61,6 +61,7 @@ import type {
   PartButton,
   PartConnector,
   PartConnectorKind,
+  PartItemFlags,
   PartDefinition,
   PartElectrical,
   PartHeader,
@@ -668,6 +669,26 @@ export function PartEditor({
     // A locked layer's items can't be deleted (keyboard or the Layers trash).
     const lk = selectionLockKey(sel)
     if (lk && locked[lk]) return
+    // Nor can a LOCKED item, or one inside a locked group — locking is worth
+    // little if Delete still removes the thing you froze. Resolved through the
+    // group ancestry, so locking a group protects every member.
+    const selFlags: PartItemFlags | null =
+      sel.type === 'pin'
+        ? (part.headers[sel.hi]?.pins[sel.pi] ?? null)
+        : sel.type === 'shape' || sel.type === 'shape-vertex'
+          ? (part.shapes?.[sel.index] ?? null)
+          : sel.type === 'label'
+            ? (part.labels?.[sel.index] ?? null)
+            : sel.type === 'button'
+              ? (part.buttons?.[sel.index] ?? null)
+              : sel.type === 'led'
+                ? (part.onboardLeds?.[sel.index] ?? null)
+                : sel.type === 'connector'
+                  ? (part.connectors?.[sel.index] ?? null)
+                  : sel.type === 'hole'
+                    ? (part.mountingHoles?.[sel.index] ?? null)
+                    : null
+    if (selFlags && itemLocked(part.groups, selFlags)) return
     // A grouped item (#630) deletes its whole group tree — every member pin,
     // shape + label (recursively through nested sub-groups) + the registry entries.
     const selGroup =

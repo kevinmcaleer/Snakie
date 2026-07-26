@@ -1,7 +1,7 @@
 # Part Editor — the single layer hierarchy
 
-Status: **model, tree and per-row hide/lock done. Structural merge of the panel
-into one list, and canvas enforcement, outstanding.**
+Status: **model, tree, per-row hide/lock and canvas enforcement done. The
+structural merge of Parts + Pins into one list is the last piece.**
 
 ## Why
 
@@ -112,13 +112,24 @@ whole mechanism is superseded and should go, along with `DEFAULT_LOCKS`.
 Keep `part.layerVisibility` working: it's in every shipped `parts.yml`, and
 `pcb`/`image` still need it. Treat it as a coarse master above the per-item flags.
 
-### 2. Canvas enforcement (`part-body.tsx`, `PartEditor.tsx`)
+### 2. Canvas enforcement — DONE
 
-- `PartBody` skips items where `itemHidden(...)` is true.
-- Selection, drag, restyle and delete refuse items where `itemLocked(...)` is true.
-- Group ops (align/distribute/move/rotate/delete) already treat a group as one
-  rigid unit by group root — that must now extend to pins and holes joining
-  mixed-kind groups.
+Enforced in **`PartCanvas`**, the editor's own renderer, NOT in `PartBody`.
+That split matters: `PartBody` draws the part for the Board View, the mini board
+and the wiring canvas, so enforcing there would let an author hide part of a
+SHIPPED part for everyone. `hidden` is an authoring aid; consumer views still
+draw the part in full. Flipping that is a one-line change if it's ever wanted.
+
+- `shown()` gates rendering — pins, holes (including the drilled hole in the PCB
+  mask), and every component kind through the unified `orderedItems` render.
+- `pickable()` gates `hitTest`, so a click falls THROUGH a hidden or locked item
+  to whatever is underneath rather than selecting something invisible or immovable.
+- `onDeleteSelected` refuses a locked item or one inside a locked group. Locking
+  is worth little if Delete still removes what you froze.
+
+Still open: group ops (align/distribute/move/rotate) treat a group as one rigid
+unit by group root — that wants extending to pins and holes now that they can
+join mixed-kind groups.
 
 ## Related, already shipped
 
