@@ -21,10 +21,27 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   header always reads Signal · V+ · GND. This is the groundwork for seating cables
   the right way round rather than merely joining them pin-to-pin.
 
+- **Board stacking model.** A board can declare the header `footprint` it plugs
+  into (`xiao`, `pico`, …) and a carrier board can declare `mounts` that accept
+  that footprint, with same-named pins bonding automatically. Mating is by name
+  rather than geometry, so a XIAO RP2350 and a XIAO RP2040 both seat in the same
+  expansion base and a new carrier only has to name the family it accepts. (Data
+  model; seating and stacked rendering follow.)
+- **Seven new standard parts** for the Seeed Grove ecosystem: **XIAO Expansion
+  Base** (the carrier — OLED, RTC, buzzer, SD, four Grove ports, and a XIAO
+  socket), **Grove 6-Axis Accel & Gyro** (LSM6DS3), **Grove I²C Motor Driver**
+  (TB6612FNG), **Grove Ultrasonic Ranger**, **Grove LED Bar**, **Grove Buzzer**
+  and **Grove Button** — most with help pages covering the traps (the ultrasonic's
+  single trigger/echo wire, the motor driver's command protocol, the LSM6DS3's
+  `0x6A`/`0x6B` address split).
+
 ### Fixed
 - A connector's **silk label placement** (its dragged offset and rotation) was
   dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
   omitted both, so the label snapped back to its default position on reload.
+- A part whose only electrical interface is a **connector** — every Grove and
+  QWIIC plug-in module — could not be saved: validation demanded at least one
+  header pin. Connector contacts now count.
 
 ## [0.37.0] - 2026-07-25
 

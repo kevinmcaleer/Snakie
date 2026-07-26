@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, readFileSync } from 'fs'
+import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
-import { libraryFromYaml, partFromYaml } from '../src/shared/part-yaml'
+import { libraryFromYaml, partFromYaml, partToYaml } from '../src/shared/part-yaml'
 import { parseRegistry } from '../src/shared/part-registry'
 import {
   normalisePart,
@@ -94,6 +94,34 @@ describe('standard parts library (snakie-standard)', () => {
     const part = partFromYaml(read('snakie-standard', 'tiny2350', 'parts.yml'))
     expect(part.image).toBeTruthy() // build-part-from-image skill embeds a top-down photo
     expect(part.version).toBe('0.1.3') // bumped on each regeneration (version capability)
+  })
+
+  // Sweep EVERY part in the library, not just the named ones above — a new part
+  // authored by hand or by the build-part-from-image skill is guarded the moment
+  // it lands, rather than only the handful someone remembered to list.
+  const allIds = readdirSync(join(ROOT, 'snakie-standard'), { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(join(ROOT, 'snakie-standard', e.name, 'parts.yml')))
+    .map((e) => e.name)
+
+  it('finds every part directory', () => {
+    expect(allIds.length).toBeGreaterThan(20)
+    expect(allIds).toContain('seeed-xiao-expansion-base')
+  })
+
+  it.each(allIds)('%s parses, validates and round-trips through normalise', (id) => {
+    const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
+    // The folder name is the id every other part of the app resolves it by.
+    expect(part.id).toBe(id)
+    const clean = normalisePart(part)
+    expect(validatePart(clean)).toBeNull()
+    expect(normalisePart(clean)).toEqual(clean)
+    // Surviving a YAML round-trip is what proves no field is silently dropped by
+    // the serialiser's field-by-field rebuild.
+    expect(normalisePart(partFromYaml(partToYaml(clean)))).toEqual(clean)
+    // A declared help/image file must actually ship alongside the part.
+    for (const f of [part.help, part.image].filter(Boolean) as string[]) {
+      expect(existsSync(join(ROOT, 'snakie-standard', id, f))).toBe(true)
+    }
   })
 
   it.each(boards)('$id parses, validates, round-trips and converts to a board', ({ id, pads, mcu }) => {

@@ -1,0 +1,88 @@
+id: grove-buzzer
+name: Grove Buzzer
+description: Piezo buzzer on a Grove digital module — drive it with PWM for tones.
+manufacturer: Seeed Studio
+family: Output
+tags:
+  - grove
+  - seeed
+  - buzzer
+  - piezo
+  - sound
+  - pwm
+package: THT
+pinSpacing: 2.0
+voltage: 3.3-5V
+partNumber: "107020000"
+properties:
+  interface: digital / PWM (drive the pin to sound it)
+  type: magnetic buzzer
+version: 0.1.0
+pcbColor: "#1b4d3e"
+aspect: 1.0
+dimensions:
+  width: 20
+  height: 20
+shape:
+  kind: rect
+  cornerRadius: 2
+headers: []
+connectors:
+  - kind: grove
+    variant: digital
+    label: SIG
+    x: 0.5
+    y: 0.88
+    pins:
+      - name: SIG
+        type: io
+        capabilities: [digital, pwm]
+      - name: NC
+        type: other
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+shapes:
+  - kind: rect
+    x: 0.04
+    y: 0.04
+    w: 0.92
+    h: 0.92
+    fill: "#1b4d3e"
+    stroke: "#0f3227"
+    strokeWidth: 1
+    cornerRadius: 3
+    z: 0
+  # The buzzer can.
+  - kind: circle
+    x: 0.24
+    y: 0.18
+    w: 0.52
+    h: 0.52
+    fill: "#1a1d21"
+    stroke: "#0b0d10"
+    strokeWidth: 1
+    z: 1
+  - kind: circle
+    x: 0.46
+    y: 0.40
+    w: 0.08
+    h: 0.08
+    fill: "#4a4f56"
+    stroke: "none"
+    strokeWidth: 0
+    z: 2
+mountingHoles:
+  - x: 0.12
+    y: 0.5
+    diameter: 2.0
+  - x: 0.88
+    y: 0.5
+    diameter: 2.0
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

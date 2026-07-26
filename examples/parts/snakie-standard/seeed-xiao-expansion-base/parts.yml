@@ -1,0 +1,371 @@
+id: seeed-xiao-expansion-base
+name: Seeed XIAO Expansion Base
+description: Carrier board for the XIAO family — OLED, RTC, buzzer, SD slot and four Grove ports. A XIAO plugs into the socket on top.
+manufacturer: Seeed Studio
+family: Microcontroller
+tags:
+  - xiao
+  - seeed
+  - carrier
+  - expansion
+  - grove
+  - oled
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+partNumber: "103030356"
+properties:
+  display: 0.96" SSD1306 OLED, I²C 0x3C
+  rtc: PCF8563, I²C 0x51, CR1220 backup
+  grove: 2x I²C, 1x UART, 1x analog/digital
+  storage: microSD (SPI, CS on D2)
+version: 0.1.0
+pcbColor: "#1b4d3e"
+aspect: 1.365
+dimensions:
+  width: 58
+  height: 42.5
+shape:
+  kind: rect
+  cornerRadius: 3
+# This board CARRIES a XIAO rather than being one: it accepts any part declaring
+# `footprint: xiao`, and the seated board's pins bond to the same-named pins here
+# (its D4 IS this board's D4). That's why the socket pins below are named for the
+# XIAO's silk (D0..D10 / 5V / GND / 3V3) and carry no `mcu` of their own.
+mounts:
+  - id: xiao
+    footprint: xiao
+    label: XIAO
+    x: 0.70
+    y: 0.35
+    rotation: 0
+# The 2x7 socket the XIAO drops into. Left row D0..D6, right row 5V/GND/3V3/D10..D7
+# — the XIAO's own pin order, so name-bonding lines up without a pinMap.
+headers:
+  - edge: left
+    pins:
+      - number: 1
+        name: D0
+        type: io
+        capabilities: [digital, adc]
+        shape: header
+        x: 0.569
+        y: 0.171
+      - number: 2
+        name: D1
+        type: io
+        capabilities: [digital, adc]
+        shape: header
+        x: 0.569
+        y: 0.231
+      - number: 3
+        name: D2
+        type: io
+        capabilities: [digital, adc]
+        shape: header
+        x: 0.569
+        y: 0.291
+      - number: 4
+        name: D3
+        type: io
+        capabilities: [digital, adc, pwm]
+        shape: header
+        x: 0.569
+        y: 0.350
+      - number: 5
+        name: D4
+        type: io
+        capabilities: [digital, i2c]
+        signals:
+          i2c: SDA
+        shape: header
+        x: 0.569
+        y: 0.410
+      - number: 6
+        name: D5
+        type: io
+        capabilities: [digital, i2c]
+        signals:
+          i2c: SCL
+        shape: header
+        x: 0.569
+        y: 0.470
+      - number: 7
+        name: D6
+        type: io
+        capabilities: [digital, uart]
+        signals:
+          uart: TX
+        shape: header
+        x: 0.569
+        y: 0.529
+  - edge: right
+    pins:
+      - number: 8
+        name: 5V
+        type: pwr
+        shape: header
+        x: 0.831
+        y: 0.171
+      - number: 9
+        name: GND
+        type: gnd
+        shape: header
+        x: 0.831
+        y: 0.231
+      - number: 10
+        name: 3V3
+        type: pwr
+        shape: header
+        x: 0.831
+        y: 0.291
+      - number: 11
+        name: D10
+        type: io
+        capabilities: [digital, spi]
+        signals:
+          spi: TX
+        shape: header
+        x: 0.831
+        y: 0.350
+      - number: 12
+        name: D9
+        type: io
+        capabilities: [digital, spi]
+        signals:
+          spi: RX
+        shape: header
+        x: 0.831
+        y: 0.410
+      - number: 13
+        name: D8
+        type: io
+        capabilities: [digital, spi]
+        signals:
+          spi: SCK
+        shape: header
+        x: 0.831
+        y: 0.470
+      - number: 14
+        name: D7
+        type: io
+        capabilities: [digital, uart]
+        signals:
+          uart: RX
+        shape: header
+        x: 0.831
+        y: 0.529
+# Four Grove ports along the bottom edge. Contact order is the Grove standard —
+# signal, signal, VCC, GND (the yellow/white/red/black of every Grove cable). The
+# GPIOs are the RP2040/RP2350 XIAO mapping (D4=GP6, D5=GP7, D6=GP0, D7=GP1,
+# D0=GP26, D1=GP27); a XIAO with a different MCU re-maps them through the mount.
+connectors:
+  - kind: grove
+    variant: i2c
+    label: I2C
+    x: 0.14
+    y: 0.90
+    pins:
+      - name: SCL
+        type: io
+        gpio: 7
+        capabilities: [i2c]
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 1
+      - name: SDA
+        type: io
+        gpio: 6
+        capabilities: [i2c]
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 1
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    variant: i2c
+    label: I2C
+    x: 0.38
+    y: 0.90
+    pins:
+      - name: SCL
+        type: io
+        gpio: 7
+        capabilities: [i2c]
+        signals:
+          i2c: SCL
+        buses:
+          i2c: 1
+      - name: SDA
+        type: io
+        gpio: 6
+        capabilities: [i2c]
+        signals:
+          i2c: SDA
+        buses:
+          i2c: 1
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    variant: uart
+    label: UART
+    x: 0.62
+    y: 0.90
+    pins:
+      - name: RX
+        type: io
+        gpio: 1
+        capabilities: [uart]
+        signals:
+          uart: RX
+      - name: TX
+        type: io
+        gpio: 0
+        capabilities: [uart]
+        signals:
+          uart: TX
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+  - kind: grove
+    variant: analog
+    label: A0/D0
+    x: 0.86
+    y: 0.90
+    pins:
+      - name: A0
+        type: io
+        gpio: 26
+        capabilities: [adc, digital]
+        buses:
+          adc: 0
+      - name: A1
+        type: io
+        gpio: 27
+        capabilities: [adc, digital]
+        buses:
+          adc: 1
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+buttons:
+  - x: 0.26
+    y: 0.62
+    label: USER
+shapes:
+  # The green PCB body.
+  - kind: rect
+    x: 0.02
+    y: 0.03
+    w: 0.96
+    h: 0.94
+    fill: "#1b4d3e"
+    stroke: "#0f3227"
+    strokeWidth: 1
+    cornerRadius: 4
+    z: 0
+  # 0.96" SSD1306 OLED module — the black glass plus its carrier.
+  - kind: rect
+    x: 0.05
+    y: 0.06
+    w: 0.43
+    h: 0.33
+    fill: "#12161a"
+    stroke: "#2c3238"
+    strokeWidth: 1
+    cornerRadius: 2
+    z: 1
+  - kind: rect
+    x: 0.08
+    y: 0.11
+    w: 0.37
+    h: 0.21
+    fill: "#05070a"
+    stroke: "#1d2228"
+    strokeWidth: 1
+    z: 2
+  # microSD card slot on the right edge.
+  - kind: rect
+    x: 0.79
+    y: 0.60
+    w: 0.19
+    h: 0.22
+    fill: "#b8bcc2"
+    stroke: "#7a7d82"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  # CR1220 RTC backup cell.
+  - kind: circle
+    x: 0.48
+    y: 0.62
+    w: 0.15
+    h: 0.20
+    fill: "#c9ccd1"
+    stroke: "#83868b"
+    strokeWidth: 1
+    z: 1
+  # Passive buzzer can.
+  - kind: circle
+    x: 0.05
+    y: 0.55
+    w: 0.13
+    h: 0.17
+    fill: "#1a1d21"
+    stroke: "#0b0d10"
+    strokeWidth: 1
+    z: 1
+  # LiPo JST-PH battery connector.
+  - kind: rect
+    x: 0.63
+    y: 0.62
+    w: 0.12
+    h: 0.14
+    fill: "#e8e4d8"
+    stroke: "#b8b4a8"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+labels:
+  - text: XIAO
+    x: 0.70
+    y: 0.11
+    fontSize: 7
+    color: "#cfe8dc"
+    z: 3
+  - text: SD
+    x: 0.885
+    y: 0.86
+    fontSize: 5
+    color: "#cfe8dc"
+    z: 3
+  - text: RTC
+    x: 0.555
+    y: 0.72
+    fontSize: 5
+    color: "#cfe8dc"
+    z: 3
+  - text: BAT
+    x: 0.69
+    y: 0.80
+    fontSize: 5
+    color: "#cfe8dc"
+    z: 3
+# The onboard OLED (0x3C) and RTC (0x51) both hang off the same I²C bus as the
+# Grove I²C ports, so an i2c.scan() on a populated board shows them too (#214).
+i2cAddresses: [60, 81]
+help: help.md
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

@@ -1,0 +1,72 @@
+id: grove-button
+name: Grove Button
+description: Momentary push-button on a Grove digital module — reads HIGH while pressed.
+manufacturer: Seeed Studio
+family: Input
+tags:
+  - grove
+  - seeed
+  - button
+  - switch
+  - digital
+package: THT
+pinSpacing: 2.0
+voltage: 3.3-5V
+partNumber: "111020000"
+properties:
+  interface: digital (HIGH while pressed)
+  type: momentary, normally open
+version: 0.1.0
+pcbColor: "#1b4d3e"
+aspect: 1.0
+dimensions:
+  width: 20
+  height: 20
+shape:
+  kind: rect
+  cornerRadius: 2
+headers: []
+connectors:
+  - kind: grove
+    variant: digital
+    label: SIG
+    x: 0.5
+    y: 0.88
+    pins:
+      - name: SIG
+        type: io
+        capabilities: [digital]
+      - name: NC
+        type: other
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+buttons:
+  - x: 0.5
+    y: 0.42
+    label: BTN
+shapes:
+  - kind: rect
+    x: 0.04
+    y: 0.04
+    w: 0.92
+    h: 0.92
+    fill: "#1b4d3e"
+    stroke: "#0f3227"
+    strokeWidth: 1
+    cornerRadius: 3
+    z: 0
+mountingHoles:
+  - x: 0.12
+    y: 0.5
+    diameter: 2.0
+  - x: 0.88
+    y: 0.5
+    diameter: 2.0
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

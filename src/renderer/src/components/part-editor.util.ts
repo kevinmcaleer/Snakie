@@ -1236,11 +1236,15 @@ export function normalisePart(part: PartDefinition): PartDefinition {
  */
 export function validatePart(part: PartDefinition): string | null {
   if (!sanitisePartId(part.id)) return 'Give the part a name (it becomes the saved id).'
-  const pins = (part.headers ?? []).reduce(
-    (n, h) => n + (h.pins ?? []).filter((p) => String(p.name ?? '').trim() !== '').length,
-    0
-  )
-  if (pins === 0) return 'Add at least one pin to a header.'
+  const named = (ps: PartPin[] | undefined): number =>
+    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
+  // Connector contacts count as pins. A Grove or QWIIC module's ONLY electrical
+  // interface is its socket — it has no broken-out header at all — so requiring a
+  // header pin would reject an entire (and growing) class of real parts.
+  const pins =
+    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
+    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  if (pins === 0) return 'Add at least one pin — on a header or a connector.'
   if (part.version && !/^\d+\.\d+(\.\d+)?(-[\w.]+)?$/.test(part.version.trim())) {
     return 'Version must look like 1.2.3.'
   }

@@ -1,0 +1,148 @@
+id: grove-led-bar
+name: Grove LED Bar
+description: 10-segment LED bargraph driven by an MY9221 over a 2-wire clock/data interface.
+manufacturer: Seeed Studio
+family: Output
+tags:
+  - grove
+  - seeed
+  - led
+  - bargraph
+  - my9221
+  - digital
+package: THT
+pinSpacing: 2.0
+voltage: 3.3-5V
+partNumber: MY9221
+properties:
+  interface: 2-wire (clock + data), NOT I²C
+  segments: 10 (green x8, then orange, then red on v2)
+version: 0.1.0
+pcbColor: "#1b4d3e"
+aspect: 3.05
+dimensions:
+  width: 61
+  height: 20
+shape:
+  kind: rect
+  cornerRadius: 2
+headers: []
+# MY9221 clock + data. Contact 1 is the CLOCK — swapping the two is the usual
+# reason a freshly wired bar lights nothing.
+connectors:
+  - kind: grove
+    variant: digital
+    label: DCKI/DI
+    x: 0.10
+    y: 0.5
+    rotation: 90
+    pins:
+      - name: DCKI
+        type: io
+        capabilities: [digital]
+      - name: DI
+        type: io
+        capabilities: [digital]
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+shapes:
+  - kind: rect
+    x: 0.01
+    y: 0.04
+    w: 0.98
+    h: 0.92
+    fill: "#1b4d3e"
+    stroke: "#0f3227"
+    strokeWidth: 1
+    cornerRadius: 3
+    z: 0
+  # The MY9221 LED driver.
+  - kind: rect
+    x: 0.21
+    y: 0.66
+    w: 0.12
+    h: 0.22
+    fill: "#1c2227"
+    stroke: "#454b52"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+labels:
+  - text: LED BAR
+    x: 0.60
+    y: 0.86
+    fontSize: 5
+    color: "#cfe8dc"
+    z: 3
+# The ten segments. They're driven by the MY9221 rather than by GPIOs of their
+# own, so none carry a `gpio` — they're here to make the bar readable on the board.
+onboardLeds:
+  - kind: single
+    label: "1"
+    x: 0.24
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "2"
+    x: 0.31
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "3"
+    x: 0.38
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "4"
+    x: 0.45
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "5"
+    x: 0.52
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "6"
+    x: 0.59
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "7"
+    x: 0.66
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "8"
+    x: 0.73
+    y: 0.36
+    color: "#3ec46d"
+    sizeMm: 2.5
+  - kind: single
+    label: "9"
+    x: 0.80
+    y: 0.36
+    color: "#e8a33d"
+    sizeMm: 2.5
+  - kind: single
+    label: "10"
+    x: 0.87
+    y: 0.36
+    color: "#e0483d"
+    sizeMm: 2.5
+help: help.md
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true
