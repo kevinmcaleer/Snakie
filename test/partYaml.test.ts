@@ -6,6 +6,7 @@ import {
   partToYaml
 } from '../src/shared/part-yaml'
 import { blankPart, normalisePart } from '../src/renderer/src/components/part-editor.util'
+import { groupChain, itemHidden, itemLocked } from '../src/shared/part'
 import type { PartDefinition } from '../src/shared/part'
 
 const RICH: PartDefinition = normalisePart({
@@ -811,5 +812,152 @@ describe('component rotation round-trip', () => {
     it('drops an all-malformed list to undefined', () => {
       expect(partFromYaml('id: f\nname: F\ncontacts: [[1, 2], "nope"]\n').contacts).toBeUndefined()
     })
+  })
+})
+
+describe('single item hierarchy — group / hidden / locked round-trip', () => {
+  // Every item type in the Part Editor's one hierarchy carries the same flags.
+  // This is the guard against the whitelist trap: both parts.yml AND normalisePart
+  // rebuild items field-by-field, so a flag added to the type but not to those two
+  // is silently dropped on save. Covering all seven kinds in one test means a new
+  // kind can't quietly opt out.
+  const RICH_ITEMS: PartDefinition = normalisePart({
+    id: 'p',
+    name: 'P',
+    groups: [
+      { id: 'g1', name: 'Grove I2C', hidden: true },
+      { id: 'g2', name: 'inner', parent: 'g1', locked: true }
+    ],
+    headers: [
+      {
+        edge: 'left',
+        pins: [{ name: 'SCL', type: 'io', gpio: 7, group: 'g1', hidden: true, locked: true, z: 12 }]
+      }
+    ],
+    mountingHoles: [{ x: 0.1, y: 0.1, diameter: 2.5, group: 'g1', hidden: true, locked: true, z: 3 }],
+    buttons: [{ label: 'BOOT', x: 0.2, y: 0.2, group: 'g1', hidden: true, locked: true, z: 4 }],
+    onboardLeds: [{ kind: 'single', x: 0.3, y: 0.3, group: 'g1', hidden: true, locked: true, z: 5 }],
+    shapes: [{ kind: 'rect', x: 0.4, y: 0.4, w: 0.1, h: 0.1, group: 'g1', hidden: true, locked: true, z: 6 }],
+    labels: [{ text: 'U1', x: 0.5, y: 0.5, group: 'g1', hidden: true, locked: true, z: 7 }],
+    connectors: [
+      {
+        kind: 'grove',
+        variant: 'i2c',
+        x: 0.6,
+        y: 0.6,
+        group: 'g1',
+        hidden: true,
+        locked: true,
+        z: 8,
+        pins: [{ name: 'SCL', type: 'io' }]
+      }
+    ]
+  })
+
+  const item = (p: PartDefinition, kind: string): Record<string, unknown> =>
+    ({
+      pin: p.headers[0].pins[0],
+      hole: p.mountingHoles?.[0],
+      button: p.buttons?.[0],
+      led: p.onboardLeds?.[0],
+      shape: p.shapes?.[0],
+      label: p.labels?.[0],
+      connector: p.connectors?.[0]
+    })[kind] as unknown as Record<string, unknown>
+
+  const KINDS = ['pin', 'hole', 'button', 'led', 'shape', 'label', 'connector']
+
+  it.each(KINDS)('normalisePart keeps group/hidden/locked/z on a %s', (kind) => {
+    expect(item(RICH_ITEMS, kind)).toMatchObject({ group: 'g1', hidden: true, locked: true })
+  })
+
+  it.each(KINDS)('parts.yml round-trips group/hidden/locked/z on a %s', (kind) => {
+    const back = partFromYaml(partToYaml(RICH_ITEMS))
+    expect(item(back, kind)).toMatchObject({ group: 'g1', hidden: true, locked: true })
+  })
+
+  it('round-trips a group’s own hidden flag', () => {
+    const back = partFromYaml(partToYaml(RICH_ITEMS))
+    expect(back.groups).toEqual([{ id: 'g1', name: 'Grove I2C', hidden: true }])
+  })
+
+  it('drops a group nothing is in — including one only nested under another', () => {
+    // Existing behaviour, asserted here because the flags make it easy to assume
+    // an empty group survives: normalisePart keeps only groups still referenced by
+    // an item's `group` or by a nested group's `parent`, so ungrouping leaves no
+    // orphans behind. `g2` in the fixture has a parent but no members.
+    expect(RICH_ITEMS.groups?.map((g) => g.id)).toEqual(['g1'])
+  })
+
+  it('round-trips a NESTED group’s own locked flag once it has a member', () => {
+    const nested = normalisePart({
+      id: 'p',
+      name: 'P',
+      groups: [
+        { id: 'g1', name: 'outer', hidden: true },
+        { id: 'g2', name: 'inner', parent: 'g1', locked: true }
+      ],
+      headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', group: 'g2' }] }]
+    })
+    expect(partFromYaml(partToYaml(nested)).groups).toEqual([
+      { id: 'g1', name: 'outer', hidden: true },
+      { id: 'g2', name: 'inner', parent: 'g1', locked: true }
+    ])
+  })
+
+  it('survives a SECOND round-trip (the canonical-shape invariant)', () => {
+    const once = normalisePart(partFromYaml(partToYaml(RICH_ITEMS)))
+    expect(normalisePart(partFromYaml(partToYaml(once)))).toEqual(once)
+  })
+})
+
+describe('itemHidden / itemLocked — the ancestor rule', () => {
+  const groups = [
+    { id: 'outer', hidden: true },
+    { id: 'inner', parent: 'outer' },
+    { id: 'locked', locked: true },
+    { id: 'plain' }
+  ]
+
+  it('an item is hidden by its OWN flag', () => {
+    expect(itemHidden(groups, { hidden: true })).toBe(true)
+    expect(itemHidden(groups, {})).toBe(false)
+  })
+
+  it('an item is hidden by the group it is in', () => {
+    expect(itemHidden(groups, { group: 'outer' })).toBe(true)
+    expect(itemHidden(groups, { group: 'plain' })).toBe(false)
+  })
+
+  it('hiding an OUTER group hides items in a nested one', () => {
+    // The reason members keep their own flags untouched: un-hiding the outer
+    // group restores exactly what was showing before, rather than everything.
+    expect(itemHidden(groups, { group: 'inner' })).toBe(true)
+    expect(itemHidden(groups, { group: 'inner', hidden: false })).toBe(true)
+  })
+
+  it('locks resolve the same way, and independently of hiding', () => {
+    expect(itemLocked(groups, { group: 'locked' })).toBe(true)
+    expect(itemHidden(groups, { group: 'locked' })).toBe(false)
+    expect(itemLocked(groups, { group: 'outer' })).toBe(false)
+    expect(itemLocked(groups, { locked: true })).toBe(true)
+  })
+
+  it('survives a dangling parent and a cycle rather than hanging', () => {
+    // Only reachable by hand-editing parts.yml, but a cycle here would freeze the
+    // editor on every repaint, so it has to terminate.
+    const bad = [
+      { id: 'a', parent: 'b' },
+      { id: 'b', parent: 'a', hidden: true },
+      { id: 'orphan', parent: 'nope', locked: true }
+    ]
+    expect(itemHidden(bad, { group: 'a' })).toBe(true)
+    expect(itemLocked(bad, { group: 'orphan' })).toBe(true)
+    expect(itemHidden(bad, { group: 'missing' })).toBe(false)
+  })
+
+  it('groupChain reports the ancestry innermost first', () => {
+    expect(groupChain(groups, 'inner').map((g) => g.id)).toEqual(['inner', 'outer'])
+    expect(groupChain(groups, undefined)).toEqual([])
   })
 })

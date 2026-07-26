@@ -23,7 +23,9 @@ import type {
   ComponentShapeKind,
   DriverFile,
   ElectricalModel,
+  MountingHole,
   OnboardLed,
+  PartButton,
   PartConnector,
   PartDefinition,
   PartEdge,
@@ -160,8 +162,7 @@ function coercePin(raw: unknown): PartPin | null {
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
-  const group = str(r.group)
-  if (group) pin.group = group
+  readItemFlags(r, pin as unknown as Record<string, unknown>)
   if (r.labelOffset && typeof r.labelOffset === 'object') {
     const lo = r.labelOffset as Record<string, unknown>
     const lx = num(lo.x)
@@ -245,6 +246,7 @@ function coerceShape(raw: unknown): ComponentShape | null {
   const y = num(r.y)
   if (x === undefined || y === undefined) return null
   const shape: ComponentShape = { kind, x, y }
+  readItemFlags(r, shape as unknown as Record<string, unknown>)
   const group = str(r.group)
   if (group) shape.group = group
   const label = str(r.label)
@@ -327,8 +329,33 @@ function driverToObj(d: DriverFile): Record<string, unknown> {
 }
 
 /** Serialise a {@link PartPin} to a tidy plain object for YAML. */
+/**
+ * Read the single-hierarchy item flags off a raw record. EVERY item type goes
+ * through here, so adding a flag is one edit rather than seven — this file's
+ * field-by-field rebuild is exactly where flags have been silently dropped before.
+ */
+function readItemFlags(raw: Record<string, unknown> | undefined, out: Record<string, unknown>): void {
+  if (!raw) return
+  const group = str(raw.group)
+  if (group) out.group = group
+  if (raw.hidden === true) out.hidden = true
+  if (raw.locked === true) out.locked = true
+  const z = num(raw.z)
+  if (z !== undefined) out.z = z
+}
+
+/** The write half of {@link readItemFlags}. Only emits set flags, so an untouched
+ *  part's YAML gains nothing. */
+function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; z?: number }, out: Record<string, unknown>): void {
+  if (item.group) out.group = item.group
+  if (item.hidden) out.hidden = true
+  if (item.locked) out.locked = true
+  if (item.z !== undefined) out.z = item.z
+}
+
 function pinToObj(p: PartPin): Record<string, unknown> {
   const out: Record<string, unknown> = { name: p.name, type: p.type }
+  writeItemFlags(p, out)
   if (p.number !== undefined) out.number = p.number
   if (p.type === 'io' && p.gpio !== undefined) out.gpio = p.gpio
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
@@ -381,6 +408,7 @@ export function partToYaml(part: PartDefinition): string {
     // in the parser below or it's silently dropped on save (this is how connector
     // label placement used to be lost).
     connectors: part.connectors?.map((c) => ({
+      ...(() => { const f: Record<string, unknown> = {}; writeItemFlags(c, f); return f })(),
       kind: c.kind,
       variant: c.variant,
       label: c.label,
@@ -498,9 +526,10 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num((h as Record<string, unknown>)?.x)
         const y = num((h as Record<string, unknown>)?.y)
         const diameter = num((h as Record<string, unknown>)?.diameter)
-        return x !== undefined && y !== undefined
-          ? { x, y, diameter: diameter ?? 2 }
-          : null
+        if (x === undefined || y === undefined) return null
+        const hole: Record<string, unknown> = { x, y, diameter: diameter ?? 2 }
+        readItemFlags(h as Record<string, unknown>, hole)
+        return hole as unknown as MountingHole
       })
       .filter((h): h is { x: number; y: number; diameter: number } => h !== null)
     if (holes.length) part.mountingHoles = holes
@@ -511,9 +540,12 @@ export function partFromYaml(text: string): PartDefinition {
         const label = str((b as Record<string, unknown>)?.label) ?? ''
         const x = num((b as Record<string, unknown>)?.x)
         const y = num((b as Record<string, unknown>)?.y)
-        return x !== undefined && y !== undefined ? { label, x, y } : null
+        if (x === undefined || y === undefined) return null
+        const btn: Record<string, unknown> = { label, x, y }
+        readItemFlags(b as Record<string, unknown>, btn)
+        return btn as unknown as PartButton
       })
-      .filter((b): b is { label: string; x: number; y: number } => b !== null)
+      .filter((b): b is PartButton => b !== null)
     if (btns.length) part.buttons = btns
   }
   if (Array.isArray(raw.features)) {
@@ -546,6 +578,7 @@ export function partFromYaml(text: string): PartDefinition {
         const y = num(rec?.y)
         if (text === undefined || x === undefined || y === undefined) return null
         const out: PartLabel = { text, x, y }
+        readItemFlags(rec, out as unknown as Record<string, unknown>)
         const fs = num(rec?.fontSize)
         if (fs !== undefined) out.fontSize = fs
         const z = num(rec?.z)
@@ -573,6 +606,7 @@ export function partFromYaml(text: string): PartDefinition {
         const id = str(gr?.id)
         if (!id) return null
         const out: PartGroup = { id }
+        readItemFlags(gr, out as unknown as Record<string, unknown>)
         const name = str(gr?.name)
         if (name) out.name = name
         const parent = str(gr?.parent)
@@ -593,6 +627,7 @@ export function partFromYaml(text: string): PartDefinition {
         const kind: OnboardLed['kind'] =
           r.kind === 'rgb' ? 'rgb' : r.kind === 'neopixel' ? 'neopixel' : 'single'
         const led: OnboardLed = { kind, x, y }
+        readItemFlags(r, led as unknown as Record<string, unknown>)
         const label = str(r.label)
         if (label) led.label = label
         if (kind === 'rgb') {
@@ -636,6 +671,7 @@ export function partFromYaml(text: string): PartDefinition {
           ? r.pins.map(coercePin).filter((p): p is PartPin => p !== null)
           : []
         const conn: PartConnector = { kind, x, y, pins }
+        readItemFlags(r, conn as unknown as Record<string, unknown>)
         const variant = coerceGroveVariant(r.variant)
         if (variant) conn.variant = variant
         const label = str(r.label)

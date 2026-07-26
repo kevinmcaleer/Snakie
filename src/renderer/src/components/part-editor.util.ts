@@ -34,6 +34,8 @@ import {
   type PartFeature,
   type PartGroup,
   type PartHeader,
+  type PartButton,
+  type PartItemFlags,
   type PartLabel,
   type PartMount,
   type PartPin,
@@ -279,10 +281,25 @@ export function derivePinPosition(edge: PartEdge, index: number, count: number):
 }
 
 /** Normalise a single pin: default type, clean fields, gate IO-only fields. */
+/**
+ * Copy the single-hierarchy item flags (group / hidden / locked / z) onto a
+ * normalised item. normalisePart rebuilds every item field-by-field, so EVERY
+ * kind routes through here — that is what stops a new flag being dropped on save
+ * for the one kind somebody forgot.
+ */
+function keepItemFlags(src: Partial<PartItemFlags> & { z?: number }, out: Record<string, unknown>): void {
+  const group = typeof src.group === 'string' ? src.group.trim() : ''
+  if (group) out.group = group
+  if (src.hidden === true) out.hidden = true
+  if (src.locked === true) out.locked = true
+  if (typeof src.z === 'number' && Number.isFinite(src.z)) out.z = src.z
+}
+
 function normalisePin(pin: PartPin): PartPin {
   const type: PartPinType = PIN_TYPES.includes(pin.type) ? pin.type : 'io'
   const name = String(pin.name ?? '').trim()
   const out: PartPin = { name, type }
+  keepItemFlags(pin, out as unknown as Record<string, unknown>)
   if (typeof pin.number === 'number' && Number.isFinite(pin.number)) out.number = pin.number
   if (type === 'io') {
     if (typeof pin.gpio === 'number' && Number.isFinite(pin.gpio)) out.gpio = pin.gpio
@@ -319,7 +336,7 @@ function normalisePin(pin: PartPin): PartPin {
 function normaliseShape(s: ComponentShape): ComponentShape {
   const kind: ComponentShapeKind = COMPONENT_SHAPES.includes(s.kind) ? s.kind : 'rect'
   const out: ComponentShape = { kind, x: clamp(s.x, -0.2, 1.2), y: clamp(s.y, -0.2, 1.2) }
-  if (typeof s.group === 'string' && s.group.trim()) out.group = s.group.trim()
+  keepItemFlags(s, out as unknown as Record<string, unknown>)
   const label = String(s.label ?? '').trim()
   if (label) out.label = label
   out.fill = typeof s.fill === 'string' && s.fill.trim() ? s.fill : DEFAULT_SHAPE_FILL
@@ -982,18 +999,26 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     }
   }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
-    out.mountingHoles = part.mountingHoles.map((h) => ({
-      x: clamp(h.x, 0, 1),
-      y: clamp(h.y, 0, 1),
-      diameter: Number.isFinite(h.diameter) && h.diameter > 0 ? h.diameter : 2
-    }))
+    out.mountingHoles = part.mountingHoles.map((h) => {
+      const hole: MountingHole = {
+        x: clamp(h.x, 0, 1),
+        y: clamp(h.y, 0, 1),
+        diameter: Number.isFinite(h.diameter) && h.diameter > 0 ? h.diameter : 2
+      }
+      keepItemFlags(h, hole as unknown as Record<string, unknown>)
+      return hole
+    })
   }
   if (Array.isArray(part.buttons) && part.buttons.length) {
-    out.buttons = part.buttons.map((b) => ({
-      label: String(b.label ?? '').trim(),
-      x: clamp(b.x, 0, 1),
-      y: clamp(b.y, 0, 1)
-    }))
+    out.buttons = part.buttons.map((b) => {
+      const btn: PartButton = {
+        label: String(b.label ?? '').trim(),
+        x: clamp(b.x, 0, 1),
+        y: clamp(b.y, 0, 1)
+      }
+      keepItemFlags(b, btn as unknown as Record<string, unknown>)
+      return btn
+    })
   }
   if (Array.isArray(part.features) && part.features.length) {
     out.features = part.features.map((f) => ({
@@ -1016,8 +1041,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           x: clamp(l.x, 0, 1),
           y: clamp(l.y, 0, 1)
         }
+        keepItemFlags(l, lbl as unknown as Record<string, unknown>)
         if (typeof l.fontSize === 'number' && Number.isFinite(l.fontSize)) lbl.fontSize = l.fontSize
-        if (typeof l.z === 'number' && Number.isFinite(l.z)) lbl.z = l.z
         if (typeof l.rotation === 'number' && Number.isFinite(l.rotation)) {
           const r = ((((Math.round(l.rotation / 90) * 90) % 360) + 360) % 360)
           if (r) lbl.rotation = r
@@ -1047,6 +1072,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         const grp: PartGroup = { id: String(g.id) }
         if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
         if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
+        if (g.hidden === true) grp.hidden = true
+        if (g.locked === true) grp.locked = true
         return grp
       })
     if (groups.length) out.groups = groups
@@ -1056,6 +1083,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       const kind: OnboardLed['kind'] =
         l.kind === 'rgb' ? 'rgb' : l.kind === 'neopixel' ? 'neopixel' : 'single'
       const led: OnboardLed = { kind, x: clamp(l.x, 0, 1), y: clamp(l.y, 0, 1) }
+      keepItemFlags(l, led as unknown as Record<string, unknown>)
       const label = text(l.label)
       if (label) led.label = label
       if (kind === 'rgb') {
@@ -1089,6 +1117,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         y: clamp(c.y, 0, 1),
         pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
       }
+      keepItemFlags(c, conn as unknown as Record<string, unknown>)
       const variant = coerceGroveVariant(c.variant)
       if (variant) conn.variant = variant
       const label = text(c.label)

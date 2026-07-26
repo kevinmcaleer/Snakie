@@ -85,6 +85,15 @@ export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
 
 /** One physical pin/pad on the part. */
 export interface PartPin {
+  /** Paint/click z-order in the single item hierarchy (higher = on top).
+   *  Absent ⇒ the legacy per-kind default. */
+  z?: number
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Physical board pin number (1-based silk numbering), if the part prints one. */
   number?: number
   /** GPIO number this pin breaks out — matched against `Pin(n)` when rendered. */
@@ -202,6 +211,16 @@ export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
  * round rather than merely joined pin-to-pin.
  */
 export interface PartConnector {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
@@ -258,6 +277,19 @@ export interface PartMount {
 
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
+  /** Paint/click z-order in the single item hierarchy (higher = on top).
+   *  Absent ⇒ the legacy per-kind default. */
+  z?: number
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Normalised X within the board outline (0 = left edge, 1 = right edge). */
   x: number
   /** Normalised Y within the board outline (0 = top edge, 1 = bottom edge). */
@@ -268,6 +300,16 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
@@ -290,6 +332,16 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
@@ -361,6 +413,12 @@ export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
  * "components" layer the Part Editor authors via the toolbar's Shapes dropdown.
  */
 export interface ComponentShape {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   kind: ComponentShapeKind
   /** Group id — items sharing it form a group (move/rotate/delete together, #627). */
   group?: string
@@ -408,6 +466,12 @@ export type TextAlign = 'left' | 'center' | 'right'
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
 export interface PartLabel {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   text: string
   x: number
   y: number
@@ -543,7 +607,59 @@ export interface PartElectrical {
  * `parent` is another group's id is nested inside it). A group can therefore hold
  * both loose items (their `group` = this id) and sub-groups (their `parent` = this id).
  */
+/**
+ * The flags every item in the Part Editor's single layer hierarchy carries.
+ *
+ * Pins, mounting holes, shapes, labels, buttons, LEDs and connectors are all
+ * *items*: each can sit in a group (mixing kinds freely — a Grove connector and
+ * its contacts belong together), and each can be hidden or locked on its own.
+ */
+export interface PartItemFlags {
+  group?: string
+  hidden?: boolean
+  locked?: boolean
+}
+
+/**
+ * A group's ancestry, innermost first. Tolerates a cycle (only reachable by hand-
+ * editing parts.yml) by stopping rather than looping forever, and a dangling
+ * `parent` by stopping at the last group that exists.
+ */
+export function groupChain(groups: PartGroup[] | undefined, id: string | undefined): PartGroup[] {
+  const out: PartGroup[] = []
+  const seen = new Set<string>()
+  let cur = id
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const g = (groups ?? []).find((x) => x.id === cur)
+    if (!g) break
+    out.push(g)
+    cur = g.parent
+  }
+  return out
+}
+
+/**
+ * Whether an item is EFFECTIVELY hidden — its own flag, or any group above it.
+ * Hiding a group hides everything inside it without touching the members' own
+ * flags, so un-hiding the group restores exactly what was showing before.
+ */
+export function itemHidden(groups: PartGroup[] | undefined, item: PartItemFlags): boolean {
+  return !!item.hidden || groupChain(groups, item.group).some((g) => g.hidden)
+}
+
+/** Whether an item is EFFECTIVELY locked — its own flag, or any group above it. */
+export function itemLocked(groups: PartGroup[] | undefined, item: PartItemFlags): boolean {
+  return !!item.locked || groupChain(groups, item.group).some((g) => g.locked)
+}
+
 export interface PartGroup {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   id: string
   name?: string
   /** The id of the group this one is nested inside, if any. */
