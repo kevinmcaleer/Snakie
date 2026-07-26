@@ -20,6 +20,10 @@ import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../..
 import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
+  coerceConnectorKind,
+  coerceGroveVariant,
+  itemHidden,
+  itemLocked,
   type ComponentShape,
   type ComponentShapeKind,
   type DriverFile,
@@ -32,7 +36,10 @@ import {
   type PartFeature,
   type PartGroup,
   type PartHeader,
+  type PartButton,
+  type PartItemFlags,
   type PartLabel,
+  type PartMount,
   type PartPin,
   type PartPinBuses,
   type PartPinCapability,
@@ -276,10 +283,25 @@ export function derivePinPosition(edge: PartEdge, index: number, count: number):
 }
 
 /** Normalise a single pin: default type, clean fields, gate IO-only fields. */
+/**
+ * Copy the single-hierarchy item flags (group / hidden / locked / z) onto a
+ * normalised item. normalisePart rebuilds every item field-by-field, so EVERY
+ * kind routes through here — that is what stops a new flag being dropped on save
+ * for the one kind somebody forgot.
+ */
+function keepItemFlags(src: Partial<PartItemFlags> & { z?: number }, out: Record<string, unknown>): void {
+  const group = typeof src.group === 'string' ? src.group.trim() : ''
+  if (group) out.group = group
+  if (src.hidden === true) out.hidden = true
+  if (src.locked === true) out.locked = true
+  if (typeof src.z === 'number' && Number.isFinite(src.z)) out.z = src.z
+}
+
 function normalisePin(pin: PartPin): PartPin {
   const type: PartPinType = PIN_TYPES.includes(pin.type) ? pin.type : 'io'
   const name = String(pin.name ?? '').trim()
   const out: PartPin = { name, type }
+  keepItemFlags(pin, out as unknown as Record<string, unknown>)
   if (typeof pin.number === 'number' && Number.isFinite(pin.number)) out.number = pin.number
   if (type === 'io') {
     if (typeof pin.gpio === 'number' && Number.isFinite(pin.gpio)) out.gpio = pin.gpio
@@ -316,7 +338,7 @@ function normalisePin(pin: PartPin): PartPin {
 function normaliseShape(s: ComponentShape): ComponentShape {
   const kind: ComponentShapeKind = COMPONENT_SHAPES.includes(s.kind) ? s.kind : 'rect'
   const out: ComponentShape = { kind, x: clamp(s.x, -0.2, 1.2), y: clamp(s.y, -0.2, 1.2) }
-  if (typeof s.group === 'string' && s.group.trim()) out.group = s.group.trim()
+  keepItemFlags(s, out as unknown as Record<string, unknown>)
   const label = String(s.label ?? '').trim()
   if (label) out.label = label
   out.fill = typeof s.fill === 'string' && s.fill.trim() ? s.fill : DEFAULT_SHAPE_FILL
@@ -979,18 +1001,26 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     }
   }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
-    out.mountingHoles = part.mountingHoles.map((h) => ({
-      x: clamp(h.x, 0, 1),
-      y: clamp(h.y, 0, 1),
-      diameter: Number.isFinite(h.diameter) && h.diameter > 0 ? h.diameter : 2
-    }))
+    out.mountingHoles = part.mountingHoles.map((h) => {
+      const hole: MountingHole = {
+        x: clamp(h.x, 0, 1),
+        y: clamp(h.y, 0, 1),
+        diameter: Number.isFinite(h.diameter) && h.diameter > 0 ? h.diameter : 2
+      }
+      keepItemFlags(h, hole as unknown as Record<string, unknown>)
+      return hole
+    })
   }
   if (Array.isArray(part.buttons) && part.buttons.length) {
-    out.buttons = part.buttons.map((b) => ({
-      label: String(b.label ?? '').trim(),
-      x: clamp(b.x, 0, 1),
-      y: clamp(b.y, 0, 1)
-    }))
+    out.buttons = part.buttons.map((b) => {
+      const btn: PartButton = {
+        label: String(b.label ?? '').trim(),
+        x: clamp(b.x, 0, 1),
+        y: clamp(b.y, 0, 1)
+      }
+      keepItemFlags(b, btn as unknown as Record<string, unknown>)
+      return btn
+    })
   }
   if (Array.isArray(part.features) && part.features.length) {
     out.features = part.features.map((f) => ({
@@ -1013,8 +1043,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           x: clamp(l.x, 0, 1),
           y: clamp(l.y, 0, 1)
         }
+        keepItemFlags(l, lbl as unknown as Record<string, unknown>)
         if (typeof l.fontSize === 'number' && Number.isFinite(l.fontSize)) lbl.fontSize = l.fontSize
-        if (typeof l.z === 'number' && Number.isFinite(l.z)) lbl.z = l.z
         if (typeof l.rotation === 'number' && Number.isFinite(l.rotation)) {
           const r = ((((Math.round(l.rotation / 90) * 90) % 360) + 360) % 360)
           if (r) lbl.rotation = r
@@ -1044,6 +1074,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         const grp: PartGroup = { id: String(g.id) }
         if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
         if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
+        if (g.hidden === true) grp.hidden = true
+        if (g.locked === true) grp.locked = true
         return grp
       })
     if (groups.length) out.groups = groups
@@ -1053,6 +1085,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       const kind: OnboardLed['kind'] =
         l.kind === 'rgb' ? 'rgb' : l.kind === 'neopixel' ? 'neopixel' : 'single'
       const led: OnboardLed = { kind, x: clamp(l.x, 0, 1), y: clamp(l.y, 0, 1) }
+      keepItemFlags(l, led as unknown as Record<string, unknown>)
       const label = text(l.label)
       if (label) led.label = label
       if (kind === 'rgb') {
@@ -1079,13 +1112,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   }
   if (Array.isArray(part.connectors) && part.connectors.length) {
     out.connectors = part.connectors.map((c): PartConnector => {
-      const kind: PartConnector['kind'] = c.kind === 'jst' ? 'jst' : 'qwiic'
+      const kind = coerceConnectorKind(c.kind)
       const conn: PartConnector = {
         kind,
         x: clamp(c.x, 0, 1),
         y: clamp(c.y, 0, 1),
         pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
       }
+      keepItemFlags(c, conn as unknown as Record<string, unknown>)
+      const variant = coerceGroveVariant(c.variant)
+      if (variant) conn.variant = variant
       const label = text(c.label)
       if (label) conn.label = label
       if (typeof c.rotation === 'number' && Number.isFinite(c.rotation)) {
@@ -1095,6 +1131,35 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       applyLabelPlacement(c, conn)
       return conn
     })
+  }
+  // Board stacking (#166): the footprint this board plugs INTO, and the sockets it
+  // offers to boards above it. Mating is by footprint NAME, so both are just data.
+  set('footprint', text(part.footprint))
+  if (Array.isArray(part.mounts) && part.mounts.length) {
+    const mounts = part.mounts
+      .map((m): PartMount | null => {
+        const id = text(m?.id)
+        const footprint = text(m?.footprint)
+        if (!id || !footprint || typeof m.x !== 'number' || typeof m.y !== 'number') return null
+        const mount: PartMount = { id, footprint, x: clamp(m.x, 0, 1), y: clamp(m.y, 0, 1) }
+        const label = text(m.label)
+        if (label) mount.label = label
+        if (typeof m.rotation === 'number' && Number.isFinite(m.rotation)) {
+          const r = (((Math.round(m.rotation / 90) * 90) % 360) + 360) % 360
+          if (r) mount.rotation = r
+        }
+        if (m.pinMap) {
+          const pm: Record<string, string> = {}
+          for (const [k, v] of Object.entries(m.pinMap)) {
+            const to = text(v)
+            if (k && to) pm[k] = to
+          }
+          if (Object.keys(pm).length) mount.pinMap = pm
+        }
+        return mount
+      })
+      .filter((m): m is PartMount => m !== null)
+    if (mounts.length) out.mounts = mounts
   }
   set('ledLabel', text(part.ledLabel))
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)
@@ -1202,11 +1267,15 @@ export function normalisePart(part: PartDefinition): PartDefinition {
  */
 export function validatePart(part: PartDefinition): string | null {
   if (!sanitisePartId(part.id)) return 'Give the part a name (it becomes the saved id).'
-  const pins = (part.headers ?? []).reduce(
-    (n, h) => n + (h.pins ?? []).filter((p) => String(p.name ?? '').trim() !== '').length,
-    0
-  )
-  if (pins === 0) return 'Add at least one pin to a header.'
+  const named = (ps: PartPin[] | undefined): number =>
+    (ps ?? []).filter((p) => String(p.name ?? '').trim() !== '').length
+  // Connector contacts count as pins. A Grove or QWIIC module's ONLY electrical
+  // interface is its socket — it has no broken-out header at all — so requiring a
+  // header pin would reject an entire (and growing) class of real parts.
+  const pins =
+    (part.headers ?? []).reduce((n, h) => n + named(h.pins), 0) +
+    (part.connectors ?? []).reduce((n, c) => n + named(c.pins), 0)
+  if (pins === 0) return 'Add at least one pin — on a header or a connector.'
   if (part.version && !/^\d+\.\d+(\.\d+)?(-[\w.]+)?$/.test(part.version.trim())) {
     return 'Version must look like 1.2.3.'
   }
@@ -1713,4 +1782,262 @@ export function schematicSymbolLayout(
   bySide.bottom.forEach((vt, i) => place(vt, 'bottom', bX[i], boxH, bX[i], boxH + stub))
   terminals.sort((a, b) => a.flatIndex - b.flatIndex)
   return { box: { w: boxW, h: boxH }, terminals }
+}
+
+// --- The single layer hierarchy (#…) ----------------------------------------
+// One tree for everything the Part Editor can select, so a Grove connector and
+// its contacts (or a servo header's S/V/G trio) sit together and move together.
+//
+// Shape of the tree, decided deliberately:
+//   * GROUPS sit at the top level and may mix kinds — that is the whole point.
+//     A nested group appears inside its parent.
+//   * UNGROUPED items fall into kind BUCKETS (Components / Pins / Mounting
+//     holes). Without them a 78-pad board buries its three interesting rows in
+//     a wall of pins; with them, the servo2040 reads as 18 servo-header groups
+//     plus a short bucket of loose I/O.
+// The rule is positional, not clever: grouped ⇒ top level, ungrouped ⇒ bucket.
+
+/** Every kind of thing that can appear as a leaf in the hierarchy. */
+export type HierItemKind = OrderedItemKind | 'pin' | 'hole'
+
+/** A leaf's identity: its kind plus its index in that kind's array. Pins use the
+ *  FLAT index across headers (the same one endpoints and `resolvedPins` use). */
+export interface HierItem {
+  kind: HierItemKind
+  index: number
+}
+
+export type LayerBucket = 'components' | 'pins' | 'holes'
+
+export interface LayerNode {
+  /** Stable key for React and for remembering which rows are collapsed. */
+  id: string
+  kind: 'group' | 'bucket' | 'item'
+  label: string
+  children: LayerNode[]
+  /** Leaf nodes only — what a click selects. */
+  item?: HierItem
+  /** Group nodes only. */
+  groupId?: string
+  /** Bucket nodes only. */
+  bucket?: LayerBucket
+  /** EFFECTIVE state, with the group ancestry resolved — what the canvas obeys. */
+  hidden: boolean
+  locked: boolean
+  /** The node's OWN flag — what its eye/lock toggle writes. Differs from the
+   *  effective state whenever an ancestor group is hidden or locked, which is how
+   *  the row shows "hidden because the group is" without clobbering its own flag. */
+  ownHidden: boolean
+  ownLocked: boolean
+}
+
+const BUCKET_LABEL: Record<LayerBucket, string> = {
+  components: 'Components',
+  pins: 'Pins',
+  holes: 'Mounting holes'
+}
+
+/** Every leaf in the part, with the flags and label the tree needs. */
+function hierLeaves(part: PartDefinition): { node: LayerNode; group?: string }[] {
+  const out: { node: LayerNode; group?: string }[] = []
+  const push = (kind: HierItemKind, index: number, label: string, flags: PartItemFlags): void => {
+    out.push({
+      group: flags.group,
+      node: {
+        id: `${kind}:${index}`,
+        kind: 'item',
+        label,
+        children: [],
+        item: { kind, index },
+        hidden: itemHidden(part.groups, flags),
+        locked: itemLocked(part.groups, flags),
+        ownHidden: !!flags.hidden,
+        ownLocked: !!flags.locked
+      }
+    })
+  }
+  // Components, in their existing paint order so the tree matches the canvas.
+  for (const it of orderedItems(part)) {
+    if (it.kind === 'shape') {
+      const s = (part.shapes ?? [])[it.index]
+      push('shape', it.index, s?.label || s?.kind || 'Shape', s ?? {})
+    } else if (it.kind === 'label') {
+      const l = (part.labels ?? [])[it.index]
+      push('label', it.index, l?.text || 'Label', l ?? {})
+    } else if (it.kind === 'button') {
+      const b = (part.buttons ?? [])[it.index]
+      push('button', it.index, b?.label || 'Button', b ?? {})
+    } else if (it.kind === 'led') {
+      const l = (part.onboardLeds ?? [])[it.index]
+      push('led', it.index, l?.label || l?.kind || 'LED', l ?? {})
+    } else if (it.kind === 'connector') {
+      const c = (part.connectors ?? [])[it.index]
+      push('connector', it.index, c?.label || c?.kind?.toUpperCase() || 'Connector', c ?? {})
+    }
+  }
+  resolvedPins(part).forEach((rp, i) => push('pin', i, rp.pin.name || `Pin ${i + 1}`, rp.pin))
+  ;(part.mountingHoles ?? []).forEach((h, i) => push('hole', i, `Hole ${i + 1}`, h))
+  return out
+}
+
+/**
+ * Build the Part Editor's single layer hierarchy.
+ *
+ * Groups come first (they are the structure worth seeing), then the buckets of
+ * whatever is left. An EMPTY bucket is omitted; an empty group is not, because a
+ * group with nothing in it is a thing the user is mid-way through filling.
+ */
+export function partLayerTree(part: PartDefinition): LayerNode[] {
+  const leaves = hierLeaves(part)
+  const registry = part.groups ?? []
+  // An item may reference a group id that was never written to the `groups`
+  // registry — the servo2040's 18 servo-header trios are authored exactly that
+  // way, with `group: servo-1` on the pins and no registry at all. Synthesise
+  // those, or each header scatters into the pin bucket and the tree becomes the
+  // wall of 78 rows the buckets exist to prevent. First-seen order, so headers
+  // list in board order.
+  const registered = new Set(registry.map((g) => g.id))
+  const synthesised: PartGroup[] = []
+  for (const l of leaves) {
+    if (l.group && !registered.has(l.group) && !synthesised.some((g) => g.id === l.group)) {
+      synthesised.push({ id: l.group })
+    }
+  }
+  const groups: PartGroup[] = [...registry, ...synthesised]
+
+  const groupNode = (g: PartGroup): LayerNode => {
+    const flags: PartItemFlags = { group: g.parent, hidden: g.hidden, locked: g.locked }
+    return {
+      id: `group:${g.id}`,
+      kind: 'group',
+      label: g.name || g.id,
+      groupId: g.id,
+      children: [
+        ...groups.filter((c) => c.parent === g.id).map(groupNode),
+        ...leaves.filter((l) => l.group === g.id).map((l) => l.node)
+      ],
+      hidden: itemHidden(groups, flags),
+      locked: itemLocked(groups, flags),
+      ownHidden: !!g.hidden,
+      ownLocked: !!g.locked
+    }
+  }
+
+  // A group whose `parent` doesn't exist would otherwise vanish from the tree —
+  // treat it as top-level rather than losing it and everything inside it.
+  const known = new Set(groups.map((g) => g.id))
+  const roots = groups.filter((g) => !g.parent || !known.has(g.parent))
+
+  const bucketOf = (k: HierItemKind): LayerBucket =>
+    k === 'pin' ? 'pins' : k === 'hole' ? 'holes' : 'components'
+
+  const buckets: LayerNode[] = (['components', 'pins', 'holes'] as LayerBucket[])
+    .map((b): LayerNode => {
+      const kids = leaves
+        .filter((l) => !l.group || !known.has(l.group))
+        .filter((l) => bucketOf(l.node.item!.kind) === b)
+        .map((l) => l.node)
+      return {
+        id: `bucket:${b}`,
+        kind: 'bucket',
+        label: BUCKET_LABEL[b],
+        bucket: b,
+        children: kids,
+        // A bucket is a view, not a thing — it has no flags of its own. It reads
+        // as hidden/locked only when everything inside it is.
+        hidden: kids.length > 0 && kids.every((k) => k.hidden),
+        locked: kids.length > 0 && kids.every((k) => k.locked),
+        ownHidden: false,
+        ownLocked: false
+      }
+    })
+    .filter((b) => b.children.length > 0)
+
+  return [...roots.map(groupNode), ...buckets]
+}
+
+/** Map a hierarchy leaf back to the pin's (header, pin) indices — `HierItem`
+ *  carries the FLAT pin index, but the part stores pins per header. */
+export function pinAt(part: PartDefinition, flatIndex: number): { hi: number; pi: number } | null {
+  const rp = resolvedPins(part)[flatIndex]
+  return rp ? { hi: rp.hi, pi: rp.pi } : null
+}
+
+/**
+ * Set `hidden` or `locked` on one item, returning the fields to patch.
+ *
+ * Writes the item's OWN flag only — never a group's, and never its siblings'. A
+ * row that reads as hidden because its group is stays untouched, so un-hiding the
+ * group brings back exactly what was showing before.
+ */
+export function withItemFlag(
+  part: PartDefinition,
+  item: HierItem,
+  flag: 'hidden' | 'locked',
+  value: boolean
+): Partial<PartDefinition> {
+  const set = <T extends object>(arr: T[] | undefined, index: number): T[] =>
+    (arr ?? []).map((el, i) => (i === index ? { ...el, [flag]: value || undefined } : el))
+  switch (item.kind) {
+    case 'shape':
+      return { shapes: set(part.shapes, item.index) }
+    case 'label':
+      return { labels: set(part.labels, item.index) }
+    case 'button':
+      return { buttons: set(part.buttons, item.index) }
+    case 'led':
+      return { onboardLeds: set(part.onboardLeds, item.index) }
+    case 'connector':
+      return { connectors: set(part.connectors, item.index) }
+    case 'hole':
+      return { mountingHoles: set(part.mountingHoles, item.index) }
+    case 'pin': {
+      const at = pinAt(part, item.index)
+      if (!at) return {}
+      return {
+        headers: (part.headers ?? []).map((h, hi) =>
+          hi === at.hi ? { ...h, pins: set(h.pins, at.pi) } : h
+        )
+      }
+    }
+  }
+}
+
+/**
+ * Set `hidden`/`locked` on a GROUP. A group id referenced by items but absent
+ * from the registry (the servo2040's headers) is registered on the way, so the
+ * flag has somewhere to live instead of being silently discarded.
+ */
+export function withGroupFlag(
+  part: PartDefinition,
+  groupId: string,
+  flag: 'hidden' | 'locked',
+  value: boolean
+): Partial<PartDefinition> {
+  const groups = part.groups ?? []
+  const known = groups.some((g) => g.id === groupId)
+  const next = known
+    ? groups.map((g) => (g.id === groupId ? { ...g, [flag]: value || undefined } : g))
+    : [...groups, { id: groupId, [flag]: value || undefined }]
+  return { groups: next }
+}
+
+
+/**
+ * Name (or rename) a group.
+ *
+ * Registers the group first if it isn't in the registry. Groups can exist purely
+ * as an id referenced by items — the servo2040 carries `group: servo-1` on its
+ * pins and no `groups:` block at all — and mapping over the registry would
+ * silently drop the new name for exactly those. An empty name clears back to the
+ * id rather than storing `""`.
+ */
+export function withGroupName(part: PartDefinition, groupId: string, name: string): Partial<PartDefinition> {
+  const clean = name.trim()
+  const groups = part.groups ?? []
+  return {
+    groups: groups.some((g) => g.id === groupId)
+      ? groups.map((g) => (g.id === groupId ? { ...g, name: clean || undefined } : g))
+      : [...groups, { id: groupId, name: clean || undefined }]
+  }
 }

@@ -569,3 +569,47 @@
   font-family: var(--font-mono);
   font-weight: 600;
 }
+
+/* --- "which one did I click?" marker ------------------------------------- */
+/* Drawn when a row is picked in the layers hierarchy, on top of any group
+   outline. It marks WITHOUT selecting: a canvas click still grabs the whole
+   group, so this has to read as a pointer rather than as a selection ring —
+   hence the pulse and the open halo instead of the group outline's dashed box. */
+.pcv__peek-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.pcv__peek-halo {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  opacity: 0.45;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pcv-peek 1.6s ease-out infinite;
+}
+
+@keyframes pcv-peek {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.72);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.18);
+  }
+}
+
+/* Respect a reduced-motion preference: keep the marker, drop the pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .pcv__peek-halo {
+    animation: none;
+    opacity: 0.45;
+  }
+}

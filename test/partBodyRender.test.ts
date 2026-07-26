@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PartBody, capabilityChipsAt, connectorSize } from '../src/renderer/src/components/part-body'
+import { PartBody, capabilityChips, capabilityChipsAt, connectorSize } from '../src/renderer/src/components/part-body'
 import { blankPart } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -92,6 +92,54 @@ describe('PartBody onboard LEDs + connectors', () => {
     }
     expect(render(part)).toContain('QWIIC · SDA GP4')
   })
+
+  it('names a Grove port by its variant, like the silk on a Seeed board', () => {
+    const part: PartDefinition = {
+      ...blankPart(),
+      connectors: [
+        {
+          kind: 'grove',
+          variant: 'i2c',
+          x: 0.5,
+          y: 0.9,
+          pins: [
+            { name: 'SCL', type: 'io', gpio: 7, capabilities: ['i2c'], signals: { i2c: 'SCL' } },
+            { name: 'SDA', type: 'io', gpio: 6, capabilities: ['i2c'], signals: { i2c: 'SDA' } },
+            { name: 'VCC', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    }
+    expect(render(part)).toContain('GROVE I2C · SCL GP7 · SDA GP6')
+  })
+
+  it('names a 3-way DuPont block SERVO', () => {
+    const part: PartDefinition = {
+      ...blankPart(),
+      connectors: [
+        {
+          kind: 'dupont',
+          x: 0.5,
+          y: 0.5,
+          pins: [
+            { name: 'SIG', type: 'io', gpio: 15, capabilities: ['pwm'] },
+            { name: 'V+', type: 'pwr' },
+            { name: 'GND', type: 'gnd' }
+          ]
+        }
+      ]
+    }
+    expect(render(part)).toContain('SERVO · SIG GP15')
+  })
+
+  it('draws a Grove shell in its off-white housing colour, not the dark JST one', () => {
+    const grove: PartDefinition = {
+      ...blankPart(),
+      connectors: [{ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.5, pins: [{ name: 'SCL', type: 'io' }] }]
+    }
+    expect(render(grove)).toContain('#f1efe6')
+  })
 })
 
 describe('connectorSize (mm-accurate connector scaling)', () => {
@@ -120,5 +168,162 @@ describe('connectorSize (mm-accurate connector scaling)', () => {
 
   it('scales linearly with px-per-mm', () => {
     expect(connectorSize(conn4, 20).w).toBeCloseTo(connectorSize(conn4, 10).w * 2, 5)
+  })
+
+  it('draws a Grove socket at its real ~11.8 × 6.6 mm footprint', () => {
+    const grove = { ...conn4, kind: 'grove' as const, variant: 'i2c' as const }
+    const pxPerMm = 10
+    const s = connectorSize(grove, pxPerMm)
+    // (4-1)*2.0 + 2*2.9 = 11.8mm wide, 6.6mm deep.
+    expect(s.w).toBeCloseTo(11.8 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(6.6 * pxPerMm, 5)
+    // A Grove shell dwarfs a QWIIC — that size difference is the visual tell.
+    expect(s.w).toBeGreaterThan(connectorSize(conn4, pxPerMm).w * 2)
+  })
+
+  it('draws a 3-way DuPont header one 2.54 mm cell per pin', () => {
+    const servo = {
+      kind: 'dupont' as const,
+      x: 0.5,
+      y: 0.5,
+      pins: [
+        { name: 'SIG', type: 'io' as const },
+        { name: 'V+', type: 'pwr' as const },
+        { name: 'GND', type: 'gnd' as const }
+      ]
+    }
+    const pxPerMm = 10
+    const s = connectorSize(servo, pxPerMm)
+    // (3-1)*2.54 + 2*1.27 = 7.62mm — exactly three 0.1" cells.
+    expect(s.w).toBeCloseTo(7.62 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(2.54 * pxPerMm, 5)
+  })
+})
+
+describe('full-pinout props (the mini board’s pin-labels toggle)', () => {
+  // The mini board is normally a USED-pin summary; showing the whole pinout is
+  // `boxedPins` + `capsPins: 'all'`. Guard that combination actually produces a
+  // readable pinout, since that is the entire point of the toggle.
+  const MCU: PartDefinition = {
+    ...blankPart(),
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { number: 5, name: 'D4', type: 'io', gpio: 6, capabilities: ['i2c'], signals: { i2c: 'SDA' }, buses: { i2c: 1 } },
+          { number: 6, name: 'D5', type: 'io', gpio: 7, capabilities: ['i2c'], signals: { i2c: 'SCL' }, buses: { i2c: 1 } },
+          { number: 7, name: '3V3', type: 'pwr' }
+        ]
+      }
+    ]
+  }
+  const full = (): string =>
+    renderToStaticMarkup(createElement(PartBody, { part: MCU, box, boxedPins: true, capsPins: 'all' as const }))
+
+  it('shows every pin’s name, GP number and I²C bus/signal badge', () => {
+    const html = full()
+    expect(html).toContain('D4')
+    expect(html).toContain('D5')
+    expect(html).toContain('GP6')
+    expect(html).toContain('GP7')
+    // The badge that answers "am I on the right I2C pins?".
+    expect(html).toContain('I2C1 SDA')
+    expect(html).toContain('I2C1 SCL')
+  })
+
+  it('shows neither GP numbers nor badges without the toggle (the used-pin summary)', () => {
+    const summary = renderToStaticMarkup(
+      createElement(PartBody, { part: MCU, box, boxedPins: new Set<number>() })
+    )
+    expect(summary).not.toContain('GP6')
+    expect(summary).not.toContain('I2C1 SDA')
+  })
+
+  it('keeps a used pin’s code variable in preference to its GP number', () => {
+    // A pin the program uses keeps showing `i2c`/`sda` etc. — the toggle must not
+    // replace the thing the mini board exists to show.
+    const html = renderToStaticMarkup(
+      createElement(PartBody, {
+        part: MCU,
+        box,
+        boxedPins: true,
+        capsPins: 'all' as const,
+        pinVariables: new Map([[0, { variable: 'sda', color: '#0f0' }]])
+      })
+    )
+    expect(html).toContain('sda')
+    expect(html).toContain('GP7') // the other pins still fall back to GP<n>
+  })
+})
+
+describe('capability chips sit on the pin line when rotated', () => {
+  // Top/bottom pins draw their chips rotated ±90°. The strip is a rect centred on
+  // its own y=0, so the transform's translate-x IS the strip's centre line and
+  // must equal the pin's cx. It used to carry boxedPinLabel's ±3.5 baseline
+  // compensation, which only makes sense for text hanging off a baseline — that
+  // pushed the chips off centre (left on bottom pins, right on top ones).
+  const box = { x: 0, y: 0, w: 200, h: 200 }
+  const cx = 100
+  const chips = (dir: 'top' | 'bottom' | 'left' | 'right'): string =>
+    renderToStaticMarkup(
+      capabilityChips(box, cx, 40, dir, 'D4', ['i2c'], { i2c: 'SDA' }, undefined, { i2c: 1 }) ??
+        createElement('g')
+    )
+
+  it('centres the strip on the pin for a TOP pin', () => {
+    expect(chips('top')).toContain(`translate(${cx},`)
+  })
+
+  it('centres the strip on the pin for a BOTTOM pin', () => {
+    expect(chips('bottom')).toContain(`translate(${cx},`)
+  })
+
+  it('top and bottom land on the SAME line — no ±offset between them', () => {
+    const tx = (html: string): string => /translate\((-?[\d.]+),/.exec(html)?.[1] ?? ''
+    expect(tx(chips('top'))).toBe(tx(chips('bottom')))
+    expect(tx(chips('top'))).toBe(String(cx))
+  })
+
+  it('still rotates the two in opposite directions (labels read outward)', () => {
+    expect(chips('top')).toContain('rotate(-90)')
+    expect(chips('bottom')).toContain('rotate(90)')
+  })
+
+  it('leaves left/right pins on their pin line too (unrotated, unchanged)', () => {
+    // cy = 40 is the pin line for a horizontal pin; the strip centres on it.
+    expect(chips('right')).toContain(', 40)')
+    expect(chips('left')).toContain(', 40)')
+  })
+})
+
+describe('pin labels stay upright on a 180°-rotated body', () => {
+  const part: PartDefinition = {
+    ...blankPart(),
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { number: 5, name: 'D4', type: 'io', gpio: 6, x: 0.05, y: 0.4 },
+          { number: 6, name: 'D5', type: 'io', gpio: 7, x: 0.95, y: 0.4 }
+        ]
+      }
+    ]
+  }
+  const at = (rotation: number): string =>
+    renderToStaticMarkup(createElement(PartBody, { part, box, boxedPins: true, rotation }))
+
+  it('flips each label about its own anchor at 180° so it reads the right way up', () => {
+    // A plain counter-rotation would move the text to the far side of its anchor;
+    // flipping about the anchor AND swapping start↔end keeps it in the same span.
+    expect(at(180)).toContain('rotate(180')
+  })
+
+  it('leaves an unrotated body alone', () => {
+    expect(at(0)).not.toContain('rotate(180')
+  })
+
+  it('leaves 90° and 270° alone — sideways labels read fine', () => {
+    expect(at(90)).not.toContain('rotate(180')
+    expect(at(270)).not.toContain('rotate(180')
   })
 })

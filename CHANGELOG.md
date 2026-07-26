@@ -6,6 +6,120 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-07-26
+
+### Added
+- **Grove and DuPont/servo connectors.** Part connectors gain two kinds alongside
+  QWIIC and JST: **Grove** — Seeed's 4-way 2.0 mm keyed socket, drawn in its
+  off-white shell at its real 11.8 × 6.6 mm footprint, with a **port type**
+  (I²C / UART / digital / analog) that names it the way a Seeed board's silk does —
+  and **DuPont**, a 0.1" male header block drawn one 2.54 mm cell per pin, for
+  servo leads. Add either from the Part Editor's ＋ Add menu (**Grove port**,
+  **Servo header**) prefilled with the kind's standard contacts, or switch an
+  existing connector's kind in the inspector.
+- **Connectors are oriented.** A connector's contact order is now meaningful —
+  contact 1 is the end the housing's **pin-1 marker** sits at, drawn the way a PCB
+  marks it — so a Grove port always reads signal · signal · VCC · GND and a servo
+  header always reads Signal · V+ · GND. This is the groundwork for seating cables
+  the right way round rather than merely joining them pin-to-pin.
+
+- **Board stacking — plug a board into a carrier.** Drag a XIAO over a XIAO
+  Expansion Base (or a Pico over a Pico Explorer) and its socket rings green;
+  drop it and the board **seats**, drawn stacked on the carrier and moving with it
+  from then on. Dragging it off takes it back out. A board declares the header
+  `footprint` it plugs into (`xiao`, `pico`, …); a carrier declares `mounts` that
+  accept that footprint. Mating is by name rather than geometry, so a XIAO RP2350
+  and a XIAO RP2040 both seat in the same base, and a new carrier only has to name
+  the family it accepts.
+- **A seated board is electrically the carrier** at every pin they share by name —
+  which is what a header socket does. So a module wired to a Grove port on the
+  expansion base now resolves through to the real GPIO on the board plugged in
+  above it, with no hand-wiring of the socket. `pinMap` covers carriers that rename
+  pins, and a board that doesn't fit its mount is never bonded.
+- **Seven new standard parts** for the Seeed Grove ecosystem: **XIAO Expansion
+  Base** (the carrier — OLED, RTC, buzzer, SD, four Grove ports, and a XIAO
+  socket), **Grove 6-Axis Accel & Gyro** (LSM6DS3), **Grove I²C Motor Driver**
+  (TB6612FNG), **Grove Ultrasonic Ranger**, **Grove LED Bar**, **Grove Buzzer**
+  and **Grove Button** — most with help pages covering the traps (the ultrasonic's
+  single trigger/echo wire, the motor driver's command protocol, the LSM6DS3's
+  `0x6A`/`0x6B` address split).
+
+- **Cables look like cables.** A cabled wire now wears its **real conductor
+  colour** in contact order — a Grove lead's yellow/white/red/black, a QWIIC
+  lead's black/red/blue/yellow, a servo lead's orange/red/brown — so a cable reads
+  as one identifiable lead instead of four net-coloured wires. Each end gets a
+  **seated plug shell** facing its mate, so a connected cable ends in a housing
+  rather than four wires fanning into pads.
+- **Cables snap into sockets.** Drag off a connector and every socket the lead
+  could go in rings green; drop anywhere on the socket — not on one 2 mm contact —
+  and it seats, previewing solid before you release. Sockets that **don't** fit are
+  refused and say why ("That's a Grove UART port — this one is Grove I2C", "A servo
+  header lead doesn't fit a Grove socket"). Which contacts join is decided by the
+  connector's contact order, never by which end you grabbed, so **a servo lead
+  dragged on backwards still lands Signal→Signal, V+→V+, GND→GND**.
+- Cables between two connectors are no longer I²C-only: a lead now joins whatever
+  contacts the two sockets share, so Grove UART, digital and analog ports wire up
+  properly instead of getting power and ground alone.
+
+- **Pin labels on the mini board.** Hovering the mini board now reveals the full
+  pinout — every pin's number, name, `GP<n>` and capability badges (`I2C1 SDA`,
+  `PWM A`, `ADC2`) — so you can check you're on the right I²C pins without
+  switching to the Electronics view. A **pin-labels toggle** in the mini board's
+  zoom toolbar keeps them up while you read, and is remembered between sessions.
+  Pins your code uses still show their variable name in preference to `GP<n>`.
+  Only the toggle re-frames the board — a hover reveal leaves it exactly where it
+  is, so the board never resizes under the pointer.
+
+- **One layer hierarchy in the Part Editor.** The separate *Parts*, *Pins* and
+  *Mounting holes* lists are now a single tree: groups at the top — which may
+  **mix kinds**, so a Grove connector sits with its contacts and a servo header
+  with its S/V/G trio — then a bucket per kind for whatever is ungrouped. Every
+  item and every group carries its **own hide and lock**, resolved through the
+  group ancestry, so hiding a group hides its members without clobbering their own
+  state and un-hiding restores exactly what was showing before. The editor canvas
+  honours both: hidden items don't draw, and a click falls through a hidden or
+  locked item to whatever is underneath. Groups are **renameable in place** from
+  the layers panel. The **selected row is filled with the brass accent** — the
+  same signal the toolbar uses for the active tool — instead of being outlined.
+  Clicking an item inside a group in the hierarchy **marks that item on the
+  board**, so you can see which member you picked — grouped behaviour
+  on the canvas is unchanged, a click there still grabs the whole group.
+
+- **Servo 2040 gains its six sensor headers**, and its help explains why 18
+  servos need PIO rather than hardware PWM (GP16/GP17 share PWM channels with
+  GP0/GP1, so servo 17 would mirror servo 1). The **XIAO Expansion Base** is
+  rebuilt from a photo of the real board, with pins on the actual pads.
+
+### Fixed
+- **Pin labels read upside down on a part rotated 180°** in the Electronics
+  workspace. Boxed labels countered the body's scale but never its rotation. Left
+  and right pins now flip upright in place; top/bottom pins land at 90°/270° and
+  are left alone, which reads fine on its side.
+- **A part layer switched off could never be switched back on.** Merging the
+  layers panel dropped the per-layer show/hide toggles, but `layerVisibility` is
+  persisted in every `parts.yml` and still gates rendering — so anything added to
+  a hidden layer silently didn't appear. The toggle now lives on the bucket rows.
+- **Capability chips sat off the pin line on top/bottom pins.** The `PWM A` /
+  `SDA` / `SCL` badges on a vertically-rotated pin were drawn ~3.5px off centre —
+  left of the pin on bottom pins, right of it on top ones — so they didn't line up
+  with the pin, its label, or each other.
+- **Renaming a group that had no registry entry did nothing.** Groups can exist
+  purely as an id on their items — the servo2040's 18 servo headers are authored
+  that way — and the rename mapped over the registry, silently dropping the new
+  name for exactly those groups.
+- **Editor hover help ran off the screen.** A long signature or docstring sized
+  the hover widget past the edge of the editor pane, leaving most of it
+  unreadable. The hover is now capped to the pane's own width and its content
+  wraps — including signatures and fenced code, which Monaco renders as
+  non-wrapping `pre` and which were what actually pushed it off. A tall wrapped
+  hover scrolls instead of running off the bottom.
+- A connector's **silk label placement** (its dragged offset and rotation) was
+  dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
+  omitted both, so the label snapped back to its default position on reload.
+- A part whose only electrical interface is a **connector** — every Grove and
+  QWIIC plug-in module — could not be saved: validation demanded at least one
+  header pin. Connector contacts now count.
+
 ## [0.37.0] - 2026-07-25
 
 ### Added
@@ -3171,7 +3285,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...HEAD
+[0.38.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
 [0.35.1]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.0...v0.35.1

@@ -1328,9 +1328,66 @@
   background: var(--bg-sunken);
 }
 
+/* The selected row is FILLED with the brass accent — the same signal the toolbar
+   uses for the active tool — rather than outlined. An outline round a 1.2rem row
+   is easy to miss in a long hierarchy; a filled row is unmissable while scanning.
+
+   Ink is dark rather than the toolbar's white: brass is a light colour, and white
+   on it manages barely 2:1. That's survivable for a single tool glyph and not for
+   a row of pin names, numbers and type badges. */
 .pe__flatrow.is-active {
-  background: var(--bg-elevated);
-  outline: 1px solid var(--text-muted);
+  /* A lighter brass than `--accent`, which reads muddy at row size — especially
+     the skeuomorph skin's #b07d1e. Set here as its own token rather than reaching
+     for `--accent`, so the selected row can be tuned without moving links, the
+     active tool and the canvas peek marker with it. */
+  --pe-row-sel: #ddad4b;
+  --pe-row-ink: #2b1d05;
+  background: var(--pe-row-sel);
+  color: var(--pe-row-ink);
+}
+
+/* Children set their own muted colours, so pull them all onto the ink. The type
+   badge included — its per-type hue is unreadable on brass and the row is already
+   telling you what's selected. */
+.pe__flatrow.is-active .pe__flatname,
+.pe__flatrow.is-active .pe__item-name,
+.pe__flatrow.is-active .pe__flatsub,
+.pe__flatrow.is-active .pe__flatnum,
+.pe__flatrow.is-active .pe__flattype,
+.pe__flatrow.is-active .pe__flathelp,
+.pe__flatrow.is-active .pe__grip,
+.pe__flatrow.is-active .pe__trash,
+.pe__flatrow.is-active .pe__group-edit,
+.pe__flatrow.is-active .pe__rowflag {
+  color: var(--pe-row-ink);
+}
+
+/* Muted children are deliberately faded; lift them so they stay legible on the
+   fill without competing with the name. */
+.pe__flatrow.is-active .pe__flatsub,
+.pe__flatrow.is-active .pe__flatnum,
+.pe__flatrow.is-active .pe__flattype {
+  opacity: 0.75;
+}
+
+/* A held eye/lock tints itself with the accent, which is invisible ON the accent.
+   Fall back to full-strength ink — the glyphs already differ (● vs ◌, closed vs
+   open padlock), so colour was never the only signal. */
+.pe__flatrow.is-active .pe__rowflag.is-on,
+.pe__flatrow.is-active .pe__group-edit {
+  opacity: 1;
+}
+
+.pe__flatrow.is-active .pe__rowflag:hover,
+.pe__flatrow.is-active .pe__group-edit:hover {
+  background: rgb(0 0 0 / 0.14);
+}
+
+/* The generic row :hover fill would otherwise be overridden away entirely, making
+   the selected row the one row that doesn't respond to the pointer. Lift the
+   brass instead so it still acknowledges the hover. */
+.pe__flatrow.is-active:hover {
+  background: color-mix(in srgb, var(--pe-row-sel) 88%, #fff);
 }
 
 .pe__flatrow.is-dragging {
@@ -1629,4 +1686,103 @@
 
 .pe__help-preview[open] > summary {
   margin-bottom: 0.45rem;
+}
+
+/* --- per-row hide / lock (the single layer hierarchy) --------------------- */
+/* One pair per row: eye then padlock, sitting before the row's name so every
+   row's controls line up down the panel regardless of indent. */
+.pe__rowflag {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.pe__rowflag:hover {
+  color: var(--text);
+  opacity: 1;
+  background: var(--card);
+}
+
+/* Held on — hidden or locked. Accent, never a hardcoded gold, so it reads in
+   both the dark and skeuomorph skins. */
+.pe__rowflag.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* Inherited from an ancestor group: on, but not this row's to clear. Dashed so
+   it's visibly different from a flag the row owns. */
+.pe__rowflag.is-inherited {
+  opacity: 0.7;
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -1px;
+}
+
+/* A hole row is a flex line so its flags sit beside the button, not above it. */
+.pe__holerow {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+.pe__holerow .pe__item {
+  flex: 1 1 auto;
+}
+
+/* --- the single hierarchy list ------------------------------------------- */
+/* Bucket rows read as headers rather than items: slightly heavier, with the
+   name taking the slack so the add/delete chips sit right. */
+.pe__flatrow--bucket {
+  font-weight: 600;
+}
+
+.pe__flatrow--bucket .pe__layer-name {
+  flex: 1 1 auto;
+}
+
+.pe__flatrow--hole .pe__flathelp {
+  margin-left: auto;
+}
+
+/* Rename pencil on a group row. Sits quiet until the row is hovered, so a long
+   list of servo headers doesn't read as a column of icons. */
+.pe__group-edit {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.pe__flatrow--partgroup:hover .pe__group-edit,
+.pe__group-edit:focus-visible {
+  opacity: 0.75;
+}
+
+.pe__group-edit:hover {
+  color: var(--accent);
+  opacity: 1;
+  background: var(--card);
 }

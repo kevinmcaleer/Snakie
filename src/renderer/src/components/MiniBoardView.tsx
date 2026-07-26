@@ -27,6 +27,7 @@ import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { useConsole } from '../store/console'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import { isVirtualPort } from '../../../shared/virtual-device'
 import './MiniBoardView.css'
 
@@ -437,6 +438,15 @@ export function MiniBoardView({
     return m
   }, [pads, usedByKey])
 
+  // Full pinout (#…): the mini board is normally a USED-pin summary, which isn't
+  // enough to answer "am I on the right I²C pins?" without opening the Board
+  // Viewer. Hovering the board reveals every pin's number, name, GP<n> and
+  // capability badges; the toolbar toggle pins that on so it stays up while you
+  // read it (and is remembered between sessions).
+  const [pinoutPinned, setPinoutPinned] = useLocalStorage('snakie.miniboard.pinout', false)
+  const [pinoutHover, setPinoutHover] = useState(false)
+  const showPinout = pinoutPinned || pinoutHover
+
   // Frame whatever is actually drawn — measured from the live content's bounding
   // box (so the authored body's image/shapes + every boxed pin label is included
   // and nothing clips), then scaled to fill the dock (CSS). Falls back to the
@@ -446,13 +456,22 @@ export function MiniBoardView({
   useLayoutEffect(() => {
     const g = contentRef.current
     if (!g) return
+    // Only the TOGGLE re-frames. A hover reveal keeps the current frame so the
+    // board doesn't resize under the pointer every time you pass over it — the
+    // labels may run past the edge for that moment, which is the trade. Skipping
+    // rather than measuring matters because any other dependency changing
+    // mid-hover would otherwise lock in the (larger) labelled bounds and keep
+    // them after the pointer leaves; ending the hover re-runs this and corrects.
+    if (pinoutHover && !pinoutPinned) return
     try {
       const b = g.getBBox()
       if (b.width > 0 && b.height > 0) setFrame({ x: b.x, y: b.y, w: b.width, h: b.height })
     } catch {
       // getBBox can throw if the content isn't laid out yet — keep the fallback.
     }
-  }, [boardPart, def, source, isPython, pinVars, box])
+    // `pinoutPinned` is a dependency because a pinned pinout draws well outside
+    // the board outline — the frame has to grow to fit it or the labels clip.
+  }, [boardPart, def, source, isPython, pinVars, box, pinoutPinned, pinoutHover])
   const M = 12
   const viewBox = {
     str: `${frame.x - M} ${frame.y - M} ${frame.w + M * 2} ${frame.h + M * 2}`,
@@ -553,7 +572,13 @@ export function MiniBoardView({
           </svg>
         </button>
       </div>
-      <div className="mini-board__scroll" ref={scrollRef} style={{ height: scrollH }}>
+      <div
+        className="mini-board__scroll"
+        ref={scrollRef}
+        style={{ height: scrollH }}
+        onPointerEnter={() => setPinoutHover(true)}
+        onPointerLeave={() => setPinoutHover(false)}
+      >
       <svg
         className="mini-board__svg"
         viewBox={viewBox.str}
@@ -575,7 +600,13 @@ export function MiniBoardView({
                pins), identical to the Part Editor / full Board Viewer. Box ONLY the
                pins the code USES (pinVars keys) so a dense board's number boxes don't
                overlap — the mini board is a used-pin summary. */
-            <PartBody part={boardPart} box={box} boxedPins={new Set(pinVars.keys())} pinVariables={pinVars} />
+            <PartBody
+              part={boardPart}
+              box={box}
+              boxedPins={showPinout ? true : new Set(pinVars.keys())}
+              pinVariables={pinVars}
+              capsPins={showPinout ? 'all' : undefined}
+            />
           ) : (
             /* Built-in board (no source part) → the stylised PCB fallback. */
             <>
@@ -609,7 +640,28 @@ export function MiniBoardView({
       </svg>
       </div>
       {/* Zoom controls — hidden until the user hovers the mini board (keeps it clean). */}
-      <div className="mini-board__zoom" aria-label="Zoom controls">
+      <div className="mini-board__zoom" aria-label="Zoom and pinout controls">
+        {/* Keep the full pinout up. Hovering the board shows it anyway; this pins
+            it so it stays while you read off which pins your I²C is on. */}
+        <button
+          type="button"
+          className={`mini-board__zoom-btn${pinoutPinned ? ' is-on' : ''}`}
+          title={pinoutPinned ? 'Hide pin labels' : 'Keep pin labels shown (they also appear on hover)'}
+          aria-label="Show pin labels"
+          aria-pressed={pinoutPinned}
+          onClick={() => setPinoutPinned(!pinoutPinned)}
+        >
+          <svg viewBox="0 0 14 14" width="11" height="11" aria-hidden="true" focusable="false">
+            <path d="M4.3 2.2v9.6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+            <path
+              d="M4.3 4.2h6.2M4.3 7h6.2M4.3 9.8h6.2"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+              fill="none"
+            />
+          </svg>
+        </button>
         <button
           type="button"
           className="mini-board__zoom-btn"

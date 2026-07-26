@@ -23,7 +23,8 @@ import {
 import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo-bind'
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
-import type { PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
+import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
+import { cableRole, conductorColour, connectorFit } from './cable'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
@@ -436,6 +437,9 @@ interface Subject {
    *  box + title/✕ decorations track the visible body. */
   bodyDX?: number
   bodyDY?: number
+  /** True when this part is SEATED in a carrier's mount (#166) — its position is
+   *  derived from the carrier, so dragging it un-seats it rather than moving it. */
+  seated?: boolean
   pads?: PadPoint[]
   usedPadKeys?: Set<string>
   ledLit?: boolean
@@ -922,7 +926,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const boardFitW = boardPart ? partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H }).w : BOARD_BODY_W
   const boardMmW = boardPart?.dimensions?.width
   const pxPerMm = boardMmW && boardMmW > 0 ? boardFitW / boardMmW : PX_PER_MM_DEFAULT
-  robot.parts.forEach((rp, i) => {
+  // Board stacking (#166): a seated board has no position of its own — it's drawn
+  // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
+  // part's ORIGINAL index so the default scatter positions don't shift. One level
+  // of nesting is all that's supported (a carrier can't itself be seated).
+  const placedBody = new Map<string, { x: number; y: number; w: number; h: number }>()
+  const orderedParts = robot.parts
+    .map((rp, i) => ({ rp, i }))
+    .sort((a, b) => (a.rp.mountedOn ? 1 : 0) - (b.rp.mountedOn ? 1 : 0))
+  /** Where a seated board's body centre sits: its mount's normalised point within
+   *  the carrier's drawn body. Null when the carrier isn't placed or the mount is
+   *  stale, in which case the board falls back to its own position. */
+  const seatCentre = (rp: RobotPart): { x: number; y: number } | null => {
+    if (!rp.mountedOn || !rp.mount) return null
+    const carrier = robot.parts.find((p) => p.id === rp.mountedOn)
+    const body = placedBody.get(rp.mountedOn)
+    if (!carrier || !body) return null
+    const mount = resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
+    if (!mount) return null
+    return { x: body.x + mount.x * body.w, y: body.y + mount.y * body.h }
+  }
+  orderedParts.forEach(({ rp, i }) => {
     const def = resolvePart(rp.lib, rp.part)
     const x = rp.x ?? 420 + (i % 2) * 230
     const y = rp.y ?? 90 + Math.floor(i / 2) * 240
@@ -968,15 +992,22 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         rot === 90 || rot === 270
           ? { x: cx - bh / 2, y: cy - bw / 2, w: bh, h: bw }
           : { x: 0, y: 0, w: bw, h: bh }
+      // Seated in a carrier? Put the body centre on the mount point instead of
+      // wherever the part was last dropped, so it follows the carrier around.
+      const seat = seatCentre(rp)
+      const px = seat ? seat.x - (aabb.x + aabb.w / 2) : x
+      const py = seat ? seat.y - (aabb.y + aabb.h / 2) : y
+      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h })
       subjects.push({
         key: rp.id,
         kind: 'part',
         title: rp.label || def.name || rp.id,
-        x,
-        y,
+        x: px,
+        y: py,
         w: aabb.w,
         h: aabb.h,
         mode: 'lifelike',
+        seated: !!seat,
         // Anchors live in CANVAS coords: scale to the body, then rotate about its
         // centre so dots + wires stay attached to the rotated pads.
         pins: partLifelikePins(def, nativeBox).map((p) => ({
@@ -993,7 +1024,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         rotation: rot,
         bodyDX: aabb.x,
         bodyDY: aabb.y,
-        hit: hitRegion('lifelike', x + aabb.x, y + aabb.y, aabb.w, aabb.h)
+        hit: hitRegion('lifelike', px + aabb.x, py + aabb.y, aabb.w, aabb.h)
       })
     } else {
       // The part drawn as its REAL schematic symbol.
@@ -1178,12 +1209,58 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
   }
 
+  /**
+   * A carrier mount the dropped part could seat in (#166): the part must declare
+   * the mount's footprint, and the mount must be free. Returns the carrier + mount
+   * ids, or null when the drop isn't over a compatible empty socket.
+   */
+  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
+    const rp = robot.parts.find((p) => p.id === key)
+    const footprint = rp && resolvePart(rp.lib, rp.part)?.footprint
+    if (!footprint) return null
+    for (const carrier of robot.parts) {
+      if (carrier.id === key) continue
+      const body = placedBody.get(carrier.id)
+      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
+      if (!body || !mounts?.length) continue
+      for (const m of mounts) {
+        if (m.footprint !== footprint) continue
+        // One board per socket — a taken mount isn't a drop target.
+        if (robot.parts.some((p) => p.id !== key && p.mountedOn === carrier.id && p.mount === m.id)) continue
+        const mx = body.x + m.x * body.w
+        const my = body.y + m.y * body.h
+        // Generous radius: you're aiming at a socket, not a pixel.
+        if (Math.hypot(cx - mx, cy - my) <= Math.min(body.w, body.h) * 0.55) {
+          return { carrier: carrier.id, mount: m.id }
+        }
+      }
+    }
+    return null
+  }
+
   const moveBox = (key: string, x: number, y: number): void => {
     const snapped = snapOrigin(key, x, y)
     x = snapped.x
     y = snapped.y
-    if (key === 'board') persist({ ...robot, boardX: x, boardY: y })
-    else persist({ ...robot, parts: robot.parts.map((p) => (p.id === key ? { ...p, x, y } : p)) })
+    if (key === 'board') {
+      persist({ ...robot, boardX: x, boardY: y })
+      return
+    }
+    // Dropping a board onto a compatible free socket SEATS it — from then on its
+    // position comes from the carrier. Dropping it anywhere else un-seats it, so
+    // dragging a seated board off its carrier is how you take it back out.
+    const s = subjByKey.get(key)
+    const seat = mountUnder(key, x + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2, y + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2)
+    persist({
+      ...robot,
+      parts: robot.parts.map((p) =>
+        p.id === key
+          ? seat
+            ? { ...p, x, y, mountedOn: seat.carrier, mount: seat.mount }
+            : { ...p, x, y, mountedOn: undefined, mount: undefined }
+          : p
+      )
+    })
   }
   const addConnection = (from: string, to: string): void => {
     if (from === to) return
@@ -1204,13 +1281,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     persist({ ...robot, connections: [...robot.connections, conn] })
   }
 
-  // --- QWIIC / I2C cable (#…) ------------------------------------------------
+  // --- Cables (#164/#165) ----------------------------------------------------
   // A part's connector pins are appended after its header pins (partLifelikePins /
-  // netlist flattenPartPins). Resolve an endpoint to the CONNECTOR it belongs to
-  // (with each of its pins' endpoints), so a connector→connector drag can wire the
-  // whole cable at once.
-  type CablePin = { endpoint: string; name: string; type: string; i2c?: string }
-  type EndpointConn = { key: string; connIndex: number; pins: CablePin[] }
+  // netlist flattenPartPins). Resolve an endpoint to the CONNECTOR it belongs to,
+  // so a connector→connector drag lays a whole lead at once — and so a lead that
+  // doesn't fit can be refused with a reason instead of quietly wiring nonsense.
+  type EndpointConn = { key: string; connIndex: number; conn: PartConnector; endpoints: string[] }
   const parseEp = (ep: string): { key: string; index: number } => {
     const hash = ep.lastIndexOf('#')
     const index = hash >= 0 ? parseInt(ep.slice(hash + 1), 10) : -1
@@ -1218,54 +1294,109 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const dot = head.indexOf('.')
     return { key: dot >= 0 ? head.slice(0, dot) : head, index }
   }
+  /** The connector contacts of a part def as [firstPinIndex, connector] pairs —
+   *  connector contacts are numbered after the header pins. */
+  const connectorRanges = (def: PartDefinition): { base: number; conn: PartConnector }[] => {
+    let acc = resolvedPins(def).length
+    return (def.connectors ?? []).map((conn) => {
+      const base = acc
+      acc += conn.pins.length
+      return { base, conn }
+    })
+  }
   const endpointConnector = (endpoint: string): EndpointConn | null => {
     const { key, index } = parseEp(endpoint)
     const def = subjByKey.get(key)?.partDef
     if (!def) return null
-    let acc = resolvedPins(def).length // connector pins are appended after headers
-    if (index < acc) return null
-    for (let ci = 0; ci < (def.connectors?.length ?? 0); ci++) {
-      const conn = def.connectors![ci]
-      if (index < acc + conn.pins.length) {
-        const pins = conn.pins.map((pin, pi) => ({
-          endpoint: `${key}.${pin.name}#${acc + pi}`,
-          name: pin.name,
-          type: pin.type as string,
-          i2c: pin.signals?.i2c
-        }))
-        return { key, connIndex: ci, pins }
+    const ranges = connectorRanges(def)
+    for (let ci = 0; ci < ranges.length; ci++) {
+      const { base, conn } = ranges[ci]
+      if (index >= base && index < base + conn.pins.length) {
+        const endpoints = conn.pins.map((pin, pi) => endpointOf(key, pin.name, base + pi))
+        return { key, connIndex: ci, conn, endpoints }
       }
-      acc += conn.pins.length
     }
     return null
   }
-  /** Wire two connectors as one cable — SDA↔SDA, SCL↔SCL, GND↔GND, pwr↔pwr, the
-   *  4 wires sharing a cable id. Power is matched by TYPE (any pwr pin). */
-  const cableRole = (p: CablePin): 'sda' | 'scl' | 'gnd' | 'pwr' | null =>
-    p.i2c === 'SDA' || p.name.toUpperCase() === 'SDA'
-      ? 'sda'
-      : p.i2c === 'SCL' || p.name.toUpperCase() === 'SCL'
-        ? 'scl'
-        : p.type === 'gnd'
-          ? 'gnd'
-          : p.type === 'pwr'
-            ? 'pwr'
-            : null
+  /**
+   * Lay a cable between two connectors: one wire per joined contact, all sharing a
+   * cable id so they colour, select and delete as a single lead.
+   *
+   * WHICH contacts join comes from `pairContacts`, never from the drag direction —
+   * so a servo lead dragged on "backwards" still lands Signal→Signal, V+→V+,
+   * GND→GND. A pair that doesn't fit is refused outright (the caller has already
+   * shown the reason while dragging).
+   */
   const makeCable = (a: EndpointConn, b: EndpointConn): void => {
+    const fit = connectorFit(a.conn, b.conn)
+    if (!fit.ok) return
     const cable = `cable-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-    const netFor = { sda: 'signal', scl: 'signal', gnd: 'gnd', pwr: 'vcc' } as const
     const has = (id: string, f: string, t: string): boolean =>
       robot.connections.some((c) => c.id === id || (c.from === t && c.to === f))
     const added: RobotConnection[] = []
-    for (const role of ['sda', 'scl', 'gnd', 'pwr'] as const) {
-      const pa = a.pins.find((p) => cableRole(p) === role)
-      const pb = b.pins.find((p) => cableRole(p) === role)
-      if (!pa || !pb || pa.endpoint === pb.endpoint) continue
-      const id = connectionId(pa.endpoint, pb.endpoint)
-      if (has(id, pa.endpoint, pb.endpoint)) continue
-      added.push({ id, from: pa.endpoint, to: pb.endpoint, net: netFor[role], cable })
+    for (const [ia, ib] of fit.pairs) {
+      const from = a.endpoints[ia]
+      const to = b.endpoints[ib]
+      if (!from || !to || from === to) continue
+      const id = connectionId(from, to)
+      if (has(id, from, to)) continue
+      const role = cableRole(a.conn.pins[ia])
+      const net: RobotNet = role === 'gnd' ? 'gnd' : role === 'pwr' ? 'vcc' : 'signal'
+      added.push({ id, from, to, net, cable })
     }
     if (added.length) persist({ ...robot, connections: [...robot.connections, ...added] })
+  }
+
+  /**
+   * Every connector on the canvas as a droppable BODY — its centre (the mean of
+   * its contacts) and a radius covering the housing. A Grove socket's contacts are
+   * 2 mm apart, so requiring a hit on one exact contact makes cables fiddly to
+   * land; the whole socket is the target instead.
+   */
+  type ConnectorTarget = EndpointConn & { cx: number; cy: number; r: number }
+  const connectorTargets: ConnectorTarget[] = []
+  for (const s of subjects) {
+    const def = s.partDef
+    if (!def?.connectors?.length) continue
+    connectorRanges(def).forEach(({ base, conn }, ci) => {
+      const pts: { x: number; y: number }[] = []
+      const endpoints: string[] = []
+      for (const p of s.pins) {
+        if (p.index < base || p.index >= base + conn.pins.length) continue
+        endpoints[p.index - base] = endpointOf(s.key, p.name, p.index)
+        for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
+      }
+      if (pts.length < 2 || endpoints.length !== conn.pins.length) return
+      const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
+      const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
+      // Pad the contact span so the target covers the housing, not just the pins.
+      const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
+      connectorTargets.push({ key: s.key, connIndex: ci, conn, endpoints, cx, cy, r })
+    })
+  }
+  /** The connector body nearest a world point, if the point is inside it. */
+  const connectorAt = (wx: number, wy: number): ConnectorTarget | null => {
+    let best: ConnectorTarget | null = null
+    let bestD = Infinity
+    for (const t of connectorTargets) {
+      const d = Math.hypot(wx - t.cx, wy - t.cy)
+      if (d <= t.r && d < bestD) {
+        bestD = d
+        best = t
+      }
+    }
+    return best
+  }
+  /** The real conductor colour of a cabled wire — a Grove lead's yellow/white/
+   *  red/black, a servo lead's orange/red/brown — so a cable reads as one
+   *  identifiable lead rather than four net-coloured wires. */
+  const conductorColourFor = (c: RobotConnection): string | undefined => {
+    if (!c.cable) return undefined
+    const ec = endpointConnector(c.from) ?? endpointConnector(c.to)
+    if (!ec) return undefined
+    const contact = ec.endpoints.indexOf(c.from)
+    const i = contact >= 0 ? contact : ec.endpoints.indexOf(c.to)
+    return i < 0 ? undefined : conductorColour(ec.conn.kind, i)
   }
 
   const removeConnection = (id: string): void =>
@@ -1550,13 +1681,23 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         // its own pin re-attaches it, so a plain grab-and-release is a no-op).
         if (target && target.endpoint !== d.from) reconnectWire(d.reconnectId, d.from, target.endpoint)
         else removeConnection(d.reconnectId)
-      } else if (target && target.endpoint !== d.from) {
-        // Dragging between two DIFFERENT connectors wires the whole cable (SDA/SCL/
-        // GND/pwr as one bundle); otherwise it's a single pin-to-pin wire.
+      } else {
+        // Dragging between two DIFFERENT connectors lays the whole cable as one
+        // lead; otherwise it's a single pin-to-pin wire. A drag that STARTED on a
+        // connector may also be dropped anywhere on the target SOCKET rather than
+        // on one 2 mm contact — that's the snap.
         const ca = endpointConnector(d.from)
-        const cb = endpointConnector(target.endpoint)
-        if (ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)) makeCable(ca, cb)
-        else addConnection(d.from, target.endpoint)
+        const cb =
+          (target ? endpointConnector(target.endpoint) : null) ??
+          (ca ? connectorAt(w.x, w.y) : null)
+        const differentConnector = ca && cb && !(ca.key === cb.key && ca.connIndex === cb.connIndex)
+        if (differentConnector) {
+          // Refused pairings never reach here as a wire — the drag simply doesn't
+          // land, having already said why in the hover badge.
+          makeCable(ca, cb)
+        } else if (target && target.endpoint !== d.from) {
+          addConnection(d.from, target.endpoint)
+        }
       }
       force((n) => n + 1)
     }
@@ -1853,6 +1994,48 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   const drag = dragRef.current
+
+  /**
+   * Seated plugs: one shell per (cable, socket). A real lead ends in a housing
+   * that covers the contacts, so drawing it hides the four-way fan-out into the
+   * pads and makes a connected cable look plugged in rather than soldered on.
+   * Each plug faces its mate, so the shell lines up with the lead leaving it.
+   */
+  const cablePlugs = (() => {
+    const byKey = new Map(connectorTargets.map((t) => [`${t.key}|${t.connIndex}`, t]))
+    const out: { t: ConnectorTarget; kind: PartConnector['kind']; angle: number }[] = []
+    const seen = new Set<string>()
+    for (const c of robot.connections) {
+      if (!c.cable) continue
+      const ends = [endpointConnector(c.from), endpointConnector(c.to)]
+      if (!ends[0] || !ends[1]) continue
+      ends.forEach((ec, i) => {
+        const mate = ends[1 - i]
+        if (!ec || !mate) return
+        const k = `${ec.key}|${ec.connIndex}`
+        if (seen.has(k)) return
+        const t = byKey.get(k)
+        const m = byKey.get(`${mate.key}|${mate.connIndex}`)
+        if (!t || !m) return
+        seen.add(k)
+        out.push({ t, kind: ec.conn.kind, angle: (Math.atan2(m.cy - t.cy, m.cx - t.cx) * 180) / Math.PI })
+      })
+    }
+    return out
+  })()
+
+  /** While a cable is being dragged off a connector: the socket under the cursor
+   *  and whether the lead fits it. Drives the target rings, the seated preview and
+   *  the "why not" badge. Null for an ordinary pin-to-pin wire drag. */
+  const cableDrag = (() => {
+    if (drag?.kind !== 'wire' || !drag.from || drag.reconnectId) return null
+    if (drag.cx == null || drag.cy == null) return null
+    const from = endpointConnector(drag.from)
+    if (!from) return null
+    const hit = connectorAt(drag.cx, drag.cy)
+    const over = hit && !(hit.key === from.key && hit.connIndex === from.connIndex) ? hit : null
+    return { from, over, fit: over ? connectorFit(from.conn, over.conn) : null }
+  })()
   // The lifelike breadboard mat is always dark, so its wires/dots render light.
   // The SCHEMATIC view, though, follows the skin: a white sheet in the light
   // (skeuomorph) theme — where ground wires must render DARK — and the dark mat in
@@ -2141,7 +2324,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                           ? '#7b8494'
                           : v !== undefined
                             ? voltageColour(v, voltage!.ref)
-                            : connectionColor(c, isDark)
+                            : // A cabled wire wears its REAL conductor colour, so the
+                              // four run as one identifiable lead. The voltage overlay
+                              // still wins — that's a diagnostic, not decoration.
+                              (conductorColourFor(c) ?? connectionColor(c, isDark))
                     }
                     strokeWidth={isHi ? 5 : isSel ? 3.6 : 3}
                     opacity={dimmed ? 0.16 : 1}
@@ -2214,22 +2400,154 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             })}
 
             {/* The live wire being dragged. */}
+            {/* Dragging a board that plugs in: ring every empty compatible socket,
+                and fill the one it would drop into. Without this a mount is
+                invisible until you happen to let go in the right place. */}
+            {drag?.kind === 'box' &&
+              drag.moved &&
+              drag.boxKey &&
+              (() => {
+                const dragged = robot.parts.find((p) => p.id === drag.boxKey)
+                const footprint = dragged && resolvePart(dragged.lib, dragged.part)?.footprint
+                if (!footprint) return null
+                const s = subjByKey.get(drag.boxKey)
+                const cx = (s?.x ?? 0) + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2
+                const cy = (s?.y ?? 0) + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2
+                const target = mountUnder(drag.boxKey, cx, cy)
+                return (
+                  <g style={{ pointerEvents: 'none' }} className="wc__mount-targets">
+                    {robot.parts.flatMap((carrier) => {
+                      if (carrier.id === drag.boxKey) return []
+                      const body = placedBody.get(carrier.id)
+                      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts ?? []
+                      if (!body) return []
+                      return mounts
+                        .filter((m) => m.footprint === footprint)
+                        .filter(
+                          (m) =>
+                            !robot.parts.some(
+                              (p) => p.id !== drag.boxKey && p.mountedOn === carrier.id && p.mount === m.id
+                            )
+                        )
+                        .map((m) => {
+                          const isOver = target?.carrier === carrier.id && target?.mount === m.id
+                          const r = Math.min(body.w, body.h) * 0.5
+                          return (
+                            <g key={`mt${carrier.id}${m.id}`}>
+                              <circle
+                                cx={body.x + m.x * body.w}
+                                cy={body.y + m.y * body.h}
+                                r={r}
+                                fill={isOver ? '#3ec46d' : 'none'}
+                                fillOpacity={isOver ? 0.16 : 0}
+                                stroke="#3ec46d"
+                                strokeWidth={isOver ? 3 : 1.5}
+                                strokeDasharray={isOver ? undefined : '6 5'}
+                                opacity={isOver ? 0.95 : 0.5}
+                              />
+                              <text
+                                x={body.x + m.x * body.w}
+                                y={body.y + m.y * body.h - r - 6}
+                                textAnchor="middle"
+                                fontSize={11}
+                                fontWeight={700}
+                                fill="#d8f5e3"
+                                stroke="#08301c"
+                                strokeWidth={3.5}
+                                style={{ paintOrder: 'stroke' }}
+                              >
+                                {m.label || m.footprint}
+                              </text>
+                            </g>
+                          )
+                        })
+                    })}
+                  </g>
+                )
+              })()}
+
+            {/* Seated plug shells, drawn over the wires so the lead's four
+                conductors disappear into the housing the way they really do. */}
+            {cablePlugs.map(({ t, kind, angle }, i) => {
+              const w = t.r * 1.5
+              const h = t.r * 1.0
+              // Grove and its lead are both off-white; QWIIC/JST/DuPont are dark.
+              const shell = kind === 'grove' ? '#e8e5da' : '#22262c'
+              const edge = kind === 'grove' ? '#9a968a' : '#0b0d10'
+              return (
+                <g key={`plug${i}`} transform={`rotate(${angle} ${t.cx} ${t.cy})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
+                  <rect x={t.cx - w / 2} y={t.cy - h / 2} width={w} height={h} rx={h * 0.18} fill={shell} stroke={edge} strokeWidth={1} />
+                  {/* Strain-relief boot on the side the lead leaves from. */}
+                  <rect x={t.cx + w / 2 - h * 0.1} y={t.cy - h * 0.3} width={h * 0.42} height={h * 0.6} rx={h * 0.14} fill={edge} opacity={0.85} />
+                </g>
+              )
+            })}
+
+            {/* Dragging a cable off a connector: ring every socket it COULD go in,
+                and mark the one under the cursor as accepted or refused. A refused
+                socket carries the reason, so a wrong port teaches instead of just
+                failing. */}
+            {cableDrag && (
+              <g style={{ pointerEvents: 'none' }} className="wc__cable-targets">
+                {connectorTargets.map((t, i) => {
+                  const isSource = t.key === cableDrag.from.key && t.connIndex === cableDrag.from.connIndex
+                  if (isSource) return null
+                  const fits = connectorFit(cableDrag.from.conn, t.conn).ok
+                  const isOver = cableDrag.over === t
+                  if (!fits && !isOver) return null
+                  return (
+                    <circle
+                      key={`ct${i}`}
+                      cx={t.cx}
+                      cy={t.cy}
+                      r={t.r}
+                      fill="none"
+                      stroke={fits ? '#3ec46d' : '#e0483d'}
+                      strokeWidth={isOver ? 3 : 1.5}
+                      strokeDasharray={fits ? undefined : '4 3'}
+                      opacity={isOver ? 0.95 : 0.4}
+                    />
+                  )
+                })}
+                {cableDrag.over && cableDrag.fit && !cableDrag.fit.ok && cableDrag.fit.reason && (
+                  <g transform={`translate(${cableDrag.over.cx} ${cableDrag.over.cy - cableDrag.over.r - 10})`}>
+                    <text
+                      x={0}
+                      y={0}
+                      textAnchor="middle"
+                      fontSize={11}
+                      fontWeight={700}
+                      fill="#ffd9d5"
+                      stroke="#3a0f0c"
+                      strokeWidth={3.5}
+                      style={{ paintOrder: 'stroke' }}
+                      className="wc__cable-why"
+                    >
+                      {cableDrag.fit.reason}
+                    </text>
+                  </g>
+                )}
+              </g>
+            )}
             {drag?.kind === 'wire' && drag.from && (() => {
               const f = parseEndpoint(drag.from)
               const fs = subjByKey.get(f.key)
               const fp = fs?.pins[f.index]
               if (!fs || !fp) return null
               const a = anchorOf(fs, fp, drag.cx ?? fs.x, drag.cy ?? fs.y)
-              const cx = drag.cx ?? a.cx
-              const cy = drag.cy ?? a.cy
+              // Snapped onto a socket that fits → the lead seats at the socket
+              // centre and goes solid, so the "click" is visible before release.
+              const seated = cableDrag?.over && cableDrag.fit?.ok ? cableDrag.over : null
+              const cx = seated ? seated.cx : (drag.cx ?? a.cx)
+              const cy = seated ? seated.cy : (drag.cy ?? a.cy)
               const dist = Math.max(WIRE_CLEARANCE, Math.hypot(cx - a.cx, cy - a.cy) * 0.4)
               return (
                 <path
                   d={`M ${a.cx} ${a.cy} C ${a.cx + a.ox * dist} ${a.cy + a.oy * dist}, ${cx} ${cy}, ${cx} ${cy}`}
                   fill="none"
-                  stroke="#4ea1ff"
-                  strokeWidth={2}
-                  strokeDasharray="5 4"
+                  stroke={seated ? '#3ec46d' : '#4ea1ff'}
+                  strokeWidth={seated ? 3 : 2}
+                  strokeDasharray={seated ? undefined : '5 4'}
                 />
               )
             })()}

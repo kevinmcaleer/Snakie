@@ -1,0 +1,297 @@
+id: seeed-xiao-expansion-base
+name: Seeed XIAO Expansion Base
+description: Carrier board for the XIAO family — OLED, RTC, buzzer, SD slot and four Grove ports. A XIAO plugs into the socket on top.
+manufacturer: Seeed Studio
+family: Microcontroller
+tags:
+  - xiao
+  - seeed
+  - carrier
+  - expansion
+  - grove
+  - oled
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+partNumber: "103030356"
+properties:
+  display: 0.96" SSD1306 OLED, I²C 0x3C
+  rtc: PCF8563, I²C 0x51, CR1220 backup
+  grove: 2x I²C, 1x UART, 1x analog/digital
+  storage: microSD (SPI, CS on D2)
+version: 0.1.4
+pcbColor: "#1b4d3e"
+aspect: 1.365
+dimensions:
+  width: 58
+  height: 42.5
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: D0
+        type: io
+        number: 1
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 90
+        x: 0.05967278641824442
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D1
+        type: io
+        number: 2
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 90
+        x: 0.10363830365962362
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D2
+        type: io
+        number: 3
+        capabilities:
+          - digital
+          - adc
+        shape: header
+        rotation: 90
+        x: 0.14760382090100282
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D3
+        type: io
+        number: 4
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        shape: header
+        rotation: 90
+        x: 0.19083657952169247
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D4
+        type: io
+        number: 5
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        shape: header
+        rotation: 90
+        x: 0.2348020967630719
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D5
+        type: io
+        number: 6
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SCL
+        shape: header
+        rotation: 90
+        x: 0.2787676140044511
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: D6
+        type: io
+        number: 7
+        capabilities:
+          - digital
+          - uart
+        signals:
+          uart: TX
+        shape: header
+        rotation: 90
+        x: 0.32200037262514103
+        y: 0.6452254431460087
+        group: grp-4o23l7d
+      - name: TX6
+        type: io
+        gpio: 6
+        capabilities:
+          - digital
+          - uart
+        signals:
+          uart: TX
+        rotation: 0
+        x: 0.9369244384765626
+        y: 0.4482262103510838
+        group: grp-0f21cxf
+      - name: 5v
+        type: pwr
+        rotation: 0
+        x: 0.9369244384765626
+        y: 0.49764884320427394
+        group: grp-0f21cxf
+      - name: GND
+        type: gnd
+        rotation: 180
+        x: 0.89090584941294
+        y: 0.5543363216624541
+        group: grp-0f21cxf
+      - name: RX07
+        type: io
+        gpio: 7
+        capabilities:
+          - digital
+          - uart
+        signals:
+          uart: RX
+        rotation: 0
+        x: 0.9369244384765626
+        y: 0.3886679825128293
+        group: grp-0f21cxf
+      - name: 3v3
+        type: pwr
+        rotation: 180
+        x: 0.89090584941294
+        y: 0.49764884320427394
+        group: grp-0f21cxf
+      - name: GND
+        type: gnd
+        rotation: 0
+        x: 0.9369244384765626
+        y: 0.5543363216624541
+        group: grp-0f21cxf
+      - name: SWDIO
+        type: other
+        rotation: 180
+        x: 0.89090584941294
+        y: 0.4482262103510838
+        group: grp-0f21cxf
+      - name: SWCLK
+        type: other
+        rotation: 180
+        x: 0.89090584941294
+        y: 0.3886679825128293
+        group: grp-0f21cxf
+  - edge: right
+    pins:
+      - name: 5V
+        type: pwr
+        number: 8
+        shape: header
+        rotation: 270
+        x: 0.05967278641824442
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: GND
+        type: gnd
+        number: 9
+        shape: header
+        rotation: 270
+        x: 0.10363830365962362
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: 3V3
+        type: pwr
+        number: 10
+        shape: header
+        rotation: 270
+        x: 0.14760382090100282
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: D10
+        type: io
+        number: 11
+        capabilities:
+          - digital
+          - spi
+        signals:
+          spi: TX
+        shape: header
+        rotation: 270
+        x: 0.19083657952169247
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: D9
+        type: io
+        number: 12
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: RX
+        shape: header
+        rotation: 270
+        x: 0.2348020967630719
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: D8
+        type: io
+        number: 13
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: SCK
+        shape: header
+        rotation: 270
+        x: 0.2787676140044511
+        y: 0.306660160900298
+        group: grp-qimzm0l
+      - name: D7
+        type: io
+        number: 14
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: RX
+        shape: header
+        rotation: 270
+        x: 0.32200037262514103
+        y: 0.306660160900298
+        group: grp-qimzm0l
+mountingHoles:
+  - x: 0.06976427714029948
+    y: 0.10291208304610905
+    diameter: 1.5
+  - x: 0.9345549519856771
+    y: 0.10291208304610905
+    diameter: 1.5
+  - x: 0.9345549519856771
+    y: 0.9031413023705576
+    diameter: 1.5
+  - x: 0.06976427714029948
+    y: 0.9031413023705576
+    diameter: 1.5
+groups:
+  - id: grp-4o23l7d
+    name: bottom row
+  - id: grp-qimzm0l
+    name: top row
+  - id: grp-0f21cxf
+    name: Edge connector
+mounts:
+  - id: xiao
+    footprint: xiao
+    label: XIAO
+    x: 0.7
+    y: 0.35
+image: image.png
+imageLayer:
+  x: -0.00024080912272135546
+  y: 0
+  w: 1
+  h: 1
+help: help.md
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: false

@@ -22,6 +22,42 @@ Other pins: WS2812 LEDs **GP18**, I²C **INT GP19 · SDA GP20 · SCL GP21**, use
 button **GP23**, analog **A0 GP26 · A1 GP27 · A2 GP28**, and a shared sense ADC on
 **GP29** (current/voltage + the 6 sensor inputs, read through an analog mux).
 
+## Why 18 servos need PIO, not hardware PWM
+
+Each servo pin shows a **PWM A** or **PWM B** badge in the Part Editor. That's
+accurate — it's the hardware PWM channel the GPIO muxes to — but it is *not* 18
+independent channels, and the reason matters if you ever drive these pins
+yourself.
+
+The RP2040 has **8 PWM slices**, each with an A and a B channel, and every
+channel is shared by two GPIOs:
+
+| Channel | GPIOs | Servos |
+|---|---|---|
+| PWM0 A | GP0, **GP16** | 1 and **17** |
+| PWM0 B | GP1, **GP17** | 2 and **18** |
+| PWM1 A … PWM7 B | GP2 … GP15 | 3 … 16 |
+
+So **servo 17 shares a PWM channel with servo 1**, and **servo 18 with servo 2**.
+Drive them with `machine.PWM` and the pair can't hold different angles — the
+second one you set drags the first with it, because they're the same counter and
+the same compare register.
+
+That's the whole reason the board's own driver uses the RP2040's **PIO** instead:
+`ServoCluster` builds the pulse train in a state machine, so all 18 really are
+independent. If you're hand-rolling with `machine.PWM`, either stay under 16
+servos avoiding the GP0/GP16 and GP1/GP17 pairs, or use `ServoCluster`.
+
+```python
+from servo import ServoCluster, servo2040
+
+# All 18, genuinely independent — PIO, not the PWM blocks.
+cluster = ServoCluster(pio=0, sm=0, pins=list(range(servo2040.SERVO_1, servo2040.SERVO_18 + 1)))
+cluster.enable_all()
+cluster.to_percent(0, 100)   # servo 1 hard over
+cluster.to_percent(16, 0)    # servo 17 the other way — no interaction
+```
+
 ## Powering servos
 
 Feed servo power into the board's **screw terminal** (2.8–8 V for typical hobby

@@ -155,3 +155,41 @@ describe('connection colours', () => {
     expect(signalColor(0)).not.toBe(signalColor(1))
   })
 })
+
+describe('board stacking round-trip (#166)', () => {
+  it('keeps a seated board’s carrier + mount through robot.yml', () => {
+    const def: RobotDefinition = {
+      board: 'pico2w',
+      parts: [
+        { id: 'base1', lib: 'snakie-standard', part: 'seeed-xiao-expansion-base', x: 200, y: 100 },
+        {
+          id: 'xiao1',
+          lib: 'snakie-standard',
+          part: 'seeed-xiao-rp2350',
+          x: 240,
+          y: 130,
+          mountedOn: 'base1',
+          mount: 'xiao'
+        }
+      ],
+      connections: []
+    }
+    const back = robotFromYaml(robotToYaml(def))
+    expect(back.parts[1]).toMatchObject({ mountedOn: 'base1', mount: 'xiao' })
+  })
+
+  it('drops a half-specified seat (a carrier with no mount id, or the reverse)', () => {
+    // Neither half is usable alone: a mount id with no carrier refers to nothing,
+    // and a carrier with no mount id can't be placed on it.
+    const yaml =
+      'parts:\n' +
+      '  - { id: a, lib: l, part: p, mountedOn: base1 }\n' +
+      '  - { id: b, lib: l, part: p, mount: xiao }\n' +
+      '  - { id: c, lib: l, part: p, mountedOn: base1, mount: xiao }\n' +
+      'connections: []\n'
+    const parts = robotFromYaml(yaml).parts
+    expect(parts[0].mountedOn).toBeUndefined()
+    expect(parts[1].mount).toBeUndefined()
+    expect(parts[2]).toMatchObject({ mountedOn: 'base1', mount: 'xiao' })
+  })
+})

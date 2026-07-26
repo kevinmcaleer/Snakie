@@ -26,6 +26,16 @@ export interface RobotPart {
   y?: number
   /** Clockwise rotation on the breadboard, in degrees (0/90/180/270). */
   rotation?: number
+  /**
+   * The instance id of the CARRIER this part is seated in (#166) — a XIAO plugged
+   * into a XIAO expansion base, a Pico pushed into a Pico Explorer. A seated part
+   * has no position of its own: it's drawn at its mount on the carrier and moves
+   * with it, and its pins bond to the carrier's same-named pins.
+   */
+  mountedOn?: string
+  /** Which mount of the carrier it's seated in (that `PartMount.id`). Only
+   *  meaningful alongside {@link mountedOn}. */
+  mount?: string
 }
 
 /** The electrical net of a wire — drives its colour. */

@@ -61,6 +61,41 @@ describe('blankPart / validatePart', () => {
     ).toMatch(/version/i)
   })
 
+  it('accepts a connector-only part (a Grove/QWIIC module has no header)', () => {
+    // A Grove module's ONLY electrical interface is its socket — rejecting it for
+    // having no header pin would rule out the whole class of plug-in modules.
+    expect(
+      validatePart({
+        id: 'grove-button',
+        name: 'Grove Button',
+        headers: [],
+        connectors: [
+          {
+            kind: 'grove',
+            variant: 'digital',
+            x: 0.5,
+            y: 0.88,
+            pins: [
+              { name: 'SIG', type: 'io' },
+              { name: 'NC', type: 'other' },
+              { name: 'VCC', type: 'pwr' },
+              { name: 'GND', type: 'gnd' }
+            ]
+          }
+        ]
+      })
+    ).toBeNull()
+    // Still rejected when the connector has no NAMED contacts either.
+    expect(
+      validatePart({
+        id: 'x',
+        name: 'X',
+        headers: [],
+        connectors: [{ kind: 'grove', x: 0.5, y: 0.5, pins: [{ name: '  ', type: 'io' }] }]
+      })
+    ).toMatch(/pin/i)
+  })
+
   it('flags a name that sanitises to an empty id (reachable on the raw part)', () => {
     // A name entirely outside [a-z0-9-_] would silently become "my-part" after
     // normalise; validatePart on the RAW part catches it first.

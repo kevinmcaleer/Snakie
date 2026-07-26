@@ -1,0 +1,178 @@
+id: grove-i2c-motor-tb6612
+name: Grove I²C Motor Driver (TB6612FNG)
+description: Dual DC / single stepper motor driver on a Grove I²C module, command-driven via an onboard MCU.
+manufacturer: Seeed Studio
+family: Motor
+tags:
+  - grove
+  - seeed
+  - motor
+  - driver
+  - i2c
+  - tb6612
+package: THT
+pinSpacing: 2.0
+voltage: 4.5-13.5V
+partNumber: TB6612FNG
+properties:
+  interface: I²C (0x14 default, settable 0x01–0x7F)
+  channels: 2 DC motors, or 1 stepper
+  current: 1.2 A continuous per channel
+version: 0.1.0
+pcbColor: "#1b4d3e"
+aspect: 1.333
+dimensions:
+  width: 40
+  height: 30
+shape:
+  kind: rect
+  cornerRadius: 2
+# Motor + supply screw terminals. These are power outputs, not GPIO, so they carry
+# no capabilities — they're here so the Board View can wire motors and a battery.
+headers:
+  - edge: top
+    pins:
+      - number: 1
+        name: VM
+        label: VM
+        type: pwr
+        shape: header
+        x: 0.12
+        y: 0.12
+      - number: 2
+        name: GND
+        label: GND
+        type: gnd
+        shape: header
+        x: 0.30
+        y: 0.12
+      - number: 3
+        name: A1
+        label: A1
+        type: other
+        shape: header
+        x: 0.55
+        y: 0.12
+      - number: 4
+        name: A2
+        label: A2
+        type: other
+        shape: header
+        x: 0.73
+        y: 0.12
+      - number: 5
+        name: B1
+        label: B1
+        type: other
+        shape: header
+        x: 0.55
+        y: 0.88
+      - number: 6
+        name: B2
+        label: B2
+        type: other
+        shape: header
+        x: 0.73
+        y: 0.88
+connectors:
+  - kind: grove
+    variant: i2c
+    label: I2C
+    x: 0.18
+    y: 0.62
+    pins:
+      - name: SCL
+        type: io
+        capabilities: [i2c]
+        signals:
+          i2c: SCL
+      - name: SDA
+        type: io
+        capabilities: [i2c]
+        signals:
+          i2c: SDA
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
+shapes:
+  - kind: rect
+    x: 0.03
+    y: 0.04
+    w: 0.94
+    h: 0.92
+    fill: "#1b4d3e"
+    stroke: "#0f3227"
+    strokeWidth: 1
+    cornerRadius: 3
+    z: 0
+  # The TB6612FNG driver IC.
+  - kind: rect
+    x: 0.42
+    y: 0.38
+    w: 0.26
+    h: 0.20
+    fill: "#1c2227"
+    stroke: "#454b52"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  # The onboard MCU that turns I²C commands into motor drive.
+  - kind: rect
+    x: 0.74
+    y: 0.40
+    w: 0.17
+    h: 0.17
+    fill: "#1c2227"
+    stroke: "#454b52"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  # Motor + power screw terminals.
+  - kind: rect
+    x: 0.06
+    y: 0.04
+    w: 0.30
+    h: 0.16
+    fill: "#2f6fb3"
+    stroke: "#1d4874"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  - kind: rect
+    x: 0.50
+    y: 0.04
+    w: 0.30
+    h: 0.16
+    fill: "#2f6fb3"
+    stroke: "#1d4874"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+  - kind: rect
+    x: 0.50
+    y: 0.80
+    w: 0.30
+    h: 0.16
+    fill: "#2f6fb3"
+    stroke: "#1d4874"
+    strokeWidth: 1
+    cornerRadius: 1
+    z: 1
+labels:
+  - text: TB6612FNG
+    x: 0.55
+    y: 0.66
+    fontSize: 6
+    color: "#cfe8dc"
+    z: 2
+# 0x14 as shipped. The address is settable across 0x01–0x7F, so a reconfigured
+# unit can appear anywhere on the bus.
+i2cAddresses: [20]
+help: help.md
+layerVisibility:
+  pcb: false
+  image: false
+  holes: true
+  pins: true
+  components: true

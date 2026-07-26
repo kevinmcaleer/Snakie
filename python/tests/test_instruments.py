@@ -843,6 +843,20 @@ class I2CPinMux(unittest.TestCase):
         self.assertIsNone(inst._i2c_block_for_pins("a", "b"))  # non-numeric
         self.assertIsNone(inst._i2c_block_for_pins(None, None))
 
+    def test_bad_pair_message_names_the_pins_and_a_valid_pairing(self):
+        # The guided error (raised on hardware for a cross-bus pair) names the two
+        # offending pins AND the valid pin sets so the user can pick a matching pair.
+        msg = inst._bad_i2c_pair_msg(6, 1)
+        self.assertIn("GP6", msg)
+        self.assertIn("GP1", msg)
+        self.assertIn("I2C0", msg)
+        self.assertIn("I2C1", msg)
+        self.assertIn("GP7", msg)  # the valid partner for GP6 (I²C1)
+        # SPI has its own guided message naming SCK/MOSI.
+        spi = inst._bad_spi_pair_msg(6, 11)
+        self.assertIn("SCK GP6", spi)
+        self.assertIn("MOSI GP11", spi)
+
 
 class SpiPinMux(unittest.TestCase):
     """The RP2040 SPI SCK/MOSI pin mux backing the ST7789 panel's invalid-pin warning."""

@@ -12,6 +12,7 @@ package: SMD
 pinSpacing: 2.54
 voltage: 3.3V
 version: 0.1.4
+footprint: xiao
 mcu: RP2040
 pcbColor: "#177a48"
 aspect: 0.848

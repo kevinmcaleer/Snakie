@@ -85,6 +85,15 @@ export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
 
 /** One physical pin/pad on the part. */
 export interface PartPin {
+  /** Paint/click z-order in the single item hierarchy (higher = on top).
+   *  Absent ⇒ the legacy per-kind default. */
+  z?: number
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Physical board pin number (1-based silk numbering), if the part prints one. */
   number?: number
   /** GPIO number this pin breaks out — matched against `Pin(n)` when rendered. */
@@ -147,18 +156,79 @@ export interface PartHeader {
 }
 
 /**
+ * The physical family of a connector housing. Each kind has its own pitch, shell
+ * colour and keying, so a board's sockets read as the real thing:
+ *  - `qwiic`  — QWIIC / STEMMA QT: a 4-pin JST-SH 1.0 mm I2C socket (black shell)
+ *  - `jst`    — a generic JST-PH 2.0 mm header
+ *  - `grove`  — Seeed's 4-pin 2.0 mm keyed socket (white shell). Its {@link
+ *               PartConnector.variant} says which of the four standard signal
+ *               sets the port carries.
+ *  - `dupont` — a 0.1" (2.54 mm) male header block a DuPont / servo lead pushes
+ *               onto. **Oriented**: contact 1 is the marked end, so a 3-way servo
+ *               block reads Signal · V+ · GND in a fixed order and a lead plugged
+ *               the wrong way round is a mistake we can show rather than allow.
+ */
+export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont'
+
+/** Every connector kind, in picker order (the first is the default). */
+export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = ['qwiic', 'jst', 'grove', 'dupont']
+
+/**
+ * Which standard signal set a **Grove** socket carries. Grove ports are all the
+ * same 4-pin housing wired four different ways — the silk on a Seeed board says
+ * which — so the variant drives the default label and contact names:
+ *  - `i2c`     — SCL · SDA · VCC · GND
+ *  - `uart`    — RX · TX · VCC · GND
+ *  - `digital` — D(n) · D(n+1) · VCC · GND
+ *  - `analog`  — A(n) · A(n+1) · VCC · GND
+ */
+export type GroveVariant = 'i2c' | 'uart' | 'digital' | 'analog'
+
+/** Every Grove variant, in picker order (the first is the default). */
+export const GROVE_VARIANTS: readonly GroveVariant[] = ['i2c', 'uart', 'digital', 'analog']
+
+/** Validate a connector `kind` off untrusted YAML/JSON. Both the parts.yml parser
+ *  and the Part Editor's normaliser go through here, so adding a kind above is the
+ *  only edit needed — neither whitelist can silently downgrade it to `qwiic`. */
+export function coerceConnectorKind(v: unknown): PartConnectorKind {
+  return PART_CONNECTOR_KINDS.includes(v as PartConnectorKind) ? (v as PartConnectorKind) : 'qwiic'
+}
+
+/** Validate a Grove `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
+export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
+  return GROVE_VARIANTS.includes(v as GroveVariant) ? (v as GroveVariant) : undefined
+}
+
+/**
  * A physical connector on the board drawn as a placed body — e.g. a **QWIIC** /
- * **STEMMA QT** 4-pin JST-SH I2C socket, or a generic **jst** header. Its
- * {@link pins} are full {@link PartPin}s, so a QWIIC's SDA/SCL carry a GPIO +
- * `i2c` capability/signal/bus just like any other pin, alongside 3V3 / GND.
+ * **STEMMA QT** 4-pin JST-SH I2C socket, a **Grove** port, a **DuPont** / servo
+ * header block, or a generic **jst** header. Its {@link pins} are full
+ * {@link PartPin}s, so a QWIIC's SDA/SCL carry a GPIO + `i2c`
+ * capability/signal/bus just like any other pin, alongside 3V3 / GND.
+ *
+ * **Contact order is the orientation.** `pins[0]` is contact 1 — the end the
+ * housing's key/pin-1 marker sits at — so a cable can be seated the right way
+ * round rather than merely joined pin-to-pin.
  */
 export interface PartConnector {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
-  /** `qwiic` (STEMMA QT — a 4-pin JST-SH I2C socket) or a generic `jst` header. */
-  kind: 'qwiic' | 'jst'
-  /** Silk label (defaults to `"QWIIC"` / `"JST"`). */
+  /** The connector family — see {@link PartConnectorKind}. */
+  kind: PartConnectorKind
+  /** For `grove`: which signal set the port carries. Ignored by other kinds. */
+  variant?: GroveVariant
+  /** Silk label (defaults to the kind's name — `"QWIIC"` / `"GROVE"` / …). */
   label?: string
   /** Normalised 0..1 position of the connector body within the outline. */
   x: number
@@ -175,8 +245,51 @@ export interface PartConnector {
   rotation?: number
 }
 
+/**
+ * A socket on a **carrier** board that another board plugs into — the female
+ * header block on a XIAO expansion base, or the Pico socket on a Pico Explorer.
+ *
+ * Mating is by **footprint name**, not geometry: the mount accepts any part whose
+ * {@link PartDefinition.footprint} equals this {@link footprint}, so a XIAO RP2350
+ * and a XIAO RP2040 both seat in a XIAO carrier without either part knowing about
+ * the other. Once seated, the two boards' **same-named pins are bonded** — the
+ * seated board's `D4` *is* the carrier's `D4` — which is what lets a Grove port on
+ * the carrier resolve to a GPIO on the MCU above it. Carriers that rename pins can
+ * override individual bonds with {@link pinMap}.
+ */
+export interface PartMount {
+  /** Unique id within this part; a placed instance references it as `mount`. */
+  id: string
+  /** The footprint family this socket accepts (e.g. `xiao`, `pico`). */
+  footprint: string
+  /** Normalised 0..1 centre of the SEATED board within this board's outline. */
+  x: number
+  y: number
+  /** Rotation of the seated board, in degrees (0/90/180/270). */
+  rotation?: number
+  /** Optional silk label for the socket (e.g. `XIAO`). */
+  label?: string
+  /** Bond overrides for a carrier whose own pin names differ from the seated
+   *  board's: seated pin name → this board's pin name. Anything not listed still
+   *  bonds by matching name. */
+  pinMap?: Record<string, string>
+}
+
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
+  /** Paint/click z-order in the single item hierarchy (higher = on top).
+   *  Absent ⇒ the legacy per-kind default. */
+  z?: number
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Normalised X within the board outline (0 = left edge, 1 = right edge). */
   x: number
   /** Normalised Y within the board outline (0 = top edge, 1 = bottom edge). */
@@ -187,6 +300,16 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
@@ -209,6 +332,16 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Group id — items sharing it form a group and move/rotate/delete as one
+   *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
+   *  belong together, so they travel together. */
+  group?: string
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
@@ -280,6 +413,12 @@ export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
  * "components" layer the Part Editor authors via the toolbar's Shapes dropdown.
  */
 export interface ComponentShape {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   kind: ComponentShapeKind
   /** Group id — items sharing it form a group (move/rotate/delete together, #627). */
   group?: string
@@ -327,6 +466,12 @@ export type TextAlign = 'left' | 'center' | 'right'
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
 export interface PartLabel {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   text: string
   x: number
   y: number
@@ -462,7 +607,59 @@ export interface PartElectrical {
  * `parent` is another group's id is nested inside it). A group can therefore hold
  * both loose items (their `group` = this id) and sub-groups (their `parent` = this id).
  */
+/**
+ * The flags every item in the Part Editor's single layer hierarchy carries.
+ *
+ * Pins, mounting holes, shapes, labels, buttons, LEDs and connectors are all
+ * *items*: each can sit in a group (mixing kinds freely — a Grove connector and
+ * its contacts belong together), and each can be hidden or locked on its own.
+ */
+export interface PartItemFlags {
+  group?: string
+  hidden?: boolean
+  locked?: boolean
+}
+
+/**
+ * A group's ancestry, innermost first. Tolerates a cycle (only reachable by hand-
+ * editing parts.yml) by stopping rather than looping forever, and a dangling
+ * `parent` by stopping at the last group that exists.
+ */
+export function groupChain(groups: PartGroup[] | undefined, id: string | undefined): PartGroup[] {
+  const out: PartGroup[] = []
+  const seen = new Set<string>()
+  let cur = id
+  while (cur && !seen.has(cur)) {
+    seen.add(cur)
+    const g = (groups ?? []).find((x) => x.id === cur)
+    if (!g) break
+    out.push(g)
+    cur = g.parent
+  }
+  return out
+}
+
+/**
+ * Whether an item is EFFECTIVELY hidden — its own flag, or any group above it.
+ * Hiding a group hides everything inside it without touching the members' own
+ * flags, so un-hiding the group restores exactly what was showing before.
+ */
+export function itemHidden(groups: PartGroup[] | undefined, item: PartItemFlags): boolean {
+  return !!item.hidden || groupChain(groups, item.group).some((g) => g.hidden)
+}
+
+/** Whether an item is EFFECTIVELY locked — its own flag, or any group above it. */
+export function itemLocked(groups: PartGroup[] | undefined, item: PartItemFlags): boolean {
+  return !!item.locked || groupChain(groups, item.group).some((g) => g.locked)
+}
+
 export interface PartGroup {
+  /** Hidden in the editor and on the rendered part. Independent of any group's
+   *  own flag — see {@link itemHidden}, which is what callers should ask. */
+  hidden?: boolean
+  /** Locked: can't be selected, moved, restyled or deleted. Same ancestor rule
+   *  as {@link hidden} — ask {@link itemLocked}, not this field. */
+  locked?: boolean
   id: string
   name?: string
   /** The id of the group this one is nested inside, if any. */
@@ -536,8 +733,21 @@ export interface PartDefinition {
   labels?: PartLabel[]
   /** Onboard indicator LEDs (single or RGB) tied to GPIO(s), drawn on the board. */
   onboardLeds?: OnboardLed[]
-  /** Physical connectors (QWIIC / STEMMA QT / JST) drawn on the board. */
+  /** Physical connectors (QWIIC / STEMMA QT / Grove / DuPont / JST) drawn on the
+   *  board. */
   connectors?: PartConnector[]
+  /**
+   * The header footprint this board **plugs into** — the shape of its pin headers
+   * as a family name (`xiao`, `pico`, `feather`). A board with a footprint can be
+   * seated in any carrier that declares a {@link PartMount} accepting it, so a
+   * XIAO RP2350 and a XIAO RP2040 both drop into a XIAO expansion base without
+   * either part knowing about the other. Absent ⇒ the board doesn't stack.
+   */
+  footprint?: string
+  /** Sockets on THIS board that accept another board on top (a carrier / shield
+   *  base — the XIAO expansion board, a Pico Explorer). Absent ⇒ nothing stacks
+   *  onto it. */
+  mounts?: PartMount[]
   /** Groups (#627): items carry a `group` id; this registry names them + records
    *  nesting (`parent`), so a group can hold items AND sub-groups. Membership is
    *  the `group` id on items (robust to reorder), not index refs. */

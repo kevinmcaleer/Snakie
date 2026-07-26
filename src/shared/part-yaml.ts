@@ -17,12 +17,15 @@
  */
 
 import { parse, stringify } from 'yaml'
+import { coerceConnectorKind, coerceGroveVariant } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
   ElectricalModel,
+  MountingHole,
   OnboardLed,
+  PartButton,
   PartConnector,
   PartDefinition,
   PartEdge,
@@ -32,6 +35,7 @@ import type {
   PartHeader,
   PartLabel,
   PartLibrary,
+  PartMount,
   PartPin,
   PartPinBuses,
   PartPinCapability,
@@ -158,8 +162,7 @@ function coercePin(raw: unknown): PartPin | null {
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
-  const group = str(r.group)
-  if (group) pin.group = group
+  readItemFlags(r, pin as unknown as Record<string, unknown>)
   if (r.labelOffset && typeof r.labelOffset === 'object') {
     const lo = r.labelOffset as Record<string, unknown>
     const lx = num(lo.x)
@@ -243,6 +246,7 @@ function coerceShape(raw: unknown): ComponentShape | null {
   const y = num(r.y)
   if (x === undefined || y === undefined) return null
   const shape: ComponentShape = { kind, x, y }
+  readItemFlags(r, shape as unknown as Record<string, unknown>)
   const group = str(r.group)
   if (group) shape.group = group
   const label = str(r.label)
@@ -325,8 +329,33 @@ function driverToObj(d: DriverFile): Record<string, unknown> {
 }
 
 /** Serialise a {@link PartPin} to a tidy plain object for YAML. */
+/**
+ * Read the single-hierarchy item flags off a raw record. EVERY item type goes
+ * through here, so adding a flag is one edit rather than seven — this file's
+ * field-by-field rebuild is exactly where flags have been silently dropped before.
+ */
+function readItemFlags(raw: Record<string, unknown> | undefined, out: Record<string, unknown>): void {
+  if (!raw) return
+  const group = str(raw.group)
+  if (group) out.group = group
+  if (raw.hidden === true) out.hidden = true
+  if (raw.locked === true) out.locked = true
+  const z = num(raw.z)
+  if (z !== undefined) out.z = z
+}
+
+/** The write half of {@link readItemFlags}. Only emits set flags, so an untouched
+ *  part's YAML gains nothing. */
+function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; z?: number }, out: Record<string, unknown>): void {
+  if (item.group) out.group = item.group
+  if (item.hidden) out.hidden = true
+  if (item.locked) out.locked = true
+  if (item.z !== undefined) out.z = item.z
+}
+
 function pinToObj(p: PartPin): Record<string, unknown> {
   const out: Record<string, unknown> = { name: p.name, type: p.type }
+  writeItemFlags(p, out)
   if (p.number !== undefined) out.number = p.number
   if (p.type === 'io' && p.gpio !== undefined) out.gpio = p.gpio
   if (p.type === 'io' && p.capabilities?.length) out.capabilities = p.capabilities
@@ -375,13 +404,30 @@ export function partToYaml(part: PartDefinition): string {
     labels: part.labels,
     groups: part.groups,
     onboardLeds: part.onboardLeds,
+    // NB: field-by-field, so every new PartConnector field must be added HERE and
+    // in the parser below or it's silently dropped on save (this is how connector
+    // label placement used to be lost).
     connectors: part.connectors?.map((c) => ({
+      ...(() => { const f: Record<string, unknown> = {}; writeItemFlags(c, f); return f })(),
       kind: c.kind,
+      variant: c.variant,
       label: c.label,
       x: c.x,
       y: c.y,
       rotation: c.rotation,
+      labelOffset: c.labelOffset ? { x: c.labelOffset.x, y: c.labelOffset.y } : undefined,
+      labelRotation: c.labelRotation,
       pins: c.pins.map(pinToObj)
+    })),
+    footprint: part.footprint,
+    mounts: part.mounts?.map((m) => ({
+      id: m.id,
+      footprint: m.footprint,
+      label: m.label,
+      x: m.x,
+      y: m.y,
+      rotation: m.rotation,
+      pinMap: m.pinMap ? { ...m.pinMap } : undefined
     })),
     ledLabel: part.ledLabel,
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
@@ -480,9 +526,10 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num((h as Record<string, unknown>)?.x)
         const y = num((h as Record<string, unknown>)?.y)
         const diameter = num((h as Record<string, unknown>)?.diameter)
-        return x !== undefined && y !== undefined
-          ? { x, y, diameter: diameter ?? 2 }
-          : null
+        if (x === undefined || y === undefined) return null
+        const hole: Record<string, unknown> = { x, y, diameter: diameter ?? 2 }
+        readItemFlags(h as Record<string, unknown>, hole)
+        return hole as unknown as MountingHole
       })
       .filter((h): h is { x: number; y: number; diameter: number } => h !== null)
     if (holes.length) part.mountingHoles = holes
@@ -493,9 +540,12 @@ export function partFromYaml(text: string): PartDefinition {
         const label = str((b as Record<string, unknown>)?.label) ?? ''
         const x = num((b as Record<string, unknown>)?.x)
         const y = num((b as Record<string, unknown>)?.y)
-        return x !== undefined && y !== undefined ? { label, x, y } : null
+        if (x === undefined || y === undefined) return null
+        const btn: Record<string, unknown> = { label, x, y }
+        readItemFlags(b as Record<string, unknown>, btn)
+        return btn as unknown as PartButton
       })
-      .filter((b): b is { label: string; x: number; y: number } => b !== null)
+      .filter((b): b is PartButton => b !== null)
     if (btns.length) part.buttons = btns
   }
   if (Array.isArray(raw.features)) {
@@ -528,6 +578,7 @@ export function partFromYaml(text: string): PartDefinition {
         const y = num(rec?.y)
         if (text === undefined || x === undefined || y === undefined) return null
         const out: PartLabel = { text, x, y }
+        readItemFlags(rec, out as unknown as Record<string, unknown>)
         const fs = num(rec?.fontSize)
         if (fs !== undefined) out.fontSize = fs
         const z = num(rec?.z)
@@ -555,6 +606,7 @@ export function partFromYaml(text: string): PartDefinition {
         const id = str(gr?.id)
         if (!id) return null
         const out: PartGroup = { id }
+        readItemFlags(gr, out as unknown as Record<string, unknown>)
         const name = str(gr?.name)
         if (name) out.name = name
         const parent = str(gr?.parent)
@@ -575,6 +627,7 @@ export function partFromYaml(text: string): PartDefinition {
         const kind: OnboardLed['kind'] =
           r.kind === 'rgb' ? 'rgb' : r.kind === 'neopixel' ? 'neopixel' : 'single'
         const led: OnboardLed = { kind, x, y }
+        readItemFlags(r, led as unknown as Record<string, unknown>)
         const label = str(r.label)
         if (label) led.label = label
         if (kind === 'rgb') {
@@ -613,19 +666,61 @@ export function partFromYaml(text: string): PartDefinition {
         const x = num(r.x)
         const y = num(r.y)
         if (x === undefined || y === undefined) return null
-        const kind: PartConnector['kind'] = r.kind === 'jst' ? 'jst' : 'qwiic'
+        const kind = coerceConnectorKind(r.kind)
         const pins = Array.isArray(r.pins)
           ? r.pins.map(coercePin).filter((p): p is PartPin => p !== null)
           : []
         const conn: PartConnector = { kind, x, y, pins }
+        readItemFlags(r, conn as unknown as Record<string, unknown>)
+        const variant = coerceGroveVariant(r.variant)
+        if (variant) conn.variant = variant
         const label = str(r.label)
         if (label) conn.label = label
         const rot = num(r.rotation)
         if (rot !== undefined) conn.rotation = rot
+        if (r.labelOffset && typeof r.labelOffset === 'object') {
+          const lo = r.labelOffset as Record<string, unknown>
+          const lx = num(lo.x)
+          const ly = num(lo.y)
+          if (lx !== undefined && ly !== undefined) conn.labelOffset = { x: lx, y: ly }
+        }
+        const labelRot = num(r.labelRotation)
+        if (labelRot !== undefined) conn.labelRotation = labelRot
         return conn
       })
       .filter((c): c is PartConnector => c !== null)
     if (connectors.length) part.connectors = connectors
+  }
+  assign('footprint', str(raw.footprint))
+  if (Array.isArray(raw.mounts)) {
+    const mounts = raw.mounts
+      .map((m): PartMount | null => {
+        if (!m || typeof m !== 'object') return null
+        const r = m as Record<string, unknown>
+        const id = str(r.id)
+        const footprint = str(r.footprint)
+        const x = num(r.x)
+        const y = num(r.y)
+        // A mount is meaningless without all four — an unnamed socket can't be
+        // referenced by a placed part, and one with no footprint accepts nothing.
+        if (!id || !footprint || x === undefined || y === undefined) return null
+        const mount: PartMount = { id, footprint, x, y }
+        const label = str(r.label)
+        if (label) mount.label = label
+        const rot = num(r.rotation)
+        if (rot !== undefined) mount.rotation = rot
+        if (r.pinMap && typeof r.pinMap === 'object') {
+          const pm: Record<string, string> = {}
+          for (const [k, v] of Object.entries(r.pinMap as Record<string, unknown>)) {
+            const to = str(v)
+            if (k && to) pm[k] = to
+          }
+          if (Object.keys(pm).length) mount.pinMap = pm
+        }
+        return mount
+      })
+      .filter((m): m is PartMount => m !== null)
+    if (mounts.length) part.mounts = mounts
   }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
