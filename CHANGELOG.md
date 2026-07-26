@@ -35,6 +35,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   single trigger/echo wire, the motor driver's command protocol, the LSM6DS3's
   `0x6A`/`0x6B` address split).
 
+- **Cables look like cables.** A cabled wire now wears its **real conductor
+  colour** in contact order — a Grove lead's yellow/white/red/black, a QWIIC
+  lead's black/red/blue/yellow, a servo lead's orange/red/brown — so a cable reads
+  as one identifiable lead instead of four net-coloured wires. Each end gets a
+  **seated plug shell** facing its mate, so a connected cable ends in a housing
+  rather than four wires fanning into pads.
+- **Cables snap into sockets.** Drag off a connector and every socket the lead
+  could go in rings green; drop anywhere on the socket — not on one 2 mm contact —
+  and it seats, previewing solid before you release. Sockets that **don't** fit are
+  refused and say why ("That's a Grove UART port — this one is Grove I2C", "A servo
+  header lead doesn't fit a Grove socket"). Which contacts join is decided by the
+  connector's contact order, never by which end you grabbed, so **a servo lead
+  dragged on backwards still lands Signal→Signal, V+→V+, GND→GND**.
+- Cables between two connectors are no longer I²C-only: a lead now joins whatever
+  contacts the two sockets share, so Grove UART, digital and analog ports wire up
+  properly instead of getting power and ground alone.
+
 ### Fixed
 - A connector's **silk label placement** (its dragged offset and rotation) was
   dropped when a part was saved: `parts.yml` rebuilt connectors field-by-field and
