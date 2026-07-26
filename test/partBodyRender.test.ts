@@ -295,3 +295,35 @@ describe('capability chips sit on the pin line when rotated', () => {
     expect(chips('left')).toContain(', 40)')
   })
 })
+
+describe('pin labels stay upright on a 180°-rotated body', () => {
+  const part: PartDefinition = {
+    ...blankPart(),
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { number: 5, name: 'D4', type: 'io', gpio: 6, x: 0.05, y: 0.4 },
+          { number: 6, name: 'D5', type: 'io', gpio: 7, x: 0.95, y: 0.4 }
+        ]
+      }
+    ]
+  }
+  const at = (rotation: number): string =>
+    renderToStaticMarkup(createElement(PartBody, { part, box, boxedPins: true, rotation }))
+
+  it('flips each label about its own anchor at 180° so it reads the right way up', () => {
+    // A plain counter-rotation would move the text to the far side of its anchor;
+    // flipping about the anchor AND swapping start↔end keeps it in the same span.
+    expect(at(180)).toContain('rotate(180')
+  })
+
+  it('leaves an unrotated body alone', () => {
+    expect(at(0)).not.toContain('rotate(180')
+  })
+
+  it('leaves 90° and 270° alone — sideways labels read fine', () => {
+    expect(at(90)).not.toContain('rotate(180')
+    expect(at(270)).not.toContain('rotate(180')
+  })
+})

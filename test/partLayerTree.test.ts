@@ -4,6 +4,7 @@ import { join } from 'path'
 import { partFromYaml } from '../src/shared/part-yaml'
 import {
   normalisePart,
+  resolvedPins,
   partLayerTree,
   withGroupFlag,
   withGroupName,
@@ -133,15 +134,22 @@ describe('partLayerTree', () => {
     )
     const part = normalisePart(partFromYaml(yaml))
     const tree = partLayerTree(part)
-    const groups = tree.filter((n) => n.kind === 'group')
-    expect(groups).toHaveLength(18)
-    // Each servo header is its Signal/V+/GND trio.
-    for (const g of groups) expect(g.children).toHaveLength(3)
-    // 78 pads - 54 in headers = 24 loose pins, so the bucket stays readable.
+    // Count at ANY depth: the part nests its first six servo headers inside a
+    // "Servo Block" parent, so a top-level-only count misses them.
+    const allGroups = (ns: LayerNode[]): LayerNode[] =>
+      ns.flatMap((n) => (n.kind === 'group' ? [n, ...allGroups(n.children)] : allGroups(n.children)))
+    // Every group whose children are all leaves is one 3-pin header — 18 servo +
+    // 6 sensor. The rest are parents holding other groups.
+    const trios = allGroups(tree).filter((g) => g.children.every((c) => c.kind === 'item'))
+    expect(trios).toHaveLength(24)
+    for (const g of trios) expect(g.children).toHaveLength(3)
+
+    const pads = resolvedPins(part).length
     const pins = tree.find((n) => n.id === 'bucket:pins')
-    expect(pins!.children.length).toBe(78 - 18 * 3)
-    // Top level is 18 groups + whatever buckets are non-empty — not 78 rows.
-    expect(tree.length).toBeLessThan(25)
+    expect(pins!.children.length).toBe(pads - 24 * 3)
+    // The point of the buckets: a 90-odd pad board reads as a couple of dozen
+    // rows, not ~92 — and nesting collapses it further still.
+    expect(tree.length).toBeLessThan(pads / 3)
   })
 })
 

@@ -530,12 +530,21 @@ export function boxedPinLabel(
   num: string,
   label: string,
   variable: string | undefined,
-  color: string
+  color: string,
+  /** The body is rotated 180°, so the glyphs would read upside down. Flip each
+   *  text about its own anchor AND swap its anchor end↔start, which lands the
+   *  glyphs upright in the same span rather than throwing them across the board
+   *  (a plain counter-rotation moves the text to the other side of its anchor).
+   *  Only meaningful for left/right pins — a top/bottom pin's label ends up at
+   *  90°/270°, which reads fine on its side and is left alone. */
+  upright = false
 ): JSX.Element {
   const B = 14
   const G = 3
   const labelW = label.length * 6.2
   const shownNum = padPinNumber(num)
+  const flipAt = (x: number, y: number): string | undefined => (upright ? `rotate(180 ${x} ${y})` : undefined)
+  const anchor = (a: 'start' | 'end'): 'start' | 'end' => (upright ? (a === 'start' ? 'end' : 'start') : a)
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
       <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
@@ -545,6 +554,7 @@ export function boxedPinLabel(
           y={by + B / 2}
           textAnchor="middle"
           dominantBaseline="central"
+          transform={flipAt(bx + B / 2, by + B / 2)}
           className="pcv__pin-num"
         >
           {shownNum}
@@ -558,8 +568,8 @@ export function boxedPinLabel(
     return (
       <>
         {numBox(bx, cy - B / 2)}
-        <text x={lx} y={cy + 3.5} textAnchor="end" className="pcv__pin-label">{label}</text>
-        {variable && <text x={lx - labelW - G} y={cy + 3.5} textAnchor="end" className="pcv__pin-var" fill={color}>{variable}</text>}
+        <text x={lx} y={cy + 3.5} textAnchor={anchor('end')} transform={flipAt(lx, cy + 3.5)} className="pcv__pin-label">{label}</text>
+        {variable && <text x={lx - labelW - G} y={cy + 3.5} textAnchor={anchor('end')} transform={flipAt(lx - labelW - G, cy + 3.5)} className="pcv__pin-var" fill={color}>{variable}</text>}
       </>
     )
   }
@@ -569,8 +579,8 @@ export function boxedPinLabel(
     return (
       <>
         {numBox(bx, cy - B / 2)}
-        <text x={lx} y={cy + 3.5} textAnchor="start" className="pcv__pin-label">{label}</text>
-        {variable && <text x={lx + labelW + G} y={cy + 3.5} textAnchor="start" className="pcv__pin-var" fill={color}>{variable}</text>}
+        <text x={lx} y={cy + 3.5} textAnchor={anchor('start')} transform={flipAt(lx, cy + 3.5)} className="pcv__pin-label">{label}</text>
+        {variable && <text x={lx + labelW + G} y={cy + 3.5} textAnchor={anchor('start')} transform={flipAt(lx + labelW + G, cy + 3.5)} className="pcv__pin-var" fill={color}>{variable}</text>}
       </>
     )
   }
@@ -1361,7 +1371,8 @@ export function PartBody({
                     String(rp.pin.number ?? rp.pin.gpio ?? ''),
                     rp.pin.label || rp.pin.name,
                     pinVar,
-                    pinVariables?.get(i)?.color ?? '#cfd6dd'
+                    pinVariables?.get(i)?.color ?? '#cfd6dd',
+                    textRot === 180 && (bdir === 'left' || bdir === 'right')
                   )}
                 </g>
               ) : boxedActive ? null : (
