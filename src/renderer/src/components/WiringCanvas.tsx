@@ -35,6 +35,7 @@ import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import { classifyBusWire } from '../../../shared/bus-wires'
+import { partSignature, mountSignature, signaturesMatch } from '../../../shared/footprint-signature'
 import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
 import { BoardMeter, type BoardMeterReading } from './BoardMeter'
 import { useFloatPlacement } from './InstrumentWindow'
@@ -1258,24 +1259,41 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   /**
-   * A carrier mount the dropped part could seat in (#166): the part must declare
-   * the mount's footprint, and the mount must be free. Returns the carrier + mount
-   * ids, or null when the drop isn't over a compatible empty socket.
+   * Does a carrier mount accept a dragged board (#166)? STRUCTURAL when the mount
+   * has imprinted pins — the board's pin signature must match the socket's (so a
+   * XIAO 2040/2350/compatible all seat) — else a legacy footprint-NAME match for
+   * mounts authored before the imprint tooling. `sig`/`footprint` describe the
+   * dragged board; `cpart` is the resolved carrier part.
    */
-  const mountUnderFp = (
-    footprint: string | undefined,
+  const mountAccepts = (
+    cpart: PartDefinition,
+    m: { id: string; footprint: string },
+    sig: string,
+    footprint: string | undefined
+  ): boolean => {
+    const msig = mountSignature(cpart, m.id)
+    return msig ? sig !== '' && signaturesMatch(msig, sig) : !!footprint && m.footprint === footprint
+  }
+  /**
+   * A free carrier mount the dragged board could seat in: structurally compatible
+   * (or legacy footprint-name compatible), unoccupied, and under the drop point.
+   */
+  const mountUnderFor = (
+    dragged: PartDefinition | null | undefined,
     excludeKey: string,
     cx: number,
     cy: number
   ): { carrier: string; mount: string } | null => {
-    if (!footprint) return null
+    const sig = dragged ? partSignature(dragged) : ''
+    const footprint = dragged?.footprint
+    if (!sig && !footprint) return null
     for (const carrier of robot.parts) {
       if (carrier.id === excludeKey) continue
       const body = placedBody.get(carrier.id)
-      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
-      if (!body || !mounts?.length) continue
-      for (const m of mounts) {
-        if (m.footprint !== footprint) continue
+      const cpart = resolvePart(carrier.lib, carrier.part)
+      if (!body || !cpart?.mounts?.length) continue
+      for (const m of cpart.mounts) {
+        if (!mountAccepts(cpart, m, sig, footprint)) continue
         // One thing per socket — a mount taken by a placed part OR by the board
         // (which seats here too, #166) isn't a drop target.
         const takenByPart = robot.parts.some(
@@ -1296,7 +1314,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
     const rp = robot.parts.find((p) => p.id === key)
-    return mountUnderFp(rp ? resolvePart(rp.lib, rp.part)?.footprint : undefined, key, cx, cy)
+    return mountUnderFor(rp ? resolvePart(rp.lib, rp.part) : undefined, key, cx, cy)
   }
 
   const moveBox = (key: string, x: number, y: number): void => {
@@ -1308,8 +1326,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       // on it's drawn at the mount and moves with the carrier. Dropping it elsewhere
       // un-seats it (drag it off the carrier to take it back out).
       const bs = subjByKey.get('board')
-      const seat = mountUnderFp(
-        boardPart?.footprint,
+      const seat = mountUnderFor(
+        boardPart,
         'board',
         x + (bs?.bodyDX ?? 0) + (bs?.w ?? 0) / 2,
         y + (bs?.bodyDY ?? 0) + (bs?.h ?? 0) / 2
@@ -2484,22 +2502,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               drag.moved &&
               drag.boxKey &&
               (() => {
-                const dragged = robot.parts.find((p) => p.id === drag.boxKey)
-                const footprint = dragged && resolvePart(dragged.lib, dragged.part)?.footprint
-                if (!footprint) return null
+                // The dragged board — a placed part, OR the MCU itself (#166): both
+                // can plug into a compatible carrier socket.
+                const draggedPart =
+                  drag.boxKey === 'board'
+                    ? boardPart
+                    : (() => {
+                        const dp = robot.parts.find((p) => p.id === drag.boxKey)
+                        return dp ? resolvePart(dp.lib, dp.part) : null
+                      })()
+                const sig = draggedPart ? partSignature(draggedPart) : ''
+                const footprint = draggedPart?.footprint
+                if (!sig && !footprint) return null
                 const s = subjByKey.get(drag.boxKey)
                 const cx = (s?.x ?? 0) + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2
                 const cy = (s?.y ?? 0) + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2
-                const target = mountUnder(drag.boxKey, cx, cy)
+                const target = mountUnderFor(draggedPart, drag.boxKey, cx, cy)
                 return (
                   <g style={{ pointerEvents: 'none' }} className="wc__mount-targets">
                     {robot.parts.flatMap((carrier) => {
                       if (carrier.id === drag.boxKey) return []
                       const body = placedBody.get(carrier.id)
-                      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts ?? []
-                      if (!body) return []
+                      const cpart = resolvePart(carrier.lib, carrier.part)
+                      const mounts = cpart?.mounts ?? []
+                      if (!body || !cpart) return []
                       return mounts
-                        .filter((m) => m.footprint === footprint)
+                        .filter((m) => mountAccepts(cpart, m, sig, footprint))
                         .filter(
                           (m) =>
                             !robot.parts.some(
