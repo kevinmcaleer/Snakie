@@ -3031,30 +3031,62 @@ export function PartCanvas({
               </text>
               {/* Hover / select the footprint → reveal its pin names, so the board's
                   orientation (which pad is D0 / 5V / GND…) is legible. Labels sit just
-                  outside the block: left-side pads to the left, right-side to the right. */}
+                  outside the block, following its layout: pins in vertical COLUMNS get
+                  labels left/right; pins in horizontal ROWS get them above/below — so a
+                  rotated footprint keeps its labels off the pads, not on top of them. */}
               {(hoverMount === m.id || sel) &&
-                (part.headers ?? [])
-                  .flatMap((h) => h.pins)
-                  .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
-                  .map((pp, pi) => {
-                    const onLeft = px(pp.x!) <= px(m.x)
+                (() => {
+                  const dp = (part.headers ?? [])
+                    .flatMap((h) => h.pins)
+                    .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
+                  // Distinct grid levels per axis IN PIXELS (aspect-correct, so it
+                  // matches what's on screen): more columns than rows ⇒ the block reads
+                  // as horizontal rows. 6px separates adjacent pads without splitting one.
+                  const levels = (vals: number[]): number => {
+                    let n = 0
+                    let prev = -Infinity
+                    for (const v of [...vals].sort((a, b) => a - b)) {
+                      if (v - prev > 6) n++
+                      prev = v
+                    }
+                    return n
+                  }
+                  const horizontal = levels(dp.map((pp) => px(pp.x!))) > levels(dp.map((pp) => py(pp.y!)))
+                  const cxp = px(m.x)
+                  const cyp = py(m.y)
+                  return dp.map((pp, pi) => {
+                    const gx = px(pp.x!)
+                    const gy = py(pp.y!)
+                    const common = {
+                      fontSize: 9,
+                      fontWeight: 700,
+                      fill: '#0b3a22',
+                      stroke: '#ffffff',
+                      strokeWidth: 2.4,
+                      style: { paintOrder: 'stroke' as const }
+                    }
+                    if (horizontal) {
+                      const above = gy <= cyp
+                      return (
+                        <text key={`ml${i}-${pi}`} {...common} x={gx} y={gy + (above ? -7 : 14)} textAnchor="middle">
+                          {pp.name}
+                        </text>
+                      )
+                    }
+                    const onLeft = gx <= cxp
                     return (
                       <text
                         key={`ml${i}-${pi}`}
-                        x={px(pp.x!) + (onLeft ? -7 : 7)}
-                        y={py(pp.y!) + 3}
+                        {...common}
+                        x={gx + (onLeft ? -7 : 7)}
+                        y={gy + 3}
                         textAnchor={onLeft ? 'end' : 'start'}
-                        fontSize={9}
-                        fontWeight={700}
-                        fill="#0b3a22"
-                        stroke="#ffffff"
-                        strokeWidth={2.4}
-                        style={{ paintOrder: 'stroke' }}
                       >
                         {pp.name}
                       </text>
                     )
-                  })}
+                  })
+                })()}
             </g>
           )
         })}
