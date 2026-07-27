@@ -2223,7 +2223,14 @@ function AddFootprintMenu({
     const onKey = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') setOpen(false)
     }
-    const onScroll = (): void => setOpen(false)
+    // Close when something ELSE scrolls (e.g. the inspector panel, which would
+    // detach this fixed menu) — but NOT when the menu scrolls its own list, or
+    // dragging its scrollbar / wheeling it would dismiss it.
+    const onScroll = (e: Event): void => {
+      const t = e.target as Node | null
+      if (t && menuRef.current && (t === menuRef.current || menuRef.current.contains(t))) return
+      setOpen(false)
+    }
     document.addEventListener('mousedown', onDoc)
     document.addEventListener('keydown', onKey)
     window.addEventListener('scroll', onScroll, true)
