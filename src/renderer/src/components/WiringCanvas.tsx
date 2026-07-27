@@ -1082,10 +1082,41 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const mount =
       carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === robot.boardMount)
     if (bs && cbody && mount) {
-      bs.x = cbody.x + mount.x * cbody.w - bs.w / 2
-      bs.y = cbody.y + mount.y * cbody.h - bs.h / 2
+      // Rotate the board to match the footprint (#166) so its pads overlay the
+      // imprinted pins — a footprint placed at 270° seats the board turned 270°,
+      // not sitting square over a rotated socket. Mirrors how a placed part rotates.
+      const R = normRot(mount.rotation)
+      if (R && bs.box) {
+        const bw0 = bs.box.w
+        const bh0 = bs.box.h
+        const cx = bw0 / 2
+        const cy = bh0 / 2
+        const aabb =
+          R === 90 || R === 270
+            ? { x: cx - bh0 / 2, y: cy - bw0 / 2, w: bh0, h: bw0 }
+            : { x: 0, y: 0, w: bw0, h: bh0 }
+        bs.pins = bs.pins.map((p) => ({
+          ...p,
+          anchors: p.anchors.map((a) => {
+            const r = rotatePoint(a.x, a.y, cx, cy, R)
+            const n = rotateNormal(a.ox, a.oy, R)
+            return { x: r.x, y: r.y, ox: n.ox, oy: n.oy }
+          })
+        }))
+        bs.rotation = R
+        bs.bodyDX = aabb.x
+        bs.bodyDY = aabb.y
+        bs.w = aabb.w
+        bs.h = aabb.h
+      }
+      const dx = bs.bodyDX ?? 0
+      const dy = bs.bodyDY ?? 0
+      const mx = cbody.x + mount.x * cbody.w
+      const my = cbody.y + mount.y * cbody.h
+      bs.x = mx - (dx + bs.w / 2)
+      bs.y = my - (dy + bs.h / 2)
       bs.seated = true
-      bs.hit = hitRegion(bs.mode, bs.x, bs.y, bs.w, bs.h)
+      bs.hit = hitRegion(bs.mode, bs.x + dx, bs.y + dy, bs.w, bs.h)
       const bi = subjects.indexOf(bs)
       subjects.splice(bi, 1)
       const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
@@ -2546,31 +2577,42 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                         )
                         .map((m) => {
                           const isOver = target?.carrier === carrier.id && target?.mount === m.id
-                          const r = Math.min(body.w, body.h) * 0.5
+                          const sw = isOver ? 3 : 1.5
+                          const op = isOver ? 0.98 : 0.55
+                          // The footprint's imprinted pins on the carrier body — draw
+                          // the actual OUTLINE + pin dots so the socket reads as the
+                          // real footprint, not an abstract circle.
+                          const dp = (cpart.headers ?? [])
+                            .flatMap((h) => h.pins)
+                            .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
+                          if (!dp.length) {
+                            // Legacy pin-less mount → fall back to a socket ring.
+                            const r = Math.min(body.w, body.h) * 0.5
+                            const mx = body.x + m.x * body.w
+                            const my = body.y + m.y * body.h
+                            return (
+                              <g key={`mt${carrier.id}${m.id}`}>
+                                <circle cx={mx} cy={my} r={r} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.16 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
+                                <text x={mx} y={my - r - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#d8f5e3" stroke="#08301c" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>
+                                  {m.label || m.footprint}
+                                </text>
+                              </g>
+                            )
+                          }
+                          const xs = dp.map((pp) => body.x + pp.x! * body.w)
+                          const ys = dp.map((pp) => body.y + pp.y! * body.h)
+                          const pad = 7
+                          const x0 = Math.min(...xs) - pad
+                          const y0 = Math.min(...ys) - pad
+                          const x1 = Math.max(...xs) + pad
+                          const y1 = Math.max(...ys) + pad
                           return (
                             <g key={`mt${carrier.id}${m.id}`}>
-                              <circle
-                                cx={body.x + m.x * body.w}
-                                cy={body.y + m.y * body.h}
-                                r={r}
-                                fill={isOver ? '#3ec46d' : 'none'}
-                                fillOpacity={isOver ? 0.16 : 0}
-                                stroke="#3ec46d"
-                                strokeWidth={isOver ? 3 : 1.5}
-                                strokeDasharray={isOver ? undefined : '6 5'}
-                                opacity={isOver ? 0.95 : 0.5}
-                              />
-                              <text
-                                x={body.x + m.x * body.w}
-                                y={body.y + m.y * body.h - r - 6}
-                                textAnchor="middle"
-                                fontSize={11}
-                                fontWeight={700}
-                                fill="#d8f5e3"
-                                stroke="#08301c"
-                                strokeWidth={3.5}
-                                style={{ paintOrder: 'stroke' }}
-                              >
+                              <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={6} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.12 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
+                              {dp.map((pp, pi) => (
+                                <circle key={pi} cx={body.x + pp.x! * body.w} cy={body.y + pp.y! * body.h} r={4} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.95 : 0} stroke="#3ec46d" strokeWidth={1.5} opacity={op} />
+                              ))}
+                              <text x={(x0 + x1) / 2} y={y0 - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#d8f5e3" stroke="#08301c" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>
                                 {m.label || m.footprint}
                               </text>
                             </g>
