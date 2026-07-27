@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } fr
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
 import { SwatchPicker } from './SwatchPicker'
+import { FootprintField } from './FootprintField'
+import { collectFootprints, type FootprintInfo } from '../../../shared/footprints'
 import {
   PartCanvas,
   DEFAULT_LAYERS,
@@ -67,6 +69,7 @@ import type {
   PartItemFlags,
   PartDefinition,
   PartElectrical,
+  PartMount,
   PartHeader,
   PartLabel,
   PartLibrary,
@@ -286,6 +289,14 @@ const ICON: Record<string, JSX.Element> = {
       <g fill="none" stroke="currentColor" strokeWidth="1.4">
         <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
         <circle cx="8" cy="8" r="3" />
+      </g>
+    </svg>
+  ),
+  mount: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.3">
+        <rect x="1.8" y="1.8" width="12.4" height="12.4" rx="2" strokeDasharray="2.4 1.8" />
+        <rect x="5" y="5" width="6" height="6" rx="1" />
       </g>
     </svg>
   ),
@@ -745,6 +756,8 @@ export function PartEditor({
       }))
     } else if (sel.type === 'hole') {
       patch({ mountingHoles: (part.mountingHoles ?? []).filter((_, i) => i !== sel.index) })
+    } else if (sel.type === 'mount') {
+      patch({ mounts: (part.mounts ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'button') {
       patch({ buttons: (part.buttons ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'led') {
@@ -839,6 +852,22 @@ export function PartEditor({
     resyncPropsRef.current = false
     setPropRows(Object.entries(part.properties ?? {}))
   }, [part])
+
+  // Known footprints across the installed libraries (#166) — the vocabulary the
+  // Footprint + mount pickers offer, so seating tags stay consistent instead of
+  // being retyped (and mis-typed) per board. Loaded once; the curated standards
+  // are always present even if listing fails.
+  const [footprints, setFootprints] = useState<FootprintInfo[]>(() => collectFootprints([]))
+  useEffect(() => {
+    let live = true
+    window.api.parts
+      .listLibraries()
+      .then((libs) => live && setFootprints(collectFootprints(libs)))
+      .catch(() => undefined)
+    return () => {
+      live = false
+    }
+  }, [])
 
   // Delete / Backspace removes the selected object; Ctrl/Cmd+Z undoes and
   // Ctrl/Cmd+Shift+Z (or Ctrl+Y) redoes — but never while typing in a field, so
@@ -1038,6 +1067,9 @@ export function PartEditor({
                 <button type="button" className={`pe__iconbtn${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Add a mounting hole" aria-label="Mounting hole">
                   {ICON.hole}
                 </button>
+                <button type="button" className={`pe__iconbtn${tool === 'mount' ? ' is-active' : ''}`} onClick={() => setTool('mount')} title="Add a carrier mount (a socket a board seats into)" aria-label="Carrier mount">
+                  {ICON.mount}
+                </button>
                 <button type="button" className={`pe__iconbtn${tool === 'button' ? ' is-active' : ''}`} onClick={() => setTool('button')} title="Add a push-button" aria-label="Push-button">
                   {ICON.button}
                 </button>
@@ -1121,6 +1153,8 @@ export function PartEditor({
                 patch={patch}
                 setPart={setPart}
                 deleteSelection={deleteSelection}
+                footprints={footprints}
+                onSelect={setSelection}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -2026,6 +2060,74 @@ interface InspectorProps {
   patch: (p: Partial<PartDefinition>) => void
   setPart: React.Dispatch<React.SetStateAction<PartDefinition>>
   deleteSelection: () => void
+  footprints: FootprintInfo[]
+  onSelect: (sel: CanvasSelection) => void
+}
+
+/** The carrier-mounts list in the Board section (#166): add/select/remove the
+ *  sockets a board seats in. Selecting a row opens it in the Inspector above. */
+function MountsList({
+  part,
+  patch,
+  selection,
+  onSelect
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  selection: CanvasSelection
+  onSelect: (sel: CanvasSelection) => void
+}): JSX.Element {
+  const mounts = part.mounts ?? []
+  const addMount = (): void => {
+    const used = new Set(mounts.map((m) => m.id))
+    let n = mounts.length + 1
+    let id = `mount-${n}`
+    while (used.has(id)) id = `mount-${++n}`
+    const next = [...mounts, { id, footprint: '', x: 0.5, y: 0.5, label: `M${n}` }]
+    patch({ mounts: next })
+    onSelect({ type: 'mount', index: next.length - 1 })
+  }
+  return (
+    <div className="pe__mounts">
+      <div className="pe__mounts-head">
+        <span>Mounts</span>
+        <button type="button" className="pe__mounts-add" onClick={addMount} title="Add a carrier mount">
+          + Add
+        </button>
+      </div>
+      {mounts.length === 0 ? (
+        <p className="pe__hint pe__hint--muted">
+          A carrier (e.g. a XIAO expansion base) has a mount for each board it seats. Add one here or with the
+          mount tool, then set the footprint it accepts.
+        </p>
+      ) : (
+        <ul className="pe__mounts-list">
+          {mounts.map((m, i) => (
+            <li
+              key={m.id}
+              className={selection?.type === 'mount' && selection.index === i ? 'is-sel' : undefined}
+            >
+              <button type="button" className="pe__mounts-row" onClick={() => onSelect({ type: 'mount', index: i })}>
+                <span className="pe__mounts-name">{m.label || m.id}</span>
+                <span className={`pe__mounts-fp${m.footprint ? '' : ' is-empty'}`}>
+                  {m.footprint || 'no footprint'}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="pe__mounts-remove"
+                title="Remove mount"
+                aria-label="Remove mount"
+                onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 function Inspector(props: InspectorProps): JSX.Element {
@@ -2096,6 +2198,15 @@ function Inspector(props: InspectorProps): JSX.Element {
             ))}
           </select>
         </label>
+        {/* The seating footprint (#166): a board with a footprint plugs into any
+            carrier mount that accepts the same footprint. */}
+        <FootprintField
+          value={part.footprint}
+          onChange={(fp) => patch({ footprint: fp })}
+          footprints={props.footprints}
+          hint="Boards sharing a footprint plug into the same carriers (e.g. a XIAO base)."
+        />
+        <MountsList part={part} patch={patch} selection={props.selection} onSelect={props.onSelect} />
       </section>
 
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
@@ -2444,7 +2555,8 @@ function SelectionInspector({
   setImageLayer,
   lockImageAspect,
   onToggleLockAspect,
-  deleteSelection
+  deleteSelection,
+  footprints
 }: InspectorProps): JSX.Element {
   if (!selection) {
     return (
@@ -2698,6 +2810,52 @@ function SelectionInspector({
           {num('y', hole.y, (v) => upd({ y: v }))}
           {num('⌀mm', hole.diameter, (v) => upd({ diameter: v }), 0.1)}
         </div>
+      )
+    }
+  } else if (selection.type === 'mount') {
+    const mount = (part.mounts ?? [])[selection.index]
+    if (mount) {
+      title = 'Carrier mount'
+      const upd = (p: Partial<PartMount>): void =>
+        patch({ mounts: (part.mounts ?? []).map((m, i) => (i === selection.index ? { ...m, ...p } : m)) })
+      body = (
+        <>
+          <label className="pe__field">
+            <span>Label</span>
+            <input
+              type="text"
+              value={mount.label ?? ''}
+              onChange={(e) => upd({ label: e.target.value || undefined })}
+              placeholder="e.g. XIAO"
+            />
+          </label>
+          <FootprintField
+            value={mount.footprint || undefined}
+            onChange={(fp) => upd({ footprint: fp ?? '' })}
+            footprints={footprints}
+            label="Accepts footprint"
+            hint="The board footprint this socket seats — must match the board's Footprint."
+          />
+          {!mount.footprint && (
+            <p className="pe__hint">Pick a footprint so a board can seat here (a mount with none is not saved).</p>
+          )}
+          <div className="pe__row">
+            {num('x', mount.x, (v) => upd({ x: v }))}
+            {num('y', mount.y, (v) => upd({ y: v }))}
+            <label className="pe__num">
+              <span>Rotation</span>
+              <select
+                value={mount.rotation ?? 0}
+                onChange={(e) => upd({ rotation: Number(e.target.value) || undefined })}
+              >
+                <option value={0}>0°</option>
+                <option value={90}>90°</option>
+                <option value={180}>180°</option>
+                <option value={270}>270°</option>
+              </select>
+            </label>
+          </div>
+        </>
       )
     }
   } else if (selection.type === 'button') {

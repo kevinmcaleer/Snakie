@@ -99,6 +99,7 @@ export type CanvasTool =
   | 'pin'
   | 'servo-header'
   | 'hole'
+  | 'mount'
   | 'button'
   | 'text'
   | 'rect'
@@ -129,6 +130,7 @@ export const DEFAULT_LOCKS: LayerLocks = { pcb: false, image: false, holes: fals
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
+  | { type: 'mount'; index: number }
   | { type: 'button'; index: number }
   | { type: 'led'; index: number }
   | { type: 'connector'; index: number }
@@ -421,6 +423,7 @@ export function PartCanvas({
   const box = fitBox(boardAspect(part))
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
+  const mounts = part.mounts ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
   const connectors = part.connectors ?? []
@@ -592,6 +595,12 @@ export function PartCanvas({
     // The reverse invariant: a hole can't be dragged onto a pin.
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
+  }
+  /** Move a carrier mount (#166) — a seating socket, may sit anywhere on the board. */
+  const moveMountTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
+    commit({ ...part, mounts: mounts.map((m, i) => (i === index ? { ...m, x: sx, y: sy } : m)) })
   }
   /** Move an on-board button (#130) — buttons may sit anywhere, incl. over pins. */
   const moveButtonTo = (index: number, nx: number, ny: number, presnapped = false): void => {
@@ -1838,6 +1847,19 @@ export function PartCanvas({
     onSelect?.({ type: 'hole', index: next.length - 1 })
   }
 
+  /** Add a carrier mount (#166) at the clicked point — a socket a board seats in.
+   *  The footprint it accepts starts blank; the inspector's picker sets it. */
+  const addMount = (nx: number, ny: number): void => {
+    const used = new Set(mounts.map((m) => m.id))
+    let n = mounts.length + 1
+    let id = `mount-${n}`
+    while (used.has(id)) id = `mount-${++n}`
+    const next = [...mounts, { id, footprint: '', x: snapX(nx), y: snapY(ny), label: `M${n}` }]
+    commit({ ...part, mounts: next })
+    onSelect?.({ type: 'mount', index: next.length - 1 })
+    onNotify?.('Pick a footprint for this mount so a board can seat in it.')
+  }
+
   /** Add an on-board push-button at the clicked point (#130). */
   const addButton = (nx: number, ny: number): void => {
     const next = [...buttons, { label: 'BTN', x: snapX(nx), y: snapY(ny) }]
@@ -2005,6 +2027,9 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+    // Carrier mounts (#166) — a bigger grab radius since the socket marker is large.
+    for (let i = mounts.length - 1; i >= 0; i--)
+      if (dist(nx, ny, mounts[i].x, mounts[i].y) < HIT * 1.6) return { type: 'mount', index: i }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -2042,6 +2067,7 @@ export function PartCanvas({
       return
     }
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
+    if (tool === 'mount') return addMount(nx, ny)
     if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
     if (tool === 'circle') return locked.components ? undefined : addShape('circle', nx, ny)
@@ -2254,6 +2280,9 @@ export function PartCanvas({
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
+    } else if (hit.type === 'mount') {
+      ox = mounts[hit.index]?.x ?? nx
+      oy = mounts[hit.index]?.y ?? ny
     } else if (hit.type === 'button') {
       ox = buttons[hit.index]?.x ?? nx
       oy = buttons[hit.index]?.y ?? ny
@@ -2466,6 +2495,7 @@ export function PartCanvas({
         if (s.type === 'pin' && d.groupOffsets) moveGroupTo(d.groupOffsets, lx, ly)
         else if (s.type === 'pin') movePinTo(s.hi, s.pi, lx, ly, undefined, true)
         else if (s.type === 'hole') moveHoleTo(s.index, lx, ly, true)
+        else if (s.type === 'mount') moveMountTo(s.index, lx, ly, true)
         else if (s.type === 'button') moveButtonTo(s.index, lx, ly, true)
         else if (s.type === 'led') moveLedTo(s.index, lx, ly)
         else if (s.type === 'connector') moveConnectorTo(s.index, lx, ly)
@@ -2495,6 +2525,8 @@ export function PartCanvas({
         const a = alignDrag(x, y, 'hole', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
         moveHoleTo(d.sel.index, a.x, a.y, true)
+      } else if (d.sel.type === 'mount') {
+        moveMountTo(d.sel.index, x, y, noSnap)
       } else if (d.sel.type === 'button') {
         const a = alignDrag(x, y, 'button', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
@@ -2902,6 +2934,47 @@ export function PartCanvas({
               <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
             ) : null
           )}
+
+        {/* Carrier mounts (#166): a socket a board plugs into, drawn as a dashed
+            green square with its label/footprint. Selected → solid, tinted fill. */}
+        {mounts.map((m, i) => {
+          const cx = px(m.x)
+          const cy = py(m.y)
+          const half = Math.max(16, Math.min(box.w, box.h) * 0.16)
+          const sel = isSel({ type: 'mount', index: i })
+          return (
+            <g key={`mnt${i}`} style={{ pointerEvents: 'none' }}>
+              <rect
+                x={cx - half}
+                y={cy - half}
+                width={half * 2}
+                height={half * 2}
+                rx={half * 0.18}
+                fill={sel ? '#3ec46d' : 'none'}
+                fillOpacity={sel ? 0.16 : 0}
+                stroke="#3ec46d"
+                strokeWidth={sel ? 3 : 1.75}
+                strokeDasharray={sel ? undefined : '7 5'}
+                opacity={sel ? 0.98 : 0.6}
+              />
+              <line x1={cx - half * 0.4} y1={cy} x2={cx + half * 0.4} y2={cy} stroke="#3ec46d" strokeWidth={1.5} opacity={0.7} />
+              <line x1={cx} y1={cy - half * 0.4} x2={cx} y2={cy + half * 0.4} stroke="#3ec46d" strokeWidth={1.5} opacity={0.7} />
+              <text
+                x={cx}
+                y={cy - half - 6}
+                textAnchor="middle"
+                fontSize={12}
+                fontWeight={700}
+                fill="#146c3f"
+                stroke="#ffffff"
+                strokeWidth={3.5}
+                style={{ paintOrder: 'stroke' }}
+              >
+                {m.label || m.footprint || m.id}
+              </text>
+            </g>
+          )
+        })}
 
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
