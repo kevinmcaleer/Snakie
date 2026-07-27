@@ -23,7 +23,8 @@
 
 import { app } from 'electron'
 import { basename, join, resolve, sep } from 'path'
-import { existsSync, promises as fsp } from 'fs'
+import { createHash } from 'crypto'
+import { existsSync, promises as fsp, type Dirent } from 'fs'
 import { simpleGit } from 'simple-git'
 import {
   libraryFromYaml,
@@ -31,6 +32,7 @@ import {
   partFromYaml,
   partToYaml
 } from '../../shared/part-yaml'
+import { backfillTopLevel, planPartSync, type SeedManifest } from '../../shared/bundled-seed'
 import { bumpPatch } from '../../shared/part-registry'
 import { reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
@@ -70,27 +72,161 @@ export function seedStandardLibrary(): Promise<void> {
   return seedInFlight
 }
 
+/** The seed manifest file (a dot-file, so the library reader skips it). Records
+ *  the bundled `version` last synced to + a hash of each part as we wrote it, so a
+ *  later sync can tell an untouched part (safe to refresh) from a user-edited one. */
+const SEED_MANIFEST_FILE = '.snakie-seed.json'
+
+function hashText(s: string): string {
+  return createHash('sha256').update(s).digest('hex')
+}
+
+async function readTextOrNull(p: string): Promise<string | null> {
+  try {
+    return await fsp.readFile(p, 'utf-8')
+  } catch {
+    return null
+  }
+}
+
+/** The bundled library's declared version (drives the refresh gate), or undefined. */
+async function readBundleVersion(src: string): Promise<string | undefined> {
+  const txt = await readTextOrNull(join(src, 'library.yml'))
+  if (!txt) return undefined
+  try {
+    return libraryFromYaml(txt).version
+  } catch {
+    return undefined
+  }
+}
+
+async function readSeedManifest(dest: string): Promise<SeedManifest | null> {
+  const txt = await readTextOrNull(join(dest, SEED_MANIFEST_FILE))
+  if (!txt) return null
+  try {
+    const obj = JSON.parse(txt) as Partial<SeedManifest>
+    if (typeof obj?.version === 'string' && obj.parts && typeof obj.parts === 'object') {
+      return { version: obj.version, parts: obj.parts as Record<string, string> }
+    }
+  } catch {
+    // corrupt manifest → treat as absent (a full re-sync rebuilds it)
+  }
+  return null
+}
+
+async function writeSeedManifest(dest: string, m: SeedManifest): Promise<void> {
+  await fsp
+    .writeFile(join(dest, SEED_MANIFEST_FILE), JSON.stringify(m), 'utf-8')
+    .catch(reporter('parts: seed manifest write'))
+}
+
+/** Hash every installed part's `parts.yml` — the manifest baseline after a copy. */
+async function hashInstalledParts(dir: string): Promise<Record<string, string>> {
+  const parts: Record<string, string> = {}
+  let entries: Dirent[] = []
+  try {
+    entries = await fsp.readdir(dir, { withFileTypes: true })
+  } catch {
+    return parts
+  }
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    const yml = await readTextOrNull(join(dir, e.name, 'parts.yml'))
+    if (yml !== null) parts[e.name] = hashText(yml)
+  }
+  return parts
+}
+
+/**
+ * Sync an ALREADY-SEEDED bundled library with the app's current bundle (#166).
+ * New parts are copied in; parts untouched since we seeded them are refreshed to
+ * the newer bundle; user-edited (or unknown-origin) parts keep their content but
+ * gain any top-level fields the bundle added (e.g. a board's `footprint`) — so
+ * board seating works for installs that predate those fields. Gated on the bundled
+ * `library.yml` version so the per-part hashing only runs when the bundle changes.
+ */
+async function syncBundledLibrary(src: string, dest: string): Promise<void> {
+  const bundleVersion = await readBundleVersion(src)
+  const manifest = await readSeedManifest(dest)
+  // Fast path: this install already tracks the current bundle version — only pull
+  // in wholly-new part folders (matches the historical additive behaviour).
+  const upToDate = !!bundleVersion && manifest?.version === bundleVersion
+
+  let entries: Dirent[]
+  try {
+    entries = await fsp.readdir(src, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  const hashes: Record<string, string> = { ...(manifest?.parts ?? {}) }
+  let dirty = manifest === null
+
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    const folder = e.name
+    const srcPart = join(src, folder)
+    const bundleYml = await readTextOrNull(join(srcPart, 'parts.yml'))
+    if (bundleYml === null) continue // not a part folder
+    const destPart = join(dest, folder)
+    const localYml = existsSync(destPart) ? await readTextOrNull(join(destPart, 'parts.yml')) : null
+
+    if (upToDate) {
+      if (localYml === null && !existsSync(destPart)) {
+        await fsp.cp(srcPart, destPart, { recursive: true }).catch(reporter('parts: seed copy-new'))
+        hashes[folder] = hashText(bundleYml)
+        dirty = true
+      }
+      continue
+    }
+
+    const action = planPartSync({
+      existsLocal: localYml !== null,
+      localHash: localYml !== null ? hashText(localYml) : undefined,
+      bundleHash: hashText(bundleYml),
+      seededHash: manifest?.parts?.[folder]
+    })
+    if (action === 'copy-new') {
+      await fsp.cp(srcPart, destPart, { recursive: true }).catch(reporter('parts: seed copy-new'))
+      hashes[folder] = hashText(bundleYml)
+      dirty = true
+    } else if (action === 'refresh') {
+      // Untouched since seeded → adopt the newer bundle wholesale.
+      await fsp.rm(destPart, { recursive: true, force: true }).catch(reporter('parts: seed refresh rm'))
+      await fsp.cp(srcPart, destPart, { recursive: true }).catch(reporter('parts: seed refresh cp'))
+      hashes[folder] = hashText(bundleYml)
+      dirty = true
+    } else if (action === 'backfill' && localYml !== null) {
+      const { text, changed } = backfillTopLevel(bundleYml, localYml)
+      if (changed) {
+        await fsp
+          .writeFile(join(destPart, 'parts.yml'), text, 'utf-8')
+          .catch(reporter('parts: seed backfill write'))
+        dirty = true
+      }
+      hashes[folder] = hashText(changed ? text : localYml)
+    } else if (localYml !== null) {
+      // skip — already identical; record the baseline hash.
+      hashes[folder] = hashText(localYml)
+    }
+  }
+
+  if (bundleVersion && dirty) {
+    await writeSeedManifest(dest, { version: bundleVersion, parts: hashes })
+  }
+}
+
 async function doSeedStandardLibrary(): Promise<void> {
   const dest = join(partsDir(), STANDARD_LIBRARY_ID)
   const src = bundledStandardLibraryDir()
   if (!existsSync(src)) return
 
-  // Already seeded: additively sync any NEW bundled part folders (e.g. parts added
-  // in an app update, like the Tiny 2350) into the existing library — WITHOUT
-  // overwriting parts the user has already (so their edits + the in-app GitHub
-  // updates survive). Only copies folders that aren't there yet.
+  // Already seeded: reconcile with the current bundle — new parts in, untouched
+  // parts refreshed, user edits preserved (only missing fields backfilled). See
+  // syncBundledLibrary; this replaced a copy-new-folders-only pass that left parts
+  // seeded before a field existed (e.g. `footprint`) stuck without it (#166).
   if (existsSync(dest)) {
-    try {
-      const entries = await fsp.readdir(src, { withFileTypes: true })
-      for (const e of entries) {
-        if (!e.isDirectory()) continue
-        const target = join(dest, e.name)
-        if (existsSync(target)) continue
-        await fsp.cp(join(src, e.name), target, { recursive: true })
-      }
-    } catch {
-      // best-effort — a missing part just falls back to the built-in board
-    }
+    await syncBundledLibrary(src, dest).catch(reporter('parts: bundled library sync'))
     return
   }
 
@@ -102,6 +238,9 @@ async function doSeedStandardLibrary(): Promise<void> {
     await fsp.rm(tmp, { recursive: true, force: true })
     await fsp.cp(src, tmp, { recursive: true })
     await fsp.rename(tmp, dest)
+    // Stamp the manifest so later syncs can tell untouched parts from user edits.
+    const version = await readBundleVersion(src)
+    if (version) await writeSeedManifest(dest, { version, parts: await hashInstalledParts(dest) })
   } catch {
     // best-effort — the built-in board fallback covers a failed seed
     await fsp.rm(tmp, { recursive: true, force: true }).catch(reporter('parts: seed temp cleanup'))

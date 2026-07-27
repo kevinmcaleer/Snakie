@@ -244,6 +244,13 @@ export interface RobotDefinition {
   /** Optional canvas position for the microcontroller box. */
   boardX?: number
   boardY?: number
+  /** Board stacking (#166): when the microcontroller is seated into a placed
+   *  carrier's mount, the carrier's part id — the board then draws at that mount
+   *  (its `boardX/boardY` are ignored) and moves with the carrier. */
+  boardMountedOn?: string
+  /** Which mount of the carrier the board is seated in (that `PartMount.id`).
+   *  Only meaningful alongside {@link boardMountedOn}. */
+  boardMount?: string
   /** The placed parts. */
   parts: RobotPart[]
   /** The pin-to-pin wires. */

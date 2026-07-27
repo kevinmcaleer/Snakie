@@ -337,6 +337,10 @@ const PART_NATIVE_H = 300
 const PART_MIN_W = 48
 const PART_MAX_W = 380
 const PART_MAX_H = 380
+// The largest single body (board OR any placed part) is scaled to fit this px cap;
+// one px/mm is then derived from it so EVERY body — the board included — draws at
+// its real mm size, in the right relative proportion (#637).
+const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
@@ -851,6 +855,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   // --- build the subjects ---------------------------------------------------
   const subjects: Subject[] = []
+
+  // Real-world scale (#637): pick ONE px/mm so the WIDEST/TALLEST body — the board
+  // OR any placed part — just fits the cap, then draw every body at its real mm
+  // size (in the right relative proportion). Previously the board was pinned to a
+  // fixed box and px/mm was derived from it, so a large carrier next to a small MCU
+  // rendered far too small (and any part > ~36mm hit the part clamp).
+  const boardMmW = boardPart?.dimensions?.width
+  const boardMmH = boardPart?.dimensions?.height
+  let widestMm = boardMmW && boardMmW > 0 ? boardMmW : 0
+  let tallestMm = boardMmH && boardMmH > 0 ? boardMmH : 0
+  for (const rp of robot.parts) {
+    const d = resolvePart(rp.lib, rp.part)?.dimensions
+    if (d?.width && d.width > widestMm) widestMm = d.width
+    if (d?.height && d.height > tallestMm) tallestMm = d.height
+  }
+  const pxPerMm =
+    widestMm > 0 || tallestMm > 0
+      ? Math.min(
+          widestMm > 0 ? BODY_CAP_PX / widestMm : Infinity,
+          tallestMm > 0 ? BODY_CAP_PX / tallestMm : Infinity
+        )
+      : PX_PER_MM_DEFAULT
+  // The board's real drawn box at this scale. Falls back to the legacy fixed box
+  // for a built-in board with no source part (no mm dimensions to scale from).
+  const boardBoxW = boardMmW && boardMmW > 0 ? boardMmW * pxPerMm : BOARD_BODY_W
+  const boardBoxH = boardMmH && boardMmH > 0 ? boardMmH * pxPerMm : BOARD_BODY_H
+
   if (boardDef) {
     const x = robot.boardX ?? 60
     const y = robot.boardY ?? 90
@@ -859,7 +890,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       // body (background image + accurate x/y pins + castellations), exactly like a
       // placed part. Pin flat-index order matches the board pad enumeration, so the
       // `board.<pin>#<index>` wiring identity is unchanged.
-      const box = partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      const box = partBodyBox(boardPart, { maxW: boardBoxW, maxH: boardBoxH })
       subjects.push({
         key: 'board',
         kind: 'board',
@@ -878,7 +909,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     } else if (renderMode === 'lifelike') {
       // Legacy built-in board (no source part): the node-graph's edge-laid Board.
-      const box = boardBox(boardDef.aspect, { cx: BOARD_BODY_W / 2, cy: BOARD_BODY_H / 2, maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      const box = boardBox(boardDef.aspect, { cx: boardBoxW / 2, cy: boardBoxH / 2, maxW: boardBoxW, maxH: boardBoxH })
       const pads = layoutPads(boardDef, box)
       const usedPadKeys = new Set<string>()
       if (usedByCode) usedByCode.forEach((_, idx) => { const pp = pads[idx]; if (pp) usedPadKeys.add(padKey(pp)) })
@@ -888,8 +919,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         title: boardDef.name,
         x,
         y,
-        w: BOARD_BODY_W,
-        h: BOARD_BODY_H,
+        w: boardBoxW,
+        h: boardBoxH,
         mode: 'lifelike',
         pins: boardLifelikePins(pads),
         boardDef,
@@ -898,7 +929,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         usedPadKeys,
         ledLit: false,
         codeUsed: usedByCode,
-        hit: hitRegion('lifelike', x, y, BOARD_BODY_W, BOARD_BODY_H)
+        hit: hitRegion('lifelike', x, y, boardBoxW, boardBoxH)
       })
     } else {
       // The MCU as a generic IC block (rectangle + labelled pin stubs).
@@ -919,13 +950,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     }
   }
-  // px-per-mm anchored to the board's ACTUAL drawn width (it may be height-limited
-  // for a portrait board, so the raw constant would over-scale): keeps the board's
-  // on-canvas size and defines the scale parts are drawn to, so every body reads at
-  // its real relative size.
-  const boardFitW = boardPart ? partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H }).w : BOARD_BODY_W
-  const boardMmW = boardPart?.dimensions?.width
-  const pxPerMm = boardMmW && boardMmW > 0 ? boardFitW / boardMmW : PX_PER_MM_DEFAULT
+  // (px-per-mm + the board box are computed up-front now, from the widest body —
+  // see the `pxPerMm` block above, #637.)
   // Board stacking (#166): a seated board has no position of its own — it's drawn
   // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
   // part's ORIGINAL index so the default scatter positions don't shift. One level
@@ -1044,6 +1070,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     }
   })
+
+  // Seat the MCU into its carrier's mount (#166): now that carrier bodies are laid
+  // out, snap the board subject to the mount point and draw it ON TOP of the carrier
+  // (the board is pushed first as the base, so a seated one must move above it).
+  if (robot.boardMountedOn && robot.boardMount) {
+    const bs = subjects.find((s) => s.key === 'board')
+    const carrier = robot.parts.find((p) => p.id === robot.boardMountedOn)
+    const cbody = placedBody.get(robot.boardMountedOn)
+    const mount =
+      carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === robot.boardMount)
+    if (bs && cbody && mount) {
+      bs.x = cbody.x + mount.x * cbody.w - bs.w / 2
+      bs.y = cbody.y + mount.y * cbody.h - bs.h / 2
+      bs.seated = true
+      bs.hit = hitRegion(bs.mode, bs.x, bs.y, bs.w, bs.h)
+      const bi = subjects.indexOf(bs)
+      subjects.splice(bi, 1)
+      const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
+      subjects.splice(ci + 1, 0, bs)
+    }
+  }
+
   const subjByKey = new Map(subjects.map((s) => [s.key, s]))
 
   // Live box-drag override (commit-on-drop): paint the dragged subject at its
@@ -1214,19 +1262,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    * the mount's footprint, and the mount must be free. Returns the carrier + mount
    * ids, or null when the drop isn't over a compatible empty socket.
    */
-  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
-    const rp = robot.parts.find((p) => p.id === key)
-    const footprint = rp && resolvePart(rp.lib, rp.part)?.footprint
+  const mountUnderFp = (
+    footprint: string | undefined,
+    excludeKey: string,
+    cx: number,
+    cy: number
+  ): { carrier: string; mount: string } | null => {
     if (!footprint) return null
     for (const carrier of robot.parts) {
-      if (carrier.id === key) continue
+      if (carrier.id === excludeKey) continue
       const body = placedBody.get(carrier.id)
       const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
       if (!body || !mounts?.length) continue
       for (const m of mounts) {
         if (m.footprint !== footprint) continue
-        // One board per socket — a taken mount isn't a drop target.
-        if (robot.parts.some((p) => p.id !== key && p.mountedOn === carrier.id && p.mount === m.id)) continue
+        // One thing per socket — a mount taken by a placed part OR by the board
+        // (which seats here too, #166) isn't a drop target.
+        const takenByPart = robot.parts.some(
+          (p) => p.id !== excludeKey && p.mountedOn === carrier.id && p.mount === m.id
+        )
+        const takenByBoard =
+          excludeKey !== 'board' && robot.boardMountedOn === carrier.id && robot.boardMount === m.id
+        if (takenByPart || takenByBoard) continue
         const mx = body.x + m.x * body.w
         const my = body.y + m.y * body.h
         // Generous radius: you're aiming at a socket, not a pixel.
@@ -1237,13 +1294,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     return null
   }
+  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
+    const rp = robot.parts.find((p) => p.id === key)
+    return mountUnderFp(rp ? resolvePart(rp.lib, rp.part)?.footprint : undefined, key, cx, cy)
+  }
 
   const moveBox = (key: string, x: number, y: number): void => {
     const snapped = snapOrigin(key, x, y)
     x = snapped.x
     y = snapped.y
     if (key === 'board') {
-      persist({ ...robot, boardX: x, boardY: y })
+      // The MCU seats into a compatible free carrier socket too (#166): from then
+      // on it's drawn at the mount and moves with the carrier. Dropping it elsewhere
+      // un-seats it (drag it off the carrier to take it back out).
+      const bs = subjByKey.get('board')
+      const seat = mountUnderFp(
+        boardPart?.footprint,
+        'board',
+        x + (bs?.bodyDX ?? 0) + (bs?.w ?? 0) / 2,
+        y + (bs?.bodyDY ?? 0) + (bs?.h ?? 0) / 2
+      )
+      persist({
+        ...robot,
+        boardX: x,
+        boardY: y,
+        boardMountedOn: seat?.carrier,
+        boardMount: seat?.mount
+      })
       return
     }
     // Dropping a board onto a compatible free socket SEATS it — from then on its

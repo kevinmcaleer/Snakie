@@ -201,6 +201,11 @@
   border: 1px solid var(--shellbd, #3a3d44);
   border-radius: 12px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  /* The full microcontroller list is long — cap it to the viewport and scroll so
+     it never runs off the bottom of the screen on smaller displays (#…). */
+  max-height: min(65vh, 460px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .boardgraph__picker-item {

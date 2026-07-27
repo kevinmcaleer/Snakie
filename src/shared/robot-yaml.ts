@@ -75,6 +75,10 @@ export function robotToYaml(def: RobotDefinition): string {
   if (str(def.board)) obj.board = def.board
   if (typeof def.boardX === 'number') obj.boardX = def.boardX
   if (typeof def.boardY === 'number') obj.boardY = def.boardY
+  if (def.boardMountedOn && def.boardMount) {
+    obj.boardMountedOn = def.boardMountedOn
+    obj.boardMount = def.boardMount
+  }
   // The KRF robot MODEL section (URDF link + servo↔joint map + limits + poses,
   // epic #309), emitted near the TOP of robot.yml — before the (potentially long)
   // parts/connections lists — so the linked `.urdf` is prominent. Round-trip
@@ -123,6 +127,10 @@ export function robotFromYaml(text: string): RobotDefinition {
   const by = num(raw.boardY)
   if (bx !== undefined) def.boardX = bx
   if (by !== undefined) def.boardY = by
+  if (str(raw.boardMountedOn) && str(raw.boardMount)) {
+    def.boardMountedOn = str(raw.boardMountedOn)
+    def.boardMount = str(raw.boardMount)
+  }
   const model = sanitiseRobotModel(raw.robot)
   if (model) def.robot = model
   return def
