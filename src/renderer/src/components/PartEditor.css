@@ -1913,3 +1913,98 @@
   opacity: 1;
   background: var(--card);
 }
+
+/* --- board rear: the flip control + coin spin (#636) ---------------------- */
+/* Bottom-centre, just under the board. Icon AND text, because "flip" is not a
+   universally-read glyph and this is a mode change, not a nudge. */
+.pe__canvas-stage {
+  position: relative;
+}
+
+.pe__flip {
+  position: absolute;
+  left: 50%;
+  bottom: 0.55rem;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.24rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.25);
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.pe__flip:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pe__flip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* The spin. A coin turning on its edge is a rotation about the VERTICAL axis, so
+   rotateY — and a little perspective, or it reads as a horizontal squash rather
+   than something turning over. The side swaps at the half-way point (in the
+   component, FLIP_MS/2), which is exactly when the board is edge-on and the
+   content change is invisible. */
+.pe__canvas-stage.is-flipping > :not(.pe__flip) {
+  animation: pe-flip 420ms ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes pe-flip {
+  0% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1400px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+/* Someone who asked for less motion still needs the side to change — they just
+   don't need it spun at them. The swap still happens on the same timer. */
+@media (prefers-reduced-motion: reduce) {
+  .pe__canvas-stage.is-flipping > :not(.pe__flip) {
+    animation: pe-flip-fade 420ms ease-in-out;
+  }
+  @keyframes pe-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+/* A pad on the far side of the board. Marked in the list because it's the one
+   thing the canvas can't show you while you're looking at the other face. */
+.pe__rearmark {
+  flex: 0 0 auto;
+  padding: 0 0.22rem;
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  border-radius: 3px;
+}
+
+.pe__flatrow.is-active .pe__rearmark {
+  color: var(--pe-row-ink);
+  border-color: color-mix(in srgb, var(--pe-row-ink) 45%, transparent);
+}

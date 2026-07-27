@@ -74,6 +74,7 @@ import type {
   PartConnector,
   PartConnectorKind,
   PartItemFlags,
+  PartSide,
   PartDefinition,
   PartElectrical,
   PartLibraryWithParts,
@@ -167,6 +168,10 @@ const SERVO_PINS: PartPin[] = [
   { name: 'GND', type: 'gnd' }
 ]
 /** Inspector heading + picker labels per connector kind. */
+/** How long the coin-spin takes, ms. Mirrored in PartEditor.css — the side swaps
+ *  at the half-way point so the board is edge-on when its content changes. */
+const FLIP_MS = 420
+
 const CONN_KIND_TITLE: Record<PartConnectorKind, string> = {
   qwiic: 'QWIIC / STEMMA QT',
   jst: 'JST connector',
@@ -487,6 +492,27 @@ export function PartEditor({
   const [bgTol, setBgTol] = useState(32)
   const [imageOriginal, setImageOriginal] = useState<string | undefined>(undefined)
   const [tool, setTool] = useState<CanvasTool>('select')
+  // Which face of the board is shown (#636), and the coin-spin that plays while
+  // it changes. `flipping` is transient: it drives the animation class only, and
+  // the side swaps HALF WAY through so the board is edge-on at the moment the
+  // content changes — which is what sells it as one object turning over.
+  const [side, setSide] = useState<PartSide>('front')
+  const [flipping, setFlipping] = useState(false)
+  const flipTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => flipTimers.current.forEach(clearTimeout), [])
+  const flipBoard = (): void => {
+    if (flipping) return
+    setFlipping(true)
+    flipTimers.current.push(
+      setTimeout(() => setSide((v) => (v === 'front' ? 'rear' : 'front')), FLIP_MS / 2),
+      setTimeout(() => setFlipping(false), FLIP_MS)
+    )
+  }
+  // The Part Editor is the authoring context, so the flip is ALWAYS available —
+  // you need it to put the first thing on a back that doesn't exist yet. The
+  // read-only library preview is the place that hides it for a single-sided part,
+  // via `partHasRear`.
+
   const [selection, setSelection] = useState<CanvasSelection>(null)
   // The row the user clicked in the layers hierarchy. Purely a "which one is
   // that?" marker on the canvas — selection semantics are untouched, so a canvas
@@ -1133,7 +1159,7 @@ export function PartEditor({
                   {ICON.button}
                 </button>
               </div>
-              <div className="pe__canvas-stage">
+              <div className={`pe__canvas-stage${flipping ? ' is-flipping' : ''}`}>
                 <PartCanvas
                   part={part}
                   visible={visible}
@@ -1156,7 +1182,28 @@ export function PartEditor({
                   onToggleGrid={() => setShowGrid((g) => !g)}
                   onToggleSnap={() => setSnap((s) => !s)}
                   resetSignal={fitSignal}
+                  side={side}
                 />
+                {(
+                  <button
+                    type="button"
+                    className="pe__flip"
+                    onClick={flipBoard}
+                    disabled={flipping}
+                    title={side === 'front' ? 'Show the back of the board' : 'Show the front of the board'}
+                    aria-label={side === 'front' ? 'Show the back of the board' : 'Show the front of the board'}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                      {/* A board seen edge-on, mid-turn, with the arrows that got it there. */}
+                      <ellipse cx="8" cy="8" rx="3" ry="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+                      <path d="M2.2 4.4A6.6 6.6 0 0 1 8 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      <path d="M13.8 11.6A6.6 6.6 0 0 1 8 14.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                      <path d="M1.2 2.2l1 2.4 2.4-1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M14.8 13.8l-1-2.4-2.4 1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <span>{side === 'front' ? 'Flip to back' : 'Flip to front'}</span>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1641,6 +1688,11 @@ function LayersPanel({
       <span className="pe__flatnum" title={typeof rp.pin.gpio === 'number' ? `GPIO ${rp.pin.gpio}` : 'No GPIO'}>
         {typeof rp.pin.gpio === 'number' ? rp.pin.gpio : ''}
       </span>
+      {rp.pin.side === 'rear' && (
+        <span className="pe__rearmark" title="On the back of the board">
+          REAR
+        </span>
+      )}
       <span className={`pe__flattype pe__flattype--${rp.pin.type}`}>{rp.pin.type}</span>
     </li>
   )
