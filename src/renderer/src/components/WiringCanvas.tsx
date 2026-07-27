@@ -1267,10 +1267,20 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    */
   const mountAccepts = (
     cpart: PartDefinition,
-    m: { id: string; footprint: string },
+    m: { id: string; footprint: string; ref?: { lib: string; part: string } },
     sig: string,
     footprint: string | undefined
   ): boolean => {
+    // Prefer the SOURCE board the footprint was imprinted from (#166): comparing the
+    // dragged board against it is rotation-INDEPENDENT — a footprint imprinted at 90°
+    // still accepts the same (un-rotated) board, because the imprint's rotation is
+    // only how it's drawn, not what fits. (The imprinted pins' own signature IS
+    // orientation-specific, so it would reject a board unless drawn at the same angle.)
+    if (m.ref) {
+      const ref = resolvePart(m.ref.lib, m.ref.part)
+      if (ref) return sig !== '' && signaturesMatch(partSignature(ref), sig)
+    }
+    // No installed source → the imprinted pins' signature, else a legacy name match.
     const msig = mountSignature(cpart, m.id)
     return msig ? sig !== '' && signaturesMatch(msig, sig) : !!footprint && m.footprint === footprint
   }
