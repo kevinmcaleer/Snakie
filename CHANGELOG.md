@@ -6,6 +6,40 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-07-27
+
+### Added
+- **Footprints — author a carrier's socket from a real board.** In the Part
+  Editor, **＋ Add footprint** stamps a reference microcontroller's *actual* pins
+  (type-coloured round pads, with their GPIO / capabilities) into a carrier as a
+  locked, movable block — so an expansion base carries the real socket a board
+  plugs into, not an abstract rectangle. Footprints are a first-class **Layers**
+  row with their own add / rename / rotate / delete, hovering a footprint reveals
+  its pin names (placed left/right for columns, above/below for rows so a rotated
+  block stays legible), and the bundled **Seeed XIAO Expansion Base** now ships
+  with a XIAO footprint, so a XIAO docks into it out of the box.
+- **Structural docking — if the pins fit, it fits.** A board seats into a carrier
+  by matching its **pin layout** (order + type + position), not a footprint name,
+  so any compatible board is interchangeable — a XIAO RP2040 and RP2350 share one
+  socket. Dragging the MCU over a carrier rings the footprint's real outline + pin
+  dots; on drop it snaps **onto** the footprint, rotated to match it — and it
+  follows the footprint even when the carrier itself is rotated in the workspace.
+- **Electrical bonding through a seat.** A seated microcontroller is electrically
+  the carrier's footprint pins, so a wire to a Grove port or header on the carrier
+  reaches the MCU's GPIO — through ERC, the DC solver and live probing.
+
+### Changed
+- **The microcontroller is drawn to scale** in the Electronics workspace,
+  sized against the widest placed part so a large carrier no longer shrinks the
+  MCU to a speck.
+
+### Fixed
+- The board picker in the Electronics workspace scrolls on smaller screens
+  instead of running off the bottom.
+- The bundled parts library refreshes stale `<userData>/parts` installs so
+  footprint / mount metadata reaches copies seeded before those fields existed —
+  without overwriting parts you've edited yourself.
+
 ## [0.38.0] - 2026-07-26
 
 ### Added
@@ -3285,7 +3319,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...HEAD
+[0.39.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...v0.37.0
 [0.36.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.35.1...v0.36.0
