@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react'
+import { createPortal } from 'react-dom'
 import { useHistory } from './use-history'
 import { PartSchematicView } from './PartSchematicView'
 import { SwatchPicker } from './SwatchPicker'
@@ -2143,6 +2144,109 @@ interface InspectorProps {
   footprintOps: FootprintOps
 }
 
+/** "Add footprint…" dropdown (#166): a scrollable, fixed-positioned menu of
+ *  reference boards. Fixed positioning escapes the inspector's `overflow: auto`
+ *  (a native <select>'s list would be cropped), and it scrolls when the list is
+ *  long. Picking a board imprints its pins. */
+function AddFootprintMenu({
+  boards,
+  onAdd
+}: {
+  boards: ReferenceBoard[]
+  onAdd: (lib: string, ref: PartDefinition) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number }>({
+    left: 0,
+    top: 0,
+    width: 220,
+    maxH: 320
+  })
+  const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLUListElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent): void => {
+      const t = e.target as Node
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return
+      setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    const onScroll = (): void => setOpen(false)
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open])
+  const toggle = (): void => {
+    const r = btnRef.current?.getBoundingClientRect()
+    if (r) {
+      const margin = 8
+      const spaceBelow = window.innerHeight - r.bottom - margin
+      const spaceAbove = r.top - margin
+      // Flip up when there isn't room below and there's more above; size to fit so
+      // it never runs off the viewport (and scrolls within whatever space it gets).
+      const openUp = spaceBelow < 180 && spaceAbove > spaceBelow
+      const maxH = Math.min(320, Math.max(120, openUp ? spaceAbove : spaceBelow))
+      const top = openUp ? r.top - 4 - maxH : r.bottom + 4
+      // Clamp horizontally so a right-aligned trigger doesn't push the menu off-screen.
+      const width = Math.max(r.width, 240)
+      const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))
+      setPos({ left, top: Math.max(margin, top), width, maxH })
+    }
+    setOpen((o) => !o)
+  }
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className="pe__mounts-add"
+        onClick={toggle}
+        disabled={!boards.length}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        title="Imprint a reference board's pins as a mount"
+      >
+        + Add footprint…
+      </button>
+      {open &&
+        createPortal(
+          <ul
+            ref={menuRef}
+            className="pe__mounts-menu"
+            role="listbox"
+            style={{ left: pos.left, top: pos.top, minWidth: pos.width, maxHeight: pos.maxH }}
+          >
+            {boards.map((b) => (
+              <li key={`${b.lib}/${b.part.id}`}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  className="pe__mounts-menu-item"
+                  onClick={() => {
+                    onAdd(b.lib, b.part)
+                    setOpen(false)
+                  }}
+                >
+                  {b.part.name || b.part.id}
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
+    </>
+  )
+}
+
 /** The carrier-mounts list in the Board section (#166): add a footprint by picking
  *  a reference board (its real pins get imprinted), select/remove existing ones.
  *  Selecting a row opens it in the Inspector above. */
@@ -2158,30 +2262,11 @@ function MountsList({
   ops: FootprintOps
 }): JSX.Element {
   const mounts = part.mounts ?? []
-  const onPick = (e: React.ChangeEvent<HTMLSelectElement>): void => {
-    const board = ops.referenceBoards.find((b) => `${b.lib}/${b.part.id}` === e.target.value)
-    if (board) ops.addFootprint(board.lib, board.part)
-    e.target.value = '' // reset so the same board can be added again
-  }
   return (
     <div className="pe__mounts">
       <div className="pe__mounts-head">
         <span>Footprints (mounts)</span>
-        <select
-          className="pe__mounts-add"
-          value=""
-          onChange={onPick}
-          disabled={!ops.referenceBoards.length}
-          title="Imprint a reference board's pins as a mount"
-          aria-label="Add a footprint from a reference board"
-        >
-          <option value="">+ Add footprint…</option>
-          {ops.referenceBoards.map((b) => (
-            <option key={`${b.lib}/${b.part.id}`} value={`${b.lib}/${b.part.id}`}>
-              {b.part.name || b.part.id}
-            </option>
-          ))}
-        </select>
+        <AddFootprintMenu boards={ops.referenceBoards} onAdd={ops.addFootprint} />
       </div>
       {mounts.length === 0 ? (
         <p className="pe__hint pe__hint--muted">

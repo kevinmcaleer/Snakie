@@ -268,9 +268,45 @@
   color: var(--text);
   cursor: pointer;
 }
-.pe__mounts-add:hover {
+.pe__mounts-add:hover:not(:disabled) {
   border-color: var(--accent, #3ec46d);
   color: var(--accent, #3ec46d);
+}
+.pe__mounts-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+/* The reference-board dropdown — fixed so the inspector's overflow can't crop it,
+   and scrollable when the list is long (#166). */
+.pe__mounts-menu {
+  position: fixed;
+  z-index: 1000;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--panel, var(--card, #fff));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+}
+.pe__mounts-menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0.35rem 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--text);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pe__mounts-menu-item:hover {
+  background: color-mix(in srgb, var(--accent, #3ec46d) 16%, transparent);
 }
 .pe__mounts-list {
   list-style: none;
