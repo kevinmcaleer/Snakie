@@ -104,6 +104,18 @@ describe('real bundled boards (#166)', () => {
   it('a XIAO does NOT duck-type with an unrelated board', () => {
     expect(signaturesMatch(partSignature(load('seeed-xiao-rp2350')), partSignature(load('esp32-devkit')))).toBe(false)
   })
+
+  it('the bundled expansion base ships an imprinted XIAO footprint (docks out of the box)', () => {
+    const base = load('seeed-xiao-expansion-base')
+    const mount = base.mounts?.[0]
+    expect(mount?.ref).toEqual({ lib: 'snakie-standard', part: 'seeed-xiao-rp2350' })
+    const derived = (base.headers ?? []).flatMap((h) => h.pins).filter((p) => p.derived === mount?.id)
+    expect(derived.length).toBe(14)
+    // Docking compares a dragged board to the mount's REF board — so any XIAO
+    // (RP2040 or RP2350) structurally matches this socket.
+    const ref = load(mount!.ref!.part)
+    expect(signaturesMatch(partSignature(ref), partSignature(load('seeed-xiao-rp2040')))).toBe(true)
+  })
 })
 
 describe('serialisation of the imprint fields (#166)', () => {
