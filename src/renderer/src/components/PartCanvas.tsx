@@ -117,15 +117,31 @@ export interface LayerVisibility {
   holes: boolean
   pins: boolean
   components: boolean
+  /** Carrier footprint blocks (#166). */
+  mounts: boolean
 }
 
-export const DEFAULT_LAYERS: LayerVisibility = { pcb: true, image: true, holes: true, pins: true, components: true }
+export const DEFAULT_LAYERS: LayerVisibility = {
+  pcb: true,
+  image: true,
+  holes: true,
+  pins: true,
+  components: true,
+  mounts: true
+}
 
 /** Per-layer edit lock (same keys as {@link LayerVisibility}). A locked layer is
  *  still drawn, but its items can't be selected, moved, resized, or created — so
  *  you can't accidentally nudge the background PCB while wiring pins. */
 export type LayerLocks = LayerVisibility
-export const DEFAULT_LOCKS: LayerLocks = { pcb: false, image: false, holes: false, pins: false, components: false }
+export const DEFAULT_LOCKS: LayerLocks = {
+  pcb: false,
+  image: false,
+  holes: false,
+  pins: false,
+  components: false,
+  mounts: false
+}
 
 /** What is currently selected (drives the editor's contextual inspector). */
 export type CanvasSelection =
@@ -2036,6 +2052,7 @@ export function PartCanvas({
         if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
     // Carrier mounts (#166) — grab anywhere inside the footprint block (its pins are
     // locked, so they fall through to here), else a radius around a pin-less mount.
+    if (visible.mounts && !locked.mounts)
     for (let i = mounts.length - 1; i >= 0; i--) {
       const bb = mountBoxN(mounts[i].id)
       if (bb) {
@@ -2951,7 +2968,8 @@ export function PartCanvas({
         {/* Carrier mounts (#166): the footprint BLOCK — a dashed-green outline around
             its imprinted pins (which draw as normal locked pins below) + its label.
             Selected → solid, tinted fill. A pin-less mount falls back to a marker. */}
-        {mounts.map((m, i) => {
+        {visible.mounts &&
+          mounts.map((m, i) => {
           const bb = mountBoxN(m.id)
           const sel = isSel({ type: 'mount', index: i })
           const x0 = bb ? px(bb.x0) : px(m.x) - 20

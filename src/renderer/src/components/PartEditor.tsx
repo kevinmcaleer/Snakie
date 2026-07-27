@@ -765,7 +765,8 @@ export function PartEditor({
     } else if (sel.type === 'hole') {
       patch({ mountingHoles: (part.mountingHoles ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'mount') {
-      patch({ mounts: (part.mounts ?? []).filter((_, i) => i !== sel.index) })
+      const m = (part.mounts ?? [])[sel.index]
+      if (m) setPart((d) => removeMountImprint(d, m.id))
     } else if (sel.type === 'button') {
       patch({ buttons: (part.buttons ?? []).filter((_, i) => i !== sel.index) })
     } else if (sel.type === 'led') {
@@ -1181,6 +1182,7 @@ export function PartEditor({
                 setTool={setTool}
                 selection={selection}
                 setSelection={selectFromPanel}
+                footprintOps={footprintOps}
                 onSelectGroup={selectGroup}
                 onDeleteSelected={deleteSelection}
                 fileInputRef={fileInputRef}
@@ -1290,6 +1292,8 @@ interface LayersPanelProps {
   /** Which sections to show: 'layers' = Components + Pins; 'board' = Mounting holes
    *  + PCB + Image. Lets the board layers sit BELOW the selection inspector. */
   variant?: 'layers' | 'board'
+  /** Footprint imprint ops — enables the Footprints bucket's "+ Add" picker (#166). */
+  footprintOps?: FootprintOps
 }
 
 /**
@@ -1318,7 +1322,8 @@ function LayersPanel({
   canResetBg,
   bgTol,
   setBgTol,
-  variant = 'layers'
+  variant = 'layers',
+  footprintOps
 }: LayersPanelProps): JSX.Element {
   const [addOpen, setAddOpen] = useState(false)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
@@ -1657,6 +1662,35 @@ function LayersPanel({
     )
   }
 
+  /** A footprint (carrier mount) row in the hierarchy (#166) — select it to edit
+   *  its source board / placement in the inspector; trash removes it + its pins. */
+  const mountRowHier = (index: number, depth: number): JSX.Element => {
+    const m = (part.mounts ?? [])[index]
+    return (
+      <li
+        key={`mount${index}`}
+        className={`pe__flatrow pe__flatrow--mount${selEq({ type: 'mount', index }) ? ' is-active' : ''}`}
+        style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
+      >
+        <button type="button" className="pe__flatname" onClick={() => setSelection({ type: 'mount', index })}>
+          <span className="pe__item-name">{m?.label || m?.footprint || `Footprint ${index + 1}`}</span>
+        </button>
+        <span className="pe__flathelp">{m?.footprint}</span>
+        {m && footprintOps && (
+          <button
+            type="button"
+            className="pe__trash"
+            onClick={() => footprintOps.removeFootprint(m.id)}
+            title="Remove footprint"
+            aria-label="Remove footprint"
+          >
+            <TrashIcon size={13} />
+          </button>
+        )}
+      </li>
+    )
+  }
+
   /** Whether ANY group exists — drag-reorder of the flat component list is only
    *  offered when there are none, exactly as before the merge (reordering a
    *  subset of the z-stack while groups nest is not well defined). */
@@ -1785,6 +1819,14 @@ function LayersPanel({
               ＋
             </button>
           )}
+          {node.bucket === 'mounts' && footprintOps && (
+            <AddFootprintMenu
+              boards={footprintOps.referenceBoards}
+              onAdd={footprintOps.addFootprint}
+              buttonClassName="pe__chip pe__chip--add"
+              label="＋ Add"
+            />
+          )}
           {isPins && (
             <>
               <button
@@ -1810,8 +1852,10 @@ function LayersPanel({
               ? selection?.type === 'pin'
               : node.bucket === 'holes'
                 ? selection?.type === 'hole'
-                : selection != null &&
-                  ['shape', 'shape-vertex', 'label', 'button', 'led', 'connector'].includes(selection.type)
+                : node.bucket === 'mounts'
+                  ? selection?.type === 'mount'
+                  : selection != null &&
+                    ['shape', 'shape-vertex', 'label', 'button', 'led', 'connector'].includes(selection.type)
           )}
         </div>
         {open && isPins && kids.length > 1 && (() => {
@@ -1878,12 +1922,12 @@ function LayersPanel({
    *  create the first pin or hole. */
   const panelNodes: LayerNode[] = [
     ...layerTree.filter((n) => n.kind === 'group'),
-    ...(['components', 'pins', 'holes'] as const).map(
+    ...(['components', 'pins', 'holes', 'mounts'] as const).map(
       (b): LayerNode =>
         layerTree.find((n) => n.bucket === b) ?? {
           id: `bucket:${b}`,
           kind: 'bucket',
-          label: b === 'components' ? 'Components' : b === 'pins' ? 'Pins' : 'Mounting holes',
+          label: b === 'components' ? 'Components' : b === 'pins' ? 'Pins' : b === 'holes' ? 'Mounting holes' : 'Footprints',
           bucket: b,
           children: [],
           hidden: false,
@@ -1945,6 +1989,7 @@ function LayersPanel({
       return rp ? pinRowHier(rp, depth) : <li key={node.id} />
     }
     if (it.kind === 'hole') return holeRowHier(it.index, depth)
+    if (it.kind === 'mount') return mountRowHier(it.index, depth)
     return itemRowTree({ kind: it.kind, index: it.index, z: 0 }, depth)
   }
 
@@ -2150,10 +2195,14 @@ interface InspectorProps {
  *  long. Picking a board imprints its pins. */
 function AddFootprintMenu({
   boards,
-  onAdd
+  onAdd,
+  buttonClassName = 'pe__mounts-add',
+  label = '+ Add footprint…'
 }: {
   boards: ReferenceBoard[]
   onAdd: (lib: string, ref: PartDefinition) => void
+  buttonClassName?: string
+  label?: string
 }): JSX.Element {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number; width: number; maxH: number }>({
@@ -2207,14 +2256,14 @@ function AddFootprintMenu({
       <button
         ref={btnRef}
         type="button"
-        className="pe__mounts-add"
+        className={buttonClassName}
         onClick={toggle}
         disabled={!boards.length}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title="Imprint a reference board's pins as a mount"
+        title="Imprint a reference board's pins as a footprint mount"
       >
-        + Add footprint…
+        {label}
       </button>
       {open &&
         createPortal(
@@ -2244,62 +2293,6 @@ function AddFootprintMenu({
           document.body
         )}
     </>
-  )
-}
-
-/** The carrier-mounts list in the Board section (#166): add a footprint by picking
- *  a reference board (its real pins get imprinted), select/remove existing ones.
- *  Selecting a row opens it in the Inspector above. */
-function MountsList({
-  part,
-  selection,
-  onSelect,
-  ops
-}: {
-  part: PartDefinition
-  selection: CanvasSelection
-  onSelect: (sel: CanvasSelection) => void
-  ops: FootprintOps
-}): JSX.Element {
-  const mounts = part.mounts ?? []
-  return (
-    <div className="pe__mounts">
-      <div className="pe__mounts-head">
-        <span>Footprints (mounts)</span>
-        <AddFootprintMenu boards={ops.referenceBoards} onAdd={ops.addFootprint} />
-      </div>
-      {mounts.length === 0 ? (
-        <p className="pe__hint pe__hint--muted">
-          A carrier (e.g. a XIAO expansion base) seats a board at each footprint. Pick a reference board above to
-          stamp its real pins into this part as a movable, locked block.
-        </p>
-      ) : (
-        <ul className="pe__mounts-list">
-          {mounts.map((m, i) => (
-            <li
-              key={m.id}
-              className={selection?.type === 'mount' && selection.index === i ? 'is-sel' : undefined}
-            >
-              <button type="button" className="pe__mounts-row" onClick={() => onSelect({ type: 'mount', index: i })}>
-                <span className="pe__mounts-name">{m.label || m.id}</span>
-                <span className={`pe__mounts-fp${m.footprint ? '' : ' is-empty'}`}>
-                  {m.footprint || 'no footprint'}
-                </span>
-              </button>
-              <button
-                type="button"
-                className="pe__mounts-remove"
-                title="Remove footprint"
-                aria-label="Remove footprint"
-                onClick={() => ops.removeFootprint(m.id)}
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
   )
 }
 
@@ -2379,7 +2372,6 @@ function Inspector(props: InspectorProps): JSX.Element {
           footprints={props.footprints}
           hint="Boards sharing a footprint plug into the same carriers (e.g. a XIAO base)."
         />
-        <MountsList part={part} selection={props.selection} onSelect={props.onSelect} ops={props.footprintOps} />
       </section>
 
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
