@@ -337,6 +337,10 @@ const PART_NATIVE_H = 300
 const PART_MIN_W = 48
 const PART_MAX_W = 380
 const PART_MAX_H = 380
+// The largest single body (board OR any placed part) is scaled to fit this px cap;
+// one px/mm is then derived from it so EVERY body — the board included — draws at
+// its real mm size, in the right relative proportion (#637).
+const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
@@ -851,6 +855,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
 
   // --- build the subjects ---------------------------------------------------
   const subjects: Subject[] = []
+
+  // Real-world scale (#637): pick ONE px/mm so the WIDEST/TALLEST body — the board
+  // OR any placed part — just fits the cap, then draw every body at its real mm
+  // size (in the right relative proportion). Previously the board was pinned to a
+  // fixed box and px/mm was derived from it, so a large carrier next to a small MCU
+  // rendered far too small (and any part > ~36mm hit the part clamp).
+  const boardMmW = boardPart?.dimensions?.width
+  const boardMmH = boardPart?.dimensions?.height
+  let widestMm = boardMmW && boardMmW > 0 ? boardMmW : 0
+  let tallestMm = boardMmH && boardMmH > 0 ? boardMmH : 0
+  for (const rp of robot.parts) {
+    const d = resolvePart(rp.lib, rp.part)?.dimensions
+    if (d?.width && d.width > widestMm) widestMm = d.width
+    if (d?.height && d.height > tallestMm) tallestMm = d.height
+  }
+  const pxPerMm =
+    widestMm > 0 || tallestMm > 0
+      ? Math.min(
+          widestMm > 0 ? BODY_CAP_PX / widestMm : Infinity,
+          tallestMm > 0 ? BODY_CAP_PX / tallestMm : Infinity
+        )
+      : PX_PER_MM_DEFAULT
+  // The board's real drawn box at this scale. Falls back to the legacy fixed box
+  // for a built-in board with no source part (no mm dimensions to scale from).
+  const boardBoxW = boardMmW && boardMmW > 0 ? boardMmW * pxPerMm : BOARD_BODY_W
+  const boardBoxH = boardMmH && boardMmH > 0 ? boardMmH * pxPerMm : BOARD_BODY_H
+
   if (boardDef) {
     const x = robot.boardX ?? 60
     const y = robot.boardY ?? 90
@@ -859,7 +890,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       // body (background image + accurate x/y pins + castellations), exactly like a
       // placed part. Pin flat-index order matches the board pad enumeration, so the
       // `board.<pin>#<index>` wiring identity is unchanged.
-      const box = partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      const box = partBodyBox(boardPart, { maxW: boardBoxW, maxH: boardBoxH })
       subjects.push({
         key: 'board',
         kind: 'board',
@@ -878,7 +909,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     } else if (renderMode === 'lifelike') {
       // Legacy built-in board (no source part): the node-graph's edge-laid Board.
-      const box = boardBox(boardDef.aspect, { cx: BOARD_BODY_W / 2, cy: BOARD_BODY_H / 2, maxW: BOARD_BODY_W, maxH: BOARD_BODY_H })
+      const box = boardBox(boardDef.aspect, { cx: boardBoxW / 2, cy: boardBoxH / 2, maxW: boardBoxW, maxH: boardBoxH })
       const pads = layoutPads(boardDef, box)
       const usedPadKeys = new Set<string>()
       if (usedByCode) usedByCode.forEach((_, idx) => { const pp = pads[idx]; if (pp) usedPadKeys.add(padKey(pp)) })
@@ -888,8 +919,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         title: boardDef.name,
         x,
         y,
-        w: BOARD_BODY_W,
-        h: BOARD_BODY_H,
+        w: boardBoxW,
+        h: boardBoxH,
         mode: 'lifelike',
         pins: boardLifelikePins(pads),
         boardDef,
@@ -898,7 +929,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         usedPadKeys,
         ledLit: false,
         codeUsed: usedByCode,
-        hit: hitRegion('lifelike', x, y, BOARD_BODY_W, BOARD_BODY_H)
+        hit: hitRegion('lifelike', x, y, boardBoxW, boardBoxH)
       })
     } else {
       // The MCU as a generic IC block (rectangle + labelled pin stubs).
@@ -919,13 +950,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     }
   }
-  // px-per-mm anchored to the board's ACTUAL drawn width (it may be height-limited
-  // for a portrait board, so the raw constant would over-scale): keeps the board's
-  // on-canvas size and defines the scale parts are drawn to, so every body reads at
-  // its real relative size.
-  const boardFitW = boardPart ? partBodyBox(boardPart, { maxW: BOARD_BODY_W, maxH: BOARD_BODY_H }).w : BOARD_BODY_W
-  const boardMmW = boardPart?.dimensions?.width
-  const pxPerMm = boardMmW && boardMmW > 0 ? boardFitW / boardMmW : PX_PER_MM_DEFAULT
+  // (px-per-mm + the board box are computed up-front now, from the widest body —
+  // see the `pxPerMm` block above, #637.)
   // Board stacking (#166): a seated board has no position of its own — it's drawn
   // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
   // part's ORIGINAL index so the default scatter positions don't shift. One level
