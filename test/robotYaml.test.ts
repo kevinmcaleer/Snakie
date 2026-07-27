@@ -49,6 +49,18 @@ describe('robot.yml round-trip', () => {
     expect(empty.description).toBeUndefined()
   })
 
+  it('round-trips the board seated on a carrier mount (#166)', () => {
+    const back = robotFromYaml(
+      robotToYaml({ ...blankRobot(), board: 'seeed-xiao-rp2350', boardMountedOn: 'base1', boardMount: 'xiao' })
+    )
+    expect(back.boardMountedOn).toBe('base1')
+    expect(back.boardMount).toBe('xiao')
+    // Both halves are required — a lone `boardMountedOn` is dropped.
+    const partial = robotFromYaml(robotToYaml({ ...blankRobot(), boardMountedOn: 'base1' }))
+    expect(partial.boardMountedOn).toBeUndefined()
+    expect(partial.boardMount).toBeUndefined()
+  })
+
   it('round-trips a part rotation and snaps it to 90°', () => {
     const def = robotFromYaml(
       ['parts:', '  - { id: a, lib: l, part: p, rotation: 95 }', '  - { id: b, lib: l, part: p, rotation: 0 }'].join('\n')

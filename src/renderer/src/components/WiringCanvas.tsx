@@ -1070,6 +1070,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     }
   })
+
+  // Seat the MCU into its carrier's mount (#166): now that carrier bodies are laid
+  // out, snap the board subject to the mount point and draw it ON TOP of the carrier
+  // (the board is pushed first as the base, so a seated one must move above it).
+  if (robot.boardMountedOn && robot.boardMount) {
+    const bs = subjects.find((s) => s.key === 'board')
+    const carrier = robot.parts.find((p) => p.id === robot.boardMountedOn)
+    const cbody = placedBody.get(robot.boardMountedOn)
+    const mount =
+      carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === robot.boardMount)
+    if (bs && cbody && mount) {
+      bs.x = cbody.x + mount.x * cbody.w - bs.w / 2
+      bs.y = cbody.y + mount.y * cbody.h - bs.h / 2
+      bs.seated = true
+      bs.hit = hitRegion(bs.mode, bs.x, bs.y, bs.w, bs.h)
+      const bi = subjects.indexOf(bs)
+      subjects.splice(bi, 1)
+      const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
+      subjects.splice(ci + 1, 0, bs)
+    }
+  }
+
   const subjByKey = new Map(subjects.map((s) => [s.key, s]))
 
   // Live box-drag override (commit-on-drop): paint the dragged subject at its
@@ -1240,19 +1262,28 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    * the mount's footprint, and the mount must be free. Returns the carrier + mount
    * ids, or null when the drop isn't over a compatible empty socket.
    */
-  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
-    const rp = robot.parts.find((p) => p.id === key)
-    const footprint = rp && resolvePart(rp.lib, rp.part)?.footprint
+  const mountUnderFp = (
+    footprint: string | undefined,
+    excludeKey: string,
+    cx: number,
+    cy: number
+  ): { carrier: string; mount: string } | null => {
     if (!footprint) return null
     for (const carrier of robot.parts) {
-      if (carrier.id === key) continue
+      if (carrier.id === excludeKey) continue
       const body = placedBody.get(carrier.id)
       const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
       if (!body || !mounts?.length) continue
       for (const m of mounts) {
         if (m.footprint !== footprint) continue
-        // One board per socket — a taken mount isn't a drop target.
-        if (robot.parts.some((p) => p.id !== key && p.mountedOn === carrier.id && p.mount === m.id)) continue
+        // One thing per socket — a mount taken by a placed part OR by the board
+        // (which seats here too, #166) isn't a drop target.
+        const takenByPart = robot.parts.some(
+          (p) => p.id !== excludeKey && p.mountedOn === carrier.id && p.mount === m.id
+        )
+        const takenByBoard =
+          excludeKey !== 'board' && robot.boardMountedOn === carrier.id && robot.boardMount === m.id
+        if (takenByPart || takenByBoard) continue
         const mx = body.x + m.x * body.w
         const my = body.y + m.y * body.h
         // Generous radius: you're aiming at a socket, not a pixel.
@@ -1263,13 +1294,33 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     }
     return null
   }
+  const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
+    const rp = robot.parts.find((p) => p.id === key)
+    return mountUnderFp(rp ? resolvePart(rp.lib, rp.part)?.footprint : undefined, key, cx, cy)
+  }
 
   const moveBox = (key: string, x: number, y: number): void => {
     const snapped = snapOrigin(key, x, y)
     x = snapped.x
     y = snapped.y
     if (key === 'board') {
-      persist({ ...robot, boardX: x, boardY: y })
+      // The MCU seats into a compatible free carrier socket too (#166): from then
+      // on it's drawn at the mount and moves with the carrier. Dropping it elsewhere
+      // un-seats it (drag it off the carrier to take it back out).
+      const bs = subjByKey.get('board')
+      const seat = mountUnderFp(
+        boardPart?.footprint,
+        'board',
+        x + (bs?.bodyDX ?? 0) + (bs?.w ?? 0) / 2,
+        y + (bs?.bodyDY ?? 0) + (bs?.h ?? 0) / 2
+      )
+      persist({
+        ...robot,
+        boardX: x,
+        boardY: y,
+        boardMountedOn: seat?.carrier,
+        boardMount: seat?.mount
+      })
       return
     }
     // Dropping a board onto a compatible free socket SEATS it — from then on its
