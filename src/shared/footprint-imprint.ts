@@ -90,14 +90,18 @@ export function imprintPins(
         // (e.g. a XIAO's 14 pins mid-board) would otherwise draw 14 edge leaders. The
         // type-coloured pads convey the footprint; names live on for bonding + hover.
         locked: true,
-        labelHidden: true
+        labelHidden: true,
+        // Always plain ROUND pads. A footprint only needs to show pin positions +
+        // types; carrying the source's castellated/header shape (whose outward
+        // direction is derived from the pin's side) makes the block read as a mess
+        // of pads pointing every which way once it's placed + rotated.
+        shape: 'round'
       }
       if (p.number !== undefined) np.number = p.number
       if (p.type === 'io' && p.gpio !== undefined) np.gpio = p.gpio
       if (p.type === 'io' && p.capabilities?.length) np.capabilities = [...p.capabilities]
       if (p.type === 'io' && p.signals) np.signals = { ...p.signals }
       if (p.type === 'io' && p.buses) np.buses = { ...p.buses }
-      if (p.shape) np.shape = p.shape
       if (p.label && p.label !== p.name) np.label = p.label
       out.push(np)
     }

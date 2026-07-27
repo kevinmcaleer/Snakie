@@ -422,6 +422,9 @@ export function PartCanvas({
   const [textMenuOpen, setTextMenuOpen] = useState(false)
   // The selected mounting hole's size (diameter) dropdown.
   const [holeMenuOpen, setHoleMenuOpen] = useState(false)
+  // Which footprint block the pointer is hovering (#166) — reveals its pin labels so
+  // the user can read the board's orientation (which pad is D0 / 5V / GND…).
+  const [hoverMount, setHoverMount] = useState<string | null>(null)
   // Per-type "style clipboard" (copy style / paste style). State (not a ref) so a
   // copy re-renders the toolbars and enables their "Paste style" button. Persists
   // across selections + part switches within a session.
@@ -2348,7 +2351,22 @@ export function PartCanvas({
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>): void => {
     const d = dragRef.current
-    if (!d || !interactive) return
+    if (!d || !interactive) {
+      // No drag → track which footprint block the pointer is over, to show its labels.
+      if (interactive && mounts.length && visible.mounts) {
+        const { nx, ny } = toNorm(e)
+        let hit: string | null = null
+        for (let i = mounts.length - 1; i >= 0; i--) {
+          const bb = mountBoxN(mounts[i].id)
+          if (bb && nx >= bb.x0 && nx <= bb.x1 && ny >= bb.y0 && ny <= bb.y1) {
+            hit = mounts[i].id
+            break
+          }
+        }
+        if (hit !== hoverMount) setHoverMount(hit)
+      } else if (hoverMount) setHoverMount(null)
+      return
+    }
     if (d.kind === 'pan') {
       const s = viewBoxScale()
       setView((v) => ({ ...v, tx: (d.panTX ?? 0) + (e.clientX - (d.panX ?? 0)) / s, ty: (d.panTY ?? 0) + (e.clientY - (d.panY ?? 0)) / s }))
@@ -2909,6 +2927,7 @@ export function PartCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={() => hoverMount && setHoverMount(null)}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
     >
@@ -3010,6 +3029,32 @@ export function PartCanvas({
               >
                 {m.label || m.footprint || m.id}
               </text>
+              {/* Hover / select the footprint → reveal its pin names, so the board's
+                  orientation (which pad is D0 / 5V / GND…) is legible. Labels sit just
+                  outside the block: left-side pads to the left, right-side to the right. */}
+              {(hoverMount === m.id || sel) &&
+                (part.headers ?? [])
+                  .flatMap((h) => h.pins)
+                  .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
+                  .map((pp, pi) => {
+                    const onLeft = px(pp.x!) <= px(m.x)
+                    return (
+                      <text
+                        key={`ml${i}-${pi}`}
+                        x={px(pp.x!) + (onLeft ? -7 : 7)}
+                        y={py(pp.y!) + 3}
+                        textAnchor={onLeft ? 'end' : 'start'}
+                        fontSize={9}
+                        fontWeight={700}
+                        fill="#0b3a22"
+                        stroke="#ffffff"
+                        strokeWidth={2.4}
+                        style={{ paintOrder: 'stroke' }}
+                      >
+                        {pp.name}
+                      </text>
+                    )
+                  })}
             </g>
           )
         })}
