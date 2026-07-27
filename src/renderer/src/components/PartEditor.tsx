@@ -2244,9 +2244,11 @@ function AddFootprintMenu({
       const openUp = spaceBelow < 180 && spaceAbove > spaceBelow
       const maxH = Math.min(320, Math.max(120, openUp ? spaceAbove : spaceBelow))
       const top = openUp ? r.top - 4 - maxH : r.bottom + 4
-      // Clamp horizontally so a right-aligned trigger doesn't push the menu off-screen.
-      const width = Math.max(r.width, 240)
-      const left = Math.max(margin, Math.min(r.left, window.innerWidth - width - margin))
+      // FIXED width so the clamp is exact — a min-width menu grows to its longest
+      // item and then its right edge (and scrollbar) fall off-screen. Long names
+      // ellipsis instead. Right-align to the trigger, then clamp into the viewport.
+      const width = Math.min(280, window.innerWidth - 2 * margin)
+      const left = Math.max(margin, Math.min(r.right - width, window.innerWidth - width - margin))
       setPos({ left, top: Math.max(margin, top), width, maxH })
     }
     setOpen((o) => !o)
@@ -2271,7 +2273,7 @@ function AddFootprintMenu({
             ref={menuRef}
             className="pe__mounts-menu"
             role="listbox"
-            style={{ left: pos.left, top: pos.top, minWidth: pos.width, maxHeight: pos.maxH }}
+            style={{ left: pos.left, top: pos.top, width: pos.width, maxHeight: pos.maxH }}
           >
             {boards.map((b) => (
               <li key={`${b.lib}/${b.part.id}`}>

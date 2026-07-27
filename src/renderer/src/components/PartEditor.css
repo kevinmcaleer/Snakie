@@ -303,6 +303,8 @@
   color: var(--text);
   font-size: 0.8rem;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
 }
 .pe__mounts-menu-item:hover {
