@@ -38,6 +38,7 @@ import {
   type PartHeader,
   type PartButton,
   type PartItemFlags,
+  type PartRear,
   type PartLabel,
   type PartMount,
   type PartPin,
@@ -294,6 +295,7 @@ function keepItemFlags(src: Partial<PartItemFlags> & { z?: number }, out: Record
   if (group) out.group = group
   if (src.hidden === true) out.hidden = true
   if (src.locked === true) out.locked = true
+  if (src.side === 'rear') out.side = 'rear'
   if (typeof src.z === 'number' && Number.isFinite(src.z)) out.z = src.z
 }
 
@@ -1166,6 +1168,20 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       })
       .filter((m): m is PartMount => m !== null)
     if (mounts.length) out.mounts = mounts
+  }
+  // Rear face (#636). Like the front, the FILENAME + layer round-trip and the
+  // inlined blob is runtime-only.
+  if (part.rear && (text(part.rear.image) || part.rear.imageLayer)) {
+    const rear: PartRear = {}
+    const img = text(part.rear.image)
+    if (img) rear.image = img
+    const l = part.rear.imageLayer
+    if (l && [l.x, l.y, l.w, l.h].every((v) => typeof v === 'number' && Number.isFinite(v))) {
+      rear.imageLayer = { x: l.x, y: l.y, w: l.w, h: l.h }
+      if (typeof l.opacity === 'number' && Number.isFinite(l.opacity)) rear.imageLayer.opacity = l.opacity
+      if (typeof l.rotation === 'number' && Number.isFinite(l.rotation)) rear.imageLayer.rotation = l.rotation
+    }
+    if (Object.keys(rear).length) out.rear = rear
   }
   set('ledLabel', text(part.ledLabel))
   // `image` is the relative filename; keep it. `imageData` (the runtime data URL)

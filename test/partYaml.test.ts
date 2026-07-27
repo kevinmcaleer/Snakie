@@ -6,7 +6,8 @@ import {
   partToYaml
 } from '../src/shared/part-yaml'
 import { blankPart, normalisePart } from '../src/renderer/src/components/part-editor.util'
-import { groupChain, itemHidden, itemLocked } from '../src/shared/part'
+import { groupChain, itemHidden, itemLocked, mirrorX, partHasRear } from '../src/shared/part'
+import type { PartItemFlags } from '../src/shared/part'
 import type { PartDefinition } from '../src/shared/part'
 
 const RICH: PartDefinition = normalisePart({
@@ -959,5 +960,94 @@ describe('itemHidden / itemLocked — the ancestor rule', () => {
   it('groupChain reports the ancestry innermost first', () => {
     expect(groupChain(groups, 'inner').map((g) => g.id)).toEqual(['inner', 'outer'])
     expect(groupChain(groups, undefined)).toEqual([])
+  })
+})
+
+describe('board rear (#636)', () => {
+  const REAR: PartDefinition = normalisePart({
+    id: 'p',
+    name: 'P',
+    dimensions: { width: 20, height: 40 },
+    image: 'front.png',
+    rear: { image: 'rear.png', imageLayer: { x: 0, y: 0, w: 1, h: 1, opacity: 0.9 } },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'FRONT', type: 'io' },
+          { name: 'BACK', type: 'io', side: 'rear' }
+        ]
+      }
+    ],
+    connectors: [{ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.9, side: 'rear', pins: [{ name: 'SCL', type: 'io' }] }],
+    buttons: [{ label: 'BOOT', x: 0.2, y: 0.2, side: 'rear' }],
+    onboardLeds: [{ kind: 'single', x: 0.3, y: 0.3, side: 'rear' }],
+    shapes: [{ kind: 'rect', x: 0.4, y: 0.4, w: 0.1, h: 0.1, side: 'rear' }],
+    labels: [{ text: 'U1', x: 0.5, y: 0.5, side: 'rear' }],
+    mountingHoles: [{ x: 0.1, y: 0.1, diameter: 2 }]
+  })
+
+  const KINDS = ['pin', 'connector', 'button', 'led', 'shape', 'label'] as const
+  const item = (p: PartDefinition, k: string): PartItemFlags =>
+    ({
+      pin: p.headers[0].pins[1],
+      connector: p.connectors?.[0],
+      button: p.buttons?.[0],
+      led: p.onboardLeds?.[0],
+      shape: p.shapes?.[0],
+      label: p.labels?.[0]
+    })[k] as PartItemFlags
+
+  it.each(KINDS)('normalisePart keeps side: rear on a %s', (k) => {
+    expect(item(REAR, k).side).toBe('rear')
+  })
+
+  it.each(KINDS)('parts.yml round-trips side: rear on a %s', (k) => {
+    expect(item(partFromYaml(partToYaml(REAR)), k).side).toBe('rear')
+  })
+
+  it('leaves a front item alone rather than writing side: front everywhere', () => {
+    // Absent means front, so an existing single-sided part gains nothing in its
+    // parts.yml and its diff stays clean.
+    expect(REAR.headers[0].pins[0].side).toBeUndefined()
+    expect(partToYaml(REAR)).not.toContain('side: front')
+  })
+
+  it('round-trips the rear artwork, filename and layer', () => {
+    const back = partFromYaml(partToYaml(REAR))
+    expect(back.rear?.image).toBe('rear.png')
+    expect(back.rear?.imageLayer).toEqual({ x: 0, y: 0, w: 1, h: 1, opacity: 0.9 })
+  })
+
+  it('never writes the rear’s inlined blob, only its filename', () => {
+    const withBlob = { ...REAR, rear: { ...REAR.rear, imageData: 'data:image/png;base64,AAAA' } }
+    const yaml = partToYaml(withBlob)
+    expect(yaml).toContain('rear.png')
+    expect(yaml).not.toContain('base64')
+    expect(partFromYaml(yaml).rear?.imageData).toBeUndefined()
+  })
+
+  it('survives a second round-trip (the canonical-shape invariant)', () => {
+    const once = normalisePart(partFromYaml(partToYaml(REAR)))
+    expect(normalisePart(partFromYaml(partToYaml(once)))).toEqual(once)
+  })
+
+  it('partHasRear: artwork OR any rear item, and false for a plain part', () => {
+    expect(partHasRear(REAR)).toBe(true)
+    // Artwork alone is enough — you can add the photo before placing anything.
+    expect(partHasRear(normalisePart({ id: 'a', name: 'A', headers: [], rear: { image: 'r.png' } }))).toBe(true)
+    // A single rear pin is enough, with no artwork at all.
+    expect(
+      partHasRear(normalisePart({ id: 'b', name: 'B', headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io', side: 'rear' }] }] }))
+    ).toBe(true)
+    expect(
+      partHasRear(normalisePart({ id: 'c', name: 'C', headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io' }] }] }))
+    ).toBe(false)
+  })
+
+  it('mirrors x for the rear view — a hole must land where it does in the hand', () => {
+    expect(mirrorX(0.1)).toBeCloseTo(0.9)
+    expect(mirrorX(0.5)).toBeCloseTo(0.5)
+    expect(mirrorX(mirrorX(0.23))).toBeCloseTo(0.23)
   })
 })

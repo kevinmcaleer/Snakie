@@ -17,12 +17,13 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceGroveVariant } from './part'
+import { coerceConnectorKind, coerceGroveVariant, coerceSide } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
   ElectricalModel,
+  ImageLayer,
   MountingHole,
   OnboardLed,
   PartButton,
@@ -42,6 +43,8 @@ import type {
   PartPinShape,
   PartPinSignals,
   PartPinType,
+  PartRear,
+  PartSide,
   SchematicPin,
   TextAlign
 } from './part'
@@ -124,6 +127,24 @@ function bool(v: unknown): boolean | undefined {
 function textAlign(v: unknown): TextAlign | undefined {
   const s = str(v)
   return s === 'left' || s === 'center' || s === 'right' ? s : undefined
+}
+
+/** Coerce a raw image-layer block. Shared by the front image and the rear face
+ *  (#636) so the two can't drift apart. */
+function coerceImageLayer(raw: unknown): ImageLayer | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const il = raw as Record<string, unknown>
+  const x = num(il.x)
+  const y = num(il.y)
+  const w = num(il.w)
+  const h = num(il.h)
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined
+  const out: ImageLayer = { x, y, w, h }
+  const op = num(il.opacity)
+  const rot = num(il.rotation)
+  if (op !== undefined) out.opacity = op
+  if (rot !== undefined) out.rotation = rot
+  return out
 }
 
 /** Coerce one raw pin object from YAML into a clean {@link PartPin}. */
@@ -342,16 +363,19 @@ function readItemFlags(raw: Record<string, unknown> | undefined, out: Record<str
   if (group) out.group = group
   if (raw.hidden === true) out.hidden = true
   if (raw.locked === true) out.locked = true
+  const side = coerceSide(raw.side)
+  if (side) out.side = side
   const z = num(raw.z)
   if (z !== undefined) out.z = z
 }
 
 /** The write half of {@link readItemFlags}. Only emits set flags, so an untouched
  *  part's YAML gains nothing. */
-function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; z?: number }, out: Record<string, unknown>): void {
+function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; side?: PartSide; z?: number }, out: Record<string, unknown>): void {
   if (item.group) out.group = item.group
   if (item.hidden) out.hidden = true
   if (item.locked) out.locked = true
+  if (item.side === 'rear') out.side = 'rear'
   if (item.z !== undefined) out.z = item.z
 }
 
@@ -437,6 +461,10 @@ export function partToYaml(part: PartDefinition): string {
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
     imageLayer: part.imageLayer,
+    // Same rule for the rear face (#636): filename + layer out, blob never.
+    rear: part.rear
+      ? pruneEmpty({ image: part.rear.image, imageLayer: part.rear.imageLayer })
+      : undefined,
     // NB: `help` (the filename) is kept; `helpText` (the inlined markdown) is NOT.
     help: part.help,
     // The linked mesh is a relative filename (never a blob), like `image`/`help`.
@@ -732,6 +760,15 @@ export function partFromYaml(text: string): PartDefinition {
       .filter((m): m is PartMount => m !== null)
     if (mounts.length) part.mounts = mounts
   }
+  if (raw.rear && typeof raw.rear === 'object') {
+    const r = raw.rear as Record<string, unknown>
+    const rear: PartRear = {}
+    const img = str(r.image)
+    if (img) rear.image = img
+    const lay = coerceImageLayer(r.imageLayer)
+    if (lay) rear.imageLayer = lay
+    if (Object.keys(rear).length) part.rear = rear
+  }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
   assign('help', str(raw.help))
@@ -758,20 +795,8 @@ export function partFromYaml(text: string): PartDefinition {
       .map((v) => [v[0], v[1], v[2]] as [number, number, number])
     if (pts.length) assign('contacts', pts)
   }
-  if (raw.imageLayer && typeof raw.imageLayer === 'object') {
-    const il = raw.imageLayer as Record<string, unknown>
-    const x = num(il.x)
-    const y = num(il.y)
-    const w = num(il.w)
-    const h = num(il.h)
-    if (x !== undefined && y !== undefined && w !== undefined && h !== undefined) {
-      part.imageLayer = { x, y, w, h }
-      const op = num(il.opacity)
-      const rot = num(il.rotation)
-      if (op !== undefined) part.imageLayer.opacity = op
-      if (rot !== undefined) part.imageLayer.rotation = rot
-    }
-  }
+  const frontLayer = coerceImageLayer(raw.imageLayer)
+  if (frontLayer) part.imageLayer = frontLayer
   if (raw.schematic && typeof raw.schematic === 'object' && !Array.isArray(raw.schematic)) {
     const s = raw.schematic as Record<string, unknown>
     if (Array.isArray(s.pins)) {

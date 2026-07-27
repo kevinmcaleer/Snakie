@@ -85,6 +85,8 @@ export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
 
 /** One physical pin/pad on the part. */
 export interface PartPin {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Paint/click z-order in the single item hierarchy (higher = on top).
    *  Absent ⇒ the legacy per-kind default. */
   z?: number
@@ -217,6 +219,8 @@ export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
  * round rather than merely joined pin-to-pin.
  */
 export interface PartConnector {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -287,6 +291,25 @@ export interface PartMount {
   pinMap?: Record<string, string>
 }
 
+/**
+ * The rear face's artwork (#636). Only the picture lives here — the pins, pads,
+ * connectors and components that are ON the rear are ordinary items carrying
+ * `side: rear`, so there is ONE list of each kind rather than two parallel
+ * schemas to keep in step (and one set of whitelists, one set of layer rows, one
+ * selection model).
+ *
+ * The rear shares the front's `dimensions`: it's the same board.
+ */
+export interface PartRear {
+  /** Relative filename of the rear photo, alongside `parts.yml`. */
+  image?: string
+  /** Runtime-only inlined data URL, exactly like {@link PartDefinition.imageData}
+   *  — read by the main process, never written back to `parts.yml`. */
+  imageData?: string
+  /** Where the rear photo sits on the board canvas, normalised 0..1. */
+  imageLayer?: ImageLayer
+}
+
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
   /** Paint/click z-order in the single item hierarchy (higher = on top).
@@ -312,6 +335,8 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -344,6 +369,8 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -425,6 +452,8 @@ export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
  * "components" layer the Part Editor authors via the toolbar's Shapes dropdown.
  */
 export interface ComponentShape {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
   hidden?: boolean
@@ -478,6 +507,8 @@ export type TextAlign = 'left' | 'center' | 'right'
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
 export interface PartLabel {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
   hidden?: boolean
@@ -630,6 +661,55 @@ export interface PartItemFlags {
   group?: string
   hidden?: boolean
   locked?: boolean
+  side?: PartSide
+}
+
+/**
+ * Which face of the board something is on (#636). Absent ⇒ `front`, so every
+ * part authored before rear support is a front-only board and reads unchanged.
+ *
+ * Mounting holes deliberately carry NO side: a hole goes through the board, so
+ * it belongs to both faces — it's just MIRRORED when the rear is shown, which is
+ * how it looks when you physically turn the board over.
+ */
+export type PartSide = 'front' | 'rear'
+
+/** Every side, in flip order. */
+export const PART_SIDES: readonly PartSide[] = ['front', 'rear']
+
+/** Validate a `side` off untrusted YAML/JSON. Anything unrecognised is front. */
+export function coerceSide(v: unknown): PartSide | undefined {
+  return v === 'rear' ? 'rear' : undefined
+}
+
+/** The side an item sits on — the default made explicit. */
+export function itemSide(item: PartItemFlags): PartSide {
+  return item.side === 'rear' ? 'rear' : 'front'
+}
+
+/**
+ * Whether a part has a rear worth showing — either rear artwork, or at least one
+ * item placed on the rear. Drives the flip control: hidden in the Parts Library
+ * for a single-sided part, always available while authoring one.
+ */
+export function partHasRear(part: PartDefinition): boolean {
+  if (part.rear?.image || part.rear?.imageData) return true
+  const onRear = (xs: PartItemFlags[] | undefined): boolean => (xs ?? []).some((x) => x.side === 'rear')
+  return (
+    (part.headers ?? []).some((h) => onRear(h.pins)) ||
+    onRear(part.connectors) ||
+    onRear(part.buttons) ||
+    onRear(part.onboardLeds) ||
+    onRear(part.shapes) ||
+    onRear(part.labels)
+  )
+}
+
+/** Mirror a normalised x. Viewing the rear flips the board left-to-right, so
+ *  anything shared between the faces (mounting holes, the outline) has to mirror
+ *  or it won't line up with the real board in your hand. */
+export function mirrorX(x: number): number {
+  return 1 - x
 }
 
 /**
@@ -788,6 +868,9 @@ export interface PartDefinition {
    * behaviour). Authored by dragging/resizing the image in the Part Editor.
    */
   imageLayer?: ImageLayer
+  /** The board's REAR face (#636) — its own photo, sharing the front's
+   *  dimensions. Absent ⇒ a single-sided part, which is nearly all of them. */
+  rear?: PartRear
 
   // --- Bundled help / docs -------------------------------------------------
   /**
