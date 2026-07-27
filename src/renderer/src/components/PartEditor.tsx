@@ -5,6 +5,12 @@ import { SwatchPicker } from './SwatchPicker'
 import { FootprintField } from './FootprintField'
 import { collectFootprints, type FootprintInfo } from '../../../shared/footprints'
 import {
+  applyImprint,
+  removeMountImprint,
+  translateMount,
+  type MountPlacement
+} from '../../../shared/footprint-imprint'
+import {
   PartCanvas,
   DEFAULT_LAYERS,
   DEFAULT_LOCKS,
@@ -69,6 +75,7 @@ import type {
   PartItemFlags,
   PartDefinition,
   PartElectrical,
+  PartLibraryWithParts,
   PartMount,
   PartHeader,
   PartLabel,
@@ -853,21 +860,74 @@ export function PartEditor({
     setPropRows(Object.entries(part.properties ?? {}))
   }, [part])
 
-  // Known footprints across the installed libraries (#166) — the vocabulary the
-  // Footprint + mount pickers offer, so seating tags stay consistent instead of
-  // being retyped (and mis-typed) per board. Loaded once; the curated standards
-  // are always present even if listing fails.
-  const [footprints, setFootprints] = useState<FootprintInfo[]>(() => collectFootprints([]))
+  // The installed libraries WITH parts (#166) — the vocabulary the Footprint field
+  // offers and the reference boards a carrier mount imprints its pins from.
+  const [partLibs, setPartLibs] = useState<PartLibraryWithParts[]>([])
   useEffect(() => {
     let live = true
     window.api.parts
       .listLibraries()
-      .then((libs) => live && setFootprints(collectFootprints(libs)))
+      .then((libs) => live && setPartLibs(libs))
       .catch(() => undefined)
     return () => {
       live = false
     }
   }, [])
+  const footprints = useMemo(() => collectFootprints(partLibs), [partLibs])
+  /** Boards that can be imprinted as a footprint — those with positioned pins. */
+  const referenceBoards = useMemo<ReferenceBoard[]>(
+    () =>
+      partLibs.flatMap((l) =>
+        l.parts
+          .filter((p) => (p.headers ?? []).some((h) => h.pins.some((pin) => pin.x !== undefined)))
+          .map((p) => ({ lib: l.id, part: p }))
+      ),
+    [partLibs]
+  )
+  const resolveRefPart = (lib: string, partId: string): PartDefinition | null =>
+    partLibs.find((l) => l.id === lib)?.parts.find((p) => p.id === partId) ?? null
+
+  // Footprint imprint operations (#166 phase 2): add stamps a reference board's real
+  // pins into the carrier; rotate/re-sync recompute them; remove strips them.
+  const addFootprint = (lib: string, ref: PartDefinition): void => {
+    const used = new Set((part.mounts ?? []).map((m) => m.id))
+    let n = (part.mounts?.length ?? 0) + 1
+    let id = `mount-${n}`
+    while (used.has(id)) id = `mount-${++n}`
+    const nextIndex = part.mounts?.length ?? 0
+    setPart((d) => applyImprint(d, ref, { lib, part: ref.id ?? '' }, { id, x: 0.5, y: 0.5, label: ref.name }))
+    setSelection({ type: 'mount', index: nextIndex })
+  }
+  const reimprint = (mountId: string, patchPlacement: Partial<MountPlacement>): void =>
+    setPart((d) => {
+      const m = (d.mounts ?? []).find((x) => x.id === mountId)
+      if (!m?.ref) return d
+      const ref = resolveRefPart(m.ref.lib, m.ref.part)
+      if (!ref) return d
+      return applyImprint(d, ref, m.ref, {
+        id: mountId,
+        x: m.x,
+        y: m.y,
+        rotation: m.rotation,
+        label: m.label,
+        footprint: m.footprint,
+        ...patchPlacement
+      })
+    })
+  const removeFootprint = (mountId: string): void => setPart((d) => removeMountImprint(d, mountId))
+  const moveFootprint = (mountId: string, x: number, y: number): void =>
+    setPart((d) => {
+      const m = (d.mounts ?? []).find((mm) => mm.id === mountId)
+      return m ? translateMount(d, mountId, x - m.x, y - m.y) : d
+    })
+  const footprintOps: FootprintOps = {
+    referenceBoards,
+    resolveRefPart,
+    addFootprint,
+    reimprint,
+    removeFootprint,
+    moveFootprint
+  }
 
   // Delete / Backspace removes the selected object; Ctrl/Cmd+Z undoes and
   // Ctrl/Cmd+Shift+Z (or Ctrl+Y) redoes — but never while typing in a field, so
@@ -1067,9 +1127,6 @@ export function PartEditor({
                 <button type="button" className={`pe__iconbtn${tool === 'hole' ? ' is-active' : ''}`} onClick={() => setTool('hole')} title="Add a mounting hole" aria-label="Mounting hole">
                   {ICON.hole}
                 </button>
-                <button type="button" className={`pe__iconbtn${tool === 'mount' ? ' is-active' : ''}`} onClick={() => setTool('mount')} title="Add a carrier mount (a socket a board seats into)" aria-label="Carrier mount">
-                  {ICON.mount}
-                </button>
                 <button type="button" className={`pe__iconbtn${tool === 'button' ? ' is-active' : ''}`} onClick={() => setTool('button')} title="Add a push-button" aria-label="Push-button">
                   {ICON.button}
                 </button>
@@ -1155,6 +1212,7 @@ export function PartEditor({
                 deleteSelection={deleteSelection}
                 footprints={footprints}
                 onSelect={setSelection}
+                footprintOps={footprintOps}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -2040,6 +2098,26 @@ function LayersPanel({
   )
 }
 
+// --- Footprint imprint plumbing (#166 phase 2) ------------------------------
+
+/** A board that can be imprinted as a carrier footprint (it has positioned pins). */
+interface ReferenceBoard {
+  lib: string
+  part: PartDefinition
+}
+
+/** Footprint operations threaded to the mounts UI (add/rotate/re-sync/remove). */
+interface FootprintOps {
+  referenceBoards: ReferenceBoard[]
+  resolveRefPart: (lib: string, part: string) => PartDefinition | null
+  addFootprint: (lib: string, ref: PartDefinition) => void
+  /** Re-imprint a mount with a placement patch (rotation change, or a fresh re-sync). */
+  reimprint: (mountId: string, patch: Partial<MountPlacement>) => void
+  removeFootprint: (mountId: string) => void
+  /** Move a mount + its imprinted pins to an absolute normalised centre. */
+  moveFootprint: (mountId: string, x: number, y: number) => void
+}
+
 // --- Breadboard inspector ---------------------------------------------------
 
 interface InspectorProps {
@@ -2062,43 +2140,53 @@ interface InspectorProps {
   deleteSelection: () => void
   footprints: FootprintInfo[]
   onSelect: (sel: CanvasSelection) => void
+  footprintOps: FootprintOps
 }
 
-/** The carrier-mounts list in the Board section (#166): add/select/remove the
- *  sockets a board seats in. Selecting a row opens it in the Inspector above. */
+/** The carrier-mounts list in the Board section (#166): add a footprint by picking
+ *  a reference board (its real pins get imprinted), select/remove existing ones.
+ *  Selecting a row opens it in the Inspector above. */
 function MountsList({
   part,
-  patch,
   selection,
-  onSelect
+  onSelect,
+  ops
 }: {
   part: PartDefinition
-  patch: (p: Partial<PartDefinition>) => void
   selection: CanvasSelection
   onSelect: (sel: CanvasSelection) => void
+  ops: FootprintOps
 }): JSX.Element {
   const mounts = part.mounts ?? []
-  const addMount = (): void => {
-    const used = new Set(mounts.map((m) => m.id))
-    let n = mounts.length + 1
-    let id = `mount-${n}`
-    while (used.has(id)) id = `mount-${++n}`
-    const next = [...mounts, { id, footprint: '', x: 0.5, y: 0.5, label: `M${n}` }]
-    patch({ mounts: next })
-    onSelect({ type: 'mount', index: next.length - 1 })
+  const onPick = (e: React.ChangeEvent<HTMLSelectElement>): void => {
+    const board = ops.referenceBoards.find((b) => `${b.lib}/${b.part.id}` === e.target.value)
+    if (board) ops.addFootprint(board.lib, board.part)
+    e.target.value = '' // reset so the same board can be added again
   }
   return (
     <div className="pe__mounts">
       <div className="pe__mounts-head">
-        <span>Mounts</span>
-        <button type="button" className="pe__mounts-add" onClick={addMount} title="Add a carrier mount">
-          + Add
-        </button>
+        <span>Footprints (mounts)</span>
+        <select
+          className="pe__mounts-add"
+          value=""
+          onChange={onPick}
+          disabled={!ops.referenceBoards.length}
+          title="Imprint a reference board's pins as a mount"
+          aria-label="Add a footprint from a reference board"
+        >
+          <option value="">+ Add footprint…</option>
+          {ops.referenceBoards.map((b) => (
+            <option key={`${b.lib}/${b.part.id}`} value={`${b.lib}/${b.part.id}`}>
+              {b.part.name || b.part.id}
+            </option>
+          ))}
+        </select>
       </div>
       {mounts.length === 0 ? (
         <p className="pe__hint pe__hint--muted">
-          A carrier (e.g. a XIAO expansion base) has a mount for each board it seats. Add one here or with the
-          mount tool, then set the footprint it accepts.
+          A carrier (e.g. a XIAO expansion base) seats a board at each footprint. Pick a reference board above to
+          stamp its real pins into this part as a movable, locked block.
         </p>
       ) : (
         <ul className="pe__mounts-list">
@@ -2116,9 +2204,9 @@ function MountsList({
               <button
                 type="button"
                 className="pe__mounts-remove"
-                title="Remove mount"
-                aria-label="Remove mount"
-                onClick={() => patch({ mounts: mounts.filter((_, j) => j !== i) })}
+                title="Remove footprint"
+                aria-label="Remove footprint"
+                onClick={() => ops.removeFootprint(m.id)}
               >
                 ✕
               </button>
@@ -2206,7 +2294,7 @@ function Inspector(props: InspectorProps): JSX.Element {
           footprints={props.footprints}
           hint="Boards sharing a footprint plug into the same carriers (e.g. a XIAO base)."
         />
-        <MountsList part={part} patch={patch} selection={props.selection} onSelect={props.onSelect} />
+        <MountsList part={part} selection={props.selection} onSelect={props.onSelect} ops={props.footprintOps} />
       </section>
 
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
@@ -2556,7 +2644,7 @@ function SelectionInspector({
   lockImageAspect,
   onToggleLockAspect,
   deleteSelection,
-  footprints
+  footprintOps
 }: InspectorProps): JSX.Element {
   if (!selection) {
     return (
@@ -2815,9 +2903,14 @@ function SelectionInspector({
   } else if (selection.type === 'mount') {
     const mount = (part.mounts ?? [])[selection.index]
     if (mount) {
-      title = 'Carrier mount'
+      title = 'Footprint mount'
       const upd = (p: Partial<PartMount>): void =>
         patch({ mounts: (part.mounts ?? []).map((m, i) => (i === selection.index ? { ...m, ...p } : m)) })
+      const ref = mount.ref ? footprintOps.resolveRefPart(mount.ref.lib, mount.ref.part) : null
+      const pinCount = (part.headers ?? []).reduce(
+        (n, h) => n + h.pins.filter((p) => p.derived === mount.id).length,
+        0
+      )
       body = (
         <>
           <label className="pe__field">
@@ -2829,24 +2922,38 @@ function SelectionInspector({
               placeholder="e.g. XIAO"
             />
           </label>
-          <FootprintField
-            value={mount.footprint || undefined}
-            onChange={(fp) => upd({ footprint: fp ?? '' })}
-            footprints={footprints}
-            label="Accepts footprint"
-            hint="The board footprint this socket seats — must match the board's Footprint."
-          />
-          {!mount.footprint && (
-            <p className="pe__hint">Pick a footprint so a board can seat here (a mount with none is not saved).</p>
+          <div className="pe__field">
+            <span>Source board</span>
+            <div className="pe__mounts-src">
+              <span className="pe__mounts-srcname">{ref?.name ?? mount.ref?.part ?? '— none —'}</span>
+              {mount.ref && (
+                <button
+                  type="button"
+                  className="pe__mounts-add"
+                  disabled={!ref}
+                  onClick={() => footprintOps.reimprint(mount.id, {})}
+                  title="Re-copy the pins from the source board"
+                >
+                  Re-sync
+                </button>
+              )}
+            </div>
+          </div>
+          {mount.ref && !ref && (
+            <p className="pe__hint">Source board not installed — its pins can’t be re-synced.</p>
           )}
+          <p className="pe__hint">
+            Footprint <code>{mount.footprint || '—'}</code> · {pinCount} pins · read-only (edit the source board to
+            change them).
+          </p>
           <div className="pe__row">
-            {num('x', mount.x, (v) => upd({ x: v }))}
-            {num('y', mount.y, (v) => upd({ y: v }))}
+            {num('x', mount.x, (v) => footprintOps.moveFootprint(mount.id, v, mount.y))}
+            {num('y', mount.y, (v) => footprintOps.moveFootprint(mount.id, mount.x, v))}
             <label className="pe__num">
               <span>Rotation</span>
               <select
                 value={mount.rotation ?? 0}
-                onChange={(e) => upd({ rotation: Number(e.target.value) || undefined })}
+                onChange={(e) => footprintOps.reimprint(mount.id, { rotation: Number(e.target.value) || undefined })}
               >
                 <option value={0}>0°</option>
                 <option value={90}>90°</option>

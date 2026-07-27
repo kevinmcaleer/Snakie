@@ -36,6 +36,7 @@ import {
   type StyleTarget
 } from './part-editor.util'
 import { itemHidden, itemLocked } from '../../../shared/part'
+import { translateMount } from '../../../shared/footprint-imprint'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -596,11 +597,30 @@ export function PartCanvas({
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
   }
-  /** Move a carrier mount (#166) — a seating socket, may sit anywhere on the board. */
+  /** A mount's footprint-block box in NORMALISED coords — the bounding box of its
+   *  imprinted (derived) pins, padded. Null when it has no imprinted pins yet. */
+  const mountBoxN = (mountId: string): { x0: number; y0: number; x1: number; y1: number } | null => {
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const h of part.headers ?? [])
+      for (const p of h.pins)
+        if (p.derived === mountId && p.x !== undefined && p.y !== undefined) {
+          xs.push(p.x)
+          ys.push(p.y)
+        }
+    if (!xs.length) return null
+    const pad = 0.025
+    return { x0: Math.min(...xs) - pad, y0: Math.min(...ys) - pad, x1: Math.max(...xs) + pad, y1: Math.max(...ys) + pad }
+  }
+
+  /** Move a carrier mount (#166) — its footprint block + all its imprinted pins
+   *  shift rigidly, so dragging the block keeps the pins under it. */
   const moveMountTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const m = mounts[index]
+    if (!m) return
     const sx = presnapped ? nx : snapX(nx)
     const sy = presnapped ? ny : snapY(ny)
-    commit({ ...part, mounts: mounts.map((m, i) => (i === index ? { ...m, x: sx, y: sy } : m)) })
+    commit(translateMount(part, m.id, sx - m.x, sy - m.y))
   }
   /** Move an on-board button (#130) — buttons may sit anywhere, incl. over pins. */
   const moveButtonTo = (index: number, nx: number, ny: number, presnapped = false): void => {
@@ -1847,19 +1867,6 @@ export function PartCanvas({
     onSelect?.({ type: 'hole', index: next.length - 1 })
   }
 
-  /** Add a carrier mount (#166) at the clicked point — a socket a board seats in.
-   *  The footprint it accepts starts blank; the inspector's picker sets it. */
-  const addMount = (nx: number, ny: number): void => {
-    const used = new Set(mounts.map((m) => m.id))
-    let n = mounts.length + 1
-    let id = `mount-${n}`
-    while (used.has(id)) id = `mount-${++n}`
-    const next = [...mounts, { id, footprint: '', x: snapX(nx), y: snapY(ny), label: `M${n}` }]
-    commit({ ...part, mounts: next })
-    onSelect?.({ type: 'mount', index: next.length - 1 })
-    onNotify?.('Pick a footprint for this mount so a board can seat in it.')
-  }
-
   /** Add an on-board push-button at the clicked point (#130). */
   const addButton = (nx: number, ny: number): void => {
     const next = [...buttons, { label: 'BTN', x: snapX(nx), y: snapY(ny) }]
@@ -2027,9 +2034,16 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
-    // Carrier mounts (#166) — a bigger grab radius since the socket marker is large.
-    for (let i = mounts.length - 1; i >= 0; i--)
-      if (dist(nx, ny, mounts[i].x, mounts[i].y) < HIT * 1.6) return { type: 'mount', index: i }
+    // Carrier mounts (#166) — grab anywhere inside the footprint block (its pins are
+    // locked, so they fall through to here), else a radius around a pin-less mount.
+    for (let i = mounts.length - 1; i >= 0; i--) {
+      const bb = mountBoxN(mounts[i].id)
+      if (bb) {
+        if (nx >= bb.x0 && nx <= bb.x1 && ny >= bb.y0 && ny <= bb.y1) return { type: 'mount', index: i }
+      } else if (dist(nx, ny, mounts[i].x, mounts[i].y) < HIT * 1.6) {
+        return { type: 'mount', index: i }
+      }
+    }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -2067,7 +2081,6 @@ export function PartCanvas({
       return
     }
     if (tool === 'hole') return locked.holes ? undefined : addHole(nx, ny)
-    if (tool === 'mount') return addMount(nx, ny)
     if (tool === 'button') return locked.components ? undefined : addButton(nx, ny)
     if (tool === 'rect') return locked.components ? undefined : addShape('rect', nx, ny)
     if (tool === 'circle') return locked.components ? undefined : addShape('circle', nx, ny)
@@ -2935,33 +2948,34 @@ export function PartCanvas({
             ) : null
           )}
 
-        {/* Carrier mounts (#166): a socket a board plugs into, drawn as a dashed
-            green square with its label/footprint. Selected → solid, tinted fill. */}
+        {/* Carrier mounts (#166): the footprint BLOCK — a dashed-green outline around
+            its imprinted pins (which draw as normal locked pins below) + its label.
+            Selected → solid, tinted fill. A pin-less mount falls back to a marker. */}
         {mounts.map((m, i) => {
-          const cx = px(m.x)
-          const cy = py(m.y)
-          const half = Math.max(16, Math.min(box.w, box.h) * 0.16)
+          const bb = mountBoxN(m.id)
           const sel = isSel({ type: 'mount', index: i })
+          const x0 = bb ? px(bb.x0) : px(m.x) - 20
+          const y0 = bb ? py(bb.y0) : py(m.y) - 20
+          const x1 = bb ? px(bb.x1) : px(m.x) + 20
+          const y1 = bb ? py(bb.y1) : py(m.y) + 20
           return (
             <g key={`mnt${i}`} style={{ pointerEvents: 'none' }}>
               <rect
-                x={cx - half}
-                y={cy - half}
-                width={half * 2}
-                height={half * 2}
-                rx={half * 0.18}
+                x={x0}
+                y={y0}
+                width={x1 - x0}
+                height={y1 - y0}
+                rx={8}
                 fill={sel ? '#3ec46d' : 'none'}
-                fillOpacity={sel ? 0.16 : 0}
+                fillOpacity={sel ? 0.1 : 0}
                 stroke="#3ec46d"
-                strokeWidth={sel ? 3 : 1.75}
+                strokeWidth={sel ? 2.5 : 1.5}
                 strokeDasharray={sel ? undefined : '7 5'}
-                opacity={sel ? 0.98 : 0.6}
+                opacity={sel ? 0.95 : 0.6}
               />
-              <line x1={cx - half * 0.4} y1={cy} x2={cx + half * 0.4} y2={cy} stroke="#3ec46d" strokeWidth={1.5} opacity={0.7} />
-              <line x1={cx} y1={cy - half * 0.4} x2={cx} y2={cy + half * 0.4} stroke="#3ec46d" strokeWidth={1.5} opacity={0.7} />
               <text
-                x={cx}
-                y={cy - half - 6}
+                x={(x0 + x1) / 2}
+                y={y0 - 6}
                 textAnchor="middle"
                 fontSize={12}
                 fontWeight={700}
