@@ -98,6 +98,22 @@ export const PART_PIN_SHAPES: readonly PartPinShape[] = [
   'octagonal'
 ]
 
+/**
+ * Does this pad go THROUGH the board? A castellated half-hole, a header ring, an
+ * octagonal servo pad and a plain `square` all drill; `round` and `smd` sit on the
+ * surface.
+ *
+ * It matters for the two-faced view (#636): a through pad is ONE pad you can see
+ * (and solder) from either side, so it shows on both faces — mirrored on the rear,
+ * like a mounting hole. A XIAO's 14 castellations are exactly this, which is why
+ * its underside array needs no pins of its own; duplicating them as rear pads
+ * would invent 14 nets the board doesn't have.
+ */
+export function padPassesThrough(shape?: PartPinShape): boolean {
+  const sh = shape ?? 'square'
+  return sh === 'square' || sh === 'castellated' || sh === 'header' || sh === 'octagonal'
+}
+
 /** Validate a pad `shape` off untrusted YAML/JSON (unknown ⇒ undefined). */
 export function coercePinShape(v: unknown): PartPinShape | undefined {
   return PART_PIN_SHAPES.includes(v as PartPinShape) ? (v as PartPinShape) : undefined

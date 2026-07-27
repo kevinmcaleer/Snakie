@@ -35,7 +35,7 @@ import {
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
-import { itemHidden, itemLocked, itemSide, mirrorX } from '../../../shared/part'
+import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   ComponentShape,
@@ -2016,6 +2016,13 @@ export function PartCanvas({
   // a normalised x on the rear, for the things shared between the two faces.
   const rear = side === 'rear'
   const faces = (item: PartItemFlags): boolean => itemSide(item) === side
+  /** Where a pad sits on the face being drawn, and whether it's there at all. A
+   *  through pad is one pad seen from either side, so it appears on both — mirrored
+   *  on the far one. A surface pad belongs to its own face only. */
+  const padOnFace = (pin: PartPin, nx: number): { show: boolean; x: number } =>
+    itemSide(pin) === side
+      ? { show: true, x: nx }
+      : { show: padPassesThrough(pin.shape), x: mirrorX(nx) }
   const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
   const faceImage = rear ? part.rear?.imageData : part.imageData
   /** Stamp the face onto a newly-created item. Without this you'd place a pad
@@ -2062,8 +2069,11 @@ export function PartCanvas({
       let best = -1
       let bestD = HIT
       for (let i = 0; i < pins.length; i++) {
-        if (!pickable(pins[i].pin)) continue
-        const d = dist(nx, ny, pins[i].x, pins[i].y)
+        // `pickable` already covers hidden/locked; the face test is separate
+        // because a through pad is selectable from EITHER side, at its mirrored x.
+        const f = padOnFace(pins[i].pin, pins[i].x)
+        if (!f.show || itemHidden(part.groups, pins[i].pin) || itemLocked(part.groups, pins[i].pin)) continue
+        const d = dist(nx, ny, f.x, pins[i].y)
         if (d < bestD) {
           bestD = d
           best = i
@@ -3109,7 +3119,9 @@ export function PartCanvas({
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
-            if (!shown(rp.pin) || !faces(rp.pin)) return null
+            const face = padOnFace(rp.pin, rp.x)
+            if (!shown(rp.pin) || !face.show) return null
+            rp = face.x === rp.x ? rp : { ...rp, x: face.x }
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             // A selected group shows a single outline (below) instead of ringing
             // each member — so suppress the per-pin ring when a group is selected.

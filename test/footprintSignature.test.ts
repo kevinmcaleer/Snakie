@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { PartDefinition, PartPin } from '../src/shared/part'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import {
@@ -138,5 +139,47 @@ describe('serialisation of the imprint fields (#166)', () => {
     const back = partFromYaml(partToYaml(part))
     expect(back.mounts?.[0]?.ref).toEqual({ lib: 'snakie-standard', part: 'seeed-xiao-rp2350' })
     expect(back.headers?.[0]?.pins?.[0]?.derived).toBe('m1')
+  })
+})
+
+describe('rear-only pads don’t change a board’s dockable footprint (#636)', () => {
+  const xiao = (extra: PartPin[] = []): PartDefinition => ({
+    id: 'xiao',
+    name: 'XIAO',
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'D0', type: 'io', shape: 'castellated', x: 0.126, y: 0.216 },
+          { name: 'D1', type: 'io', shape: 'castellated', x: 0.126, y: 0.328 },
+          { name: '5V', type: 'pwr', shape: 'castellated', x: 0.898, y: 0.216 },
+          { name: 'GND', type: 'gnd', shape: 'castellated', x: 0.898, y: 0.328 },
+          ...extra
+        ]
+      }
+    ]
+  })
+
+  it('a rear SMD pad is excluded — it faces away from the carrier', () => {
+    // Adding battery pads to the underside must not stop the board seating in a
+    // footprint it still physically fits.
+    const withBattery = xiao([
+      { name: 'BAT+', type: 'pwr', shape: 'smd', side: 'rear', x: 0.42, y: 0.1 },
+      { name: 'BAT-', type: 'gnd', shape: 'smd', side: 'rear', x: 0.58, y: 0.1 }
+    ])
+    expect(partSignature(withBattery)).toBe(partSignature(xiao()))
+    expect(signaturesMatch(partSignature(withBattery), partSignature(xiao()))).toBe(true)
+  })
+
+  it('but a rear pad that DRILLS THROUGH still counts — it does mate', () => {
+    const withThroughHole = xiao([
+      { name: 'TP1', type: 'other', shape: 'header', side: 'rear', x: 0.5, y: 0.5 }
+    ])
+    expect(partSignature(withThroughHole)).not.toBe(partSignature(xiao()))
+  })
+
+  it('a FRONT surface pad still counts — it faces the carrier', () => {
+    const withFrontSmd = xiao([{ name: 'TP2', type: 'other', shape: 'smd', x: 0.5, y: 0.5 }])
+    expect(partSignature(withFrontSmd)).not.toBe(partSignature(xiao()))
   })
 })

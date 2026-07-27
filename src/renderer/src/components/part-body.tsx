@@ -9,12 +9,13 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import { itemSide, mirrorX } from '../../../shared/part'
+import { itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
   PartDefinition,
   PartItemFlags,
+  PartPin,
   PartSide,
   PartPinBuses,
   PartPinCapability,
@@ -1148,6 +1149,13 @@ export function PartBody({
   const rear = side === 'rear'
   const faces = (item: PartItemFlags): boolean => itemSide(item) === side
   const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
+  /** A pad is shown if it was authored for this face, OR it drills through — one
+   *  pad, visible from either side. `x` is its position on the face being drawn:
+   *  a through pad seen from the far side appears mirrored. */
+  const padOnFace = (pin: PartPin, nx: number): { show: boolean; x: number } =>
+    itemSide(pin) === side
+      ? { show: true, x: nx }
+      : { show: padPassesThrough(pin.shape), x: mirrorX(nx) }
 
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
@@ -1222,7 +1230,10 @@ export function PartBody({
   // Pin/castellation through-holes to cut through the PCB + image + copper (#171),
   // so a realistic board shows the real background through its holes.
   const pinHoleList = visible.pins
-    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), padSize, rp.x, rp.pin.rotation))
+    ? pins.flatMap((rp) => {
+        const f = padOnFace(rp.pin, rp.x)
+        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rp.pin.rotation) : []
+      })
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
 
@@ -1303,7 +1314,9 @@ export function PartBody({
           pinLabels mode paints the pads with the body and the labels on top. */}
       {visible.pins &&
         pins.map((rp: ResolvedPin, i) => {
-          if (!faces(rp.pin)) return null
+          const face = padOnFace(rp.pin, rp.x)
+          if (!face.show) return null
+          rp = face.x === rp.x ? rp : { ...rp, x: face.x }
           // `true` boxes every pin; a Set boxes only those indices (mini board:
           // just the used pins, so a dense board's number boxes don't overlap).
           const boxAll = boxedPins === true

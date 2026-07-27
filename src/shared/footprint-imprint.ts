@@ -14,6 +14,7 @@
 
 import type { PartDefinition, PartMount, PartPin } from './part'
 import { slugifyFootprint } from './footprints'
+import { padPassesThrough } from './part'
 
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v))
 
@@ -72,6 +73,12 @@ export function imprintPins(
   for (const h of ref.headers ?? []) {
     for (const p of h.pins ?? []) {
       if (p.x === undefined || p.y === undefined) continue
+      // Only what the board presents DOWNWARD gets imprinted. A rear-only surface
+      // pad (a XIAO's BAT+/BAT−) faces away from the carrier and touches nothing,
+      // so imprinting it would put a phantom pad in the carrier — and, worse, make
+      // the imprint's signature disagree with the board's, so the board would no
+      // longer dock into the footprint taken from it. Same rule as `partSigPins`.
+      if (p.side === 'rear' && !padPassesThrough(p.shape)) continue
       // Offset from the reference board's centre, in its own normalised frame.
       const ox = (p.x - 0.5) * fw
       const oy = (p.y - 0.5) * fh

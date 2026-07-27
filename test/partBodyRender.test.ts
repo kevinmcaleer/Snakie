@@ -376,3 +376,40 @@ describe('board rear (#636) — PartBody draws one face at a time', () => {
     expect(draw('rear')).toContain('cx="80"')
   })
 })
+
+describe('through-board pads show on both faces (#636)', () => {
+  // A castellated pad is ONE pad you can solder from either side — a XIAO's 14
+  // castellations ARE its underside array. Duplicating them as rear pins would
+  // invent 14 nets the board hasn't got.
+  const xiaoish: PartDefinition = {
+    ...blankPart(),
+    dimensions: { width: 17.8, height: 21 },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'D0', type: 'io', gpio: 26, shape: 'castellated', x: 0.126, y: 0.216 },
+          { name: 'BATPLUS', type: 'pwr', shape: 'smd', x: 0.5, y: 0.1, side: 'rear' }
+        ]
+      }
+    ]
+  }
+  const draw = (side: 'front' | 'rear'): string =>
+    renderToStaticMarkup(createElement(PartBody, { part: xiaoish, box, side, boxedPins: true }))
+
+  it('shows a castellated pad on the front AND the back', () => {
+    expect(draw('front')).toContain('D0')
+    expect(draw('rear')).toContain('D0')
+  })
+
+  it('mirrors it on the back — same pad, seen from the other side', () => {
+    // box is 100 wide: x=0.126 → 12.6 on the front, 87.4 mirrored on the rear.
+    expect(draw('front')).toContain('12.6')
+    expect(draw('rear')).toContain('87.4')
+  })
+
+  it('keeps a rear-only SMD pad off the front', () => {
+    expect(draw('front')).not.toContain('BATPLUS')
+    expect(draw('rear')).toContain('BATPLUS')
+  })
+})
