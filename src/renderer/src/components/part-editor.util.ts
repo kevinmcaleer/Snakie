@@ -318,6 +318,7 @@ function normalisePin(pin: PartPin): PartPin {
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
   if (pin.labelHidden === true) out.labelHidden = true
   if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
+  if (typeof pin.derived === 'string' && pin.derived.trim()) out.derived = pin.derived.trim()
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
@@ -1142,6 +1143,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         const footprint = text(m?.footprint)
         if (!id || !footprint || typeof m.x !== 'number' || typeof m.y !== 'number') return null
         const mount: PartMount = { id, footprint, x: clamp(m.x, 0, 1), y: clamp(m.y, 0, 1) }
+        if (m.ref && typeof m.ref === 'object') {
+          const lib = text(m.ref.lib)
+          const rp = text(m.ref.part)
+          if (lib && rp) mount.ref = { lib, part: rp }
+        }
         const label = text(m.label)
         if (label) mount.label = label
         if (typeof m.rotation === 'number' && Number.isFinite(m.rotation)) {

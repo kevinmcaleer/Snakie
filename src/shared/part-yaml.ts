@@ -162,6 +162,8 @@ function coercePin(raw: unknown): PartPin | null {
   const y = num(r.y)
   if (x !== undefined) pin.x = x
   if (y !== undefined) pin.y = y
+  const derived = str(r.derived)
+  if (derived) pin.derived = derived
   readItemFlags(r, pin as unknown as Record<string, unknown>)
   if (r.labelOffset && typeof r.labelOffset === 'object') {
     const lo = r.labelOffset as Record<string, unknown>
@@ -368,6 +370,7 @@ function pinToObj(p: PartPin): Record<string, unknown> {
   if (p.x !== undefined) out.x = p.x
   if (p.y !== undefined) out.y = p.y
   if (p.group) out.group = p.group
+  if (p.derived) out.derived = p.derived
   if (p.labelOffset) out.labelOffset = { x: p.labelOffset.x, y: p.labelOffset.y }
   return out
 }
@@ -423,6 +426,7 @@ export function partToYaml(part: PartDefinition): string {
     mounts: part.mounts?.map((m) => ({
       id: m.id,
       footprint: m.footprint,
+      ref: m.ref ? { lib: m.ref.lib, part: m.ref.part } : undefined,
       label: m.label,
       x: m.x,
       y: m.y,
@@ -705,6 +709,12 @@ export function partFromYaml(text: string): PartDefinition {
         // referenced by a placed part, and one with no footprint accepts nothing.
         if (!id || !footprint || x === undefined || y === undefined) return null
         const mount: PartMount = { id, footprint, x, y }
+        if (r.ref && typeof r.ref === 'object') {
+          const rr = r.ref as Record<string, unknown>
+          const lib = str(rr.lib)
+          const part = str(rr.part)
+          if (lib && part) mount.ref = { lib, part }
+        }
         const label = str(r.label)
         if (label) mount.label = label
         const rot = num(r.rotation)
