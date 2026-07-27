@@ -4,23 +4,23 @@ description: Carrier board for the XIAO family — OLED, RTC, buzzer, SD slot an
 manufacturer: Seeed Studio
 family: Microcontroller
 tags:
-  - xiao
-  - seeed
-  - carrier
-  - expansion
-  - grove
-  - oled
+- xiao
+- seeed
+- carrier
+- expansion
+- grove
+- oled
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-partNumber: "103030356"
+partNumber: '103030356'
 properties:
   display: 0.96" SSD1306 OLED, I²C 0x3C
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.7
-pcbColor: "#1b4d3e"
+version: 0.1.8
+pcbColor: '#1b4d3e'
 aspect: 1.365
 dimensions:
   width: 58
@@ -29,317 +29,329 @@ shape:
   kind: rect
   cornerRadius: 0
 headers:
-  - edge: left
-    pins:
-      - name: TX6
-        type: io
-        group: grp-0f21cxf
-        gpio: 6
-        capabilities:
-          - digital
-          - uart
-        signals:
-          uart: TX
-        rotation: 0
-        x: 0.9369244384765626
-        y: 0.4482262103510838
-      - name: 5v
-        type: pwr
-        group: grp-0f21cxf
-        rotation: 0
-        x: 0.9369244384765626
-        y: 0.49764884320427394
-      - name: GND
-        type: gnd
-        group: grp-0f21cxf
-        rotation: 180
-        x: 0.89090584941294
-        y: 0.5543363216624541
-      - name: RX07
-        type: io
-        group: grp-0f21cxf
-        gpio: 7
-        capabilities:
-          - digital
-          - uart
-        signals:
-          uart: RX
-        rotation: 0
-        x: 0.9369244384765626
-        y: 0.3886679825128293
-      - name: 3v3
-        type: pwr
-        group: grp-0f21cxf
-        rotation: 180
-        x: 0.89090584941294
-        y: 0.49764884320427394
-      - name: GND
-        type: gnd
-        group: grp-0f21cxf
-        rotation: 0
-        x: 0.9369244384765626
-        y: 0.5543363216624541
-      - name: SWDIO
-        type: other
-        group: grp-0f21cxf
-        rotation: 180
-        x: 0.89090584941294
-        y: 0.4482262103510838
-      - name: SWCLK
-        type: other
-        group: grp-0f21cxf
-        rotation: 180
-        x: 0.89090584941294
-        y: 0.3886679825128293
-  - edge: left
-    pins:
-      - name: D0
-        type: io
-        locked: true
-        number: 1
-        gpio: 26
-        capabilities:
-          - digital
-          - pwm
-          - adc
-        signals:
-          pwm: A
-        buses:
-          adc: 0
-        shape: round
-        x: 0.07149010029018933
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D1
-        type: io
-        locked: true
-        number: 2
-        gpio: 27
-        capabilities:
-          - digital
-          - pwm
-          - adc
-        signals:
-          pwm: B
-        buses:
-          adc: 1
-        shape: round
-        x: 0.11218116354861002
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D2
-        type: io
-        locked: true
-        number: 3
-        gpio: 28
-        capabilities:
-          - digital
-          - pwm
-          - adc
-        signals:
-          pwm: A
-        buses:
-          adc: 2
-        shape: round
-        x: 0.15182057718646383
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D3
-        type: io
-        locked: true
-        number: 4
-        gpio: 29
-        capabilities:
-          - digital
-          - pwm
-          - adc
-        signals:
-          pwm: B
-        buses:
-          adc: 3
-        shape: round
-        x: 0.191086080209004
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D4
-        type: io
-        locked: true
-        number: 5
-        gpio: 6
-        capabilities:
-          - digital
-          - pwm
-          - i2c
-        signals:
-          i2c: SDA
-          pwm: A
-        buses:
-          i2c: 1
-        shape: round
-        x: 0.23008041628887813
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D5
-        type: io
-        locked: true
-        number: 6
-        gpio: 7
-        capabilities:
-          - digital
-          - pwm
-          - i2c
-        signals:
-          i2c: SCL
-          pwm: B
-        buses:
-          i2c: 1
-        shape: round
-        x: 0.270300359222864
-        y: 0.634778167372771
-        derived: mount-1
-      - name: D6
-        type: io
-        locked: true
-        number: 7
-        gpio: 0
-        capabilities:
-          - digital
-          - pwm
-          - uart
-        signals:
-          uart: TX
-          pwm: A
-        buses:
-          uart: 0
-        shape: round
-        x: 0.30790395740007936
-        y: 0.6347781673727708
-        derived: mount-1
-      - name: 5V
-        type: pwr
-        locked: true
-        number: 8
-        shape: round
-        x: 0.07167496763838632
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: GND
-        type: gnd
-        locked: true
-        number: 9
-        shape: round
-        x: 0.11218116354861002
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: 3V3
-        type: pwr
-        locked: true
-        number: 10
-        shape: round
-        x: 0.15182057718646372
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: D10
-        type: io
-        locked: true
-        number: 11
-        gpio: 3
-        capabilities:
-          - digital
-          - pwm
-          - spi
-        signals:
-          spi: TX
-          pwm: B
-        buses:
-          spi: 0
-        shape: round
-        x: 0.19108608020900394
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: D9
-        type: io
-        locked: true
-        number: 12
-        gpio: 4
-        capabilities:
-          - digital
-          - pwm
-          - spi
-        signals:
-          spi: RX
-          pwm: A
-        buses:
-          spi: 0
-        shape: round
-        x: 0.23008041628887813
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: D8
-        type: io
-        locked: true
-        number: 13
-        gpio: 2
-        capabilities:
-          - digital
-          - pwm
-          - spi
-        signals:
-          spi: SCK
-          pwm: A
-        buses:
-          spi: 0
-        shape: round
-        x: 0.270300359222864
-        y: 0.3114766864993727
-        derived: mount-1
-      - name: D7
-        type: io
-        locked: true
-        number: 14
-        gpio: 1
-        capabilities:
-          - digital
-          - pwm
-          - spi
-          - uart
-        signals:
-          spi: CSn
-          uart: RX
-          pwm: B
-        buses:
-          spi: 0
-          uart: 0
-        shape: round
-        x: 0.30790395740007936
-        y: 0.31147668649937255
-        derived: mount-1
+- edge: left
+  pins:
+  - name: TX6
+    type: io
+    group: grp-0f21cxf
+    gpio: 6
+    capabilities:
+    - digital
+    - uart
+    signals:
+      uart: TX
+    rotation: 0
+    x: 0.9369244384765626
+    y: 0.4482262103510838
+  - name: 5v
+    type: pwr
+    group: grp-0f21cxf
+    rotation: 0
+    x: 0.9369244384765626
+    y: 0.49764884320427394
+  - name: GND
+    type: gnd
+    group: grp-0f21cxf
+    rotation: 180
+    x: 0.89090584941294
+    y: 0.5543363216624541
+  - name: RX07
+    type: io
+    group: grp-0f21cxf
+    gpio: 7
+    capabilities:
+    - digital
+    - uart
+    signals:
+      uart: RX
+    rotation: 0
+    x: 0.9369244384765626
+    y: 0.3886679825128293
+  - name: 3v3
+    type: pwr
+    group: grp-0f21cxf
+    rotation: 180
+    x: 0.89090584941294
+    y: 0.49764884320427394
+  - name: GND
+    type: gnd
+    group: grp-0f21cxf
+    rotation: 0
+    x: 0.9369244384765626
+    y: 0.5543363216624541
+  - name: SWDIO
+    type: other
+    group: grp-0f21cxf
+    rotation: 180
+    x: 0.89090584941294
+    y: 0.4482262103510838
+  - name: SWCLK
+    type: other
+    group: grp-0f21cxf
+    rotation: 180
+    x: 0.89090584941294
+    y: 0.3886679825128293
+  - name: BAT+
+    type: pwr
+    shape: pogo
+    label: B+
+    x: 0.035059
+    y: 0.436203
+  - name: BAT-
+    type: gnd
+    shape: pogo
+    label: B-
+    x: 0.035059
+    y: 0.519968
+- edge: left
+  pins:
+  - name: D0
+    type: io
+    locked: true
+    number: 1
+    gpio: 26
+    capabilities:
+    - digital
+    - pwm
+    - adc
+    signals:
+      pwm: A
+    buses:
+      adc: 0
+    shape: round
+    x: 0.07149010029018933
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D1
+    type: io
+    locked: true
+    number: 2
+    gpio: 27
+    capabilities:
+    - digital
+    - pwm
+    - adc
+    signals:
+      pwm: B
+    buses:
+      adc: 1
+    shape: round
+    x: 0.11218116354861002
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D2
+    type: io
+    locked: true
+    number: 3
+    gpio: 28
+    capabilities:
+    - digital
+    - pwm
+    - adc
+    signals:
+      pwm: A
+    buses:
+      adc: 2
+    shape: round
+    x: 0.15182057718646383
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D3
+    type: io
+    locked: true
+    number: 4
+    gpio: 29
+    capabilities:
+    - digital
+    - pwm
+    - adc
+    signals:
+      pwm: B
+    buses:
+      adc: 3
+    shape: round
+    x: 0.191086080209004
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D4
+    type: io
+    locked: true
+    number: 5
+    gpio: 6
+    capabilities:
+    - digital
+    - pwm
+    - i2c
+    signals:
+      i2c: SDA
+      pwm: A
+    buses:
+      i2c: 1
+    shape: round
+    x: 0.23008041628887813
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D5
+    type: io
+    locked: true
+    number: 6
+    gpio: 7
+    capabilities:
+    - digital
+    - pwm
+    - i2c
+    signals:
+      i2c: SCL
+      pwm: B
+    buses:
+      i2c: 1
+    shape: round
+    x: 0.270300359222864
+    y: 0.634778167372771
+    derived: mount-1
+  - name: D6
+    type: io
+    locked: true
+    number: 7
+    gpio: 0
+    capabilities:
+    - digital
+    - pwm
+    - uart
+    signals:
+      uart: TX
+      pwm: A
+    buses:
+      uart: 0
+    shape: round
+    x: 0.30790395740007936
+    y: 0.6347781673727708
+    derived: mount-1
+  - name: 5V
+    type: pwr
+    locked: true
+    number: 8
+    shape: round
+    x: 0.07167496763838632
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: GND
+    type: gnd
+    locked: true
+    number: 9
+    shape: round
+    x: 0.11218116354861002
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: 3V3
+    type: pwr
+    locked: true
+    number: 10
+    shape: round
+    x: 0.15182057718646372
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: D10
+    type: io
+    locked: true
+    number: 11
+    gpio: 3
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    signals:
+      spi: TX
+      pwm: B
+    buses:
+      spi: 0
+    shape: round
+    x: 0.19108608020900394
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: D9
+    type: io
+    locked: true
+    number: 12
+    gpio: 4
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    signals:
+      spi: RX
+      pwm: A
+    buses:
+      spi: 0
+    shape: round
+    x: 0.23008041628887813
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: D8
+    type: io
+    locked: true
+    number: 13
+    gpio: 2
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    signals:
+      spi: SCK
+      pwm: A
+    buses:
+      spi: 0
+    shape: round
+    x: 0.270300359222864
+    y: 0.3114766864993727
+    derived: mount-1
+  - name: D7
+    type: io
+    locked: true
+    number: 14
+    gpio: 1
+    capabilities:
+    - digital
+    - pwm
+    - spi
+    - uart
+    signals:
+      spi: CSn
+      uart: RX
+      pwm: B
+    buses:
+      spi: 0
+      uart: 0
+    shape: round
+    x: 0.30790395740007936
+    y: 0.31147668649937255
+    derived: mount-1
 mountingHoles:
-  - x: 0.06976427714029948
-    y: 0.10291208304610905
-    diameter: 1.5
-  - x: 0.9345549519856771
-    y: 0.10291208304610905
-    diameter: 1.5
-  - x: 0.9345549519856771
-    y: 0.9031413023705576
-    diameter: 1.5
-  - x: 0.06976427714029948
-    y: 0.9031413023705576
-    diameter: 1.5
+- x: 0.06976427714029948
+  y: 0.10291208304610905
+  diameter: 1.5
+- x: 0.9345549519856771
+  y: 0.10291208304610905
+  diameter: 1.5
+- x: 0.9345549519856771
+  y: 0.9031413023705576
+  diameter: 1.5
+- x: 0.06976427714029948
+  y: 0.9031413023705576
+  diameter: 1.5
 groups:
-  - id: grp-0f21cxf
-    name: Edge connector
+- id: grp-0f21cxf
+  name: Edge connector
 mounts:
-  - id: mount-1
-    footprint: xiao
-    ref:
-      lib: snakie-standard
-      part: seeed-xiao-rp2350
-    label: Seeed Studio XIAO RP2350
-    x: 0.17445560075618602
-    y: 0.4780852094570392
-    rotation: 270
+- id: mount-1
+  footprint: xiao
+  ref:
+    lib: snakie-standard
+    part: seeed-xiao-rp2350
+  label: Seeed Studio XIAO RP2350
+  x: 0.17445560075618602
+  y: 0.4780852094570392
+  rotation: 270
 image: image.png
 imageLayer:
   x: -0.00024080912272135546

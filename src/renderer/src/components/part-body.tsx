@@ -444,7 +444,7 @@ export function pinThroughHoles(
   // they need no mask cut (a cut would punch a round see-through over the square).
   if (shape === 'octagonal') return []
   // Surface-mount: sits ON the copper, so nothing is drilled through.
-  if (shape === 'smd') return []
+  if (shape === 'smd' || shape === 'pogo') return []
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -1348,6 +1348,15 @@ export function PartBody({
             )
           } else if (shape === 'octagonal') {
             pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+          } else if (shape === 'pogo') {
+            // A sprung contact, not copper: a bright core in a barrel ring, so it
+            // reads as something that PRESSES on a pad rather than being one.
+            pad = (
+              <>
+                <circle cx={cx} cy={cy} r={size / 2} fill="none" stroke="#9aa4b0" strokeWidth={Math.max(1, size * 0.14)} />
+                <circle cx={cx} cy={cy} r={size * 0.26} fill="#e2e7ec" stroke={stroke} strokeWidth={sw * 0.6} />
+              </>
+            )
           } else if (shape === 'smd') {
             // Solid rectangular copper, no drill — and slightly taller than wide
             // so it reads as a surface pad rather than a square through-hole one.

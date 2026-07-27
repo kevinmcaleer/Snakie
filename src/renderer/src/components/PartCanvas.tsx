@@ -3162,6 +3162,15 @@ export function PartCanvas({
               )
             } else if (shape === 'octagonal') {
               pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+            } else if (shape === 'pogo') {
+              // A sprung contact, not copper: a bright core in a barrel ring, so it
+              // reads as something that PRESSES on a pad rather than being one.
+              pad = (
+                <>
+                  <circle cx={cx} cy={cy} r={size / 2} fill="none" stroke="#9aa4b0" strokeWidth={Math.max(1, size * 0.14)} />
+                  <circle cx={cx} cy={cy} r={size * 0.26} fill="#e2e7ec" stroke={stroke} strokeWidth={sw * 0.6} />
+                </>
+              )
             } else if (shape === 'smd') {
               // Surface-mount: solid copper, no drill. Slightly taller than wide so
               // it reads as a pad rather than a square through-hole one.

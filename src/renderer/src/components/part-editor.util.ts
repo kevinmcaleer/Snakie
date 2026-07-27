@@ -91,7 +91,8 @@ export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
   castellated: 'Castellated',
   header: 'Header hole',
   octagonal: 'Octagonal (servo)',
-  smd: 'SMD pad (no hole)'
+  smd: 'SMD pad (no hole)',
+  pogo: 'Pogo contact (sprung)'
 }
 
 /** Component shape kinds the Shapes dropdown offers, in UI order. */

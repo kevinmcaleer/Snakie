@@ -80,8 +80,19 @@ export type PartPackage = 'THT' | 'SMD'
  *  - `smd`        — a surface-mount pad that does NOT pass through the board. The
  *                   only rectangular pad with no drill: `square` is a through-hole
  *                   pad that punches one. This is what a XIAO's underside array is.
+ *  - `pogo`       — a sprung contact on a CARRIER that presses against a seated
+ *                   board's pad rather than being soldered to it. The XIAO
+ *                   Expansion Base reaches the XIAO's underside battery pads this
+ *                   way. Drawn as a contact, not copper, because it isn't one.
  */
-export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal' | 'smd'
+export type PartPinShape =
+  | 'square'
+  | 'round'
+  | 'castellated'
+  | 'header'
+  | 'octagonal'
+  | 'smd'
+  | 'pogo'
 
 /**
  * Every pad shape, in picker order. ONE list — the parts.yml parser and the Part
@@ -95,7 +106,8 @@ export const PART_PIN_SHAPES: readonly PartPinShape[] = [
   'smd',
   'castellated',
   'header',
-  'octagonal'
+  'octagonal',
+  'pogo'
 ]
 
 /**
