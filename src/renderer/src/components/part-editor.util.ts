@@ -318,6 +318,7 @@ function normalisePin(pin: PartPin): PartPin {
   if (PIN_SHAPES.includes(pin.shape as PartPinShape)) out.shape = pin.shape
   if (pin.labelHidden === true) out.labelHidden = true
   if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
+  if (typeof pin.derived === 'string' && pin.derived.trim()) out.derived = pin.derived.trim()
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
@@ -1142,6 +1143,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         const footprint = text(m?.footprint)
         if (!id || !footprint || typeof m.x !== 'number' || typeof m.y !== 'number') return null
         const mount: PartMount = { id, footprint, x: clamp(m.x, 0, 1), y: clamp(m.y, 0, 1) }
+        if (m.ref && typeof m.ref === 'object') {
+          const lib = text(m.ref.lib)
+          const rp = text(m.ref.part)
+          if (lib && rp) mount.ref = { lib, part: rp }
+        }
         const label = text(m.label)
         if (label) mount.label = label
         if (typeof m.rotation === 'number' && Number.isFinite(m.rotation)) {
@@ -1798,7 +1804,7 @@ export function schematicSymbolLayout(
 // The rule is positional, not clever: grouped ⇒ top level, ungrouped ⇒ bucket.
 
 /** Every kind of thing that can appear as a leaf in the hierarchy. */
-export type HierItemKind = OrderedItemKind | 'pin' | 'hole'
+export type HierItemKind = OrderedItemKind | 'pin' | 'hole' | 'mount'
 
 /** A leaf's identity: its kind plus its index in that kind's array. Pins use the
  *  FLAT index across headers (the same one endpoints and `resolvedPins` use). */
@@ -1807,7 +1813,7 @@ export interface HierItem {
   index: number
 }
 
-export type LayerBucket = 'components' | 'pins' | 'holes'
+export type LayerBucket = 'components' | 'pins' | 'holes' | 'mounts'
 
 export interface LayerNode {
   /** Stable key for React and for remembering which rows are collapsed. */
@@ -1834,7 +1840,8 @@ export interface LayerNode {
 const BUCKET_LABEL: Record<LayerBucket, string> = {
   components: 'Components',
   pins: 'Pins',
-  holes: 'Mounting holes'
+  holes: 'Mounting holes',
+  mounts: 'Footprints'
 }
 
 /** Every leaf in the part, with the flags and label the tree needs. */
@@ -1875,8 +1882,14 @@ function hierLeaves(part: PartDefinition): { node: LayerNode; group?: string }[]
       push('connector', it.index, c?.label || c?.kind?.toUpperCase() || 'Connector', c ?? {})
     }
   }
-  resolvedPins(part).forEach((rp, i) => push('pin', i, rp.pin.name || `Pin ${i + 1}`, rp.pin))
+  // Skip pins imprinted from a footprint (#166) — they belong to their mount, not
+  // the loose Pins bucket, and would otherwise bury it under a carrier's 14+ pads.
+  resolvedPins(part).forEach((rp, i) => {
+    if (rp.pin.derived) return
+    push('pin', i, rp.pin.name || `Pin ${i + 1}`, rp.pin)
+  })
   ;(part.mountingHoles ?? []).forEach((h, i) => push('hole', i, `Hole ${i + 1}`, h))
+  ;(part.mounts ?? []).forEach((m, i) => push('mount', i, m.label || m.footprint || `Footprint ${i + 1}`, {}))
   return out
 }
 
@@ -1929,9 +1942,9 @@ export function partLayerTree(part: PartDefinition): LayerNode[] {
   const roots = groups.filter((g) => !g.parent || !known.has(g.parent))
 
   const bucketOf = (k: HierItemKind): LayerBucket =>
-    k === 'pin' ? 'pins' : k === 'hole' ? 'holes' : 'components'
+    k === 'pin' ? 'pins' : k === 'hole' ? 'holes' : k === 'mount' ? 'mounts' : 'components'
 
-  const buckets: LayerNode[] = (['components', 'pins', 'holes'] as LayerBucket[])
+  const buckets: LayerNode[] = (['components', 'pins', 'holes', 'mounts'] as LayerBucket[])
     .map((b): LayerNode => {
       const kids = leaves
         .filter((l) => !l.group || !known.has(l.group))
@@ -1991,6 +2004,10 @@ export function withItemFlag(
       return { connectors: set(part.connectors, item.index) }
     case 'hole':
       return { mountingHoles: set(part.mountingHoles, item.index) }
+    case 'mount':
+      // Footprint mounts (#166) have no per-item hidden/locked flag — the whole
+      // Footprints layer toggles them — so there's nothing to write.
+      return {}
     case 'pin': {
       const at = pinAt(part, item.index)
       if (!at) return {}

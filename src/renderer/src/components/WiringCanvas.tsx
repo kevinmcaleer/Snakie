@@ -35,6 +35,7 @@ import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
 import { PART_DRAG_MIME, decodePartDrag } from './part-drag'
 import { classifyBusWire } from '../../../shared/bus-wires'
+import { partSignature, mountSignature, signaturesMatch } from '../../../shared/footprint-signature'
 import { voltageColour, formatVoltage } from '../../../shared/circuit-probe'
 import { BoardMeter, type BoardMeterReading } from './BoardMeter'
 import { useFloatPlacement } from './InstrumentWindow'
@@ -956,7 +957,18 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
   // part's ORIGINAL index so the default scatter positions don't shift. One level
   // of nesting is all that's supported (a carrier can't itself be seated).
-  const placedBody = new Map<string, { x: number; y: number; w: number; h: number }>()
+  // Each placed carrier records its AABB (x/y/w/h) AND its un-rotated body (bw/bh),
+  // subject origin (px/py) and rotation, so a point given in the carrier's own
+  // un-rotated frame (a mount centre, an imprinted pin) can be transformed through
+  // the carrier's rotation — the footprint then follows the carrier when it turns.
+  type PlacedBody = { x: number; y: number; w: number; h: number; rot: 0 | 90 | 180 | 270; bw: number; bh: number; px: number; py: number }
+  const placedBody = new Map<string, PlacedBody>()
+  /** Canvas position of a normalised point in a carrier's UN-rotated frame. */
+  const carrierPoint = (body: PlacedBody, nx: number, ny: number): { x: number; y: number } => {
+    if (!body.rot) return { x: body.x + nx * body.w, y: body.y + ny * body.h }
+    const r = rotatePoint(nx * body.bw, ny * body.bh, body.bw / 2, body.bh / 2, body.rot)
+    return { x: body.px + r.x, y: body.py + r.y }
+  }
   const orderedParts = robot.parts
     .map((rp, i) => ({ rp, i }))
     .sort((a, b) => (a.rp.mountedOn ? 1 : 0) - (b.rp.mountedOn ? 1 : 0))
@@ -970,7 +982,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (!carrier || !body) return null
     const mount = resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
     if (!mount) return null
-    return { x: body.x + mount.x * body.w, y: body.y + mount.y * body.h }
+    return carrierPoint(body, mount.x, mount.y)
   }
   orderedParts.forEach(({ rp, i }) => {
     const def = resolvePart(rp.lib, rp.part)
@@ -1023,7 +1035,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const seat = seatCentre(rp)
       const px = seat ? seat.x - (aabb.x + aabb.w / 2) : x
       const py = seat ? seat.y - (aabb.y + aabb.h / 2) : y
-      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h })
+      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h, rot, bw, bh, px, py })
       subjects.push({
         key: rp.id,
         kind: 'part',
@@ -1081,10 +1093,43 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const mount =
       carrier && resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === robot.boardMount)
     if (bs && cbody && mount) {
-      bs.x = cbody.x + mount.x * cbody.w - bs.w / 2
-      bs.y = cbody.y + mount.y * cbody.h - bs.h / 2
+      // Rotate the board to match the footprint (#166) so its pads overlay the
+      // imprinted pins — a footprint placed at 270° seats the board turned 270°,
+      // not sitting square over a rotated socket. Mirrors how a placed part rotates.
+      // Add the CARRIER's own rotation so the footprint (and the board) turn WITH the
+      // carrier when it's rotated in the workspace.
+      const R = normRot((mount.rotation ?? 0) + (carrier.rotation ?? 0))
+      if (R && bs.box) {
+        const bw0 = bs.box.w
+        const bh0 = bs.box.h
+        const cx = bw0 / 2
+        const cy = bh0 / 2
+        const aabb =
+          R === 90 || R === 270
+            ? { x: cx - bh0 / 2, y: cy - bw0 / 2, w: bh0, h: bw0 }
+            : { x: 0, y: 0, w: bw0, h: bh0 }
+        bs.pins = bs.pins.map((p) => ({
+          ...p,
+          anchors: p.anchors.map((a) => {
+            const r = rotatePoint(a.x, a.y, cx, cy, R)
+            const n = rotateNormal(a.ox, a.oy, R)
+            return { x: r.x, y: r.y, ox: n.ox, oy: n.oy }
+          })
+        }))
+        bs.rotation = R
+        bs.bodyDX = aabb.x
+        bs.bodyDY = aabb.y
+        bs.w = aabb.w
+        bs.h = aabb.h
+      }
+      const dx = bs.bodyDX ?? 0
+      const dy = bs.bodyDY ?? 0
+      // The mount centre in canvas coords, transformed through the carrier's rotation.
+      const mp = carrierPoint(cbody, mount.x, mount.y)
+      bs.x = mp.x - (dx + bs.w / 2)
+      bs.y = mp.y - (dy + bs.h / 2)
       bs.seated = true
-      bs.hit = hitRegion(bs.mode, bs.x, bs.y, bs.w, bs.h)
+      bs.hit = hitRegion(bs.mode, bs.x + dx, bs.y + dy, bs.w, bs.h)
       const bi = subjects.indexOf(bs)
       subjects.splice(bi, 1)
       const ci = subjects.findIndex((s) => s.key === robot.boardMountedOn)
@@ -1258,24 +1303,51 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
 
   /**
-   * A carrier mount the dropped part could seat in (#166): the part must declare
-   * the mount's footprint, and the mount must be free. Returns the carrier + mount
-   * ids, or null when the drop isn't over a compatible empty socket.
+   * Does a carrier mount accept a dragged board (#166)? STRUCTURAL when the mount
+   * has imprinted pins — the board's pin signature must match the socket's (so a
+   * XIAO 2040/2350/compatible all seat) — else a legacy footprint-NAME match for
+   * mounts authored before the imprint tooling. `sig`/`footprint` describe the
+   * dragged board; `cpart` is the resolved carrier part.
    */
-  const mountUnderFp = (
-    footprint: string | undefined,
+  const mountAccepts = (
+    cpart: PartDefinition,
+    m: { id: string; footprint: string; ref?: { lib: string; part: string } },
+    sig: string,
+    footprint: string | undefined
+  ): boolean => {
+    // Prefer the SOURCE board the footprint was imprinted from (#166): comparing the
+    // dragged board against it is rotation-INDEPENDENT — a footprint imprinted at 90°
+    // still accepts the same (un-rotated) board, because the imprint's rotation is
+    // only how it's drawn, not what fits. (The imprinted pins' own signature IS
+    // orientation-specific, so it would reject a board unless drawn at the same angle.)
+    if (m.ref) {
+      const ref = resolvePart(m.ref.lib, m.ref.part)
+      if (ref) return sig !== '' && signaturesMatch(partSignature(ref), sig)
+    }
+    // No installed source → the imprinted pins' signature, else a legacy name match.
+    const msig = mountSignature(cpart, m.id)
+    return msig ? sig !== '' && signaturesMatch(msig, sig) : !!footprint && m.footprint === footprint
+  }
+  /**
+   * A free carrier mount the dragged board could seat in: structurally compatible
+   * (or legacy footprint-name compatible), unoccupied, and under the drop point.
+   */
+  const mountUnderFor = (
+    dragged: PartDefinition | null | undefined,
     excludeKey: string,
     cx: number,
     cy: number
   ): { carrier: string; mount: string } | null => {
-    if (!footprint) return null
+    const sig = dragged ? partSignature(dragged) : ''
+    const footprint = dragged?.footprint
+    if (!sig && !footprint) return null
     for (const carrier of robot.parts) {
       if (carrier.id === excludeKey) continue
       const body = placedBody.get(carrier.id)
-      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts
-      if (!body || !mounts?.length) continue
-      for (const m of mounts) {
-        if (m.footprint !== footprint) continue
+      const cpart = resolvePart(carrier.lib, carrier.part)
+      if (!body || !cpart?.mounts?.length) continue
+      for (const m of cpart.mounts) {
+        if (!mountAccepts(cpart, m, sig, footprint)) continue
         // One thing per socket — a mount taken by a placed part OR by the board
         // (which seats here too, #166) isn't a drop target.
         const takenByPart = robot.parts.some(
@@ -1284,8 +1356,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         const takenByBoard =
           excludeKey !== 'board' && robot.boardMountedOn === carrier.id && robot.boardMount === m.id
         if (takenByPart || takenByBoard) continue
-        const mx = body.x + m.x * body.w
-        const my = body.y + m.y * body.h
+        const mp = carrierPoint(body, m.x, m.y)
+        const mx = mp.x
+        const my = mp.y
         // Generous radius: you're aiming at a socket, not a pixel.
         if (Math.hypot(cx - mx, cy - my) <= Math.min(body.w, body.h) * 0.55) {
           return { carrier: carrier.id, mount: m.id }
@@ -1296,7 +1369,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   const mountUnder = (key: string, cx: number, cy: number): { carrier: string; mount: string } | null => {
     const rp = robot.parts.find((p) => p.id === key)
-    return mountUnderFp(rp ? resolvePart(rp.lib, rp.part)?.footprint : undefined, key, cx, cy)
+    return mountUnderFor(rp ? resolvePart(rp.lib, rp.part) : undefined, key, cx, cy)
   }
 
   const moveBox = (key: string, x: number, y: number): void => {
@@ -1308,8 +1381,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       // on it's drawn at the mount and moves with the carrier. Dropping it elsewhere
       // un-seats it (drag it off the carrier to take it back out).
       const bs = subjByKey.get('board')
-      const seat = mountUnderFp(
-        boardPart?.footprint,
+      const seat = mountUnderFor(
+        boardPart,
         'board',
         x + (bs?.bodyDX ?? 0) + (bs?.w ?? 0) / 2,
         y + (bs?.bodyDY ?? 0) + (bs?.h ?? 0) / 2
@@ -2484,22 +2557,32 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               drag.moved &&
               drag.boxKey &&
               (() => {
-                const dragged = robot.parts.find((p) => p.id === drag.boxKey)
-                const footprint = dragged && resolvePart(dragged.lib, dragged.part)?.footprint
-                if (!footprint) return null
+                // The dragged board — a placed part, OR the MCU itself (#166): both
+                // can plug into a compatible carrier socket.
+                const draggedPart =
+                  drag.boxKey === 'board'
+                    ? boardPart
+                    : (() => {
+                        const dp = robot.parts.find((p) => p.id === drag.boxKey)
+                        return dp ? resolvePart(dp.lib, dp.part) : null
+                      })()
+                const sig = draggedPart ? partSignature(draggedPart) : ''
+                const footprint = draggedPart?.footprint
+                if (!sig && !footprint) return null
                 const s = subjByKey.get(drag.boxKey)
                 const cx = (s?.x ?? 0) + (s?.bodyDX ?? 0) + (s?.w ?? 0) / 2
                 const cy = (s?.y ?? 0) + (s?.bodyDY ?? 0) + (s?.h ?? 0) / 2
-                const target = mountUnder(drag.boxKey, cx, cy)
+                const target = mountUnderFor(draggedPart, drag.boxKey, cx, cy)
                 return (
                   <g style={{ pointerEvents: 'none' }} className="wc__mount-targets">
                     {robot.parts.flatMap((carrier) => {
                       if (carrier.id === drag.boxKey) return []
                       const body = placedBody.get(carrier.id)
-                      const mounts = resolvePart(carrier.lib, carrier.part)?.mounts ?? []
-                      if (!body) return []
+                      const cpart = resolvePart(carrier.lib, carrier.part)
+                      const mounts = cpart?.mounts ?? []
+                      if (!body || !cpart) return []
                       return mounts
-                        .filter((m) => m.footprint === footprint)
+                        .filter((m) => mountAccepts(cpart, m, sig, footprint))
                         .filter(
                           (m) =>
                             !robot.parts.some(
@@ -2508,31 +2591,44 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                         )
                         .map((m) => {
                           const isOver = target?.carrier === carrier.id && target?.mount === m.id
-                          const r = Math.min(body.w, body.h) * 0.5
+                          const sw = isOver ? 3 : 1.5
+                          const op = isOver ? 0.98 : 0.55
+                          // The footprint's imprinted pins on the carrier body — draw
+                          // the actual OUTLINE + pin dots so the socket reads as the
+                          // real footprint, not an abstract circle.
+                          const dp = (cpart.headers ?? [])
+                            .flatMap((h) => h.pins)
+                            .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
+                          if (!dp.length) {
+                            // Legacy pin-less mount → fall back to a socket ring.
+                            const r = Math.min(body.w, body.h) * 0.5
+                            const mp = carrierPoint(body, m.x, m.y)
+                            const mx = mp.x
+                            const my = mp.y
+                            return (
+                              <g key={`mt${carrier.id}${m.id}`}>
+                                <circle cx={mx} cy={my} r={r} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.16 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
+                                <text x={mx} y={my - r - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#d8f5e3" stroke="#08301c" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>
+                                  {m.label || m.footprint}
+                                </text>
+                              </g>
+                            )
+                          }
+                          const pts = dp.map((pp) => carrierPoint(body, pp.x!, pp.y!))
+                          const xs = pts.map((pt) => pt.x)
+                          const ys = pts.map((pt) => pt.y)
+                          const pad = 7
+                          const x0 = Math.min(...xs) - pad
+                          const y0 = Math.min(...ys) - pad
+                          const x1 = Math.max(...xs) + pad
+                          const y1 = Math.max(...ys) + pad
                           return (
                             <g key={`mt${carrier.id}${m.id}`}>
-                              <circle
-                                cx={body.x + m.x * body.w}
-                                cy={body.y + m.y * body.h}
-                                r={r}
-                                fill={isOver ? '#3ec46d' : 'none'}
-                                fillOpacity={isOver ? 0.16 : 0}
-                                stroke="#3ec46d"
-                                strokeWidth={isOver ? 3 : 1.5}
-                                strokeDasharray={isOver ? undefined : '6 5'}
-                                opacity={isOver ? 0.95 : 0.5}
-                              />
-                              <text
-                                x={body.x + m.x * body.w}
-                                y={body.y + m.y * body.h - r - 6}
-                                textAnchor="middle"
-                                fontSize={11}
-                                fontWeight={700}
-                                fill="#d8f5e3"
-                                stroke="#08301c"
-                                strokeWidth={3.5}
-                                style={{ paintOrder: 'stroke' }}
-                              >
+                              <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={6} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.12 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
+                              {pts.map((pt, pi) => (
+                                <circle key={pi} cx={pt.x} cy={pt.y} r={4} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.95 : 0} stroke="#3ec46d" strokeWidth={1.5} opacity={op} />
+                              ))}
+                              <text x={(x0 + x1) / 2} y={y0 - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#d8f5e3" stroke="#08301c" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>
                                 {m.label || m.footprint}
                               </text>
                             </g>

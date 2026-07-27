@@ -259,6 +259,60 @@ describe('connector pins as wire terminals', () => {
   })
 })
 
+describe('buildNetlist — board stacking: the seated MCU (#166)', () => {
+  // A carrier whose imprinted footprint pins mirror the BOARD (GP0/GP1/5V/GND/3V3),
+  // plus its own Grove signal pin. Flattened: 0=GP0 1=GP1 2=5V 3=GND 4=3V3 5=GROVE.
+  const CARRIER: PartDefinition = {
+    id: 'base',
+    name: 'Base',
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'GP0', type: 'io', derived: 'm1' },
+          { name: 'GP1', type: 'io', derived: 'm1' },
+          { name: '5V', type: 'pwr', derived: 'm1' },
+          { name: 'GND', type: 'gnd', derived: 'm1' },
+          { name: '3V3', type: 'pwr', derived: 'm1' },
+          { name: 'GROVE', type: 'io' }
+        ]
+      }
+    ],
+    mounts: [{ id: 'm1', footprint: 'xiao', x: 0.5, y: 0.5 }]
+  } as unknown as PartDefinition
+  const defs = new Map<string, PartDefinition>([['base', CARRIER]])
+  const seated = (connections: RobotConnection[] = []): RobotDefinition => ({
+    parts: [{ id: 'base', lib: 'l', part: 'base' }],
+    connections,
+    boardMountedOn: 'base',
+    boardMount: 'm1'
+  })
+
+  it('bonds the seated MCU pads to the carrier footprint pins of the same name', () => {
+    const nl = buildNetlist(seated(), BOARD, defs)
+    expect(nl.nodeOf[ep('board', 'GP0', 3)]).toBe(nl.nodeOf[ep('base', 'GP0', 0)])
+    expect(nl.nodeOf[ep('board', 'GND', 1)]).toBe(nl.nodeOf[ep('base', 'GND', 3)])
+  })
+
+  it('a wire to a carrier pad reaches the MCU GPIO through the seat', () => {
+    const nl = buildNetlist(seated([wire('w', ep('base', 'GROVE', 5), ep('base', 'GP0', 0))]), BOARD, defs)
+    // GROVE — base.GP0 — board.GP0 are all one node.
+    expect(nl.nodeOf[ep('base', 'GROVE', 5)]).toBe(nl.nodeOf[ep('board', 'GP0', 3)])
+  })
+
+  it('does NOT bond when the board is not seated', () => {
+    const nl = buildNetlist(
+      {
+        parts: [{ id: 'base', lib: 'l', part: 'base' }],
+        connections: [wire('w1', ep('board', 'GP0', 3), ep('base', 'GROVE', 5)), wire('w2', ep('base', 'GP0', 0), ep('base', 'GP1', 1))]
+      },
+      BOARD,
+      defs
+    )
+    expect(nl.nodeOf[ep('board', 'GP0', 3)]).not.toBe(nl.nodeOf[ep('base', 'GP0', 0)])
+  })
+})
+
 describe('remapConnectionsForBoard (MCU swap)', () => {
   // A different board layout: GP0 sits at a NEW index, GP1 is absent, and there is
   // only one GND / 3V3. Flattened: 0=GND 1=3V3 2=GP0 3=5V.

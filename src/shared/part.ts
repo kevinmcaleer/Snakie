@@ -131,6 +131,12 @@ export interface PartPin {
    *  Signal/V+/GND trio). Pins sharing a `group` move + delete as a unit and collapse
    *  to one row in the pin list. Absent ⇒ a standalone pin. */
   group?: string
+  /** Imprinted from a carrier MOUNT's footprint (#166): the {@link PartMount.id}
+   *  this pin was stamped from. Such pins are the footprint's actual pads (correct
+   *  type + position), copied from a reference board — read-only + moving rigidly
+   *  with their mount block. They give the carrier real, wireable pins to bond a
+   *  seated board onto, instead of an abstract socket. Absent ⇒ an authored pin. */
+  derived?: string
   /**
    * Castellation outward direction in degrees: 0 = right, 90 = down, 180 = left,
    * 270 = up. Absent ⇒ derived from the pin's side (left/right by x). Only affects
@@ -260,8 +266,14 @@ export interface PartConnector {
 export interface PartMount {
   /** Unique id within this part; a placed instance references it as `mount`. */
   id: string
-  /** The footprint family this socket accepts (e.g. `xiao`, `pico`). */
+  /** The footprint family this socket accepts (e.g. `xiao`, `pico`). A label/handle
+   *  only — actual dock compatibility is STRUCTURAL (the imprinted pins' signature),
+   *  so a board whose pins match this mount's can seat even without the same tag. */
   footprint: string
+  /** The reference board this footprint was imprinted from (#166), for the editor's
+   *  "re-sync from source". The imprinted pins live in the carrier's headers, flagged
+   *  {@link PartPin.derived} = this mount's {@link id}. */
+  ref?: { lib: string; part: string }
   /** Normalised 0..1 centre of the SEATED board within this board's outline. */
   x: number
   y: number

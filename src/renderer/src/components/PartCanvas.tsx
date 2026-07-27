@@ -36,6 +36,7 @@ import {
   type StyleTarget
 } from './part-editor.util'
 import { itemHidden, itemLocked } from '../../../shared/part'
+import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -99,6 +100,7 @@ export type CanvasTool =
   | 'pin'
   | 'servo-header'
   | 'hole'
+  | 'mount'
   | 'button'
   | 'text'
   | 'rect'
@@ -115,20 +117,37 @@ export interface LayerVisibility {
   holes: boolean
   pins: boolean
   components: boolean
+  /** Carrier footprint blocks (#166). */
+  mounts: boolean
 }
 
-export const DEFAULT_LAYERS: LayerVisibility = { pcb: true, image: true, holes: true, pins: true, components: true }
+export const DEFAULT_LAYERS: LayerVisibility = {
+  pcb: true,
+  image: true,
+  holes: true,
+  pins: true,
+  components: true,
+  mounts: true
+}
 
 /** Per-layer edit lock (same keys as {@link LayerVisibility}). A locked layer is
  *  still drawn, but its items can't be selected, moved, resized, or created — so
  *  you can't accidentally nudge the background PCB while wiring pins. */
 export type LayerLocks = LayerVisibility
-export const DEFAULT_LOCKS: LayerLocks = { pcb: false, image: false, holes: false, pins: false, components: false }
+export const DEFAULT_LOCKS: LayerLocks = {
+  pcb: false,
+  image: false,
+  holes: false,
+  pins: false,
+  components: false,
+  mounts: false
+}
 
 /** What is currently selected (drives the editor's contextual inspector). */
 export type CanvasSelection =
   | { type: 'pin'; hi: number; pi: number }
   | { type: 'hole'; index: number }
+  | { type: 'mount'; index: number }
   | { type: 'button'; index: number }
   | { type: 'led'; index: number }
   | { type: 'connector'; index: number }
@@ -403,6 +422,9 @@ export function PartCanvas({
   const [textMenuOpen, setTextMenuOpen] = useState(false)
   // The selected mounting hole's size (diameter) dropdown.
   const [holeMenuOpen, setHoleMenuOpen] = useState(false)
+  // Which footprint block the pointer is hovering (#166) — reveals its pin labels so
+  // the user can read the board's orientation (which pad is D0 / 5V / GND…).
+  const [hoverMount, setHoverMount] = useState<string | null>(null)
   // Per-type "style clipboard" (copy style / paste style). State (not a ref) so a
   // copy re-renders the toolbars and enables their "Paste style" button. Persists
   // across selections + part switches within a session.
@@ -421,6 +443,7 @@ export function PartCanvas({
   const box = fitBox(boardAspect(part))
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
+  const mounts = part.mounts ?? []
   const buttons = part.buttons ?? []
   const onboardLeds = part.onboardLeds ?? []
   const connectors = part.connectors ?? []
@@ -592,6 +615,31 @@ export function PartCanvas({
     // The reverse invariant: a hole can't be dragged onto a pin.
     if (onPin(sx, sy, holeR(holes[index]?.diameter ?? 2.5))) return
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, x: sx, y: sy } : h)) })
+  }
+  /** A mount's footprint-block box in NORMALISED coords — the bounding box of its
+   *  imprinted (derived) pins, padded. Null when it has no imprinted pins yet. */
+  const mountBoxN = (mountId: string): { x0: number; y0: number; x1: number; y1: number } | null => {
+    const xs: number[] = []
+    const ys: number[] = []
+    for (const h of part.headers ?? [])
+      for (const p of h.pins)
+        if (p.derived === mountId && p.x !== undefined && p.y !== undefined) {
+          xs.push(p.x)
+          ys.push(p.y)
+        }
+    if (!xs.length) return null
+    const pad = 0.025
+    return { x0: Math.min(...xs) - pad, y0: Math.min(...ys) - pad, x1: Math.max(...xs) + pad, y1: Math.max(...ys) + pad }
+  }
+
+  /** Move a carrier mount (#166) — its footprint block + all its imprinted pins
+   *  shift rigidly, so dragging the block keeps the pins under it. */
+  const moveMountTo = (index: number, nx: number, ny: number, presnapped = false): void => {
+    const m = mounts[index]
+    if (!m) return
+    const sx = presnapped ? nx : snapX(nx)
+    const sy = presnapped ? ny : snapY(ny)
+    commit(translateMount(part, m.id, sx - m.x, sy - m.y))
   }
   /** Move an on-board button (#130) — buttons may sit anywhere, incl. over pins. */
   const moveButtonTo = (index: number, nx: number, ny: number, presnapped = false): void => {
@@ -1753,6 +1801,12 @@ export function PartCanvas({
       const { h } = connectorSize(c, connPxPerMm)
       return { nx: c.x, ny: c.y - h / 2 / box.h }
     }
+    if (sel?.type === 'mount') {
+      const m = mounts[sel.index]
+      if (!m) return null
+      const bb = mountBoxN(m.id)
+      return bb ? { nx: (bb.x0 + bb.x1) / 2, ny: bb.y0 } : { nx: m.x, ny: m.y }
+    }
     return null
   }
 
@@ -2005,6 +2059,17 @@ export function PartCanvas({
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
         if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+    // Carrier mounts (#166) — grab anywhere inside the footprint block (its pins are
+    // locked, so they fall through to here), else a radius around a pin-less mount.
+    if (visible.mounts && !locked.mounts)
+    for (let i = mounts.length - 1; i >= 0; i--) {
+      const bb = mountBoxN(mounts[i].id)
+      if (bb) {
+        if (nx >= bb.x0 && nx <= bb.x1 && ny >= bb.y0 && ny <= bb.y1) return { type: 'mount', index: i }
+      } else if (dist(nx, ny, mounts[i].x, mounts[i].y) < HIT * 1.6) {
+        return { type: 'mount', index: i }
+      }
+    }
     if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
       return { type: 'image' }
     return null
@@ -2254,6 +2319,9 @@ export function PartCanvas({
     } else if (hit.type === 'hole') {
       ox = holes[hit.index]?.x ?? nx
       oy = holes[hit.index]?.y ?? ny
+    } else if (hit.type === 'mount') {
+      ox = mounts[hit.index]?.x ?? nx
+      oy = mounts[hit.index]?.y ?? ny
     } else if (hit.type === 'button') {
       ox = buttons[hit.index]?.x ?? nx
       oy = buttons[hit.index]?.y ?? ny
@@ -2283,7 +2351,22 @@ export function PartCanvas({
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>): void => {
     const d = dragRef.current
-    if (!d || !interactive) return
+    if (!d || !interactive) {
+      // No drag → track which footprint block the pointer is over, to show its labels.
+      if (interactive && mounts.length && visible.mounts) {
+        const { nx, ny } = toNorm(e)
+        let hit: string | null = null
+        for (let i = mounts.length - 1; i >= 0; i--) {
+          const bb = mountBoxN(mounts[i].id)
+          if (bb && nx >= bb.x0 && nx <= bb.x1 && ny >= bb.y0 && ny <= bb.y1) {
+            hit = mounts[i].id
+            break
+          }
+        }
+        if (hit !== hoverMount) setHoverMount(hit)
+      } else if (hoverMount) setHoverMount(null)
+      return
+    }
     if (d.kind === 'pan') {
       const s = viewBoxScale()
       setView((v) => ({ ...v, tx: (d.panTX ?? 0) + (e.clientX - (d.panX ?? 0)) / s, ty: (d.panTY ?? 0) + (e.clientY - (d.panY ?? 0)) / s }))
@@ -2466,6 +2549,7 @@ export function PartCanvas({
         if (s.type === 'pin' && d.groupOffsets) moveGroupTo(d.groupOffsets, lx, ly)
         else if (s.type === 'pin') movePinTo(s.hi, s.pi, lx, ly, undefined, true)
         else if (s.type === 'hole') moveHoleTo(s.index, lx, ly, true)
+        else if (s.type === 'mount') moveMountTo(s.index, lx, ly, true)
         else if (s.type === 'button') moveButtonTo(s.index, lx, ly, true)
         else if (s.type === 'led') moveLedTo(s.index, lx, ly)
         else if (s.type === 'connector') moveConnectorTo(s.index, lx, ly)
@@ -2495,6 +2579,8 @@ export function PartCanvas({
         const a = alignDrag(x, y, 'hole', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
         moveHoleTo(d.sel.index, a.x, a.y, true)
+      } else if (d.sel.type === 'mount') {
+        moveMountTo(d.sel.index, x, y, noSnap)
       } else if (d.sel.type === 'button') {
         const a = alignDrag(x, y, 'button', { index: d.sel.index }, noSnap)
         setGuides(a.gx !== undefined || a.gy !== undefined ? { x: a.gx, y: a.gy } : null)
@@ -2841,6 +2927,7 @@ export function PartCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
+      onPointerLeave={() => hoverMount && setHoverMount(null)}
       onDoubleClick={onDoubleClick}
       onWheel={onWheel}
     >
@@ -2902,6 +2989,107 @@ export function PartCanvas({
               <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
             ) : null
           )}
+
+        {/* Carrier mounts (#166): the footprint BLOCK — a dashed-green outline around
+            its imprinted pins (which draw as normal locked pins below) + its label.
+            Selected → solid, tinted fill. A pin-less mount falls back to a marker. */}
+        {visible.mounts &&
+          mounts.map((m, i) => {
+          const bb = mountBoxN(m.id)
+          const sel = isSel({ type: 'mount', index: i })
+          const x0 = bb ? px(bb.x0) : px(m.x) - 20
+          const y0 = bb ? py(bb.y0) : py(m.y) - 20
+          const x1 = bb ? px(bb.x1) : px(m.x) + 20
+          const y1 = bb ? py(bb.y1) : py(m.y) + 20
+          return (
+            <g key={`mnt${i}`} style={{ pointerEvents: 'none' }}>
+              <rect
+                x={x0}
+                y={y0}
+                width={x1 - x0}
+                height={y1 - y0}
+                rx={8}
+                fill={sel ? '#3ec46d' : 'none'}
+                fillOpacity={sel ? 0.1 : 0}
+                stroke="#3ec46d"
+                strokeWidth={sel ? 2.5 : 1.5}
+                strokeDasharray={sel ? undefined : '7 5'}
+                opacity={sel ? 0.95 : 0.6}
+              />
+              <text
+                x={(x0 + x1) / 2}
+                y={y0 - 6}
+                textAnchor="middle"
+                fontSize={12}
+                fontWeight={700}
+                fill="#146c3f"
+                stroke="#ffffff"
+                strokeWidth={3.5}
+                style={{ paintOrder: 'stroke' }}
+              >
+                {m.label || m.footprint || m.id}
+              </text>
+              {/* Hover / select the footprint → reveal its pin names, so the board's
+                  orientation (which pad is D0 / 5V / GND…) is legible. Labels sit just
+                  outside the block, following its layout: pins in vertical COLUMNS get
+                  labels left/right; pins in horizontal ROWS get them above/below — so a
+                  rotated footprint keeps its labels off the pads, not on top of them. */}
+              {(hoverMount === m.id || sel) &&
+                (() => {
+                  const dp = (part.headers ?? [])
+                    .flatMap((h) => h.pins)
+                    .filter((pp) => pp.derived === m.id && pp.x !== undefined && pp.y !== undefined)
+                  // Distinct grid levels per axis IN PIXELS (aspect-correct, so it
+                  // matches what's on screen): more columns than rows ⇒ the block reads
+                  // as horizontal rows. 6px separates adjacent pads without splitting one.
+                  const levels = (vals: number[]): number => {
+                    let n = 0
+                    let prev = -Infinity
+                    for (const v of [...vals].sort((a, b) => a - b)) {
+                      if (v - prev > 6) n++
+                      prev = v
+                    }
+                    return n
+                  }
+                  const horizontal = levels(dp.map((pp) => px(pp.x!))) > levels(dp.map((pp) => py(pp.y!)))
+                  const cxp = px(m.x)
+                  const cyp = py(m.y)
+                  return dp.map((pp, pi) => {
+                    const gx = px(pp.x!)
+                    const gy = py(pp.y!)
+                    const common = {
+                      fontSize: 9,
+                      fontWeight: 700,
+                      fill: '#0b3a22',
+                      stroke: '#ffffff',
+                      strokeWidth: 2.4,
+                      style: { paintOrder: 'stroke' as const }
+                    }
+                    if (horizontal) {
+                      const above = gy <= cyp
+                      return (
+                        <text key={`ml${i}-${pi}`} {...common} x={gx} y={gy + (above ? -7 : 14)} textAnchor="middle">
+                          {pp.name}
+                        </text>
+                      )
+                    }
+                    const onLeft = gx <= cxp
+                    return (
+                      <text
+                        key={`ml${i}-${pi}`}
+                        {...common}
+                        x={gx + (onLeft ? -7 : 7)}
+                        y={gy + 3}
+                        textAnchor={onLeft ? 'end' : 'start'}
+                      >
+                        {pp.name}
+                      </text>
+                    )
+                  })
+                })()}
+            </g>
+          )
+        })}
 
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
@@ -3928,6 +4116,54 @@ export function PartCanvas({
                 {rotateIcon}
               </button>
               <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete connector" onClick={() => deleteComponent(sel)}>
+                {delIcon}
+              </button>
+            </div>
+          )
+        })()}
+      {/* Footprint toolbar — rename + rotate + delete for a selected carrier mount (#166). */}
+      {interactive &&
+        !locked.mounts &&
+        alignCount === 0 &&
+        selection?.type === 'mount' &&
+        (() => {
+          const sel = selection
+          const m = mounts[sel.index]
+          if (!m) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit footprint" style={style}>
+              <input
+                className="pcv__ctb-input"
+                type="text"
+                value={m.label ?? ''}
+                placeholder="Label"
+                aria-label="Footprint label"
+                onChange={(e) =>
+                  commit({
+                    ...part,
+                    mounts: mounts.map((mm, i) =>
+                      i === sel.index ? { ...mm, label: e.target.value || undefined } : mm
+                    )
+                  })
+                }
+              />
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate footprint 90 degrees" onClick={() => commit(rotateMount(part, m.id, 90))}>
+                {rotateIcon}
+              </button>
+              <button
+                type="button"
+                className="pcv__ctb-btn pcv__ctb-btn--danger"
+                title="Delete"
+                aria-label="Delete footprint"
+                onClick={() => {
+                  commit(removeMountImprint(part, m.id))
+                  onSelect?.(null)
+                }}
+              >
                 {delIcon}
               </button>
             </div>

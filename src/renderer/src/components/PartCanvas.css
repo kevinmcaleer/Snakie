@@ -246,6 +246,21 @@
   z-index: 6;
 }
 
+.pcv__ctb-input {
+  width: 8.5rem;
+  height: 1.6rem;
+  padding: 0 0.4rem;
+  color: #eceef1;
+  background: #26282d;
+  border: 1px solid #3a3d44;
+  border-radius: 6px;
+  font-size: 0.78rem;
+}
+.pcv__ctb-input:focus {
+  outline: none;
+  border-color: #565b63;
+}
+
 .pcv__ctb-btn {
   display: inline-flex;
   align-items: center;
