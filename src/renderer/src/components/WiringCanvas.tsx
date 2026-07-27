@@ -957,7 +957,18 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   // at its mount on the carrier — so carriers must be laid out FIRST. Keep each
   // part's ORIGINAL index so the default scatter positions don't shift. One level
   // of nesting is all that's supported (a carrier can't itself be seated).
-  const placedBody = new Map<string, { x: number; y: number; w: number; h: number }>()
+  // Each placed carrier records its AABB (x/y/w/h) AND its un-rotated body (bw/bh),
+  // subject origin (px/py) and rotation, so a point given in the carrier's own
+  // un-rotated frame (a mount centre, an imprinted pin) can be transformed through
+  // the carrier's rotation — the footprint then follows the carrier when it turns.
+  type PlacedBody = { x: number; y: number; w: number; h: number; rot: 0 | 90 | 180 | 270; bw: number; bh: number; px: number; py: number }
+  const placedBody = new Map<string, PlacedBody>()
+  /** Canvas position of a normalised point in a carrier's UN-rotated frame. */
+  const carrierPoint = (body: PlacedBody, nx: number, ny: number): { x: number; y: number } => {
+    if (!body.rot) return { x: body.x + nx * body.w, y: body.y + ny * body.h }
+    const r = rotatePoint(nx * body.bw, ny * body.bh, body.bw / 2, body.bh / 2, body.rot)
+    return { x: body.px + r.x, y: body.py + r.y }
+  }
   const orderedParts = robot.parts
     .map((rp, i) => ({ rp, i }))
     .sort((a, b) => (a.rp.mountedOn ? 1 : 0) - (b.rp.mountedOn ? 1 : 0))
@@ -971,7 +982,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (!carrier || !body) return null
     const mount = resolvePart(carrier.lib, carrier.part)?.mounts?.find((m) => m.id === rp.mount)
     if (!mount) return null
-    return { x: body.x + mount.x * body.w, y: body.y + mount.y * body.h }
+    return carrierPoint(body, mount.x, mount.y)
   }
   orderedParts.forEach(({ rp, i }) => {
     const def = resolvePart(rp.lib, rp.part)
@@ -1024,7 +1035,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const seat = seatCentre(rp)
       const px = seat ? seat.x - (aabb.x + aabb.w / 2) : x
       const py = seat ? seat.y - (aabb.y + aabb.h / 2) : y
-      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h })
+      placedBody.set(rp.id, { x: px + aabb.x, y: py + aabb.y, w: aabb.w, h: aabb.h, rot, bw, bh, px, py })
       subjects.push({
         key: rp.id,
         kind: 'part',
@@ -1085,7 +1096,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       // Rotate the board to match the footprint (#166) so its pads overlay the
       // imprinted pins — a footprint placed at 270° seats the board turned 270°,
       // not sitting square over a rotated socket. Mirrors how a placed part rotates.
-      const R = normRot(mount.rotation)
+      // Add the CARRIER's own rotation so the footprint (and the board) turn WITH the
+      // carrier when it's rotated in the workspace.
+      const R = normRot((mount.rotation ?? 0) + (carrier.rotation ?? 0))
       if (R && bs.box) {
         const bw0 = bs.box.w
         const bh0 = bs.box.h
@@ -1111,10 +1124,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       }
       const dx = bs.bodyDX ?? 0
       const dy = bs.bodyDY ?? 0
-      const mx = cbody.x + mount.x * cbody.w
-      const my = cbody.y + mount.y * cbody.h
-      bs.x = mx - (dx + bs.w / 2)
-      bs.y = my - (dy + bs.h / 2)
+      // The mount centre in canvas coords, transformed through the carrier's rotation.
+      const mp = carrierPoint(cbody, mount.x, mount.y)
+      bs.x = mp.x - (dx + bs.w / 2)
+      bs.y = mp.y - (dy + bs.h / 2)
       bs.seated = true
       bs.hit = hitRegion(bs.mode, bs.x + dx, bs.y + dy, bs.w, bs.h)
       const bi = subjects.indexOf(bs)
@@ -1343,8 +1356,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         const takenByBoard =
           excludeKey !== 'board' && robot.boardMountedOn === carrier.id && robot.boardMount === m.id
         if (takenByPart || takenByBoard) continue
-        const mx = body.x + m.x * body.w
-        const my = body.y + m.y * body.h
+        const mp = carrierPoint(body, m.x, m.y)
+        const mx = mp.x
+        const my = mp.y
         // Generous radius: you're aiming at a socket, not a pixel.
         if (Math.hypot(cx - mx, cy - my) <= Math.min(body.w, body.h) * 0.55) {
           return { carrier: carrier.id, mount: m.id }
@@ -2588,8 +2602,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                           if (!dp.length) {
                             // Legacy pin-less mount → fall back to a socket ring.
                             const r = Math.min(body.w, body.h) * 0.5
-                            const mx = body.x + m.x * body.w
-                            const my = body.y + m.y * body.h
+                            const mp = carrierPoint(body, m.x, m.y)
+                            const mx = mp.x
+                            const my = mp.y
                             return (
                               <g key={`mt${carrier.id}${m.id}`}>
                                 <circle cx={mx} cy={my} r={r} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.16 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
@@ -2599,8 +2614,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                               </g>
                             )
                           }
-                          const xs = dp.map((pp) => body.x + pp.x! * body.w)
-                          const ys = dp.map((pp) => body.y + pp.y! * body.h)
+                          const pts = dp.map((pp) => carrierPoint(body, pp.x!, pp.y!))
+                          const xs = pts.map((pt) => pt.x)
+                          const ys = pts.map((pt) => pt.y)
                           const pad = 7
                           const x0 = Math.min(...xs) - pad
                           const y0 = Math.min(...ys) - pad
@@ -2609,8 +2625,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                           return (
                             <g key={`mt${carrier.id}${m.id}`}>
                               <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} rx={6} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.12 : 0} stroke="#3ec46d" strokeWidth={sw} strokeDasharray={isOver ? undefined : '6 5'} opacity={op} />
-                              {dp.map((pp, pi) => (
-                                <circle key={pi} cx={body.x + pp.x! * body.w} cy={body.y + pp.y! * body.h} r={4} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.95 : 0} stroke="#3ec46d" strokeWidth={1.5} opacity={op} />
+                              {pts.map((pt, pi) => (
+                                <circle key={pi} cx={pt.x} cy={pt.y} r={4} fill={isOver ? '#3ec46d' : 'none'} fillOpacity={isOver ? 0.95 : 0} stroke="#3ec46d" strokeWidth={1.5} opacity={op} />
                               ))}
                               <text x={(x0 + x1) / 2} y={y0 - 6} textAnchor="middle" fontSize={11} fontWeight={700} fill="#d8f5e3" stroke="#08301c" strokeWidth={3.5} style={{ paintOrder: 'stroke' }}>
                                 {m.label || m.footprint}
