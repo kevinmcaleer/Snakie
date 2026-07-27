@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { CollapsiblePanel } from './CollapsiblePanel'
 import { PartCanvas } from './PartCanvas'
+import { partHasRear } from '../../../shared/part'
+import type { PartSide } from '../../../shared/part'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
 import { PartCatalog } from './PartCatalog'
@@ -707,6 +709,22 @@ function PartDetail({
   onClose: () => void
 }): JSX.Element {
   const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
+  // Which face the preview shows, and the coin-spin between them. Same shape as
+  // the Part Editor's: the side swaps half way, while the board is edge-on.
+  const [previewSide, setPreviewSide] = useState<PartSide>('front')
+  const [previewFlipping, setPreviewFlipping] = useState(false)
+  const flipTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => flipTimers.current.forEach(clearTimeout), [])
+  // A different part may not have a back at all — start each one face-up.
+  useEffect(() => setPreviewSide('front'), [part.id])
+  const flipPreview = (): void => {
+    if (previewFlipping) return
+    setPreviewFlipping(true)
+    flipTimers.current.push(
+      setTimeout(() => setPreviewSide((v) => (v === 'front' ? 'rear' : 'front')), 210),
+      setTimeout(() => setPreviewFlipping(false), 420)
+    )
+  }
   const metaRows: [string, string | undefined][] = [
     ['Manufacturer', part.manufacturer],
     ['Family', part.family],
@@ -785,13 +803,33 @@ function PartDetail({
           Schematic
         </button>
       </div>
-      <div className="pl__detail-fp">
+      <div className={`pl__detail-fp${previewFlipping ? ' is-flipping' : ''}`}>
         {previewMode === 'board' ? (
-          <PartCanvas part={part} readOnly />
+          <PartCanvas part={part} readOnly side={previewSide} />
         ) : (
           <PartSchematicView part={part} />
         )}
       </div>
+      {/* Only offered when there IS a back — a single-sided part shouldn't invite
+          you to turn it over and find nothing (#636). */}
+      {previewMode === 'board' && partHasRear(part) && (
+        <button
+          type="button"
+          className="pl__flip"
+          onClick={flipPreview}
+          disabled={previewFlipping}
+          title={previewSide === 'front' ? 'Show the back of the board' : 'Show the front of the board'}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+            <ellipse cx="8" cy="8" rx="3" ry="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M2.2 4.4A6.6 6.6 0 0 1 8 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M13.8 11.6A6.6 6.6 0 0 1 8 14.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M1.2 2.2l1 2.4 2.4-1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14.8 13.8l-1-2.4-2.4 1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>{previewSide === 'front' ? 'Flip to back' : 'Flip to front'}</span>
+        </button>
+      )}
 
       <dl className="pl__meta">
         {metaRows

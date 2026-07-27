@@ -6,7 +6,7 @@ import {
   partToYaml
 } from '../src/shared/part-yaml'
 import { blankPart, normalisePart } from '../src/renderer/src/components/part-editor.util'
-import { groupChain, itemHidden, itemLocked, mirrorX, partHasRear } from '../src/shared/part'
+import { PART_PIN_SHAPES, groupChain, itemHidden, itemLocked, mirrorX, partHasRear } from '../src/shared/part'
 import type { PartItemFlags } from '../src/shared/part'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -1049,5 +1049,26 @@ describe('board rear (#636)', () => {
     expect(mirrorX(0.1)).toBeCloseTo(0.9)
     expect(mirrorX(0.5)).toBeCloseTo(0.5)
     expect(mirrorX(mirrorX(0.23))).toBeCloseTo(0.23)
+  })
+})
+
+describe('pad shapes (#636)', () => {
+  it('round-trips every shape — including octagonal, which the parser used to eat', () => {
+    // The parser and the editor's normaliser kept SEPARATE shape lists and the
+    // parser's was missing `octagonal`, so a servo/DuPont pad was silently
+    // downgraded on every save→load. They share one list now.
+    for (const shape of PART_PIN_SHAPES) {
+      const part = normalisePart({
+        id: 'p',
+        name: 'P',
+        headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', shape }] }]
+      })
+      expect(part.headers[0].pins[0].shape).toBe(shape)
+      expect(partFromYaml(partToYaml(part)).headers[0].pins[0].shape).toBe(shape)
+    }
+  })
+
+  it('drops an unrecognised shape rather than trusting it', () => {
+    expect(partFromYaml('id: p\nheaders:\n  - edge: left\n    pins: [{ name: A, type: io, shape: banana }]\n').headers[0].pins[0].shape).toBeUndefined()
   })
 })

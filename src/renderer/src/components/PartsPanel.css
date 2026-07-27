@@ -645,3 +645,64 @@
 .pl__doclink:hover {
   text-decoration: underline;
 }
+
+/* --- board rear in the library preview (#636) ----------------------------- */
+/* Only rendered when the part HAS a back, so its absence is the answer to
+   "is this single-sided?". */
+.pl__flip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  margin: 0.3rem auto 0;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.pl__flip:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pl__flip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.pl__detail-fp.is-flipping {
+  animation: pl-flip 420ms ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes pl-flip {
+  0% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1400px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl__detail-fp.is-flipping {
+    animation: pl-flip-fade 420ms ease-in-out;
+  }
+  @keyframes pl-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}

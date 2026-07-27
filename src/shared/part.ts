@@ -77,8 +77,31 @@ export type PartPackage = 'THT' | 'SMD'
  *                   drill hole showing (where pin headers are soldered)
  *  - `octagonal`  — an octagonal header pad with a SQUARE pin/hole, the classic
  *                   look of servo / DuPont-style 0.1" headers (Signal/V+/GND rows)
+ *  - `smd`        — a surface-mount pad that does NOT pass through the board. The
+ *                   only rectangular pad with no drill: `square` is a through-hole
+ *                   pad that punches one. This is what a XIAO's underside array is.
  */
-export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal'
+export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal' | 'smd'
+
+/**
+ * Every pad shape, in picker order. ONE list — the parts.yml parser and the Part
+ * Editor's normaliser both validate against it. They used to keep their own
+ * copies, which drifted: `octagonal` was missing from the parser's, so an
+ * octagonal pad was silently downgraded on every save/load round-trip.
+ */
+export const PART_PIN_SHAPES: readonly PartPinShape[] = [
+  'square',
+  'round',
+  'smd',
+  'castellated',
+  'header',
+  'octagonal'
+]
+
+/** Validate a pad `shape` off untrusted YAML/JSON (unknown ⇒ undefined). */
+export function coercePinShape(v: unknown): PartPinShape | undefined {
+  return PART_PIN_SHAPES.includes(v as PartPinShape) ? (v as PartPinShape) : undefined
+}
 
 /** Which edge of the board outline a pin/header sits on. */
 export type PartEdge = 'left' | 'right' | 'top' | 'bottom'

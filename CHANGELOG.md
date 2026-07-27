@@ -6,6 +6,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Boards have a back (#636).** A part can now carry a **rear face** — its own
+  photo, and pins, connectors and components marked `side: rear`. A **Flip to
+  back** control sits under the board in the Part Editor and in the Parts Library
+  preview, with a coin-spin that turns the board on its edge; the library only
+  offers it when the part actually has a back. Mounting holes are shared and
+  **mirror** on the rear, where they really are once you turn the board over. Pins
+  on the far face carry a **REAR** badge in the pin list, and anything you add
+  while the back is showing lands on the back.
+- **`smd` pad shape** — a rectangular surface-mount pad with **no drill**. The
+  default `square` pad punches a hole, so until now there was no way to draw the
+  underside pad array a XIAO uses.
+
+### Fixed
+- **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
+  parser and the Part Editor's normaliser kept separate lists of valid pad shapes,
+  and the parser's was missing `octagonal` — so a servo/DuPont header lost its pad
+  shape each round-trip. They share one list now.
+
 ## [0.39.0] - 2026-07-27
 
 ### Added

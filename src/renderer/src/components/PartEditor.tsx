@@ -624,7 +624,9 @@ export function PartEditor({
         // Flatten HDR (iPhone Display-P3/PQ) photos to SDR sRGB so they don't render
         // washed out in the SDR board UI; already-SDR images pass through unchanged.
         const flat = await flattenImportedImage(reader.result)
-        patch({ imageData: flat })
+        // Whichever face you're looking at is the one you're giving a photo to —
+        // so the existing picker serves both and there's no second control to find.
+        patch(side === 'rear' ? { rear: { ...part.rear, imageData: flat } } : { imageData: flat })
         setImageOriginal(flat) // a fresh upload is the new pristine original
         setVisible((v) => ({ ...v, image: true }))
         setSelection({ type: 'image' })
@@ -2949,6 +2951,19 @@ function SelectionInspector({
                   {PIN_SHAPE_LABEL[s]}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="pe__field">
+            <span>Side</span>
+            {/* A pad on the far face. Changing this makes the pin vanish from the
+                view you're in — which is correct, and the Pins list keeps showing
+                it with a REAR badge so it isn't lost. */}
+            <select
+              value={pin.side ?? 'front'}
+              onChange={(e) => updatePin({ side: e.target.value === 'rear' ? 'rear' : undefined })}
+            >
+              <option value="front">Front</option>
+              <option value="rear">Rear (back of the board)</option>
             </select>
           </label>
           {/* Suppress the silk annotation for the repeated V+/GND rows of a servo /

@@ -848,7 +848,7 @@ export function PartCanvas({
       return
     }
     const n = pins.length
-    const newPin = { name: `P${n}`, type: 'io' as const, gpio: n, capabilities: ['digital' as const], x: sx, y: sy }
+    const newPin = onFace({ name: `P${n}`, type: 'io' as const, gpio: n, capabilities: ['digital' as const], x: sx, y: sy })
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, newPin] } : h)) })
     onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length })
@@ -874,7 +874,7 @@ export function PartCanvas({
    *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
    *  all sharing `gid` so they move + delete as one unit. */
   const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
+    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy }),
     { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
     { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
   ]
@@ -1898,18 +1898,18 @@ export function PartCanvas({
 
   /** Add an on-board push-button at the clicked point (#130). */
   const addButton = (nx: number, ny: number): void => {
-    const next = [...buttons, { label: 'BTN', x: snapX(nx), y: snapY(ny) }]
+    const next = [...buttons, onFace({ label: 'BTN', x: snapX(nx), y: snapY(ny) })]
     commit({ ...part, buttons: next })
     onSelect?.({ type: 'button', index: next.length - 1 })
   }
   const addShape = (kind: ComponentShapeKind, nx: number, ny: number): void => {
-    const base = {
+    const base = onFace({
       kind,
       label: '',
       fill: DEFAULT_SHAPE_FILL,
       stroke: DEFAULT_SHAPE_STROKE,
       strokeWidth: DEFAULT_SHAPE_STROKE_WIDTH
-    }
+    })
     let shape: ComponentShape
     if (kind === 'circle') {
       shape = { ...base, x: clamp01(nx), y: clamp01(ny), r: 0.08 }
@@ -2018,6 +2018,9 @@ export function PartCanvas({
   const faces = (item: PartItemFlags): boolean => itemSide(item) === side
   const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
   const faceImage = rear ? part.rear?.imageData : part.imageData
+  /** Stamp the face onto a newly-created item. Without this you'd place a pad
+   *  while looking at the back and watch it disappear onto the front. */
+  const onFace = <T,>(item: T): T => (rear ? { ...item, side: 'rear' as const } : item)
   const faceLayer = (rear ? part.rear?.imageLayer : part.imageLayer) ?? { x: 0, y: 0, w: 1, h: 1 }
 
   const hitTest = (nx: number, ny: number): CanvasSelection => {
@@ -3147,6 +3150,21 @@ export function PartCanvas({
               )
             } else if (shape === 'octagonal') {
               pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+            } else if (shape === 'smd') {
+              // Surface-mount: solid copper, no drill. Slightly taller than wide so
+              // it reads as a pad rather than a square through-hole one.
+              pad = (
+                <rect
+                  x={cx - size * 0.42}
+                  y={cy - size * 0.5}
+                  width={size * 0.84}
+                  height={size}
+                  rx={1.5}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={sw}
+                />
+              )
             } else {
               pad = (
                 <>

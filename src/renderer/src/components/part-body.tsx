@@ -442,6 +442,8 @@ export function pinThroughHoles(
   // Octagonal pads are opaque copper and draw their OWN dark square pin-hole, so
   // they need no mask cut (a cut would punch a round see-through over the square).
   if (shape === 'octagonal') return []
+  // Surface-mount: sits ON the copper, so nothing is drilled through.
+  if (shape === 'smd') return []
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -1333,6 +1335,21 @@ export function PartBody({
             )
           } else if (shape === 'octagonal') {
             pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+          } else if (shape === 'smd') {
+            // Solid rectangular copper, no drill — and slightly taller than wide
+            // so it reads as a surface pad rather than a square through-hole one.
+            pad = (
+              <rect
+                x={cx - size * 0.42}
+                y={cy - size * 0.5}
+                width={size * 0.84}
+                height={size}
+                rx={1.5}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={sw}
+              />
+            )
           } else {
             pad = (
               <>

@@ -17,7 +17,7 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceGroveVariant, coerceSide } from './part'
+import { coerceConnectorKind, coerceGroveVariant, coercePinShape, coerceSide } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -40,7 +40,6 @@ import type {
   PartPin,
   PartPinBuses,
   PartPinCapability,
-  PartPinShape,
   PartPinSignals,
   PartPinType,
   PartRear,
@@ -82,7 +81,6 @@ function coerceBuses(raw: unknown): PartPinBuses | undefined {
   }
   return Object.keys(out).length ? out : undefined
 }
-const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
 const SHAPE_KINDS: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
 const EDGES = ['left', 'right', 'top', 'bottom'] as const
 
@@ -176,7 +174,8 @@ function coercePin(raw: unknown): PartPin | null {
   const label = str(r.label)
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
-  if (PIN_SHAPES.includes(r.shape as PartPinShape)) pin.shape = r.shape as PartPinShape
+  const padShape = coercePinShape(r.shape)
+  if (padShape) pin.shape = padShape
   const rotation = num(r.rotation)
   if (rotation !== undefined) pin.rotation = rotation
   const x = num(r.x)

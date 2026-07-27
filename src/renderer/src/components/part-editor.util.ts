@@ -22,6 +22,7 @@ import {
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
   coerceGroveVariant,
+  PART_PIN_SHAPES,
   itemHidden,
   itemLocked,
   type ComponentShape,
@@ -81,7 +82,7 @@ export const CAPABILITY_LABEL: Record<PartPinCapability, string> = {
 export const PACKAGES: PartPackage[] = ['THT', 'SMD']
 
 /** Pad shapes the editor offers, in UI order. */
-export const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header', 'octagonal']
+export const PIN_SHAPES: readonly PartPinShape[] = PART_PIN_SHAPES
 
 /** Human labels for each pad shape. */
 export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
@@ -89,7 +90,8 @@ export const PIN_SHAPE_LABEL: Record<PartPinShape, string> = {
   round: 'Round',
   castellated: 'Castellated',
   header: 'Header hole',
-  octagonal: 'Octagonal (servo)'
+  octagonal: 'Octagonal (servo)',
+  smd: 'SMD pad (no hole)'
 }
 
 /** Component shape kinds the Shapes dropdown offers, in UI order. */
