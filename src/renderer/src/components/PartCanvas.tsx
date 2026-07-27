@@ -36,7 +36,7 @@ import {
   type StyleTarget
 } from './part-editor.util'
 import { itemHidden, itemLocked } from '../../../shared/part'
-import { translateMount } from '../../../shared/footprint-imprint'
+import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -1797,6 +1797,12 @@ export function PartCanvas({
       if (!c) return null
       const { h } = connectorSize(c, connPxPerMm)
       return { nx: c.x, ny: c.y - h / 2 / box.h }
+    }
+    if (sel?.type === 'mount') {
+      const m = mounts[sel.index]
+      if (!m) return null
+      const bb = mountBoxN(m.id)
+      return bb ? { nx: (bb.x0 + bb.x1) / 2, ny: bb.y0 } : { nx: m.x, ny: m.y }
     }
     return null
   }
@@ -4033,6 +4039,54 @@ export function PartCanvas({
                 {rotateIcon}
               </button>
               <button type="button" className="pcv__ctb-btn pcv__ctb-btn--danger" title="Delete" aria-label="Delete connector" onClick={() => deleteComponent(sel)}>
+                {delIcon}
+              </button>
+            </div>
+          )
+        })()}
+      {/* Footprint toolbar — rename + rotate + delete for a selected carrier mount (#166). */}
+      {interactive &&
+        !locked.mounts &&
+        alignCount === 0 &&
+        selection?.type === 'mount' &&
+        (() => {
+          const sel = selection
+          const m = mounts[sel.index]
+          if (!m) return null
+          const anchor = componentAnchorPx(sel)
+          const style = anchor
+            ? { left: `${anchor.left}px`, top: `${anchor.top}px`, transform: 'translate(-50%, calc(-100% - 14px))' }
+            : undefined
+          return (
+            <div className="pcv__ctb" role="toolbar" aria-label="Edit footprint" style={style}>
+              <input
+                className="pcv__ctb-input"
+                type="text"
+                value={m.label ?? ''}
+                placeholder="Label"
+                aria-label="Footprint label"
+                onChange={(e) =>
+                  commit({
+                    ...part,
+                    mounts: mounts.map((mm, i) =>
+                      i === sel.index ? { ...mm, label: e.target.value || undefined } : mm
+                    )
+                  })
+                }
+              />
+              <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate footprint 90 degrees" onClick={() => commit(rotateMount(part, m.id, 90))}>
+                {rotateIcon}
+              </button>
+              <button
+                type="button"
+                className="pcv__ctb-btn pcv__ctb-btn--danger"
+                title="Delete"
+                aria-label="Delete footprint"
+                onClick={() => {
+                  commit(removeMountImprint(part, m.id))
+                  onSelect?.(null)
+                }}
+              >
                 {delIcon}
               </button>
             </div>

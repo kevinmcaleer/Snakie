@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import { join } from 'path'
-import { imprintPins, applyImprint, removeMountImprint, translateMount } from '../src/shared/footprint-imprint'
+import { imprintPins, applyImprint, removeMountImprint, translateMount, rotateMount } from '../src/shared/footprint-imprint'
 import { partSignature, mountSignature, signaturesMatch } from '../src/shared/footprint-signature'
 import { partFromYaml } from '../src/shared/part-yaml'
 import type { PartDefinition } from '../src/shared/part'
@@ -72,6 +72,33 @@ describe('applyImprint / removeMountImprint / translateMount', () => {
     const c = removeMountImprint(applyImprint(blankCarrier(), xiao, refId, { id: 'm1', x: 0.5, y: 0.5 }), 'm1')
     expect(c.mounts ?? []).toHaveLength(0)
     expect((c.headers ?? []).flatMap((h) => h.pins).some((p) => p.derived === 'm1')).toBe(false)
+  })
+
+  it('rotateMount spins the block as a GROUP — the row/column grid rotates', () => {
+    const c0 = applyImprint(blankCarrier(58, 42.5), xiao, refId, { id: 'm1', x: 0.5, y: 0.5 })
+    // Count distinct levels (clusters) along an axis — the XIAO is 2 columns × 7 rows.
+    const levels = (vals: number[], gap = 0.03): number => {
+      let n = 0
+      let prev = -Infinity
+      for (const v of [...vals].sort((a, b) => a - b)) {
+        if (v - prev > gap) n++
+        prev = v
+      }
+      return n
+    }
+    const grid = (c: PartDefinition): { cols: number; rows: number } => {
+      const ps = (c.headers ?? []).flatMap((h) => h.pins).filter((p) => p.derived === 'm1')
+      return { cols: levels(ps.map((p) => p.x!)), rows: levels(ps.map((p) => p.y!)) }
+    }
+    expect(grid(c0)).toEqual({ cols: 2, rows: 7 })
+    const c90 = rotateMount(c0, 'm1', 90)
+    // A quarter turn rotates the whole grid: columns and rows swap.
+    expect(grid(c90)).toEqual({ cols: 7, rows: 2 })
+    expect(c90.mounts?.[0]?.rotation).toBe(90)
+    // Four quarter-turns return to the original grid + rotation 0.
+    const c360 = rotateMount(rotateMount(rotateMount(c90, 'm1', 90), 'm1', 90), 'm1', 90)
+    expect(grid(c360)).toEqual({ cols: 2, rows: 7 })
+    expect(c360.mounts?.[0]?.rotation).toBeUndefined()
   })
 
   it('translateMount shifts the mount + its pins rigidly (signature unchanged)', () => {

@@ -155,6 +155,37 @@ export function removeMountImprint(carrier: PartDefinition, mountId: string): Pa
 }
 
 /**
+ * Rotate a mount's footprint block by `deg` about its centre (#166). Its imprinted
+ * pins spin as a rigid GROUP — every position rotates about the mount centre
+ * (isotropically in mm, so a non-square carrier doesn't shear it), NOT each pin
+ * about its own axis — and the mount's stored rotation advances. Operates on the
+ * existing pins, so it needs no reference board.
+ */
+export function rotateMount(carrier: PartDefinition, mountId: string, deg: number): PartDefinition {
+  const m = (carrier.mounts ?? []).find((x) => x.id === mountId)
+  if (!m) return carrier
+  const cw = carrier.dimensions?.width ?? 0
+  const ch = carrier.dimensions?.height ?? 0
+  const mm = cw > 0 && ch > 0
+  const spin = (x: number, y: number): { x: number; y: number } => {
+    const r = mm ? rotate((x - m.x) * cw, (y - m.y) * ch, deg) : rotate(x - m.x, y - m.y, deg)
+    return mm ? { x: m.x + r.x / cw, y: m.y + r.y / ch } : { x: m.x + r.x, y: m.y + r.y }
+  }
+  const headers = (carrier.headers ?? []).map((h) => ({
+    ...h,
+    pins: h.pins.map((p) => {
+      if (p.derived !== mountId || p.x === undefined || p.y === undefined) return p
+      const s = spin(p.x, p.y)
+      return { ...p, x: clamp01(s.x), y: clamp01(s.y) }
+    })
+  }))
+  const mounts = (carrier.mounts ?? []).map((mm2) =>
+    mm2.id === mountId ? { ...mm2, rotation: ((((mm2.rotation ?? 0) + deg) % 360) + 360) % 360 || undefined } : mm2
+  )
+  return { ...carrier, headers, mounts }
+}
+
+/**
  * Translate a mount and its derived pins by a delta (for a cheap on-canvas DRAG that
  * needs no reference board — the block just shifts rigidly). Positions are clamped.
  */
