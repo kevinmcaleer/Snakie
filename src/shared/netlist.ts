@@ -451,6 +451,34 @@ export function buildNetlist(
     })
   }
 
+  // 1c. Board stacking for the MCU ITSELF (#166): the seated microcontroller
+  //     (robot.board, via boardMountedOn/boardMount) bonds to the carrier's
+  //     imprinted footprint pins by name — same as a seated part, but the board's
+  //     endpoints are `board.<label>#<index>`. This is what lets a wire to a carrier
+  //     pad (a Grove port, a header) reach the GPIO on the MCU plugged in above it.
+  if (board && robot.boardMountedOn && robot.boardMount) {
+    const carrierId = robot.boardMountedOn
+    const carrierDef = partDefs.get(carrierId)
+    const mount = carrierDef?.mounts?.find((m) => m.id === robot.boardMount)
+    if (carrierDef && mount) {
+      const carrierEndpoint = new Map<string, string>()
+      flattenPartPins(carrierDef).forEach((pin, i) => {
+        if (pin.name && !carrierEndpoint.has(pin.name)) {
+          carrierEndpoint.set(pin.name, `${carrierId}.${pin.name}#${i}`)
+        }
+      })
+      flattenBoardPads(board).forEach((pad, index) => {
+        if (!pad.label) return
+        const to = carrierEndpoint.get(mount.pinMap?.[pad.label] ?? pad.label)
+        if (!to) return
+        const from = `${BOARD_KEY}.${pad.label}#${index}`
+        if (!register(from) || !register(to)) return
+        uf.union(from, to)
+        edges.push({ id: `mount:board:${pad.label}`, from, to, internal: true })
+      })
+    }
+  }
+
   // 2. Every user-drawn wire joins its two endpoints. Unresolvable endpoints are
   //    surfaced as dangling (the wire is skipped, not silently swallowed).
   for (const conn of robot.connections ?? []) {
