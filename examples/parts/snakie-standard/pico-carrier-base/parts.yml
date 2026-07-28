@@ -1,0 +1,687 @@
+id: pico-carrier-base
+name: Pico Carrier Base
+description: A generic carrier a Raspberry Pi Pico plugs into — its 40-pin socket is broken out as a footprint you can wire to.
+family: Microcontroller
+pcbColor: "#0f5a2e"
+dimensions:
+  width: 55
+  height: 80
+shape:
+  kind: rect
+  cornerRadius: 0.04
+headers:
+  - edge: left
+    pins:
+      - name: GP0
+        type: io
+        locked: true
+        number: 1
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.22107806816101078
+        derived: mount-1
+      - name: GP1
+        type: io
+        locked: true
+        number: 2
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.25053056816101077
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 3
+        shape: round
+        x: 0.34715705455433243
+        y: 0.27998306816101076
+        derived: mount-1
+      - name: GP2
+        type: io
+        locked: true
+        number: 4
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.30943556816101075
+        derived: mount-1
+      - name: GP3
+        type: io
+        locked: true
+        number: 5
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.3388880681610108
+        derived: mount-1
+      - name: GP4
+        type: io
+        locked: true
+        number: 6
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.36840431816101077
+        derived: mount-1
+      - name: GP5
+        type: io
+        locked: true
+        number: 7
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.39785681816101076
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 8
+        shape: round
+        x: 0.34715705455433243
+        y: 0.42730931816101075
+        derived: mount-1
+      - name: GP6
+        type: io
+        locked: true
+        number: 9
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.45676181816101075
+        derived: mount-1
+      - name: GP7
+        type: io
+        locked: true
+        number: 10
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.34715705455433243
+        y: 0.48621431816101074
+        derived: mount-1
+      - name: GP8
+        type: io
+        locked: true
+        number: 11
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5156668181610108
+        derived: mount-1
+      - name: GP9
+        type: io
+        locked: true
+        number: 12
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5451193181610107
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 13
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5745718181610107
+        derived: mount-1
+      - name: GP10
+        type: io
+        locked: true
+        number: 14
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6040243181610108
+        derived: mount-1
+      - name: GP11
+        type: io
+        locked: true
+        number: 15
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6334768181610108
+        derived: mount-1
+      - name: GP12
+        type: io
+        locked: true
+        number: 16
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6629930681610108
+        derived: mount-1
+      - name: GP13
+        type: io
+        locked: true
+        number: 17
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6924455681610108
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 18
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7218980681610108
+        derived: mount-1
+      - name: GP14
+        type: io
+        locked: true
+        number: 19
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7513505681610108
+        derived: mount-1
+      - name: GP15
+        type: io
+        locked: true
+        number: 20
+        gpio: 15
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7808030681610106
+        derived: mount-1
+      - name: VBUS
+        type: pwr
+        locked: true
+        number: 40
+        shape: round
+        x: 0.6538935546875
+        y: 0.21903235092163087
+        derived: mount-1
+      - name: VSYS
+        type: pwr
+        locked: true
+        number: 39
+        shape: round
+        x: 0.6538935546875
+        y: 0.24848485092163092
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 38
+        shape: round
+        x: 0.6538935546875
+        y: 0.27793735092163085
+        derived: mount-1
+      - name: 3V3_EN
+        type: other
+        locked: true
+        number: 37
+        shape: round
+        x: 0.6538935546875
+        y: 0.30738985092163085
+        derived: mount-1
+      - name: 3V3
+        type: pwr
+        locked: true
+        number: 36
+        shape: round
+        x: 0.6538935546875
+        y: 0.33684235092163084
+        derived: mount-1
+      - name: ADC_VREF
+        type: other
+        locked: true
+        number: 35
+        shape: round
+        x: 0.6538935546875
+        y: 0.36635860092163086
+        derived: mount-1
+      - name: GP28
+        type: io
+        locked: true
+        number: 34
+        gpio: 28
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 1
+          adc: 2
+        shape: round
+        x: 0.6538935546875
+        y: 0.39581110092163085
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 33
+        shape: round
+        x: 0.6538935546875
+        y: 0.4252636009216309
+        derived: mount-1
+      - name: GP27
+        type: io
+        locked: true
+        number: 32
+        gpio: 27
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 1
+          adc: 1
+        shape: round
+        x: 0.6538935546875
+        y: 0.45471610092163084
+        derived: mount-1
+      - name: GP26
+        type: io
+        locked: true
+        number: 31
+        gpio: 26
+        capabilities:
+          - digital
+          - pwm
+          - adc
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 1
+          adc: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.4841686009216309
+        derived: mount-1
+      - name: RUN
+        type: other
+        locked: true
+        number: 30
+        shape: round
+        x: 0.6538935546875
+        y: 0.5136211009216308
+        derived: mount-1
+      - name: GP22
+        type: io
+        locked: true
+        number: 29
+        gpio: 22
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.5430736009216308
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 28
+        shape: round
+        x: 0.6538935546875
+        y: 0.5725261009216309
+        derived: mount-1
+      - name: GP21
+        type: io
+        locked: true
+        number: 27
+        gpio: 21
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.6019786009216309
+        derived: mount-1
+      - name: GP20
+        type: io
+        locked: true
+        number: 26
+        gpio: 20
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.6314311009216309
+        derived: mount-1
+      - name: GP19
+        type: io
+        locked: true
+        number: 25
+        gpio: 19
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: TX
+          pwm: B
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.6609473509216309
+        derived: mount-1
+      - name: GP18
+        type: io
+        locked: true
+        number: 24
+        gpio: 18
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: SCK
+          pwm: A
+        buses:
+          i2c: 1
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.6903998509216309
+        derived: mount-1
+      - name: GND
+        type: gnd
+        locked: true
+        number: 23
+        shape: round
+        x: 0.6538935546875
+        y: 0.7198523509216309
+        derived: mount-1
+      - name: GP17
+        type: io
+        locked: true
+        number: 22
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SCL
+          spi: CSn
+          pwm: B
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.7493048509216309
+        derived: mount-1
+      - name: GP16
+        type: io
+        locked: true
+        number: 21
+        gpio: 16
+        capabilities:
+          - digital
+          - pwm
+          - spi
+          - i2c
+        signals:
+          i2c: SDA
+          spi: RX
+          pwm: A
+        buses:
+          i2c: 0
+          spi: 0
+        shape: round
+        x: 0.6538935546875
+        y: 0.7787573509216308
+        derived: mount-1
+mounts:
+  - id: mount-1
+    footprint: pico
+    ref:
+      lib: snakie-standard
+      part: pico2w
+    label: Raspberry Pi Pico 2 W
+    x: 0.5
+    y: 0.5
