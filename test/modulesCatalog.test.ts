@@ -32,7 +32,8 @@ describe('MODULES catalog shape', () => {
       'led',
       'encoder',
       'buzzer',
-      'gamepad'
+      'gamepad',
+      'motor'
     ]
     for (const m of MODULES) {
       expect(known).toContain(m.instrument)
@@ -50,10 +51,10 @@ describe('MODULES catalog shape', () => {
     }
   })
 
-  it('covers the instrument inputs/outputs #120 names (display/range/imu/led/encoder/buzzer/gamepad)', () => {
+  it('covers the instrument inputs/outputs #120 names (display/range/imu/led/encoder/buzzer/gamepad/motor)', () => {
     const instruments = new Set(MODULES.map((m) => m.instrument))
     expect(instruments).toEqual(
-      new Set(['i2c-display', 'range', 'imu', 'led', 'encoder', 'buzzer', 'gamepad'])
+      new Set(['i2c-display', 'range', 'imu', 'led', 'encoder', 'buzzer', 'gamepad', 'motor'])
     )
   })
 

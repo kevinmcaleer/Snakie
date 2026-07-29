@@ -33,6 +33,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   as separate fixed-direction pins), `tb6612` (the Grove I²C motor driver, which
   pairs with the teleop mixer via signed `[-1, 1]` powers), and the MY9221 LED
   bar referenced upstream.
+- **Motor instrument (#638).** A dock panel for a two-channel DC motor driver:
+  signed power bars for A and B, a linked **Throttle** with **Trim**, and
+  **STOP** / **BRAKE** / **STANDBY**. Built for the two measurements that are
+  miserable to get by editing a literal and re-running — the **deadband** (where
+  a wheel actually starts turning) and the **trim** that makes a rover track
+  straight. Powers are signed and normalised (`-1`…`1`), the same unit the teleop
+  mixer uses, so the panel doesn't care what driver is on the other end. The bars
+  show what the board *applied* (`SNK MOTOR <a> <b>`), not just what was asked —
+  a driver left in standby accepts every command and turns nothing.
 
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`

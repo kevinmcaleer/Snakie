@@ -49,6 +49,7 @@ export type InstrumentId =
   | 'encoder'
   | 'buzzer'
   | 'gamepad'
+  | 'motor'
 
 /** Where a module's code comes from. */
 export type ModuleSource =
@@ -260,10 +261,8 @@ export const MODULES: ModuleDef[] = [
   {
     id: 'tb6612',
     name: 'Grove I²C Motor Driver (TB6612FNG)',
-    description: 'Two DC motor channels over I²C — pairs with the teleop mixer.',
-    // Grouped under Gamepad because teleop is what drives it today; it moves to
-    // its own group once the motor-driver instrument exists.
-    instrument: 'gamepad',
+    description: 'Two DC motor channels over I²C — drives the Motor panel and teleop.',
+    instrument: 'motor',
     importName: 'tb6612',
     source: { kind: 'bundled', file: 'tb6612.py' },
     license: 'MIT'

@@ -28,6 +28,7 @@ import { DataLoggerInstrument } from './DataLoggerInstrument'
 import { LedInstrument } from './LedInstrument'
 import { PsuInstrument } from './PsuInstrument'
 import { ServoInstrument } from './ServoInstrument'
+import { MotorInstrument } from './MotorInstrument'
 import { PoseInstrument } from './PoseInstrument'
 import { PotentiometerInstrument } from './PotentiometerInstrument'
 import { ButtonInstrument } from './ButtonInstrument'
@@ -988,6 +989,8 @@ export function renderSingleton(
       return <PsuInstrument {...p} />
     case 'servo':
       return <ServoInstrument {...p} />
+    case 'motor':
+      return <MotorInstrument {...p} />
     case 'poses':
       return <PoseInstrument {...p} />
     case 'pot':

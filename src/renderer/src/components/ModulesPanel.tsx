@@ -48,7 +48,8 @@ const INSTRUMENT_TITLES: Record<InstrumentId, string> = {
   led: 'LED',
   encoder: 'Encoder',
   buzzer: 'Buzzer',
-  gamepad: 'Gamepad / Teleop'
+  gamepad: 'Gamepad / Teleop',
+  motor: 'Motor Driver'
 }
 
 export function ModulesPanel(): JSX.Element {

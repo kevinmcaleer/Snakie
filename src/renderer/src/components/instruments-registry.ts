@@ -230,6 +230,20 @@ export const INSTRUMENTS: InstrumentDef[] = [
     hints: ['servo', 'sg90', 'mg90', 'mg996', 'pca9685']
   },
   {
+    id: 'motor',
+    name: 'Motor',
+    accent: '#ff9f6e',
+    border: 'rgba(255,159,110,.5)',
+    // a DC motor: a round can with a shaft out of the right-hand side
+    icon: 'M4 8 h10 v8 h-10 z M14 12 h6 M6 5 v-1 M12 5 v-1',
+    group: 'output',
+    kind: 'singleton',
+    description: 'Drive a two-channel DC motor driver — A/B power, trim, brake and standby.',
+    // `hints` rather than `uses`, since a motor driver is an I²C/bridge device
+    // `parse-pins` can't classify from pin usage alone.
+    hints: ['tb6612', 'motor', 'l298', 'drv8833', 'mx1508', 'grovemotordriver']
+  },
+  {
     id: 'poses',
     name: 'Poses',
     accent: '#7fe0a8',
