@@ -386,7 +386,7 @@ headers:
         number: 40
         shape: round
         x: 0.6538935546875
-        y: 0.21903235092163087
+        y: 0.22107806816101078
         derived: mount-1
       - name: VSYS
         type: pwr
@@ -394,7 +394,7 @@ headers:
         number: 39
         shape: round
         x: 0.6538935546875
-        y: 0.24848485092163092
+        y: 0.25053056816101077
         derived: mount-1
       - name: GND
         type: gnd
@@ -402,7 +402,7 @@ headers:
         number: 38
         shape: round
         x: 0.6538935546875
-        y: 0.27793735092163085
+        y: 0.27998306816101076
         derived: mount-1
       - name: 3V3_EN
         type: other
@@ -410,7 +410,7 @@ headers:
         number: 37
         shape: round
         x: 0.6538935546875
-        y: 0.30738985092163085
+        y: 0.30943556816101075
         derived: mount-1
       - name: 3V3
         type: pwr
@@ -418,7 +418,7 @@ headers:
         number: 36
         shape: round
         x: 0.6538935546875
-        y: 0.33684235092163084
+        y: 0.3388880681610108
         derived: mount-1
       - name: ADC_VREF
         type: other
@@ -426,7 +426,7 @@ headers:
         number: 35
         shape: round
         x: 0.6538935546875
-        y: 0.36635860092163086
+        y: 0.36840431816101077
         derived: mount-1
       - name: GP28
         type: io
@@ -449,7 +449,7 @@ headers:
           adc: 2
         shape: round
         x: 0.6538935546875
-        y: 0.39581110092163085
+        y: 0.39785681816101076
         derived: mount-1
       - name: GND
         type: gnd
@@ -457,7 +457,7 @@ headers:
         number: 33
         shape: round
         x: 0.6538935546875
-        y: 0.4252636009216309
+        y: 0.42730931816101075
         derived: mount-1
       - name: GP27
         type: io
@@ -480,7 +480,7 @@ headers:
           adc: 1
         shape: round
         x: 0.6538935546875
-        y: 0.45471610092163084
+        y: 0.45676181816101075
         derived: mount-1
       - name: GP26
         type: io
@@ -503,7 +503,7 @@ headers:
           adc: 0
         shape: round
         x: 0.6538935546875
-        y: 0.4841686009216309
+        y: 0.48621431816101074
         derived: mount-1
       - name: RUN
         type: other
@@ -511,7 +511,7 @@ headers:
         number: 30
         shape: round
         x: 0.6538935546875
-        y: 0.5136211009216308
+        y: 0.5156668181610108
         derived: mount-1
       - name: GP22
         type: io
@@ -532,7 +532,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.5430736009216308
+        y: 0.5451193181610107
         derived: mount-1
       - name: GND
         type: gnd
@@ -540,7 +540,7 @@ headers:
         number: 28
         shape: round
         x: 0.6538935546875
-        y: 0.5725261009216309
+        y: 0.5745718181610107
         derived: mount-1
       - name: GP21
         type: io
@@ -561,7 +561,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.6019786009216309
+        y: 0.6040243181610108
         derived: mount-1
       - name: GP20
         type: io
@@ -582,7 +582,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.6314311009216309
+        y: 0.6334768181610108
         derived: mount-1
       - name: GP19
         type: io
@@ -603,7 +603,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.6609473509216309
+        y: 0.6629930681610108
         derived: mount-1
       - name: GP18
         type: io
@@ -624,7 +624,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.6903998509216309
+        y: 0.6924455681610108
         derived: mount-1
       - name: GND
         type: gnd
@@ -632,7 +632,7 @@ headers:
         number: 23
         shape: round
         x: 0.6538935546875
-        y: 0.7198523509216309
+        y: 0.7218980681610108
         derived: mount-1
       - name: GP17
         type: io
@@ -653,7 +653,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.7493048509216309
+        y: 0.7513505681610108
         derived: mount-1
       - name: GP16
         type: io
@@ -674,7 +674,7 @@ headers:
           spi: 0
         shape: round
         x: 0.6538935546875
-        y: 0.7787573509216308
+        y: 0.7808030681610106
         derived: mount-1
 mounts:
   - id: mount-1

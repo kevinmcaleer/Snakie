@@ -11,7 +11,7 @@ package: THT
 pinSpacing: 2.54
 voltage: 1.8–5.5V
 partNumber: SC1634
-version: 1.0.6
+version: 1.0.7
 mcu: RP2350
 pcbColor: "#0f5a2e"
 aspect: 0.3943
@@ -377,42 +377,42 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.05926643281824449
+        y: 0.062475401036879596
       - name: VSYS
         type: pwr
         number: 39
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.1054664328182445
+        y: 0.1086754010368796
       - name: GND
         type: gnd
         number: 38
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.1516664328182445
+        y: 0.1548754010368796
       - name: 3V3_EN
         type: other
         number: 37
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.19786643281824448
+        y: 0.2010754010368796
       - name: 3V3
         type: pwr
         number: 36
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.24406643281824447
+        y: 0.2472754010368796
       - name: ADC_VREF
         type: other
         number: 35
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.29036643281824454
+        y: 0.2935754010368796
       - name: GP28
         type: io
         number: 34
@@ -434,14 +434,14 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.3365664328182445
+        y: 0.3397754010368796
       - name: GND
         type: gnd
         number: 33
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.3827664328182445
+        y: 0.3859754010368796
       - name: GP27
         type: io
         number: 32
@@ -463,7 +463,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.4289664328182445
+        y: 0.43217540103687957
       - name: GP26
         type: io
         number: 31
@@ -485,14 +485,14 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.4751664328182445
+        y: 0.4783754010368796
       - name: RUN
         type: other
         number: 30
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.5213664328182445
+        y: 0.5245754010368796
       - name: GP22
         type: io
         number: 29
@@ -512,14 +512,14 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.5675664328182445
+        y: 0.5707754010368795
       - name: GND
         type: gnd
         number: 28
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.6137664328182445
+        y: 0.6169754010368795
       - name: GP21
         type: io
         number: 27
@@ -539,7 +539,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.6599664328182445
+        y: 0.6631754010368796
       - name: GP20
         type: io
         number: 26
@@ -559,7 +559,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.7061664328182445
+        y: 0.7093754010368796
       - name: GP19
         type: io
         number: 25
@@ -579,7 +579,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.7524664328182445
+        y: 0.7556754010368796
       - name: GP18
         type: io
         number: 24
@@ -599,14 +599,14 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.7986664328182446
+        y: 0.8018754010368796
       - name: GND
         type: gnd
         number: 23
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.8448664328182446
+        y: 0.8480754010368796
       - name: GP17
         type: io
         number: 22
@@ -626,7 +626,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.8910664328182446
+        y: 0.8942754010368796
       - name: GP16
         type: io
         number: 21
@@ -646,7 +646,7 @@ headers:
         shape: castellated
         rotation: 0
         x: 0.9030545479910713
-        y: 0.9372664328182444
+        y: 0.9404754010368794
 ledLabel: LED
 image: image.png
 imageLayer:
