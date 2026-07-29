@@ -1,28 +1,20 @@
-id: pico2w
-name: Raspberry Pi Pico 2 W
-description: RP2350 microcontroller board with CYW43439 2.4GHz wireless (Wi-Fi / BLE).
-manufacturer: Raspberry Pi
+id: pico-carrier-base
+name: Pico Carrier Base
+description: A generic carrier a Raspberry Pi Pico plugs into — its 40-pin socket is broken out as a footprint you can wire to.
 family: Microcontroller
-tags:
-  - rp2350
-  - wifi
-  - pico
-package: THT
-pinSpacing: 2.54
-voltage: 1.8–5.5V
-partNumber: SC1634
-version: 1.0.7
-mcu: RP2350
 pcbColor: "#0f5a2e"
-aspect: 0.3943
 dimensions:
-  width: 21
-  height: 51
+  width: 55
+  height: 80
+shape:
+  kind: rect
+  cornerRadius: 0.04
 headers:
   - edge: left
     pins:
       - name: GP0
         type: io
+        locked: true
         number: 1
         gpio: 0
         capabilities:
@@ -37,12 +29,13 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.062475401036879596
+        shape: round
+        x: 0.34715705455433243
+        y: 0.22107806816101078
+        derived: mount-1
       - name: GP1
         type: io
+        locked: true
         number: 2
         gpio: 1
         capabilities:
@@ -57,19 +50,21 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.1086754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.25053056816101077
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 3
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.1548754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.27998306816101076
+        derived: mount-1
       - name: GP2
         type: io
+        locked: true
         number: 4
         gpio: 2
         capabilities:
@@ -84,12 +79,13 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.2010754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.30943556816101075
+        derived: mount-1
       - name: GP3
         type: io
+        locked: true
         number: 5
         gpio: 3
         capabilities:
@@ -104,12 +100,13 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.2472754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.3388880681610108
+        derived: mount-1
       - name: GP4
         type: io
+        locked: true
         number: 6
         gpio: 4
         capabilities:
@@ -124,12 +121,13 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.2935754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.36840431816101077
+        derived: mount-1
       - name: GP5
         type: io
+        locked: true
         number: 7
         gpio: 5
         capabilities:
@@ -144,19 +142,21 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.3397754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.39785681816101076
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 8
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.3859754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.42730931816101075
+        derived: mount-1
       - name: GP6
         type: io
+        locked: true
         number: 9
         gpio: 6
         capabilities:
@@ -171,12 +171,13 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.43217540103687957
+        shape: round
+        x: 0.34715705455433243
+        y: 0.45676181816101075
+        derived: mount-1
       - name: GP7
         type: io
+        locked: true
         number: 10
         gpio: 7
         capabilities:
@@ -191,12 +192,13 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.4783754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.48621431816101074
+        derived: mount-1
       - name: GP8
         type: io
+        locked: true
         number: 11
         gpio: 8
         capabilities:
@@ -211,12 +213,13 @@ headers:
         buses:
           i2c: 0
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.5245754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5156668181610108
+        derived: mount-1
       - name: GP9
         type: io
+        locked: true
         number: 12
         gpio: 9
         capabilities:
@@ -231,19 +234,21 @@ headers:
         buses:
           i2c: 0
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.5707754010368795
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5451193181610107
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 13
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.6169754010368795
+        shape: round
+        x: 0.34715705455433243
+        y: 0.5745718181610107
+        derived: mount-1
       - name: GP10
         type: io
+        locked: true
         number: 14
         gpio: 10
         capabilities:
@@ -258,12 +263,13 @@ headers:
         buses:
           i2c: 1
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.6631754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6040243181610108
+        derived: mount-1
       - name: GP11
         type: io
+        locked: true
         number: 15
         gpio: 11
         capabilities:
@@ -278,12 +284,13 @@ headers:
         buses:
           i2c: 1
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.7093754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6334768181610108
+        derived: mount-1
       - name: GP12
         type: io
+        locked: true
         number: 16
         gpio: 12
         capabilities:
@@ -298,12 +305,13 @@ headers:
         buses:
           i2c: 0
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.7556754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6629930681610108
+        derived: mount-1
       - name: GP13
         type: io
+        locked: true
         number: 17
         gpio: 13
         capabilities:
@@ -318,19 +326,21 @@ headers:
         buses:
           i2c: 0
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.8018754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.6924455681610108
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 18
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.8480754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7218980681610108
+        derived: mount-1
       - name: GP14
         type: io
+        locked: true
         number: 19
         gpio: 14
         capabilities:
@@ -345,12 +355,13 @@ headers:
         buses:
           i2c: 1
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.8942754010368796
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7513505681610108
+        derived: mount-1
       - name: GP15
         type: io
+        locked: true
         number: 20
         gpio: 15
         capabilities:
@@ -365,56 +376,61 @@ headers:
         buses:
           i2c: 1
           spi: 1
-        shape: castellated
-        rotation: 180
-        x: 0.09969704764229911
-        y: 0.9404754010368794
-  - edge: right
-    pins:
+        shape: round
+        x: 0.34715705455433243
+        y: 0.7808030681610106
+        derived: mount-1
       - name: VBUS
         type: pwr
+        locked: true
         number: 40
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.062475401036879596
+        shape: round
+        x: 0.6538935546875
+        y: 0.22107806816101078
+        derived: mount-1
       - name: VSYS
         type: pwr
+        locked: true
         number: 39
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.1086754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.25053056816101077
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 38
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.1548754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.27998306816101076
+        derived: mount-1
       - name: 3V3_EN
         type: other
+        locked: true
         number: 37
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.2010754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.30943556816101075
+        derived: mount-1
       - name: 3V3
         type: pwr
+        locked: true
         number: 36
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.2472754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.3388880681610108
+        derived: mount-1
       - name: ADC_VREF
         type: other
+        locked: true
         number: 35
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.2935754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.36840431816101077
+        derived: mount-1
       - name: GP28
         type: io
+        locked: true
         number: 34
         gpio: 28
         capabilities:
@@ -431,19 +447,21 @@ headers:
           i2c: 0
           spi: 1
           adc: 2
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.3397754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.39785681816101076
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 33
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.3859754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.42730931816101075
+        derived: mount-1
       - name: GP27
         type: io
+        locked: true
         number: 32
         gpio: 27
         capabilities:
@@ -460,12 +478,13 @@ headers:
           i2c: 1
           spi: 1
           adc: 1
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.43217540103687957
+        shape: round
+        x: 0.6538935546875
+        y: 0.45676181816101075
+        derived: mount-1
       - name: GP26
         type: io
+        locked: true
         number: 31
         gpio: 26
         capabilities:
@@ -482,19 +501,21 @@ headers:
           i2c: 1
           spi: 1
           adc: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.4783754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.48621431816101074
+        derived: mount-1
       - name: RUN
         type: other
+        locked: true
         number: 30
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.5245754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.5156668181610108
+        derived: mount-1
       - name: GP22
         type: io
+        locked: true
         number: 29
         gpio: 22
         capabilities:
@@ -509,19 +530,21 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.5707754010368795
+        shape: round
+        x: 0.6538935546875
+        y: 0.5451193181610107
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 28
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.6169754010368795
+        shape: round
+        x: 0.6538935546875
+        y: 0.5745718181610107
+        derived: mount-1
       - name: GP21
         type: io
+        locked: true
         number: 27
         gpio: 21
         capabilities:
@@ -536,12 +559,13 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.6631754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.6040243181610108
+        derived: mount-1
       - name: GP20
         type: io
+        locked: true
         number: 26
         gpio: 20
         capabilities:
@@ -556,12 +580,13 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.7093754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.6334768181610108
+        derived: mount-1
       - name: GP19
         type: io
+        locked: true
         number: 25
         gpio: 19
         capabilities:
@@ -576,12 +601,13 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.7556754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.6629930681610108
+        derived: mount-1
       - name: GP18
         type: io
+        locked: true
         number: 24
         gpio: 18
         capabilities:
@@ -596,19 +622,21 @@ headers:
         buses:
           i2c: 1
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.8018754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.6924455681610108
+        derived: mount-1
       - name: GND
         type: gnd
+        locked: true
         number: 23
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.8480754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.7218980681610108
+        derived: mount-1
       - name: GP17
         type: io
+        locked: true
         number: 22
         gpio: 17
         capabilities:
@@ -623,12 +651,13 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.8942754010368796
+        shape: round
+        x: 0.6538935546875
+        y: 0.7513505681610108
+        derived: mount-1
       - name: GP16
         type: io
+        locked: true
         number: 21
         gpio: 16
         capabilities:
@@ -643,28 +672,16 @@ headers:
         buses:
           i2c: 0
           spi: 0
-        shape: castellated
-        rotation: 0
-        x: 0.9030545479910713
-        y: 0.9404754010368794
-ledLabel: LED
-image: image.png
-imageLayer:
-  x: 0.038349914550781294
-  y: 0.010895316277623301
-  w: 0.9309969220842635
-  h: 0.9567124380906831
-help: help.md
-electrical:
-  model: regulator
-  maxCurrentA: 0.3
-  inputRail: VSYS
-  outputRail: 3V3
-  outputV: 3.3
-  dropoutV: 0.3
-layerVisibility:
-  pcb: false
-  image: true
-  holes: true
-  pins: true
-  components: true
+        shape: round
+        x: 0.6538935546875
+        y: 0.7808030681610106
+        derived: mount-1
+mounts:
+  - id: mount-1
+    footprint: pico
+    ref:
+      lib: snakie-standard
+      part: pico2w
+    label: Raspberry Pi Pico 2 W
+    x: 0.5
+    y: 0.5
