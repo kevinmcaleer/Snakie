@@ -18,6 +18,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`smd` pad shape** — a rectangular surface-mount pad with **no drill**. The
   default `square` pad punches a hole, so until now there was no way to draw the
   underside pad array a XIAO uses.
+- **Reset a bundled part to the version the app ships (#643).** Editing a bundled
+  part correctly stops the seeder from ever overwriting it — but that also meant it
+  could never pick up later structural changes, and there was no way back short of
+  deleting the folder by hand. The Parts Library now says so: a selected part shows
+  **"Bundled version X available — yours is Y"** with a **Reset to bundled** button,
+  and the Standard library header carries an **"N behind"** count that restores them
+  all in one pass. The copy being replaced is moved to the library's `.backups`
+  folder first — image and help file included — so nothing is lost.
 
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`

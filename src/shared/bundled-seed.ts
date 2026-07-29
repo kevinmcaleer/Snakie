@@ -16,6 +16,7 @@
  */
 
 import { parse, stringify } from 'yaml'
+import { isNewer } from './part-registry'
 
 /** What the seeder recorded about a previous sync, per bundled library. */
 export interface SeedManifest {
@@ -95,4 +96,63 @@ export function backfillTopLevel(
   }
   if (!changed) return { text: localText, changed: false }
   return { text: stringify(localObj, { lineWidth: 0 }), changed: true }
+}
+
+/**
+ * How one installed bundled part compares with the bundle shipped in the app (#643).
+ *
+ * Once a user edits a bundled part the seeder can only ever {@link backfillTopLevel}
+ * it, and backfill adds MISSING TOP-LEVEL KEYS ONLY — it never merges into a key the
+ * copy already has, nor descends into nested structures. So an edited part silently
+ * misses any later change that lands inside an existing key (the footprint `mounts`
+ * / `derived` pins case that made docking draw the old marker). This status is what
+ * the UI needs to say so, and to offer the way back.
+ */
+export interface BundledPartStatus {
+  /** The part folder name (its id). */
+  id: string
+  /** Display name, for the UI (from the installed copy, else the bundle). */
+  name?: string
+  /** `version` declared by the INSTALLED `parts.yml` (undefined ⇒ unversioned). */
+  localVersion?: string
+  /** `version` declared by the BUNDLED `parts.yml`. */
+  bundledVersion?: string
+  /**
+   * The install differs from what the seeder last wrote, i.e. the user edited it
+   * (or it predates the seed manifest). Exactly the parts the seeder now treats as
+   * `backfill` — and so the only ones a reset does anything for.
+   */
+  edited: boolean
+  /** The bundled copy declares a strictly newer version than the install. */
+  behind: boolean
+}
+
+/**
+ * Classify one installed bundled part: is it user-edited, and is the bundle newer?
+ *
+ * `edited` is deliberately derived from {@link planPartSync} rather than restated,
+ * so "we would only backfill this" and "the UI offers a reset" can never drift out
+ * of step. `behind` compares the declared part versions; an unversioned install
+ * counts as behind any versioned bundle.
+ */
+export function planPartStatus(args: {
+  /** sha256 of the installed `parts.yml` (undefined ⇒ not installed). */
+  localHash?: string
+  /** sha256 of the bundled `parts.yml`. */
+  bundleHash: string
+  /** The hash the seed manifest recorded for this part, if any. */
+  seededHash?: string
+  localVersion?: string
+  bundledVersion?: string
+}): { edited: boolean; behind: boolean } {
+  const action = planPartSync({
+    existsLocal: args.localHash !== undefined,
+    localHash: args.localHash,
+    bundleHash: args.bundleHash,
+    seededHash: args.seededHash
+  })
+  return {
+    edited: action === 'backfill',
+    behind: !!args.bundledVersion && isNewer(args.bundledVersion, args.localVersion ?? null)
+  }
 }

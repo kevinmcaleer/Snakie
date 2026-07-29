@@ -40,8 +40,12 @@ export function createWebPartsApi(): Record<string, unknown> {
         ? { ok: true, contents }
         : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
     },
-    // Read-only on the web: no per-user library storage, nothing to update.
+    // Read-only on the web: no per-user library storage, nothing to update. The
+    // bundled parts ARE the install here, so none can be edited or fall behind
+    // (#643) and there is nothing a reset could restore.
     checkUpdates: async () => [],
-    cachedUpdates: async () => []
+    cachedUpdates: async () => [],
+    bundledStatus: async () => [],
+    resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' })
   }
 }

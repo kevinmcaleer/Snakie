@@ -267,6 +267,18 @@
   border-color: transparent;
 }
 
+/* #643 — "N parts behind the bundle". Distinct from --update (a REGISTRY update):
+   this is the app's own bundle being newer than what's installed. */
+.pl__badge--stale {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.pl__badge--stale:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .pl__badge--mine {
   cursor: default;
   color: var(--green, #46e06a);
@@ -546,6 +558,40 @@
   margin: 0 0 0.5rem;
   font-size: 0.72rem;
   color: var(--text-muted);
+}
+
+/* #643 — "your copy has drifted from the bundle" notice. Themed off the shared
+   tokens so it reads in both the skeuomorph and dark skins; the `--behind` variant
+   uses the accent because it's the case with something to gain. */
+.pl__stale {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  background: var(--card, transparent);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pl__stale--behind {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.pl__stale-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.pl__stale strong {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .pl__detail-fp {

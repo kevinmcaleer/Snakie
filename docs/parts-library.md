@@ -166,6 +166,32 @@ a **newer** version it shows an **⬆ update** badge — click it to re-install
 the exact ordering rules — `1.2` == `1.2.0`, a leading `v` is tolerated, and a
 pre-release like `1.0.0-beta` sorts *below* `1.0.0`.)
 
+### The bundled Standard library
+
+The **Standard Parts** library is different: it ships *inside the app*, and is
+seeded into `<userData>/parts/snakie-standard` on first run. On later launches
+Snakie reconciles that install with the bundle it now ships, per part:
+
+| your copy | what happens |
+|---|---|
+| not installed | copied in |
+| identical to the bundle | nothing |
+| **untouched** since it was seeded | refreshed to the newer bundle |
+| **edited** (or of unknown origin) | kept — only *missing top-level fields* added |
+
+That last row protects your edits, but it also means an edited part can **never**
+adopt a later change that lands *inside* a field it already has (a footprint's
+`mounts`, the `derived` pins inside `headers`). Such a part quietly stays on an old
+schema — which looks like a bug in the app, not stale data.
+
+So the Parts Library tells you. Select a part and it shows **"Bundled version X
+available — yours is Y"** with **Reset to bundled**; the Standard library header
+shows an **↻ N behind** count that restores them all at once. Resetting moves your
+current copy — image and help file included — to `<library>/.backups/<part-id>/`
+first, so it's recoverable, then re-baselines the part so ordinary refreshes work
+again. It is the equivalent of deleting the folder and letting Snakie re-seed it,
+without the restart or the data loss.
+
 ## Authoring parts
 
 You rarely hand-write `parts.yml`. The **Part Editor** authors it visually and

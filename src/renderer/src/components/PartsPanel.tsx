@@ -9,6 +9,7 @@ import { groupByCategory } from './part-categories'
 import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
+import type { BundledPartStatus } from '../../../shared/bundled-seed'
 import type {
   LibraryUpdate,
   PartDefinition,
@@ -157,6 +158,11 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   const [busyLib, setBusyLib] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
+  // #643: which bundled parts are user-edited and/or behind the shipped bundle,
+  // keyed by part id. An edited part is never refreshed by the seeder, so this is
+  // the only thing that makes the staleness visible.
+  const [bundled, setBundled] = useState<Record<string, BundledPartStatus>>({})
+
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
@@ -167,7 +173,75 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
     } finally {
       setLoading(false)
     }
+    // Re-read alongside the parts themselves: a save in the Part Editor is exactly
+    // what flips a bundled part to "edited".
+    try {
+      const st = await window.api.parts.bundledStatus()
+      setBundled(Object.fromEntries(st.map((s) => [s.id, s])))
+    } catch {
+      setBundled({})
+    }
   }, [])
+
+  /** Bundled parts whose shipped version is newer than the installed copy (#643).
+   *  Surfaced as a count on the library header — otherwise a stale part is only
+   *  discoverable by selecting it, which is how the last one went unnoticed. */
+  const behindParts = useMemo(
+    () => Object.values(bundled).filter((s) => s.behind),
+    [bundled]
+  )
+
+  /** Restore every part that's behind, in one pass. */
+  const resetAllBehind = useCallback(async (): Promise<void> => {
+    if (behindParts.length === 0) return
+    const names = behindParts.map((s) => `  • ${s.name ?? s.id} (${s.localVersion ?? '—'} → ${s.bundledVersion})`)
+    const ok = window.confirm(
+      `Restore ${behindParts.length} part${behindParts.length === 1 ? '' : 's'} to the bundled version?\n\n` +
+        `${names.join('\n')}\n\n` +
+        "Each current copy is kept in the library's .backups folder."
+    )
+    if (!ok) return
+    let done = 0
+    const failed: string[] = []
+    for (const s of behindParts) {
+      const res = await window.api.parts.resetToBundled(s.id)
+      if (res.ok) done++
+      else failed.push(s.name ?? s.id)
+    }
+    setNote(
+      failed.length === 0
+        ? `Restored ${done} part${done === 1 ? '' : 's'} to the bundled version. Old copies are in .backups.`
+        : `Restored ${done}; could not restore: ${failed.join(', ')}.`
+    )
+    window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+    await refresh()
+  }, [behindParts, refresh])
+
+  /** Restore a bundled part to the version this app ships (#643). */
+  const resetToBundled = useCallback(
+    async (part: PartDefinition): Promise<void> => {
+      const st = bundled[part.id]
+      const ver = st?.bundledVersion ? ` (${st.bundledVersion})` : ''
+      const ok = window.confirm(
+        `Replace "${part.name}" with the bundled version${ver}?\n\n` +
+          'Your current copy — including any image or help file — is kept in the ' +
+          'library\'s .backups folder, so this can be undone by hand.'
+      )
+      if (!ok) return
+      const res = await window.api.parts.resetToBundled(part.id)
+      setNote(
+        res.ok
+          ? `"${part.name}" restored to the bundled version. Your copy is in .backups.`
+          : (res.error ?? 'Reset failed.')
+      )
+      if (res.ok) {
+        // Other windows (Board View, Part Editor) cache parts too.
+        window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+        await refresh()
+      }
+    },
+    [bundled, refresh]
+  )
 
   useEffect(() => {
     void refresh()
@@ -554,6 +628,18 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
                         ⬆ v{update.available}
                       </button>
                     )}
+                    {/* #643 — how many bundled parts this app ships a newer version
+                        of than the installed copy. Click to restore them all. */}
+                    {lib.id === STANDARD_LIBRARY_ID && behindParts.length > 0 && (
+                      <button
+                        type="button"
+                        className="pl__badge pl__badge--stale"
+                        title={`${behindParts.length} part(s) are older than the bundled version — click to restore them (your copies are backed up)`}
+                        onClick={() => void resetAllBehind()}
+                      >
+                        ↻ {behindParts.length} behind
+                      </button>
+                    )}
                     {/* DEV-only: publish the Standard library to GitHub (#197). */}
                     {import.meta.env.DEV && lib.id === STANDARD_LIBRARY_ID && (
                       <button
@@ -676,6 +762,14 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
                     ? 'Update Standard'
                     : 'Promote to Standard'
                 }
+                bundledStatus={
+                  // Only meaningful for the bundled library — a user's own part has
+                  // no bundle to compare against or reset to.
+                  selectedPart.libraryId === STANDARD_LIBRARY_ID
+                    ? bundled[selectedPart.part.id]
+                    : undefined
+                }
+                onResetToBundled={() => void resetToBundled(selectedPart.part)}
                 onClose={() => setSelected(null)}
               />
             </Panel>
@@ -695,6 +789,8 @@ function PartDetail({
   onAddToProject,
   onPromote,
   promoteLabel,
+  bundledStatus,
+  onResetToBundled,
   onClose
 }: {
   libraryId: string
@@ -706,6 +802,10 @@ function PartDetail({
   /** DEV-only: promote this microcontroller board into the Standard Boards library. */
   onPromote?: () => void
   promoteLabel?: string
+  /** How this copy compares with the bundle the app ships (#643); absent for
+   *  parts that aren't bundled. */
+  bundledStatus?: BundledPartStatus
+  onResetToBundled: () => void
   onClose: () => void
 }): JSX.Element {
   const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
@@ -782,6 +882,33 @@ function PartDetail({
       </div>
 
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
+
+      {/* #643 — an edited bundled part is never refreshed by the seeder, so it can
+          sit on an old schema indefinitely. Say so, and offer the way back. The
+          `behind` case is the one that actually costs the user something. */}
+      {bundledStatus && (bundledStatus.behind || bundledStatus.edited) && (
+        <div className={`pl__stale${bundledStatus.behind ? ' pl__stale--behind' : ''}`}>
+          <span className="pl__stale-text">
+            {bundledStatus.behind ? (
+              <>
+                Bundled version <strong>{bundledStatus.bundledVersion}</strong> available — yours is{' '}
+                <strong>{bundledStatus.localVersion ?? 'unversioned'}</strong>
+                {bundledStatus.edited ? ' (edited)' : ''}.
+              </>
+            ) : (
+              <>Edited — this copy no longer tracks the bundled version.</>
+            )}
+          </span>
+          <button
+            type="button"
+            className="pl__btn pl__btn--small"
+            onClick={onResetToBundled}
+            title="Replace this part with the version bundled in the app (your copy is backed up)"
+          >
+            Reset to bundled
+          </button>
+        </div>
+      )}
 
       <div className="pl__detail-seg" role="tablist" aria-label="Preview">
         <button
