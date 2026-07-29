@@ -26,6 +26,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the Standard library header carries an **"N behind"** count that restores them
   all in one pass. The copy being replaced is moved to the library's `.backups`
   folder first — image and help file included — so nothing is lost.
+- **Four Grove drivers in the Modules panel (#638).** `lsm6ds3` (the 6-axis IMU
+  on Seeed's Grove module — a *different* part from the LSM6DSOX already listed,
+  which rejects its `WHO_AM_I` of `0x69`), `grove_ultrasonic` (the one-wire
+  ranger, which the HC-SR04 driver can't drive because it holds trigger and echo
+  as separate fixed-direction pins), `tb6612` (the Grove I²C motor driver, which
+  pairs with the teleop mixer via signed `[-1, 1]` powers), and the MY9221 LED
+  bar referenced upstream.
 
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
