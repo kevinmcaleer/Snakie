@@ -362,16 +362,22 @@ export async function resetPartToBundled(partId: string): Promise<WriteResult> {
 
   // 3) Re-baseline the manifest so the part counts as untouched again and future
   //    releases can `refresh` it normally instead of falling back to backfill.
-  const bundleYml = await readTextOrNull(join(srcPart, 'parts.yml'))
+  //
+  //    ONLY when a manifest already exists, and never advancing its `version`.
+  //    Writing a fresh manifest stamped with the CURRENT bundle version would make
+  //    the next `syncBundledLibrary` take its up-to-date fast path — which only
+  //    copies wholly-new folders — and so silently skip the reconcile every OTHER
+  //    stale part in the install is still waiting for. An install with no manifest
+  //    needs that full pass more than it needs this one hash: the reset part is now
+  //    byte-identical to the bundle, so the next sync classifies it `skip` and
+  //    records its hash correctly anyway.
   const manifest = await readSeedManifest(dest)
-  if (bundleYml !== null) {
-    const version = manifest?.version ?? (await readBundleVersion(bundledStandardLibraryDir()))
-    if (version) {
-      await writeSeedManifest(dest, {
-        version,
-        parts: { ...(manifest?.parts ?? {}), [id]: hashText(bundleYml) }
-      })
-    }
+  const bundleYml = await readTextOrNull(join(srcPart, 'parts.yml'))
+  if (manifest && bundleYml !== null) {
+    await writeSeedManifest(dest, {
+      version: manifest.version,
+      parts: { ...manifest.parts, [id]: hashText(bundleYml) }
+    })
   }
   return { ok: true, id, libraryId: STANDARD_LIBRARY_ID }
 }
