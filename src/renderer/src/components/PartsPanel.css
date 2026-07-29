@@ -92,6 +92,9 @@
 }
 
 .pl__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
   margin: 0 0.6rem 0.4rem;
   padding: 0.35rem 0.5rem;
   font-size: 0.7rem;
@@ -99,6 +102,19 @@
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
+}
+
+.pl__note-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Long messages (a bulk-reset summary) must wrap, not stretch the panel. */
+  overflow-wrap: anywhere;
+}
+
+/* Sits with the text rather than centred against a multi-line message. */
+.pl__note-close {
+  flex: 0 0 auto;
+  margin-top: -0.1rem;
 }
 
 .pl__muted {

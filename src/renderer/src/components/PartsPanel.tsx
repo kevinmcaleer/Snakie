@@ -523,7 +523,23 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         />
       </div>
 
-      {note && <p className="pl__note">{note}</p>}
+      {/* Panel status line (reset/promote/install/registry). It persists until the
+          next action replaces it, so it needs a way out — otherwise a one-off
+          "restored to the bundled version" sits there for the rest of the session. */}
+      {note && (
+        <div className="pl__note" role="status">
+          <span className="pl__note-text">{note}</span>
+          <button
+            type="button"
+            className="pl__icon pl__note-close"
+            onClick={() => setNote(null)}
+            title="Dismiss"
+            aria-label="Dismiss message"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Library update indicator (#196) — one click pulls + uses the latest. */}
       {updates.length > 0 && (
