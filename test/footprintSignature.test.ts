@@ -124,6 +124,16 @@ describe('real bundled boards (#166)', () => {
     const derived = (carrier.headers ?? []).flatMap((h) => h.pins).filter((p) => p.derived === mount?.id)
     expect(derived.length).toBe(40)
   })
+
+  it('the whole Pico family shares one footprint, so any Pico docks the carrier', () => {
+    // pico2w's columns were misaligned (40 distinct y-levels), breaking its
+    // signature vs pico/pico-w; once aligned they all duck-type together.
+    const sig = partSignature(load('pico2w')) // the carrier's mount ref
+    expect(sig).not.toBe('')
+    for (const id of ['pico', 'pico-w', 'pico2w']) {
+      expect(signaturesMatch(sig, partSignature(load(id)))).toBe(true)
+    }
+  })
 })
 
 describe('serialisation of the imprint fields (#166)', () => {
