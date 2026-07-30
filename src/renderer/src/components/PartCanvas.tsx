@@ -30,6 +30,8 @@ import {
   pasteStyle,
   pinShapeOf,
   resolvedPins,
+  uniquePinName,
+  usedPinNames,
   type GroupMemberRef,
   type PartStyleClipboard,
   type ResolvedPin,
@@ -42,6 +44,7 @@ import type {
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
+  PartConnector,
   PartItemFlags,
   PartLabel,
   PartSide,
@@ -1446,6 +1449,34 @@ export function PartCanvas({
       const next = [...labels, { ...l, x: clamp01(l.x + 0.04), y: clamp01(l.y + 0.04), z: nextComponentZ(part) }]
       commit({ ...part, labels: next })
       onSelect?.({ type: 'label', index: next.length - 1 })
+    } else if (sel?.type === 'connector') {
+      const c = connectors[sel.index]
+      if (!c) return
+      // Contacts carry no coordinates of their own — they're laid out from the
+      // body's position and rotation — so only the body moves.
+      const off = 0.04
+      const used = usedPinNames(part)
+      const copy: PartConnector = {
+        ...c,
+        // A duplicate is a NEW, standalone connector. Inheriting the source's
+        // group would make the copy move, rotate and delete as part of it — so
+        // dragging the original would drag its own duplicate around.
+        group: undefined,
+        x: clamp01(c.x + off),
+        y: clamp01(c.y + off),
+        z: nextComponentZ(part),
+        // Contacts share one namespace with every other pin (a wire endpoint is
+        // `<partId>.<PinName>`), so a verbatim copy would give a board two pins
+        // called SCL and make that endpoint ambiguous. Suffix them: SCL → SCL2.
+        pins: c.pins.map((p) => {
+          const name = uniquePinName(p.name, used)
+          used.add(name)
+          return { ...p, name, capabilities: p.capabilities ? [...p.capabilities] : undefined }
+        })
+      }
+      const next = [...connectors, copy]
+      commit({ ...part, connectors: next })
+      onSelect?.({ type: 'connector', index: next.length - 1 })
     }
   }
 
@@ -4163,6 +4194,9 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit connector" style={style}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate connector" onClick={() => duplicateComponent(sel)}>
+                {dupIcon}
+              </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate connector 90 degrees" onClick={() => rotateComponent(sel)}>
                 {rotateIcon}
               </button>

@@ -34,7 +34,9 @@ import {
   snapToGrid,
   validatePart,
   withPinPositions,
-  withShapesFromFeatures
+  withShapesFromFeatures,
+  uniquePinName,
+  usedPinNames
 } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -1063,5 +1065,57 @@ describe('group tree helpers (#630)', () => {
     const out = dissolveGroup(part, 'solo')
     expect(out.shapes?.[0].group).toBeUndefined()
     expect(out.groups).toBeUndefined()
+  })
+})
+
+describe('unique pin names (#647 — duplicating a connector)', () => {
+  const part = (over: Partial<PartDefinition> = {}): PartDefinition =>
+    ({ id: 'p', name: 'P', headers: [], ...over }) as PartDefinition
+
+  it('collects names from headers AND connectors — they share one namespace', () => {
+    // A wire endpoint is `<partId>.<PinName>`, so a header pin and a connector
+    // contact called the same thing collide just as surely as two header pins.
+    const p = part({
+      headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', x: 0, y: 0 }] }],
+      connectors: [{ kind: 'grove', x: 0.5, y: 0.5, pins: [{ name: 'SCL', type: 'io' }] }]
+    } as Partial<PartDefinition>)
+    expect(usedPinNames(p)).toEqual(new Set(['GP0', 'SCL']))
+  })
+
+  it('leaves a free name alone', () => {
+    expect(uniquePinName('SCL', new Set())).toBe('SCL')
+  })
+
+  it('suffixes a taken name', () => {
+    expect(uniquePinName('SCL', new Set(['SCL']))).toBe('SCL2')
+  })
+
+  it('counts up rather than re-colliding', () => {
+    expect(uniquePinName('SCL', new Set(['SCL', 'SCL2', 'SCL3']))).toBe('SCL4')
+  })
+
+  it('continues an existing number instead of appending to it', () => {
+    // Duplicating `SCL2` must give `SCL3`, not `SCL22`.
+    expect(uniquePinName('SCL2', new Set(['SCL2']))).toBe('SCL3')
+    expect(uniquePinName('SDA1', new Set(['SDA1', 'SDA2']))).toBe('SDA3')
+  })
+
+  it('handles an empty / whitespace name without looping', () => {
+    expect(uniquePinName('', new Set(['']))).toBe('')
+    expect(uniquePinName('  ', new Set())).toBe('')
+  })
+
+  it('a duplicated Grove connector gets a wholly distinct contact set', () => {
+    // The real scenario: a board with one Grove port gains a second.
+    const names = ['SCL', 'SDA', 'VCC', 'GND']
+    const used = new Set(names)
+    const copied = names.map((n) => {
+      const u = uniquePinName(n, used)
+      used.add(u)
+      return u
+    })
+    expect(copied).toEqual(['SCL2', 'SDA2', 'VCC2', 'GND2'])
+    // Nothing in the copy shadows an original.
+    expect(copied.some((n) => names.includes(n))).toBe(false)
   })
 })

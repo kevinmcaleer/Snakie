@@ -624,6 +624,43 @@ export function nextComponentZ(part: PartDefinition): number {
 }
 
 /**
+ * Every pin name the part already uses — header pins AND connector contacts.
+ *
+ * They share one namespace: a wire endpoint is `"<partId>.<PinName>"`, so two
+ * pins with the same name anywhere in a part make that endpoint ambiguous.
+ */
+export function usedPinNames(part: PartDefinition): Set<string> {
+  const names = new Set<string>()
+  for (const h of part.headers ?? []) for (const p of h.pins) if (p.name) names.add(p.name)
+  for (const c of part.connectors ?? []) for (const p of c.pins ?? []) if (p.name) names.add(p.name)
+  return names
+}
+
+/**
+ * A pin name not already in `used`, derived from `base` by a numeric suffix:
+ * `SCL` → `SCL2` → `SCL3`. Pure.
+ *
+ * Matches how a real two-port board is labelled (the QT Py's `SDA1`/`SCL1`), and
+ * exists because duplicating a connector would otherwise produce a second set of
+ * contacts named exactly like the first — see {@link usedPinNames} for why that
+ * is not merely untidy.
+ *
+ * A `base` that already ends in digits counts up from there, so duplicating
+ * `SCL2` gives `SCL3` rather than `SCL22`.
+ */
+export function uniquePinName(base: string, used: ReadonlySet<string>): string {
+  const name = (base ?? '').trim()
+  if (!name) return name
+  if (!used.has(name)) return name
+  const m = /^(.*?)(\d+)$/.exec(name)
+  const stem = m ? m[1] : name
+  let n = m ? parseInt(m[2], 10) + 1 : 2
+  // Bounded so a pathological part can't spin here; 999 is far past any real board.
+  while (used.has(`${stem}${n}`) && n < 1000) n++
+  return `${stem}${n}`
+}
+
+/**
  * Append a shape or label and put it strictly ON TOP of every existing component,
  * renormalising all `z` to 0..n in the resolved order. Pure. (Computing a single
  * `z` before the append is unsafe: the no-`z` label fallback depends on the shape

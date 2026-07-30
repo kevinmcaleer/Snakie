@@ -88,6 +88,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   force their detail open, since that message is the only thing that explains
   what to do next.
 
+- **Duplicate a connector in the Part Editor (#647).** Its mini-toolbar had only
+  Rotate and Delete, so a second Grove/QWIIC port had to be built by hand. The
+  copy's contacts are renamed (`SCL` → `SCL2`) because a wire endpoint is
+  `<partId>.<PinName>` — two ports with identically-named contacts would make
+  that endpoint ambiguous — and it starts ungrouped, so dragging the original
+  doesn't drag its own duplicate around.
+
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
   parser and the Part Editor's normaliser kept separate lists of valid pad shapes,
