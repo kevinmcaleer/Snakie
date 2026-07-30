@@ -24,7 +24,7 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit } from './cable'
+import { cableRole, conductorColour, connectorFit, plugAngle } from './cable'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
@@ -1504,25 +1504,43 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    * 2 mm apart, so requiring a hit on one exact contact makes cables fiddly to
    * land; the whole socket is the target instead.
    */
-  type ConnectorTarget = EndpointConn & { cx: number; cy: number; r: number }
+  /** `angle` is the socket's OWN facing (degrees), from its contact normals — it
+   *  belongs to the part the connector is mounted on, not to whatever is wired to
+   *  it (#647). */
+  type ConnectorTarget = EndpointConn & { cx: number; cy: number; r: number; angle: number }
   const connectorTargets: ConnectorTarget[] = []
   for (const s of subjects) {
     const def = s.partDef
     if (!def?.connectors?.length) continue
     connectorRanges(def).forEach(({ base, conn }, ci) => {
       const pts: { x: number; y: number }[] = []
+      // The contacts' outward normals — already turned with the placed part by
+      // `rotateNormal`, so they give the socket's facing in WORLD space.
+      const norms: { ox: number; oy: number }[] = []
       const endpoints: string[] = []
       for (const p of s.pins) {
         if (p.index < base || p.index >= base + conn.pins.length) continue
         endpoints[p.index - base] = endpointOf(s.key, p.name, p.index)
-        for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
+        for (const a of p.anchors) {
+          pts.push({ x: s.x + a.x, y: s.y + a.y })
+          norms.push({ ox: a.ox, oy: a.oy })
+        }
       }
       if (pts.length < 2 || endpoints.length !== conn.pins.length) return
       const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
       const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
       // Pad the contact span so the target covers the housing, not just the pins.
       const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
-      connectorTargets.push({ key: s.key, connIndex: ci, conn, endpoints, cx, cy, r })
+      connectorTargets.push({
+        key: s.key,
+        connIndex: ci,
+        conn,
+        endpoints,
+        cx,
+        cy,
+        r,
+        angle: plugAngle(norms)
+      })
     })
   }
   /** The connector body nearest a world point, if the point is inside it. */
@@ -2198,7 +2216,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         const m = byKey.get(`${mate.key}|${mate.connIndex}`)
         if (!t || !m) return
         seen.add(k)
-        out.push({ t, kind: ec.conn.kind, angle: (Math.atan2(m.cy - t.cy, m.cx - t.cx) * 180) / Math.PI })
+        // The plug's OWN facing (#647). It used to be `atan2` toward the mate, so
+        // every header swung round to point at the other component and swung again
+        // whenever that component moved — a plug is part of the socket it's pushed
+        // into, so only the lead between them should move.
+        out.push({ t, kind: ec.conn.kind, angle: t.angle })
       })
     }
     return out

@@ -4,7 +4,8 @@ import {
   conductorColour,
   connectorFit,
   connectorKindName,
-  pairContacts
+  pairContacts,
+  plugAngle
 } from '../src/renderer/src/components/cable'
 import type { PartConnector, PartPin } from '../src/shared/part'
 
@@ -214,5 +215,29 @@ describe('connectorKindName', () => {
     expect(connectorKindName(groveUart())).toBe('Grove UART')
     expect(connectorKindName(qwiic())).toBe('QWIIC')
     expect(connectorKindName(servo())).toBe('servo header')
+  })
+})
+
+describe('plugAngle (#647 — plugs keep their own orientation)', () => {
+  it('faces the way the contacts face, not the mate', () => {
+    // An unrotated connector's contacts point +y (down the screen).
+    expect(plugAngle([{ ox: 0, oy: 1 }, { ox: 0, oy: 1 }])).toBe(90)
+  })
+
+  it('follows the part through each quarter turn', () => {
+    expect(plugAngle([{ ox: 1, oy: 0 }])).toBe(0)
+    expect(plugAngle([{ ox: 0, oy: 1 }])).toBe(90)
+    expect(plugAngle([{ ox: -1, oy: 0 }])).toBe(180)
+    expect(plugAngle([{ ox: 0, oy: -1 }])).toBe(-90)
+  })
+
+  it('averages contacts that agree', () => {
+    expect(plugAngle([{ ox: 1, oy: 0 }, { ox: 1, oy: 0 }, { ox: 1, oy: 0 }])).toBe(0)
+  })
+
+  it('is 0 for a degenerate or empty set rather than NaN', () => {
+    // Opposing normals cancel; a NaN here would blow up the SVG transform.
+    expect(plugAngle([{ ox: 1, oy: 0 }, { ox: -1, oy: 0 }])).toBe(0)
+    expect(plugAngle([])).toBe(0)
   })
 })

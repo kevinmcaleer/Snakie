@@ -96,6 +96,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **Cable plugs stay put.** A Grove/QWIIC plug took its angle from the position of
+  whatever it was wired to, so every header swung round to face the other component
+  — and swung again whenever that component moved. A plug is part of the socket it
+  is pushed into: it now takes its orientation from its own connector's contacts,
+  which already turn with the placed part, so only the lead between them moves.
+
 - **`instruments.py` reaches the board again.** Its `__version__` is how the app
   decides whether a board's copy is stale — and it went unbumped through two
   changes, so every board silently kept the OLD library while the app reported it

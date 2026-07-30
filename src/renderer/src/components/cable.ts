@@ -140,3 +140,34 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
   }
   return { ok: true, pairs }
 }
+
+/**
+ * The angle (degrees) a cable plug sits at, from its connector's contact normals.
+ *
+ * A plug is part of the SOCKET it's pushed into, so its orientation belongs to the
+ * part it's mounted on — not to whatever happens to be wired to it. Deriving it
+ * from the mate's position (as this once did) made every header swing round to
+ * face the other component, and re-orient again whenever that component moved.
+ * Only the lead between them should move.
+ *
+ * Each contact carries an outward normal that is already rotated with the placed
+ * part, so averaging them gives the direction the lead leaves the socket, in world
+ * space. Contacts of one connector share a normal; the average is a cheap way to
+ * be robust to a malformed part whose contacts disagree.
+ *
+ * Returns `0` for an empty or degenerate set (normals that cancel out), so a bad
+ * part yields a consistently-placed plug rather than a NaN transform.
+ */
+export function plugAngle(normals: readonly { ox: number; oy: number }[]): number {
+  if (normals.length === 0) return 0
+  let nx = 0
+  let ny = 0
+  for (const n of normals) {
+    nx += n.ox
+    ny += n.oy
+  }
+  nx /= normals.length
+  ny /= normals.length
+  if (Math.hypot(nx, ny) < 1e-6) return 0
+  return (Math.atan2(ny, nx) * 180) / Math.PI
+}
