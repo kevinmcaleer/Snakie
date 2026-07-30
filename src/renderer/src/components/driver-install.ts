@@ -7,7 +7,8 @@
  * main (past the renderer CSP) and copied to its target path, creating each
  * ancestor folder first (MicroPython has no recursive mkdir).
  */
-import { driverDeviceDirs, driverInstallMethod } from './part-editor.util'
+import { driverDeviceDirs, driverInstallMethod, driverModuleId } from './part-editor.util'
+import { moduleById } from '../../../shared/modules-catalog'
 import type { DriverFile } from '../../../preload/index.d'
 
 export interface DriverInstallResult {
@@ -23,7 +24,21 @@ export async function installPartDriver(
   d: DriverFile
 ): Promise<DriverInstallResult> {
   try {
-    if (driverInstallMethod(d.source) === 'mip') {
+    const method = driverInstallMethod(d.source)
+    if (method === 'module') {
+      // A catalog module (#638) — install it exactly as the Modules panel does,
+      // so "already installed" and the install log mean the same thing whichever
+      // route the user took.
+      const id = driverModuleId(d.source)
+      if (!moduleById(id)) {
+        return { ok: false, message: `Unknown module "${id}" — it is not in the catalog.` }
+      }
+      const res = await window.api.modules.install(id)
+      return res.ok
+        ? { ok: true }
+        : { ok: false, message: res.log?.split('\n').filter(Boolean).pop() || `Could not install ${id}.` }
+    }
+    if (method === 'mip') {
       const target = d.target.trim()
       const res = await window.api.packages.install(d.source, target ? { target } : undefined)
       return res.ok

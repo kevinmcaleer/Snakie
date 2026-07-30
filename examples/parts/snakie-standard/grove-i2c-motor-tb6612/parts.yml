@@ -18,7 +18,7 @@ properties:
   interface: I²C (0x14 default, settable 0x01–0x7F)
   channels: 2 DC motors, or 1 stepper
   current: 1.2 A continuous per channel
-version: 0.1.1
+version: 0.1.2
 pcbColor: "#1b4d3e"
 aspect: 1.333
 dimensions:
@@ -169,9 +169,12 @@ labels:
 # 0x14 as shipped. The address is settable across 0x01–0x7F, so a reconfigured
 # unit can appear anywhere on the bus.
 i2cAddresses: [20]
-suggests:
-  - module: tb6612
-    unlocks: both DC motor channels
+library:
+  module: tb6612
+drivers:
+  - source: module:tb6612
+    target: lib/tb6612.py
+    label: TB6612 motor driver
 help: help.md
 layerVisibility:
   pcb: false

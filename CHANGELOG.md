@@ -96,6 +96,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **Placing a part that needs a driver now says so.** Adding the Grove IMU to a
+  project prompted nothing, and running the code failed with a bare
+  `ImportError: no module named 'lsm6ds3'` and no route to a fix. Both
+  notifications key off `library.module` / `drivers`, which the Grove parts never
+  declared. They do now — so the Board View offers the install, and the Code
+  workspace says which import is missing.
+- A part can require a driver from the **modules catalog** (`source: module:<id>`)
+  instead of shipping a copy of the `.py` in its own folder — six Grove parts share
+  four drivers. Those are probed **by import** rather than by path, since a
+  `mip`-backed module lands wherever `mip` puts it and a guessed path would leave
+  the prompt nagging for ever.
+
 - **A bundled IMU driver can now actually be watched.** `inst.watch(imu=…)`
   duck-typed on `read_accel_gyro` / `read_accelerometer_gyro_data` / `read_accel`
   — none of which the bundled `lsm6ds3` **or** `mpu6050` expose. Both fell through

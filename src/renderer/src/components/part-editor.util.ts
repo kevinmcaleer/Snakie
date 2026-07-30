@@ -1545,8 +1545,15 @@ export function placedPartsNeedingDrivers(
   return out
 }
 
-/** How a driver's {@link DriverFile.source} is installed (#184). */
-export type DriverInstallMethod = 'mip' | 'copy'
+/** How a driver's {@link DriverFile.source} is installed (#184).
+ *  `module` = a `module:<id>` reference into the modules catalog (#638). */
+export type DriverInstallMethod = 'mip' | 'copy' | 'module'
+
+/** The catalog id in a `module:<id>` driver source (empty when not that form). */
+export function driverModuleId(source: string): string {
+  const s = String(source ?? '').trim()
+  return /^module:/i.test(s) ? s.slice(s.indexOf(':') + 1).trim() : ''
+}
 
 /**
  * Classify a driver source into its install mechanism (#184). A `github:` /
@@ -1557,6 +1564,10 @@ export type DriverInstallMethod = 'mip' | 'copy'
  */
 export function driverInstallMethod(source: string): DriverInstallMethod {
   const s = String(source ?? '').trim()
+  // `module:<id>` — a driver from the MODULES CATALOG (#638). Lets a part require
+  // a driver that Snakie already ships without copying the .py into every part
+  // folder that needs it; six Grove parts share four drivers.
+  if (/^module:/i.test(s)) return 'module'
   if (/^(github|gitlab|pypi):/i.test(s)) return 'mip'
   const hasScheme = /:\/\//.test(s)
   const isBareName = !hasScheme && !s.includes('/') && !/\.(py|mpy)$/i.test(s)

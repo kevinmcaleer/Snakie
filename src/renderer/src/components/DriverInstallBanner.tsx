@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { driverInstallMethod, type PartDriverNeed } from './part-editor.util'
+import { driverInstallMethod, driverModuleId, type PartDriverNeed } from './part-editor.util'
+import { moduleById } from '../../../shared/modules-catalog'
 import { installPartDriver } from './driver-install'
 import { Notice } from './Notice'
 import type { DriverFile } from '../../../preload/index.d'
@@ -20,10 +21,16 @@ import './DriverInstallBanner.css'
  *  - `copy` → read the file's source (a bundled file in the part folder, or an
  *             http(s) URL — both via `parts.readDriverSource` in main, past the
  *             renderer CSP) then `device.mkdir` each ancestor folder + write it to
- *             its `target` path with `device.writeFile`.
+ *             its `target` path with `device.writeFile`;
+ *  - `module` → a `module:<id>` reference into the MODULES CATALOG (#638),
+ *             installed exactly as the Modules panel does. Lets a part require a
+ *             driver Snakie already ships without copying the `.py` into every
+ *             part folder that needs it.
  *
- * The banner is BOARD-AWARE: it stats each `copy` driver's target on the connected
- * board and shows only the drivers that are actually MISSING — so it clears once
+ * The banner is BOARD-AWARE: it stats each `copy` driver's target, and probes each
+ * `module` driver BY IMPORT (a mip-backed module lands wherever mip decides, so a
+ * guessed path would never match and the banner would nag for ever), showing only
+ * the drivers that are actually MISSING — so it clears once
  * they're installed (its own install, or another window's, via the shared
  * `modules.onChanged` signal), instead of lingering forever. Installing touches the
  * device, so the action is disabled until a board is connected.
@@ -100,9 +107,19 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
     let alive = true
     void (async (): Promise<void> => {
       const found = new Set<string>()
+      // Catalog-module drivers are probed by IMPORT, not by path: a `mip`-backed
+      // module (e.g. my9221) lands wherever mip decides, so stat-ing a guessed
+      // target would never find it and the banner would nag for ever.
+      const modNeeds: { key: string; name: string }[] = []
       for (const need of needs) {
         for (const d of need.drivers) {
-          if (driverInstallMethod(d.source) !== 'copy') continue
+          const method = driverInstallMethod(d.source)
+          if (method === 'module') {
+            const def = moduleById(driverModuleId(d.source))
+            if (def) modNeeds.push({ key: driverKey(need, d), name: def.importName })
+            continue
+          }
+          if (method !== 'copy') continue
           const target = d.target.trim()
           if (!target) continue
           const ok = await window.api.device
@@ -111,6 +128,12 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
             .catch(() => false)
           if (ok) found.add(driverKey(need, d))
         }
+      }
+      if (modNeeds.length) {
+        const importable = new Set(
+          await window.api.modules.probeInstalled(modNeeds.map((m) => m.name)).catch(() => [])
+        )
+        for (const m of modNeeds) if (importable.has(m.name)) found.add(m.key)
       }
       if (alive) setPresent(found)
     })()

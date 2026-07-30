@@ -19,7 +19,7 @@ properties:
   interface: I²C (0x6A default, 0x6B with SA0 high)
   measures: acceleration (±2/4/8/16 g), angular rate (±125…2000 dps)
   whoami: register 0x0F reads 0x69
-version: 0.1.1
+version: 0.1.2
 pcbColor: "#1b4d3e"
 aspect: 1.0
 dimensions:
@@ -88,9 +88,12 @@ mountingHoles:
     diameter: 2.0
 # 0x6A default, 0x6B when SA0 is pulled high (which is how most Grove units ship).
 i2cAddresses: [106, 107]
-suggests:
-  - module: lsm6ds3
-    unlocks: the 6-axis accelerometer + gyro
+library:
+  module: lsm6ds3
+drivers:
+  - source: module:lsm6ds3
+    target: lib/lsm6ds3.py
+    label: LSM6DS3 IMU driver
 help: help.md
 layerVisibility:
   pcb: false

@@ -3,8 +3,10 @@ import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { libraryFromYaml, partFromYaml, partToYaml } from '../src/shared/part-yaml'
 import { parseRegistry } from '../src/shared/part-registry'
-import { moduleById } from '../src/shared/modules-catalog'
+import { installPathFor, moduleById } from '../src/shared/modules-catalog'
 import {
+  driverInstallMethod,
+  driverModuleId,
   normalisePart,
   partToBoardDefinition,
   validatePart
@@ -191,5 +193,44 @@ describe('suggested modules across the bundled library (#638)', () => {
     for (const s of part.suggests ?? []) {
       expect(s.unlocks, `"${s.module}" needs an unlocks line`).toBeTruthy()
     }
+  })
+})
+
+describe('a placed Grove part asks for its driver (#638)', () => {
+  // The gap this closes: adding the Grove IMU to a project prompted nothing, and
+  // running the code failed with a bare `ImportError: no module named 'lsm6ds3'`.
+  // Both notifications key off fields the part simply didn't have.
+  const grove = ['grove-6axis-lsm6ds3', 'grove-i2c-motor-tb6612', 'grove-ultrasonic-ranger', 'grove-led-bar']
+
+  it.each(grove)('%s declares the module its code must import', (id) => {
+    const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
+    // `requiredPartModules` keys ENTIRELY off this — without it, neither the
+    // "this file doesn't import…" nor the "board is missing…" notice can fire.
+    expect(part.library?.module, `${id} needs library.module`).toBeTruthy()
+  })
+
+  it.each(grove)('%s declares an installable driver', (id) => {
+    const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
+    expect(part.drivers?.length, `${id} needs drivers`).toBeGreaterThan(0)
+    for (const d of part.drivers ?? []) {
+      expect(driverInstallMethod(d.source)).toBe('module')
+      // A `module:` source must name a REAL catalog module, or the install button
+      // is a dead end.
+      const mod = moduleById(driverModuleId(d.source))
+      expect(mod, `${id} driver "${d.source}"`).toBeTruthy()
+      // A BUNDLED module has a knowable path, so the declared target must match
+      // it. A mip-backed one lands wherever mip decides — hence the banner probes
+      // those by import name rather than by path.
+      const path = installPathFor(mod!)
+      if (path) expect(`/${d.target.replace(/^\//, '')}`).toBe(path)
+      else expect(d.target.trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it.each(grove)('%s imports the name the driver installs as', (id) => {
+    const part = partFromYaml(read('snakie-standard', id, 'parts.yml'))
+    const mod = moduleById(driverModuleId(part.drivers![0].source))!
+    // The import in the user's code and the file on the board must agree.
+    expect(part.library!.module).toBe(mod.importName)
   })
 })

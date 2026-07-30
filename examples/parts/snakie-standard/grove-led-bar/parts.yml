@@ -17,7 +17,7 @@ partNumber: MY9221
 properties:
   interface: 2-wire (clock + data), NOT I²C
   segments: 10 (green x8, then orange, then red on v2)
-version: 0.1.1
+version: 0.1.2
 pcbColor: "#1b4d3e"
 aspect: 3.05
 dimensions:
@@ -139,9 +139,12 @@ onboardLeds:
     y: 0.36
     color: "#e0483d"
     sizeMm: 2.5
-suggests:
-  - module: my9221
-    unlocks: the 10-segment bar
+library:
+  module: my9221
+drivers:
+  - source: module:my9221
+    target: lib/my9221.py
+    label: MY9221 LED bar driver
 help: help.md
 layerVisibility:
   pcb: false
