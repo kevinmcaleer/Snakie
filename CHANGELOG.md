@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-07-31
+
 ### Added
 - **Magic smoke (#618).** An ERC **error** now pours smoke out of the breadboard —
   from the shorted **pins themselves**, with a plume per fault so several shorts
@@ -3485,7 +3487,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...HEAD
+[0.40.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...v0.38.0
 [0.37.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.36.0...v0.37.0
