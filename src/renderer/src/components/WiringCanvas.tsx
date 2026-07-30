@@ -25,7 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { cableRole, conductorColour, connectorFit } from './cable'
-import { browserTree, countNodes, type BrowserNode } from './browser-tree'
+import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
@@ -1584,6 +1584,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
   const removePart = (key: string): void => {
+    // Never the microcontroller. It has no entry in `parts`, so the parts filter
+    // below is a no-op for it — but the CONNECTIONS filter is not, and would strip
+    // every wire attached to the board. The MCU is changed with the picker.
+    if (key === BOARD_KEY) return
     setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
     persist({
       ...robot,
@@ -1800,11 +1804,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       moveBox(d.boxKey, d.liveX, d.liveY)
       return
     }
-    // A click (no drag) on a placed part selects it (boards aren't selectable);
+    // A click (no drag) on a placed part OR the microcontroller selects it (#648 —
+    // the MCU is a component like any other, so it highlights in the browser too);
     // a click on empty space clears the selection. Either way, end any rename.
+    // Selecting the board deliberately does NOT open the part mini-toolbar (see
+    // `selPart`) — there is nothing to rotate/rename/delete on it.
     if (d?.kind === 'box' && !d.moved) {
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
-      const nextSel = renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null
+      const selectable = s?.kind === 'part' || s?.kind === 'board'
+      const nextSel = renderMode === 'lifelike' && selectable ? (d.boxKey ?? null) : null
       setSelectedKey(nextSel)
       setSelectedWire(null) // a part click clears any wire selection
       setRenameText(null)
@@ -2287,7 +2295,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             e.preventDefault()
             removeWireOrCable(selectedWire) // deletes the whole cable if it's cabled
             setSelectedWire(null)
-          } else if (selectedKey) {
+          } else if (selectedKey && subjByKey.get(selectedKey)?.kind === 'part') {
+            // PARTS only. The MCU became selectable in #648, and `removePart`
+            // filters connections by endpoint key — so deleting "board" would
+            // silently strip every wire attached to the microcontroller. The board
+            // is changed with the picker, never with the Delete key.
             e.preventDefault()
             removePart(selectedKey)
           }
@@ -2755,14 +2767,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 )
               })()}
 
-            {/* Selection ring around the selected part (#176). */}
-            {selPart && (
+            {/* Selection ring around the selected subject (#176) — the MCU as well
+                as a part (#648), so the canvas agrees with the browser highlight. */}
+            {selSubject?.hit && (
               <rect
                 className="wc__sel-ring"
-                x={selPart.hit.x}
-                y={selPart.hit.y}
-                width={selPart.hit.w}
-                height={selPart.hit.h}
+                x={selSubject.hit.x}
+                y={selSubject.hit.y}
+                width={selSubject.hit.w}
+                height={selSubject.hit.h}
                 rx={6}
               />
             )}

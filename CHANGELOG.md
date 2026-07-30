@@ -60,9 +60,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a carrier now renders indented beneath it, with a guide line — a XIAO appears
   under the XIAO Expansion Base rather than as a sibling three rows away. The
   microcontroller nests too, since it is the one that gets docked.
-- **The browser highlights the selected part (#648).** Selecting a part on the
-  canvas highlights its browser row in the same amber the Part Editor's layers
-  panel uses, so "selected" reads the same across both hierarchies.
+- **The browser highlights the selected component (#648).** Selecting a part —
+  **or the microcontroller**, which is now selectable too — highlights its browser
+  row in the same amber the Part Editor's layers panel uses, and draws the
+  selection ring on the canvas, so both hierarchies agree.
 - **Part titles only show for the part you're looking at (#650).** On a populated
   board every name collided with the pin labels; titles now appear on the selected
   or hovered part only.
