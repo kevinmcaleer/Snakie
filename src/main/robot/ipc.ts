@@ -170,17 +170,22 @@ export function registerRobotIpc(): void {
 
   ipcMain.handle(
     'robot:save',
-    async (e, args: { folder?: string; def: RobotDefinition }): Promise<{ ok: boolean; error?: string }> => {
+    async (_e, args: { folder?: string; def: RobotDefinition }): Promise<{ ok: boolean; error?: string }> => {
       try {
         const path = await robotPath(args?.folder)
         await queuedWrite(path, robotToYaml(args.def))
         await regenerateSkeleton(args?.folder, args.def) // #537 — bindings feed skeleton.json
-        // Edits happen in the Board View window; tell the OTHER windows so e.g. the
-        // main window's parts-import banner re-reads (a removed part clears its nag).
+        // Tell EVERY window, including the sender. This used to skip the sender on
+        // the assumption that edits only happen in the separate Board View window —
+        // but the Electronics workspace embeds the Board View in the MAIN window
+        // (BoardPane), so removing a part there left that same window's
+        // parts-import banner still nagging about a part that no longer exists.
+        //
+        // Safe to echo back: every robot.yml reader guards its reload with a
+        // `saveSeqRef` bumped BEFORE the save, so a load triggered by a window's own
+        // save either returns what it just wrote or is discarded as stale.
         for (const w of BrowserWindow.getAllWindows()) {
-          if (!w.isDestroyed() && w.webContents.id !== e.sender.id) {
-            w.webContents.send('robot:didChange')
-          }
+          if (!w.isDestroyed()) w.webContents.send('robot:didChange')
         }
         return { ok: true }
       } catch (err) {

@@ -50,6 +50,7 @@ import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
 import { NoticeStack } from './Notice'
 import { PartsImportBanner } from './PartsImportBanner'
+import { PARTS_CHANGED_EVENT } from './PartsPanel'
 import { isElectron } from '../lib/platform'
 import { TutorialPanel } from './TutorialPanel'
 import {
@@ -728,10 +729,25 @@ export function AppShell(): JSX.Element {
   // connects or a .py file opens, flag any required module the file doesn't import
   // and/or the board doesn't have installed, and offer to install the missing ones.
   const [requiredModules, setRequiredModules] = useState<RequiredModule[]>([])
-  // Bumped when the Board View window saves robot.yml (adds/removes a part), so
-  // the required-modules load below re-runs and the parts banner reflects it.
+  // Bumped whenever the project's parts change, so the required-modules load below
+  // re-runs and the banner reflects the current build.
+  //
+  // THREE sources, because the load below reads robot.yml *and* the part libraries,
+  // and an edit can come from this window or another one:
+  //  - `robot.onChanged` — robot.yml saved anywhere (now including this window, so
+  //    removing a part in the embedded Electronics workspace clears its nag);
+  //  - `parts.onChanged`  — a library changed in ANOTHER window (e.g. the pop-out
+  //    Part Editor changing which drivers a part needs);
+  //  - `PARTS_CHANGED_EVENT` — the same, in THIS window, which the IPC deliberately
+  //    doesn't echo back.
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  useEffect(() => window.api.parts.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  useEffect(() => {
+    const bump = (): void => setRobotNonce((n) => n + 1)
+    window.addEventListener(PARTS_CHANGED_EVENT, bump)
+    return () => window.removeEventListener(PARTS_CHANGED_EVENT, bump)
+  }, [])
   // Belt-and-braces reconcile: parts are usually added/removed in the SEPARATE
   // Board View window, so the user's next move is to click back to THIS window. Re-
   // read robot.yml whenever the main window regains focus/visibility, so the parts

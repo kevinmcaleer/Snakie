@@ -68,24 +68,44 @@ function makeBus(): {
   }
 }
 
-/** Wrap `robot.save` to broadcast a change to the other window, and `onChanged`
- *  to receive it — the web twin of Electron's `robot:didChange` relay (which
- *  also only ever notified windows OTHER than the saver). Both windows call
- *  this, so a part placed in the popup reloads the main window's mini board,
- *  and vice versa. */
+/** Wrap `robot.save` to announce a change, and `onChanged` to receive it — the
+ *  web twin of Electron's `robot:didChange` relay. Both windows call this, so a
+ *  part placed in the popup reloads the main window's mini board, and vice versa.
+ *
+ *  Listeners in the SAVING window are notified too, directly rather than over the
+ *  channel (a `BroadcastChannel` never echoes to its sender). Without that, the
+ *  Electronics workspace — which is embedded in the main window — could remove a
+ *  part while that same window's parts-import banner went on naming it. Mirrors
+ *  the same fix on the Electron side. */
 function bridgeRobotChanges(bus: ReturnType<typeof makeBus>): void {
   const w = window as typeof window & { api?: Record<string, unknown> }
   const robot = w.api?.robot as
     | { save?: (...args: unknown[]) => Promise<unknown>; onChanged?: (cb: () => void) => () => void }
     | undefined
   if (!robot?.save) return
+  const local = new Set<() => void>()
   const save = robot.save.bind(robot)
   robot.save = async (...args: unknown[]): Promise<unknown> => {
     const result = await save(...args)
     bus.post({ t: 'robot' })
+    // Never let one throwing listener stop the others (or the save's result).
+    for (const cb of local) {
+      try {
+        cb()
+      } catch {
+        /* a listener's problem, not the save's */
+      }
+    }
     return result
   }
-  robot.onChanged = (cb: () => void): (() => void) => bus.on('robot', () => cb())
+  robot.onChanged = (cb: () => void): (() => void) => {
+    local.add(cb)
+    const off = bus.on('robot', () => cb())
+    return () => {
+      local.delete(cb)
+      off()
+    }
+  }
 }
 
 /**

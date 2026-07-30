@@ -96,6 +96,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **The Code workspace now notices parts removed in Electronics.** Deleting the
+  SG90 left the editor still nagging *"this file doesn't import servo (needed by
+  SG90 Micro Servo)"*. The `robot:didChange` relay deliberately skipped the window
+  that saved — correct when the Board View was always a separate pop-out, but
+  Electronics **embeds** it in the main window, so that window never heard its own
+  edit. It now notifies every window, which is safe because each robot.yml reader
+  already guards its reload against its own save. The same-window gap existed on
+  the web build too (a `BroadcastChannel` never echoes to its sender) and is fixed
+  the same way. The banner also re-reads when a part **library** changes, which it
+  never did despite depending on one.
+
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
   parser and the Part Editor's normaliser kept separate lists of valid pad shapes,
   and the parser's was missing `octagonal` — so a servo/DuPont header lost its pad
