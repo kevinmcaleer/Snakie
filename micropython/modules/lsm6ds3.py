@@ -146,11 +146,35 @@ class LSM6DS3:
     also select the conversion factor, so a reading is always in real units.
     """
 
-    def __init__(self, i2c, addr=_DEFAULT_ADDR, odr_hz=104, g_range=2, dps_range=245):
+    def __init__(self, i2c, addr=_DEFAULT_ADDR, odr_hz=104, g_range=2, dps_range=245, check=True):
         self._i2c = i2c
         self._addr = addr
         self._g_range = g_range
         self._dps_range = dps_range
+        # IDENTIFY before configuring. Blind-writing the three control registers
+        # turns a wrong address, the wrong bus, or a half-seated Grove lead into a
+        # bare `OSError: [Errno 5] EIO` from whichever write happened to go first,
+        # which tells you nothing about which of those it was.
+        #
+        # Pass `check=False` to skip, e.g. for a register-compatible variant whose
+        # WHO_AM_I isn't one we know.
+        if check:
+            try:
+                who = i2c.readfrom_mem(addr, _WHO_AM_I, 1)[0]
+            except OSError:
+                raise OSError(
+                    "no reply from an I2C device at 0x%02x. Check the bus pins and "
+                    "reseat the lead, then run i2c.scan() to see what is really there. "
+                    "A device that shows up in scan() but fails here is usually a "
+                    "half-seated Grove connector." % addr
+                )
+            if who not in WHO_AM_I_VALUES:
+                raise RuntimeError(
+                    "the device at 0x%02x is not an LSM6DS3: WHO_AM_I read 0x%02x, "
+                    "expected %s. (0xff usually means a marginal lead rather than the "
+                    "wrong chip.)"
+                    % (addr, who, " or ".join("0x%02x" % v for v in WHO_AM_I_VALUES))
+                )
         # Block-data-update + register auto-increment, so a 6-byte burst read is
         # coherent and actually advances.
         self._i2c.writeto_mem(addr, _CTRL3_C, bytes([_CTRL3_BDU | _CTRL3_IF_INC]))

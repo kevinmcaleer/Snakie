@@ -225,6 +225,73 @@ class TestGroveUltrasonic(unittest.TestCase):
         self.assertEqual(grove_us.echo_to_distance_mm(None), -1)
 
 
+    def test_constructor_identifies_before_configuring(self):
+        # A wrong address / bus / half-seated lead must not surface as a bare EIO
+        # from whichever control-register write happened to go first.
+        class DeadBus:
+            def __init__(self):
+                self.writes = []
+
+            def readfrom_mem(self, addr, reg, n):
+                raise OSError(5)  # EIO
+
+            def writeto_mem(self, addr, reg, data):
+                self.writes.append((addr, reg, data))
+
+        bus = DeadBus()
+        with self.assertRaises(OSError) as ctx:
+            lsm6ds3.LSM6DS3(bus, addr=0x6B)
+        msg = str(ctx.exception)
+        self.assertIn("0x6b", msg.lower())
+        self.assertIn("scan", msg)
+        # and it must not have written anything to a bus it could not identify
+        self.assertEqual(bus.writes, [])
+
+    def test_constructor_rejects_the_wrong_chip_by_name(self):
+        class OtherChip:
+            def readfrom_mem(self, addr, reg, n):
+                return bytes([0x12])
+
+            def writeto_mem(self, addr, reg, data):
+                raise AssertionError("must not configure an unidentified device")
+
+        with self.assertRaises(RuntimeError) as ctx:
+            lsm6ds3.LSM6DS3(OtherChip(), addr=0x6B)
+        self.assertIn("0x12", str(ctx.exception))
+
+    def test_constructor_configures_a_real_lsm6ds3(self):
+        class RealChip:
+            def __init__(self):
+                self.writes = []
+
+            def readfrom_mem(self, addr, reg, n):
+                return bytes([0x69])  # LSM6DS3
+
+            def writeto_mem(self, addr, reg, data):
+                self.writes.append((reg, data[0]))
+
+        chip = RealChip()
+        lsm6ds3.LSM6DS3(chip, addr=0x6B)
+        regs = [r for r, _ in chip.writes]
+        self.assertEqual(regs, [0x12, 0x10, 0x11])  # CTRL3_C, CTRL1_XL, CTRL2_G
+
+    def test_check_false_skips_identification(self):
+        # For a register-compatible variant whose WHO_AM_I we do not know.
+        class Odd:
+            def __init__(self):
+                self.writes = []
+
+            def readfrom_mem(self, addr, reg, n):
+                raise AssertionError("must not probe when check=False")
+
+            def writeto_mem(self, addr, reg, data):
+                self.writes.append(reg)
+
+        chip = Odd()
+        lsm6ds3.LSM6DS3(chip, addr=0x6B, check=False)
+        self.assertEqual(len(chip.writes), 3)
+
+
 class TestPcf8563(unittest.TestCase):
     def test_bcd_round_trip(self):
         for n in (0, 9, 10, 42, 59, 99):
