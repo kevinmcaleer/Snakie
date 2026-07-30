@@ -1137,59 +1137,73 @@
 }
 
 /* --- Magic smoke (#618) --------------------------------------------------- */
-/* A pin implicated by an ERC ERROR pours smoke from the fault ITSELF, not from
-   the middle of the part. Decorative only — `pointer-events` is off on the group
-   so the part underneath stays grabbable. Self-contained colours: the breadboard
-   mat is always dark, so this reads the same in both skins. */
+/* A pin implicated by an ERC ERROR pours smoke from the fault itself. Decorative
+   only — `pointer-events` is off on the group so the part underneath stays
+   grabbable. Self-contained colours: the breadboard mat is always dark, so this
+   reads the same in both skins. */
 
-/* The failing point, glowing. Gives the plume something to rise out of. */
+/* `transform-box: fill-box` is LOAD-BEARING. SVG defaults to `view-box`, so
+   `transform-origin: center` would resolve to the centre of the 1180x720 viewBox
+   rather than the centre of each circle — every scale() then hurls the puff across
+   the canvas from a point hundreds of units away. That is why this first read as
+   "circles flying across the page" instead of as smoke. */
+.wc__smoke-puff,
 .wc__smoke-ember {
-  fill: #ff7a3d;
-  filter: blur(1.5px);
-  animation: wc-ember 0.9s ease-in-out infinite alternate;
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
+/* The failing point, glowing — gives the plume something to rise out of. */
+.wc__smoke-ember {
+  fill: #ff8a4c;
+  filter: blur(2px);
+  animation: wc-ember 0.7s ease-in-out infinite alternate;
+}
+
+/* Soft edges are what make this read as smoke rather than as circles. A hard
+   circle never looks like smoke however it moves. */
 .wc__smoke-puff {
-  fill: #b9c0c8;
+  fill: #aeb6bf;
   opacity: 0;
-  transform-origin: center;
-  /* Each puff gets its own keyframes below — one shared animation made the whole
-     plume travel as a single diagonal streak instead of billowing. */
-  animation-duration: 2.2s;
-  animation-timing-function: ease-out;
+  filter: blur(5px);
+  animation-duration: 2.6s;
+  animation-timing-function: cubic-bezier(0.2, 0.6, 0.4, 1);
   animation-iteration-count: infinite;
 }
 
-/* Staggered so the column is continuous rather than pulsing as one blob, and
-   drifting BOTH ways so it spreads into a plume instead of leaning. */
+/* Staggered so the column is continuous, and drifting BOTH ways so it spreads
+   into a plume instead of leaning one way. */
 .wc__smoke-puff--0 { animation-name: wc-smoke-a; animation-delay: 0s; }
-.wc__smoke-puff--1 { animation-name: wc-smoke-b; animation-delay: 0.36s; }
-.wc__smoke-puff--2 { animation-name: wc-smoke-c; animation-delay: 0.73s; }
-.wc__smoke-puff--3 { animation-name: wc-smoke-a; animation-delay: 1.1s; }
-.wc__smoke-puff--4 { animation-name: wc-smoke-b; animation-delay: 1.47s; }
-.wc__smoke-puff--5 { animation-name: wc-smoke-c; animation-delay: 1.84s; }
+.wc__smoke-puff--1 { animation-name: wc-smoke-b; animation-delay: 0.43s; }
+.wc__smoke-puff--2 { animation-name: wc-smoke-c; animation-delay: 0.86s; }
+.wc__smoke-puff--3 { animation-name: wc-smoke-b; animation-delay: 1.3s; }
+.wc__smoke-puff--4 { animation-name: wc-smoke-a; animation-delay: 1.73s; }
+.wc__smoke-puff--5 { animation-name: wc-smoke-c; animation-delay: 2.16s; }
 
 @keyframes wc-ember {
-  from { opacity: 0.55; transform: scale(0.8); }
-  to   { opacity: 1;    transform: scale(1.25); }
+  from { opacity: 0.5; transform: scale(0.75); }
+  to   { opacity: 1;   transform: scale(1.3); }
 }
 
-/* Three drift profiles: left-leaning, straight up, right-leaning. All rise well
-   clear of the part and swell as they go, so it reads as a serious plume. */
+/* Three drift profiles — left, centre, right. Each rises, swells and fades. The
+   sideways wander mid-flight keeps it from looking like a straight jet. */
 @keyframes wc-smoke-a {
-  0%   { opacity: 0;    transform: translate(0, 0) scale(0.3); }
-  12%  { opacity: 0.75; }
-  100% { opacity: 0;    transform: translate(-26px, -96px) scale(2.6); }
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.35); }
+  15%  { opacity: 0.7; }
+  55%  { transform: translate(-9px, -34px) scale(1.5); }
+  100% { opacity: 0;    transform: translate(-19px, -74px) scale(2.7); }
 }
 @keyframes wc-smoke-b {
-  0%   { opacity: 0;    transform: translate(0, 0) scale(0.3); }
-  12%  { opacity: 0.8; }
-  100% { opacity: 0;    transform: translate(3px, -108px) scale(2.9); }
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.35); }
+  15%  { opacity: 0.78; }
+  55%  { transform: translate(5px, -37px) scale(1.6); }
+  100% { opacity: 0;    transform: translate(-2px, -80px) scale(2.9); }
 }
 @keyframes wc-smoke-c {
-  0%   { opacity: 0;    transform: translate(0, 0) scale(0.3); }
-  12%  { opacity: 0.75; }
-  100% { opacity: 0;    transform: translate(28px, -92px) scale(2.6); }
+  0%   { opacity: 0;    transform: translate(0, 0) scale(0.35); }
+  15%  { opacity: 0.7; }
+  55%  { transform: translate(10px, -33px) scale(1.5); }
+  100% { opacity: 0;    transform: translate(20px, -72px) scale(2.7); }
 }
 
 /* A looping animation over the work area is precisely what this setting is for.
@@ -1203,8 +1217,8 @@
     opacity: 1;
   }
   .wc__smoke-puff--0 {
-    opacity: 0.5;
-    transform: translate(0, -20px) scale(1.6);
+    opacity: 0.55;
+    transform: translate(0, -18px) scale(1.8);
   }
   .wc__smoke-puff--1,
   .wc__smoke-puff--2,
