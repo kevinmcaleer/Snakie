@@ -45,6 +45,10 @@ _OUT_TEMP_L = 0x20
 _OUTX_L_G = 0x22  # gyro block, 6 bytes
 _OUTX_L_XL = 0x28  # accel block, 6 bytes
 
+#: Both addresses the part can take: SA0 low, SA0 high. Seeed's Grove 6-Axis
+#: ships SA0 HIGH, so it answers on 0x6B rather than the chip's 0x6A default.
+ADDRESSES = (0x6A, 0x6B)
+
 _DEFAULT_ADDR = 0x6A  # SA0 low. Seeed's Grove module is 0x6B (SA0 high).
 
 # `WHO_AM_I` answers we accept: the LSM6DS3 proper, and the LSM6DS3TR-C variant
@@ -162,6 +166,21 @@ class LSM6DS3:
             try:
                 who = i2c.readfrom_mem(addr, _WHO_AM_I, 1)[0]
             except OSError:
+                # Before blaming the wiring, look at the OTHER address this part
+                # can take. The chip's default is 0x6A (SA0 low) but Seeed's Grove
+                # module ships SA0 HIGH, so `LSM6DS3(i2c)` on that board misses by
+                # one address — a confusing failure with an obvious cause.
+                other = ADDRESSES[1] if addr == ADDRESSES[0] else ADDRESSES[0]
+                try:
+                    if i2c.readfrom_mem(other, _WHO_AM_I, 1)[0] in WHO_AM_I_VALUES:
+                        raise OSError(
+                            "no LSM6DS3 at 0x%02x, but one answered at 0x%02x — "
+                            "pass addr=0x%02x. (Seeed's Grove 6-Axis ships SA0 high.)"
+                            % (addr, other, other)
+                        )
+                except OSError as exc:
+                    if "pass addr=" in str(exc):
+                        raise
                 raise OSError(
                     "no reply from an I2C device at 0x%02x. Check the bus pins and "
                     "reseat the lead, then run i2c.scan() to see what is really there. "

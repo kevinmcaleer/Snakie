@@ -247,6 +247,36 @@ class TestGroveUltrasonic(unittest.TestCase):
         # and it must not have written anything to a bus it could not identify
         self.assertEqual(bus.writes, [])
 
+    def test_wrong_address_points_at_the_right_one(self):
+        # `LSM6DS3(i2c)` on Seeed's Grove module misses by one address (it ships
+        # SA0 high). Say so, instead of blaming the wiring.
+        class OnlyAt6B:
+            def readfrom_mem(self, addr, reg, n):
+                if addr == 0x6B:
+                    return bytes([0x69])
+                raise OSError(5)
+
+            def writeto_mem(self, addr, reg, data):
+                raise AssertionError("must not configure the wrong address")
+
+        with self.assertRaises(OSError) as ctx:
+            lsm6ds3.LSM6DS3(OnlyAt6B())  # default 0x6A
+        msg = str(ctx.exception)
+        self.assertIn("0x6b", msg.lower())
+        self.assertIn("pass addr=", msg)
+
+    def test_nothing_anywhere_still_reports_the_wiring(self):
+        class Dead:
+            def readfrom_mem(self, addr, reg, n):
+                raise OSError(5)
+
+            def writeto_mem(self, addr, reg, data):
+                raise AssertionError("must not configure a silent bus")
+
+        with self.assertRaises(OSError) as ctx:
+            lsm6ds3.LSM6DS3(Dead(), addr=0x6B)
+        self.assertIn("scan", str(ctx.exception))
+
     def test_constructor_rejects_the_wrong_chip_by_name(self):
         class OtherChip:
             def readfrom_mem(self, addr, reg, n):
