@@ -1291,5 +1291,61 @@ class WatchBinding(unittest.TestCase):
         self.assertIn("watch", inst.control._handlers)
 
 
+
+class ImuDuckTyping(unittest.TestCase):
+    """`watch(imu=...)` classification — the bundled drivers must actually bind."""
+
+    class _AccelOnly:
+        """The bundled `lsm6ds3` / `mpu6050` shape: accel() (+ gyro())."""
+
+        def accel(self):
+            return (0.0, 0.0, 1.0)
+
+        def gyro(self):
+            return (0.0, 0.0, 0.0)
+
+        def temperature(self):
+            return 25.0
+
+    class _ReadAccel:
+        """The pre-existing shape, which must keep working unchanged."""
+
+        def read_accel(self):
+            return (0.0, 1.0, 0.0)
+
+        def read_gyro(self):
+            return (0.0, 0.0, 0.0)
+
+    def test_bundled_driver_shape_classifies_as_imu(self):
+        # Before this, a driver exposing accel()/gyro() fell through EVERY branch
+        # of _classify and bound as nothing — watch(imu=...) silently did nothing.
+        self.assertEqual(inst._classify(self._AccelOnly()), "imu")
+
+    def test_existing_read_accel_shape_still_classifies(self):
+        self.assertEqual(inst._classify(self._ReadAccel()), "imu")
+
+    def test_accel_only_driver_is_not_mistaken_for_an_env_sensor(self):
+        # It has temperature() but no pressure/humidity, and _is_env is checked
+        # FIRST — so an IMU with a die-temperature reading must not land in env.
+        self.assertFalse(inst._is_env(self._AccelOnly()))
+
+    def test_euler_from_the_bundled_shape(self):
+        # Flat: gravity on +z -> ~0 roll, ~0 pitch.
+        roll, pitch, yaw = inst._imu_euler(self._AccelOnly())
+        self.assertAlmostEqual(roll, 0.0, places=3)
+        self.assertAlmostEqual(pitch, 0.0, places=3)
+        self.assertEqual(yaw, 0.0)
+
+    def test_euler_still_prefers_read_accel(self):
+        # Tilted onto +y -> roll ~= 90 deg, proving the existing branch is used.
+        roll, _p, _y = inst._imu_euler(self._ReadAccel())
+        self.assertAlmostEqual(roll, 90.0, places=2)
+
+    def test_watch_emits_imu_telemetry_for_a_bundled_driver(self):
+        out = _emit(lambda: (inst.watch(imu=self._AccelOnly()), inst.update()))
+        self.assertIn("SNK IMU imu", out)
+        inst.unwatch("imu")
+
+
 if __name__ == "__main__":
     unittest.main()

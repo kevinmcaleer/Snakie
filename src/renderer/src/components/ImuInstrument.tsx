@@ -158,8 +158,10 @@ export function ImuInstrument({
           lines={[
             'The IMU viewer tilts a 3-D board from roll/pitch/yaw telemetry. Watch an IMU in your program and it comes alive.'
           ]}
+          // Driver-agnostic on purpose: the old snippet named ICM20948 only, which
+          // reads as "this panel needs that chip" when any watched IMU works.
           code={
-            'import instruments as inst\nfrom icm20948 import ICM20948\n\nimu = ICM20948()\ninst.watch(imu=imu)   # then inst.update() in your loop'
+            'import instruments as inst\nfrom machine import I2C, Pin\nfrom lsm6ds3 import LSM6DS3   # or icm20948, mpu6050, bno055\n\nimu = LSM6DS3(I2C(1, sda=Pin(6), scl=Pin(7)), addr=0x6B)\ninst.watch(imu=imu)          # then inst.update() in your loop'
           }
           helpId={`inst-${def.id}`}
           accent={def.accent}

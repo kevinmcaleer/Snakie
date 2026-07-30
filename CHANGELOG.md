@@ -96,6 +96,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **A bundled IMU driver can now actually be watched.** `inst.watch(imu=…)`
+  duck-typed on `read_accel_gyro` / `read_accelerometer_gyro_data` / `read_accel`
+  — none of which the bundled `lsm6ds3` **or** `mpu6050` expose. Both fell through
+  every branch of the classifier and bound as *nothing*, so the IMU panel stayed
+  empty with no error. It now also recognises the `accel()` naming those drivers
+  use, and the Euler helper reads from it. The IMU panel's example no longer names
+  ICM20948 as though the panel required that specific chip.
+
 - **The Code workspace now notices parts removed in Electronics.** Deleting the
   SG90 left the editor still nagging *"this file doesn't import servo (needed by
   SG90 Micro Servo)"*. The `robot:didChange` relay deliberately skipped the window

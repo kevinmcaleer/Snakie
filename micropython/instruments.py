@@ -1705,6 +1705,10 @@ def _is_imu(obj):
         hasattr(obj, "read_accel_gyro")
         or hasattr(obj, "read_accelerometer_gyro_data")
         or (hasattr(obj, "read_accel") and hasattr(obj, "read_gyro"))
+        # `accel()` — the naming BOTH bundled drivers use (`lsm6ds3`, `mpu6050`).
+        # Without this neither could be `watch`ed as an IMU: they fell through
+        # every branch of `_classify` and bound as nothing at all.
+        or hasattr(obj, "accel")
     )
 
 
@@ -1797,8 +1801,12 @@ def _imu_euler(obj):
         a = obj.read_accel()
     elif hasattr(obj, "read_accel_gyro"):
         a = obj.read_accel_gyro()
-    else:
+    elif hasattr(obj, "read_accelerometer_gyro_data"):
         a = obj.read_accelerometer_gyro_data()
+    else:
+        # The bundled drivers' naming (`lsm6ds3`, `mpu6050`). Checked LAST so an
+        # existing driver's behaviour is untouched.
+        a = obj.accel()
     ax, ay, az = a[0], a[1], a[2]
     roll = degrees(atan2(ay, az))
     pitch = degrees(atan2(-ax, sqrt(ay * ay + az * az)))

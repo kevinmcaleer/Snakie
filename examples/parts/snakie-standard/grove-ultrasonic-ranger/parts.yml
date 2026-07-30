@@ -18,7 +18,7 @@ properties:
   interface: single-wire digital (trigger and echo on the same pin)
   range: 2 cm – 350 cm
   angle: 15°
-version: 0.1.0
+version: 0.1.1
 pcbColor: "#1b4d3e"
 aspect: 2.15
 dimensions:
@@ -84,6 +84,9 @@ labels:
     fontSize: 5
     color: "#cfe8dc"
     z: 2
+suggests:
+  - module: grove-ultrasonic
+    unlocks: distance readings from the one-wire ranger
 help: help.md
 layerVisibility:
   pcb: false
