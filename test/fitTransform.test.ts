@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { FIT_PAD, fitTransform } from '../src/renderer/src/components/WiringCanvas'
+import { FIT_PAD, fitTransform, stageViewArea } from '../src/renderer/src/components/WiringCanvas'
 
 /**
  * Zoom-to-fit framing. The property that matters is that the content actually
  * FILLS the area — the complaint was a fit that left a wide margin all round.
  */
-const AREA = { areaX: 0, areaW: 1180, viewH: 720 }
+const AREA = { areaX: 0, areaW: 1180, areaH: 720 }
 
 /** Where a world point lands on screen under a transform. */
 const project = (
@@ -30,7 +30,7 @@ describe('fitTransform', () => {
     const t = fitTransform(b, AREA)
     const c = project(t, (b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2)
     expect(c.x).toBeCloseTo(AREA.areaW / 2, 5)
-    expect(c.y).toBeCloseTo(AREA.viewH / 2, 5)
+    expect(c.y).toBeCloseTo(AREA.areaH / 2, 5)
   })
 
   it('is tighter than the old 60-unit padding', () => {
@@ -77,5 +77,42 @@ describe('fitTransform', () => {
     expect(Number.isFinite(t.scale)).toBe(true)
     expect(Number.isFinite(t.tx)).toBe(true)
     expect(Number.isFinite(t.ty)).toBe(true)
+  })
+})
+
+describe('stageViewArea (fit the STAGE, not the letterboxed viewBox)', () => {
+  it('is the plain viewBox when the stage matches its aspect', () => {
+    const a = stageViewArea(1180, 720)
+    expect(a).toEqual({ x: 0, y: 0, w: 1180, h: 720 })
+  })
+
+  it('is the viewBox before the stage has been measured', () => {
+    expect(stageViewArea(0, 0)).toEqual({ x: 0, y: 0, w: 1180, h: 720 })
+  })
+
+  it('gains vertical span on a TALLER pane, centred', () => {
+    // 1180x1440 is twice as tall as the viewBox aspect: width binds, so the
+    // visible viewBox-space region is 1180 x 1440 units, centred.
+    const a = stageViewArea(1180, 1440)
+    expect(a.w).toBeCloseTo(1180, 5)
+    expect(a.h).toBeCloseTo(1440, 5)
+    expect(a.y).toBeCloseTo((720 - 1440) / 2, 5) // extends equally above and below
+  })
+
+  it('gains horizontal span on a WIDER pane, centred', () => {
+    const a = stageViewArea(2360, 720)
+    expect(a.h).toBeCloseTo(720, 5)
+    expect(a.w).toBeCloseTo(2360, 5)
+    expect(a.x).toBeCloseTo((1180 - 2360) / 2, 5)
+  })
+
+  it('lets a tall pane zoom in further than the viewBox alone would', () => {
+    // The point of the whole exercise: a square-ish build in a tall pane should
+    // use the extra height rather than leaving it as letterbox.
+    const b = { minX: 0, minY: 0, maxX: 400, maxY: 400 }
+    const viewBoxOnly = fitTransform(b, { areaX: 0, areaW: 1180, areaH: 720 })
+    const tall = stageViewArea(1180, 1440)
+    const wholeStage = fitTransform(b, { areaX: tall.x, areaW: tall.w, areaY: tall.y, areaH: tall.h })
+    expect(wholeStage.scale).toBeGreaterThan(viewBoxOnly.scale)
   })
 })

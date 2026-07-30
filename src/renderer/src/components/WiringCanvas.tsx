@@ -1949,10 +1949,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const frameBounds = (minX: number, minY: number, maxX: number, maxY: number): void => {
     // Left inset ≈ the 14rem browser's share of the viewBox (it floats top-left).
     const insetL = browserOpen ? BROWSER_INSET : 0
+    // Fit to what is visible across the whole STAGE, not to the viewBox — the SVG
+    // letterboxes the viewBox whenever the pane's aspect differs from 1180:720.
+    const a = stageViewArea(stageSize.w, stageSize.h)
     setView(
       fitTransform(
         { minX, minY, maxX, maxY },
-        { areaX: insetL, areaW: VIEW_W - insetL, viewH: VIEW_H }
+        { areaX: a.x + insetL, areaW: a.w - insetL, areaY: a.y, areaH: a.h }
       )
     )
   }
@@ -3511,7 +3514,7 @@ function RobotHeader({
  * unless a part is selected now (#650), so that allowance was buying nothing and
  * the fit just looked slack.
  */
-export const FIT_PAD = 24
+export const FIT_PAD = 16
 
 /** Zoom limits for a fit: don't blow one small part up absurdly, and don't shrink
  *  a huge build past the point of legibility (it scrolls instead). */
@@ -3525,26 +3528,51 @@ const FIT_MAX_SCALE = 3
  */
 export function fitTransform(
   b: { minX: number; minY: number; maxX: number; maxY: number },
-  area: { areaX: number; areaW: number; viewH: number; pad?: number }
+  area: { areaX: number; areaW: number; areaY?: number; areaH?: number; viewH?: number; pad?: number }
 ): { tx: number; ty: number; scale: number } {
   const pad = area.pad ?? FIT_PAD
   // The pad is a SCREEN margin, so it is taken off the available area rather than
   // added to the content before scaling. Added to the content it gets multiplied
   // by the zoom — a 24-unit pad becomes 72 at 3×, so the margin grew fastest on
   // exactly the small builds where the fit already looked slackest.
+  const areaY = area.areaY ?? 0
+  const areaH = area.areaH ?? area.viewH ?? VIEW_H
   const cw = Math.max(1, b.maxX - b.minX)
   const ch = Math.max(1, b.maxY - b.minY)
   const availW = Math.max(1, area.areaW - pad * 2)
-  const availH = Math.max(1, area.viewH - pad * 2)
+  const availH = Math.max(1, areaH - pad * 2)
   const scale = Math.min(
     FIT_MAX_SCALE,
     Math.max(FIT_MIN_SCALE, Math.min(availW / cw, availH / ch))
   )
   return {
     tx: area.areaX + (area.areaW - (b.maxX + b.minX) * scale) / 2,
-    ty: (area.viewH - (b.maxY + b.minY) * scale) / 2,
+    ty: areaY + (areaH - (b.maxY + b.minY) * scale) / 2,
     scale
   }
+}
+
+/**
+ * The viewBox-space rectangle actually visible across the WHOLE stage.
+ *
+ * The SVG is `preserveAspectRatio="xMidYMid meet"` on a fixed 1180×720 viewBox,
+ * so whenever the pane's aspect differs from that the viewBox is letterboxed
+ * inside the stage and centred. Fitting content to the viewBox therefore fills
+ * only the letterboxed rectangle, leaving bands of unused screen that no amount
+ * of reducing the pad could reclaim — the fit was tight against the wrong box.
+ *
+ * Falls back to the viewBox before the stage has been measured.
+ */
+export function stageViewArea(
+  stageW: number,
+  stageH: number
+): { x: number; y: number; w: number; h: number } {
+  const k = Math.min(stageW / VIEW_W, stageH / VIEW_H)
+  if (!Number.isFinite(k) || k <= 0) return { x: 0, y: 0, w: VIEW_W, h: VIEW_H }
+  const w = stageW / k
+  const h = stageH / k
+  // `meet` centres the viewBox, so the extra span appears equally on both sides.
+  return { x: (VIEW_W - w) / 2, y: (VIEW_H - h) / 2, w, h }
 }
 
 function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
