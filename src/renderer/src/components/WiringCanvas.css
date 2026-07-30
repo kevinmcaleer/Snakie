@@ -1206,12 +1206,86 @@
   100% { opacity: 0;    transform: translate(20px, -72px) scale(2.7); }
 }
 
+/* --- The initial blow-out ------------------------------------------------- */
+/* Letting the magic smoke out is a violent, one-off event, so the first second is
+   a hard burst that then subsides to the steady plume. These run ONCE and end
+   invisible (`forwards`), so nothing keeps re-exploding at you while you work. */
+.wc__smoke-burst {
+  transform-box: fill-box;
+  transform-origin: center;
+  fill: #c8cfd8;
+  opacity: 0;
+  filter: blur(6px);
+  animation-duration: 1s;
+  animation-timing-function: cubic-bezier(0.05, 0.75, 0.25, 1);
+  animation-iteration-count: 1;
+  animation-fill-mode: forwards;
+}
+
+/* Fanned across four directions and tightly staggered, so the first second reads
+   as one expanding cloud rather than a queue of puffs. */
+.wc__smoke-burst--0 { animation-name: wc-burst-a; animation-delay: 0s; }
+.wc__smoke-burst--1 { animation-name: wc-burst-b; animation-delay: 0.03s; }
+.wc__smoke-burst--2 { animation-name: wc-burst-c; animation-delay: 0.06s; }
+.wc__smoke-burst--3 { animation-name: wc-burst-d; animation-delay: 0.09s; }
+.wc__smoke-burst--4 { animation-name: wc-burst-a; animation-delay: 0.14s; }
+.wc__smoke-burst--5 { animation-name: wc-burst-b; animation-delay: 0.19s; }
+.wc__smoke-burst--6 { animation-name: wc-burst-c; animation-delay: 0.24s; }
+.wc__smoke-burst--7 { animation-name: wc-burst-d; animation-delay: 0.3s; }
+.wc__smoke-burst--8 { animation-name: wc-burst-b; animation-delay: 0.38s; }
+.wc__smoke-burst--9 { animation-name: wc-burst-c; animation-delay: 0.46s; }
+
+@keyframes wc-burst-a {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.3); }
+  10%  { opacity: 0.95; }
+  100% { opacity: 0;   transform: translate(-52px, -66px) scale(4.2); }
+}
+@keyframes wc-burst-b {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.3); }
+  10%  { opacity: 1; }
+  100% { opacity: 0;   transform: translate(-8px, -96px) scale(4.6); }
+}
+@keyframes wc-burst-c {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.3); }
+  10%  { opacity: 0.95; }
+  100% { opacity: 0;   transform: translate(48px, -70px) scale(4.2); }
+}
+/* One low, wide puff so the cloud has a base and isn't only a column. */
+@keyframes wc-burst-d {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(0.3); }
+  10%  { opacity: 0.9; }
+  100% { opacity: 0;   transform: translate(6px, -26px) scale(5); }
+}
+
+/* A white-hot flash at the instant of failure, once. */
+.wc__smoke-flare {
+  transform-box: fill-box;
+  transform-origin: center;
+  fill: #fff2c4;
+  opacity: 0;
+  filter: blur(4px);
+  animation: wc-flare 0.5s ease-out 1 forwards;
+}
+
+@keyframes wc-flare {
+  0%   { opacity: 0;    transform: scale(0.2); }
+  12%  { opacity: 0.95; transform: scale(1.5); }
+  100% { opacity: 0;    transform: scale(2.6); }
+}
+
 /* A looping animation over the work area is precisely what this setting is for.
    The smoke still SHOWS — it marks which pin failed — it just stops moving. */
 @media (prefers-reduced-motion: reduce) {
   .wc__smoke-puff,
-  .wc__smoke-ember {
+  .wc__smoke-ember,
+  .wc__smoke-burst,
+  .wc__smoke-flare {
     animation: none;
+  }
+  /* The blow-out is pure motion — there is nothing to convey without it. */
+  .wc__smoke-burst,
+  .wc__smoke-flare {
+    display: none;
   }
   .wc__smoke-ember {
     opacity: 1;

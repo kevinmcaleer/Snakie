@@ -3610,9 +3610,17 @@ function MagicSmoke({ x, y }: { x: number; y: number }): JSX.Element {
     <g className="wc__smoke" transform={`translate(${x} ${y})`} style={{ pointerEvents: 'none' }} aria-hidden="true">
       {/* The ember at the base — the bit that is actually failing. Sits under the
           smoke so the plume rises out of a hot spot rather than out of nothing. */}
+      <circle className="wc__smoke-flare" r={9} />
       <circle className="wc__smoke-ember" r={5} />
-      {/* Six puffs, each with its OWN drift so the plume billows and spreads.
-          They shared one keyframe before, which made the whole thing travel as a
+      {/* The INITIAL BLOW-OUT: a hard burst for the first second, because that is
+          what letting the smoke out actually looks like. One-shot — these end
+          invisible and stay that way, leaving the steady plume behind. Mounting is
+          the trigger, so a NEW short bursts while existing ones keep smouldering. */}
+      {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+        <circle key={`b${i}`} className={`wc__smoke-burst wc__smoke-burst--${i}`} r={9} />
+      ))}
+      {/* The steady plume, each puff with its OWN drift so it billows and spreads.
+          They shared one keyframe once, which made the whole thing travel as a
           single diagonal streak rather than as smoke. */}
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <circle key={i} className={`wc__smoke-puff wc__smoke-puff--${i}`} r={7} />
