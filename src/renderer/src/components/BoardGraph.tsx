@@ -19,7 +19,7 @@ import {
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import { buildNetlist, remapConnectionsForBoard, type BoardRemap, type TerminalRole } from '../../../shared/netlist'
-import { runErc, ercSummary, smokingParts } from '../../../shared/erc'
+import { runErc, ercSummary, smokeSites } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
 import { useDcSolver } from './useDcSolver'
 import { voltageColour, formatVoltage, wireCurrent } from '../../../shared/circuit-probe'
@@ -459,7 +459,7 @@ export function BoardGraph({
   // #618: the parts an ERC ERROR implicates vent magic smoke on the breadboard,
   // so a fault is visible where it happened rather than only in the panel list.
   const smoking = useMemo(
-    () => smokingParts(ercIssues, netlistData?.netlist),
+    () => smokeSites(ercIssues, netlistData?.netlist),
     [ercIssues, netlistData]
   )
 

@@ -25,6 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { cableRole, conductorColour, connectorFit, plugAngle } from './cable'
+import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
@@ -622,9 +623,9 @@ export interface WiringCanvasProps {
   renderMode: WiringRenderMode
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
-  /** Placed-part instance ids venting magic smoke — the parts an ERC **error**
-   *  implicates (#618). Empty/absent ⇒ nothing is on fire. */
-  smoking?: readonly string[]
+  /** Where magic smoke pours out — the terminals an ERC **error** implicates
+   *  (#618). Empty/absent ⇒ nothing is on fire. */
+  smoking?: readonly SmokeSite[]
   /** Drop a library part onto the canvas at a world position (#159). When set, the
    *  canvas accepts drags from the Parts panel; `pos` is the body's top-left. */
   onDropPart?: (libraryId: string, part: PartDefinition, pos: { x: number; y: number }) => void
@@ -2835,10 +2836,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 Drawn last so it rises over the bodies and their wires, and inert to
                 the pointer so you can still grab the part you've just cooked. */}
             {renderMode === 'lifelike' &&
-              (smoking ?? []).map((key) => {
-                const s = subjByKey.get(key)
+              (smoking ?? []).map((site) => {
+                const s = subjByKey.get(site.key)
                 if (!s) return null
-                return <MagicSmoke key={`smoke${key}`} x={s.x + s.w / 2} y={s.y + s.h * 0.35} />
+                // At the implicated PIN — that is where the short is. Falls back to
+                // the body centre only when the issue named no pin.
+                const a = site.index >= 0 ? s.pins[site.index]?.anchors[0] : undefined
+                const x = a ? s.x + a.x : s.x + s.w / 2
+                const y = a ? s.y + a.y : s.y + s.h * 0.35
+                return <MagicSmoke key={`smoke${site.key}#${site.index}`} x={x} y={y} />
               })}
 
             {/* Selection ring around the selected subject (#176) — the MCU as well
@@ -3602,8 +3608,14 @@ export function stageViewArea(
 function MagicSmoke({ x, y }: { x: number; y: number }): JSX.Element {
   return (
     <g className="wc__smoke" transform={`translate(${x} ${y})`} style={{ pointerEvents: 'none' }} aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <circle key={i} className={`wc__smoke-puff wc__smoke-puff--${i}`} r={9} />
+      {/* The ember at the base — the bit that is actually failing. Sits under the
+          smoke so the plume rises out of a hot spot rather than out of nothing. */}
+      <circle className="wc__smoke-ember" r={5} />
+      {/* Six puffs, each with its OWN drift so the plume billows and spreads.
+          They shared one keyframe before, which made the whole thing travel as a
+          single diagonal streak rather than as smoke. */}
+      {[0, 1, 2, 3, 4, 5].map((i) => (
+        <circle key={i} className={`wc__smoke-puff wc__smoke-puff--${i}`} r={7} />
       ))}
     </g>
   )

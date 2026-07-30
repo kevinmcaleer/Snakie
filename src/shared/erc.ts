@@ -247,40 +247,56 @@ export function ercSummary(issues: ErcIssue[]): ErcSummary {
 }
 
 /**
- * The placed parts that should be venting magic smoke (#618) — those implicated
- * by an ERROR-severity issue.
+ * Where magic smoke should pour out (#618) — one site per TERMINAL implicated by
+ * an ERROR-severity issue.
  *
- * Errors only. A warning is "this is questionable", and setting fire to the board
- * over it would cry wolf; smoke has to mean *you have destroyed something* or it
- * stops being read as a signal at all.
+ * Sites are terminals, not parts, because the fault has a location: a dead short
+ * happens at the pins that are shorted, and putting the smoke in the middle of the
+ * part's body points at the component rather than at the mistake. Several shorted
+ * pins, or several shorted nodes, therefore give several plumes.
  *
- * Most rules locate a fault by NODE, not by part — a dead short is a property of
- * the net, not of one component — so the node's terminals are resolved back to the
- * subjects sitting on it. Without that the two rules that actually matter
- * (`vcc-gnd-short`, `rail-conflict`) would light nothing at all, since neither
- * populates `parts`. The board itself (`"board"`) can smoke: shorting a rail on
- * the microcontroller is very much the microcontroller's problem.
+ * Errors only. A warning means "this is questionable"; smoke for one would cry
+ * wolf until it stopped registering as a signal at all.
  *
- * Deduped, and returned in first-implicated order so the animation doesn't
- * reshuffle when an unrelated issue appears or clears.
+ * `index < 0` means "no specific pin" — used for an issue that names a part but no
+ * node, where the body centre is the best available site.
+ *
+ * Deduped, in first-implicated order so the animation doesn't reshuffle when an
+ * unrelated issue appears or clears.
  */
-export function smokingParts(issues: ErcIssue[], netlist?: Netlist): string[] {
+export interface SmokeSite {
+  /** Subject key: `"board"` for the MCU, else the placed part's instance id. */
+  key: string
+  /** Flattened pin index on that subject, or `-1` for "the body centre". */
+  index: number
+}
+
+export function smokeSites(issues: ErcIssue[], netlist?: Netlist): SmokeSite[] {
   const byNode = new Map<string, NetlistNode>()
   for (const n of netlist?.nodes ?? []) byNode.set(n.id, n)
 
-  const out: string[] = []
+  const out: SmokeSite[] = []
   const seen = new Set<string>()
-  const add = (key: string): void => {
-    if (!key || seen.has(key)) return
-    seen.add(key)
-    out.push(key)
+  const add = (key: string, index: number): void => {
+    if (!key) return
+    const id = `${key}#${index}`
+    if (seen.has(id)) return
+    seen.add(id)
+    out.push({ key, index })
   }
 
   for (const issue of issues) {
     if (issue.severity !== 'error') continue
-    for (const key of issue.parts ?? []) add(key)
+    // Node-located first: the two rules that matter (`vcc-gnd-short`,
+    // `rail-conflict`) locate a fault by NODE and populate no `parts` at all, so
+    // a parts-only reading would light nothing on a real short.
     for (const id of issue.nodes ?? []) {
-      for (const t of byNode.get(id)?.terminals ?? []) add(t.key)
+      for (const t of byNode.get(id)?.terminals ?? []) add(t.key, t.index)
+    }
+    // A part named without a node (or with an unknown one) still smokes, from its
+    // body — better than not showing the fault at all.
+    for (const key of issue.parts ?? []) {
+      if (!out.some((s) => s.key === key)) add(key, -1)
     }
   }
   return out

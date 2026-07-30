@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { smokingParts, type ErcIssue } from '../src/shared/erc'
+import { smokeSites, type ErcIssue } from '../src/shared/erc'
 import type { Netlist } from '../src/shared/netlist'
 
 const issue = (over: Partial<ErcIssue>): ErcIssue => ({
@@ -11,87 +11,85 @@ const issue = (over: Partial<ErcIssue>): ErcIssue => ({
   ...over
 })
 
-describe('smokingParts (#618)', () => {
-  it('picks the parts an error implicates', () => {
-    expect(smokingParts([issue({ parts: ['servo1', 'led2'] })])).toEqual(['servo1', 'led2'])
+/** A shorted node: the board's 3V3 tied to a servo's GND. */
+const netlist = {
+  nodes: [
+    {
+      id: 'N3',
+      kind: 'ground',
+      terminals: [
+        { endpoint: 'board.3V3#1', key: 'board', index: 1, name: '3V3', role: 'pwr' },
+        { endpoint: 'servo1.GND#2', key: 'servo1', index: 2, name: 'GND', role: 'gnd' }
+      ]
+    },
+    {
+      id: 'N7',
+      kind: 'power',
+      terminals: [{ endpoint: 'led2.A#0', key: 'led2', index: 0, name: 'A', role: 'pwr' }]
+    }
+  ]
+} as unknown as Netlist
+
+describe('smokeSites (#618)', () => {
+  it('smokes the PINS that are shorted, not the middle of the part', () => {
+    // The fault has a location. Smoke at the body centre points at the component
+    // rather than at the mistake.
+    expect(smokeSites([issue({ rule: 'vcc-gnd-short', nodes: ['N3'] })], netlist)).toEqual([
+      { key: 'board', index: 1 },
+      { key: 'servo1', index: 2 }
+    ])
+  })
+
+  it('gives a plume per node when several things are shorted', () => {
+    const out = smokeSites([issue({ nodes: ['N3'] }), issue({ nodes: ['N7'] })], netlist)
+    expect(out).toHaveLength(3)
+    expect(out).toContainEqual({ key: 'led2', index: 0 })
   })
 
   it('ignores warnings and infos', () => {
-    // Smoke has to mean "you destroyed something". A warning that smokes is a
-    // warning nobody believes.
+    // Smoke has to mean "you destroyed something", or it stops meaning anything.
     expect(
-      smokingParts([
-        issue({ severity: 'warning', parts: ['a'] }),
-        issue({ severity: 'info', parts: ['b'] })
-      ])
+      smokeSites(
+        [
+          issue({ severity: 'warning', nodes: ['N3'] }),
+          issue({ severity: 'info', parts: ['a'] })
+        ],
+        netlist
+      )
     ).toEqual([])
   })
 
-  it('dedupes a part implicated by several errors', () => {
-    expect(
-      smokingParts([issue({ parts: ['a', 'b'] }), issue({ parts: ['b', 'c'] })])
-    ).toEqual(['a', 'b', 'c'])
+  it('dedupes a pin implicated by several errors', () => {
+    const out = smokeSites([issue({ nodes: ['N3'] }), issue({ nodes: ['N3'] })], netlist)
+    expect(out).toHaveLength(2)
   })
 
-  it('keeps first-implicated order, so the animation does not reshuffle', () => {
-    const before = smokingParts([issue({ parts: ['x'] }), issue({ parts: ['y'] })])
-    const after = smokingParts([
-      issue({ parts: ['x'] }),
-      issue({ severity: 'warning', parts: ['w'] }),
-      issue({ parts: ['y'] })
+  it('falls back to the body when an issue names a part but no node', () => {
+    expect(smokeSites([issue({ parts: ['servo1'] })], netlist)).toEqual([
+      { key: 'servo1', index: -1 }
     ])
+  })
+
+  it('prefers the pin over the body when an issue gives both', () => {
+    // Otherwise one issue would smoke the same part twice, once precisely and
+    // once vaguely.
+    const out = smokeSites([issue({ nodes: ['N3'], parts: ['servo1'] })], netlist)
+    expect(out).toContainEqual({ key: 'servo1', index: 2 })
+    expect(out).not.toContainEqual({ key: 'servo1', index: -1 })
+  })
+
+  it('keeps first-implicated order, so plumes do not reshuffle', () => {
+    const before = smokeSites([issue({ nodes: ['N3'] })], netlist)
+    const after = smokeSites(
+      [issue({ nodes: ['N3'] }), issue({ severity: 'warning', nodes: ['N7'] })],
+      netlist
+    )
     expect(after).toEqual(before)
   })
 
-  it('tolerates issues with no parts, and empty input', () => {
-    expect(smokingParts([issue({}), issue({ parts: [] })])).toEqual([])
-    expect(smokingParts([])).toEqual([])
-  })
-
-  it('skips empty part keys rather than smoking nowhere', () => {
-    expect(smokingParts([issue({ parts: ['', 'real'] })])).toEqual(['real'])
-  })
-})
-
-describe('smokingParts resolves node-located faults (#618)', () => {
-  // The rules that matter most locate by NODE, not part: neither `vcc-gnd-short`
-  // nor `rail-conflict` populates `parts`. Without this resolution the feature
-  // would light nothing for exactly the faults worth showing.
-  const netlist = {
-    nodes: [
-      {
-        id: 'N3',
-        kind: 'ground',
-        terminals: [
-          { endpoint: 'board.3V3#1', key: 'board', index: 1, name: '3V3', role: 'pwr' },
-          { endpoint: 'servo1.GND#2', key: 'servo1', index: 2, name: 'GND', role: 'gnd' }
-        ]
-      }
-    ]
-  } as unknown as Netlist
-
-  it('smokes every subject on a shorted node', () => {
-    const out = smokingParts([issue({ rule: 'vcc-gnd-short', nodes: ['N3'] })], netlist)
-    expect(out).toEqual(['board', 'servo1'])
-  })
-
-  it('includes the board — shorting its rail is its problem', () => {
-    expect(smokingParts([issue({ nodes: ['N3'] })], netlist)).toContain('board')
-  })
-
-  it('merges part- and node-located issues without duplicates', () => {
-    const out = smokingParts(
-      [issue({ parts: ['servo1'] }), issue({ nodes: ['N3'] })],
-      netlist
-    )
-    expect(out).toEqual(['servo1', 'board'])
-  })
-
-  it('ignores an unknown node id rather than throwing', () => {
-    expect(smokingParts([issue({ nodes: ['N99'] })], netlist)).toEqual([])
-  })
-
-  it('still works with no netlist supplied', () => {
-    expect(smokingParts([issue({ parts: ['a'], nodes: ['N3'] })])).toEqual(['a'])
+  it('tolerates unknown nodes, missing netlist and empty input', () => {
+    expect(smokeSites([issue({ nodes: ['N99'] })], netlist)).toEqual([])
+    expect(smokeSites([issue({ nodes: ['N3'] })])).toEqual([])
+    expect(smokeSites([])).toEqual([])
   })
 })

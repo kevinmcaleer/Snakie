@@ -7,12 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
-- **Magic smoke (#618).** A part implicated by an ERC **error** now vents a puff of
-  smoke on the breadboard, at the part itself — so a dead short is visible where it
-  happened, not only as a line in the ERC panel. Errors only: smoke that meant
-  "this is questionable" would stop meaning anything. It stops moving under
-  `prefers-reduced-motion`, and stays pointer-inert so you can still grab the part
-  you have just cooked.
+- **Magic smoke (#618).** An ERC **error** now pours smoke out of the breadboard —
+  from the shorted **pins themselves**, with a glowing ember at the base and a
+  plume per fault, so several shorts smoke in several places. Errors only: smoke
+  that meant "this is questionable" would stop meaning anything. It stops moving
+  under `prefers-reduced-motion` (still marking the spot), and stays pointer-inert
+  so you can grab the part you have just cooked.
 
 - **Boards have a back (#636).** A part can now carry a **rear face** — its own
   photo, and pins, connectors and components marked `side: rear`. A **Flip to
