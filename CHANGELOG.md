@@ -96,6 +96,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **`instruments.py` reaches the board again.** Its `__version__` is how the app
+  decides whether a board's copy is stale — and it went unbumped through two
+  changes, so every board silently kept the OLD library while the app reported it
+  as up to date. That is why a fixed `watch(imu=…)` classifier never took effect
+  and the IMU panel stayed empty with no error. Bumped to **0.10.0**, and a test
+  now fails if the file changes without the version changing.
+
 - **Placing a part that needs a driver now says so.** Adding the Grove IMU to a
   project prompted nothing, and running the code failed with a bare
   `ImportError: no module named 'lsm6ds3'` and no route to a fix. Both
