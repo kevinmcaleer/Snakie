@@ -265,6 +265,25 @@ class TestGroveUltrasonic(unittest.TestCase):
         self.assertIn("0x6b", msg.lower())
         self.assertIn("pass addr=", msg)
 
+    def test_sibling_that_replies_with_rubbish_is_reported_verbatim(self):
+        # The real case: nothing at 0x6a, and 0x6b ACKs but returns 0xff. Saying
+        # only "nothing at 0x6a" hides the useful half of that.
+        class Rubbish6B:
+            def readfrom_mem(self, addr, reg, n):
+                if addr == 0x6B:
+                    return bytes([0xFF])
+                raise OSError(5)
+
+            def writeto_mem(self, addr, reg, data):
+                raise AssertionError("must not configure")
+
+        with self.assertRaises(OSError) as ctx:
+            lsm6ds3.LSM6DS3(Rubbish6B())  # default 0x6A
+        msg = str(ctx.exception)
+        self.assertIn("0x6b", msg.lower())
+        self.assertIn("0xff", msg.lower())
+        self.assertNotIn("pass addr=", msg)  # it is NOT a wrong-address problem
+
     def test_nothing_anywhere_still_reports_the_wiring(self):
         class Dead:
             def readfrom_mem(self, addr, reg, n):

@@ -19,7 +19,7 @@ properties:
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.14
+version: 0.1.15
 pcbColor: "#1b4d3e"
 aspect: 1.365
 dimensions:
@@ -350,6 +350,29 @@ mountingHoles:
 groups:
   - id: grp-0f21cxf
     name: Edge connector
+connectors:
+  - z: 0
+    kind: grove
+    variant: i2c
+    x: 0.49144683837890624
+    y: 0.1077782485064338
+    pins:
+      - name: SCL
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+      - name: SDA
+        type: io
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
+      - name: VCC
+        type: pwr
+      - name: GND
+        type: gnd
 mounts:
   - id: mount-1
     footprint: xiao
@@ -366,6 +389,7 @@ imageLayer:
   y: 0
   w: 1
   h: 1
+help: help.md
 suggests:
   - module: ssd1306
     unlocks: the 0.96" OLED
@@ -375,10 +399,9 @@ suggests:
     unlocks: tones and RTTTL melodies on the buzzer
   - module: sdcard
     unlocks: the microSD slot
-help: help.md
 layerVisibility:
   pcb: false
   image: true
   holes: true
   pins: true
-  components: false
+  components: true

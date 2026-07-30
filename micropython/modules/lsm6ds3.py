@@ -171,16 +171,28 @@ class LSM6DS3:
                 # module ships SA0 HIGH, so `LSM6DS3(i2c)` on that board misses by
                 # one address — a confusing failure with an obvious cause.
                 other = ADDRESSES[1] if addr == ADDRESSES[0] else ADDRESSES[0]
+                sibling = None
                 try:
-                    if i2c.readfrom_mem(other, _WHO_AM_I, 1)[0] in WHO_AM_I_VALUES:
-                        raise OSError(
-                            "no LSM6DS3 at 0x%02x, but one answered at 0x%02x — "
-                            "pass addr=0x%02x. (Seeed's Grove 6-Axis ships SA0 high.)"
-                            % (addr, other, other)
-                        )
-                except OSError as exc:
-                    if "pass addr=" in str(exc):
-                        raise
+                    sibling = i2c.readfrom_mem(other, _WHO_AM_I, 1)[0]
+                except OSError:
+                    pass
+                if sibling in WHO_AM_I_VALUES:
+                    raise OSError(
+                        "no LSM6DS3 at 0x%02x, but one answered at 0x%02x — "
+                        "pass addr=0x%02x. (Seeed's Grove 6-Axis ships SA0 high.)"
+                        % (addr, other, other)
+                    )
+                if sibling is not None:
+                    # Readable but wrong: say WHAT it read. Reporting only "nothing
+                    # at 0x6a" hides the far more useful fact that the other address
+                    # replied with rubbish, which is a different fault entirely.
+                    raise OSError(
+                        "no LSM6DS3 at 0x%02x. A device at 0x%02x replied but its "
+                        "WHO_AM_I is 0x%02x, not %s — 0xff means it is ACKing without "
+                        "driving data, which is a power or connection fault on that "
+                        "module rather than the wrong address."
+                        % (addr, other, sibling, " or ".join("0x%02x" % v for v in WHO_AM_I_VALUES))
+                    )
                 raise OSError(
                     "no reply from an I2C device at 0x%02x. Check the bus pins and "
                     "reseat the lead, then run i2c.scan() to see what is really there. "
