@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { libraryFromYaml, partFromYaml, partToYaml } from '../src/shared/part-yaml'
 import { parseRegistry } from '../src/shared/part-registry'
+import { moduleById } from '../src/shared/modules-catalog'
 import {
   normalisePart,
   partToBoardDefinition,
@@ -148,5 +149,47 @@ describe('standard parts library (snakie-standard)', () => {
     const gpioPads = allPads.filter((p) => p.type === 'gpio')
     expect(gpioPads.length).toBeGreaterThan(0)
     expect(gpioPads.every((p) => typeof p.gpio === 'number')).toBe(true)
+  })
+})
+
+describe('suggested modules across the bundled library (#638)', () => {
+  it('every `suggests` entry names a REAL catalog module', () => {
+    // A typo'd id silently renders nothing in the detail pane — no error, just a
+    // missing row. This sweep is the only thing that would catch it.
+    let checked = 0
+    // `examples/parts` also holds README.md / registry.json / .DS_Store, so walk
+    // directories only.
+    for (const lib of readdirSync(ROOT, { withFileTypes: true })) {
+      if (!lib.isDirectory()) continue
+      const libDir = join(ROOT, lib.name)
+      for (const id of readdirSync(libDir)) {
+        const yml = join(libDir, id, 'parts.yml')
+        if (!existsSync(yml)) continue
+        const part = partFromYaml(readFileSync(yml, 'utf-8'))
+        for (const s of part.suggests ?? []) {
+          expect(moduleById(s.module), `${lib.name}/${id} suggests "${s.module}"`).toBeTruthy()
+          checked++
+        }
+      }
+    }
+    expect(checked, 'at least one part should suggest modules').toBeGreaterThan(0)
+  })
+
+  it('the XIAO Expansion Base offers its onboard peripherals', () => {
+    const part = partFromYaml(read('snakie-standard', 'seeed-xiao-expansion-base', 'parts.yml'))
+    const ids = (part.suggests ?? []).map((s) => s.module)
+    // The four things actually ON the board that need a driver. The button needs
+    // none (it is a Pin), so it must NOT appear here.
+    expect(ids).toEqual(expect.arrayContaining(['ssd1306', 'pcf8563', 'buzzer', 'sdcard']))
+    // These are OPTIONAL, so they must NOT be `drivers` — that list gets pushed
+    // by the install banner, and a Grove-ports-only user should not be nagged.
+    expect(part.drivers ?? []).toHaveLength(0)
+  })
+
+  it('every suggestion explains what it unlocks', () => {
+    const part = partFromYaml(read('snakie-standard', 'seeed-xiao-expansion-base', 'parts.yml'))
+    for (const s of part.suggests ?? []) {
+      expect(s.unlocks, `"${s.module}" needs an unlocks line`).toBeTruthy()
+    }
   })
 })

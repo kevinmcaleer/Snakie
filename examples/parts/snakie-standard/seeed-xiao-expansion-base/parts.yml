@@ -19,7 +19,7 @@ properties:
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.8
+version: 0.1.9
 pcbColor: '#1b4d3e'
 aspect: 1.365
 dimensions:
@@ -358,6 +358,15 @@ imageLayer:
   y: 0
   w: 1
   h: 1
+suggests:
+- module: ssd1306
+  unlocks: the 0.96" OLED
+- module: pcf8563
+  unlocks: the PCF8563 real-time clock
+- module: buzzer
+  unlocks: tones and RTTTL melodies on the buzzer
+- module: sdcard
+  unlocks: the microSD slot
 help: help.md
 layerVisibility:
   pcb: false

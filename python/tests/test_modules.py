@@ -36,6 +36,7 @@ teleop = _load("snakie_teleop", "teleop.py")
 lsm6ds3 = _load("snakie_lsm6ds3", "lsm6ds3.py")
 tb6612 = _load("snakie_tb6612", "tb6612.py")
 grove_us = _load("snakie_grove_ultrasonic", "grove_ultrasonic.py")
+pcf8563 = _load("snakie_pcf8563", "pcf8563.py")
 
 
 class TestHcsr04(unittest.TestCase):
@@ -222,6 +223,52 @@ class TestGroveUltrasonic(unittest.TestCase):
     def test_timeout_is_out_of_range(self):
         self.assertEqual(grove_us.echo_to_distance_mm(-1), -1)
         self.assertEqual(grove_us.echo_to_distance_mm(None), -1)
+
+
+class TestPcf8563(unittest.TestCase):
+    def test_bcd_round_trip(self):
+        for n in (0, 9, 10, 42, 59, 99):
+            self.assertEqual(pcf8563.from_bcd(pcf8563.to_bcd(n)), n)
+
+    def test_to_bcd_rejects_out_of_range(self):
+        for bad in (-1, 100):
+            with self.assertRaises(ValueError):
+                pcf8563.to_bcd(bad)
+
+    def test_decode_masks_the_status_bits_out_of_each_field(self):
+        # Every field shares its byte with status/padding bits. The seconds
+        # register's top bit is the VL flag -- read it unmasked and 0x53 becomes
+        # 0xD3 -> ":83", a plausible-looking wrong time.
+        raw = bytes([0xD3, 0x00, 0x00, 0x01, 0x00, 0x01, 0x26])
+        y, mo, d, h, mi, s, wd, unset = pcf8563.decode_time(raw)
+        self.assertEqual((y, mo, d, h, mi, s), (2026, 1, 1, 0, 0, 53))
+        self.assertTrue(unset)
+
+    def test_decode_reports_a_trustworthy_clock(self):
+        raw = bytes([0x53, 0x30, 0x09, 0x30, 0x03, 0x07, 0x26])
+        y, mo, d, h, mi, s, wd, unset = pcf8563.decode_time(raw)
+        self.assertEqual((y, mo, d, h, mi, s, wd), (2026, 7, 30, 9, 30, 53, 3))
+        self.assertFalse(unset)
+
+    def test_decode_matches_grover_bringup_masks(self):
+        # The hour/day/month masks Grover's b2_peripherals.py validated on real
+        # hardware: 0x3F, 0x3F, 0x1F. High bits set must not leak into the value.
+        raw = bytes([0x00, 0x00, 0xC0 | 0x09, 0xC0 | 0x30, 0x00, 0x80 | 0x07, 0x26])
+        y, mo, d, h, mi, s, wd, _ = pcf8563.decode_time(raw)
+        self.assertEqual((h, d, mo), (9, 30, 7))
+
+    def test_encode_round_trips_through_decode(self):
+        enc = pcf8563.encode_time(2026, 7, 30, 9, 30, 53, 3)
+        self.assertEqual(len(enc), 7)
+        y, mo, d, h, mi, s, wd, unset = pcf8563.decode_time(enc)
+        self.assertEqual((y, mo, d, h, mi, s, wd), (2026, 7, 30, 9, 30, 53, 3))
+        # Setting the time must CLEAR the voltage-low flag -- otherwise a freshly
+        # set clock still reports itself as untrustworthy forever.
+        self.assertFalse(unset)
+
+    def test_decode_rejects_a_short_read(self):
+        with self.assertRaises(ValueError):
+            pcf8563.decode_time(bytes([0, 0, 0]))
 
 
 if __name__ == "__main__":

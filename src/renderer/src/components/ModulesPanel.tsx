@@ -205,9 +205,14 @@ export function ModulesPanel(): JSX.Element {
       )}
 
       {groups.map((group) => (
-        <section key={group.instrument} className="mods__group">
+        <section key={group.instrument ?? 'other'} className="mods__group">
           <div className="mods__group-head">
-            {INSTRUMENT_TITLES[group.instrument] ?? group.instrument}
+            {/* A module with no instrument is a real driver with no panel behind
+                it (an RTC, an SD card) — grouped honestly rather than filed under
+                an unrelated instrument. */}
+            {group.instrument
+              ? (INSTRUMENT_TITLES[group.instrument] ?? group.instrument)
+              : 'Other drivers'}
           </div>
           <ul className="mods__list" role="list">
             {group.modules.map(renderTag)}

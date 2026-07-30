@@ -77,8 +77,15 @@ export interface ModuleDef {
   name: string
   /** One-line description of what the driver is / which hardware it talks to. */
   description: string
-  /** The dock instrument this module powers (groups the Modules manager). */
-  instrument: InstrumentId
+  /**
+   * The dock instrument this module powers (groups the Modules manager).
+   *
+   * OPTIONAL, because not every useful driver has a panel behind it — an RTC is a
+   * real, installable dependency with nothing to plot or drive. Those group under
+   * "Other drivers" rather than being filed under an unrelated instrument, which
+   * would make the grouping lie.
+   */
+  instrument?: InstrumentId
   /**
    * The Python module name it becomes importable as on the board, e.g. `ssd1306`
    * (from `import ssd1306`). Used to PROBE whether it's already installed (a
@@ -258,6 +265,24 @@ export const MODULES: ModuleDef[] = [
     source: { kind: 'bundled', file: 'teleop.py' },
     license: 'MIT'
   },
+  // --- Panel-less drivers --------------------------------------------------
+  // Real dependencies with no dock instrument behind them (see `instrument`).
+  {
+    id: 'pcf8563',
+    name: 'PCF8563 RTC',
+    description: 'I²C real-time clock — the RTC on the XIAO Expansion Base (0x51).',
+    importName: 'pcf8563',
+    source: { kind: 'bundled', file: 'pcf8563.py' },
+    license: 'MIT'
+  },
+  {
+    id: 'sdcard',
+    name: 'SD card (SPI)',
+    description: 'Mount a microSD card over SPI — e.g. the XIAO Expansion Base slot.',
+    importName: 'sdcard',
+    // MicroPython's own official driver — referenced, not vendored.
+    source: { kind: 'mip', spec: 'github:micropython/micropython-lib/micropython/drivers/storage/sdcard/sdcard.py' }
+  },
   {
     id: 'tb6612',
     name: 'Grove I²C Motor Driver (TB6612FNG)',
@@ -284,8 +309,8 @@ export function modulesForInstrument(instrument: InstrumentId): ModuleDef[] {
 
 /** One instrument's modules, grouped together for the Modules manager. */
 export interface ModuleGroup {
-  /** The instrument id these modules power. */
-  instrument: InstrumentId
+  /** The instrument id these modules power; `undefined` for the panel-less group. */
+  instrument?: InstrumentId
   /** The modules, in catalog order. */
   modules: ModuleDef[]
 }
@@ -296,8 +321,10 @@ export interface ModuleGroup {
  * over stable groups (the Modules manager renders one section per instrument).
  */
 export function groupByInstrument(defs: ModuleDef[] = MODULES): ModuleGroup[] {
-  const order: InstrumentId[] = []
-  const byInstrument = new Map<InstrumentId, ModuleDef[]>()
+  // `undefined` is a real key here — the panel-less drivers group (see
+  // `ModuleDef.instrument`). Map handles it as a key, unlike an object.
+  const order: (InstrumentId | undefined)[] = []
+  const byInstrument = new Map<InstrumentId | undefined, ModuleDef[]>()
   for (const m of defs) {
     let bucket = byInstrument.get(m.instrument)
     if (!bucket) {

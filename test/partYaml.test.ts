@@ -1072,3 +1072,38 @@ describe('pad shapes (#636)', () => {
     expect(partFromYaml('id: p\nheaders:\n  - edge: left\n    pins: [{ name: A, type: io, shape: banana }]\n').headers[0].pins[0].shape).toBeUndefined()
   })
 })
+
+describe('suggested modules round-trip (#638)', () => {
+  it('survives partToYaml → partFromYaml', () => {
+    const part: PartDefinition = {
+      id: 'base',
+      name: 'Carrier',
+      suggests: [
+        { module: 'ssd1306', unlocks: 'the 0.96" OLED' },
+        { module: 'pcf8563' }
+      ]
+    }
+    const back = partFromYaml(partToYaml(part))
+    expect(back.suggests).toEqual([
+      { module: 'ssd1306', unlocks: 'the 0.96" OLED' },
+      { module: 'pcf8563' }
+    ])
+  })
+
+  it('survives normalisePart, which rebuilds field-by-field', () => {
+    // The whitelist trap: `normalisePart` and the YAML coercion BOTH rebuild a
+    // part key by key, so a new field has to be added to both or it is silently
+    // stripped on save. This is the guard for that.
+    const out = normalisePart({
+      id: 'base',
+      name: 'Carrier',
+      suggests: [{ module: 'ssd1306', unlocks: 'the OLED' }]
+    } as PartDefinition)
+    expect(out.suggests).toEqual([{ module: 'ssd1306', unlocks: 'the OLED' }])
+  })
+
+  it('drops entries with no module id rather than emitting a broken row', () => {
+    const back = partFromYaml('id: x\nname: X\nsuggests:\n  - unlocks: nothing\n  - module: buzzer\n')
+    expect(back.suggests).toEqual([{ module: 'buzzer' }])
+  })
+})

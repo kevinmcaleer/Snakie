@@ -576,6 +576,70 @@
   color: var(--text-muted);
 }
 
+/* #638 — "Works with": the OPTIONAL modules a part can use. Quieter than the
+   driver-install banner, because nothing here is required. */
+.pl__works {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card, transparent);
+}
+
+.pl__works-head {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.pl__works-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pl__works-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.pl__works-name {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+/* The "what it unlocks" text yields first — the name and the action must survive
+   a narrow panel. */
+.pl__works-unlocks {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.pl__works-on {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--green, #46e06a);
+}
+
+.pl__works-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
 /* #643 — "your copy has drifted from the bundle" notice. Themed off the shared
    tokens so it reads in both the skeuomorph and dark skins; the `--behind` variant
    uses the accent because it's the case with something to gain. */

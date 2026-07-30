@@ -42,6 +42,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   mixer uses, so the panel doesn't care what driver is on the other end. The bars
   show what the board *applied* (`SNK MOTOR <a> <b>`), not just what was asked —
   a driver left in standby accepts every command and turns nothing.
+- **"Works with" — the drivers a part *can* use (#638).** A part can now list
+  optional modules and what each one unlocks, shown in its Parts-panel detail with
+  per-module install and an on-board indicator. Deliberately separate from the
+  driver-install banner, which pushes the drivers a part cannot work *without*: a
+  carrier like the XIAO Expansion Base is a menu of optional peripherals, and
+  someone using only its Grove ports shouldn't be nagged into an OLED driver. The
+  expansion base now says which of its six onboard features need a driver — only
+  two do.
+- **PCF8563 RTC + SD-card drivers.** The two genuine gaps on that board. The OLED
+  and buzzer were already covered (`instruments.py` ships its own SSD1306) and the
+  user button needs nothing. A catalog module may now declare **no instrument** —
+  an RTC is a real installable dependency with no panel behind it, so those group
+  under "Other drivers" instead of being filed under an unrelated instrument.
 
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`

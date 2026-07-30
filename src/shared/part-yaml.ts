@@ -22,6 +22,7 @@ import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
+  SuggestedModule,
   ElectricalModel,
   ImageLayer,
   MountingHole,
@@ -350,6 +351,25 @@ function driverToObj(d: DriverFile): Record<string, unknown> {
   return out
 }
 
+/** Parse a {@link SuggestedModule} — an optional module this part can use (#638). */
+function coerceSuggested(raw: unknown): SuggestedModule | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const module = str(r.module)
+  if (module === undefined) return null
+  const out: SuggestedModule = { module }
+  const unlocks = str(r.unlocks)
+  if (unlocks !== undefined) out.unlocks = unlocks
+  return out
+}
+
+/** Serialise a {@link SuggestedModule} to a tidy plain object for YAML. */
+function suggestedToObj(s: SuggestedModule): Record<string, unknown> {
+  const out: Record<string, unknown> = { module: s.module }
+  if (s.unlocks) out.unlocks = s.unlocks
+  return out
+}
+
 /** Serialise a {@link PartPin} to a tidy plain object for YAML. */
 /**
  * Read the single-hierarchy item flags off a raw record. EVERY item type goes
@@ -482,6 +502,7 @@ export function partToYaml(part: PartDefinition): string {
     i2cAddresses: part.i2cAddresses,
     library: part.library,
     drivers: part.drivers?.map(driverToObj),
+    suggests: part.suggests?.map(suggestedToObj),
     layerVisibility: part.layerVisibility
   })
   return stringify(obj, { lineWidth: 0 })
@@ -841,6 +862,12 @@ export function partFromYaml(text: string): PartDefinition {
     if (Object.keys(lib).length) part.library = lib
   }
 
+  if (Array.isArray(raw.suggests)) {
+    const suggests = raw.suggests
+      .map(coerceSuggested)
+      .filter((s): s is SuggestedModule => s !== null)
+    if (suggests.length) part.suggests = suggests
+  }
   if (Array.isArray(raw.drivers)) {
     const drivers = raw.drivers.map(coerceDriver).filter((d): d is DriverFile => d !== null)
     if (drivers.length) part.drivers = drivers

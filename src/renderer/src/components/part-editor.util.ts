@@ -28,6 +28,7 @@ import {
   type ComponentShape,
   type ComponentShapeKind,
   type DriverFile,
+  type SuggestedModule,
   type ImageLayer,
   type MountingHole,
   type PartDefinition,
@@ -1272,6 +1273,19 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       })
       .filter((d): d is DriverFile => d !== null)
     if (drivers.length) out.drivers = drivers
+  }
+  if (Array.isArray(part.suggests) && part.suggests.length) {
+    const suggests = part.suggests
+      .map((s): SuggestedModule | null => {
+        const module = text(s?.module)
+        if (module === undefined) return null
+        const out: SuggestedModule = { module }
+        const unlocks = text(s?.unlocks)
+        if (unlocks !== undefined) out.unlocks = unlocks
+        return out
+      })
+      .filter((s): s is SuggestedModule => s !== null)
+    if (suggests.length) out.suggests = suggests
   }
   if (part.layerVisibility && typeof part.layerVisibility === 'object') {
     const lv: NonNullable<PartDefinition['layerVisibility']> = {}

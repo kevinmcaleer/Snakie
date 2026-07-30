@@ -967,6 +967,18 @@ export interface PartDefinition {
    */
   drivers?: DriverFile[]
 
+  /**
+   * Modules that CAN be used with this part, and what each one unlocks (#638).
+   *
+   * Distinct from {@link drivers} on purpose. `drivers` means "this part does not
+   * work without these", and placing the part prompts to install them. A carrier
+   * like the XIAO Expansion Base instead has a *menu* of optional peripherals —
+   * an OLED, an RTC, a microSD slot — and pushing all of their drivers at someone
+   * who only wanted the Grove ports would be wrong. These are shown in the part's
+   * detail pane as "Works with", each installable on its own.
+   */
+  suggests?: SuggestedModule[]
+
   // --- 3-D mesh (Robot View, #406) -----------------------------------------
   /**
    * A 3-D mesh (STL) linked to this part. On disk this is a **relative filename**
@@ -1070,6 +1082,20 @@ export interface PartLibraryLink {
  *    destination **path** on the board (folder + filename, e.g. `"lib/vl53l0x.py"`).
  *    Any intermediate folders are created.
  */
+/**
+ * An OPTIONAL module this part can use, naming what it unlocks (#638).
+ *
+ * `module` is a {@link ./modules-catalog}.MODULES id, so the detail pane can show
+ * its real name/description and reuse the ordinary module install path (including
+ * the "already installed" probe) rather than restating any of it here.
+ */
+export interface SuggestedModule {
+  /** A `MODULES` catalog id, e.g. `ssd1306`. */
+  module: string
+  /** What this module gets you on THIS part, e.g. `the 0.96" OLED`. */
+  unlocks?: string
+}
+
 export interface DriverFile {
   /** Where the driver comes from: a `mip` spec, a URL, or a bundled filename. */
   source: string

@@ -10,6 +10,9 @@ import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
 import type { BundledPartStatus } from '../../../shared/bundled-seed'
+import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
+import type { SuggestedModule } from '../../../shared/part'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
   LibraryUpdate,
   PartDefinition,
@@ -796,6 +799,100 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   )
 }
 
+/**
+ * "Works with" — the OPTIONAL modules a part can use, and what each unlocks (#638).
+ *
+ * Deliberately separate from the Board View's driver-install banner, which pushes
+ * the drivers a part CANNOT work without. A carrier is a menu: someone using only
+ * its Grove ports should never be nagged to install an OLED driver. So this lists,
+ * shows what is already on the board, and installs one at a time — on request.
+ *
+ * Reuses the ordinary module install path (`modules.probeInstalled` / `install`),
+ * so "already installed" means the same thing here as in the Modules panel.
+ */
+function WorksWith({ suggests }: { suggests: SuggestedModule[] }): JSX.Element | null {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const [installed, setInstalled] = useState<ReadonlySet<string>>(new Set())
+  const [busy, setBusy] = useState<string | null>(null)
+  const [done, setDone] = useState(0)
+
+  // Only rows that resolve to a real catalog module — a typo'd id must not render
+  // an install button that cannot work.
+  const rows = useMemo(
+    () =>
+      suggests
+        .map((s) => ({ suggest: s, def: moduleById(s.module) }))
+        .filter((r): r is { suggest: SuggestedModule; def: ModuleDef } => r.def !== undefined),
+    [suggests]
+  )
+
+  useEffect(() => {
+    if (!connected || rows.length === 0) {
+      setInstalled(new Set())
+      return
+    }
+    let active = true
+    window.api.modules
+      .probeInstalled(rows.map((r) => r.def.importName))
+      .then((found) => {
+        if (active) setInstalled(new Set(found))
+      })
+      .catch(() => {
+        if (active) setInstalled(new Set())
+      })
+    return () => {
+      active = false
+    }
+  }, [connected, rows, done])
+
+  const install = useCallback(async (def: ModuleDef): Promise<void> => {
+    setBusy(def.id)
+    try {
+      await window.api.modules.install(def.id)
+      setDone((n) => n + 1)
+    } catch {
+      // The Modules panel is the place with a full install log; here a failure
+      // just leaves the row installable rather than throwing at the user.
+    } finally {
+      setBusy(null)
+    }
+  }, [])
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="pl__works">
+      <div className="pl__works-head">Works with</div>
+      <ul className="pl__works-list">
+        {rows.map(({ suggest, def }) => {
+          const on = installed.has(def.importName)
+          return (
+            <li className="pl__works-row" key={def.id}>
+              <span className="pl__works-name">{def.name}</span>
+              <span className="pl__works-unlocks">{suggest.unlocks ?? def.description}</span>
+              {on ? (
+                <span className="pl__works-on">on board</span>
+              ) : (
+                <button
+                  type="button"
+                  className="pl__btn pl__btn--small"
+                  disabled={!connected || busy === def.id}
+                  title={connected ? `Install ${def.name}` : 'Connect a board to install'}
+                  onClick={() => void install(def)}
+                >
+                  {busy === def.id ? '…' : 'Install'}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {!connected && <p className="pl__works-note">Connect a board to install these.</p>}
+    </div>
+  )
+}
+
 /** The detail card for a selected part: footprint + metadata + pinout table. */
 function PartDetail({
   part,
@@ -898,6 +995,8 @@ function PartDetail({
       </div>
 
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
+
+      {part.suggests && part.suggests.length > 0 && <WorksWith suggests={part.suggests} />}
 
       {/* #643 — an edited bundled part is never refreshed by the seeder, so it can
           sit on an old schema indefinitely. Say so, and offer the way back. The
