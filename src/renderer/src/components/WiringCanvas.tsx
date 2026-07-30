@@ -1955,6 +1955,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (s) frameBounds(s.hit.x, s.hit.y, s.hit.x + s.hit.w, s.hit.y + s.hit.h)
   }
 
+  /**
+   * Clicking a row in the project browser: zoom to it AND select it, so the row
+   * highlights, the canvas draws its selection ring, and a part gets its
+   * mini-toolbar — exactly as clicking the thing on the canvas does. Zooming
+   * without selecting left the browser unable to show what it had just navigated to.
+   *
+   * Focus is deliberately NOT moved to the canvas here (a canvas click does move
+   * it, to scope the Delete key). In focused Board mode an unpinned browser hides
+   * on blur, so stealing focus would collapse the panel on every row click.
+   */
+  const selectFromBrowser = (key: string): void => {
+    const s = subjects.find((sub) => sub.key === key)
+    const selectable = s?.kind === 'part' || s?.kind === 'board'
+    if (renderMode === 'lifelike' && selectable) {
+      setSelectedKey(key)
+      setSelectedWire(null)
+      setRenameText(null)
+    }
+    fitToKey(key)
+  }
+
   // Export the canvas as an image (#…): serialise the live SVG framed to its
   // content (full drawing at 1:1, independent of pan/zoom) and save it.
   const doExport = (fmt: ExportFmt): void => {
@@ -3084,7 +3105,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           onRemovePart={removePart}
           open={browserOpen}
           onOpenChange={setBrowserOpen}
-          onFocus={fitToKey}
+          onFocus={selectFromBrowser}
           pinned={focusedChrome ? browserPinned : undefined}
           onPin={focusedChrome ? setBrowserPinned : undefined}
         />
@@ -3306,7 +3327,7 @@ function BrowserRows({
               type="button"
               className="wc__tree-name wc__tree-focus"
               onClick={() => onFocus(n.key)}
-              title={`Zoom to fit ${n.label}`}
+              title={`Select and zoom to ${n.label}`}
             >
               {n.label}
             </button>

@@ -60,6 +60,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a carrier now renders indented beneath it, with a guide line — a XIAO appears
   under the XIAO Expansion Base rather than as a sibling three rows away. The
   microcontroller nests too, since it is the one that gets docked.
+- **Clicking a browser row selects the component (#648).** It zoomed to the item
+  but left it unselected, so the browser couldn't show what it had just navigated
+  to. A row click now behaves like clicking the thing on the canvas: the row
+  highlights, the selection ring draws, and a part gets its mini-toolbar.
 - **The browser highlights the selected component (#648).** Selecting a part —
   **or the microcontroller**, which is now selectable too — highlights its browser
   row in the same amber the Part Editor's layers panel uses, and draws the
