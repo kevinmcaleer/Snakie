@@ -53,6 +53,11 @@ function driverLabel(d: DriverFile): string {
 
 export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.Element | null {
   const [dismissed, setDismissed] = useState(false)
+  // #621: collapsed to ONE line by default. The full per-driver list (part, file,
+  // install path) is what made this eat the top of the Board View, and it is detail
+  // you want when auditing, not every time you place a part. Install stays visible
+  // collapsed, so the notification is still actionable without expanding.
+  const [expanded, setExpanded] = useState(false)
   const [connected, setConnected] = useState(false)
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
@@ -192,16 +197,31 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
               : `${visibleNeeds.length} part${visibleNeeds.length === 1 ? '' : 's'} need${
                   visibleNeeds.length === 1 ? 's' : ''
                 } a driver`}
+            {/* Collapsed, the one thing that must survive is WHY Install is
+                disabled — otherwise it reads as broken rather than blocked. */}
+            {!allOk && !connected && <span className="drvbanner__hint"> — connect a board</span>}
           </strong>
-          <span className="drvbanner__sub">
-            {allOk
-              ? 'All driver files are on the board.'
-              : connected
-                ? 'Copy the required MicroPython driver file(s) onto the connected board.'
-                : 'Connect a board to install the required driver file(s).'}
-          </span>
+          {expanded && (
+            <span className="drvbanner__sub">
+              {allOk
+                ? 'All driver files are on the board.'
+                : connected
+                  ? 'Copy the required MicroPython driver file(s) onto the connected board.'
+                  : 'Connect a board to install the required driver file(s).'}
+            </span>
+          )}
         </div>
         <div className="drvbanner__actions">
+          <button
+            type="button"
+            className="drvbanner__toggle"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+            title={expanded ? 'Hide driver details' : `Show ${total} driver file${total === 1 ? '' : 's'}`}
+            aria-label={expanded ? 'Hide driver details' : 'Show driver details'}
+          >
+            {expanded ? '▾' : '▸'} {total}
+          </button>
           {!allOk && (
             <button
               type="button"
@@ -227,6 +247,9 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
         </div>
       </div>
 
+      {/* An install failure must not stay hidden behind a collapsed panel — the
+          message is the only thing that explains what to do next. */}
+      {(expanded || errored) && (
       <ul className="drvbanner__list">
         {rows.map(({ need, d, id }) => {
           const st = statuses[id]?.state ?? 'pending'
@@ -245,6 +268,7 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
           )
         })}
       </ul>
+      )}
     </div>
   )
 }

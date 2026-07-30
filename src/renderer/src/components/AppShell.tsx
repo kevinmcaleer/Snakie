@@ -831,8 +831,14 @@ export function AppShell(): JSX.Element {
       (m) => imported.has(m.module) || !moduleCoveredByInstrument(m.module, inUse)
     )
   }, [installedModules, requiredModules, inUse, boardIsPython, boardSource])
+  // #621: this is a notice ABOUT THE OPEN FILE ("this file doesn't import servo"),
+  // so it belongs to the Code workspace only. It used to render above all three,
+  // where it was noise in Electronics and Build — neither has a file to fix.
   const showPartsBanner =
-    requiredModules.length > 0 && !partsDismissed && (missImports.length > 0 || missBoard.length > 0)
+    layout.active === 'code' &&
+    requiredModules.length > 0 &&
+    !partsDismissed &&
+    (missImports.length > 0 || missBoard.length > 0)
 
   const installMissingLibs = useCallback((): void => {
     // Installable = the module ships bundled driver file(s) (copied straight to

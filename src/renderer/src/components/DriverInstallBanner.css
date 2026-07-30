@@ -18,11 +18,37 @@
   overflow: hidden;
 }
 
+/* #621 — tightened so the collapsed banner is a single compact line rather than a
+   block that eats the top of the Board View. */
 .drvbanner__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: 8px;
+  padding: 5px 9px;
+}
+
+/* Why Install is disabled, inline on the title row when collapsed. */
+.drvbanner__hint {
+  font-weight: 400;
+  color: #cdbf9c;
+}
+
+/* The expand caret + driver count. */
+.drvbanner__toggle {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  font-family: inherit;
+  font-size: 11px;
+  color: #cdbf9c;
+  background: transparent;
+  border: 1px solid #4a3a16;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.drvbanner__toggle:hover {
+  color: #f6dd92;
+  border-color: #6b5320;
 }
 
 .drvbanner__icon {

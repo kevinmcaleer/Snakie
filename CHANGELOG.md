@@ -56,6 +56,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   an RTC is a real installable dependency with no panel behind it, so those group
   under "Other drivers" instead of being filed under an unrelated instrument.
 
+- **The project browser shows what's docked into what (#649).** A part seated in
+  a carrier now renders indented beneath it, with a guide line — a XIAO appears
+  under the XIAO Expansion Base rather than as a sibling three rows away. The
+  microcontroller nests too, since it is the one that gets docked.
+- **The browser highlights the selected part (#648).** Selecting a part on the
+  canvas highlights its browser row in the same amber the Part Editor's layers
+  panel uses, so "selected" reads the same across both hierarchies.
+- **Part titles only show for the part you're looking at (#650).** On a populated
+  board every name collided with the pin labels; titles now appear on the selected
+  or hovered part only.
+- **Notifications take up far less room (#621).** The "this file doesn't import…"
+  notice is a fact about the OPEN FILE, so it now appears in the **Code** workspace
+  only instead of above all three — Electronics and Build have no file to fix. The
+  driver-install prompt collapses to a single line with the Install button still on
+  it; the per-driver list is behind a caret, and appears automatically if an install
+  fails.
+
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
   parser and the Part Editor's normaliser kept separate lists of valid pad shapes,

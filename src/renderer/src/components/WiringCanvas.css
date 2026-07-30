@@ -680,6 +680,30 @@
   background: rgba(255, 255, 255, 0.08);
 }
 
+/* #648 — the row for the part selected on the canvas. Same amber as the Part
+   Editor's layers panel, so "selected" reads the same across both hierarchies. */
+.wc__tree-item.is-selected,
+.wc__tree-item.is-selected:hover {
+  background: #ddad4b;
+  color: #1b1204;
+  font-weight: 600;
+}
+
+/* The delete button inherits the dark ink rather than staying pale-on-amber. */
+.wc__tree-item.is-selected .wc__parts-del,
+.wc__tree-item.is-selected .wc__parts-tag {
+  color: inherit;
+  opacity: 0.85;
+}
+
+/* #649 — docked parts sit indented under their carrier, with a guide line so the
+   relationship is readable at a glance rather than inferred from padding. */
+.wc__tree-list--nested {
+  padding-left: 0.7rem;
+  margin-left: 0.35rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.16);
+}
+
 .wc__tree-item--board {
   font-weight: 600;
 }
