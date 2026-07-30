@@ -19,7 +19,7 @@ import {
 import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import { buildNetlist, remapConnectionsForBoard, type BoardRemap, type TerminalRole } from '../../../shared/netlist'
-import { runErc, ercSummary } from '../../../shared/erc'
+import { runErc, ercSummary, smokingParts } from '../../../shared/erc'
 import { buildCircuit, type CircuitComponent } from '../../../shared/dc-solver'
 import { useDcSolver } from './useDcSolver'
 import { voltageColour, formatVoltage, wireCurrent } from '../../../shared/circuit-probe'
@@ -456,6 +456,12 @@ export function BoardGraph({
     }
   }, [netlistData])
   const ercSum = useMemo(() => ercSummary(ercIssues), [ercIssues])
+  // #618: the parts an ERC ERROR implicates vent magic smoke on the breadboard,
+  // so a fault is visible where it happened rather than only in the panel list.
+  const smoking = useMemo(
+    () => smokingParts(ercIssues, netlistData?.netlist),
+    [ercIssues, netlistData]
+  )
 
   // Interactive potentiometer wiper positions (#605), 0..1 per placed pot instance —
   // dragging a slider re-solves the circuit.
@@ -1246,6 +1252,7 @@ export function BoardGraph({
               jointLimits={jointLimits ?? {}}
               libraries={libraries ?? []}
               usedByCode={usedByCode}
+              smoking={smoking}
               voltage={
                 solverCircuit
                   ? {

@@ -1135,3 +1135,54 @@
 .wc__net-chip:hover {
   background: color-mix(in srgb, var(--accent, #e6ab30) 30%, transparent);
 }
+
+/* --- Magic smoke (#618) --------------------------------------------------- */
+/* A part implicated by an ERC ERROR vents smoke at its own position. Decorative
+   only — `pointer-events` is off on the group so the part underneath stays
+   grabbable. Self-contained greys: the breadboard mat is always dark, so smoke
+   reads the same in both skins. */
+.wc__smoke-puff {
+  fill: #cfd4da;
+  opacity: 0;
+  transform-origin: center;
+  animation: wc-smoke 2.4s ease-out infinite;
+}
+
+/* Staggered starts, so the plume is continuous instead of pulsing as one blob. */
+.wc__smoke-puff--1 {
+  animation-delay: 0.8s;
+}
+.wc__smoke-puff--2 {
+  animation-delay: 1.6s;
+}
+
+@keyframes wc-smoke {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.35);
+  }
+  15% {
+    opacity: 0.6;
+  }
+  /* Drifts sideways as it rises — straight up reads as a jet, not smoke. */
+  60% {
+    transform: translate(7px, -34px) scale(0.95);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(14px, -62px) scale(1.5);
+  }
+}
+
+/* A looping animation over the work area is precisely what this setting is for.
+   The smoke still SHOWS — it marks which part failed — it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  .wc__smoke-puff {
+    animation: none;
+    opacity: 0.5;
+  }
+  .wc__smoke-puff--1,
+  .wc__smoke-puff--2 {
+    display: none;
+  }
+}

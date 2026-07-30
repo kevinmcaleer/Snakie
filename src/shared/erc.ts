@@ -245,3 +245,43 @@ export function ercSummary(issues: ErcIssue[]): ErcSummary {
   const worst: ErcSeverity | null = errors ? 'error' : warnings ? 'warning' : infos ? 'info' : null
   return { total: issues.length, errors, warnings, infos, worst }
 }
+
+/**
+ * The placed parts that should be venting magic smoke (#618) — those implicated
+ * by an ERROR-severity issue.
+ *
+ * Errors only. A warning is "this is questionable", and setting fire to the board
+ * over it would cry wolf; smoke has to mean *you have destroyed something* or it
+ * stops being read as a signal at all.
+ *
+ * Most rules locate a fault by NODE, not by part — a dead short is a property of
+ * the net, not of one component — so the node's terminals are resolved back to the
+ * subjects sitting on it. Without that the two rules that actually matter
+ * (`vcc-gnd-short`, `rail-conflict`) would light nothing at all, since neither
+ * populates `parts`. The board itself (`"board"`) can smoke: shorting a rail on
+ * the microcontroller is very much the microcontroller's problem.
+ *
+ * Deduped, and returned in first-implicated order so the animation doesn't
+ * reshuffle when an unrelated issue appears or clears.
+ */
+export function smokingParts(issues: ErcIssue[], netlist?: Netlist): string[] {
+  const byNode = new Map<string, NetlistNode>()
+  for (const n of netlist?.nodes ?? []) byNode.set(n.id, n)
+
+  const out: string[] = []
+  const seen = new Set<string>()
+  const add = (key: string): void => {
+    if (!key || seen.has(key)) return
+    seen.add(key)
+    out.push(key)
+  }
+
+  for (const issue of issues) {
+    if (issue.severity !== 'error') continue
+    for (const key of issue.parts ?? []) add(key)
+    for (const id of issue.nodes ?? []) {
+      for (const t of byNode.get(id)?.terminals ?? []) add(t.key)
+    }
+  }
+  return out
+}

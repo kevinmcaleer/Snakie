@@ -622,6 +622,9 @@ export interface WiringCanvasProps {
   renderMode: WiringRenderMode
   /** Board pads used by the parsed code, keyed by board pad index (combine view). */
   usedByCode?: UsedByCode
+  /** Placed-part instance ids venting magic smoke — the parts an ERC **error**
+   *  implicates (#618). Empty/absent ⇒ nothing is on fire. */
+  smoking?: readonly string[]
   /** Drop a library part onto the canvas at a world position (#159). When set, the
    *  canvas accepts drags from the Parts panel; `pos` is the body's top-left. */
   onDropPart?: (libraryId: string, part: PartDefinition, pos: { x: number; y: number }) => void
@@ -723,7 +726,7 @@ interface Drag {
   pinchWY?: number
 }
 
-export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
+export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, libraries, boardDef, boardPart, renderMode, usedByCode, smoking, onDropPart, onShowHelp, focusedChrome = false, voltage, live, highlight, nets, onHighlightNet }: WiringCanvasProps): JSX.Element {
   const svgRef = useRef<SVGSVGElement>(null)
   // The focusable canvas root — focused when a part is selected so the Delete /
   // Backspace shortcut is scoped to THIS canvas (a selected part can't be nuked by
@@ -2828,6 +2831,16 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 )
               })()}
 
+            {/* Magic smoke (#618): the parts an ERC ERROR implicates are venting.
+                Drawn last so it rises over the bodies and their wires, and inert to
+                the pointer so you can still grab the part you've just cooked. */}
+            {renderMode === 'lifelike' &&
+              (smoking ?? []).map((key) => {
+                const s = subjByKey.get(key)
+                if (!s) return null
+                return <MagicSmoke key={`smoke${key}`} x={s.x + s.w / 2} y={s.y + s.h * 0.35} />
+              })}
+
             {/* Selection ring around the selected subject (#176) — the MCU as well
                 as a part (#648), so the canvas agrees with the browser highlight. */}
             {selSubject?.hit && (
@@ -3573,6 +3586,27 @@ export function stageViewArea(
   const h = stageH / k
   // `meet` centres the viewBox, so the extra span appears equally on both sides.
   return { x: (VIEW_W - w) / 2, y: (VIEW_H - h) / 2, w, h }
+}
+
+/**
+ * MAGIC SMOKE (#618) — the puff of smoke a part vents when an ERC **error**
+ * implicates it. Purely decorative and pointer-inert: you must still be able to
+ * grab the part you have just cooked.
+ *
+ * Three puffs on staggered delays so the plume is continuous rather than pulsing
+ * as one blob, drifting slightly as it rises and fading out. The animation itself
+ * lives in CSS so `prefers-reduced-motion` can stop it dead — a looping animation
+ * over the work area is exactly what that setting exists for; the smoke then sits
+ * as a static puff, still marking the spot.
+ */
+function MagicSmoke({ x, y }: { x: number; y: number }): JSX.Element {
+  return (
+    <g className="wc__smoke" transform={`translate(${x} ${y})`} style={{ pointerEvents: 'none' }} aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <circle key={i} className={`wc__smoke-puff wc__smoke-puff--${i}`} r={9} />
+      ))}
+    </g>
+  )
 }
 
 function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {

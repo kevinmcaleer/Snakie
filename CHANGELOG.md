@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Magic smoke (#618).** A part implicated by an ERC **error** now vents a puff of
+  smoke on the breadboard, at the part itself — so a dead short is visible where it
+  happened, not only as a line in the ERC panel. Errors only: smoke that meant
+  "this is questionable" would stop meaning anything. It stops moving under
+  `prefers-reduced-motion`, and stays pointer-inert so you can still grab the part
+  you have just cooked.
+
 - **Boards have a back (#636).** A part can now carry a **rear face** — its own
   photo, and pins, connectors and components marked `side: rear`. A **Flip to
   back** control sits under the board in the Part Editor and in the Parts Library
