@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { BoardGraph } from './BoardGraph'
 import { PartEditor } from './PartEditor'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './PartsPanel'
+import { preloadPartImages } from './part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { readRobotModel } from '../../../shared/krf'
 import { jointNames, jointDisplayLimits } from './robot-assembly'
@@ -87,6 +88,10 @@ export function BoardPane(): JSX.Element {
       window.api.parts.listLibraries()
         .then((l) => {
           cachedLibraries = l
+          // Decode the board photos BEFORE the canvas paints, so parts don't show
+          // as bare PCB + shapes for a frame first (this pane unmounts on every
+          // workspace switch, so that flash happened every time).
+          preloadPartImages(l)
           setLibraries(l)
         })
         .catch(() => setLibraries([]))

@@ -96,6 +96,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **A docked board moves with its carrier.** Dragging the XIAO Expansion Base left
+  the seated XIAO behind until the mouse was released — a seated board has no
+  position of its own, so it was laid out from the carrier's *committed* box and
+  only caught up on drop. Riders now follow the live drag.
+- **No more generic-then-photo redraw in Electronics.** Part photos are data URLs
+  the browser decodes asynchronously, so every part painted as bare PCB + shapes
+  for a frame before its image landed — on every visit, since leaving the workspace
+  unmounts the pane. The photos are now decoded up front, once.
+
 - **Cable plugs stay put.** A Grove/QWIIC plug took its angle from the position of
   whatever it was wired to, so every header swung round to face the other component
   — and swung again whenever that component moved. A plug is part of the socket it

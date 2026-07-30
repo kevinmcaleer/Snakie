@@ -29,6 +29,7 @@ import ReactDOM from 'react-dom/client'
 import { BoardGraph } from './components/BoardGraph'
 import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail } from './components/PartsPanel'
 import { PartEditor } from './components/PartEditor'
+import { preloadPartImages } from './components/part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import { readRobotModel } from '../../shared/krf'
 import { attachPartMesh } from './components/robot-part-mesh'
@@ -174,7 +175,13 @@ function BoardWindowApp(): JSX.Element {
   // Installed libraries (for the wiring canvas + add-to-project); refresh on save.
   useEffect(() => {
     const load = (): void => {
-      window.api.parts.listLibraries().then(setLibraries).catch(() => setLibraries([]))
+      window.api.parts
+        .listLibraries()
+        .then((l) => {
+          preloadPartImages(l) // decode photos before the canvas paints
+          setLibraries(l)
+        })
+        .catch(() => setLibraries([]))
     }
     load()
     window.addEventListener(PARTS_CHANGED_EVENT, load)

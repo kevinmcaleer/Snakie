@@ -1151,6 +1151,22 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       s.x = liveDrag.liveX
       s.y = liveDrag.liveY
       s.hit = { ...s.hit, x: s.hit.x + dx, y: s.hit.y + dy }
+      // Anything SEATED on the dragged carrier rides with it. A seated board has
+      // no position of its own — it's laid out from the carrier's committed box —
+      // so without this it stays behind until the drop writes the new position,
+      // and a XIAO appears to fall out of its expansion base mid-drag.
+      // One level of nesting is all seating supports, so no recursion.
+      const riders: string[] = robot.parts
+        .filter((p) => p.mountedOn === liveDrag.boxKey)
+        .map((p) => p.id)
+      if (robot.boardMountedOn === liveDrag.boxKey) riders.push('board')
+      for (const key of riders) {
+        const c = subjByKey.get(key)
+        if (!c) continue
+        c.x += dx
+        c.y += dy
+        c.hit = { ...c.hit, x: c.hit.x + dx, y: c.hit.y + dy }
+      }
     }
   }
 
