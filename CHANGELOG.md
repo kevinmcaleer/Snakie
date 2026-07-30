@@ -9,7 +9,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 - **Magic smoke (#618).** An ERC **error** now pours smoke out of the breadboard —
   from the shorted **pins themselves**, with a plume per fault so several shorts
-  smoke in several places. It starts with a violent one-second blow-out (a flash
+  smoke in several places. It starts with a violent two-second blow-out (a flash
   and an expanding cloud) and settles to a steady plume over a glowing ember. Errors only: smoke
   that meant "this is questionable" would stop meaning anything. It stops moving
   under `prefers-reduced-motion` (still marking the spot), and stays pointer-inert
