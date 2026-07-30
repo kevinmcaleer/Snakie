@@ -73,6 +73,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   it; the per-driver list is behind a caret, and appears automatically if an install
   fails.
 
+- **One compact notification shape everywhere (#621).** The instrument-library,
+  missing-import and driver-install prompts were three separate banners that each
+  rendered their full prose as free-flowing text; any two at once ate a real slice
+  of the window. They now share one `Notice` row: a **single clamped summary line
+  with the action on it**, and the full explanation (or the per-driver file list)
+  behind a caret. So a notice is one row tall whether it's naming a missing import
+  or eleven driver files, and it stays clickable without expanding. Failures
+  force their detail open, since that message is the only thing that explains
+  what to do next.
+
 ### Fixed
 - **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
   parser and the Part Editor's normaliser kept separate lists of valid pad shapes,

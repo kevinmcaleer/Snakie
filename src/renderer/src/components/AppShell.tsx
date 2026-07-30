@@ -48,6 +48,7 @@ import { SettingsDialog, type SettingsTab } from './SettingsDialog'
 import { OPEN_SETTINGS_EVENT } from './settingsBus'
 import { HELP_EVENT, type HelpEventDetail } from './editorBridge'
 import { InstrumentLibBanner } from './InstrumentLibBanner'
+import { NoticeStack } from './Notice'
 import { PartsImportBanner } from './PartsImportBanner'
 import { isElectron } from '../lib/platform'
 import { TutorialPanel } from './TutorialPanel'
@@ -999,7 +1000,10 @@ export function AppShell(): JSX.Element {
       {/* Persistent live region so a banner is ANNOUNCED when it appears: the
           container stays mounted (empty when no banner is shown), so screen
           readers pick up the injected banner text (a11y, #188). */}
-      <div aria-live="polite">
+      {/* #621: notices stack as compact one-line rows, so two showing at once
+          costs two lines instead of two paragraphs. Each Notice announces itself
+          politely, so the group needs no aria-live of its own. */}
+      <NoticeStack>
         {showLibBanner && (
           <InstrumentLibBanner
             installing={libInstalling}
@@ -1021,7 +1025,7 @@ export function AppShell(): JSX.Element {
             onDismiss={() => setPartsDismissed(true)}
           />
         )}
-      </div>
+      </NoticeStack>
       <Toolbar />
 
       <div className="shell__body shell__main">

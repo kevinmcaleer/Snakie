@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { driverInstallMethod, type PartDriverNeed } from './part-editor.util'
 import { installPartDriver } from './driver-install'
+import { Notice } from './Notice'
 import type { DriverFile } from '../../../preload/index.d'
 import './DriverInstallBanner.css'
 
@@ -53,11 +54,6 @@ function driverLabel(d: DriverFile): string {
 
 export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.Element | null {
   const [dismissed, setDismissed] = useState(false)
-  // #621: collapsed to ONE line by default. The full per-driver list (part, file,
-  // install path) is what made this eat the top of the Board View, and it is detail
-  // you want when auditing, not every time you place a part. Install stays visible
-  // collapsed, so the notification is still actionable without expanding.
-  const [expanded, setExpanded] = useState(false)
   const [connected, setConnected] = useState(false)
   const [running, setRunning] = useState(false)
   // Per-driver status; absent ⇒ not started. Cleared when the part set changes.
@@ -175,100 +171,57 @@ export function DriverInstallBanner({ needs }: DriverInstallBannerProps): JSX.El
   const errored = rows.some(({ id }) => statuses[id]?.state === 'error')
   const allOk = total > 0 && done === total
 
-  return (
-    <div className="drvbanner" role="region" aria-label="Driver install">
-      <div className="drvbanner__head">
-        <span className="drvbanner__icon" aria-hidden="true">
-          {/* a small chip glyph */}
-          <svg width="18" height="18" viewBox="0 0 24 24">
-            <rect x="6" y="6" width="12" height="12" rx="2" fill="none" stroke="currentColor" strokeWidth="1.8" />
-            <path
-              d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-          </svg>
-        </span>
-        <div className="drvbanner__text">
-          <strong className="drvbanner__title">
-            {allOk
-              ? 'Drivers installed'
-              : `${visibleNeeds.length} part${visibleNeeds.length === 1 ? '' : 's'} need${
-                  visibleNeeds.length === 1 ? 's' : ''
-                } a driver`}
-            {/* Collapsed, the one thing that must survive is WHY Install is
-                disabled — otherwise it reads as broken rather than blocked. */}
-            {!allOk && !connected && <span className="drvbanner__hint"> — connect a board</span>}
-          </strong>
-          {expanded && (
-            <span className="drvbanner__sub">
-              {allOk
-                ? 'All driver files are on the board.'
-                : connected
-                  ? 'Copy the required MicroPython driver file(s) onto the connected board.'
-                  : 'Connect a board to install the required driver file(s).'}
-            </span>
-          )}
-        </div>
-        <div className="drvbanner__actions">
-          <button
-            type="button"
-            className="drvbanner__toggle"
-            onClick={() => setExpanded((v) => !v)}
-            aria-expanded={expanded}
-            title={expanded ? 'Hide driver details' : `Show ${total} driver file${total === 1 ? '' : 's'}`}
-            aria-label={expanded ? 'Hide driver details' : 'Show driver details'}
-          >
-            {expanded ? '▾' : '▸'} {total}
-          </button>
-          {!allOk && (
-            <button
-              type="button"
-              className="drvbanner__install"
-              onClick={() => void installAll()}
-              disabled={running || !connected}
-              title={connected ? 'Install the drivers onto the board' : 'Connect a board first'}
-            >
-              {running ? `Installing… ${done}/${total}` : errored ? 'Retry install' : 'Install drivers'}
-            </button>
-          )}
-          <button
-            type="button"
-            className="drvbanner__dismiss"
-            onClick={() => setDismissed(true)}
-            aria-label="Dismiss driver prompt"
-            title="Dismiss"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="1.9" />
-            </svg>
-          </button>
-        </div>
-      </div>
+  // The summary must carry WHY Install is disabled, or a greyed-out button reads
+  // as broken rather than blocked.
+  const summary = allOk
+    ? 'Drivers installed'
+    : `${visibleNeeds.length} part${visibleNeeds.length === 1 ? '' : 's'} need${
+        visibleNeeds.length === 1 ? 's' : ''
+      } a driver${connected ? '' : ' — connect a board'}`
 
-      {/* An install failure must not stay hidden behind a collapsed panel — the
-          message is the only thing that explains what to do next. */}
-      {(expanded || errored) && (
-      <ul className="drvbanner__list">
-        {rows.map(({ need, d, id }) => {
-          const st = statuses[id]?.state ?? 'pending'
-          return (
-            <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
-              <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
-              <span className="drvbanner__row-part">{need.label}</span>
-              <span className="drvbanner__row-driver">{driverLabel(d)}</span>
-              <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
-                → {d.target}
-              </span>
-              {st === 'error' && statuses[id]?.message && (
-                <span className="drvbanner__row-error">{statuses[id]?.message}</span>
-              )}
-            </li>
-          )
-        })}
-      </ul>
-      )}
-    </div>
+  return (
+    <Notice
+      variant="canvas"
+      tone={errored ? 'error' : 'info'}
+      summary={summary}
+      // An install failure must not stay hidden behind a collapsed row — the
+      // message is the only thing that explains what to do next.
+      forceExpanded={errored}
+      action={
+        allOk
+          ? undefined
+          : {
+              label: running
+                ? `Installing… ${done}/${total}`
+                : errored
+                  ? 'Retry install'
+                  : 'Install drivers',
+              onClick: () => void installAll(),
+              disabled: running || !connected,
+              title: connected ? 'Install the drivers onto the board' : 'Connect a board first'
+            }
+      }
+      onDismiss={() => setDismissed(true)}
+      detail={
+        <ul className="drvbanner__list">
+          {rows.map(({ need, d, id }) => {
+            const st = statuses[id]?.state ?? 'pending'
+            return (
+              <li key={id} className={`drvbanner__row drvbanner__row--${st}`}>
+                <span className={`drvbanner__dot drvbanner__dot--${st}`} aria-hidden="true" />
+                <span className="drvbanner__row-part">{need.label}</span>
+                <span className="drvbanner__row-driver">{driverLabel(d)}</span>
+                <span className="drvbanner__row-target" title={`Installs to ${d.target}`}>
+                  → {d.target}
+                </span>
+                {st === 'error' && statuses[id]?.message && (
+                  <span className="drvbanner__row-error">{statuses[id]?.message}</span>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      }
+    />
   )
 }

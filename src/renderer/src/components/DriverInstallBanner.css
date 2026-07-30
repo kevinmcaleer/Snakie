@@ -1,131 +1,25 @@
 /*
- * Driver Install Banner (#184) — the consent-first "this part needs a driver"
- * prompt shown inside the Board View. Self-contained dark colours (no theme
- * tokens) so it reads identically in every theme, matching BoardGraph.
+ * Driver Install Banner (#184) — the per-driver DETAIL list shown inside the
+ * shared compact Notice (#621). The notice chrome itself (row, action, caret,
+ * dismiss) now lives in `Notice.css`; only the rows are bespoke here.
  *
- * Unique BEM prefix `drvbanner__` (instrument/board CSS is global — see the
- * i2c-detect vs i2c-display collision) so nothing here leaks onto other panels.
+ * Self-contained dark colours (no theme tokens) so it reads identically in every
+ * theme, matching BoardGraph. Unique BEM prefix `drvbanner__` (instrument/board
+ * CSS is global — see the i2c-detect vs i2c-display collision).
  */
 
-.drvbanner {
-  flex: 0 0 auto;
-  margin: 10px 12px 0;
-  border: 1px solid #4a3a16;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #2a2516, #211d12);
-  color: #f0e7d2;
-  font-family: var(--font-mono), 'JetBrains Mono', monospace;
-  overflow: hidden;
-}
-
-/* #621 — tightened so the collapsed banner is a single compact line rather than a
-   block that eats the top of the Board View. */
-.drvbanner__head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 9px;
-}
-
-/* Why Install is disabled, inline on the title row when collapsed. */
-.drvbanner__hint {
-  font-weight: 400;
-  color: #cdbf9c;
-}
-
-/* The expand caret + driver count. */
-.drvbanner__toggle {
-  flex: 0 0 auto;
-  padding: 2px 6px;
-  font-family: inherit;
-  font-size: 11px;
-  color: #cdbf9c;
-  background: transparent;
-  border: 1px solid #4a3a16;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.drvbanner__toggle:hover {
-  color: #f6dd92;
-  border-color: #6b5320;
-}
-
-.drvbanner__icon {
-  display: inline-flex;
-  color: #e8b84b;
-  flex: 0 0 auto;
-}
-
-.drvbanner__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  flex: 1 1 auto;
-}
-
-.drvbanner__title {
-  font-size: 13px;
-  letter-spacing: 0.02em;
-  color: #f6dd92;
-}
-
-.drvbanner__sub {
-  font-size: 11px;
-  color: #cdbf9c;
-}
-
-.drvbanner__actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.drvbanner__install {
-  appearance: none;
-  border: 1px solid #caa23e;
-  border-radius: 6px;
-  background: linear-gradient(180deg, #f6dd92, #caa23e);
-  color: #2a2210;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 6px 12px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.drvbanner__install:hover:not(:disabled) {
-  filter: brightness(1.06);
-}
-
-.drvbanner__install:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.drvbanner__dismiss {
-  appearance: none;
-  border: none;
-  background: transparent;
-  color: #cdbf9c;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 0;
-  border-radius: 4px;
-}
-
-.drvbanner__dismiss:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.08);
+/* The banner must never eat the board pane — cap it and scroll its own content
+   instead (the narrow embedded pane made it swallow the canvas's full height).
+   Carried over from the old `.drvbanner` block onto the Notice canvas variant. */
+.notice--canvas {
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .drvbanner__list {
   list-style: none;
   margin: 0;
-  padding: 0 12px 10px;
+  padding: 0;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -189,13 +83,4 @@
   color: #f0a59c;
   width: 100%;
   padding-left: 16px;
-}
-
-/* Modes review: the banner must never eat the board pane — cap it and scroll
-   its own content instead (the narrow embedded pane made it swallow the
-   canvas's full height). */
-.drvbanner {
-  max-height: 200px;
-  overflow-y: auto;
-  flex: 0 0 auto;
 }
