@@ -96,6 +96,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **Zoom to fit fills the screen.** Three things were each adding slack: the pad
+  was added to the content *before* scaling, so it was multiplied by the zoom (a
+  24-unit margin became 72 at 3×, widening exactly when you were most zoomed in);
+  the fit measured each part's hit box, which reserves space above it for a title
+  that is only drawn when selected; and the pad itself was 60 units per side of a
+  720-unit-tall view. The pad is now a constant on-screen margin, measured against
+  the drawn body.
+
 - **A docked board moves with its carrier.** Dragging the XIAO Expansion Base left
   the seated XIAO behind until the mouse was released — a seated board has no
   position of its own, so it was laid out from the carrier's *committed* box and

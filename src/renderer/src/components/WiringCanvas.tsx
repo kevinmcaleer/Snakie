@@ -1947,19 +1947,14 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    *  its footprint so the framed content sits to the RIGHT of the browser (never
    *  hidden under it). */
   const frameBounds = (minX: number, minY: number, maxX: number, maxY: number): void => {
-    const pad = 60
     // Left inset ≈ the 14rem browser's share of the viewBox (it floats top-left).
     const insetL = browserOpen ? BROWSER_INSET : 0
-    const areaX = insetL
-    const areaW = VIEW_W - insetL
-    const cw = maxX - minX + pad * 2
-    const ch = maxY - minY + pad * 2
-    const scale = Math.min(3, Math.max(0.35, Math.min(areaW / cw, VIEW_H / ch)))
-    setView({
-      tx: areaX + (areaW - (maxX + minX) * scale) / 2,
-      ty: (VIEW_H - (maxY + minY) * scale) / 2,
-      scale
-    })
+    setView(
+      fitTransform(
+        { minX, minY, maxX, maxY },
+        { areaX: insetL, areaW: VIEW_W - insetL, viewH: VIEW_H }
+      )
+    )
   }
 
   /** Frame all subjects within the viewBox (a "fit" reset). */
@@ -1973,10 +1968,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     let maxX = -Infinity
     let maxY = -Infinity
     for (const s of subjects) {
-      minX = Math.min(minX, s.hit.x)
-      minY = Math.min(minY, s.hit.y)
-      maxX = Math.max(maxX, s.hit.x + s.hit.w)
-      maxY = Math.max(maxY, s.hit.y + s.hit.h)
+      // The DRAWN body, not `hit` — which is inflated upward to reserve room for a
+      // title that is only drawn for the selected part now (#650). Fitting to it
+      // padded every build with a strip of empty space along the top.
+      minX = Math.min(minX, s.x)
+      minY = Math.min(minY, s.y)
+      maxX = Math.max(maxX, s.x + s.w)
+      maxY = Math.max(maxY, s.y + s.h)
     }
     frameBounds(minX, minY, maxX, maxY)
   }
@@ -1986,7 +1984,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const fitToKey = (key: string | null): void => {
     if (!key) return fitView()
     const s = subjects.find((sub) => sub.key === key)
-    if (s) frameBounds(s.hit.x, s.hit.y, s.hit.x + s.hit.w, s.hit.y + s.hit.h)
+    // The drawn body, for the same reason as `fitView`.
+    if (s) frameBounds(s.x, s.y, s.x + s.w, s.y + s.h)
   }
 
   /**
@@ -3504,6 +3503,50 @@ function RobotHeader({
 
 /** The draggable hit region (canvas coords) — schematic uses the box; life-like
  *  adds a title band above the body. */
+/**
+ * Breathing room around a zoom-to-fit, in viewBox units, per side.
+ *
+ * Deliberately small. It was 60 — a tenth of the 720-unit height gone from each
+ * of top and bottom — partly to keep each part's title in shot. Titles are hidden
+ * unless a part is selected now (#650), so that allowance was buying nothing and
+ * the fit just looked slack.
+ */
+export const FIT_PAD = 24
+
+/** Zoom limits for a fit: don't blow one small part up absurdly, and don't shrink
+ *  a huge build past the point of legibility (it scrolls instead). */
+const FIT_MIN_SCALE = 0.35
+const FIT_MAX_SCALE = 3
+
+/**
+ * The view transform that frames `b` inside the available area. Pure, so the
+ * framing can be checked without a canvas — the interesting property being that
+ * the content really does fill the area to within {@link FIT_PAD}.
+ */
+export function fitTransform(
+  b: { minX: number; minY: number; maxX: number; maxY: number },
+  area: { areaX: number; areaW: number; viewH: number; pad?: number }
+): { tx: number; ty: number; scale: number } {
+  const pad = area.pad ?? FIT_PAD
+  // The pad is a SCREEN margin, so it is taken off the available area rather than
+  // added to the content before scaling. Added to the content it gets multiplied
+  // by the zoom — a 24-unit pad becomes 72 at 3×, so the margin grew fastest on
+  // exactly the small builds where the fit already looked slackest.
+  const cw = Math.max(1, b.maxX - b.minX)
+  const ch = Math.max(1, b.maxY - b.minY)
+  const availW = Math.max(1, area.areaW - pad * 2)
+  const availH = Math.max(1, area.viewH - pad * 2)
+  const scale = Math.min(
+    FIT_MAX_SCALE,
+    Math.max(FIT_MIN_SCALE, Math.min(availW / cw, availH / ch))
+  )
+  return {
+    tx: area.areaX + (area.areaW - (b.maxX + b.minX) * scale) / 2,
+    ty: (area.viewH - (b.maxY + b.minY) * scale) / 2,
+    scale
+  }
+}
+
 function hitRegion(mode: WiringRenderMode, x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } {
   if (mode === 'lifelike') return { x, y: y - 20, w, h: h + 20 }
   return { x, y, w, h }
