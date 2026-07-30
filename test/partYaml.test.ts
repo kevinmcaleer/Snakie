@@ -6,7 +6,8 @@ import {
   partToYaml
 } from '../src/shared/part-yaml'
 import { blankPart, normalisePart } from '../src/renderer/src/components/part-editor.util'
-import { groupChain, itemHidden, itemLocked } from '../src/shared/part'
+import { PART_PIN_SHAPES, groupChain, itemHidden, itemLocked, mirrorX, partHasRear } from '../src/shared/part'
+import type { PartItemFlags } from '../src/shared/part'
 import type { PartDefinition } from '../src/shared/part'
 
 const RICH: PartDefinition = normalisePart({
@@ -959,5 +960,150 @@ describe('itemHidden / itemLocked — the ancestor rule', () => {
   it('groupChain reports the ancestry innermost first', () => {
     expect(groupChain(groups, 'inner').map((g) => g.id)).toEqual(['inner', 'outer'])
     expect(groupChain(groups, undefined)).toEqual([])
+  })
+})
+
+describe('board rear (#636)', () => {
+  const REAR: PartDefinition = normalisePart({
+    id: 'p',
+    name: 'P',
+    dimensions: { width: 20, height: 40 },
+    image: 'front.png',
+    rear: { image: 'rear.png', imageLayer: { x: 0, y: 0, w: 1, h: 1, opacity: 0.9 } },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'FRONT', type: 'io' },
+          { name: 'BACK', type: 'io', side: 'rear' }
+        ]
+      }
+    ],
+    connectors: [{ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.9, side: 'rear', pins: [{ name: 'SCL', type: 'io' }] }],
+    buttons: [{ label: 'BOOT', x: 0.2, y: 0.2, side: 'rear' }],
+    onboardLeds: [{ kind: 'single', x: 0.3, y: 0.3, side: 'rear' }],
+    shapes: [{ kind: 'rect', x: 0.4, y: 0.4, w: 0.1, h: 0.1, side: 'rear' }],
+    labels: [{ text: 'U1', x: 0.5, y: 0.5, side: 'rear' }],
+    mountingHoles: [{ x: 0.1, y: 0.1, diameter: 2 }]
+  })
+
+  const KINDS = ['pin', 'connector', 'button', 'led', 'shape', 'label'] as const
+  const item = (p: PartDefinition, k: string): PartItemFlags =>
+    ({
+      pin: p.headers[0].pins[1],
+      connector: p.connectors?.[0],
+      button: p.buttons?.[0],
+      led: p.onboardLeds?.[0],
+      shape: p.shapes?.[0],
+      label: p.labels?.[0]
+    })[k] as PartItemFlags
+
+  it.each(KINDS)('normalisePart keeps side: rear on a %s', (k) => {
+    expect(item(REAR, k).side).toBe('rear')
+  })
+
+  it.each(KINDS)('parts.yml round-trips side: rear on a %s', (k) => {
+    expect(item(partFromYaml(partToYaml(REAR)), k).side).toBe('rear')
+  })
+
+  it('leaves a front item alone rather than writing side: front everywhere', () => {
+    // Absent means front, so an existing single-sided part gains nothing in its
+    // parts.yml and its diff stays clean.
+    expect(REAR.headers[0].pins[0].side).toBeUndefined()
+    expect(partToYaml(REAR)).not.toContain('side: front')
+  })
+
+  it('round-trips the rear artwork, filename and layer', () => {
+    const back = partFromYaml(partToYaml(REAR))
+    expect(back.rear?.image).toBe('rear.png')
+    expect(back.rear?.imageLayer).toEqual({ x: 0, y: 0, w: 1, h: 1, opacity: 0.9 })
+  })
+
+  it('never writes the rear’s inlined blob, only its filename', () => {
+    const withBlob = { ...REAR, rear: { ...REAR.rear, imageData: 'data:image/png;base64,AAAA' } }
+    const yaml = partToYaml(withBlob)
+    expect(yaml).toContain('rear.png')
+    expect(yaml).not.toContain('base64')
+    expect(partFromYaml(yaml).rear?.imageData).toBeUndefined()
+  })
+
+  it('survives a second round-trip (the canonical-shape invariant)', () => {
+    const once = normalisePart(partFromYaml(partToYaml(REAR)))
+    expect(normalisePart(partFromYaml(partToYaml(once)))).toEqual(once)
+  })
+
+  it('partHasRear: artwork OR any rear item, and false for a plain part', () => {
+    expect(partHasRear(REAR)).toBe(true)
+    // Artwork alone is enough — you can add the photo before placing anything.
+    expect(partHasRear(normalisePart({ id: 'a', name: 'A', headers: [], rear: { image: 'r.png' } }))).toBe(true)
+    // A single rear pin is enough, with no artwork at all.
+    expect(
+      partHasRear(normalisePart({ id: 'b', name: 'B', headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io', side: 'rear' }] }] }))
+    ).toBe(true)
+    expect(
+      partHasRear(normalisePart({ id: 'c', name: 'C', headers: [{ edge: 'left', pins: [{ name: 'X', type: 'io' }] }] }))
+    ).toBe(false)
+  })
+
+  it('mirrors x for the rear view — a hole must land where it does in the hand', () => {
+    expect(mirrorX(0.1)).toBeCloseTo(0.9)
+    expect(mirrorX(0.5)).toBeCloseTo(0.5)
+    expect(mirrorX(mirrorX(0.23))).toBeCloseTo(0.23)
+  })
+})
+
+describe('pad shapes (#636)', () => {
+  it('round-trips every shape — including octagonal, which the parser used to eat', () => {
+    // The parser and the editor's normaliser kept SEPARATE shape lists and the
+    // parser's was missing `octagonal`, so a servo/DuPont pad was silently
+    // downgraded on every save→load. They share one list now.
+    for (const shape of PART_PIN_SHAPES) {
+      const part = normalisePart({
+        id: 'p',
+        name: 'P',
+        headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', shape }] }]
+      })
+      expect(part.headers[0].pins[0].shape).toBe(shape)
+      expect(partFromYaml(partToYaml(part)).headers[0].pins[0].shape).toBe(shape)
+    }
+  })
+
+  it('drops an unrecognised shape rather than trusting it', () => {
+    expect(partFromYaml('id: p\nheaders:\n  - edge: left\n    pins: [{ name: A, type: io, shape: banana }]\n').headers[0].pins[0].shape).toBeUndefined()
+  })
+})
+
+describe('suggested modules round-trip (#638)', () => {
+  it('survives partToYaml → partFromYaml', () => {
+    const part: PartDefinition = {
+      id: 'base',
+      name: 'Carrier',
+      suggests: [
+        { module: 'ssd1306', unlocks: 'the 0.96" OLED' },
+        { module: 'pcf8563' }
+      ]
+    }
+    const back = partFromYaml(partToYaml(part))
+    expect(back.suggests).toEqual([
+      { module: 'ssd1306', unlocks: 'the 0.96" OLED' },
+      { module: 'pcf8563' }
+    ])
+  })
+
+  it('survives normalisePart, which rebuilds field-by-field', () => {
+    // The whitelist trap: `normalisePart` and the YAML coercion BOTH rebuild a
+    // part key by key, so a new field has to be added to both or it is silently
+    // stripped on save. This is the guard for that.
+    const out = normalisePart({
+      id: 'base',
+      name: 'Carrier',
+      suggests: [{ module: 'ssd1306', unlocks: 'the OLED' }]
+    } as PartDefinition)
+    expect(out.suggests).toEqual([{ module: 'ssd1306', unlocks: 'the OLED' }])
+  })
+
+  it('drops entries with no module id rather than emitting a broken row', () => {
+    const back = partFromYaml('id: x\nname: X\nsuggests:\n  - unlocks: nothing\n  - module: buzzer\n')
+    expect(back.suggests).toEqual([{ module: 'buzzer' }])
   })
 })

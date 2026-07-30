@@ -24,6 +24,24 @@ below resolve to real GPIOs.
 
 There is **no motor driver on this board** — that's a separate Grove module.
 
+## Drivers you need
+
+Only two of the onboard peripherals need anything installed. The part's **Works
+with** list in the Parts panel installs each one on its own — nothing is pushed at
+you, because most projects use only some of this board.
+
+| Peripheral | Driver |
+|---|---|
+| OLED | **already works** — `inst.display` has a built-in SSD1306, or install `ssd1306` for the full driver |
+| Buzzer | **already works** — `inst.buzzer`, or install `buzzer` for RTTTL melodies |
+| User button | **nothing to install** — it's a `Pin` |
+| RTC | install **`pcf8563`** |
+| microSD | install **`sdcard`** |
+
+The RTC is worth a warning: the PCF8563's seconds register shares its top bit with
+a **voltage-low flag**, so a clock whose backup cell has gone flat doesn't run
+slow — it reports nonsense. Check `rtc.unset()` before trusting a reading.
+
 ## Pin gotchas
 
 Three collisions are worth knowing before you wire anything up:

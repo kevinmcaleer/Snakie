@@ -1,12 +1,18 @@
-import { useCallback, useEffect, useMemo, useState, type JSX } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react'
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels'
 import { CollapsiblePanel } from './CollapsiblePanel'
 import { PartCanvas } from './PartCanvas'
+import { partHasRear } from '../../../shared/part'
+import type { PartSide } from '../../../shared/part'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
 import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
+import type { BundledPartStatus } from '../../../shared/bundled-seed'
+import { moduleById, type ModuleDef } from '../../../shared/modules-catalog'
+import type { SuggestedModule } from '../../../shared/part'
+import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import type {
   LibraryUpdate,
   PartDefinition,
@@ -155,6 +161,11 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   const [busyLib, setBusyLib] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
 
+  // #643: which bundled parts are user-edited and/or behind the shipped bundle,
+  // keyed by part id. An edited part is never refreshed by the seeder, so this is
+  // the only thing that makes the staleness visible.
+  const [bundled, setBundled] = useState<Record<string, BundledPartStatus>>({})
+
   const refresh = useCallback(async (): Promise<void> => {
     setLoading(true)
     try {
@@ -165,7 +176,75 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
     } finally {
       setLoading(false)
     }
+    // Re-read alongside the parts themselves: a save in the Part Editor is exactly
+    // what flips a bundled part to "edited".
+    try {
+      const st = await window.api.parts.bundledStatus()
+      setBundled(Object.fromEntries(st.map((s) => [s.id, s])))
+    } catch {
+      setBundled({})
+    }
   }, [])
+
+  /** Bundled parts whose shipped version is newer than the installed copy (#643).
+   *  Surfaced as a count on the library header — otherwise a stale part is only
+   *  discoverable by selecting it, which is how the last one went unnoticed. */
+  const behindParts = useMemo(
+    () => Object.values(bundled).filter((s) => s.behind),
+    [bundled]
+  )
+
+  /** Restore every part that's behind, in one pass. */
+  const resetAllBehind = useCallback(async (): Promise<void> => {
+    if (behindParts.length === 0) return
+    const names = behindParts.map((s) => `  • ${s.name ?? s.id} (${s.localVersion ?? '—'} → ${s.bundledVersion})`)
+    const ok = window.confirm(
+      `Restore ${behindParts.length} part${behindParts.length === 1 ? '' : 's'} to the bundled version?\n\n` +
+        `${names.join('\n')}\n\n` +
+        "Each current copy is kept in the library's .backups folder."
+    )
+    if (!ok) return
+    let done = 0
+    const failed: string[] = []
+    for (const s of behindParts) {
+      const res = await window.api.parts.resetToBundled(s.id)
+      if (res.ok) done++
+      else failed.push(s.name ?? s.id)
+    }
+    setNote(
+      failed.length === 0
+        ? `Restored ${done} part${done === 1 ? '' : 's'} to the bundled version. Old copies are in .backups.`
+        : `Restored ${done}; could not restore: ${failed.join(', ')}.`
+    )
+    window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+    await refresh()
+  }, [behindParts, refresh])
+
+  /** Restore a bundled part to the version this app ships (#643). */
+  const resetToBundled = useCallback(
+    async (part: PartDefinition): Promise<void> => {
+      const st = bundled[part.id]
+      const ver = st?.bundledVersion ? ` (${st.bundledVersion})` : ''
+      const ok = window.confirm(
+        `Replace "${part.name}" with the bundled version${ver}?\n\n` +
+          'Your current copy — including any image or help file — is kept in the ' +
+          'library\'s .backups folder, so this can be undone by hand.'
+      )
+      if (!ok) return
+      const res = await window.api.parts.resetToBundled(part.id)
+      setNote(
+        res.ok
+          ? `"${part.name}" restored to the bundled version. Your copy is in .backups.`
+          : (res.error ?? 'Reset failed.')
+      )
+      if (res.ok) {
+        // Other windows (Board View, Part Editor) cache parts too.
+        window.dispatchEvent(new Event(PARTS_CHANGED_EVENT))
+        await refresh()
+      }
+    },
+    [bundled, refresh]
+  )
 
   useEffect(() => {
     void refresh()
@@ -447,7 +526,23 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         />
       </div>
 
-      {note && <p className="pl__note">{note}</p>}
+      {/* Panel status line (reset/promote/install/registry). It persists until the
+          next action replaces it, so it needs a way out — otherwise a one-off
+          "restored to the bundled version" sits there for the rest of the session. */}
+      {note && (
+        <div className="pl__note" role="status">
+          <span className="pl__note-text">{note}</span>
+          <button
+            type="button"
+            className="pl__icon pl__note-close"
+            onClick={() => setNote(null)}
+            title="Dismiss"
+            aria-label="Dismiss message"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Library update indicator (#196) — one click pulls + uses the latest. */}
       {updates.length > 0 && (
@@ -550,6 +645,18 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
                         }}
                       >
                         ⬆ v{update.available}
+                      </button>
+                    )}
+                    {/* #643 — how many bundled parts this app ships a newer version
+                        of than the installed copy. Click to restore them all. */}
+                    {lib.id === STANDARD_LIBRARY_ID && behindParts.length > 0 && (
+                      <button
+                        type="button"
+                        className="pl__badge pl__badge--stale"
+                        title={`${behindParts.length} part(s) are older than the bundled version — click to restore them (your copies are backed up)`}
+                        onClick={() => void resetAllBehind()}
+                      >
+                        ↻ {behindParts.length} behind
                       </button>
                     )}
                     {/* DEV-only: publish the Standard library to GitHub (#197). */}
@@ -674,12 +781,114 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
                     ? 'Update Standard'
                     : 'Promote to Standard'
                 }
+                bundledStatus={
+                  // Only meaningful for the bundled library — a user's own part has
+                  // no bundle to compare against or reset to.
+                  selectedPart.libraryId === STANDARD_LIBRARY_ID
+                    ? bundled[selectedPart.part.id]
+                    : undefined
+                }
+                onResetToBundled={() => void resetToBundled(selectedPart.part)}
                 onClose={() => setSelected(null)}
               />
             </Panel>
           </>
         )}
       </PanelGroup>
+    </div>
+  )
+}
+
+/**
+ * "Works with" — the OPTIONAL modules a part can use, and what each unlocks (#638).
+ *
+ * Deliberately separate from the Board View's driver-install banner, which pushes
+ * the drivers a part CANNOT work without. A carrier is a menu: someone using only
+ * its Grove ports should never be nagged to install an OLED driver. So this lists,
+ * shows what is already on the board, and installs one at a time — on request.
+ *
+ * Reuses the ordinary module install path (`modules.probeInstalled` / `install`),
+ * so "already installed" means the same thing here as in the Modules panel.
+ */
+function WorksWith({ suggests }: { suggests: SuggestedModule[] }): JSX.Element | null {
+  const status = useDeviceStatus()
+  const connected = status.state === 'connected'
+  const [installed, setInstalled] = useState<ReadonlySet<string>>(new Set())
+  const [busy, setBusy] = useState<string | null>(null)
+  const [done, setDone] = useState(0)
+
+  // Only rows that resolve to a real catalog module — a typo'd id must not render
+  // an install button that cannot work.
+  const rows = useMemo(
+    () =>
+      suggests
+        .map((s) => ({ suggest: s, def: moduleById(s.module) }))
+        .filter((r): r is { suggest: SuggestedModule; def: ModuleDef } => r.def !== undefined),
+    [suggests]
+  )
+
+  useEffect(() => {
+    if (!connected || rows.length === 0) {
+      setInstalled(new Set())
+      return
+    }
+    let active = true
+    window.api.modules
+      .probeInstalled(rows.map((r) => r.def.importName))
+      .then((found) => {
+        if (active) setInstalled(new Set(found))
+      })
+      .catch(() => {
+        if (active) setInstalled(new Set())
+      })
+    return () => {
+      active = false
+    }
+  }, [connected, rows, done])
+
+  const install = useCallback(async (def: ModuleDef): Promise<void> => {
+    setBusy(def.id)
+    try {
+      await window.api.modules.install(def.id)
+      setDone((n) => n + 1)
+    } catch {
+      // The Modules panel is the place with a full install log; here a failure
+      // just leaves the row installable rather than throwing at the user.
+    } finally {
+      setBusy(null)
+    }
+  }, [])
+
+  if (rows.length === 0) return null
+
+  return (
+    <div className="pl__works">
+      <div className="pl__works-head">Works with</div>
+      <ul className="pl__works-list">
+        {rows.map(({ suggest, def }) => {
+          const on = installed.has(def.importName)
+          return (
+            <li className="pl__works-row" key={def.id}>
+              <span className="pl__works-name">{def.name}</span>
+              <span className="pl__works-unlocks">{suggest.unlocks ?? def.description}</span>
+              {on ? (
+                <span className="pl__works-on">on board</span>
+              ) : (
+                <button
+                  type="button"
+                  className="pl__btn pl__btn--small"
+                  disabled={!connected || busy === def.id}
+                  title={connected ? `Install ${def.name}` : 'Connect a board to install'}
+                  onClick={() => void install(def)}
+                >
+                  {busy === def.id ? '…' : 'Install'}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+      {!connected && <p className="pl__works-note">Connect a board to install these.</p>}
     </div>
   )
 }
@@ -693,6 +902,8 @@ function PartDetail({
   onAddToProject,
   onPromote,
   promoteLabel,
+  bundledStatus,
+  onResetToBundled,
   onClose
 }: {
   libraryId: string
@@ -704,9 +915,29 @@ function PartDetail({
   /** DEV-only: promote this microcontroller board into the Standard Boards library. */
   onPromote?: () => void
   promoteLabel?: string
+  /** How this copy compares with the bundle the app ships (#643); absent for
+   *  parts that aren't bundled. */
+  bundledStatus?: BundledPartStatus
+  onResetToBundled: () => void
   onClose: () => void
 }): JSX.Element {
   const [previewMode, setPreviewMode] = useState<'board' | 'schematic'>('board')
+  // Which face the preview shows, and the coin-spin between them. Same shape as
+  // the Part Editor's: the side swaps half way, while the board is edge-on.
+  const [previewSide, setPreviewSide] = useState<PartSide>('front')
+  const [previewFlipping, setPreviewFlipping] = useState(false)
+  const flipTimers = useRef<ReturnType<typeof setTimeout>[]>([])
+  useEffect(() => () => flipTimers.current.forEach(clearTimeout), [])
+  // A different part may not have a back at all — start each one face-up.
+  useEffect(() => setPreviewSide('front'), [part.id])
+  const flipPreview = (): void => {
+    if (previewFlipping) return
+    setPreviewFlipping(true)
+    flipTimers.current.push(
+      setTimeout(() => setPreviewSide((v) => (v === 'front' ? 'rear' : 'front')), 210),
+      setTimeout(() => setPreviewFlipping(false), 420)
+    )
+  }
   const metaRows: [string, string | undefined][] = [
     ['Manufacturer', part.manufacturer],
     ['Family', part.family],
@@ -765,6 +996,35 @@ function PartDetail({
 
       {part.description && <p className="pl__detail-desc">{part.description}</p>}
 
+      {part.suggests && part.suggests.length > 0 && <WorksWith suggests={part.suggests} />}
+
+      {/* #643 — an edited bundled part is never refreshed by the seeder, so it can
+          sit on an old schema indefinitely. Say so, and offer the way back. The
+          `behind` case is the one that actually costs the user something. */}
+      {bundledStatus && (bundledStatus.behind || bundledStatus.edited) && (
+        <div className={`pl__stale${bundledStatus.behind ? ' pl__stale--behind' : ''}`}>
+          <span className="pl__stale-text">
+            {bundledStatus.behind ? (
+              <>
+                Bundled version <strong>{bundledStatus.bundledVersion}</strong> available — yours is{' '}
+                <strong>{bundledStatus.localVersion ?? 'unversioned'}</strong>
+                {bundledStatus.edited ? ' (edited)' : ''}.
+              </>
+            ) : (
+              <>Edited — this copy no longer tracks the bundled version.</>
+            )}
+          </span>
+          <button
+            type="button"
+            className="pl__btn pl__btn--small"
+            onClick={onResetToBundled}
+            title="Replace this part with the version bundled in the app (your copy is backed up)"
+          >
+            Reset to bundled
+          </button>
+        </div>
+      )}
+
       <div className="pl__detail-seg" role="tablist" aria-label="Preview">
         <button
           type="button"
@@ -785,13 +1045,33 @@ function PartDetail({
           Schematic
         </button>
       </div>
-      <div className="pl__detail-fp">
+      <div className={`pl__detail-fp${previewFlipping ? ' is-flipping' : ''}`}>
         {previewMode === 'board' ? (
-          <PartCanvas part={part} readOnly />
+          <PartCanvas part={part} readOnly side={previewSide} />
         ) : (
           <PartSchematicView part={part} />
         )}
       </div>
+      {/* Only offered when there IS a back — a single-sided part shouldn't invite
+          you to turn it over and find nothing (#636). */}
+      {previewMode === 'board' && partHasRear(part) && (
+        <button
+          type="button"
+          className="pl__flip"
+          onClick={flipPreview}
+          disabled={previewFlipping}
+          title={previewSide === 'front' ? 'Show the back of the board' : 'Show the front of the board'}
+        >
+          <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true">
+            <ellipse cx="8" cy="8" rx="3" ry="6.4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M2.2 4.4A6.6 6.6 0 0 1 8 1.4" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M13.8 11.6A6.6 6.6 0 0 1 8 14.6" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+            <path d="M1.2 2.2l1 2.4 2.4-1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M14.8 13.8l-1-2.4-2.4 1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>{previewSide === 'front' ? 'Flip to back' : 'Flip to front'}</span>
+        </button>
+      )}
 
       <dl className="pl__meta">
         {metaRows

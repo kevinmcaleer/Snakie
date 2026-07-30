@@ -368,6 +368,36 @@ class _RecordingPWM:
         self.duties.append(int(n))
 
 
+class _RecordingMotorDriver:
+    """Stand-in for a two-channel DC motor driver (the ``tb6612`` module's shape).
+
+    ``Motor`` is deliberately driver-agnostic — it only requires this interface —
+    so the fake IS the contract: if a real driver stops matching it, these tests
+    still pass and the board goes quiet, which is why the shape is spelled out.
+    """
+
+    def __init__(self):
+        self.driven = []          # every (a, b) applied, in order
+        self.braked = []          # channels braked
+        self.stopped = False
+        self.standby_calls = []   # True on standby(), False on wake()
+
+    def drive(self, a, b):
+        self.driven.append((a, b))
+
+    def brake(self, ch):
+        self.braked.append(ch)
+
+    def stop_all(self):
+        self.stopped = True
+
+    def standby(self):
+        self.standby_calls.append(True)
+
+    def wake(self):
+        self.standby_calls.append(False)
+
+
 class BuzzerDevice(unittest.TestCase):
     """The on-device Buzzer: stop/set_pin/play_seq + the ``buzzer`` receiver."""
 
@@ -471,6 +501,72 @@ class BuzzerDevice(unittest.TestCase):
         srv = inst.Servo(_RecordingPWM())
         self.assertIsNone(inst.servo_command("wat", srv))
         self.assertIsNone(inst.servo_command("", srv))
+
+    # --- Motor (#638): the two-channel DC driver receiver --------------------
+
+    def test_motor_command_run_drives_both_channels(self):
+        drv = _RecordingMotorDriver()
+        mot = inst.Motor(drv)
+        self.assertEqual(inst.motor_command("run 0.5 -0.25", mot), "run")
+        self.assertEqual(drv.driven[-1], (0.5, -0.25))
+        self.assertEqual((mot.a, mot.b), (0.5, -0.25))
+
+    def test_motor_command_single_channel_leaves_the_other(self):
+        mot = inst.Motor(_RecordingMotorDriver())
+        inst.motor_command("run 0.5 0.5", mot)
+        self.assertEqual(inst.motor_command("a -1", mot), "a")
+        self.assertEqual((mot.a, mot.b), (-1.0, 0.5))
+
+    def test_motor_command_clamps_to_normalised_range(self):
+        mot = inst.Motor(_RecordingMotorDriver())
+        inst.motor_command("run 9 -9", mot)
+        self.assertEqual((mot.a, mot.b), (1.0, -1.0))
+
+    def test_motor_stop_and_brake_zero_the_reported_powers(self):
+        drv = _RecordingMotorDriver()
+        mot = inst.Motor(drv)
+        inst.motor_command("run 1 1", mot)
+        self.assertEqual(inst.motor_command("stop", mot), "stop")
+        self.assertEqual((mot.a, mot.b), (0.0, 0.0))
+        self.assertTrue(drv.stopped)
+        inst.motor_command("run 1 1", mot)
+        self.assertEqual(inst.motor_command("brake", mot), "brake")
+        # Both channels must be braked, not just one.
+        self.assertEqual(sorted(drv.braked), [0, 1])
+
+    def test_motor_standby_zeroes_powers_so_the_panel_cannot_lie(self):
+        # Standby really does disable the outputs; reporting a stale non-zero
+        # power afterwards would show a moving bar for a motionless robot.
+        drv = _RecordingMotorDriver()
+        mot = inst.Motor(drv)
+        inst.motor_command("run 1 1", mot)
+        self.assertEqual(inst.motor_command("standby 1", mot), "standby")
+        self.assertEqual((mot.a, mot.b), (0.0, 0.0))
+        self.assertTrue(mot.standby_on and drv.standby_calls[-1] is True)
+        self.assertEqual(inst.motor_command("standby 0", mot), "standby")
+        self.assertFalse(mot.standby_on)
+        self.assertIs(drv.standby_calls[-1], False)
+
+    def test_motor_reports_applied_powers_as_telemetry(self):
+        out = _emit(lambda: inst.Motor(_RecordingMotorDriver()).drive(0.25, -0.5))
+        self.assertIn("SNK MOTOR 0.25 -0.5", out)
+
+    def test_motor_works_without_a_driver(self):
+        # The panel must be usable with nothing attached — no driver is a no-op,
+        # not an AttributeError.
+        mot = inst.Motor()
+        self.assertEqual(inst.motor_command("run 0.5 0.5", mot), "run")
+        self.assertEqual((mot.a, mot.b), (0.5, 0.5))
+        self.assertEqual(inst.motor_command("brake", mot), "brake")
+
+    def test_motor_command_unknown_and_malformed(self):
+        mot = inst.Motor(_RecordingMotorDriver())
+        self.assertIsNone(inst.motor_command("wat", mot))
+        self.assertIsNone(inst.motor_command("", mot))
+        # A run with a missing/garbage argument must not half-apply.
+        self.assertIsNone(inst.motor_command("run 0.5", mot))
+        self.assertIsNone(inst.motor_command("run x y", mot))
+        self.assertEqual((mot.a, mot.b), (0.0, 0.0))
 
     def test_servo_from_pwm_sets_servo_freq(self):
         # Exported `Servo(PWM(Pin(n)))` — the Servo sets the PWM to 50 Hz so a

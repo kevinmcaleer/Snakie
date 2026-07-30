@@ -77,14 +77,67 @@ export type PartPackage = 'THT' | 'SMD'
  *                   drill hole showing (where pin headers are soldered)
  *  - `octagonal`  — an octagonal header pad with a SQUARE pin/hole, the classic
  *                   look of servo / DuPont-style 0.1" headers (Signal/V+/GND rows)
+ *  - `smd`        — a surface-mount pad that does NOT pass through the board. The
+ *                   only rectangular pad with no drill: `square` is a through-hole
+ *                   pad that punches one. This is what a XIAO's underside array is.
+ *  - `pogo`       — a sprung contact on a CARRIER that presses against a seated
+ *                   board's pad rather than being soldered to it. The XIAO
+ *                   Expansion Base reaches the XIAO's underside battery pads this
+ *                   way. Drawn as a contact, not copper, because it isn't one.
  */
-export type PartPinShape = 'square' | 'round' | 'castellated' | 'header' | 'octagonal'
+export type PartPinShape =
+  | 'square'
+  | 'round'
+  | 'castellated'
+  | 'header'
+  | 'octagonal'
+  | 'smd'
+  | 'pogo'
+
+/**
+ * Every pad shape, in picker order. ONE list — the parts.yml parser and the Part
+ * Editor's normaliser both validate against it. They used to keep their own
+ * copies, which drifted: `octagonal` was missing from the parser's, so an
+ * octagonal pad was silently downgraded on every save/load round-trip.
+ */
+export const PART_PIN_SHAPES: readonly PartPinShape[] = [
+  'square',
+  'round',
+  'smd',
+  'castellated',
+  'header',
+  'octagonal',
+  'pogo'
+]
+
+/**
+ * Does this pad go THROUGH the board? A castellated half-hole, a header ring, an
+ * octagonal servo pad and a plain `square` all drill; `round` and `smd` sit on the
+ * surface.
+ *
+ * It matters for the two-faced view (#636): a through pad is ONE pad you can see
+ * (and solder) from either side, so it shows on both faces — mirrored on the rear,
+ * like a mounting hole. A XIAO's 14 castellations are exactly this, which is why
+ * its underside array needs no pins of its own; duplicating them as rear pads
+ * would invent 14 nets the board doesn't have.
+ */
+export function padPassesThrough(shape?: PartPinShape): boolean {
+  const sh = shape ?? 'square'
+  return sh === 'square' || sh === 'castellated' || sh === 'header' || sh === 'octagonal'
+}
+
+/** Validate a pad `shape` off untrusted YAML/JSON (unknown ⇒ undefined). */
+export function coercePinShape(v: unknown): PartPinShape | undefined {
+  return PART_PIN_SHAPES.includes(v as PartPinShape) ? (v as PartPinShape) : undefined
+}
 
 /** Which edge of the board outline a pin/header sits on. */
 export type PartEdge = 'left' | 'right' | 'top' | 'bottom'
 
 /** One physical pin/pad on the part. */
 export interface PartPin {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Paint/click z-order in the single item hierarchy (higher = on top).
    *  Absent ⇒ the legacy per-kind default. */
   z?: number
@@ -217,6 +270,8 @@ export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
  * round rather than merely joined pin-to-pin.
  */
 export interface PartConnector {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -287,6 +342,25 @@ export interface PartMount {
   pinMap?: Record<string, string>
 }
 
+/**
+ * The rear face's artwork (#636). Only the picture lives here — the pins, pads,
+ * connectors and components that are ON the rear are ordinary items carrying
+ * `side: rear`, so there is ONE list of each kind rather than two parallel
+ * schemas to keep in step (and one set of whitelists, one set of layer rows, one
+ * selection model).
+ *
+ * The rear shares the front's `dimensions`: it's the same board.
+ */
+export interface PartRear {
+  /** Relative filename of the rear photo, alongside `parts.yml`. */
+  image?: string
+  /** Runtime-only inlined data URL, exactly like {@link PartDefinition.imageData}
+   *  — read by the main process, never written back to `parts.yml`. */
+  imageData?: string
+  /** Where the rear photo sits on the board canvas, normalised 0..1. */
+  imageLayer?: ImageLayer
+}
+
 /** A mounting hole, positioned in normalised 0..1 coords within the outline. */
 export interface MountingHole {
   /** Paint/click z-order in the single item hierarchy (higher = on top).
@@ -312,6 +386,8 @@ export interface MountingHole {
 
 /** A push-button on the board, positioned in normalised 0..1 coords. */
 export interface PartButton {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -344,6 +420,8 @@ export interface PartButton {
  *                 DATA GP22 + POWER GP23). The power pin is optional.
  */
 export interface OnboardLed {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Group id — items sharing it form a group and move/rotate/delete as one
    *  rigid unit (#627). A group may mix kinds: a Grove connector and its contacts
    *  belong together, so they travel together. */
@@ -425,6 +503,8 @@ export type ComponentShapeKind = 'rect' | 'circle' | 'polygon'
  * "components" layer the Part Editor authors via the toolbar's Shapes dropdown.
  */
 export interface ComponentShape {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
   hidden?: boolean
@@ -478,6 +558,8 @@ export type TextAlign = 'left' | 'center' | 'right'
 
 /** A free-floating text label placed on the board canvas (normalised 0..1). */
 export interface PartLabel {
+  /** Which face of the board this sits on (#636). Absent ⇒ front. */
+  side?: PartSide
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
   hidden?: boolean
@@ -630,6 +712,55 @@ export interface PartItemFlags {
   group?: string
   hidden?: boolean
   locked?: boolean
+  side?: PartSide
+}
+
+/**
+ * Which face of the board something is on (#636). Absent ⇒ `front`, so every
+ * part authored before rear support is a front-only board and reads unchanged.
+ *
+ * Mounting holes deliberately carry NO side: a hole goes through the board, so
+ * it belongs to both faces — it's just MIRRORED when the rear is shown, which is
+ * how it looks when you physically turn the board over.
+ */
+export type PartSide = 'front' | 'rear'
+
+/** Every side, in flip order. */
+export const PART_SIDES: readonly PartSide[] = ['front', 'rear']
+
+/** Validate a `side` off untrusted YAML/JSON. Anything unrecognised is front. */
+export function coerceSide(v: unknown): PartSide | undefined {
+  return v === 'rear' ? 'rear' : undefined
+}
+
+/** The side an item sits on — the default made explicit. */
+export function itemSide(item: PartItemFlags): PartSide {
+  return item.side === 'rear' ? 'rear' : 'front'
+}
+
+/**
+ * Whether a part has a rear worth showing — either rear artwork, or at least one
+ * item placed on the rear. Drives the flip control: hidden in the Parts Library
+ * for a single-sided part, always available while authoring one.
+ */
+export function partHasRear(part: PartDefinition): boolean {
+  if (part.rear?.image || part.rear?.imageData) return true
+  const onRear = (xs: PartItemFlags[] | undefined): boolean => (xs ?? []).some((x) => x.side === 'rear')
+  return (
+    (part.headers ?? []).some((h) => onRear(h.pins)) ||
+    onRear(part.connectors) ||
+    onRear(part.buttons) ||
+    onRear(part.onboardLeds) ||
+    onRear(part.shapes) ||
+    onRear(part.labels)
+  )
+}
+
+/** Mirror a normalised x. Viewing the rear flips the board left-to-right, so
+ *  anything shared between the faces (mounting holes, the outline) has to mirror
+ *  or it won't line up with the real board in your hand. */
+export function mirrorX(x: number): number {
+  return 1 - x
 }
 
 /**
@@ -788,6 +919,9 @@ export interface PartDefinition {
    * behaviour). Authored by dragging/resizing the image in the Part Editor.
    */
   imageLayer?: ImageLayer
+  /** The board's REAR face (#636) — its own photo, sharing the front's
+   *  dimensions. Absent ⇒ a single-sided part, which is nearly all of them. */
+  rear?: PartRear
 
   // --- Bundled help / docs -------------------------------------------------
   /**
@@ -832,6 +966,18 @@ export interface PartDefinition {
    * folders as needed) or `mip`-installing a spec. Absent / empty ⇒ no driver.
    */
   drivers?: DriverFile[]
+
+  /**
+   * Modules that CAN be used with this part, and what each one unlocks (#638).
+   *
+   * Distinct from {@link drivers} on purpose. `drivers` means "this part does not
+   * work without these", and placing the part prompts to install them. A carrier
+   * like the XIAO Expansion Base instead has a *menu* of optional peripherals —
+   * an OLED, an RTC, a microSD slot — and pushing all of their drivers at someone
+   * who only wanted the Grove ports would be wrong. These are shown in the part's
+   * detail pane as "Works with", each installable on its own.
+   */
+  suggests?: SuggestedModule[]
 
   // --- 3-D mesh (Robot View, #406) -----------------------------------------
   /**
@@ -936,6 +1082,20 @@ export interface PartLibraryLink {
  *    destination **path** on the board (folder + filename, e.g. `"lib/vl53l0x.py"`).
  *    Any intermediate folders are created.
  */
+/**
+ * An OPTIONAL module this part can use, naming what it unlocks (#638).
+ *
+ * `module` is a {@link ./modules-catalog}.MODULES id, so the detail pane can show
+ * its real name/description and reuse the ordinary module install path (including
+ * the "already installed" probe) rather than restating any of it here.
+ */
+export interface SuggestedModule {
+  /** A `MODULES` catalog id, e.g. `ssd1306`. */
+  module: string
+  /** What this module gets you on THIS part, e.g. `the 0.96" OLED`. */
+  unlocks?: string
+}
+
 export interface DriverFile {
   /** Where the driver comes from: a `mip` spec, a URL, or a bundled filename. */
   source: string

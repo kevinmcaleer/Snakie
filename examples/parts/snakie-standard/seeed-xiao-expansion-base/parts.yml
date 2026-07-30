@@ -2,7 +2,7 @@ id: seeed-xiao-expansion-base
 name: Seeed XIAO Expansion Base
 description: Carrier board for the XIAO family — OLED, RTC, buzzer, SD slot and four Grove ports. A XIAO plugs into the socket on top.
 manufacturer: Seeed Studio
-family: Microcontroller
+family: Carrier
 tags:
   - xiao
   - seeed
@@ -19,7 +19,7 @@ properties:
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.7
+version: 0.1.14
 pcbColor: "#1b4d3e"
 aspect: 1.365
 dimensions:
@@ -91,6 +91,26 @@ headers:
         rotation: 180
         x: 0.89090584941294
         y: 0.3886679825128293
+      - name: BAT+
+        type: pwr
+        label: B+
+        shape: pogo
+        x: 0.035059
+        y: 0.436203
+      - name: BAT-
+        type: gnd
+        label: B-
+        shape: pogo
+        x: 0.035059
+        y: 0.519968
+      - name: GND
+        type: gnd
+        x: 0.8799811808268229
+        y: 0.6970861912147671
+      - name: 5V
+        type: pwr
+        x: 0.8799811808268229
+        y: 0.7455997194776347
   - edge: left
     pins:
       - name: D0
@@ -346,6 +366,15 @@ imageLayer:
   y: 0
   w: 1
   h: 1
+suggests:
+  - module: ssd1306
+    unlocks: the 0.96" OLED
+  - module: pcf8563
+    unlocks: the PCF8563 real-time clock
+  - module: buzzer
+    unlocks: tones and RTTTL melodies on the buzzer
+  - module: sdcard
+    unlocks: the microSD slot
 help: help.md
 layerVisibility:
   pcb: false

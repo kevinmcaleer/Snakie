@@ -32,10 +32,13 @@ describe('MODULES catalog shape', () => {
       'led',
       'encoder',
       'buzzer',
-      'gamepad'
+      'gamepad',
+      'motor'
     ]
     for (const m of MODULES) {
-      expect(known).toContain(m.instrument)
+      // `instrument` is optional — a driver with no dock panel behind it (an RTC,
+      // an SD card) declares none rather than being filed under an unrelated one.
+      if (m.instrument !== undefined) expect(known).toContain(m.instrument)
     }
   })
 
@@ -50,10 +53,10 @@ describe('MODULES catalog shape', () => {
     }
   })
 
-  it('covers the instrument inputs/outputs #120 names (display/range/imu/led/encoder/buzzer/gamepad)', () => {
-    const instruments = new Set(MODULES.map((m) => m.instrument))
+  it('covers the instrument inputs/outputs #120 names (display/range/imu/led/encoder/buzzer/gamepad/motor)', () => {
+    const instruments = new Set(MODULES.map((m) => m.instrument).filter(Boolean))
     expect(instruments).toEqual(
-      new Set(['i2c-display', 'range', 'imu', 'led', 'encoder', 'buzzer', 'gamepad'])
+      new Set(['i2c-display', 'range', 'imu', 'led', 'encoder', 'buzzer', 'gamepad', 'motor'])
     )
   })
 
@@ -152,5 +155,29 @@ describe('diffInstalled', () => {
   it('covers exactly the catalog ids', () => {
     const out = diffInstalled(new Set(), true)
     expect(Object.keys(out).sort()).toEqual(MODULES.map((m) => m.id).sort())
+  })
+})
+
+describe('panel-less drivers (#638)', () => {
+  it('groups modules with no instrument separately, not under a wrong one', () => {
+    const groups = groupByInstrument()
+    const other = groups.find((g) => g.instrument === undefined)
+    expect(other, 'a group for panel-less drivers').toBeTruthy()
+    expect(other!.modules.map((m) => m.id)).toContain('pcf8563')
+  })
+
+  it('a panel-less driver is still a complete, installable module', () => {
+    // The point of allowing no instrument is that these are REAL dependencies,
+    // not placeholders — they must still resolve an install path.
+    const rtc = moduleById('pcf8563')!
+    expect(rtc.instrument).toBeUndefined()
+    expect(rtc.importName).toBe('pcf8563')
+    expect(installPathFor(rtc)).toBe('/lib/pcf8563.py')
+  })
+
+  it('modulesForInstrument never returns a panel-less module', () => {
+    for (const i of ['imu', 'range', 'led', 'motor'] as InstrumentId[]) {
+      for (const m of modulesForInstrument(i)) expect(m.instrument).toBe(i)
+    }
   })
 })

@@ -327,3 +327,89 @@ describe('pin labels stay upright on a 180°-rotated body', () => {
     expect(at(270)).not.toContain('rotate(180')
   })
 })
+
+describe('board rear (#636) — PartBody draws one face at a time', () => {
+  const twoSided: PartDefinition = {
+    ...blankPart(),
+    imageData: 'data:image/png;base64,FRONTIMG',
+    rear: { imageData: 'data:image/png;base64,REARIMG' },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'FRONTPIN', type: 'io', x: 0.1, y: 0.3 },
+          { name: 'REARPIN', type: 'io', x: 0.1, y: 0.6, side: 'rear' }
+        ]
+      }
+    ],
+    labels: [
+      { text: 'FRONTLABEL', x: 0.5, y: 0.2 },
+      { text: 'REARLABEL', x: 0.5, y: 0.8, side: 'rear' }
+    ],
+    mountingHoles: [{ x: 0.2, y: 0.5, diameter: 2 }]
+  }
+  const draw = (side: 'front' | 'rear'): string =>
+    renderToStaticMarkup(createElement(PartBody, { part: twoSided, box, side, boxedPins: true }))
+
+  it('shows only the front’s items by default', () => {
+    const html = draw('front')
+    expect(html).toContain('FRONTLABEL')
+    expect(html).not.toContain('REARLABEL')
+  })
+
+  it('shows only the rear’s items when flipped', () => {
+    const html = draw('rear')
+    expect(html).toContain('REARLABEL')
+    expect(html).not.toContain('FRONTLABEL')
+  })
+
+  it('uses each face’s own photo, and never the front’s on the back', () => {
+    expect(draw('front')).toContain('FRONTIMG')
+    expect(draw('front')).not.toContain('REARIMG')
+    expect(draw('rear')).toContain('REARIMG')
+    expect(draw('rear')).not.toContain('FRONTIMG')
+  })
+
+  it('mirrors a mounting hole on the rear — it lands where it does in the hand', () => {
+    // box is 100 wide, hole at x=0.2 → 20 on the front, 80 mirrored on the rear.
+    expect(draw('front')).toContain('cx="20"')
+    expect(draw('rear')).toContain('cx="80"')
+  })
+})
+
+describe('through-board pads show on both faces (#636)', () => {
+  // A castellated pad is ONE pad you can solder from either side — a XIAO's 14
+  // castellations ARE its underside array. Duplicating them as rear pins would
+  // invent 14 nets the board hasn't got.
+  const xiaoish: PartDefinition = {
+    ...blankPart(),
+    dimensions: { width: 17.8, height: 21 },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'D0', type: 'io', gpio: 26, shape: 'castellated', x: 0.126, y: 0.216 },
+          { name: 'BATPLUS', type: 'pwr', shape: 'smd', x: 0.5, y: 0.1, side: 'rear' }
+        ]
+      }
+    ]
+  }
+  const draw = (side: 'front' | 'rear'): string =>
+    renderToStaticMarkup(createElement(PartBody, { part: xiaoish, box, side, boxedPins: true }))
+
+  it('shows a castellated pad on the front AND the back', () => {
+    expect(draw('front')).toContain('D0')
+    expect(draw('rear')).toContain('D0')
+  })
+
+  it('mirrors it on the back — same pad, seen from the other side', () => {
+    // box is 100 wide: x=0.126 → 12.6 on the front, 87.4 mirrored on the rear.
+    expect(draw('front')).toContain('12.6')
+    expect(draw('rear')).toContain('87.4')
+  })
+
+  it('keeps a rear-only SMD pad off the front', () => {
+    expect(draw('front')).not.toContain('BATPLUS')
+    expect(draw('rear')).toContain('BATPLUS')
+  })
+})

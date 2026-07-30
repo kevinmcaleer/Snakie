@@ -1,0 +1,145 @@
+/* MOTOR instrument — global CSS, so every selector uses the UNIQUE `motorpanel__`
+   prefix (never reuse another panel's prefix). Themed via --accent/--accent-border
+   and the shared tokens, so it reads in both the skeuomorph and dark skins. */
+.motorpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.55rem 0.6rem 0.6rem;
+}
+
+.motorpanel__screen {
+  padding: 0.45rem 0.5rem;
+}
+
+.motorpanel__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.motorpanel__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.motorpanel__bar-label {
+  width: 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--accent);
+}
+
+.motorpanel__bar-value {
+  width: 3.2rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  /* Tabular figures so the number doesn't jitter as it changes width. */
+  font-variant-numeric: tabular-nums;
+}
+
+/* The track is centre-zero: fill grows right for forward, left for reverse. */
+.motorpanel__track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 0.85rem;
+  border: var(--border-w) solid var(--accent-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.motorpanel__centre {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--accent-border);
+}
+
+.motorpanel__fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  background: var(--accent);
+  opacity: 0.75;
+  transition: width 90ms linear;
+}
+
+/* Reverse mirrors about the centre line rather than using a second element. */
+.motorpanel__fill.is-reverse {
+  left: auto;
+  right: 50%;
+}
+
+.motorpanel__note {
+  margin: 0.4rem 0 0;
+  font-size: 0.66rem;
+  color: var(--text-muted);
+}
+
+.motorpanel__row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.7rem;
+}
+
+.motorpanel__row-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 4.2rem;
+  color: var(--text-muted);
+}
+
+.motorpanel__row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.motorpanel__row-value {
+  width: 3.2rem;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.motorpanel__actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.motorpanel__btn {
+  flex: 1 1 auto;
+  padding: 0.3rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  background: var(--card, transparent);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.motorpanel__btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.motorpanel__btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* STANDBY latches on, so it must look held rather than momentary. */
+.motorpanel__btn--latch.is-on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+}

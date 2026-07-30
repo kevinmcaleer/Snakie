@@ -1895,6 +1895,135 @@ display = Display()
 servo = Servo()
 
 
+class Motor:
+    """Drive a two-channel DC motor driver from ``motor`` control commands.
+
+    Deliberately knows NOTHING about a particular driver chip. Pass any object
+    exposing ``drive(a, b)`` / ``brake(ch)`` / ``stop(ch)`` / ``standby()`` /
+    ``wake()`` — the bundled ``tb6612`` module's ``GroveMotorDriver`` has exactly
+    that shape, but a hand-rolled PWM H-bridge wrapper works just as well. With no
+    driver every call is a no-op (still importable + testable under CPython), so
+    the IDE panel can be exercised with nothing attached.
+
+    Powers are signed and normalised, ``-1.0``..``1.0`` — the same unit
+    ``teleop.arcade_mix`` emits, so a gamepad and this panel speak the same
+    language and the scaling to PWM counts stays the driver's business.
+
+    Each change emits ``SNK MOTOR <a> <b>``, so the IDE panel shows what the board
+    actually applied rather than only what it asked for.
+    """
+
+    def __init__(self, driver=None):
+        self.driver = driver
+        self.a = 0.0
+        self.b = 0.0
+        self.standby_on = False
+
+    def _report(self):
+        print("%s MOTOR %s %s" % (SENTINEL, self.a, self.b))
+
+    def _clamp(self, v):
+        v = float(v)
+        return -1.0 if v < -1.0 else 1.0 if v > 1.0 else v
+
+    def drive(self, a, b):
+        """Apply signed powers to channel A and B."""
+        self.a = self._clamp(a)
+        self.b = self._clamp(b)
+        if self.driver is not None:
+            self.driver.drive(self.a, self.b)
+        self._report()
+        return self.a, self.b
+
+    def channel(self, ch, power):
+        """Set ONE channel (``'a'``/``'b'``), leaving the other where it is."""
+        if ch == "a":
+            return self.drive(power, self.b)
+        if ch == "b":
+            return self.drive(self.a, power)
+        return None
+
+    def stop(self):
+        """Release both channels — the motors coast to a halt."""
+        self.a = self.b = 0.0
+        if self.driver is not None:
+            self.driver.stop_all()
+        self._report()
+
+    def brake(self):
+        """Actively brake both channels (windings shorted)."""
+        self.a = self.b = 0.0
+        if self.driver is not None:
+            # `CH_A`/`CH_B` are 0/1 in every driver we ship; pass the ints so this
+            # stays independent of the driver module's constants.
+            self.driver.brake(0)
+            self.driver.brake(1)
+        self._report()
+
+    def standby(self, on=True):
+        """Disable (``on``) or re-enable the driver's outputs.
+
+        Entering standby zeroes the remembered powers too: the outputs really are
+        off, and reporting a stale non-zero power would make the panel lie.
+        """
+        self.standby_on = bool(on)
+        if on:
+            self.a = self.b = 0.0
+        if self.driver is not None:
+            if on:
+                self.driver.standby()
+            else:
+                self.driver.wake()
+        self._report()
+
+
+def motor_command(payload, motor=None):
+    """Drive ``motor`` (a :class:`Motor`) from one ``motor`` control payload.
+
+      * ``run <a> <b>``   → ``motor.drive(a, b)``
+      * ``a <power>``     → ``motor.channel('a', power)``
+      * ``b <power>``     → ``motor.channel('b', power)``
+      * ``stop``          → ``motor.stop()`` (coast)
+      * ``brake``         → ``motor.brake()``
+      * ``standby <0|1>`` → ``motor.standby(bool)``
+
+    Defaults to the shared :data:`motor` singleton. Never raises on a malformed
+    payload; returns the verb handled (or ``None``), so it is easy to unit-test.
+    """
+    mot = motor if motor is not None else globals().get("motor")
+    if mot is None or not payload:
+        return None
+    payload = payload.strip()
+    sp = payload.find(" ")
+    if sp == -1:
+        verb, args = payload, ""
+    else:
+        verb, args = payload[:sp], payload[sp + 1:].strip()
+    try:
+        if verb == "run":
+            parts = args.split()
+            mot.drive(float(parts[0]), float(parts[1]))
+        elif verb in ("a", "b"):
+            mot.channel(verb, float(args.split()[0]))
+        elif verb == "stop":
+            mot.stop()
+        elif verb == "brake":
+            mot.brake()
+        elif verb == "standby":
+            mot.standby(args.split()[0] not in ("0", "off", "false"))
+        else:
+            return None
+    except (ValueError, IndexError, TypeError):
+        return None
+    return verb
+
+
+#: The shared motor singleton `motor_command` drives by default. Defined here
+#: rather than with the other singletons above because :class:`Motor` is declared
+#: after them.
+motor = Motor()
+
+
 def servo_on(pin, freq=50):
     """A :class:`Servo` attached to GPIO ``pin`` for the Robot View (#313).
 

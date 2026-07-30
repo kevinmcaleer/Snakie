@@ -17,12 +17,14 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceGroveVariant } from './part'
+import { coerceConnectorKind, coerceGroveVariant, coercePinShape, coerceSide } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
   DriverFile,
+  SuggestedModule,
   ElectricalModel,
+  ImageLayer,
   MountingHole,
   OnboardLed,
   PartButton,
@@ -39,9 +41,10 @@ import type {
   PartPin,
   PartPinBuses,
   PartPinCapability,
-  PartPinShape,
   PartPinSignals,
   PartPinType,
+  PartRear,
+  PartSide,
   SchematicPin,
   TextAlign
 } from './part'
@@ -79,7 +82,6 @@ function coerceBuses(raw: unknown): PartPinBuses | undefined {
   }
   return Object.keys(out).length ? out : undefined
 }
-const PIN_SHAPES: PartPinShape[] = ['square', 'round', 'castellated', 'header']
 const SHAPE_KINDS: ComponentShapeKind[] = ['rect', 'circle', 'polygon']
 const EDGES = ['left', 'right', 'top', 'bottom'] as const
 
@@ -126,6 +128,24 @@ function textAlign(v: unknown): TextAlign | undefined {
   return s === 'left' || s === 'center' || s === 'right' ? s : undefined
 }
 
+/** Coerce a raw image-layer block. Shared by the front image and the rear face
+ *  (#636) so the two can't drift apart. */
+function coerceImageLayer(raw: unknown): ImageLayer | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const il = raw as Record<string, unknown>
+  const x = num(il.x)
+  const y = num(il.y)
+  const w = num(il.w)
+  const h = num(il.h)
+  if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined
+  const out: ImageLayer = { x, y, w, h }
+  const op = num(il.opacity)
+  const rot = num(il.rotation)
+  if (op !== undefined) out.opacity = op
+  if (rot !== undefined) out.rotation = rot
+  return out
+}
+
 /** Coerce one raw pin object from YAML into a clean {@link PartPin}. */
 function coercePin(raw: unknown): PartPin | null {
   if (!raw || typeof raw !== 'object') return null
@@ -155,7 +175,8 @@ function coercePin(raw: unknown): PartPin | null {
   const label = str(r.label)
   if (label && label !== name) pin.label = label
   if (r.castellated === true) pin.castellated = true
-  if (PIN_SHAPES.includes(r.shape as PartPinShape)) pin.shape = r.shape as PartPinShape
+  const padShape = coercePinShape(r.shape)
+  if (padShape) pin.shape = padShape
   const rotation = num(r.rotation)
   if (rotation !== undefined) pin.rotation = rotation
   const x = num(r.x)
@@ -330,6 +351,25 @@ function driverToObj(d: DriverFile): Record<string, unknown> {
   return out
 }
 
+/** Parse a {@link SuggestedModule} — an optional module this part can use (#638). */
+function coerceSuggested(raw: unknown): SuggestedModule | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  const module = str(r.module)
+  if (module === undefined) return null
+  const out: SuggestedModule = { module }
+  const unlocks = str(r.unlocks)
+  if (unlocks !== undefined) out.unlocks = unlocks
+  return out
+}
+
+/** Serialise a {@link SuggestedModule} to a tidy plain object for YAML. */
+function suggestedToObj(s: SuggestedModule): Record<string, unknown> {
+  const out: Record<string, unknown> = { module: s.module }
+  if (s.unlocks) out.unlocks = s.unlocks
+  return out
+}
+
 /** Serialise a {@link PartPin} to a tidy plain object for YAML. */
 /**
  * Read the single-hierarchy item flags off a raw record. EVERY item type goes
@@ -342,16 +382,19 @@ function readItemFlags(raw: Record<string, unknown> | undefined, out: Record<str
   if (group) out.group = group
   if (raw.hidden === true) out.hidden = true
   if (raw.locked === true) out.locked = true
+  const side = coerceSide(raw.side)
+  if (side) out.side = side
   const z = num(raw.z)
   if (z !== undefined) out.z = z
 }
 
 /** The write half of {@link readItemFlags}. Only emits set flags, so an untouched
  *  part's YAML gains nothing. */
-function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; z?: number }, out: Record<string, unknown>): void {
+function writeItemFlags(item: { group?: string; hidden?: boolean; locked?: boolean; side?: PartSide; z?: number }, out: Record<string, unknown>): void {
   if (item.group) out.group = item.group
   if (item.hidden) out.hidden = true
   if (item.locked) out.locked = true
+  if (item.side === 'rear') out.side = 'rear'
   if (item.z !== undefined) out.z = item.z
 }
 
@@ -437,6 +480,10 @@ export function partToYaml(part: PartDefinition): string {
     // NB: `image` (the filename) is kept; `imageData` (the inlined blob) is NOT.
     image: part.image,
     imageLayer: part.imageLayer,
+    // Same rule for the rear face (#636): filename + layer out, blob never.
+    rear: part.rear
+      ? pruneEmpty({ image: part.rear.image, imageLayer: part.rear.imageLayer })
+      : undefined,
     // NB: `help` (the filename) is kept; `helpText` (the inlined markdown) is NOT.
     help: part.help,
     // The linked mesh is a relative filename (never a blob), like `image`/`help`.
@@ -455,6 +502,7 @@ export function partToYaml(part: PartDefinition): string {
     i2cAddresses: part.i2cAddresses,
     library: part.library,
     drivers: part.drivers?.map(driverToObj),
+    suggests: part.suggests?.map(suggestedToObj),
     layerVisibility: part.layerVisibility
   })
   return stringify(obj, { lineWidth: 0 })
@@ -732,6 +780,15 @@ export function partFromYaml(text: string): PartDefinition {
       .filter((m): m is PartMount => m !== null)
     if (mounts.length) part.mounts = mounts
   }
+  if (raw.rear && typeof raw.rear === 'object') {
+    const r = raw.rear as Record<string, unknown>
+    const rear: PartRear = {}
+    const img = str(r.image)
+    if (img) rear.image = img
+    const lay = coerceImageLayer(r.imageLayer)
+    if (lay) rear.imageLayer = lay
+    if (Object.keys(rear).length) part.rear = rear
+  }
   assign('ledLabel', str(raw.ledLabel))
   assign('image', str(raw.image))
   assign('help', str(raw.help))
@@ -758,20 +815,8 @@ export function partFromYaml(text: string): PartDefinition {
       .map((v) => [v[0], v[1], v[2]] as [number, number, number])
     if (pts.length) assign('contacts', pts)
   }
-  if (raw.imageLayer && typeof raw.imageLayer === 'object') {
-    const il = raw.imageLayer as Record<string, unknown>
-    const x = num(il.x)
-    const y = num(il.y)
-    const w = num(il.w)
-    const h = num(il.h)
-    if (x !== undefined && y !== undefined && w !== undefined && h !== undefined) {
-      part.imageLayer = { x, y, w, h }
-      const op = num(il.opacity)
-      const rot = num(il.rotation)
-      if (op !== undefined) part.imageLayer.opacity = op
-      if (rot !== undefined) part.imageLayer.rotation = rot
-    }
-  }
+  const frontLayer = coerceImageLayer(raw.imageLayer)
+  if (frontLayer) part.imageLayer = frontLayer
   if (raw.schematic && typeof raw.schematic === 'object' && !Array.isArray(raw.schematic)) {
     const s = raw.schematic as Record<string, unknown>
     if (Array.isArray(s.pins)) {
@@ -817,6 +862,12 @@ export function partFromYaml(text: string): PartDefinition {
     if (Object.keys(lib).length) part.library = lib
   }
 
+  if (Array.isArray(raw.suggests)) {
+    const suggests = raw.suggests
+      .map(coerceSuggested)
+      .filter((s): s is SuggestedModule => s !== null)
+    if (suggests.length) part.suggests = suggests
+  }
   if (Array.isArray(raw.drivers)) {
     const drivers = raw.drivers.map(coerceDriver).filter((d): d is DriverFile => d !== null)
     if (drivers.length) part.drivers = drivers

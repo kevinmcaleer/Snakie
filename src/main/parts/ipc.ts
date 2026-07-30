@@ -15,12 +15,15 @@
  *   parts:fetchRegistry   → fetch the master community registry
  *   parts:installLibrary  → clone a registry library into the parts folder
  *   parts:checkUpdates    → which installed libraries have a newer registry version
+ *   parts:bundledStatus   → per bundled part: edited? behind the shipped bundle?
+ *   parts:resetToBundled  → restore one bundled part to the version this app ships
  */
 
 import { BrowserWindow, ipcMain, shell } from 'electron'
 import { promises as fsp } from 'fs'
 import {
   LOCAL_LIBRARY_ID,
+  bundledPartStatuses,
   createLibrary,
   deleteLibrary,
   deletePart,
@@ -30,6 +33,7 @@ import {
   publishStandardLibrary,
   readDriverSource,
   readLibraries,
+  resetPartToBundled,
   seedStandardLibrary,
   writePart
 } from './library'
@@ -134,6 +138,16 @@ export function registerPartsIpc(): void {
     (_e, args: { libraryId: string; partId: string; source: string }) =>
       readDriverSource(args?.libraryId ?? '', args?.partId ?? '', args?.source ?? '')
   )
+
+  // #643: which bundled parts the user has edited, and which the app now ships a
+  // newer version of — the data behind the "bundled version available" badge.
+  ipcMain.handle('parts:bundledStatus', () => bundledPartStatuses())
+
+  ipcMain.handle('parts:resetToBundled', async (e, partId: string) => {
+    const res = await resetPartToBundled(partId ?? '')
+    if (res.ok) broadcastPartsChanged(e.sender.id)
+    return res
+  })
 
   ipcMain.handle('parts:fetchRegistry', (_e, url?: string) => fetchRegistry(url || undefined))
 

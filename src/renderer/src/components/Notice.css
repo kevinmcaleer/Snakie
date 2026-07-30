@@ -1,0 +1,177 @@
+/* Notice — the shared compact notification row (#621). UNIQUE `notice__` prefix
+ * (this CSS is global; see the i2c-detect vs i2c-display collision).
+ *
+ * Two variants: `chrome` keeps the manila/kraft strip the old banners used above
+ * the toolbar (theme-agnostic on purpose — manila stock reads on both skins), and
+ * `canvas` uses the Board View's self-contained dark palette. */
+
+.notice-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+}
+
+.notice {
+  position: relative;
+  flex: 0 0 auto;
+  font-size: 12px;
+}
+
+/* The single always-visible line: summary + action + caret + dismiss. Everything
+   here must stay on ONE row — that is the whole point of the component. */
+.notice__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 16px;
+  min-height: 26px;
+}
+
+/* Clamped to one line: a long message must not silently grow the strip. The full
+   text is in the `title` and, properly, in the detail. */
+.notice__summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.notice__spine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+.notice__action,
+.notice__toggle,
+.notice__close {
+  flex: 0 0 auto;
+  font-family: inherit;
+  font-size: 11px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.notice__action {
+  padding: 3px 10px;
+  font-weight: 600;
+}
+
+.notice__action:disabled,
+.notice__close:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.notice__toggle,
+.notice__close {
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+.notice__detail {
+  padding: 0 12px 7px 16px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+/* --- chrome: the manila strip above the toolbar ------------------------------ */
+.notice--chrome {
+  background: linear-gradient(160deg, #ece0b4, #e0d199);
+  border-bottom: 1px solid #b59b5e;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.25);
+  color: #3a3320;
+  z-index: 5;
+}
+
+/* Kraft striped spine, like a manila tag. */
+.notice--chrome .notice__spine {
+  background: repeating-linear-gradient(180deg, #cdb877 0 4px, #c2ab66 4px 8px);
+}
+
+/* Gold key — matches the Packages panel's INSTALL action. */
+.notice--chrome .notice__action {
+  color: #4a3a10;
+  background: linear-gradient(180deg, #f2d488, #d9b153);
+  border: 1px solid #b08d38;
+}
+
+.notice--chrome .notice__action:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f7dc98, #e0ba5d);
+}
+
+.notice--chrome .notice__toggle,
+.notice--chrome .notice__close {
+  color: #6a5c34;
+}
+
+.notice--chrome .notice__toggle:hover:not(:disabled),
+.notice--chrome .notice__close:hover:not(:disabled) {
+  color: #3a3320;
+  border-color: #b59b5e;
+}
+
+.notice--chrome .notice__detail {
+  color: #4b4230;
+  border-top: 1px solid rgba(181, 155, 94, 0.5);
+  padding-top: 5px;
+}
+
+.notice--chrome.notice--error .notice__summary {
+  color: #7a3326;
+  font-weight: 600;
+}
+
+/* --- canvas: over the dark Board View --------------------------------------- */
+.notice--canvas {
+  margin: 8px 12px 0;
+  border: 1px solid #4a3a16;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #2a2516, #211d12);
+  color: #f6dd92;
+  font-family: var(--font-mono), 'JetBrains Mono', monospace;
+  overflow: hidden;
+}
+
+.notice--canvas .notice__spine {
+  background: #e8b84b;
+}
+
+.notice--canvas .notice__action {
+  color: #2a2110;
+  background: linear-gradient(180deg, #f2d488, #d9b153);
+  border: 1px solid #b08d38;
+}
+
+.notice--canvas .notice__action:hover:not(:disabled) {
+  background: linear-gradient(180deg, #f7dc98, #e0ba5d);
+}
+
+.notice--canvas .notice__toggle,
+.notice--canvas .notice__close {
+  color: #cdbf9c;
+  border-color: #4a3a16;
+}
+
+.notice--canvas .notice__toggle:hover:not(:disabled),
+.notice--canvas .notice__close:hover:not(:disabled) {
+  color: #f6dd92;
+  border-color: #6b5320;
+}
+
+.notice--canvas .notice__detail {
+  color: #cdbf9c;
+  border-top: 1px solid #4a3a16;
+  padding-top: 6px;
+}
+
+.notice--canvas.notice--error .notice__summary {
+  color: #ffb4a2;
+}

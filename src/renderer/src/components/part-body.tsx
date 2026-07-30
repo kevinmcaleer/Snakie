@@ -9,10 +9,14 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
+import { itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
   PartDefinition,
+  PartItemFlags,
+  PartPin,
+  PartSide,
   PartPinBuses,
   PartPinCapability,
   PartPinShape,
@@ -439,6 +443,8 @@ export function pinThroughHoles(
   // Octagonal pads are opaque copper and draw their OWN dark square pin-hole, so
   // they need no mask cut (a cut would punch a round see-through over the square).
   if (shape === 'octagonal') return []
+  // Surface-mount: sits ON the copper, so nothing is drilled through.
+  if (shape === 'smd' || shape === 'pogo') return []
   if (shape === 'castellated') {
     const { hR, ex, ey } = castellationGeom(cx, cy, size, nx, rotationDeg)
     return [
@@ -792,6 +798,11 @@ export interface PartBodyProps {
   capsPins?: 'all' | ReadonlySet<number>
   /** The hovered pin's flat-index — the other pins' chips dim to 40%. */
   capsHoverPin?: number | null
+  /** Which FACE of the board to draw (#636). Items carrying the other side are
+   *  skipped, and shared geometry (mounting holes) mirrors, because turning a
+   *  board over swaps left and right. Absent ⇒ front, so every existing caller
+   *  draws exactly what it drew before. */
+  side?: PartSide
   /** Which of the two paint layers to render (SVG has no z-index, so the caller
    *  paints the body under an overlay and the labels over it):
    *  - `'all'` (default): body + pads + pin labels + shapes, one pass.
@@ -1102,7 +1113,8 @@ export function PartBody({
   pinVariables,
   capsPins,
   capsHoverPin,
-  pinLabels = 'all'
+  pinLabels = 'all',
+  side = 'front'
 }: PartBodyProps): JSX.Element {
   // Two-layer split so a caller (the node-graph) can paint the board body under
   // its wires and the pin labels over them.
@@ -1131,6 +1143,20 @@ export function PartBody({
   const clipId = `pcb-clip-${uid}`
   const maskId = `pcb-holes-${uid}`
 
+  // Face filtering (#636). `mx` mirrors a normalised x on the rear: a mounting
+  // hole has no side of its own (it goes through the board), so it has to move to
+  // where it really is when you flip the board over.
+  const rear = side === 'rear'
+  const faces = (item: PartItemFlags): boolean => itemSide(item) === side
+  const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
+  /** A pad is shown if it was authored for this face, OR it drills through — one
+   *  pad, visible from either side. `x` is its position on the face being drawn:
+   *  a through pad seen from the far side appears mirrored. */
+  const padOnFace = (pin: PartPin, nx: number): { show: boolean; x: number } =>
+    itemSide(pin) === side
+      ? { show: true, x: nx }
+      : { show: padPassesThrough(pin.shape), x: mirrorX(nx) }
+
   const pins = resolvedPins(part)
   const holes = part.mountingHoles ?? []
   const features = part.features ?? [] // legacy chips (read-only; migrated on edit)
@@ -1140,7 +1166,10 @@ export function PartBody({
   const onboardLeds = part.onboardLeds ?? []
   const connectors = part.connectors ?? []
   const spacing = part.pinSpacing && part.pinSpacing > 0 ? part.pinSpacing : 2.54
-  const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+  // Each face has its own photo. The rear falls back to nothing rather than to
+  // the front's picture — showing the front's artwork on the back would be a lie.
+  const faceImage = rear ? part.rear?.imageData : part.imageData
+  const layer = (rear ? part.rear?.imageLayer : part.imageLayer) ?? { x: 0, y: 0, w: 1, h: 1 }
 
   const px = (nx: number): number => box.x + nx * box.w
   const py = (ny: number): number => box.y + ny * box.h
@@ -1201,7 +1230,10 @@ export function PartBody({
   // Pin/castellation through-holes to cut through the PCB + image + copper (#171),
   // so a realistic board shows the real background through its holes.
   const pinHoleList = visible.pins
-    ? pins.flatMap((rp) => pinThroughHoles(pinShapeOf(rp.pin), px(rp.x), py(rp.y), padSize, rp.x, rp.pin.rotation))
+    ? pins.flatMap((rp) => {
+        const f = padOnFace(rp.pin, rp.x)
+        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rp.pin.rotation) : []
+      })
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
 
@@ -1233,7 +1265,7 @@ export function PartBody({
             <rect x={box.x - 40} y={box.y - 40} width={box.w + 80} height={box.h + 80} fill="white" />
             {cutHoles &&
               holes.map((h, i) => (
-                <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+                <circle key={`mh${i}`} cx={px(mx(h.x))} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
               ))}
             {pinHoleList.map((h, i) => (
               <circle key={`ph${i}`} cx={h.cx} cy={h.cy} r={h.r} fill="black" />
@@ -1245,9 +1277,9 @@ export function PartBody({
       {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
       <g mask={hasCuts ? `url(#${maskId})` : undefined}>
         {visible.pcb && shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
-        {visible.image && part.imageData && (
+        {visible.image && faceImage && (
           <image
-            href={part.imageData}
+            href={faceImage}
             x={px(layer.x)}
             y={py(layer.y)}
             width={layer.w * box.w}
@@ -1272,7 +1304,7 @@ export function PartBody({
       {visible.holes &&
         holes.map((h, i) =>
           isSel({ type: 'hole', index: i }) ? (
-            <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
+            <circle key={`h${i}`} cx={px(mx(h.x))} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
           ) : null
         )}
       </>
@@ -1282,6 +1314,9 @@ export function PartBody({
           pinLabels mode paints the pads with the body and the labels on top. */}
       {visible.pins &&
         pins.map((rp: ResolvedPin, i) => {
+          const face = padOnFace(rp.pin, rp.x)
+          if (!face.show) return null
+          rp = face.x === rp.x ? rp : { ...rp, x: face.x }
           // `true` boxes every pin; a Set boxes only those indices (mini board:
           // just the used pins, so a dense board's number boxes don't overlap).
           const boxAll = boxedPins === true
@@ -1313,6 +1348,30 @@ export function PartBody({
             )
           } else if (shape === 'octagonal') {
             pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+          } else if (shape === 'pogo') {
+            // A sprung contact, not copper: a bright core in a barrel ring, so it
+            // reads as something that PRESSES on a pad rather than being one.
+            pad = (
+              <>
+                <circle cx={cx} cy={cy} r={size / 2} fill="none" stroke="#9aa4b0" strokeWidth={Math.max(1, size * 0.14)} />
+                <circle cx={cx} cy={cy} r={size * 0.26} fill="#e2e7ec" stroke={stroke} strokeWidth={sw * 0.6} />
+              </>
+            )
+          } else if (shape === 'smd') {
+            // Solid rectangular copper, no drill — and slightly taller than wide
+            // so it reads as a surface pad rather than a square through-hole one.
+            pad = (
+              <rect
+                x={cx - size * 0.42}
+                y={cy - size * 0.5}
+                width={size * 0.84}
+                height={size}
+                rx={1.5}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={sw}
+              />
+            )
           } else {
             pad = (
               <>
@@ -1444,6 +1503,7 @@ export function PartBody({
       {/* Layer 4b/4c: shapes + text labels in one unified z-order (so they stack). */}
       {!labelsOnly && visible.components &&
         orderedComponents(part).map((c) => {
+          if (!faces(c.kind === 'label' ? labels[c.index] : shapes[c.index])) return null
           if (c.kind === 'label') {
             const i = c.index
             const l = labels[i]
@@ -1521,6 +1581,7 @@ export function PartBody({
       {/* Layer 4d: on-board push-buttons (#130) — a tactile-switch glyph + silk label. */}
       {!labelsOnly && visible.components &&
         buttons.map((b, i) => {
+          if (!faces(b)) return null
           const cx = px(b.x)
           const cy = py(b.y)
           const labelY = cy + PART_BUTTON_SIZE * 0.5 + 9
@@ -1544,6 +1605,7 @@ export function PartBody({
           "LED · GP25" / "RGB · GP18 GP19 GP20" silk label. */}
       {!labelsOnly && visible.components &&
         onboardLeds.map((led, i) => {
+          if (!faces(led)) return null
           const cx = px(led.x)
           const cy = py(led.y)
           const labelY = cy + 18
@@ -1574,6 +1636,7 @@ export function PartBody({
       {/* Layer 4f: connectors (QWIIC / STEMMA QT / JST) — a JST housing + label. */}
       {!labelsOnly && visible.components &&
         connectors.map((conn, i) => {
+          if (!faces(conn)) return null
           const cx = px(conn.x)
           const cy = py(conn.y)
           const { h: connH } = connectorSize(conn, connPxPerMm)

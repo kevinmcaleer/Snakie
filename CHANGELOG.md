@@ -6,6 +6,90 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Boards have a back (#636).** A part can now carry a **rear face** — its own
+  photo, and pins, connectors and components marked `side: rear`. A **Flip to
+  back** control sits under the board in the Part Editor and in the Parts Library
+  preview, with a coin-spin that turns the board on its edge; the library only
+  offers it when the part actually has a back. Mounting holes are shared and
+  **mirror** on the rear, where they really are once you turn the board over. Pins
+  on the far face carry a **REAR** badge in the pin list, and anything you add
+  while the back is showing lands on the back.
+- **`smd` pad shape** — a rectangular surface-mount pad with **no drill**. The
+  default `square` pad punches a hole, so until now there was no way to draw the
+  underside pad array a XIAO uses.
+- **Reset a bundled part to the version the app ships (#643).** Editing a bundled
+  part correctly stops the seeder from ever overwriting it — but that also meant it
+  could never pick up later structural changes, and there was no way back short of
+  deleting the folder by hand. The Parts Library now says so: a selected part shows
+  **"Bundled version X available — yours is Y"** with a **Reset to bundled** button,
+  and the Standard library header carries an **"N behind"** count that restores them
+  all in one pass. The copy being replaced is moved to the library's `.backups`
+  folder first — image and help file included — so nothing is lost.
+- **Four Grove drivers in the Modules panel (#638).** `lsm6ds3` (the 6-axis IMU
+  on Seeed's Grove module — a *different* part from the LSM6DSOX already listed,
+  which rejects its `WHO_AM_I` of `0x69`), `grove_ultrasonic` (the one-wire
+  ranger, which the HC-SR04 driver can't drive because it holds trigger and echo
+  as separate fixed-direction pins), `tb6612` (the Grove I²C motor driver, which
+  pairs with the teleop mixer via signed `[-1, 1]` powers), and the MY9221 LED
+  bar referenced upstream.
+- **Motor instrument (#638).** A dock panel for a two-channel DC motor driver:
+  signed power bars for A and B, a linked **Throttle** with **Trim**, and
+  **STOP** / **BRAKE** / **STANDBY**. Built for the two measurements that are
+  miserable to get by editing a literal and re-running — the **deadband** (where
+  a wheel actually starts turning) and the **trim** that makes a rover track
+  straight. Powers are signed and normalised (`-1`…`1`), the same unit the teleop
+  mixer uses, so the panel doesn't care what driver is on the other end. The bars
+  show what the board *applied* (`SNK MOTOR <a> <b>`), not just what was asked —
+  a driver left in standby accepts every command and turns nothing.
+- **"Works with" — the drivers a part *can* use (#638).** A part can now list
+  optional modules and what each one unlocks, shown in its Parts-panel detail with
+  per-module install and an on-board indicator. Deliberately separate from the
+  driver-install banner, which pushes the drivers a part cannot work *without*: a
+  carrier like the XIAO Expansion Base is a menu of optional peripherals, and
+  someone using only its Grove ports shouldn't be nagged into an OLED driver. The
+  expansion base now says which of its six onboard features need a driver — only
+  two do.
+- **PCF8563 RTC + SD-card drivers.** The two genuine gaps on that board. The OLED
+  and buzzer were already covered (`instruments.py` ships its own SSD1306) and the
+  user button needs nothing. A catalog module may now declare **no instrument** —
+  an RTC is a real installable dependency with no panel behind it, so those group
+  under "Other drivers" instead of being filed under an unrelated instrument.
+
+- **The project browser shows what's docked into what (#649).** A part seated in
+  a carrier now renders indented beneath it, with a guide line — a XIAO appears
+  under the XIAO Expansion Base rather than as a sibling three rows away. The
+  microcontroller nests too, since it is the one that gets docked.
+- **The browser highlights the selected component (#648).** Selecting a part —
+  **or the microcontroller**, which is now selectable too — highlights its browser
+  row in the same amber the Part Editor's layers panel uses, and draws the
+  selection ring on the canvas, so both hierarchies agree.
+- **Part titles only show for the part you're looking at (#650).** On a populated
+  board every name collided with the pin labels; titles now appear on the selected
+  or hovered part only.
+- **Notifications take up far less room (#621).** The "this file doesn't import…"
+  notice is a fact about the OPEN FILE, so it now appears in the **Code** workspace
+  only instead of above all three — Electronics and Build have no file to fix. The
+  driver-install prompt collapses to a single line with the Install button still on
+  it; the per-driver list is behind a caret, and appears automatically if an install
+  fails.
+
+- **One compact notification shape everywhere (#621).** The instrument-library,
+  missing-import and driver-install prompts were three separate banners that each
+  rendered their full prose as free-flowing text; any two at once ate a real slice
+  of the window. They now share one `Notice` row: a **single clamped summary line
+  with the action on it**, and the full explanation (or the per-driver file list)
+  behind a caret. So a notice is one row tall whether it's naming a missing import
+  or eleven driver files, and it stays clickable without expanding. Failures
+  force their detail open, since that message is the only thing that explains
+  what to do next.
+
+### Fixed
+- **Octagonal pads were silently downgraded on every save/load.** The `parts.yml`
+  parser and the Part Editor's normaliser kept separate lists of valid pad shapes,
+  and the parser's was missing `octagonal` — so a servo/DuPont header lost its pad
+  shape each round-trip. They share one list now.
+
 ## [0.39.0] - 2026-07-27
 
 ### Added

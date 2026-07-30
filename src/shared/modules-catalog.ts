@@ -49,6 +49,7 @@ export type InstrumentId =
   | 'encoder'
   | 'buzzer'
   | 'gamepad'
+  | 'motor'
 
 /** Where a module's code comes from. */
 export type ModuleSource =
@@ -76,8 +77,15 @@ export interface ModuleDef {
   name: string
   /** One-line description of what the driver is / which hardware it talks to. */
   description: string
-  /** The dock instrument this module powers (groups the Modules manager). */
-  instrument: InstrumentId
+  /**
+   * The dock instrument this module powers (groups the Modules manager).
+   *
+   * OPTIONAL, because not every useful driver has a panel behind it — an RTC is a
+   * real, installable dependency with nothing to plot or drive. Those group under
+   * "Other drivers" rather than being filed under an unrelated instrument, which
+   * would make the grouping lie.
+   */
+  instrument?: InstrumentId
   /**
    * The Python module name it becomes importable as on the board, e.g. `ssd1306`
    * (from `import ssd1306`). Used to PROBE whether it's already installed (a
@@ -132,6 +140,18 @@ export const MODULES: ModuleDef[] = [
     license: 'MIT'
   },
   {
+    id: 'grove-ultrasonic',
+    name: 'Grove Ultrasonic Ranger',
+    description:
+      'Seeed Grove ultrasonic ranger — ONE signal wire for both trigger and echo.',
+    instrument: 'range',
+    importName: 'grove_ultrasonic',
+    // Not interchangeable with `hcsr04`: that driver holds trigger and echo as
+    // separate fixed-direction pins, which a one-wire sensor cannot satisfy.
+    source: { kind: 'bundled', file: 'grove_ultrasonic.py' },
+    license: 'MIT'
+  },
+  {
     id: 'vl53l0x',
     name: 'VL53L0X ToF',
     description: 'I²C driver for the VL53L0X time-of-flight distance sensor.',
@@ -167,6 +187,18 @@ export const MODULES: ModuleDef[] = [
     source: { kind: 'mip', spec: 'github:micropython-IMU/micropython-bno055/bno055.py' }
   },
   {
+    id: 'lsm6ds3',
+    name: 'LSM6DS3 IMU',
+    description:
+      '6-axis accelerometer + gyro over I²C — the sensor on the Grove 6-Axis module.',
+    instrument: 'imu',
+    importName: 'lsm6ds3',
+    // A DIFFERENT part from the LSM6DSOX below, not a spelling of it: an LSM6DS3
+    // answers WHO_AM_I 0x69, which that driver rejects.
+    source: { kind: 'bundled', file: 'lsm6ds3.py' },
+    license: 'MIT'
+  },
+  {
     id: 'lsm6ds',
     name: 'LSM6DS IMU',
     description: '6-axis accelerometer + gyro (LSM6DSOX / LSM6DS33) over I²C.',
@@ -189,6 +221,16 @@ export const MODULES: ModuleDef[] = [
     // bit-banged fallback for ports that lack it. (See the file's comment.)
     source: { kind: 'bundled', file: 'neopixel_ws2812.py' },
     license: 'MIT'
+  },
+  {
+    id: 'my9221',
+    name: 'MY9221 LED bar',
+    description: '10-segment Grove LED Bar (MY9221 2-wire clock/data driver).',
+    instrument: 'led',
+    importName: 'my9221',
+    // Someone else's MIT driver — referenced upstream rather than vendored, per
+    // this file's policy for code that isn't ours.
+    source: { kind: 'mip', spec: 'github:mcauser/micropython-my9221/my9221.py' }
   },
 
   // --- Encoder (#117) ------------------------------------------------------
@@ -222,6 +264,33 @@ export const MODULES: ModuleDef[] = [
     importName: 'teleop',
     source: { kind: 'bundled', file: 'teleop.py' },
     license: 'MIT'
+  },
+  // --- Panel-less drivers --------------------------------------------------
+  // Real dependencies with no dock instrument behind them (see `instrument`).
+  {
+    id: 'pcf8563',
+    name: 'PCF8563 RTC',
+    description: 'I²C real-time clock — the RTC on the XIAO Expansion Base (0x51).',
+    importName: 'pcf8563',
+    source: { kind: 'bundled', file: 'pcf8563.py' },
+    license: 'MIT'
+  },
+  {
+    id: 'sdcard',
+    name: 'SD card (SPI)',
+    description: 'Mount a microSD card over SPI — e.g. the XIAO Expansion Base slot.',
+    importName: 'sdcard',
+    // MicroPython's own official driver — referenced, not vendored.
+    source: { kind: 'mip', spec: 'github:micropython/micropython-lib/micropython/drivers/storage/sdcard/sdcard.py' }
+  },
+  {
+    id: 'tb6612',
+    name: 'Grove I²C Motor Driver (TB6612FNG)',
+    description: 'Two DC motor channels over I²C — drives the Motor panel and teleop.',
+    instrument: 'motor',
+    importName: 'tb6612',
+    source: { kind: 'bundled', file: 'tb6612.py' },
+    license: 'MIT'
   }
 ]
 
@@ -240,8 +309,8 @@ export function modulesForInstrument(instrument: InstrumentId): ModuleDef[] {
 
 /** One instrument's modules, grouped together for the Modules manager. */
 export interface ModuleGroup {
-  /** The instrument id these modules power. */
-  instrument: InstrumentId
+  /** The instrument id these modules power; `undefined` for the panel-less group. */
+  instrument?: InstrumentId
   /** The modules, in catalog order. */
   modules: ModuleDef[]
 }
@@ -252,8 +321,10 @@ export interface ModuleGroup {
  * over stable groups (the Modules manager renders one section per instrument).
  */
 export function groupByInstrument(defs: ModuleDef[] = MODULES): ModuleGroup[] {
-  const order: InstrumentId[] = []
-  const byInstrument = new Map<InstrumentId, ModuleDef[]>()
+  // `undefined` is a real key here — the panel-less drivers group (see
+  // `ModuleDef.instrument`). Map handles it as a key, unlike an object.
+  const order: (InstrumentId | undefined)[] = []
+  const byInstrument = new Map<InstrumentId | undefined, ModuleDef[]>()
   for (const m of defs) {
     let bucket = byInstrument.get(m.instrument)
     if (!bucket) {

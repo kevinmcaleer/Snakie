@@ -78,6 +78,7 @@ import type {
   PartRegistry,
   RegistryEntry
 } from '../shared/part'
+import type { BundledPartStatus } from '../shared/bundled-seed'
 import type { RobotDefinition } from '../shared/robot'
 import type { InstrumentWindowPayload } from '../shared/instrument-window'
 import type { BugReportPayload, BugReportResult } from '../main/feedback/ipc'
@@ -961,6 +962,17 @@ const parts = {
     source: string
   ): Promise<DriverSourceResult> =>
     ipcRenderer.invoke('parts:readDriverSource', { libraryId, partId, source }),
+  /**
+   * Per bundled part: has the user edited it, and does this app ship a newer
+   * version than the installed copy (#643)? An edited part is never overwritten by
+   * the seeder, so without this the staleness is invisible until something
+   * misbehaves.
+   */
+  bundledStatus: (): Promise<BundledPartStatus[]> => ipcRenderer.invoke('parts:bundledStatus'),
+  /** Restore one bundled part to the version this app ships, backing up the
+   *  current copy to `<library>/.backups/<id>/` first (#643). */
+  resetToBundled: (partId: string): Promise<PartsWriteResult> =>
+    ipcRenderer.invoke('parts:resetToBundled', partId),
   /** Fetch the master community registry (optionally from a custom URL). */
   fetchRegistry: (url?: string): Promise<PartRegistry> =>
     ipcRenderer.invoke('parts:fetchRegistry', url),

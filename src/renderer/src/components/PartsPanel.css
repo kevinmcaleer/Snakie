@@ -92,6 +92,9 @@
 }
 
 .pl__note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
   margin: 0 0.6rem 0.4rem;
   padding: 0.35rem 0.5rem;
   font-size: 0.7rem;
@@ -99,6 +102,19 @@
   border: var(--border-w) solid var(--border);
   border-radius: var(--radius);
   color: var(--text-muted);
+}
+
+.pl__note-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Long messages (a bulk-reset summary) must wrap, not stretch the panel. */
+  overflow-wrap: anywhere;
+}
+
+/* Sits with the text rather than centred against a multi-line message. */
+.pl__note-close {
+  flex: 0 0 auto;
+  margin-top: -0.1rem;
 }
 
 .pl__muted {
@@ -265,6 +281,18 @@
   color: var(--goldink, #5a3d0e);
   background: var(--grad-gold, #e6ab30);
   border-color: transparent;
+}
+
+/* #643 — "N parts behind the bundle". Distinct from --update (a REGISTRY update):
+   this is the app's own bundle being newer than what's installed. */
+.pl__badge--stale {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.pl__badge--stale:hover {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .pl__badge--mine {
@@ -548,6 +576,104 @@
   color: var(--text-muted);
 }
 
+/* #638 — "Works with": the OPTIONAL modules a part can use. Quieter than the
+   driver-install banner, because nothing here is required. */
+.pl__works {
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card, transparent);
+}
+
+.pl__works-head {
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 0.3rem;
+}
+
+.pl__works-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pl__works-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+}
+
+.pl__works-name {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+/* The "what it unlocks" text yields first — the name and the action must survive
+   a narrow panel. */
+.pl__works-unlocks {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+
+.pl__works-on {
+  flex: 0 0 auto;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--green, #46e06a);
+}
+
+.pl__works-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+/* #643 — "your copy has drifted from the bundle" notice. Themed off the shared
+   tokens so it reads in both the skeuomorph and dark skins; the `--behind` variant
+   uses the accent because it's the case with something to gain. */
+.pl__stale {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.5rem;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--text-muted);
+  background: var(--card, transparent);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pl__stale--behind {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.pl__stale-text {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.pl__stale strong {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .pl__detail-fp {
   height: 180px;
   background: var(--bc-mat, #0c0f12);
@@ -644,4 +770,65 @@
 }
 .pl__doclink:hover {
   text-decoration: underline;
+}
+
+/* --- board rear in the library preview (#636) ----------------------------- */
+/* Only rendered when the part HAS a back, so its absence is the answer to
+   "is this single-sided?". */
+.pl__flip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  margin: 0.3rem auto 0;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.pl__flip:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.pl__flip:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.pl__detail-fp.is-flipping {
+  animation: pl-flip 420ms ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes pl-flip {
+  0% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1400px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pl__detail-fp.is-flipping {
+    animation: pl-flip-fade 420ms ease-in-out;
+  }
+  @keyframes pl-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
 }

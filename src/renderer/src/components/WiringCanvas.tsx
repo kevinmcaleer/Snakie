@@ -25,6 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { cableRole, conductorColour, connectorFit } from './cable'
+import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
@@ -1583,6 +1584,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     persist({ ...robot, connections: robot.connections.map((c) => (c.id === id ? { ...c, color } : c)) })
   // Remove a placed part AND any wires that reference it (no dangling endpoints).
   const removePart = (key: string): void => {
+    // Never the microcontroller. It has no entry in `parts`, so the parts filter
+    // below is a no-op for it — but the CONNECTIONS filter is not, and would strip
+    // every wire attached to the board. The MCU is changed with the picker.
+    if (key === BOARD_KEY) return
     setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
     persist({
       ...robot,
@@ -1799,11 +1804,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       moveBox(d.boxKey, d.liveX, d.liveY)
       return
     }
-    // A click (no drag) on a placed part selects it (boards aren't selectable);
+    // A click (no drag) on a placed part OR the microcontroller selects it (#648 —
+    // the MCU is a component like any other, so it highlights in the browser too);
     // a click on empty space clears the selection. Either way, end any rename.
+    // Selecting the board deliberately does NOT open the part mini-toolbar (see
+    // `selPart`) — there is nothing to rotate/rename/delete on it.
     if (d?.kind === 'box' && !d.moved) {
       const s = d.boxKey ? subjByKey.get(d.boxKey) : undefined
-      const nextSel = renderMode === 'lifelike' && s?.kind === 'part' ? (d.boxKey ?? null) : null
+      const selectable = s?.kind === 'part' || s?.kind === 'board'
+      const nextSel = renderMode === 'lifelike' && selectable ? (d.boxKey ?? null) : null
       setSelectedKey(nextSel)
       setSelectedWire(null) // a part click clears any wire selection
       setRenameText(null)
@@ -2286,7 +2295,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             e.preventDefault()
             removeWireOrCable(selectedWire) // deletes the whole cable if it's cabled
             setSelectedWire(null)
-          } else if (selectedKey) {
+          } else if (selectedKey && subjByKey.get(selectedKey)?.kind === 'part') {
+            // PARTS only. The MCU became selectable in #648, and `removePart`
+            // filters connections by endpoint key — so deleting "board" would
+            // silently strip every wire attached to the microcontroller. The board
+            // is changed with the picker, never with the Delete key.
             e.preventDefault()
             removePart(selectedKey)
           }
@@ -2345,6 +2358,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   key={s.key}
                   subject={s}
                   liveByPad={live?.byPad}
+                  // #650: only the part you're looking at is named — selected, or
+                  // hovered so you can identify one without committing to a click.
+                  showTitle={selectedKey === s.key || hover?.key === s.key}
                   capsPins={capsOn ? 'all' : undefined}
                   capsHoverPin={capsOn && hover ? hover.pin : null}
                   onHoverPart={(on) =>
@@ -2751,14 +2767,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                 )
               })()}
 
-            {/* Selection ring around the selected part (#176). */}
-            {selPart && (
+            {/* Selection ring around the selected subject (#176) — the MCU as well
+                as a part (#648), so the canvas agrees with the browser highlight. */}
+            {selSubject?.hit && (
               <rect
                 className="wc__sel-ring"
-                x={selPart.hit.x}
-                y={selPart.hit.y}
-                width={selPart.hit.w}
-                height={selPart.hit.h}
+                x={selSubject.hit.x}
+                y={selSubject.hit.y}
+                width={selSubject.hit.w}
+                height={selSubject.hit.h}
                 rx={6}
               />
             )}
@@ -3061,7 +3078,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
           description={robot.description ?? ''}
           onCommit={commitRobotMeta}
           board={boardDef?.name}
+          boardMountedOn={robot.boardMountedOn}
           parts={robot.parts}
+          selectedKey={selectedKey}
           onRemovePart={removePart}
           open={browserOpen}
           onOpenChange={setBrowserOpen}
@@ -3122,7 +3141,9 @@ function BoardBrowser({
   description,
   onCommit,
   board,
+  boardMountedOn,
   parts,
+  selectedKey,
   onRemovePart,
   open,
   onOpenChange,
@@ -3134,7 +3155,11 @@ function BoardBrowser({
   description: string
   onCommit: (patch: { name?: string; description?: string }) => void
   board?: string
+  /** The part the MCU is docked into, so it nests under it (#649). */
+  boardMountedOn?: string
   parts: RobotPart[]
+  /** The canvas's selected subject key, mirrored as a highlighted row (#648). */
+  selectedKey?: string | null
   onRemovePart: (id: string) => void
   /** Open state (lifted to WiringCanvas so the fit can inset for the browser). */
   open: boolean
@@ -3148,7 +3173,10 @@ function BoardBrowser({
 }): JSX.Element {
   const [compOpen, setCompOpen] = useState(true)
   const asideRef = useRef<HTMLElement | null>(null)
-  const count = parts.length + (board ? 1 : 0)
+  // Docked parts nest under their carrier (#649); the count still covers every
+  // depth, so collapsing a carrier doesn't appear to lose components.
+  const tree = useMemo(() => browserTree({ board, boardMountedOn, parts }), [board, boardMountedOn, parts])
+  const count = countNodes(tree)
   const pinnable = onPin !== undefined
 
   if (!open) {
@@ -3233,54 +3261,90 @@ function BoardBrowser({
           (count === 0 ? (
             <p className="wc__muted wc__tree-empty">No components yet — pick a board + add parts.</p>
           ) : (
-            <ul className="wc__tree-list">
-              {board && (
-                <li className="wc__tree-item wc__tree-item--board">
-                  <button
-                    type="button"
-                    className="wc__tree-name wc__tree-focus"
-                    onClick={() => onFocus('board')}
-                    title={`Zoom to fit ${board}`}
-                  >
-                    {board}
-                  </button>
-                  <span className="wc__parts-tag">MCU</span>
-                </li>
-              )}
-              {parts.map((p) => (
-                <li key={p.id} className="wc__tree-item">
-                  <button
-                    type="button"
-                    className="wc__tree-name wc__tree-focus"
-                    onClick={() => onFocus(p.id)}
-                    title={`Zoom to fit ${p.label || p.part}`}
-                  >
-                    {p.label || p.part}
-                  </button>
-                  <button
-                    type="button"
-                    className="wc__parts-del"
-                    onClick={() => onRemovePart(p.id)}
-                    title={`Remove ${p.label || p.part}`}
-                    aria-label={`Remove ${p.label || p.part}`}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path
-                        d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <BrowserRows
+              nodes={tree}
+              depth={0}
+              selectedKey={selectedKey}
+              onFocus={onFocus}
+              onRemovePart={onRemovePart}
+            />
           ))}
       </div>
     </aside>
+  )
+}
+
+/**
+ * One level of the browser's component tree (#649) — recursive, so a part docked
+ * into a carrier renders indented beneath it. The selected row is highlighted so
+ * the browser mirrors the canvas selection (#648).
+ */
+function BrowserRows({
+  nodes,
+  depth,
+  selectedKey,
+  onFocus,
+  onRemovePart
+}: {
+  nodes: BrowserNode[]
+  depth: number
+  selectedKey?: string | null
+  onFocus: (key: string) => void
+  onRemovePart: (id: string) => void
+}): JSX.Element {
+  return (
+    <ul className={`wc__tree-list${depth > 0 ? ' wc__tree-list--nested' : ''}`}>
+      {nodes.map((n) => (
+        <li key={n.key}>
+          <div
+            className={`wc__tree-item${n.isBoard ? ' wc__tree-item--board' : ''}${
+              selectedKey === n.key ? ' is-selected' : ''
+            }`}
+            aria-current={selectedKey === n.key ? 'true' : undefined}
+          >
+            <button
+              type="button"
+              className="wc__tree-name wc__tree-focus"
+              onClick={() => onFocus(n.key)}
+              title={`Zoom to fit ${n.label}`}
+            >
+              {n.label}
+            </button>
+            {n.isBoard ? (
+              <span className="wc__parts-tag">MCU</span>
+            ) : (
+              <button
+                type="button"
+                className="wc__parts-del"
+                onClick={() => onRemovePart(n.key)}
+                title={`Remove ${n.label}`}
+                aria-label={`Remove ${n.label}`}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m2 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v6m4-6v6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+          {n.children.length > 0 && (
+            <BrowserRows
+              nodes={n.children}
+              depth={depth + 1}
+              selectedKey={selectedKey}
+              onFocus={onFocus}
+              onRemovePart={onRemovePart}
+            />
+          )}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -3432,12 +3496,20 @@ function SubjectBody({
   onHoverPart,
   capsPins,
   capsHoverPin,
-  liveByPad
+  liveByPad,
+  showTitle = true
 }: {
   subject: Subject
   onHoverPin?: (index: number | null) => void
   /** Pointer entered (true) / left (false) the whole part body. */
   onHoverPart?: (hovering: boolean) => void
+  /**
+   * Draw the part's name above it (#650). Titles are hidden until a part is
+   * selected or hovered: on a populated board they collide with the pin labels and
+   * turn the canvas into noise, and the name is only wanted for the part you are
+   * actually looking at.
+   */
+  showTitle?: boolean
   /** Which pins draw hover capability chips (forwarded to PartBody). */
   capsPins?: 'all' | ReadonlySet<number>
   capsHoverPin?: number | null
@@ -3528,9 +3600,11 @@ function SubjectBody({
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
-          <text x={dx + s.w / 2} y={dy - 7} textAnchor="middle" className="wc__body-title">
-            {s.title}
-          </text>
+          {showTitle && (
+            <text x={dx + s.w / 2} y={dy - 7} textAnchor="middle" className="wc__body-title">
+              {s.title}
+            </text>
+          )}
         </>
       )}
 

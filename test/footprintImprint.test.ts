@@ -13,11 +13,18 @@ const blankCarrier = (w = 58, h = 42.5): PartDefinition =>
   ({ parts: [], connections: [], headers: [], dimensions: { width: w, height: h } }) as unknown as PartDefinition
 
 describe('imprintPins (#166 phase 2)', () => {
-  it('copies every positioned reference pin as a derived, locked pin', () => {
+  it('copies every MATING reference pin as a derived, locked pin', () => {
     const xiao = load('seeed-xiao-rp2350')
-    const refCount = (xiao.headers ?? []).flatMap((h) => h.pins).filter((p) => p.x !== undefined).length
+    const all = (xiao.headers ?? []).flatMap((h) => h.pins).filter((p) => p.x !== undefined)
+    // A footprint imprints what the board presents DOWNWARD. A rear-only surface
+    // pad (the XIAO's BAT+/BAT−) faces away from the carrier and touches nothing,
+    // so it isn't imprinted — otherwise the carrier grows phantom pads and the
+    // imprint's signature stops matching the board it was taken from.
+    const mating = all.filter((p) => p.side !== 'rear' || p.shape === 'castellated')
+    expect(mating.length).toBeLessThan(all.length) // the XIAO really has rear pads
     const pins = imprintPins(xiao, { id: 'm1', x: 0.7, y: 0.35 }, blankCarrier())
-    expect(pins.length).toBe(refCount)
+    expect(pins.length).toBe(mating.length)
+    expect(pins.some((p) => p.name === 'BAT+')).toBe(false)
     expect(pins.every((p) => p.derived === 'm1' && p.locked === true)).toBe(true)
     // Types + names carried through; positions land inside the board.
     expect(pins.some((p) => p.type === 'pwr')).toBe(true)

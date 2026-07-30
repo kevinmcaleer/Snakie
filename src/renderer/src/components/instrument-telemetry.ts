@@ -17,6 +17,7 @@
  *   SNK IMU   <ch> <roll> <pitch> <yaw>       → Euler-angle orientation (deg)
  *   SNK IMUQ  <ch> <w> <x> <y> <z>            → quaternion orientation
  *   SNK DIST  <ch> <mm> [<angle>]             → a range reading (mm, optional deg)
+ *   SNK MOTOR <a> <b>                         → DC motor powers applied (-1..1)
  *   SNK BTN   <name> <0|1>                    → a button up/down event
  *   SNK ENC   <ch> <count> [<0|1>]            → an encoder count (+ optional press)
  *   SNK SCR   <addr> text <row> [<row> ...]   → a text screen (rows are `_`-joined)
@@ -77,6 +78,20 @@ export interface ServoTelemetry {
   pin: string
   /** Commanded servo angle in degrees (0..180). */
   angle: number
+}
+/**
+ * The powers a two-channel DC motor driver ACTUALLY applied (`SNK MOTOR <a> <b>`),
+ * signed and normalised (-1..1) — the same unit the `motor` control target takes.
+ *
+ * Unlike `SNK SERVO` this is not pin-keyed: the driver is a single addressed
+ * device (I²C, or one bridge chip), not a pin per output.
+ */
+export interface MotorTelemetry {
+  kind: 'motor'
+  /** Channel A's applied power, -1..1. */
+  a: number
+  /** Channel B's applied power, -1..1. */
+  b: number
 }
 /**
  * An object-BINDING descriptor from `inst.watch(name=obj)` — the board announces
@@ -206,6 +221,7 @@ export type Telemetry =
   | ScopeTelemetry
   | PwmTelemetry
   | ServoTelemetry
+  | MotorTelemetry
   | BindTelemetry
   | MeterTelemetry
   | PlotTelemetry
@@ -284,6 +300,17 @@ export function parseTelemetry(line: string): Telemetry | null {
     const angle = Number(parts[3])
     if (!pin || !Number.isFinite(angle)) return null
     return { kind: 'servo', pin, angle }
+  }
+
+  if (kind === 'MOTOR') {
+    // SNK MOTOR <a> <b> — the powers a two-channel DC driver ACTUALLY applied,
+    // signed and normalised (-1..1). `inst.motor` emits this on every change, so
+    // the Motor panel can show what the board did rather than only what it asked
+    // for — the difference that matters when a driver is in standby.
+    const a = Number(parts[2])
+    const b = Number(parts[3])
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null
+    return { kind: 'motor', a, b }
   }
 
   if (kind === 'BIND') {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parse } from 'yaml'
-import { planPartSync, backfillTopLevel } from '../src/shared/bundled-seed'
+import { planPartSync, planPartStatus, backfillTopLevel } from '../src/shared/bundled-seed'
 
 describe('planPartSync (#166 bundled seed policy)', () => {
   it('copies a part that is not installed', () => {
@@ -64,5 +64,90 @@ describe('backfillTopLevel', () => {
     const bundle = 'id: x\nname: X\n'
     const local = 'id: x\nname: X\nextra: mine\n'
     expect(backfillTopLevel(bundle, local)).toEqual({ text: local, changed: false })
+  })
+})
+
+describe('planPartStatus (#643 stranded-part visibility)', () => {
+  it('reports an untouched, up-to-date install as neither edited nor behind', () => {
+    expect(
+      planPartStatus({
+        localHash: 'x',
+        bundleHash: 'x',
+        seededHash: 'x',
+        localVersion: '0.1.8',
+        bundledVersion: '0.1.8'
+      })
+    ).toEqual({ edited: false, behind: false })
+  })
+
+  it('does NOT call an untouched-but-stale part edited (the seeder just refreshes it)', () => {
+    // local still matches what we seeded → `refresh`, so there is nothing to warn
+    // about; it will adopt the bundle on the next sync by itself.
+    expect(
+      planPartStatus({
+        localHash: 'old',
+        bundleHash: 'new',
+        seededHash: 'old',
+        localVersion: '0.1.5',
+        bundledVersion: '0.1.8'
+      })
+    ).toEqual({ edited: false, behind: true })
+  })
+
+  it('flags the real-world stranded part: edited AND behind the bundle', () => {
+    // The green-circle case — a hand-edited 0.38.0-era expansion base against a
+    // newer bundle. The seeder can only backfill it, so it needs a reset.
+    expect(
+      planPartStatus({
+        localHash: 'edited',
+        bundleHash: 'new',
+        seededHash: 'old',
+        localVersion: '0.1.5',
+        bundledVersion: '0.1.8'
+      })
+    ).toEqual({ edited: true, behind: true })
+  })
+
+  it('treats a part with no manifest record as edited (unknown provenance)', () => {
+    expect(
+      planPartStatus({ localHash: 'stale', bundleHash: 'new', bundledVersion: '0.1.8' })
+    ).toEqual({ edited: true, behind: true })
+  })
+
+  it('counts an unversioned install as behind any versioned bundle', () => {
+    expect(
+      planPartStatus({ localHash: 'a', bundleHash: 'b', seededHash: 'a', bundledVersion: '0.1.0' }).behind
+    ).toBe(true)
+  })
+
+  it('is not behind when the user has bumped past the bundle', () => {
+    // Editing a part in the Part Editor bumps its patch version, so an edited copy
+    // routinely sits AHEAD of the bundle — that must not nag.
+    expect(
+      planPartStatus({
+        localHash: 'mine',
+        bundleHash: 'b',
+        seededHash: 'seeded',
+        localVersion: '0.2.0',
+        bundledVersion: '0.1.8'
+      })
+    ).toEqual({ edited: true, behind: false })
+  })
+
+  it('is never behind when the bundle declares no version', () => {
+    expect(planPartStatus({ localHash: 'a', bundleHash: 'b', localVersion: '0.1.0' }).behind).toBe(false)
+  })
+
+  it('edited tracks planPartSync exactly — the two must not drift', () => {
+    const cases = [
+      { localHash: 'x', bundleHash: 'x', seededHash: 'x' },
+      { localHash: 'old', bundleHash: 'new', seededHash: 'old' },
+      { localHash: 'edited', bundleHash: 'new', seededHash: 'old' },
+      { localHash: 'stale', bundleHash: 'new', seededHash: undefined }
+    ]
+    for (const c of cases) {
+      const action = planPartSync({ existsLocal: true, ...c })
+      expect(planPartStatus(c).edited).toBe(action === 'backfill')
+    }
   })
 })

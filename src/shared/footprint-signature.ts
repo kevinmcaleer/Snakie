@@ -17,7 +17,8 @@
  * Editor (imprint/compat) and tests all share one definition of "compatible".
  */
 
-import type { PartDefinition, PartPinType } from './part'
+import { padPassesThrough } from './part'
+import type { PartDefinition, PartPin, PartPinType } from './part'
 
 /** The minimal per-pin input a signature needs: role + normalised position. */
 export interface SigPin {
@@ -82,8 +83,20 @@ export function partSigPins(part: PartDefinition): SigPin[] {
   const out: SigPin[] = []
   for (const h of part.headers ?? [])
     for (const p of h.pins ?? [])
-      if (p.x !== undefined && p.y !== undefined) out.push({ type: p.type, x: p.x, y: p.y })
+      if (p.x !== undefined && p.y !== undefined && matesWithCarrier(p))
+        out.push({ type: p.type, x: p.x, y: p.y })
   return out
+}
+
+/**
+ * Can this pad mate with a carrier? A board's dockable footprint is what it
+ * PRESENTS downward — its through-board and front pads. A pad that's rear-only and
+ * surface-mount (a XIAO's BAT+/BAT− on the underside) faces away from the carrier
+ * and touches nothing, so counting it would change the board's signature and stop
+ * it seating in a footprint it physically fits.
+ */
+function matesWithCarrier(pin: PartPin): boolean {
+  return pin.side !== 'rear' || padPassesThrough(pin.shape)
 }
 
 /** Signature of a whole board's pins — its dockable footprint as a SOURCE board. */

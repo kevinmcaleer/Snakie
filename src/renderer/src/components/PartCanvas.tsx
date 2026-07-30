@@ -35,7 +35,7 @@ import {
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
-import { itemHidden, itemLocked } from '../../../shared/part'
+import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   ComponentShape,
@@ -44,6 +44,7 @@ import type {
   PartDefinition,
   PartItemFlags,
   PartLabel,
+  PartSide,
   PartPin,
   PartPinType,
   TextAlign
@@ -164,6 +165,8 @@ export interface PartCanvasProps {
   visible?: LayerVisibility
   /** Per-layer edit lock. A locked layer can't be selected/moved/edited. */
   locked?: LayerLocks
+  /** Which face to author (#636). Absent ⇒ front. */
+  side?: PartSide
   /** The single item the user clicked in the LAYERS HIERARCHY. Drawn as its own
    *  marker on top of any group outline, purely to answer "which one is that?".
    *  It changes nothing about selection: a canvas click still picks up the whole
@@ -377,6 +380,7 @@ export function PartCanvas({
   visible: visibleProp,
   locked = DEFAULT_LOCKS,
   peek = null,
+  side = 'front',
   showGrid = false,
   readOnly = false,
   tool = 'select',
@@ -844,7 +848,7 @@ export function PartCanvas({
       return
     }
     const n = pins.length
-    const newPin = { name: `P${n}`, type: 'io' as const, gpio: n, capabilities: ['digital' as const], x: sx, y: sy }
+    const newPin = onFace({ name: `P${n}`, type: 'io' as const, gpio: n, capabilities: ['digital' as const], x: sx, y: sy })
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
     commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, newPin] } : h)) })
     onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length })
@@ -870,7 +874,7 @@ export function PartCanvas({
    *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
    *  all sharing `gid` so they move + delete as one unit. */
   const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy },
+    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy }),
     { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
     { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
   ]
@@ -1894,18 +1898,18 @@ export function PartCanvas({
 
   /** Add an on-board push-button at the clicked point (#130). */
   const addButton = (nx: number, ny: number): void => {
-    const next = [...buttons, { label: 'BTN', x: snapX(nx), y: snapY(ny) }]
+    const next = [...buttons, onFace({ label: 'BTN', x: snapX(nx), y: snapY(ny) })]
     commit({ ...part, buttons: next })
     onSelect?.({ type: 'button', index: next.length - 1 })
   }
   const addShape = (kind: ComponentShapeKind, nx: number, ny: number): void => {
-    const base = {
+    const base = onFace({
       kind,
       label: '',
       fill: DEFAULT_SHAPE_FILL,
       stroke: DEFAULT_SHAPE_STROKE,
       strokeWidth: DEFAULT_SHAPE_STROKE_WIDTH
-    }
+    })
     let shape: ComponentShape
     if (kind === 'circle') {
       shape = { ...base, x: clamp01(nx), y: clamp01(ny), r: 0.08 }
@@ -2001,12 +2005,30 @@ export function PartCanvas({
    *  Resolves the group ancestry, so hiding or locking a group protects every
    *  item inside it. */
   const pickable = (item: PartItemFlags): boolean =>
-    !itemHidden(part.groups, item) && !itemLocked(part.groups, item)
+    !itemHidden(part.groups, item) && !itemLocked(part.groups, item) && itemSide(item) === side
 
   /** Should this item draw? Resolves the group ancestry, so hiding a group hides
    *  everything inside it. Editor-canvas only — `hidden` is an authoring aid, so
    *  the Board View and mini board still draw the part in full. */
   const shown = (item: PartItemFlags): boolean => !itemHidden(part.groups, item)
+
+  // Face (#636). `faces` keeps items belonging to the side on show; `mx` mirrors
+  // a normalised x on the rear, for the things shared between the two faces.
+  const rear = side === 'rear'
+  const faces = (item: PartItemFlags): boolean => itemSide(item) === side
+  /** Where a pad sits on the face being drawn, and whether it's there at all. A
+   *  through pad is one pad seen from either side, so it appears on both — mirrored
+   *  on the far one. A surface pad belongs to its own face only. */
+  const padOnFace = (pin: PartPin, nx: number): { show: boolean; x: number } =>
+    itemSide(pin) === side
+      ? { show: true, x: nx }
+      : { show: padPassesThrough(pin.shape), x: mirrorX(nx) }
+  const mx = (nx: number): number => (rear ? mirrorX(nx) : nx)
+  const faceImage = rear ? part.rear?.imageData : part.imageData
+  /** Stamp the face onto a newly-created item. Without this you'd place a pad
+   *  while looking at the back and watch it disappear onto the front. */
+  const onFace = <T,>(item: T): T => (rear ? { ...item, side: 'rear' as const } : item)
+  const faceLayer = (rear ? part.rear?.imageLayer : part.imageLayer) ?? { x: 0, y: 0, w: 1, h: 1 }
 
   const hitTest = (nx: number, ny: number): CanvasSelection => {
     // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
@@ -2047,8 +2069,11 @@ export function PartCanvas({
       let best = -1
       let bestD = HIT
       for (let i = 0; i < pins.length; i++) {
-        if (!pickable(pins[i].pin)) continue
-        const d = dist(nx, ny, pins[i].x, pins[i].y)
+        // `pickable` already covers hidden/locked; the face test is separate
+        // because a through pad is selectable from EITHER side, at its mirrored x.
+        const f = padOnFace(pins[i].pin, pins[i].x)
+        if (!f.show || itemHidden(part.groups, pins[i].pin) || itemLocked(part.groups, pins[i].pin)) continue
+        const d = dist(nx, ny, f.x, pins[i].y)
         if (d < bestD) {
           bestD = d
           best = i
@@ -2058,7 +2083,7 @@ export function PartCanvas({
     }
     if (visible.holes && !locked.holes)
       for (let i = holes.length - 1; i >= 0; i--)
-        if (pickable(holes[i]) && dist(nx, ny, holes[i].x, holes[i].y) < HIT) return { type: 'hole', index: i }
+        if (dist(nx, ny, mx(holes[i].x), holes[i].y) < HIT) return { type: 'hole', index: i }
     // Carrier mounts (#166) — grab anywhere inside the footprint block (its pins are
     // locked, so they fall through to here), else a radius around a pin-less mount.
     if (visible.mounts && !locked.mounts)
@@ -2070,7 +2095,7 @@ export function PartCanvas({
         return { type: 'mount', index: i }
       }
     }
-    if (visible.image && !locked.image && part.imageData && nx >= layer.x && nx <= layer.x + layer.w && ny >= layer.y && ny <= layer.y + layer.h)
+    if (visible.image && !locked.image && faceImage && nx >= faceLayer.x && nx <= faceLayer.x + faceLayer.w && ny >= faceLayer.y && ny <= faceLayer.y + faceLayer.h)
       return { type: 'image' }
     return null
   }
@@ -2944,7 +2969,7 @@ export function PartCanvas({
             {cutHoles &&
               holes.map((h, i) =>
                 shown(h) ? (
-                  <circle key={`mh${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
+                  <circle key={`mh${i}`} cx={px(mx(h.x))} cy={py(h.y)} r={holeR(h.diameter)} fill="black" />
                 ) : null
               )}
             {pinHoleList.map((h, i) => (
@@ -2958,9 +2983,9 @@ export function PartCanvas({
         {/* Layer 1: PCB (outline + image), with holes cut through via the mask */}
         <g mask={hasCuts ? `url(#${maskId})` : undefined}>
           {visible.pcb && shapeEl({ fill: part.pcbColor || '#0f5a2e', stroke: '#0008', strokeWidth: 2 })}
-          {visible.image && part.imageData && (
+          {visible.image && faceImage && (
             <image
-              href={part.imageData}
+              href={faceImage}
               x={px(layer.x)}
               y={py(layer.y)}
               width={layer.w * box.w}
@@ -2986,7 +3011,7 @@ export function PartCanvas({
         {visible.holes &&
           holes.map((h, i) =>
             shown(h) && isSel({ type: 'hole', index: i }) ? (
-              <circle key={`h${i}`} cx={px(h.x)} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
+              <circle key={`h${i}`} cx={px(mx(h.x))} cy={py(h.y)} r={holeR(h.diameter)} fill="none" stroke="#fff" strokeWidth={3} />
             ) : null
           )}
 
@@ -3094,7 +3119,9 @@ export function PartCanvas({
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
-            if (!shown(rp.pin)) return null
+            const face = padOnFace(rp.pin, rp.x)
+            if (!shown(rp.pin) || !face.show) return null
+            rp = face.x === rp.x ? rp : { ...rp, x: face.x }
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             // A selected group shows a single outline (below) instead of ringing
             // each member — so suppress the per-pin ring when a group is selected.
@@ -3135,6 +3162,30 @@ export function PartCanvas({
               )
             } else if (shape === 'octagonal') {
               pad = octagonalPad(cx, cy, size, fill, stroke, sw)
+            } else if (shape === 'pogo') {
+              // A sprung contact, not copper: a bright core in a barrel ring, so it
+              // reads as something that PRESSES on a pad rather than being one.
+              pad = (
+                <>
+                  <circle cx={cx} cy={cy} r={size / 2} fill="none" stroke="#9aa4b0" strokeWidth={Math.max(1, size * 0.14)} />
+                  <circle cx={cx} cy={cy} r={size * 0.26} fill="#e2e7ec" stroke={stroke} strokeWidth={sw * 0.6} />
+                </>
+              )
+            } else if (shape === 'smd') {
+              // Surface-mount: solid copper, no drill. Slightly taller than wide so
+              // it reads as a pad rather than a square through-hole one.
+              pad = (
+                <rect
+                  x={cx - size * 0.42}
+                  y={cy - size * 0.5}
+                  width={size * 0.84}
+                  height={size}
+                  rx={1.5}
+                  fill={fill}
+                  stroke={stroke}
+                  strokeWidth={sw}
+                />
+              )
             } else {
               pad = (
                 <>
@@ -3399,7 +3450,7 @@ export function PartCanvas({
                     : c.kind === 'label'
                       ? labels[c.index]
                       : shapes[c.index]
-            if (src && !shown(src)) return null
+            if (src && (!shown(src) || !faces(src))) return null
             if (c.kind === 'button') {
               const i = c.index
               const b = buttons[i]

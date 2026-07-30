@@ -32,7 +32,13 @@ import {
   partFromYaml,
   partToYaml
 } from '../../shared/part-yaml'
-import { backfillTopLevel, planPartSync, type SeedManifest } from '../../shared/bundled-seed'
+import {
+  backfillTopLevel,
+  planPartStatus,
+  planPartSync,
+  type BundledPartStatus,
+  type SeedManifest
+} from '../../shared/bundled-seed'
 import { bumpPatch } from '../../shared/part-registry'
 import { reporter } from '../report-error'
 import type { PartDefinition, PartLibrary, PartLibraryWithParts } from '../../shared/part'
@@ -245,6 +251,135 @@ async function doSeedStandardLibrary(): Promise<void> {
     // best-effort — the built-in board fallback covers a failed seed
     await fsp.rm(tmp, { recursive: true, force: true }).catch(reporter('parts: seed temp cleanup'))
   }
+}
+
+/** Read just the `version` + `name` out of a `parts.yml`, tolerating a bad file. */
+function partMeta(yml: string | null): { name?: string; version?: string } {
+  if (yml === null) return {}
+  try {
+    const p = partFromYaml(yml)
+    return { name: p.name, version: p.version }
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Compare every bundled part with its installed copy (#643), so the Parts panel can
+ * say "the bundled version is newer than yours" — and offer the way back.
+ *
+ * Only parts that exist in the BUNDLE are reported (a user's own parts have nothing
+ * to compare against). Best-effort: an unreadable file just yields a status with the
+ * fields it could determine, never an exception.
+ */
+export async function bundledPartStatuses(): Promise<BundledPartStatus[]> {
+  const src = bundledStandardLibraryDir()
+  const dest = join(partsDir(), STANDARD_LIBRARY_ID)
+  if (!existsSync(src)) return []
+  // Wait for any first-run seed/sync: mid-copy, parts look uninstalled and every
+  // one of them would read as "behind" the bundle.
+  await seedStandardLibrary().catch(() => undefined)
+  const manifest = await readSeedManifest(dest)
+
+  let entries: Dirent[]
+  try {
+    entries = await fsp.readdir(src, { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const out: BundledPartStatus[] = []
+  for (const e of entries) {
+    if (!e.isDirectory() || e.name.startsWith('.')) continue
+    const bundleYml = await readTextOrNull(join(src, e.name, 'parts.yml'))
+    if (bundleYml === null) continue // not a part folder
+    const localYml = await readTextOrNull(join(dest, e.name, 'parts.yml'))
+    // Not installed at all ⇒ not "behind", just absent (the seeder copies it in).
+    // Reporting it would badge parts the user cannot even select.
+    if (localYml === null) continue
+    const bundleMeta = partMeta(bundleYml)
+    const localMeta = partMeta(localYml)
+    const { edited, behind } = planPartStatus({
+      localHash: localYml !== null ? hashText(localYml) : undefined,
+      bundleHash: hashText(bundleYml),
+      seededHash: manifest?.parts?.[e.name],
+      localVersion: localMeta.version,
+      bundledVersion: bundleMeta.version
+    })
+    out.push({
+      id: e.name,
+      name: localMeta.name ?? bundleMeta.name,
+      localVersion: localMeta.version,
+      bundledVersion: bundleMeta.version,
+      edited,
+      behind
+    })
+  }
+  return out
+}
+
+/** Where {@link resetPartToBundled} stashes the copy it replaces. Dot-prefixed so
+ *  `readLibrary` skips it — a backup must never show up as a duplicate part. */
+const SEED_BACKUP_DIR = '.backups'
+
+/**
+ * Restore one bundled part to the version shipped in this app (#643).
+ *
+ * The seeder deliberately never overwrites an edited part, which leaves it stranded
+ * on an old schema with no way back — this is that way back. The current folder is
+ * moved to `<library>/.backups/<id>/` FIRST (so a custom image or help file survives,
+ * not just the YAML), then the bundle is copied in and the seed manifest is stamped
+ * with the bundle's hash — which re-marks the part as untouched, so ordinary
+ * `refresh` syncs pick it up again from here on.
+ *
+ * Equivalent to deleting the folder and letting the seeder re-copy it, minus the
+ * restart and the data loss.
+ */
+export async function resetPartToBundled(partId: string): Promise<WriteResult> {
+  const id = sanitiseId(partId)
+  if (!id) return { ok: false, error: 'No part id given.' }
+  const srcPart = join(bundledStandardLibraryDir(), id)
+  if (!existsSync(join(srcPart, 'parts.yml'))) {
+    return { ok: false, error: `"${id}" is not a bundled part — there is nothing to reset it to.` }
+  }
+  const dest = join(partsDir(), STANDARD_LIBRARY_ID)
+  const destPart = join(dest, id)
+
+  try {
+    // 1) Preserve the current copy whole, replacing any previous backup of it.
+    if (existsSync(destPart)) {
+      const backup = join(dest, SEED_BACKUP_DIR, id)
+      await fsp.mkdir(join(dest, SEED_BACKUP_DIR), { recursive: true })
+      await fsp.rm(backup, { recursive: true, force: true })
+      await fsp.cp(destPart, backup, { recursive: true })
+      await fsp.rm(destPart, { recursive: true, force: true })
+    }
+    // 2) Take the bundle wholesale.
+    await fsp.cp(srcPart, destPart, { recursive: true })
+  } catch (err) {
+    return { ok: false, error: `Could not reset "${id}": ${(err as Error).message}` }
+  }
+
+  // 3) Re-baseline the manifest so the part counts as untouched again and future
+  //    releases can `refresh` it normally instead of falling back to backfill.
+  //
+  //    ONLY when a manifest already exists, and never advancing its `version`.
+  //    Writing a fresh manifest stamped with the CURRENT bundle version would make
+  //    the next `syncBundledLibrary` take its up-to-date fast path — which only
+  //    copies wholly-new folders — and so silently skip the reconcile every OTHER
+  //    stale part in the install is still waiting for. An install with no manifest
+  //    needs that full pass more than it needs this one hash: the reset part is now
+  //    byte-identical to the bundle, so the next sync classifies it `skip` and
+  //    records its hash correctly anyway.
+  const manifest = await readSeedManifest(dest)
+  const bundleYml = await readTextOrNull(join(srcPart, 'parts.yml'))
+  if (manifest && bundleYml !== null) {
+    await writeSeedManifest(dest, {
+      version: manifest.version,
+      parts: { ...manifest.parts, [id]: hashText(bundleYml) }
+    })
+  }
+  return { ok: true, id, libraryId: STANDARD_LIBRARY_ID }
 }
 
 /**
