@@ -6,7 +6,7 @@ family: Microcontroller
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.15
+version: 0.1.16
 pcbColor: "#047283"
 aspect: 0.5
 dimensions:
@@ -411,7 +411,7 @@ imageLayer:
   w: 0.9867877960205077
   h: 0.9846070495099651
 rear:
-  image: rear.png
+  image: rear.webp
 layerVisibility:
   pcb: false
   image: true

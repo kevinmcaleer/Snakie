@@ -2244,7 +2244,7 @@ function LayersPanel({
           )}
         </div>
         {tool === 'erasebg' && <p className="pe__hint pe__hint--muted">Erase mode: click a background patch on the image. Adjust Tolerance if it takes too much / too little.</p>}
-        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
+        <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: 'none' }} onChange={onPickImage} />
       </div>
 
         </>

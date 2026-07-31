@@ -53,9 +53,16 @@ extraResources:
     to: examples/parts/snakie-standard
     filter:
       - '**/*.yml'
+      - '**/*.md'
+      # Every extension `IMAGE_EXTS` in src/main/parts/library.ts accepts. A part
+      # photo in a format missing here works in dev and SILENTLY VANISHES from a
+      # packaged build — webp especially, which is what a cut-out photo wants.
       - '**/*.png'
       - '**/*.jpg'
+      - '**/*.jpeg'
       - '**/*.svg'
+      - '**/*.gif'
+      - '**/*.webp'
   # Ship the servo-arm DEMO PROJECT — the one artefact that is the same robot in
   # all three workspaces (wiring in Electronics, the arm in Robot, sweep.py in
   # Code). It is how a new user discovers the three are connected at all, so it
