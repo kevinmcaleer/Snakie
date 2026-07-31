@@ -1212,6 +1212,9 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   }
   // Rear face (#636). Like the front, the FILENAME + layer round-trip and the
   // inlined blob is runtime-only.
+  // `imageData` is runtime-only for the rear exactly as it is for the front, so
+  // it is NOT carried here — the editor re-attaches it to the save payload, which
+  // is where the main process picks it up and writes the asset.
   if (part.rear && (text(part.rear.image) || part.rear.imageLayer)) {
     const rear: PartRear = {}
     const img = text(part.rear.image)

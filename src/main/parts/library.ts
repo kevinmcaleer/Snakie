@@ -468,9 +468,9 @@ async function inlineHelp(partDir: string, filename: string): Promise<string | u
 }
 
 /** Delete every `image.<ext>` asset in a part folder (clean slate before write). */
-async function removeImageAssets(partDir: string): Promise<void> {
+async function removeImageAssets(partDir: string, base = 'image'): Promise<void> {
   await Promise.all(
-    IMAGE_EXTS.map((ext) => fsp.unlink(join(partDir, `image.${ext}`)).catch(() => undefined))
+    IMAGE_EXTS.map((ext) => fsp.unlink(join(partDir, `${base}.${ext}`)).catch(() => undefined))
   )
 }
 
@@ -495,6 +495,12 @@ async function readPart(libDir: string, partId: string): Promise<PartDefinition 
   if (part.image) {
     const data = await inlineImage(partDir, part.image)
     if (data) part.imageData = data
+  }
+  // The REAR photo (#636) — inlined exactly like the front, or a part authored
+  // with a back face loads with the pins but no picture.
+  if (part.rear?.image) {
+    const data = await inlineImage(partDir, part.rear.image)
+    if (data) part.rear = { ...part.rear, imageData: data }
   }
   if (part.help) {
     const text = await inlineHelp(partDir, part.help)
@@ -637,6 +643,9 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
       if (prev.image && isContainedFile(partDir, prev.image)) {
         await unlinkQuietly(join(partDir, prev.image), 'parts: remove old image')
       }
+      if (prev.rear?.image && isContainedFile(partDir, prev.rear.image)) {
+        await unlinkQuietly(join(partDir, prev.rear.image), 'parts: remove old rear image')
+      }
       if (prev.help && isContainedFile(partDir, prev.help)) {
         await unlinkQuietly(join(partDir, prev.help), 'parts: remove old help')
       }
@@ -644,6 +653,7 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
       // No existing part / unreadable → nothing to clean up.
     }
     await removeImageAssets(partDir)
+    await removeImageAssets(partDir, 'rear')
     if (part.imageData) {
       const decoded = decodeDataUrl(part.imageData)
       if (decoded) {
@@ -656,6 +666,28 @@ export async function writePart(libraryId: string, part: PartDefinition): Promis
     } else {
       // No image supplied → drop the reference.
       delete toWrite.image
+    }
+
+    // The REAR photo, under its own basename so the two faces never overwrite
+    // each other. Without this a rear image uploaded in the editor was simply
+    // discarded on save — the picture appeared, then vanished.
+    if (part.rear?.imageData) {
+      const decoded = decodeDataUrl(part.rear.imageData)
+      const rear = { ...part.rear }
+      delete rear.imageData
+      if (decoded) {
+        const filename = `rear.${decoded.ext}`
+        await fsp.writeFile(join(partDir, filename), decoded.buf)
+        rear.image = filename
+      } else {
+        delete rear.image
+      }
+      toWrite.rear = Object.keys(rear).length ? rear : undefined
+    } else if (toWrite.rear) {
+      const rear = { ...toWrite.rear }
+      delete rear.imageData
+      delete rear.image
+      toWrite.rear = Object.keys(rear).length ? rear : undefined
     }
 
     // Persist the bundled help markdown, if any (empty ⇒ drop the reference).

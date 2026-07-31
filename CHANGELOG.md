@@ -136,6 +136,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **You can add a photo of a board's REAR face.** The back face shipped in #636
+  with pins and a flip, but no working way to give it a picture: the upload wrote
+  it, then the save dropped it, and the main process never wrote or re-read a rear
+  image asset. The whole chain works now, and the Background controls act on the
+  face you are looking at — previously the ＋ said "Replace" on an empty back, and
+  its bin deleted the FRONT photo you could not even see.
+
 - **The Part Editor no longer offers the Standard library as a save target (#633).**
   Writing there edits the seeder-managed copy and strands the part on an old schema
   (#643), so it is a developer target now. With one target left there is nothing to

@@ -656,13 +656,7 @@ export function PartEditor({
     e.target.value = ''
   }
   const removeImage = (): void => {
-    setPart((d) => {
-      const next = { ...d }
-      delete next.imageData
-      delete next.image
-      delete next.imageLayer
-      return next
-    })
+    patchFaceImage(undefined)
     setImageOriginal(undefined)
     if (tool === 'erasebg') setTool('select')
     if (selection?.type === 'image') setSelection(null)
@@ -697,18 +691,49 @@ export function PartEditor({
       img.onerror = () => resolve(null)
       img.src = dataUrl
     })
+  // --- the CURRENT face's photo -------------------------------------------
+  // Every background control used to read `part.imageData` — the FRONT — whatever
+  // face was showing. On the back that made the chip say "Replace" when there was
+  // nothing to replace, and made the trash delete the front photo you couldn't
+  // even see (#636 follow-up).
+  const faceImageData = side === 'rear' ? part.rear?.imageData : part.imageData
+  /** Patch the photo of whichever face is showing. */
+  const patchFaceImage = (data: string | undefined): void => {
+    if (side === 'rear') {
+      setPart((d) => {
+        const rear = { ...(d.rear ?? {}) }
+        if (data === undefined) delete rear.imageData
+        else rear.imageData = data
+        const next = { ...d }
+        if (Object.keys(rear).length) next.rear = rear
+        else delete next.rear
+        return next
+      })
+    } else if (data === undefined) {
+      setPart((d) => {
+        const next = { ...d }
+        delete next.imageData
+        delete next.image
+        delete next.imageLayer
+        return next
+      })
+    } else {
+      patch({ imageData: data })
+    }
+  }
+
   /** Auto: knock out the connected border background from every edge. */
   const autoRemoveBg = async (): Promise<void> => {
-    if (!part.imageData) return
-    const out = await processImage(part.imageData, (img) => removeBackgroundFromEdges(img, bgTol))
+    if (!faceImageData) return
+    const out = await processImage(faceImageData, (img) => removeBackgroundFromEdges(img, bgTol))
     if (out) {
-      patch({ imageData: out })
+      patchFaceImage(out)
       setStatus({ kind: 'info', text: 'Removed the background from the image edges. Click leftover patches to erase them.' })
     } else setStatus({ kind: 'error', text: 'Could not process that image.' })
   }
   /** Click-to-erase: flood-fill the background at a clicked board point. */
   const eraseBgAt = async (nx: number, ny: number): Promise<void> => {
-    const src = part.imageData
+    const src = faceImageData
     if (!src) return
     const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
     const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
@@ -719,7 +744,7 @@ export function PartEditor({
       const py = Math.min(img.height - 1, Math.max(0, Math.round(v * img.height)))
       floodFillTransparent(img, [[px, py]], bgTol)
     })
-    if (out) patch({ imageData: out })
+    if (out) patchFaceImage(out)
   }
   /** Restore the pristine image captured on load/upload. */
   const resetBg = (): void => {
@@ -1070,6 +1095,12 @@ export function PartEditor({
     // `helpText`/`imageData` are runtime-only (normalisePart strips them); re-add
     // them so the main process can write help.md / the image asset out on save.
     const payload: PartDefinition = { ...clean, version: nextVersion, imageData: part.imageData, helpText: part.helpText }
+    // The REAR photo is runtime-only too, and `normalisePart` strips it for the
+    // same reason it strips the front's — so re-attach it, or the back face saves
+    // without its picture (#636 follow-up).
+    if (part.rear?.imageData) {
+      payload.rear = { ...(clean.rear ?? {}), imageData: part.rear.imageData }
+    }
     try {
       const res: PartsWriteResult = await window.api.parts.savePart(libId, payload)
       if (res?.ok) {
@@ -1255,6 +1286,7 @@ export function PartEditor({
               <LayersPanel
                 variant="layers"
                 part={part}
+                side={side}
                 visible={visible}
                 setVisible={setVisible}
                 locked={locked}
@@ -1303,6 +1335,7 @@ export function PartEditor({
               <LayersPanel
                 variant="board"
                 part={part}
+                side={side}
                 visible={visible}
                 setVisible={setVisible}
                 locked={locked}
@@ -1348,6 +1381,9 @@ export function PartEditor({
 
 interface LayersPanelProps {
   part: PartDefinition
+  /** Which face is showing — the background controls act on THAT face's photo,
+   *  not always the front's (#636 follow-up). */
+  side: PartSide
   visible: LayerVisibility
   setVisible: React.Dispatch<React.SetStateAction<LayerVisibility>>
   locked: LayerLocks
@@ -1384,6 +1420,7 @@ interface LayersPanelProps {
  */
 function LayersPanel({
   part,
+  side,
   visible,
   setVisible,
   locked,
@@ -1406,6 +1443,9 @@ function LayersPanel({
   variant = 'layers',
   footprintOps
 }: LayersPanelProps): JSX.Element {
+  // The photo of the face on screen. Reading `part.imageData` regardless of face
+  // is what made the back's controls describe (and delete) the FRONT.
+  const faceImageData = side === 'rear' ? part.rear?.imageData : part.imageData
   const [addOpen, setAddOpen] = useState(false)
   const [bgMenuOpen, setBgMenuOpen] = useState(false)
   const [dragRow, setDragRow] = useState<number | null>(null)
@@ -2119,7 +2159,7 @@ function LayersPanel({
           {lock('image')}
           <span className="pe__layer-name">Background</span>
           <span className="pe__flatspacer" />
-          {part.imageData && (
+          {faceImageData && (
             <div className="pe__addwrap">
               <button
                 type="button"
@@ -2185,11 +2225,20 @@ function LayersPanel({
               )}
             </div>
           )}
-          <button type="button" className="pe__chip" onClick={() => fileInputRef.current?.click()} title={part.imageData ? 'Replace the board photo' : 'Add a board photo'}>
-            {part.imageData ? 'Replace' : '＋'}
+          <button
+            type="button"
+            className="pe__chip"
+            onClick={() => fileInputRef.current?.click()}
+            title={
+              faceImageData
+                ? `Replace the ${side === 'rear' ? 'back' : 'board'} photo`
+                : `Add a ${side === 'rear' ? 'photo of the back' : 'board photo'}`
+            }
+          >
+            {faceImageData ? 'Replace' : '＋'}
           </button>
-          {part.imageData && (
-            <button type="button" className="pe__trash" onClick={removeImage} title="Remove background image" aria-label="Remove background image">
+          {faceImageData && (
+            <button type="button" className="pe__trash" onClick={removeImage} title={`Remove the ${side === 'rear' ? 'back' : 'front'} photo`} aria-label={`Remove the ${side === 'rear' ? 'back' : 'front'} photo`}>
               <TrashIcon size={13} />
             </button>
           )}

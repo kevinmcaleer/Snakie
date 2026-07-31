@@ -1107,3 +1107,60 @@ describe('suggested modules round-trip (#638)', () => {
     expect(back.suggests).toEqual([{ module: 'buzzer' }])
   })
 })
+
+describe('rear photo survives the editor→disk round trip (#636 follow-up)', () => {
+  it('normalisePart strips the runtime rear data URL, like it does the front', () => {
+    // A freshly-uploaded rear photo has no filename yet, so `rear` normalises
+    // away entirely — which is why the EDITOR re-attaches `rear.imageData` to the
+    // save payload. Without that re-attach the picture appeared in the editor and
+    // vanished on save, which is what "no way to add a rear image" looked like.
+    const out = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [],
+      rear: { imageData: 'data:image/png;base64,AAA' }
+    } as PartDefinition)
+    expect(out.rear).toBeUndefined()
+    // …and the front behaves identically, which is the point.
+    const front = normalisePart({
+      id: 'x',
+      name: 'X',
+      headers: [],
+      imageData: 'data:image/png;base64,AAA'
+    } as PartDefinition)
+    expect(front.imageData).toBeUndefined()
+  })
+
+  it('still drops an empty rear block', () => {
+    const out = normalisePart({ id: 'x', name: 'X', headers: [], rear: {} } as PartDefinition)
+    expect(out.rear).toBeUndefined()
+  })
+
+  it('keeps a rear referenced by filename or layer, as before', () => {
+    expect(
+      normalisePart({ id: 'x', name: 'X', headers: [], rear: { image: 'rear.png' } } as PartDefinition).rear
+        ?.image
+    ).toBe('rear.png')
+    expect(
+      normalisePart({
+        id: 'x',
+        name: 'X',
+        headers: [],
+        rear: { imageLayer: { x: 0, y: 0, w: 1, h: 1 } }
+      } as PartDefinition).rear?.imageLayer
+    ).toBeTruthy()
+  })
+
+  it('does not write the runtime data URL into the YAML', () => {
+    // `imageData` is runtime-only for BOTH faces — the file on disk references a
+    // filename, or parts.yml would carry a base64 blob.
+    const yaml = partToYaml({
+      id: 'x',
+      name: 'X',
+      headers: [],
+      rear: { image: 'rear.png', imageData: 'data:image/png;base64,AAA' }
+    } as PartDefinition)
+    expect(yaml).toContain('rear.png')
+    expect(yaml).not.toContain('base64')
+  })
+})
