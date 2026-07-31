@@ -1,0 +1,420 @@
+id: arduino-nano-esp32
+name: Arduino Nano ESP32
+description: Arduino Nano ESP32 Microcontroller
+manufacturer: Arduino
+family: Microcontroller
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.15
+pcbColor: "#047283"
+aspect: 0.5
+dimensions:
+  width: 18
+  height: 45
+headers:
+  - edge: left
+    pins:
+      - name: D13
+        type: io
+        number: 1
+        gpio: 48
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: SCK
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.10718457839068245
+      - name: GND
+        type: gnd
+        number: 14
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.8458928041609562
+      - name: A3
+        type: io
+        number: 7
+        gpio: 4
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 3
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.4482770051160719
+      - name: A2
+        type: io
+        number: 6
+        gpio: 3
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 2
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.3913031267638647
+      - name: 3v3
+        type: pwr
+        number: 2
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.1640082880653189
+      - name: B0
+        type: io
+        number: 3
+        gpio: 46
+        capabilities:
+          - digital
+        buses:
+          adc: 1
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.22083199773995535
+      - name: A0
+        type: io
+        number: 4
+        gpio: 1
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 0
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.2776557074145918
+      - name: A1
+        type: io
+        number: 5
+        gpio: 2
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 1
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.33447941708922824
+      - name: A4
+        type: io
+        number: 8
+        gpio: 11
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 0
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.5051257429036368
+      - name: A5
+        type: io
+        number: 9
+        gpio: 12
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 1
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.5619744806912017
+      - name: A6
+        type: io
+        number: 10
+        gpio: 13
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 2
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.6185979654624104
+      - name: A7
+        type: io
+        number: 11
+        gpio: 14
+        capabilities:
+          - digital
+          - pwm
+          - adc
+        buses:
+          adc: 3
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.6756719562663315
+      - name: vBUS
+        type: pwr
+        number: 12
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.7325206940538964
+      - name: B1
+        type: io
+        number: 13
+        gpio: 0
+        capabilities:
+          - digital
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.7890690944863198
+      - name: VIN
+        type: pwr
+        number: 15
+        castellated: true
+        shape: castellated
+        x: 0.0701372685504218
+        y: 0.9030669074165911
+      - name: D12
+        type: io
+        number: 30
+        gpio: 47
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: RX
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.10718457839068245
+      - name: D11
+        type: io
+        number: 29
+        gpio: 38
+        capabilities:
+          - digital
+          - pwm
+          - spi
+        signals:
+          spi: TX
+        buses:
+          spi: 0
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.1640082880653189
+      - name: D10
+        type: io
+        number: 28
+        gpio: 21
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.22088205396581226
+      - name: D9
+        type: io
+        number: 27
+        gpio: 18
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.27773079175337717
+      - name: D8
+        type: io
+        number: 26
+        gpio: 17
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.33447941708922824
+      - name: d7
+        type: io
+        number: 25
+        gpio: 10
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.3913031267638647
+      - name: D6
+        type: io
+        number: 24
+        gpio: 9
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.4482770051160719
+      - name: D5
+        type: io
+        number: 23
+        gpio: 8
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.5051257429036368
+      - name: D4
+        type: io
+        number: 22
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.5619744806912017
+      - name: D3
+        type: io
+        number: 21
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.6188232184787665
+      - name: D2
+        type: io
+        number: 20
+        gpio: 5
+        capabilities:
+          - digital
+          - pwm
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.6756719562663315
+      - name: GND
+        type: gnd
+        number: 19
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.7325206940538964
+      - name: RST
+        type: other
+        number: 18
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.7893694318414612
+      - name: RX0
+        type: io
+        number: 17
+        gpio: 44
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: RX
+        buses:
+          uart: 0
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.8462181696290262
+      - name: TX1
+        type: io
+        number: 16
+        gpio: 43
+        capabilities:
+          - digital
+          - pwm
+          - uart
+        signals:
+          uart: TX
+        buses:
+          uart: 0
+        castellated: true
+        shape: castellated
+        x: 0.9219723869772518
+        y: 0.9030669074165911
+mountingHoles:
+  - x: 0.919478460290707
+    y: 0.05747644099648589
+    diameter: 1
+  - x: 0.06754393256205325
+    y: 0.963866637575957
+    diameter: 1
+  - x: 0.9224658648725736
+    y: 0.9621239849032014
+    diameter: 1
+  - x: 0.07206051574456813
+    y: 0.054602873114143045
+    diameter: 1
+onboardLeds:
+  - kind: single
+    x: 0.17098079557005874
+    y: 0.052397240963022146
+    z: 0
+    label: LED_Builtin
+    gpio: 48
+    color: "#e99d1c"
+  - kind: single
+    x: 0.8404210006718591
+    y: 0.05078656208307335
+    z: 1
+    label: Power
+  - kind: rgb
+    x: 0.7258217165432974
+    y: 0.26460729847716885
+    z: 2
+    rgb:
+      r: 46
+      g: 0
+      b: 45
+image: image.jpg
+imageLayer:
+  x: 0.014914905323701766
+  y: 0.0013840588261876396
+  w: 0.9867877960205077
+  h: 0.9846070495099651
+rear:
+  image: rear.png
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

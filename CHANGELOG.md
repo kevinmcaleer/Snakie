@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Arduino Nano ESP32** joins the Standard library — 30 pins, with a photo of both
+  faces, so it flips in the catalogue and in the Part Editor.
+- **Pimoroni Tiny 2350** gains its Qw/ST connector, so it can be cabled up like the
+  other QWIIC boards rather than needing pin-by-pin wires.
+
+
 - **A white breadboard background** (Settings → Appearance). A plain white sheet
   with no grid and no paper texture — for printing and screenshots. The ink flips
   with it: ground wires, part titles and net tags go dark, because the breadboard

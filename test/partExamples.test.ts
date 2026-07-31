@@ -96,7 +96,12 @@ describe('standard parts library (snakie-standard)', () => {
   it('the Tiny 2350 ships a life-like background photo', () => {
     const part = partFromYaml(read('snakie-standard', 'tiny2350', 'parts.yml'))
     expect(part.image).toBeTruthy() // build-part-from-image skill embeds a top-down photo
-    expect(part.version).toBe('0.1.3') // bumped on each regeneration (version capability)
+    // A PARSEABLE version, not a pinned one. The exact number changes every time
+    // the part is legitimately edited, and asserting it only ever produced a
+    // mechanical test update — while the thing worth guarding is that the part
+    // declares a version at all, since that is what the seeder compares to decide
+    // whether an install is behind (#643).
+    expect(part.version).toMatch(/^\d+\.\d+\.\d+$/)
   })
 
   // Sweep EVERY part in the library, not just the named ones above — a new part
