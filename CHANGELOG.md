@@ -7,6 +7,21 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Shareable tutorial links (#483).** The address bar now tracks where you are in
+  a course — `#/learn/robotics/3` — so a link restores the same entry point, and
+  back/forward move between lessons. Unknown ids are ignored rather than shown as
+  an error, leaving the gallery usable.
+- **A lesson can declare the workspace it is about (#483).** `view: robot` on a
+  lesson switches to Build when it opens, so the URDF course lands in the 3-D view
+  and the board-view lesson lands in Electronics instead of leaving the reader to
+  find what the words describe. Absent ⇒ stay put.
+
+
+- **A lesson no longer overwrites your work (#483).** Revisiting a lesson dropped
+  its starter code straight over whatever you had written, and opened another copy
+  of the buffer every time. It now reuses the lesson's own buffer, and asks before
+  replacing changes you made — once per lesson, since re-prompting on every visit
+  just trains people to click through dialogs.
 - **The servo-arm demo is now the same robot in all three workspaces.** It shipped
   with `parts: []` and `connections: []` — it bound pins to joints but placed no
   board, servos or wires, so Electronics was empty and nothing suggested the views

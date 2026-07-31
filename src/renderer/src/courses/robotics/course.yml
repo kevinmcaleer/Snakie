@@ -11,6 +11,7 @@ lessons:
     tip: "Connect the **Simulated device (offline)** — no real hardware needed."
   - title: See your board
     file: 02-board-view.md
+    view: board
     code: |
       from machine import Pin
       led = Pin(15, Pin.OUT)

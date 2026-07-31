@@ -9,13 +9,21 @@
  *   - a course, splash  → the intro SPLASH card
  *   - a course, lesson  → the LESSON walkthrough (Markdown + prev/next/dots/tip)
  *
- * Opening a lesson seeds its starter `code` into a fresh editor buffer so the
- * learner can press Run right away. The lesson's own leading Markdown heading is
- * the title — we don't repeat it as a separate header.
+ * Opening a lesson seeds its starter `code` so the learner can press Run right
+ * away — but never over work they have changed (see `seedAction`), and into the
+ * SAME buffer each time rather than a fresh one per visit. A lesson may also
+ * declare the `view` it is about, and opening it switches workspace, so a lesson
+ * on wiring lands in Electronics instead of leaving the reader to find it.
+ *
+ * The lesson's own leading Markdown heading is the title — we don't repeat it as
+ * a separate header.
  */
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTutorials } from '../store/tutorials'
 import { useWorkspace } from '../store/workspace'
+import { useWorkspaceLayout } from '../store/layout'
+import { lessonFileName, seedAction } from '../lib/lesson-seed'
+import { formatCourseLink, parseCourseLink, resolveLessonIndex } from '../lib/course-link'
 import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
 import type { Course, CourseTrack } from '../lib/courses'
@@ -30,12 +38,83 @@ const TRACK_LABEL: Record<CourseTrack, string> = {
 
 export function TutorialPanel(): JSX.Element {
   const { courses, course, lessonIndex, openCourse, start, next, prev, goto, close } = useTutorials()
-  const { openBuffer } = useWorkspace()
+  const { openBuffer, openFiles, setActive, updateContent } = useWorkspace()
+  const { switchWorkspace } = useWorkspaceLayout()
   const [tipOpen, setTipOpen] = useState(false)
   // Seed the editor once per (course, lesson) — not on every re-render.
   const seeded = useRef<string>('')
+  // Lessons whose overwrite prompt the user has already answered, so revisiting
+  // one doesn't ask again. Per lesson: approving a reset on one must never
+  // silently reset another.
+  const asked = useRef<Set<string>>(new Set())
 
   const lesson = course && lessonIndex >= 0 ? course.lessons[lessonIndex] : null
+
+  // Keep the URL in step with where the user is, so the address bar is always a
+  // shareable entry point (#483). `replaceState` — a lesson step is not a
+  // navigation, and filling the back button with them would trap the user.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.history?.replaceState) return
+    const hash = course ? formatCourseLink(course.id, lessonIndex >= 0 ? lessonIndex : null) : ''
+    if (!hash && !window.location.hash.startsWith('#/learn/')) return
+    if (window.location.hash === hash) return
+    window.history.replaceState(null, '', hash || window.location.pathname + window.location.search)
+  }, [course, lessonIndex])
+
+  // Restore a course from the URL on load, and follow back/forward. Unknown ids
+  // are IGNORED rather than surfaced as an error: a stale link should leave the
+  // gallery usable, which is the issue's "failure paths leave the editor usable".
+  useEffect(() => {
+    const apply = (): void => {
+      const link = parseCourseLink(window.location.hash)
+      if (!link) return
+      const found = courses.find((c) => c.id === link.courseId)
+      if (!found) return
+      openCourse(found)
+      const idx = resolveLessonIndex(link, found.lessons.length)
+      if (idx !== null) goto(idx)
+    }
+    apply()
+    window.addEventListener('hashchange', apply)
+    return () => window.removeEventListener('hashchange', apply)
+    // Courses are loaded once; re-running on every store identity change would
+    // yank the user back to the URL's lesson after they clicked Next.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courses])
+
+  /** Place a lesson's starter code without trampling the learner's own edits. */
+  const seedLesson = useCallback((): void => {
+    if (!course || !lesson?.code) return
+    const name = lessonFileName(course.id, lessonIndex)
+    const open = openFiles.find((f) => f.name === name)
+    const key = `${course.id}#${lessonIndex}`
+    const action = seedAction({
+      starter: lesson.code,
+      existing: open ? open.content : null,
+      asked: asked.current.has(key)
+    })
+    if (action === 'keep') {
+      if (open) setActive(open.id) // still bring their work to the front
+      return
+    }
+    if (action === 'confirm') {
+      asked.current.add(key)
+      const ok = window.confirm(
+        `"${name}" has changes you made.\n\nReplace it with this lesson's starter code?`
+      )
+      if (!ok) {
+        if (open) setActive(open.id)
+        return
+      }
+    }
+    // Reuse the lesson's own buffer rather than opening another copy each visit.
+    if (open) {
+      updateContent(open.id, lesson.code)
+      setActive(open.id)
+    } else {
+      openBuffer(name, lesson.code)
+    }
+  }, [course, lesson, lessonIndex, openFiles, openBuffer, setActive, updateContent])
 
   useEffect(() => {
     setTipOpen(false)
@@ -43,10 +122,10 @@ export function TutorialPanel(): JSX.Element {
     const key = `${course.id}#${lessonIndex}`
     if (seeded.current === key) return
     seeded.current = key
-    if (lesson.code) {
-      openBuffer(`${course.id}-${String(lessonIndex + 1).padStart(2, '0')}.py`, lesson.code)
-    }
-  }, [course, lesson, lessonIndex, openBuffer])
+    seedLesson()
+    // The workspace the lesson is ABOUT. Absent ⇒ stay put.
+    if (lesson.view) switchWorkspace(lesson.view)
+  }, [course, lesson, lessonIndex, seedLesson, switchWorkspace])
 
   // ── Gallery: pick a course ────────────────────────────────────────────────
   if (!course) {

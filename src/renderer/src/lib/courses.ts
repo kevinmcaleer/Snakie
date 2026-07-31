@@ -12,6 +12,7 @@
  * image assets need authoring.
  */
 import { parse } from 'yaml'
+import type { WorkspaceId } from '../store/layout'
 
 export interface Lesson {
   title: string
@@ -21,6 +22,15 @@ export interface Lesson {
   code?: string
   /** Optional tip shown behind the lightbulb (Markdown). */
   tip?: string
+  /**
+   * The workspace this lesson is about (#483). A lesson on wiring belongs in
+   * Electronics and one on URDF joints in Build; opening either in the code
+   * editor leaves the reader to find the view the words are describing.
+   *
+   * Absent ⇒ don't switch. Staying put is the safe default: a lesson that says
+   * nothing about where it lives has no business moving the user.
+   */
+  view?: WorkspaceId
 }
 
 export type CourseTrack = 'beginner' | 'robotics' | 'urdf'
@@ -40,6 +50,7 @@ interface RawLesson {
   file: string
   code?: string
   tip?: string
+  view?: string
 }
 interface RawCourse {
   title: string
@@ -61,6 +72,31 @@ const lessonMd = import.meta.glob('../courses/*/*.md', {
   import: 'default',
   eager: true
 }) as Record<string, string>
+
+/**
+ * A lesson's declared workspace, or `undefined` when absent/unknown.
+ *
+ * Course YAML is authored by hand, so a typo (`board-view`, `Electronics`) must
+ * degrade to "don't switch" rather than throwing the whole course away. The
+ * friendly aliases are accepted because the UI calls these workspaces
+ * Code / Electronics / Build while the layout ids are `code`/`board`/`robot`.
+ */
+export function coerceView(raw: unknown): WorkspaceId | undefined {
+  const v = String(raw ?? '').trim().toLowerCase()
+  if (!v) return undefined
+  const alias: Record<string, WorkspaceId> = {
+    code: 'code',
+    editor: 'code',
+    board: 'board',
+    electronics: 'board',
+    breadboard: 'board',
+    robot: 'robot',
+    build: 'robot',
+    urdf: 'robot',
+    '3d': 'robot'
+  }
+  return alias[v]
+}
 
 /** `../courses/<id>/course.yml` → `<id>`. */
 const idOf = (path: string): string => path.replace(/.*\/courses\/([^/]+)\/.*/, '$1')
@@ -85,7 +121,7 @@ export function loadCourses(): Course[] {
       .map((l): Lesson | null => {
         const body = lessonMd[`${dir}/${l.file}`]
         if (body == null) return null
-        return { title: l.title, body, code: l.code, tip: l.tip }
+        return { title: l.title, body, code: l.code, tip: l.tip, view: coerceView(l.view) }
       })
       .filter((l): l is Lesson => l !== null)
     if (!lessons.length) continue
