@@ -721,6 +721,39 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
                               >
                                 <span className="pl__part-name">{part.name}</span>
                               </button>
+                              {/* Which parts the ↻ / ⇧ Publish buttons above actually ACT on.
+                                  Both were library-wide, so a maintainer could see that
+                                  something was behind or unpublished without being told
+                                  which. `bundledStatus` already knows per part (#643). */}
+                              {(() => {
+                                const st =
+                                  lib.id === STANDARD_LIBRARY_ID ? bundled[part.id] : undefined
+                                if (!st) return null
+                                return (
+                                  <>
+                                    {st.behind && (
+                                      <span
+                                        className="pl__part-mark pl__part-mark--behind"
+                                        title={`Behind the bundled version — yours is ${st.localVersion ?? 'unversioned'}, the app ships ${st.bundledVersion}. Reset it from the part's detail.`}
+                                        aria-label={`${part.name} is behind the bundled version`}
+                                      >
+                                        ↻
+                                      </span>
+                                    )}
+                                    {/* DEV-only: "differs from what ships" is a publishing
+                                        concern, and ⇧ Publish is developer-only too. */}
+                                    {import.meta.env.DEV && st.edited && !st.behind && (
+                                      <span
+                                        className="pl__part-mark pl__part-mark--unpublished"
+                                        title={`Edited since it was seeded (v${st.localVersion ?? '?'}) — not yet in the bundled library. Publish to ship it.`}
+                                        aria-label={`${part.name} has unpublished changes`}
+                                      >
+                                        ●
+                                      </span>
+                                    )}
+                                  </>
+                                )
+                              })()}
                               {/* Part-level update hint (#155): the registry tracks versions per
                                   library, so when a part's library has an update we flag the part
                                   too — updating pulls the newest version of this part. */}

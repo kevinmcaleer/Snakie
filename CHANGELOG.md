@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Per-part status marks in the Parts list.** The library header's **↻ N behind**
+  and **⇧ Publish** told you something needed attention without saying WHICH part.
+  Each part now carries its own mark: **↻** when it is behind the bundled version,
+  and (in dev) a green **●** when it has been edited since seeding and so differs
+  from what ships. Hovering either explains it, with both version numbers.
+
+
 - **Arduino Nano ESP32** joins the Standard library — 30 pins, with a photo of both
   faces, so it flips in the catalogue and in the Part Editor.
 - **Pimoroni Tiny 2350** gains its Qw/ST connector, so it can be cabled up like the

@@ -832,3 +832,24 @@
     }
   }
 }
+
+/* Per-part status marks (#643 follow-up): which parts the library-wide ↻ and
+   ⇧ Publish buttons actually act on. */
+.pl__part-mark {
+  flex: 0 0 auto;
+  font-size: 0.66rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: help;
+}
+
+/* Behind the bundled version — the same amber as the library's "N behind". */
+.pl__part-mark--behind {
+  color: var(--accent);
+}
+
+/* Edited since seeding, so it differs from what ships. Green = "yours is ahead",
+   matching the "your library" accent rather than the warning amber. */
+.pl__part-mark--unpublished {
+  color: var(--green, #46e06a);
+}
