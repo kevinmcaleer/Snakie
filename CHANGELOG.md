@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Hover a catalogue part to see its back.** In the full-screen parts catalogue, a
+  part with a rear photo does the same coin spin as the Part Editor's flip button
+  when you hover it, and turns back when you leave. Only parts that have a picture
+  of the back flip — a rear face with no photo would spin to a blank board and read
+  as a broken image — and a small FRONT/BACK badge says which side you are looking
+  at. Touch is excluded (a tap would flip it and tick the checkbox, with no way
+  back), and `prefers-reduced-motion` fades instead of spinning.
+
+
 - **"Open demo project" in Learn (#483).** One click installs the servo arm into a
   folder you pick and lands you in **Electronics** — the circuit, the 3-D model and
   `sweep.py` are one project, which is the thing the 3-D demo alone could never

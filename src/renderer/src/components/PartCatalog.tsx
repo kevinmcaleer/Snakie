@@ -1,6 +1,8 @@
-import { useMemo, useState, useEffect, type JSX } from 'react'
+import { useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
 import { groupByCategory } from './part-categories'
-import type { PartDefinition } from '../../../shared/part'
+import { useCoinFlip } from '../hooks/useCoinFlip'
+import { partHasRearImage } from '../../../shared/part'
+import type { PartDefinition, PartSide } from '../../../shared/part'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
 import './PartCatalog.css'
 
@@ -183,17 +185,33 @@ function CatalogCard({
 }): JSX.Element {
   const { part } = item
   const sku = part.partNumber || part.id
+  // Hover turns the board over — but only when there is a back to SEE. A part
+  // with rear pins and no rear photo would spin to a blank face, which reads as
+  // the image failing to load.
+  const rearImage = partHasRearImage(part) ? part.rear?.imageData : undefined
+  const { face, flipping, flipTo } = useCoinFlip()
+  const shown = face === 'rear' ? (rearImage ?? part.imageData) : part.imageData
+  // Touch has no hover: a tap would flip the board AND tick the checkbox, and
+  // nothing would ever flip it back.
+  const hover = (next: PartSide) => (e: ReactPointerEvent) => {
+    if (!rearImage || e.pointerType === 'touch') return
+    flipTo(next)
+  }
   return (
-    <label className={`pcat__card${checked ? ' is-checked' : ''}`}>
+    <label
+      className={`pcat__card${checked ? ' is-checked' : ''}`}
+      onPointerEnter={hover('rear')}
+      onPointerLeave={hover('front')}
+    >
       <input type="checkbox" className="pcat__card-input" checked={checked} onChange={onToggle} />
       <span className="pcat__check" aria-hidden="true">
         <svg viewBox="0 0 24 24" className="pcat__check-tick" focusable="false">
           <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
-      <div className="pcat__card-img">
-        {part.imageData ? (
-          <img src={part.imageData} alt="" draggable={false} />
+      <div className={`pcat__card-img${flipping ? ' is-flipping' : ''}`}>
+        {shown ? (
+          <img src={shown} alt="" draggable={false} />
         ) : (
           <span className="pcat__card-noimg" style={{ background: part.pcbColor || '#2f6b4e' }} aria-hidden="true">
             {(part.name || '?').slice(0, 2).toUpperCase()}
@@ -207,6 +225,11 @@ function CatalogCard({
         </div>
         {part.description && <div className="pcat__card-desc">{part.description}</div>}
       </div>
+      {rearImage && (
+        <span className="pcat__card-face" aria-hidden="true">
+          {face === 'rear' ? 'BACK' : 'FRONT'}
+        </span>
+      )}
     </label>
   )
 }

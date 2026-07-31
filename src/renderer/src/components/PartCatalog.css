@@ -325,3 +325,56 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+
+/* --- Hover flip (#636) ---------------------------------------------------- */
+/* A part with a rear PHOTO turns over on hover and back off it, using the same
+   coin spin as the Part Editor's flip button so the gesture reads as one thing.
+   The face swaps at the halfway point, while the board is edge-on. */
+.pcat__card-img.is-flipping {
+  animation: pcat-flip 420ms ease-in-out;
+  transform-origin: center center;
+}
+
+@keyframes pcat-flip {
+  0% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1400px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1400px) rotateY(0deg);
+  }
+}
+
+/* Which face you are looking at — otherwise a board whose two sides look alike
+   leaves you unsure whether the hover did anything. */
+.pcat__card-face {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 0.05rem 0.3rem;
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  letter-spacing: 0.06em;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the face CHANGE — that is the information — and drop the spin. */
+  .pcat__card-img.is-flipping {
+    animation: pcat-flip-fade 420ms ease-in-out;
+  }
+  @keyframes pcat-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}

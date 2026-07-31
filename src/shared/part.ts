@@ -743,6 +743,19 @@ export function itemSide(item: PartItemFlags): PartSide {
  * item placed on the rear. Drives the flip control: hidden in the Parts Library
  * for a single-sided part, always available while authoring one.
  */
+/**
+ * Is there a rear PHOTO to show — as opposed to merely a rear face?
+ *
+ * Distinct from {@link partHasRear} on purpose. That is true for a board with
+ * rear pins and no picture, which is right for offering a flip in the EDITOR
+ * (you have to get to the back to author it) and wrong for the catalogue's
+ * hover-flip, where turning the board over would reveal a blank face and read as
+ * the image failing to load.
+ */
+export function partHasRearImage(part: PartDefinition): boolean {
+  return !!(part.rear?.imageData || part.rear?.image)
+}
+
 export function partHasRear(part: PartDefinition): boolean {
   if (part.rear?.image || part.rear?.imageData) return true
   const onRear = (xs: PartItemFlags[] | undefined): boolean => (xs ?? []).some((x) => x.side === 'rear')

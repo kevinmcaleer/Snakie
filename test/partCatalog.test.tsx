@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { PartCatalog } from '../src/renderer/src/components/PartCatalog'
+import { partHasRear, partHasRearImage } from '../src/shared/part'
 import type { PartLibraryWithParts } from '../src/preload/index.d'
 
 /** The full-screen parts catalog (#613) rendered to static HTML — structure only
@@ -51,5 +52,60 @@ describe('PartCatalog (#613)', () => {
     expect(out).toContain('pcat__card')
     expect(out).toContain('type="checkbox"')
     expect(out).toContain('pcat__check') // the stylised box
+  })
+})
+
+describe('hover flip (#636)', () => {
+  const withRear: PartLibraryWithParts[] = [
+    {
+      id: 'snakie-standard',
+      name: 'Standard',
+      parts: [
+        {
+          id: 'two-sided',
+          name: 'Two Sided',
+          headers: [],
+          imageData: 'data:image/png;base64,FRONT',
+          rear: { imageData: 'data:image/png;base64,BACK' }
+        },
+        {
+          id: 'front-only',
+          name: 'Front Only',
+          headers: [],
+          imageData: 'data:image/png;base64,FRONT'
+        }
+      ] as unknown as PartLibraryWithParts['parts']
+    }
+  ]
+
+  it('shows the FRONT face at rest', () => {
+    const out = html(<PartCatalog libraries={withRear} onClose={() => {}} onAdd={() => {}} />)
+    expect(out).toContain('base64,FRONT')
+    expect(out, 'the back is only revealed on hover').not.toContain('base64,BACK')
+  })
+
+  it('marks which face is showing, but only for a part that HAS a back', () => {
+    // Without the badge, a board whose sides look alike leaves you unsure the
+    // hover did anything.
+    const out = html(<PartCatalog libraries={withRear} onClose={() => {}} onAdd={() => {}} />)
+    expect(out).toContain('pcat__card-face')
+    expect((out.match(/pcat__card-face/g) ?? []).length, 'one badge, not two').toBe(1)
+  })
+})
+
+describe('partHasRearImage', () => {
+  it('is true only when there is a picture of the back', () => {
+    // A rear FACE is not a rear PHOTO: flipping to a blank back reads as a
+    // broken image, so the catalogue gates on the picture.
+    expect(partHasRearImage({ rear: { imageData: 'x' } } as never)).toBe(true)
+    expect(partHasRearImage({ rear: { image: 'rear.png' } } as never)).toBe(true)
+    expect(partHasRearImage({ rear: {} } as never)).toBe(false)
+    expect(partHasRearImage({} as never)).toBe(false)
+  })
+
+  it('differs from partHasRear, which counts rear PINS', () => {
+    const pinsOnly = { headers: [{ pins: [{ side: 'rear' }] }] } as never
+    expect(partHasRear(pinsOnly)).toBe(true)
+    expect(partHasRearImage(pinsOnly)).toBe(false)
   })
 })
