@@ -1,9 +1,59 @@
 name: Servo Arm
-parts: []
-connections: []
+description: A two-joint arm — the same robot in all three workspaces. The servos wired here drive the joints in the 3-D view, and sweep.py moves them.
+board: pico
+boardX: 120
+boardY: 200
+parts:
+  - id: shoulder
+    lib: snakie-standard
+    part: sg90
+    label: Shoulder servo
+    x: 520
+    y: 90
+  - id: elbow
+    lib: snakie-standard
+    part: sg90
+    label: Elbow servo
+    x: 520
+    y: 330
+connections:
+  # Signal: each servo's control wire to the GPIO named in servoJointMap below.
+  - id: shoulder.Signal#0__board.GP0#0
+    from: shoulder.Signal#0
+    to: board.GP0#0
+    net: signal
+    color: "#4ea1ff"
+  - id: elbow.Signal#0__board.GP1#1
+    from: elbow.Signal#0
+    to: board.GP1#1
+    net: signal
+    color: "#46e06a"
+  # Power: SG90s run from VBUS (5 V), not 3V3 — a servo under load browns out a
+  # 3.3 V rail. On real hardware give them their own supply once there are more
+  # than a couple.
+  - id: shoulder.VCC#1__board.VBUS#20
+    from: shoulder.VCC#1
+    to: board.VBUS#20
+    net: vcc
+  - id: elbow.VCC#1__board.VBUS#20
+    from: elbow.VCC#1
+    to: board.VBUS#20
+    net: vcc
+  # Ground: a shared return, or the servo has no reference for its signal.
+  - id: shoulder.GND#2__board.GND#2
+    from: shoulder.GND#2
+    to: board.GND#2
+    net: gnd
+  - id: elbow.GND#2__board.GND#7
+    from: elbow.GND#2
+    to: board.GND#7
+    net: gnd
 robot:
   version: 1
   urdf: arm.urdf
+  # Pin ↔ joint: GP0 drives the shoulder, GP1 the elbow — the same pins the servos
+  # are wired to above. This is the spine tying the wiring to the 3-D model: move a
+  # servo here and the joint moves there.
   servoJointMap:
     - pin: "0"
       joint: shoulder

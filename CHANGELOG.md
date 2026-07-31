@@ -6,6 +6,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **The servo-arm demo is now the same robot in all three workspaces.** It shipped
+  with `parts: []` and `connections: []` — it bound pins to joints but placed no
+  board, servos or wires, so Electronics was empty and nothing suggested the views
+  were connected. It now wires a Pico to two SG90s on GP0/GP1 (the exact pins its
+  `servoJointMap` drives), shares a ground, and powers the servos from VBUS. The
+  project also ships in packaged builds, which it previously did not.
+
 ## [0.40.0] - 2026-07-31
 
 ### Added

@@ -56,6 +56,17 @@ extraResources:
       - '**/*.png'
       - '**/*.jpg'
       - '**/*.svg'
+  # Ship the servo-arm DEMO PROJECT — the one artefact that is the same robot in
+  # all three workspaces (wiring in Electronics, the arm in Robot, sweep.py in
+  # Code). It is how a new user discovers the three are connected at all, so it
+  # has to exist in a packaged build and not just in the repo.
+  - from: examples/servo-arm
+    to: examples/servo-arm
+    filter:
+      - '**/*.yml'
+      - '**/*.urdf'
+      - '**/*.py'
+      - '**/*.stl'
 
 # Rebuild native modules (e.g. serialport) for the Electron ABI.
 # npmRebuild defaults to true; nodeGypRebuild stays false so install-app-deps
