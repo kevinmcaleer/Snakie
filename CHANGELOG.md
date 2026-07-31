@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-08-01
+
 ### Added
 - **Per-part status marks in the Parts list.** The library header's **↻ N behind**
   and **⇧ Publish** told you something needed attention without saying WHICH part.
@@ -3567,7 +3569,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...HEAD
+[0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...v0.39.0
 [0.38.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.37.0...v0.38.0
