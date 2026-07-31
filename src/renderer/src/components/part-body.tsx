@@ -1406,13 +1406,20 @@ export function PartBody({
           const lo = rp.pin.labelOffset
           const labelShift = lo ? `translate(${lo.x * box.w} ${lo.y * box.h})` : undefined
           const labelGroupTf = [densityTf, labelShift].filter(Boolean).join(' ') || undefined
-          // The "variable" text drawn after the number+name: the code variable when
-          // one is set, else the GP<gpio> on HOVER (so hovering an MCU shows its GPIO
-          // numbers between the name and the capability badges).
+          // The text drawn between the pin name and the capability badges: the
+          // GP<gpio> while hovering, and the code variable when one is set — BOTH,
+          // in that order.
+          //
+          // They used to share the slot with a `??`, so a pin your code used lost
+          // its GPIO number exactly when you hovered to look it up — the variable
+          // displaced the very thing you were hovering to read.
+          //
+          // `capabilityChips` is given the same string, so a longer one pushes the
+          // badges outward instead of colliding with them.
           const isHovered = capsPins === 'all' || !!capsPins?.has(i)
-          const pinVar =
-            pinVariables?.get(i)?.variable ??
-            (isHovered && rp.pin.gpio != null ? `GP${rp.pin.gpio}` : undefined)
+          const gpioText = isHovered && rp.pin.gpio != null ? `GP${rp.pin.gpio}` : undefined
+          const varText = pinVariables?.get(i)?.variable
+          const pinVar = [gpioText, varText].filter(Boolean).join('  ') || undefined
           return (
             <g key={`p${i}`}>
               {/* Mask the pad (not its label) so the through-hole shows the real

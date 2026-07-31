@@ -239,9 +239,10 @@ describe('full-pinout props (the mini board’s pin-labels toggle)', () => {
     expect(summary).not.toContain('I2C1 SDA')
   })
 
-  it('keeps a used pin’s code variable in preference to its GP number', () => {
-    // A pin the program uses keeps showing `i2c`/`sda` etc. — the toggle must not
-    // replace the thing the mini board exists to show.
+  it('shows a used pin’s GP number AND its code variable, not one or the other', () => {
+    // They shared a slot, so a pin your code used lost its GP number exactly when
+    // you hovered to look it up — the variable displaced the thing you were
+    // hovering to read. Both now show, GP first, before the capability badges.
     const html = renderToStaticMarkup(
       createElement(PartBody, {
         part: MCU,
