@@ -206,6 +206,32 @@
   max-height: min(65vh, 460px);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Reserve the gutter so the list does not reflow when the bar appears. */
+  scrollbar-gutter: stable;
+}
+
+/* macOS hides overlay scrollbars until you actually scroll, so a capped list of
+   20-odd boards reads as the WHOLE list rather than a truncated one — you cannot
+   discover a scrollbar you have to scroll to reveal. Force a visible bar on this
+   menu specifically: it is the one place where not knowing there is more costs
+   you the board you were looking for. Themed off the shared tokens, so it reads
+   in both skins. */
+.boardgraph__picker-menu::-webkit-scrollbar {
+  width: 10px;
+}
+.boardgraph__picker-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.boardgraph__picker-menu::-webkit-scrollbar-thumb {
+  background: var(--shellbd, #3a3d44);
+  border-radius: 6px;
+  /* Inset from the track so the thumb reads as a pill, not a full-width slab. */
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+.boardgraph__picker-menu::-webkit-scrollbar-thumb:hover {
+  background: var(--txt4, #6b7280);
+  background-clip: content-box;
 }
 
 .boardgraph__picker-item {

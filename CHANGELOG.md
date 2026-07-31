@@ -6,6 +6,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **The board picker shows its scrollbar.** macOS hides overlay scrollbars until
+  you scroll, so a capped list of twenty-odd boards read as the whole list rather
+  than a truncated one — you cannot discover a scrollbar you have to scroll to
+  reveal. The menu now keeps a visible bar and a stable gutter.
+
 ## [0.41.0] - 2026-08-01
 
 ### Added
