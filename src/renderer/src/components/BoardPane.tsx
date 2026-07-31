@@ -11,7 +11,6 @@ import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
 import { useEditorSettings } from '../store/settings'
 import type {
-  BoardDefinition,
   PartDefinition,
   PartLibrary,
   PartLibraryWithParts
@@ -44,7 +43,6 @@ import type {
 // board view paints the real board + placed parts on the FIRST render instead of
 // flashing built-in defaults while the async library / board lists load (#615).
 let cachedLibraries: PartLibraryWithParts[] = []
-let cachedUserBoards: BoardDefinition[] = []
 
 export function BoardPane(): JSX.Element {
   const { openFiles, activeId, currentFolder } = useWorkspace()
@@ -66,20 +64,9 @@ export function BoardPane(): JSX.Element {
     )
   }, [breadboardBg])
 
-  // User-authored boards (Microcontroller-family parts saved to disk).
-  const [userBoards, setUserBoards] = useState<BoardDefinition[]>(() => cachedUserBoards)
-  const refreshUserBoards = useCallback((): void => {
-    window.api.board
-      .listUserBoards()
-      .then((b) => {
-        cachedUserBoards = b
-        setUserBoards(b)
-      })
-      .catch(() => setUserBoards([]))
-  }, [])
-  useEffect(() => {
-    refreshUserBoards()
-  }, [refreshUserBoards])
+  // User-authored boards are loaded by `useBoards` inside BoardGraph now — one
+  // loader, one set of refresh signals, so this pane and the code workspace's
+  // mini board view cannot list different boards.
 
   // Installed part libraries (wiring canvas + add-to-project); refresh on save.
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>(() => cachedLibraries)
@@ -300,7 +287,6 @@ export function BoardPane(): JSX.Element {
         source={source}
         fileName={fileName}
         isPython={isPython}
-        userBoards={userBoards}
         robot={robot}
         onChangeRobot={saveRobot}
         libraries={libraries}

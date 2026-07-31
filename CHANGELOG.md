@@ -158,6 +158,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **The Electronics MCU dropdown lists the same boards as the code workspace.** It
+  derived its list from props whose hosts refreshed on different signals — the
+  board pane read user boards once on mount and never again, and ignored the
+  cross-window "parts changed" broadcast — so a board authored in the Part Editor
+  appeared in the mini board view and was missing from the dropdown. Both now share
+  one loader, so the two lists cannot diverge.
+
 - **You can add a photo of a board's REAR face.** The back face shipped in #636
   with pins and a flip, but no working way to give it a picture: the upload wrote
   it, then the save dropped it, and the main process never wrote or re-read a rear

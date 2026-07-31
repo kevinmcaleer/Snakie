@@ -35,7 +35,6 @@ import { readRobotModel } from '../../shared/krf'
 import { attachPartMesh } from './components/robot-part-mesh'
 import { jointNames, jointDisplayLimits } from './components/robot-assembly'
 import type {
-  BoardDefinition,
   BoardSourcePayload,
   PartDefinition,
   PartLibrary,
@@ -71,7 +70,6 @@ function BoardWindowApp(): JSX.Element {
     isPython: false,
     theme: 'skeuomorph'
   })
-  const [userBoards, setUserBoards] = useState<BoardDefinition[]>([])
   // The live board VIEW (BoardGraph — which hosts the Life-like/Schematic wiring
   // views + the library dock). `editing` overlays the Part Editor on top of it —
   // boards are now authored in the Part Editor (a Microcontroller-family part), so
@@ -89,14 +87,6 @@ function BoardWindowApp(): JSX.Element {
   const [robot, setRobot] = useState<RobotDefinition>(() => blankRobot())
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const folder = payload.folder
-
-  // Re-read the user boards off disk (after a save/delete, or on Done).
-  const refreshUserBoards = useCallback((): void => {
-    window.api.board
-      .listUserBoards()
-      .then(setUserBoards)
-      .catch(() => setUserBoards([]))
-  }, [])
 
   // Apply the persisted theme + breadboard background immediately so the first
   // paint matches the app (before the streamed payload arrives).
@@ -119,11 +109,6 @@ function BoardWindowApp(): JSX.Element {
     }
     applyBreadboardBg(bg)
   }, [])
-
-  // Load user-authored boards once (read off disk by the main process).
-  useEffect(() => {
-    refreshUserBoards()
-  }, [refreshUserBoards])
 
   // Subscribe to the streamed active-file snapshot; apply its theme live.
   useEffect(() => {
@@ -338,7 +323,6 @@ function BoardWindowApp(): JSX.Element {
         source={payload.source}
         fileName={payload.fileName}
         isPython={payload.isPython}
-        userBoards={userBoards}
         asWindow
         robot={robot}
         onChangeRobot={saveRobot}

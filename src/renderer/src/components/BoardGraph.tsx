@@ -16,7 +16,8 @@ import {
   type BoardFeature,
   type BoardPadType
 } from './board-defs'
-import { boardPartFor, placedPartsNeedingDrivers, resolveBoards } from './part-editor.util'
+import { boardPartFor, placedPartsNeedingDrivers } from './part-editor.util'
+import { useBoards } from './use-boards'
 import { DriverInstallBanner } from './DriverInstallBanner'
 import { buildNetlist, remapConnectionsForBoard, type BoardRemap, type TerminalRole } from '../../../shared/netlist'
 import { runErc, ercSummary, smokeSites } from '../../../shared/erc'
@@ -108,7 +109,6 @@ export interface BoardGraphProps {
   /** Whether the active file is a Python file (gates the empty states). */
   isPython: boolean
   /** User-authored board definitions to merge with the built-ins (optional). */
-  userBoards?: BoardDefinition[]
   /** When true, render the window title-bar chrome (drag region + selector). */
   asWindow?: boolean
   // --- Wiring + Parts (merged into this view, #139/#140). When `robot` +
@@ -338,7 +338,6 @@ export function BoardGraph({
   source,
   fileName,
   isPython,
-  userBoards,
   asWindow = false,
   robot,
   onChangeRobot,
@@ -352,7 +351,12 @@ export function BoardGraph({
 }: BoardGraphProps): JSX.Element {
   // Boards are sourced from the installed parts libraries (microcontroller parts)
   // plus any Board-Creator boards; the built-ins are only a fresh-install fallback.
-  const boards = useMemo(() => resolveBoards(libraries ?? [], userBoards), [libraries, userBoards])
+  // ONE loader for the board list, shared with the code workspace's mini board
+  // view. It used to be derived from props, and the two hosts refreshed on
+  // different signals — this pane never re-read user boards after mount and
+  // ignored the cross-window `parts:didChange` — so authoring a board part left
+  // the MCU dropdown missing boards the mini view already listed.
+  const boards = useBoards()
 
   // The view representation (#139/#140): the node-graph (parsed pin usage), or
   // the Life-like / Schematic wiring canvas. Wiring is only available when the
