@@ -58,7 +58,10 @@ function applyTheme(theme: string): void {
 /** Set the breadboard background variant as a document attribute so WiringCanvas.css
  *  can repaint the canvas mat (`dark` default / `blueprint`). */
 function applyBreadboardBg(bg: string | undefined): void {
-  document.documentElement.setAttribute('data-breadboard-bg', bg === 'blueprint' ? 'blueprint' : 'dark')
+  // Keep in step with BoardPane's copy — the pop-out window applies this itself,
+  // so a new mat added in one place silently falls back to dark in the other.
+  const mat = bg === 'blueprint' || bg === 'white' ? bg : 'dark'
+  document.documentElement.setAttribute('data-breadboard-bg', mat)
 }
 
 function BoardWindowApp(): JSX.Element {

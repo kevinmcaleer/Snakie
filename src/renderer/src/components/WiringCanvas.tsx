@@ -2260,15 +2260,19 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     const over = hit && !(hit.key === from.key && hit.connIndex === from.connIndex) ? hit : null
     return { from, over, fit: over ? connectorFit(from.conn, over.conn) : null }
   })()
-  // The lifelike breadboard mat is always dark, so its wires/dots render light.
-  // The SCHEMATIC view, though, follows the skin: a white sheet in the light
-  // (skeuomorph) theme — where ground wires must render DARK — and the dark mat in
-  // the dark theme. (Theme changes reach the board window via a re-render, so a
-  // read at render time is current.)
+  // Is the surface we are drawing ON dark? It decides which way round the ink
+  // goes — most visibly, whether a ground wire is white or black.
+  //
+  // The SCHEMATIC view follows the skin: a white sheet in the light (skeuomorph)
+  // theme, the dark mat in the dark theme. The BREADBOARD used to be hardcoded
+  // dark, which was true until the mat became a choice — on the white mat a
+  // ground wire would be drawn white on white and simply disappear.
+  // (Attribute reads are current: both the theme and the mat reach this window
+  // as a re-render.)
   const isDark =
     renderMode === 'schematic'
       ? document.documentElement.getAttribute('data-theme') === 'dark'
-      : true
+      : document.documentElement.getAttribute('data-breadboard-bg') !== 'white'
 
   // Selected part + the screen position of its mini-toolbar (#176). Only placed
   // parts in the breadboard view are selectable/rotatable.

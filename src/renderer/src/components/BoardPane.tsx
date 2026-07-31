@@ -62,7 +62,7 @@ export function BoardPane(): JSX.Element {
   useEffect(() => {
     document.documentElement.setAttribute(
       'data-breadboard-bg',
-      breadboardBg === 'blueprint' ? 'blueprint' : 'dark'
+      breadboardBg === 'blueprint' || breadboardBg === 'white' ? breadboardBg : 'dark'
     )
   }, [breadboardBg])
 

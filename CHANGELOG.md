@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A white breadboard background** (Settings → Appearance). A plain white sheet
+  with no grid and no paper texture — for printing and screenshots. The ink flips
+  with it: ground wires, part titles and net tags go dark, because the breadboard
+  had until now been hardcoded as a dark surface and a ground wire would otherwise
+  have been drawn white on white.
+
+
 - **Hover a catalogue part to see its back.** In the full-screen parts catalogue, a
   part with a rear photo does the same coin spin as the Part Editor's flip button
   when you hover it, and turns back when you leave. Only parts that have a picture

@@ -96,6 +96,49 @@
   background-color: #0e4373;
 }
 
+/* WHITE breadboard background (Settings → Appearance): a plain sheet, for
+   printing and screenshots. Unlike blueprint this inverts the SURFACE, so the
+   ink has to go the other way — `isDark` in WiringCanvas.tsx turns off for this
+   mat, which is what keeps a ground wire black instead of white-on-white. */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__stage {
+  background-color: #ffffff;
+}
+/* No grid at all — a plain white sheet. The whole point of this mat is a clean
+   surface for printing and screenshots, and graph paper is the first thing you
+   would crop out. The grid layer is hidden rather than recoloured so it costs
+   nothing to draw. */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__grid-layer {
+  display: none;
+}
+/* No paper mottle — the point of this mat is a clean, flat sheet. */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__paper {
+  display: none;
+}
+/* The drop tint darkens the mat, which on white reads as the sheet going grey.
+   Tint toward the accent instead so the drop zone still reads. */
+:root[data-breadboard-bg='white'] .wc--lifelike.wc--drop .wc__stage {
+  background-color: #eef4ff;
+}
+
+/* Ink for the white mat. Everything below is light-on-dark by default, mirroring
+   the overrides the skeuomorph SCHEMATIC sheet already needed for exactly this
+   reason — a light surface flips which way round the contrast goes. */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__body-title {
+  fill: #1c2128;
+}
+/* The GND dot's fill is CSS (the wires are handled by `isDark` in JS). */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__dot--gnd {
+  fill: #2c333c;
+}
+/* The code label is dark text with a light halo here — its default is the
+   reverse, and a dark halo on a white sheet reads as a smudge. */
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__code-label {
+  stroke: #ffffff;
+}
+:root[data-breadboard-bg='white'] .wc--lifelike .wc__net-tag-txt {
+  fill: #1c2128;
+}
+
 /* SCHEMATIC view sheet — follows the skin, never the blueprint/dark breadboard
    mat. Dark theme keeps the existing dark mat (light-on-dark symbols); the light
    (skeuomorph) theme uses a white sheet, and the symbol overrides below flip the

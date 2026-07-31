@@ -31,7 +31,7 @@ export type EditorPaper = 'lines' | 'dots' | 'off'
 
 /** The Board View breadboard/canvas background: the default dark mat, or a
  *  classic blueprint (blue paper + light grid). */
-export type BreadboardBg = 'dark' | 'blueprint'
+export type BreadboardBg = 'dark' | 'blueprint' | 'white'
 
 export const MIN_LINE_SPACING = 22
 export const MAX_LINE_SPACING = 48

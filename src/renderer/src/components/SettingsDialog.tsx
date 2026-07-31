@@ -140,7 +140,8 @@ export function SettingsDialog({
 /** Board View breadboard background options (#…). */
 const BREADBOARD_BG_OPTIONS: { value: BreadboardBg; label: string; hint: string }[] = [
   { value: 'dark', label: 'Dark', hint: 'The default dark workbench mat' },
-  { value: 'blueprint', label: 'Blueprint', hint: 'A classic blue blueprint with a light grid' }
+  { value: 'blueprint', label: 'Blueprint', hint: 'A classic blue blueprint with a light grid' },
+  { value: 'white', label: 'White', hint: 'A plain white sheet — best for printing and screenshots' }
 ]
 
 /** The Appearance tab: the app-wide skin + the Board View breadboard background. */
