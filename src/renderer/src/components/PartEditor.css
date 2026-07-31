@@ -72,6 +72,35 @@
   color: var(--text-muted);
 }
 
+/* The single save target, when there is nothing to choose between (#633). */
+.pe__libsel-one {
+  color: var(--head, var(--text));
+  font-weight: 600;
+}
+
+/* Where the part lands on disk — click to reveal. Truncates from the LEFT so the
+   folder name stays visible when the path is long, which is the useful end. */
+.pe__libsel-path {
+  max-width: 22ch;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 0 0.2rem;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.pe__libsel-path:hover {
+  color: var(--accent);
+}
+
 .pe__bar-actions {
   margin-left: auto;
   display: flex;

@@ -8,6 +8,7 @@
  *
  *   parts:listLibraries  → installed libraries + their parts (image inlined)
  *   parts:openPartsFolder → reveal <userData>/parts in the OS file manager
+ *   parts:partsFolder     → the absolute path of <userData>/parts (shown in the editor)
  *   parts:savePart        → write a part's parts.yml + image asset
  *   parts:deletePart      → delete a part folder
  *   parts:createLibrary   → create an empty library (manifest)
@@ -75,6 +76,10 @@ export function registerPartsIpc(): void {
     await seedStandardLibrary()
     return readLibraries()
   })
+
+  // #633: the Part Editor shows WHERE a saved part lands, so "My Parts" is a
+  // place on disk rather than an abstraction.
+  ipcMain.handle('parts:partsFolder', () => partsDir())
 
   ipcMain.handle('parts:openPartsFolder', async () => {
     const dir = partsDir()

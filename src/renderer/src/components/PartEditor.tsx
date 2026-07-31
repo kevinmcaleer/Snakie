@@ -58,6 +58,7 @@ import {
   withShapesFromFeatures
   ,type HierItem,
   type LayerBucket,
+  saveTargets,
   type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
@@ -470,6 +471,22 @@ export function PartEditor({
     canRedo
   } = useHistory<PartDefinition>(initialSeedRef.current as PartDefinition)
   const [libId, setLibId] = useState<string>(libraryId)
+  // Where parts land on disk, so "My Parts" is a place rather than an abstraction
+  // (#633). Empty on the web, which has no filesystem — the hint is then hidden.
+  const [partsFolder, setPartsFolder] = useState('')
+  useEffect(() => {
+    window.api.parts
+      .partsFolder?.()
+      .then((p) => setPartsFolder(p ?? ''))
+      .catch(() => setPartsFolder(''))
+  }, [])
+  const targets = useMemo(
+    () => saveTargets(libraries, libId, import.meta.env.DEV),
+    [libraries, libId]
+  )
+  const saveHint = partsFolder
+    ? `Saved into ${partsFolder} — click the path to open it`
+    : 'The parts library this part is saved into'
   // A NEW part (incl. a pre-seeded starter) has no "opened" id, so the collision
   // guard treats its id as fresh and warns before overwriting an existing part.
   const [openedId, setOpenedId] = useState<string | null>(isNew ? null : (initial?.id ?? null))
@@ -1095,19 +1112,34 @@ export function PartEditor({
             Schematic
           </button>
         </div>
-        <label className="pe__libsel" title="The parts library this part is saved into">
+        {/* #633: the Standard library is a DEVELOPER save target — writing to it
+            edits the seeder-managed copy and strands the part on an old schema
+            (#643). With only one target there is nothing to choose, so show where
+            the file lands instead of a pointless dropdown. */}
+        <div className="pe__libsel" title={saveHint}>
           <span>Saved to</span>
-          <select value={libId} onChange={(e) => setLibId(e.target.value)}>
-            {!libraries.some((l) => l.id === 'my-parts') && (
-              <option value="my-parts">My Parts (your library)</option>
-            )}
-            {libraries.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.id === 'my-parts' ? `${l.name} (your library)` : l.name}
-              </option>
-            ))}
-          </select>
-        </label>
+          {targets.length > 1 ? (
+            <select value={libId} onChange={(e) => setLibId(e.target.value)} aria-label="Library to save into">
+              {targets.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <strong className="pe__libsel-one">{targets[0]?.name ?? 'My Parts'}</strong>
+          )}
+          {partsFolder && (
+            <button
+              type="button"
+              className="pe__libsel-path"
+              onClick={() => void window.api.parts.openPartsFolder?.()}
+              title={`Open ${partsFolder}`}
+            >
+              {partsFolder}
+            </button>
+          )}
+        </div>
         <div className="pe__bar-actions">
           <button type="button" className="pe__btn" onClick={newPart} title="Start a new blank part">
             New

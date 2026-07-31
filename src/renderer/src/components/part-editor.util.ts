@@ -2139,3 +2139,47 @@ export function withGroupName(part: PartDefinition, groupId: string, name: strin
       : [...groups, { id: groupId, name: clean || undefined }]
   }
 }
+
+/** The bundled Standard library's id (mirrors `STANDARD_LIBRARY_ID` in main). */
+export const STANDARD_LIB_ID = 'snakie-standard'
+/** The auto-created library a user's own parts are saved into. */
+export const LOCAL_LIB_ID = 'my-parts'
+
+/**
+ * The libraries offered as SAVE TARGETS in the Part Editor (#633).
+ *
+ * The bundled Standard library is a developer target, not a user one. Saving into
+ * it edits the copy the seeder manages, which strands that part on an old schema
+ * with no way back — the whole of #643. A regular user should be writing to their
+ * own library, so Standard is filtered out of the picker for them.
+ *
+ * The CURRENT target always survives the filter, even when it would otherwise be
+ * hidden: a select whose value isn't among its options renders blank, and an
+ * in-place edit of a bundled part (opened by a developer, or from an older
+ * session) must still show honestly where it is about to be written.
+ *
+ * `my-parts` is always offered, even before it exists on disk — the first save
+ * auto-provisions it.
+ */
+export function saveTargets(
+  libraries: { id: string; name: string }[],
+  currentLibId: string,
+  isDev: boolean
+): { id: string; name: string }[] {
+  const out: { id: string; name: string }[] = []
+  const seen = new Set<string>()
+  const add = (id: string, name: string): void => {
+    if (!id || seen.has(id)) return
+    seen.add(id)
+    out.push({ id, name })
+  }
+  const known = new Map(libraries.map((l) => [l.id, l.name]))
+  add(LOCAL_LIB_ID, known.get(LOCAL_LIB_ID) ?? 'My Parts')
+  for (const lib of libraries) {
+    if (lib.id === STANDARD_LIB_ID && !isDev) continue
+    add(lib.id, lib.name)
+  }
+  // Never let the picker misreport where a save is going.
+  add(currentLibId, known.get(currentLibId) ?? currentLibId)
+  return out
+}

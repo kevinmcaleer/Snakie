@@ -35,6 +35,7 @@ import {
   validatePart,
   withPinPositions,
   withShapesFromFeatures,
+  saveTargets,
   uniquePinName,
   usedPinNames
 } from '../src/renderer/src/components/part-editor.util'
@@ -1117,5 +1118,51 @@ describe('unique pin names (#647 — duplicating a connector)', () => {
     expect(copied).toEqual(['SCL2', 'SDA2', 'VCC2', 'GND2'])
     // Nothing in the copy shadows an original.
     expect(copied.some((n) => names.includes(n))).toBe(false)
+  })
+})
+
+describe('saveTargets (#633 — Standard is a developer target)', () => {
+  const libs = [
+    { id: 'my-parts', name: 'My Parts' },
+    { id: 'snakie-standard', name: 'Standard Parts' },
+    { id: 'community', name: 'Community Bits' }
+  ]
+
+  it('hides the Standard library from a regular user', () => {
+    // Saving into it edits the seeder-managed copy and strands the part on an old
+    // schema — the whole of #643.
+    const ids = saveTargets(libs, 'my-parts', false).map((l) => l.id)
+    expect(ids).not.toContain('snakie-standard')
+    expect(ids).toContain('my-parts')
+    expect(ids).toContain('community')
+  })
+
+  it('offers it to a developer', () => {
+    expect(saveTargets(libs, 'my-parts', true).map((l) => l.id)).toContain('snakie-standard')
+  })
+
+  it('keeps the CURRENT target even when it would be filtered out', () => {
+    // A select whose value is not among its options renders blank, and the picker
+    // must never misreport where a save is about to go.
+    const ids = saveTargets(libs, 'snakie-standard', false).map((l) => l.id)
+    expect(ids).toContain('snakie-standard')
+  })
+
+  it('offers My Parts before it exists on disk', () => {
+    // The first save auto-provisions it.
+    expect(saveTargets([], 'my-parts', false)).toEqual([{ id: 'my-parts', name: 'My Parts' }])
+  })
+
+  it('lists My Parts first', () => {
+    expect(saveTargets(libs, 'community', false)[0].id).toBe('my-parts')
+  })
+
+  it('never duplicates a library', () => {
+    const ids = saveTargets(libs, 'my-parts', true).map((l) => l.id)
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  it('falls back to the id when an unknown library is current', () => {
+    expect(saveTargets(libs, 'ghost', false).map((l) => l.id)).toContain('ghost')
   })
 })

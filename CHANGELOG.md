@@ -136,6 +136,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   doesn't drag its own duplicate around.
 
 ### Fixed
+- **The Part Editor no longer offers the Standard library as a save target (#633).**
+  Writing there edits the seeder-managed copy and strands the part on an old schema
+  (#643), so it is a developer target now. With one target left there is nothing to
+  choose, so the picker shows **where the file lands** instead — a click opens the
+  folder. (The web build's "window.api is unavailable" on save is a separate,
+  larger piece: the browser has no parts store yet.)
+
 - **Zoom to fit fills the screen.** Four things were each adding slack: the fit
   targeted the SVG's fixed 1180×720 viewBox, which `preserveAspectRatio="meet"`
   letterboxes inside the pane — so it filled the letterbox, not the screen, and no

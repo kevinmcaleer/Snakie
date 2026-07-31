@@ -928,6 +928,9 @@ const parts = {
     ipcRenderer.invoke('parts:listLibraries'),
   /** Reveal `<userData>/parts` in the OS file manager (creates it if missing). */
   openPartsFolder: (): Promise<void> => ipcRenderer.invoke('parts:openPartsFolder'),
+  /** The absolute path of `<userData>/parts` — shown in the Part Editor so a saved
+   *  part lands somewhere the user can actually find (#633). */
+  partsFolder: (): Promise<string> => ipcRenderer.invoke('parts:partsFolder'),
   /**
    * Persist a part to `<parts>/<libraryId>/<part.id>/parts.yml` (+ image asset).
    * Defaults to the auto-created local "my-parts" library when `libraryId` is

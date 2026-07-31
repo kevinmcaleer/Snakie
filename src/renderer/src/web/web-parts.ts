@@ -45,6 +45,8 @@ export function createWebPartsApi(): Record<string, unknown> {
     // (#643) and there is nothing a reset could restore.
     checkUpdates: async () => [],
     cachedUpdates: async () => [],
+    // No filesystem in the browser, so there is no folder to name or reveal.
+    partsFolder: async () => '',
     bundledStatus: async () => [],
     resetToBundled: async () => ({ ok: false, error: 'Parts are read-only on the web.' })
   }
