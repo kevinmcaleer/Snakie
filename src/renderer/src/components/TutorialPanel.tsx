@@ -26,6 +26,7 @@ import { lessonFileName, seedAction } from '../lib/lesson-seed'
 import { formatCourseLink, parseCourseLink, resolveLessonIndex } from '../lib/course-link'
 import { Markdown } from './Markdown'
 import { BuildChecklist } from './BuildChecklist'
+import { DemoProjectCard } from './DemoProjectCard'
 import type { Course, CourseTrack } from '../lib/courses'
 import { BulbIcon, CourseIcon } from './ui-icons'
 import './Tutorials.css'
@@ -137,6 +138,9 @@ export function TutorialPanel(): JSX.Element {
           <p className="tp__sub">Pick a project and follow along — each runs on the simulator, no hardware needed.</p>
         </div>
         <BuildChecklist />
+        {/* A working robot before any lesson: the fastest way to see that the
+            three workspaces are one project (#483). */}
+        <DemoProjectCard />
         {courses.length === 0 && <p className="tp__empty">No tutorials are bundled in this build yet.</p>}
         {tracks.map((t) => {
           const list = courses.filter((c) => c.track === t)

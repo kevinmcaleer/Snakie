@@ -332,3 +332,70 @@
   background: color-mix(in srgb, var(--accent) 22%, transparent);
   border-color: var(--accent);
 }
+
+/* --- Demo project card (#483) --------------------------------------------- */
+/* Sits above the course tracks: a working robot beats a lesson as a first move. */
+.tp__demo {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  border: var(--border-w) solid var(--accent);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.tp__demo-emoji {
+  font-size: 1.6rem;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+
+.tp__demo-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tp__demo-title {
+  margin: 0 0 0.15rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--head, var(--text));
+}
+
+.tp__demo-desc {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.tp__demo-error {
+  margin: 0.35rem 0 0;
+  font-size: 0.7rem;
+  color: var(--danger, #c0392b);
+}
+
+.tp__demo-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 0.34rem 0.7rem;
+  font-family: var(--font-ui), sans-serif;
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--goldink, #fff);
+  background: var(--grad-gold, #2f6b2a);
+  border: none;
+  border-radius: var(--radius);
+  box-shadow: inset 0 1px 0 var(--pillinset, rgba(255, 255, 255, 0.5));
+  cursor: pointer;
+}
+
+.tp__demo-btn:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+
+.tp__demo-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

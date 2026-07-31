@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **"Open demo project" in Learn (#483).** One click installs the servo arm into a
+  folder you pick and lands you in **Electronics** — the circuit, the 3-D model and
+  `sweep.py` are one project, which is the thing the 3-D demo alone could never
+  show. It refuses to write over an existing `servo-arm` folder rather than
+  merging into it.
+
+
 - **Shareable tutorial links (#483).** The address bar now tracks where you are in
   a course — `#/learn/robotics/3` — so a link restores the same entry point, and
   back/forward move between lessons. Unknown ids are ignored rather than shown as
