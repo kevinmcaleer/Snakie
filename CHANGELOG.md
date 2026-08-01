@@ -16,6 +16,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and a second with the nose pointed at the floor pins the rest down exactly.
 
 ### Fixed
+- **Deleting a driver from your board now offers it again.** Snakie decided a
+  driver was installed by importing it, and MicroPython remembers imported modules
+  for the rest of the session — so once anything had used a driver, deleting the
+  file left Snakie still believing it was there. Removing and re-adding the part
+  didn't help, because the part wasn't what was stale. It now asks the filesystem
+  rather than the board's memory.
 - **The I²C pin dropdowns match the board you actually have.** The bus/SDA/SCL
   lists were built from one hardcoded rule — the Pico family's, where SDA must be
   a multiple of 4 (or 2) and SCL the very next pin. On anything else that rule is

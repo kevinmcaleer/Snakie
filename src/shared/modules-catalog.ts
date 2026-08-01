@@ -363,12 +363,23 @@ export const MODULE_PRESENT = '<<SNAKIE_MOD_PRESENT>>'
  * installed: `__import__(<name>)` succeeds (prints {@link MODULE_PRESENT}) iff
  * the driver is importable on the board. Pure (string-only); never throws on the
  * device (the import is wrapped in try/except).
+ *
+ * **The name is evicted from `sys.modules` first (#703).** MicroPython caches
+ * imported modules, and deleting the file does NOT evict the cache — so once
+ * anything in the session has imported the driver, a bare `__import__` keeps
+ * answering PRESENT for a file that no longer exists. Verified on the real
+ * interpreter: delete the file and the probe still succeeds; pop the cache entry
+ * and it correctly fails. Popping is safe for a running program, because objects
+ * already bound to that module stay alive through their own references.
  */
 export function importProbeSnippet(importName: string): string {
   // importName is a catalog constant (a bare module name) so it never contains
   // quotes — but sanitise defensively all the same to a safe identifier.
   const name = importName.replace(/[^A-Za-z0-9_]/g, '')
   return [
+    'import sys',
+    // Ask the FILESYSTEM, not the cache.
+    `sys.modules.pop('${name}', None)`,
     'try:',
     `    __import__('${name}')`,
     `    print('${MODULE_PRESENT}')`,

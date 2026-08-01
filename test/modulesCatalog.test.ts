@@ -137,6 +137,31 @@ describe('importProbeSnippet', () => {
     expect(snippet).toContain("__import__('osimportevil')")
     expect(snippet).not.toContain("');")
   })
+
+  it('evicts the module cache before importing (#703)', () => {
+    // MicroPython caches imported modules, and deleting the FILE does not evict
+    // the cache — so once a session has imported a driver, a bare `__import__`
+    // reports PRESENT for a file that is gone. Verified against the real
+    // interpreter: delete + probe still succeeds; pop the entry and it fails.
+    // A user deleted /lib/lsm6ds3.py, re-added the part, and was never offered
+    // the install.
+    const snippet = importProbeSnippet('lsm6ds3')
+    expect(snippet).toContain("sys.modules.pop('lsm6ds3', None)")
+    expect(snippet).toContain('import sys')
+  })
+
+  it('pops BEFORE it imports — order is the whole point', () => {
+    // Popping afterwards would leave the cached entry answering the probe.
+    const snippet = importProbeSnippet('lsm6ds3')
+    expect(snippet.indexOf('sys.modules.pop')).toBeLessThan(snippet.indexOf('__import__'))
+  })
+
+  it('sanitises the name in the eviction too, not just the import', () => {
+    // Both spots interpolate the name; missing one would reopen the injection.
+    const snippet = importProbeSnippet("os'); import evil #")
+    expect(snippet).toContain("sys.modules.pop('osimportevil', None)")
+    expect(snippet).not.toContain("os');")
+  })
 })
 
 describe('diffInstalled', () => {
