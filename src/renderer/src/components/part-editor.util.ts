@@ -1192,6 +1192,56 @@ export function pruneEmptyGroups(part: PartDefinition): PartGroup[] | undefined 
 }
 
 /**
+ * INTERNAL RAILS (#706) — the pure edits behind the Rails table.
+ *
+ * A rail says "a PCB trace ties these pins together", which is the only way the
+ * netlist can know that a PCA9685's V+ terminal feeds all sixteen servo headers.
+ * Pins are joined BY NAME so a rail survives reordering, and these helpers all
+ * return a fresh array so the editor's patch/undo stays value-based.
+ *
+ * Nothing here drops a rail for being short: a one-pin rail is meaningless but is
+ * a normal state to pass through while building one, and `normalisePart` prunes
+ * it on save. Deleting a half-built rail out from under the user would be worse
+ * than carrying it.
+ */
+export function addRail(rails: PartRail[] | undefined, name: string): PartRail[] {
+  return [...(rails ?? []), { name, pins: [] }]
+}
+
+/** Rename rail `i` (no-op when out of range). */
+export function renameRail(rails: PartRail[] | undefined, i: number, name: string): PartRail[] {
+  return (rails ?? []).map((r, j) => (j === i ? { ...r, name } : r))
+}
+
+/** Drop rail `i` entirely. */
+export function removeRail(rails: PartRail[] | undefined, i: number): PartRail[] {
+  return (rails ?? []).filter((_, j) => j !== i)
+}
+
+/**
+ * Add or remove `pin` on rail `i`.
+ *
+ * A pin may sit on only ONE rail: two rails sharing a pin would be one net
+ * described twice, and the netlist would merge them anyway — so adding a pin here
+ * takes it off any other rail rather than quietly creating that contradiction.
+ */
+export function toggleRailPin(rails: PartRail[] | undefined, i: number, pin: string): PartRail[] {
+  const list = rails ?? []
+  const has = list[i]?.pins.includes(pin)
+  return list.map((r, j) => {
+    if (j === i) {
+      return { ...r, pins: has ? r.pins.filter((p) => p !== pin) : [...r.pins, pin] }
+    }
+    return has ? r : { ...r, pins: r.pins.filter((p) => p !== pin) }
+  })
+}
+
+/** The rail (if any) that already claims `pin` — drives the "on RAIL" hint. */
+export function railHolding(rails: PartRail[] | undefined, pin: string): PartRail | undefined {
+  return (rails ?? []).find((r) => r.pins.includes(pin))
+}
+
+/**
  * Duplicate a whole group and everything in it (#691).
  *
  * Copies every member, offset as a block so the copy is visibly its own, and

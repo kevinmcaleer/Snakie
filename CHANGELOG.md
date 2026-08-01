@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Define a part's internal wiring in the editor.** A new **Rails** section lists
+  one row per internal net — name it, then add its pins — so a distribution board
+  can say that its power terminal feeds every servo header. Wire one pin of a rail
+  and the rest go live with it. Previously this could only be written by hand in
+  `parts.yml`. Pins are picked from the part's own list rather than typed (a rail
+  joins by name, so a typo would join nothing), and a pin can only sit on one rail.
 - **Say which wiring a Grove or JST group is.** A connector built as a group of
   pins could pick its housing type but not its wiring, so a Grove port couldn't
   declare itself I²C, UART, digital or analog — and a lead that shouldn't fit was

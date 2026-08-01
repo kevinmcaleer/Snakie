@@ -76,12 +76,17 @@ import {
   sanitisePartId,
   validatePart,
   withPinPositions,
-  withShapesFromFeatures
-  ,type HierItem,
+  withShapesFromFeatures,
+  type HierItem,
   type LayerBucket,
   saveTargets,
   type ResolvedPin,
-  type LayerNode
+  type LayerNode,
+  addRail,
+  renameRail,
+  removeRail,
+  toggleRailPin,
+  railHolding
 } from './part-editor.util'
 import {
   GROVE_VARIANTS,
@@ -121,7 +126,8 @@ import type {
   PartPinShape,
   PartPinSignals,
   PartPinType,
-  TextAlign
+  TextAlign,
+  PartRail
 } from '../../../shared/part'
 import type { PartsWriteResult } from '../../../preload/index.d'
 import { Markdown } from './Markdown'
@@ -2764,6 +2770,9 @@ function Inspector(props: InspectorProps): JSX.Element {
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
       <ElectricalSection part={part} patch={patch} names={props.names} />
 
+      {/* Internal rails — the pins a PCB trace ties together (#695/#706) */}
+      <RailsSection part={part} patch={patch} names={props.names} />
+
       {/* I²C addresses — what the I²C-detect instrument matches a scan against (#653) */}
       <I2cSection part={part} patch={patch} existingParts={props.existingParts} />
     </>
@@ -2927,6 +2936,119 @@ type ElectricalNumKey =
   | 'stallCurrentA'
   | 'outputV'
   | 'dropoutV'
+
+/**
+ * The **Rails** inspector section (#706) — the pins a PCB trace ties together.
+ *
+ * Without this the netlist cannot know that a PCA9685's V+ terminal feeds all
+ * sixteen servo headers, so a servo on header 3 reads as unpowered even with the
+ * terminal wired to a battery. The connection exists on the board and was
+ * invisible; declaring it is what makes a distribution board work.
+ *
+ * One row per rail, pins PICKED from the part's own pins rather than typed —
+ * a rail joins by name, so a typo would silently join nothing. A pin already on
+ * another rail says so, because two rails sharing a pin is one net described
+ * twice.
+ */
+function RailsSection({
+  part,
+  patch,
+  names
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  names: string[]
+}): JSX.Element {
+  const rails = part.rails ?? []
+  const set = (next: PartRail[]): void => patch({ rails: next.length ? next : undefined })
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">Rails</h3>
+      <p className="pe__hint">
+        Pins joined by a trace INSIDE the part — a power bus feeding every header, a
+        shared ground. Wire one and the rest go live with it.
+      </p>
+
+      {rails.length > 0 && (
+        <table className="pe__rails">
+          <thead>
+            <tr>
+              <th>Rail</th>
+              <th>Pins</th>
+              <th aria-label="Remove" />
+            </tr>
+          </thead>
+          <tbody>
+            {rails.map((rail, i) => (
+              <tr key={i}>
+                <td>
+                  <input
+                    type="text"
+                    className="pe__rail-name"
+                    value={rail.name}
+                    placeholder="V+"
+                    onChange={(e) => set(renameRail(rails, i, e.target.value))}
+                  />
+                </td>
+                <td>
+                  <div className="pe__rail-pins">
+                    {rail.pins.map((pin) => (
+                      <button
+                        key={pin}
+                        type="button"
+                        className="pe__rail-pin"
+                        title={`Remove ${pin} from ${rail.name || 'this rail'}`}
+                        onClick={() => set(toggleRailPin(rails, i, pin))}
+                      >
+                        {pin} <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                    <select
+                      className="pe__rail-add"
+                      value=""
+                      aria-label={`Add a pin to ${rail.name || 'this rail'}`}
+                      onChange={(e) => e.target.value && set(toggleRailPin(rails, i, e.target.value))}
+                    >
+                      <option value="">+ pin</option>
+                      {names
+                        .filter((n) => !rail.pins.includes(n))
+                        .map((n) => {
+                          const other = railHolding(rails, n)
+                          return (
+                            <option key={n} value={n}>
+                              {other ? `${n} — on ${other.name || 'another rail'}` : n}
+                            </option>
+                          )
+                        })}
+                    </select>
+                  </div>
+                  {rail.pins.length === 1 && (
+                    <span className="pe__rail-warn">one pin isn&rsquo;t a net — add another</span>
+                  )}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="pe__rail-del"
+                    title="Delete this rail"
+                    onClick={() => set(removeRail(rails, i))}
+                  >
+                    ×
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <button type="button" className="pe__add pe__add--inline" onClick={() => set(addRail(rails, ""))}>
+        + Rail
+      </button>
+    </section>
+  )
+}
 
 /**
  * The **Electrical** inspector section (#600) — the in-app editor for a part's

@@ -2268,3 +2268,101 @@
 .pe__chip--cap.is-active {
   opacity: 1;
 }
+
+/* --- Rails table (#706): one row per internal net -------------------------- */
+.pe__rails {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.35rem 0 0.5rem;
+  font-size: 0.74rem;
+}
+
+.pe__rails th {
+  text-align: left;
+  padding: 0 0.35rem 0.25rem 0;
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.pe__rails td {
+  padding: 0.2rem 0.35rem 0.2rem 0;
+  vertical-align: top;
+  border-top: var(--border-w) solid var(--border);
+}
+
+.pe__rails td:last-child,
+.pe__rails th:last-child {
+  width: 1.4rem;
+  padding-right: 0;
+}
+
+.pe__rail-name {
+  width: 100%;
+  min-width: 3.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.2rem 0.35rem;
+}
+
+/* The pins on a rail: removable chips plus the picker that adds one. */
+.pe__rail-pins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem;
+  align-items: center;
+}
+
+.pe__rail-pin {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent-ink);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: var(--border-w) solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.3rem;
+  cursor: pointer;
+}
+
+.pe__rail-pin:hover {
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
+}
+
+.pe__rail-add {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: transparent;
+  border: var(--border-w) dashed var(--border);
+  border-radius: var(--radius);
+  padding: 0.1rem 0.2rem;
+  cursor: pointer;
+}
+
+.pe__rail-warn {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.66rem;
+  color: var(--warn);
+}
+
+.pe__rail-del {
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0.15rem 0.25rem;
+  cursor: pointer;
+}
+
+.pe__rail-del:hover {
+  color: var(--danger);
+}
