@@ -24,14 +24,22 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit, plugAngle } from './cable'
+import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
+import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
-import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
+import {
+  allConnectors,
+  connectorEndpointIndices,
+  pinPositions,
+  resolvedPins,
+  schematicSymbolLayout,
+  type Box
+} from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
@@ -1467,23 +1475,25 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   /** The connector contacts of a part def as [firstPinIndex, connector] pairs —
    *  connector contacts are numbered after the header pins. */
-  const connectorRanges = (def: PartDefinition): { base: number; conn: PartConnector }[] => {
-    let acc = resolvedPins(def).length
-    return (def.connectors ?? []).map((conn) => {
-      const base = acc
-      acc += conn.pins.length
-      return { base, conn }
-    })
-  }
+  /**
+   * Every connector on a part — stored in `connectors[]` OR a housed group (#673)
+   * — with the flat endpoint index of each of its contacts.
+   *
+   * Indices come from pin IDENTITY, not base+offset arithmetic: a housed group's
+   * contacts are header pins, so their indices sit wherever those pins do rather
+   * than in a contiguous block at the end.
+   */
+  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector }[] =>
+    allConnectors(def).map((conn) => ({ conn, idx: connectorEndpointIndices(def, conn) }))
   const endpointConnector = (endpoint: string): EndpointConn | null => {
     const { key, index } = parseEp(endpoint)
     const def = subjByKey.get(key)?.partDef
     if (!def) return null
     const ranges = connectorRanges(def)
     for (let ci = 0; ci < ranges.length; ci++) {
-      const { base, conn } = ranges[ci]
-      if (index >= base && index < base + conn.pins.length) {
-        const endpoints = conn.pins.map((pin, pi) => endpointOf(key, pin.name, base + pi))
+      const { idx, conn } = ranges[ci]
+      if (idx.includes(index)) {
+        const endpoints = conn.pins.map((pin, pi) => endpointOf(key, pin.name, idx[pi]))
         return { key, connIndex: ci, conn, endpoints }
       }
     }
@@ -1527,30 +1537,41 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   /** `angle` is the socket's OWN facing (degrees), from its contact normals — it
    *  belongs to the part the connector is mounted on, not to whatever is wired to
    *  it (#647). */
-  type ConnectorTarget = EndpointConn & { cx: number; cy: number; r: number; angle: number }
+  /** `w`/`h` are the housing's REAL footprint in canvas px — length along the
+   *  contacts × depth across them — as opposed to `r`, which stays a generous
+   *  drag target. */
+  type ConnectorTarget = EndpointConn & {
+    cx: number
+    cy: number
+    r: number
+    angle: number
+    w: number
+    h: number
+  }
   const connectorTargets: ConnectorTarget[] = []
   for (const s of subjects) {
     const def = s.partDef
-    if (!def?.connectors?.length) continue
-    connectorRanges(def).forEach(({ base, conn }, ci) => {
+    if (!def) continue
+    connectorRanges(def).forEach(({ idx, conn }, ci) => {
       const pts: { x: number; y: number }[] = []
-      // The contacts' outward normals — already turned with the placed part by
-      // `rotateNormal`, so they give the socket's facing in WORLD space.
-      const norms: { ox: number; oy: number }[] = []
       const endpoints: string[] = []
       for (const p of s.pins) {
-        if (p.index < base || p.index >= base + conn.pins.length) continue
-        endpoints[p.index - base] = endpointOf(s.key, p.name, p.index)
-        for (const a of p.anchors) {
-          pts.push({ x: s.x + a.x, y: s.y + a.y })
-          norms.push({ ox: a.ox, oy: a.oy })
-        }
+        const at = idx.indexOf(p.index)
+        if (at < 0) continue
+        endpoints[at] = endpointOf(s.key, p.name, p.index)
+        for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
       }
       if (pts.length < 2 || endpoints.length !== conn.pins.length) return
       const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
       const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
       // Pad the contact span so the target covers the housing, not just the pins.
       const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
+      // The housing's real size, from the SAME function that draws the socket, so
+      // a plug can't disagree with the thing it seats on. `box` is the body's
+      // local frame and `scale` takes it to canvas px.
+      const mmW = def.dimensions?.width ?? 0
+      const pxPerMm = s.box && mmW > 0 ? (s.box.w / mmW) * (s.scale ?? 1) : 0
+      const size = connectorSize(conn, pxPerMm)
       connectorTargets.push({
         key: s.key,
         connIndex: ci,
@@ -1559,10 +1580,39 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         cx,
         cy,
         r,
-        angle: plugAngle(norms)
+        // One rule for every connector, stored or housed: the shell lies along
+        // its contacts and the lead leaves one end (#697). Turned with the placed
+        // part, exactly as the contact normals are.
+        angle: housingPlugAngle(conn) + (s.rotation ?? 0),
+        w: size.w,
+        h: size.h
       })
     })
   }
+  /**
+   * The supply each placed part is sitting on, from the DC solve (#698) — it lights
+   * a part's power LED.
+   *
+   * `undefined` means "nothing solved", which is NOT the same as 0 V: with no
+   * source and no electrical models there is nothing to read, and a dark LED would
+   * assert the part is unpowered on the strength of knowing nothing. Once a solve
+   * HAS run, a part whose power pin reaches no node simply isn't connected to it —
+   * that is a real 0 V, and the LED is right to go out.
+   */
+  const supplyByKey = new Map<string, number>()
+  if (voltage?.ready) {
+    for (const s2 of subjects) {
+      if (s2.kind !== 'part') continue
+      const pins = s2.pins.map((p) => ({ net: p.net, endpoint: endpointOf(s2.key, p.name, p.index) }))
+      supplyByKey.set(s2.key, partSupplyVoltage(pins, voltage.byEndpoint) ?? 0)
+    }
+  }
+
+  /** Every endpoint that sits in a connector, and which one — so a cabled wire can
+   *  ask where its plug is rather than where its own contact points. */
+  const targetByEndpoint = new Map<string, ConnectorTarget>()
+  for (const t of connectorTargets) for (const ep of t.endpoints) if (ep) targetByEndpoint.set(ep, t)
+
   /** The connector body nearest a world point, if the point is inside it. */
   const connectorAt = (wx: number, wy: number): ConnectorTarget | null => {
     let best: ConnectorTarget | null = null
@@ -2142,6 +2192,31 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSig])
 
+  /**
+   * Which way a CABLED wire leaves its end — the plug's boot, not its own contact.
+   *
+   * An ordinary wire is soldered to one pad, so it leaves along that pad's normal.
+   * A cable's conductors do not: they all emerge from the one boot, which is why a
+   * real lead reads as a single bundle. Taking the direction from the connector
+   * gives every conductor the same exit, so they run parallel out of the shell.
+   *
+   * It matters most on a HOUSED GROUP, whose contacts are ordinary pins that each
+   * work out their own facing: a servo trio's three disagreed (bottom, left,
+   * bottom), so the conductors fanned apart, and the left-facing one tripped the
+   * `vbow` U-turn guard below and bowed away on its own. Same rule as the shell
+   * itself, so lead and boot cannot disagree (#697).
+   *
+   * `null` for anything that isn't a cabled connector endpoint — those keep the
+   * pad normal.
+   */
+  const cableExit = (c: RobotConnection, endpoint: string): { ox: number; oy: number } | null => {
+    if (!c.cable) return null
+    const t = targetByEndpoint.get(endpoint)
+    if (!t) return null
+    const r = (t.angle * Math.PI) / 180
+    return { ox: Math.cos(r), oy: Math.sin(r) }
+  }
+
   // Resolve a connection's two endpoints in canvas coords + their outward normals.
   const wireEnds = (
     c: RobotConnection
@@ -2155,7 +2230,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (!fs || !ts || !fp || !tp) return null
     const fa = fp.anchors[0]
     const ta = tp.anchors[0]
-    return { ax: fs.x + fa.x, ay: fs.y + fa.y, aox: fa.ox, aoy: fa.oy, bx: ts.x + ta.x, by: ts.y + ta.y, box: ta.ox, boy: ta.oy }
+    // A cabled wire leaves through its plug's boot; anything else off its own pad.
+    const fe = cableExit(c, c.from) ?? fa
+    const te = cableExit(c, c.to) ?? ta
+    return { ax: fs.x + fa.x, ay: fs.y + fa.y, aox: fe.ox, aoy: fe.oy, bx: ts.x + ta.x, by: ts.y + ta.y, box: te.ox, boy: te.oy }
   }
 
   // --- wire path: orthogonal in Schematic, a Node-RED-style Bézier noodle in
@@ -2427,6 +2505,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   key={s.key}
                   subject={s}
                   liveByPad={live?.byPad}
+                  supplyV={supplyByKey.get(s.key)}
                   // #650: only the part you're looking at is named — selected, or
                   // hovered so you can identify one without committing to a click.
                   showTitle={selectedKey === s.key || hover?.key === s.key}
@@ -2727,8 +2806,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             {/* Seated plug shells, drawn over the wires so the lead's four
                 conductors disappear into the housing the way they really do. */}
             {cablePlugs.map(({ t, kind, angle }, i) => {
-              const w = t.r * 1.5
-              const h = t.r * 1.0
+              // The housing's real footprint (#697). It used to be sized off the
+              // contact-span radius, which drew a 3-way servo plug ~4 mm deep
+              // against a real 2.54 mm — so on a PCA9685, whose servo headers sit
+              // one 2.54 mm pitch apart, neighbouring plugs overlapped.
+              const w = t.w
+              const h = t.h
               // Grove and its lead are both off-white; QWIIC/JST/DuPont are dark.
               const shell = kind === 'grove' ? '#e8e5da' : '#22262c'
               const edge = kind === 'grove' ? '#9a968a' : '#0b0d10'
@@ -3685,6 +3768,7 @@ function SubjectBody({
   capsPins,
   capsHoverPin,
   liveByPad,
+  supplyV,
   showTitle = true
 }: {
   subject: Subject
@@ -3704,6 +3788,9 @@ function SubjectBody({
   /** LIVE device readings by board pad index (#…) — appended to each used pad's
    *  code-variable label so the Breadboard shows live values. */
   liveByPad?: Map<number, { text: string; asserted: boolean }>
+  /** The solved supply this part is sitting on (#698) — lights its power LED.
+   *  Absent ⇒ no solve, so the LED draws as it always has. */
+  supplyV?: number
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -3781,6 +3868,7 @@ function SubjectBody({
                   pinVariables={pinVars}
                   capsPins={capsPins}
                   capsHoverPin={capsHoverPin}
+                  supplyV={supplyV}
                 />
               )
               return tf ? <g transform={tf}>{body}</g> : body

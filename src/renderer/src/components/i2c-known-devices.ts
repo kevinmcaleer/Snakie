@@ -64,3 +64,75 @@ export function partsForAddress(
 export function hexAddr(addr: number): string {
   return `0x${addr.toString(16).toUpperCase().padStart(2, '0')}`
 }
+
+/** The highest valid 7-bit I²C address. */
+export const I2C_MAX_ADDRESS = 0x7f
+
+/**
+ * Parse an address a part author typed, or `null` if it isn't a valid 7-bit one.
+ *
+ * Hex needs a marker — `0x76`, `76h` or `$76`. **Bare digits are decimal**, which
+ * is the one genuinely ambiguous case: I²C addresses are conventionally written
+ * in hex, so someone typing `76` may well mean `0x76` and get `0x4C`. Rather than
+ * guess (a wrong guess here silently mislabels the part), the caller shows the
+ * canonical parse back to the author as they type — see the Addresses section's
+ * live preview, which also names the device at that address.
+ */
+export function parseI2cAddress(input: string): number | null {
+  const s = String(input ?? '').trim()
+  if (!s) return null
+  const hex = /^(?:0x([0-9a-f]+)|([0-9a-f]+)h|\$([0-9a-f]+))$/i.exec(s)
+  let n: number
+  if (hex) n = parseInt(hex[1] ?? hex[2] ?? hex[3], 16)
+  else if (/^\d+$/.test(s)) n = Number(s)
+  else return null
+  if (!Number.isInteger(n) || n < 0 || n > I2C_MAX_ADDRESS) return null
+  return n
+}
+
+/**
+ * Addresses the I²C spec reserves (`0x00`–`0x07` and `0x78`–`0x7F`).
+ *
+ * A part claiming one is *probably* a typo, but not certainly — so this drives a
+ * warning, never a block. Real hardware does occasionally sit here.
+ */
+export function isReservedI2cAddress(addr: number): boolean {
+  return addr <= 0x07 || addr >= 0x78
+}
+
+/**
+ * Whether the part has anything that speaks I²C — an `i2c`-capable pin, a QWIIC
+ * connector, or a Grove port strapped to the I²C variant.
+ *
+ * Used to tailor the Addresses section's hint, NOT to hide it: a part can be
+ * mid-authoring (addresses first, pins later), and a control the author can't
+ * find is worse than one they don't need.
+ */
+export function hasI2cInterface(part: PartDefinition): boolean {
+  for (const h of part.headers ?? []) {
+    for (const p of h.pins) if (p.capabilities?.includes('i2c')) return true
+  }
+  for (const c of part.connectors ?? []) {
+    if (c.kind === 'qwiic') return true
+    if (c.kind === 'grove' && c.variant === 'i2c') return true
+    for (const p of c.pins ?? []) if (p.capabilities?.includes('i2c')) return true
+  }
+  return false
+}
+
+/**
+ * Other parts already claiming `addr`, so the author can be told before they ship
+ * two parts the scanner can't tell apart.
+ *
+ * `exceptId` drops the part being edited (it should not clash with itself). Note
+ * this only sees the parts passed in — in the Part Editor that is the part's own
+ * library, not every installed one, so it catches the realistic case (building a
+ * parts pack) rather than every possible one.
+ */
+export function partsClaimingAddress(
+  addr: number,
+  parts: PartDefinition[],
+  exceptId?: string
+): PartDefinition[] {
+  return parts.filter((p) => p.id !== exceptId && p.i2cAddresses?.includes(addr))
+}

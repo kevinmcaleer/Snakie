@@ -192,8 +192,14 @@ describe('flashTargetForFamily', () => {
     expect(flashTargetForFamily('esp32')).toEqual({ board: 'esp32', offset: '0x1000' })
   })
 
-  it('maps every other esp32* chip to esp32 board at 0x0', () => {
-    for (const fam of ['esp32s2', 'esp32s3', 'esp32c2', 'esp32c3', 'esp32c5', 'esp32c6', 'esp32p4']) {
+  it('keeps the ESP32-S2 at 0x1000, like the original ESP32', () => {
+    // Espressif moved the bootloader to 0x0 from the S3 onwards — the S2 did NOT
+    // move. This test previously asserted 0x0 for it, encoding the bug.
+    expect(flashTargetForFamily('esp32s2')).toEqual({ board: 'esp32', offset: '0x1000' })
+  })
+
+  it('maps the S3 and the RISC-V parts to 0x0', () => {
+    for (const fam of ['esp32s3', 'esp32c2', 'esp32c3', 'esp32c5', 'esp32c6', 'esp32p4']) {
       expect(flashTargetForFamily(fam)).toEqual({ board: 'esp32', offset: '0x0' })
     }
   })

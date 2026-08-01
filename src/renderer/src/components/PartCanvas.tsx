@@ -19,32 +19,40 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  housedGroupConnectors,
+  faceImageLayer,
+  pinLabelHidden,
+  pruneEmptyGroups,
+  servoSignalRotation,
+  withFaceImageLayer,
+  selectionGroupId,
+  usedPinNames,
+  type GroupComponentKind,
   groupRootId,
   groupTreeIds,
   translateShape,
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
-  nextComponentZ,
+  duplicateGroup,
+  duplicateSelection,
   orderedItems,
   pasteStyle,
   pinShapeOf,
   resolvedPins,
-  uniquePinName,
-  usedPinNames,
   type GroupMemberRef,
   type PartStyleClipboard,
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
-import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
+import { itemHidden, itemLocked, itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
+  PartGroup,
   ComponentShape,
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
-  PartConnector,
   PartItemFlags,
   PartLabel,
   PartSide,
@@ -52,7 +60,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, connectorContactLabels, housingDrawsShell, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -97,6 +105,14 @@ const PAD_FILL: Record<PartPinType, string> = {
 
 /** The toolbar / layer-add tools, in display order. `rect`/`circle`/`cpoly` add
  *  component shapes; `shape` edits the board outline polygon. */
+/** ⧉ — the duplicate glyph the per-item mini-toolbars already use. */
+const DUPE_ICON = (
+  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="2.5" y="2.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+)
+
 export type CanvasTool =
   | 'select'
   | 'move'
@@ -186,6 +202,12 @@ export interface PartCanvasProps {
   /** A request to select a whole group by id (from the Layers panel) — the
    *  `nonce` makes repeat selects of the same group re-fire the effect (#631). */
   groupSelect?: { id: string; nonce: number }
+  /** A group was duplicated from the canvas toolbar — select the copy (#693). */
+  onGroupDuplicated?: (gid: string) => void
+  /** A request to delete the MULTI-selection (#667). The marquee's selection lives
+   *  in here, not in the editor's single `selection`, so the editor's Delete key
+   *  can't reach it — it asks instead. `nonce` re-fires for repeat presses. */
+  deleteRequest?: { nonce: number }
   /** Snap placed/moved positions to the pin-spacing grid. */
   snap?: boolean
   /** Keep the image layer's width:height ratio fixed while resizing it. */
@@ -373,8 +395,8 @@ interface Drag {
    *  whole group tree (pins + shapes + labels, recursive) moves rigidly (#630). */
   groupBundle?: {
     pins: { hi: number; pi: number; dx: number; dy: number }[]
-    shapes: { index: number; dx: number; dy: number }[]
-    labels: { index: number; dx: number; dy: number }[]
+    /** Per non-pin kind: each member's offset from the pointer's start (#665). */
+    comps: { kind: GroupComponentKind; index: number; dx: number; dy: number }[]
   }
 }
 
@@ -389,6 +411,8 @@ export function PartCanvas({
   tool = 'select',
   selection = null,
   groupSelect,
+  deleteRequest,
+  onGroupDuplicated,
   snap = false,
   lockAspect = false,
   imageNativeAspect = null,
@@ -418,7 +442,7 @@ export function PartCanvas({
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   // Multi-select of components (shapes + labels) — same marquee / shift-click
   // gesture, same alignment toolbar.
-  const [selComponents, setSelComponents] = useState<{ type: 'shape' | 'label'; index: number }[]>([])
+  const [selComponents, setSelComponents] = useState<{ type: GroupComponentKind; index: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   // Smart alignment guides (#169): green center-lines shown while dragging a pin /
   // hole that lines up with another's centre. Normalised x (vertical line) / y.
@@ -475,7 +499,13 @@ export function PartCanvas({
     }
   }, [interactive])
 
-  const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+  // The layer of the face being edited (#687). This drives the drawn <image>, the
+  // resize handles and the image hit-test alike, so it must follow `side` — it
+  // used to be the FRONT's unconditionally, which drew the rear photo inside the
+  // front's box (hence its aspect) and edited the front's placement.
+  const layer = faceImageLayer(part, side ?? 'front')
+  /** The image data of the face being edited — what there is to interact with. */
+  const faceImageData = side === 'rear' ? part.rear?.imageData : part.imageData
   // Colours already used in this part, for the quick-pick swatch grids on every
   // colour well (fill / border / label). Deduped, in first-seen order.
   const usedColors = collectUsedColors(part)
@@ -835,9 +865,13 @@ export function PartCanvas({
     commit({ ...part, polygon: next, shape: { kind: 'polygon' } })
     onSelect?.({ type: 'vertex', index: edgeI + 1 })
   }
-  const moveImage = (nx: number, ny: number): void => commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
+  // Move/resize the layer of the face ON SCREEN (#687). These used to write
+  // `part.imageLayer` unconditionally while the canvas RENDERED `faceLayer`, so
+  // dragging the rear photo moved the front one — invisibly, until you flipped.
+  const moveImage = (nx: number, ny: number): void =>
+    commit({ ...part, ...withFaceImageLayer(part, side ?? 'front', { x: nx, y: ny }) })
   const resizeImage = (x: number, y: number, w: number, h: number): void =>
-    commit({ ...part, imageLayer: { ...layer, x, y, w, h } })
+    commit({ ...part, ...withFaceImageLayer(part, side ?? 'front', { x, y, w, h }) })
 
   const addPin = (nx: number, ny: number): void => {
     const sx = snapX(nx)
@@ -876,15 +910,50 @@ export function PartCanvas({
   /** One servo/DuPont header trio at (sx, sy): a vertical Signal / V+ / GND stack at
    *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
    *  all sharing `gid` so they move + delete as one unit. */
+  // NB: no `rotation` on the signal pin. An explicit rotation is a deliberate
+  // "aim the label this way" override (the pin inspector's rotate control sets
+  // it), and `pinOutwardDir` honours it over everything else — so presetting one
+  // here pinned every servo label to the top of the board no matter where the
+  // header sat. Left absent, the label follows the NEAREST EDGE, and the rotate
+  // control still aims it by hand when that's wanted.
+  /** One servo/DuPont header as a real 3-way CONNECTOR: Signal / V+ / GND at the
+   *  2.54 mm pitch, standing vertical (rotation 90) so it reads as the familiar
+   *  three-pin column. Contacts are ordinary pins, coloured by role. */
+  /** One servo/DuPont header: a vertical Signal / V+ / GND trio of ordinary pins
+   *  at the 2.54 mm pitch, octagonal pads, sharing `gid` — plus a housing on that
+   *  group, which is what a lead plugs into. */
   const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy }),
-    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
-    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
+    // The trio runs vertically, so its label reads to the nearer TOP/BOTTOM edge
+    // — never sideways, which on a row of sixteen stacks them all on one edge
+    // across each other (#689).
+    onFace({
+      name: `S${idx}`,
+      type: 'io',
+      capabilities: ['digital', 'pwm'],
+      signals: { pwm: 'A' },
+      shape: 'octagonal',
+      rotation: servoSignalRotation(clamp01(sy + stepNY)),
+      group: gid,
+      x: sx,
+      y: sy
+    }),
+    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + stepNY) },
+    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
   ]
 
-  /** Drop `n` pre-wired servo headers in a row starting at (nx, ny), spaced one pin
-   *  pitch apart along x (n = 1 for a plain click; more for a drag-strip). The
-   *  signals' GPIOs are left for the user to set. */
+  /**
+   * Drop `n` servo headers in a row starting at (nx, ny), one pin pitch apart
+   * along x (n = 1 for a plain click; more for a drag-strip).
+   *
+   * Each header is a trio of ORDINARY PINS in a group that carries a `dupont`
+   * housing (#673). That is the shape that gives both halves at once: the pins are
+   * selectable, editable and appear in the layers hierarchy as a group like any
+   * other, AND the housing means a servo lead plugs into all three in one drag.
+   *
+   * #669 briefly made these stored connectors instead, which bought the cabling at
+   * the cost of the pins — contacts nested in `connectors[]` can't be selected or
+   * fully edited (#677). Housing-on-group needs no such trade.
+   */
   const addServoHeaders = (nx: number, ny: number, n = 1): void => {
     const sx = snapX(nx)
     const sy = snapY(ny)
@@ -892,17 +961,34 @@ export function PartCanvas({
       onNotify?.("Can't place a servo header on a mounting hole.")
       return
     }
-    const groups = new Set<string>()
-    for (const h of part.headers) for (const p of h.pins) if (p.group) groups.add(p.group)
-    let idx = groups.size
+    // Continue the numbering already on the board so channels stay S1..Sn rather
+    // than restarting and colliding with pins that are already there.
+    const used = usedPinNames(part)
     const trios: PartPin[] = []
+    const groups: PartGroup[] = [...(part.groups ?? [])]
+    let idx = 0
     for (let k = 0; k < Math.max(1, n); k++) {
-      idx += 1
-      trios.push(...servoTrio(clamp01(sx + k * stepNX), sy, `servo-${idx}`, idx))
+      do idx += 1
+      while (used.has(`S${idx}`) && idx < 1000)
+      used.add(`S${idx}`)
+      const gid = `servo-${idx}`
+      const x = clamp01(sx + k * stepNX)
+      trios.push(...servoTrio(x, sy, gid, idx))
+      groups.push({
+        id: gid,
+        name: `Servo ${idx}`,
+        // Centred on the trio; standing on end, because the pads run in a column.
+        housing: { kind: 'dupont', x, y: clamp01(sy + stepNY), rotation: 90 }
+      })
     }
     const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
-    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)) })
-    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the first signal
+    const firstPi = headers[0].pins.length
+    commit({
+      ...part,
+      headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)),
+      groups
+    })
+    onSelect?.({ type: 'pin', hi: 0, pi: firstPi }) // the first signal pad
   }
 
   /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and
@@ -922,6 +1008,20 @@ export function PartCanvas({
 
   /** Move a whole group tree (pins + shapes + labels) rigidly, each member placed
    *  at `base + its captured offset`. One commit so undo treats it as one move. */
+  /** Reposition the members of one point-positioned kind from their captured
+   *  offsets. Shapes are excluded — they translate their polygon points too. */
+  const movePoints = <T extends { x: number; y: number }>(
+    list: T[],
+    bundle: NonNullable<Drag['groupBundle']>,
+    kind: GroupComponentKind,
+    baseX: number,
+    baseY: number
+  ): T[] =>
+    list.map((it, i) => {
+      const o = bundle.comps.find((c) => c.kind === kind && c.index === i)
+      return o ? { ...it, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : it
+    })
+
   const moveGroupBundleTo = (bundle: NonNullable<Drag['groupBundle']>, baseX: number, baseY: number): void => {
     commit({
       ...part,
@@ -932,14 +1032,17 @@ export function PartCanvas({
           return o ? { ...p, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : p
         })
       })),
+      // A shape carries its polygon points, so it translates rather than being
+      // repositioned; every other kind is point-positioned and just takes x/y.
       shapes: shapes.map((s, i) => {
-        const o = bundle.shapes.find((off) => off.index === i)
+        const o = bundle.comps.find((c) => c.kind === 'shape' && c.index === i)
         return o ? translateShape(s, baseX + o.dx - s.x, baseY + o.dy - s.y) : s
       }),
-      labels: labels.map((l, i) => {
-        const o = bundle.labels.find((off) => off.index === i)
-        return o ? { ...l, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : l
-      })
+      labels: movePoints(labels, bundle, 'label', baseX, baseY),
+      connectors: movePoints(connectors, bundle, 'connector', baseX, baseY),
+      onboardLeds: movePoints(onboardLeds, bundle, 'led', baseX, baseY),
+      buttons: movePoints(buttons, bundle, 'button', baseX, baseY),
+      mountingHoles: movePoints(holes, bundle, 'hole', baseX, baseY)
     })
   }
 
@@ -961,16 +1064,38 @@ export function PartCanvas({
   // The alignment toolbar aligns a UNION of selected pins + components. Each is
   // resolved to a normalised centre (cx, cy); pins/labels move to absolute
   // targets, shapes translate by the delta (so polygon points come along too).
+  // Every groupable kind (#676). A shape translates (it carries polygon points);
+  // everything else is point-positioned and takes x/y directly.
   type AlignRef =
     | { kind: 'pin'; hi: number; pi: number }
-    | { kind: 'shape'; index: number }
-    | { kind: 'label'; index: number }
+    | { kind: GroupComponentKind; index: number }
 
   /** Geometric centre of a shape/label in normalised coords. */
-  const componentCenter = (type: 'shape' | 'label', index: number): { cx: number; cy: number } | null => {
+  const componentCenter = (
+    type: GroupComponentKind,
+    index: number
+  ): { cx: number; cy: number } | null => {
     if (type === 'label') {
       const l = labels[index]
       return l ? { cx: l.x, cy: l.y } : null
+    }
+    // Connectors, LEDs, buttons and holes are all point-positioned: their x/y IS
+    // the centre, so no bounding-box maths is needed for any of them (#665).
+    if (type === 'connector') {
+      const c = connectors[index]
+      return c ? { cx: c.x, cy: c.y } : null
+    }
+    if (type === 'led') {
+      const l = onboardLeds[index]
+      return l ? { cx: l.x, cy: l.y } : null
+    }
+    if (type === 'button') {
+      const b = buttons[index]
+      return b ? { cx: b.x, cy: b.y } : null
+    }
+    if (type === 'hole') {
+      const h = holes[index]
+      return h ? { cx: h.x, cy: h.y } : null
     }
     const s = shapes[index]
     if (!s) return null
@@ -1028,11 +1153,7 @@ export function PartCanvas({
 
   /** The `group` id of an align ref (undefined = loose). */
   const groupOfRef = (ref: AlignRef): string | undefined =>
-    ref.kind === 'pin'
-      ? part.headers[ref.hi]?.pins[ref.pi]?.group
-      : ref.kind === 'shape'
-        ? shapes[ref.index]?.group
-        : labels[ref.index]?.group
+    selectionGroupId(part, ref.kind === 'pin' ? { type: 'pin', hi: ref.hi, pi: ref.pi } : { type: ref.kind, index: ref.index })
 
   /** Partition the selection into ALIGNMENT UNITS: each grouped item's whole group
    *  (by root) is ONE rigid unit — aligned/distributed by its bounding-box centre,
@@ -1069,18 +1190,34 @@ export function PartCanvas({
   /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
   const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
     const pinSet = new Map<string, { x?: number; y?: number }>()
-    const labelSet = new Map<number, { x?: number; y?: number }>()
+    /** Point-positioned kinds: kind -> index -> new centre. */
+    const moves = new Map<GroupComponentKind, Map<number, { x?: number; y?: number }>>()
     const shapeDelta = new Map<number, { dx: number; dy: number }>()
     for (const t of targets) {
-      if (t.ref.kind === 'pin') pinSet.set(pinKey(t.ref.hi, t.ref.pi), { x: t.tcx, y: t.tcy })
-      else if (t.ref.kind === 'label') labelSet.set(t.ref.index, { x: t.tcx, y: t.tcy })
-      else {
+      if (t.ref.kind === 'pin') {
+        pinSet.set(pinKey(t.ref.hi, t.ref.pi), { x: t.tcx, y: t.tcy })
+      } else if (t.ref.kind === 'shape') {
+        // A shape owns polygon points, so it TRANSLATES rather than being moved.
         const c = componentCenter('shape', t.ref.index)
         shapeDelta.set(t.ref.index, {
           dx: t.tcx !== undefined ? t.tcx - (c?.cx ?? 0) : 0,
           dy: t.tcy !== undefined ? t.tcy - (c?.cy ?? 0) : 0
         })
+      } else {
+        const m = moves.get(t.ref.kind) ?? new Map()
+        m.set(t.ref.index, { x: t.tcx, y: t.tcy })
+        moves.set(t.ref.kind, m)
       }
+    }
+    const place = <T extends { x: number; y: number }>(list: T[], kind: GroupComponentKind): T[] => {
+      const m = moves.get(kind)
+      if (!m) return list
+      return list.map((it, i) => {
+        const u = m.get(i)
+        return u
+          ? { ...it, ...(u.x !== undefined ? { x: clamp01(u.x) } : {}), ...(u.y !== undefined ? { y: clamp01(u.y) } : {}) }
+          : it
+      })
     }
     commit({
       ...part,
@@ -1095,10 +1232,11 @@ export function PartCanvas({
         const d = shapeDelta.get(i)
         return d ? translateShape(s, d.dx, d.dy) : s
       }),
-      labels: labels.map((l, i) => {
-        const u = labelSet.get(i)
-        return u ? { ...l, ...(u.x !== undefined ? { x: clamp01(u.x) } : {}), ...(u.y !== undefined ? { y: clamp01(u.y) } : {}) } : l
-      })
+      labels: place(labels, 'label'),
+      connectors: place(connectors, 'connector'),
+      onboardLeds: place(onboardLeds, 'led'),
+      buttons: place(buttons, 'button'),
+      mountingHoles: place(holes, 'hole')
     })
   }
 
@@ -1279,7 +1417,13 @@ export function PartCanvas({
     }
     const pinUpd = new Map<string, { x: number; y: number; rotation: number }>()
     const shapeUpd = new Map<number, { x: number; y: number; rotation: number }>()
-    const labelUpd = new Map<number, { x: number; y: number }>()
+    /** Point-positioned kinds: kind -> index -> new position (+ own rotation). */
+    const pointUpds = new Map<GroupComponentKind, Map<number, { x: number; y: number; rotation?: number }>>()
+    const pointUpd = (k: GroupComponentKind): Map<number, { x: number; y: number; rotation?: number }> => {
+      const m = pointUpds.get(k) ?? new Map()
+      pointUpds.set(k, m)
+      return m
+    }
     for (const { m, cx: mcx, cy: mcy } of pts) {
       const r = rotedCentre(mcx, mcy)
       if (m.kind === 'pin') {
@@ -1295,9 +1439,29 @@ export function PartCanvas({
         const offX = ctr ? ctr.cx - s.x : 0
         const offY = ctr ? ctr.cy - s.y : 0
         shapeUpd.set(m.index, { x: r.x - offX, y: r.y - offY, rotation: ((s.rotation ?? 0) + 90) % 360 })
+      } else if (m.kind === 'connector') {
+        // A connector carries its OWN body rotation, which turns its contacts and
+        // silk together — compose with it rather than overwrite it, the same way
+        // a pin's rotation is turned rather than replaced.
+        const c = connectors[m.index]
+        pointUpd('connector').set(m.index, { x: r.x, y: r.y, rotation: ((c.rotation ?? 0) + 90) % 360 })
+      } else if (m.kind === 'led') {
+        pointUpd('led').set(m.index, { x: r.x, y: r.y })
+      } else if (m.kind === 'button') {
+        pointUpd('button').set(m.index, { x: r.x, y: r.y })
+      } else if (m.kind === 'hole') {
+        pointUpd('hole').set(m.index, { x: r.x, y: r.y })
       } else {
-        labelUpd.set(m.index, { x: r.x, y: r.y })
+        pointUpd('label').set(m.index, { x: r.x, y: r.y })
       }
+    }
+    const turn = <T extends { x: number; y: number }>(list: T[], kind: GroupComponentKind): T[] => {
+      const m = pointUpds.get(kind)
+      if (!m) return list
+      return list.map((it, i) => {
+        const u = m.get(i)
+        return u ? { ...it, x: u.x, y: u.y, ...(u.rotation !== undefined ? { rotation: u.rotation } : {}) } : it
+      })
     }
     commit({
       ...part,
@@ -1312,10 +1476,11 @@ export function PartCanvas({
         const u = shapeUpd.get(i)
         return u ? { ...s, x: u.x, y: u.y, rotation: u.rotation } : s
       }),
-      labels: labels.map((l, i) => {
-        const u = labelUpd.get(i)
-        return u ? { ...l, x: u.x, y: u.y } : l
-      })
+      labels: turn(labels, 'label'),
+      connectors: turn(connectors, 'connector'),
+      onboardLeds: turn(onboardLeds, 'led'),
+      buttons: turn(buttons, 'button'),
+      mountingHoles: turn(holes, 'hole')
     })
   }
 
@@ -1329,6 +1494,15 @@ export function PartCanvas({
    *  for a formal group (its members are all selected) or a loose multi-select. */
   const rotateSelection = (): void => rotateMembers(selectionMembers())
 
+  /** Duplicate the selected group — members, housing and all (#693), then select
+   *  the copy so a second press makes a third rather than another of the first. */
+  const duplicateSelectedGroup = (gid: string): void => {
+    const res = duplicateGroup(part, gid)
+    if (!res) return
+    commit({ ...part, ...res.part })
+    onGroupDuplicated?.(res.gid)
+  }
+
   /** Delete every selected item; drop any group registry entry left unreferenced. */
   const deleteSelectionItems = (): void => {
     const pinSel = new Set(selectedPins.map((s) => `${s.hi}:${s.pi}`))
@@ -1340,29 +1514,10 @@ export function PartCanvas({
       .filter((h) => h.pins.length > 0)
     const nextShapes = shapes.filter((_, i) => !shapeSel.has(i))
     const nextLabels = labels.filter((_, i) => !labelSel.has(i))
-    // Keep only group ids still referenced by a surviving item (plus their
-    // ancestor chain), so deleting a whole group drops its registry entry.
-    const referenced = new Set<string>()
-    const keepWithAncestors = (g: string | undefined): void => {
-      let cur = g
-      const seen = new Set<string>()
-      while (cur && !seen.has(cur)) {
-        seen.add(cur)
-        referenced.add(cur)
-        cur = (part.groups ?? []).find((x) => x.id === cur)?.parent
-      }
-    }
-    nextHeaders.forEach((h) => h.pins.forEach((p) => keepWithAncestors(p.group)))
-    nextShapes.forEach((s) => keepWithAncestors(s.group))
-    nextLabels.forEach((l) => keepWithAncestors(l.group))
-    const nextGroups = (part.groups ?? []).filter((g) => referenced.has(g.id))
-    commit({
-      ...part,
-      headers: nextHeaders,
-      shapes: nextShapes,
-      labels: nextLabels,
-      groups: nextGroups.length ? nextGroups : undefined
-    })
+    // Drop any group left with nothing in it. Was a local scan of pins, shapes
+    // and labels only — the same narrow list that kept biting elsewhere (#690).
+    const next = { ...part, headers: nextHeaders, shapes: nextShapes, labels: nextLabels }
+    commit({ ...next, groups: pruneEmptyGroups(next) })
     setSelectedPins([])
     setSelComponents([])
     onSelect?.(null)
@@ -1375,15 +1530,71 @@ export function PartCanvas({
     const root = groupRootId(part.groups, groupSelect.id)
     const first = groupMembers(part, groupTreeIds(part.groups, root))[0]
     if (!first) return
+    // `first` may now be any groupable kind, and CanvasSelection names them the
+    // same way GroupMemberRef does — so the mapping is direct rather than a
+    // three-way ladder that silently fell through to 'label' (#665).
     const primary: CanvasSelection =
       first.kind === 'pin'
         ? { type: 'pin', hi: first.hi, pi: first.pi }
-        : first.kind === 'shape'
-          ? { type: 'shape', index: first.index }
-          : { type: 'label', index: first.index }
+        : { type: first.kind, index: first.index }
     selectWholeGroup(root, primary)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSelect?.nonce])
+
+  /**
+   * Delete every item in the multi-selection (#667).
+   *
+   * Locked items are skipped, matching the single-item Delete: locking is worth
+   * little if a rubber band still removes what you froze.
+   */
+  const deleteMultiSelection = (): void => {
+    if (!selectedPins.length && !selComponents.length) return
+    const pinKeys = new Set(selectedPins.map((s) => `${s.hi}:${s.pi}`))
+    const idx = (kind: GroupComponentKind): Set<number> =>
+      new Set(selComponents.filter((c) => c.type === kind).map((c) => c.index))
+    const drop = <T extends Partial<PartItemFlags>>(list: T[] | undefined, kind: GroupComponentKind): T[] => {
+      const gone = idx(kind)
+      return (list ?? []).filter((it, i) => !gone.has(i) || itemLocked(part.groups, it))
+    }
+    commit({
+      ...part,
+      headers: part.headers
+        .map((h, hi) => ({
+          ...h,
+          pins: h.pins.filter((p, pi) => !pinKeys.has(`${hi}:${pi}`) || itemLocked(part.groups, p))
+        }))
+        .filter((h) => h.pins.length > 0),
+      shapes: drop(shapes, 'shape'),
+      labels: drop(labels, 'label'),
+      connectors: drop(connectors, 'connector'),
+      onboardLeds: drop(onboardLeds, 'led'),
+      buttons: drop(buttons, 'button'),
+      mountingHoles: drop(holes, 'hole'),
+      // No group is left listing nothing once its last member goes (#690).
+      groups: pruneEmptyGroups({
+        ...part,
+        headers: part.headers.map((h, hi) => ({
+          ...h,
+          pins: h.pins.filter((p, pi) => !pinKeys.has(`${hi}:${pi}`) || itemLocked(part.groups, p))
+        })),
+        shapes: drop(shapes, 'shape'),
+        labels: drop(labels, 'label'),
+        connectors: drop(connectors, 'connector'),
+        onboardLeds: drop(onboardLeds, 'led'),
+        buttons: drop(buttons, 'button'),
+        mountingHoles: drop(holes, 'hole')
+      })
+    })
+    setSelectedPins([])
+    setSelComponents([])
+    onSelect?.(null)
+  }
+
+  useEffect(() => {
+    if (!deleteRequest) return
+    deleteMultiSelection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteRequest?.nonce])
 
   /** Container-pixel position of the selection's TOP-CENTRE, so the align toolbar
    *  floats above the whole selection (not over its lowest pin — which would cover
@@ -1427,57 +1638,17 @@ export function PartCanvas({
   const updateShape = (index: number, patch: Partial<ComponentShape>): void =>
     commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
 
-  /** Duplicate the selected shape/label (offset a little) and select the copy. */
-  const duplicateComponent = (sel: CanvasSelection): void => {
-    if (sel?.type === 'shape') {
-      const s = shapes[sel.index]
-      if (!s) return
-      const off = 0.04
-      const copy: ComponentShape = {
-        ...s,
-        x: clamp01(s.x + off),
-        y: clamp01(s.y + off),
-        points: s.points?.map((p) => ({ x: clamp01(p.x + off), y: clamp01(p.y + off) })),
-        z: nextComponentZ(part)
-      }
-      const next = [...shapes, copy]
-      commit({ ...part, shapes: next })
-      onSelect?.({ type: 'shape', index: next.length - 1 })
-    } else if (sel?.type === 'label') {
-      const l = labels[sel.index]
-      if (!l) return
-      const next = [...labels, { ...l, x: clamp01(l.x + 0.04), y: clamp01(l.y + 0.04), z: nextComponentZ(part) }]
-      commit({ ...part, labels: next })
-      onSelect?.({ type: 'label', index: next.length - 1 })
-    } else if (sel?.type === 'connector') {
-      const c = connectors[sel.index]
-      if (!c) return
-      // Contacts carry no coordinates of their own — they're laid out from the
-      // body's position and rotation — so only the body moves.
-      const off = 0.04
-      const used = usedPinNames(part)
-      const copy: PartConnector = {
-        ...c,
-        // A duplicate is a NEW, standalone connector. Inheriting the source's
-        // group would make the copy move, rotate and delete as part of it — so
-        // dragging the original would drag its own duplicate around.
-        group: undefined,
-        x: clamp01(c.x + off),
-        y: clamp01(c.y + off),
-        z: nextComponentZ(part),
-        // Contacts share one namespace with every other pin (a wire endpoint is
-        // `<partId>.<PinName>`), so a verbatim copy would give a board two pins
-        // called SCL and make that endpoint ambiguous. Suffix them: SCL → SCL2.
-        pins: c.pins.map((p) => {
-          const name = uniquePinName(p.name, used)
-          used.add(name)
-          return { ...p, name, capabilities: p.capabilities ? [...p.capabilities] : undefined }
-        })
-      }
-      const next = [...connectors, copy]
-      commit({ ...part, connectors: next })
-      onSelect?.({ type: 'connector', index: next.length - 1 })
-    }
+  /**
+   * Duplicate the selected item (offset a little) and select the copy.
+   *
+   * The logic itself lives in {@link duplicateSelection} so the mini-toolbar's ⧉
+   * buttons and the Ctrl/Cmd+D shortcut (#661) can't drift apart.
+   */
+  const duplicateSel = (sel: CanvasSelection): void => {
+    const res = duplicateSelection(part, sel)
+    if (!res) return
+    commit(res.part)
+    onSelect?.(res.selection)
   }
 
   /** Delete the selected shape/label. */
@@ -1493,38 +1664,10 @@ export function PartCanvas({
   const updateHole = (index: number, patch: Partial<MountingHole>): void =>
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, ...patch } : h)) })
 
-  /** Duplicate a mounting hole (offset a little) and select the copy. */
-  const duplicateHole = (index: number): void => {
-    const h = holes[index]
-    if (!h) return
-    const off = 0.04
-    const next = [...holes, { x: clamp01(h.x + off), y: clamp01(h.y + off), diameter: h.diameter }]
-    commit({ ...part, mountingHoles: next })
-    onSelect?.({ type: 'hole', index: next.length - 1 })
-  }
-
   /** Delete a mounting hole. */
   const deleteHole = (index: number): void => {
     commit({ ...part, mountingHoles: holes.filter((_, i) => i !== index) })
     onSelect?.(null)
-  }
-
-  /** Duplicate the selected pin (offset a little, same header) and select the copy. */
-  const duplicatePin = (sel: CanvasSelection): void => {
-    if (sel?.type !== 'pin') return
-    const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
-    const src = part.headers[sel.hi]?.pins[sel.pi]
-    if (!rp || !src) return
-    const off = 0.04
-    const copy: PartPin = {
-      ...src,
-      capabilities: src.capabilities ? [...src.capabilities] : undefined,
-      x: clamp01(rp.x + off),
-      y: clamp01(rp.y + off)
-    }
-    const newPi = part.headers[sel.hi].pins.length
-    commit({ ...part, headers: part.headers.map((h, i) => (i === sel.hi ? { ...h, pins: [...h.pins, copy] } : h)) })
-    onSelect?.({ type: 'pin', hi: sel.hi, pi: newPi })
   }
 
   // --- copy style / paste style (per-type style clipboard) ------------------
@@ -2059,7 +2202,7 @@ export function PartCanvas({
   /** Stamp the face onto a newly-created item. Without this you'd place a pad
    *  while looking at the back and watch it disappear onto the front. */
   const onFace = <T,>(item: T): T => (rear ? { ...item, side: 'rear' as const } : item)
-  const faceLayer = (rear ? part.rear?.imageLayer : part.imageLayer) ?? { x: 0, y: 0, w: 1, h: 1 }
+  const faceLayer = layer // same thing: the face being edited (#687)
 
   const hitTest = (nx: number, ny: number): CanvasSelection => {
     // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
@@ -2143,7 +2286,7 @@ export function PartCanvas({
     }
     // Erase-background: clicking on the image flood-fills the backdrop there.
     if (tool === 'erasebg') {
-      if (locked.image || !part.imageData) return
+      if (locked.image || !faceImageData) return
       const inX = nx >= layer.x && nx <= layer.x + layer.w
       const inY = ny >= layer.y && ny <= layer.y + layer.h
       if (inX && inY) onEraseImageAt?.(nx, ny)
@@ -2213,7 +2356,7 @@ export function PartCanvas({
     }
 
     // select tool — image resize handles (when the image is selected)
-    if (selection?.type === 'image' && visible.image && !locked.image && part.imageData) {
+    if (selection?.type === 'image' && visible.image && !locked.image && faceImageData) {
       const corners = [
         [layer.x, layer.y],
         [layer.x + layer.w, layer.y],
@@ -2318,9 +2461,36 @@ export function PartCanvas({
       }
       return
     }
+    // Dragging an item that is part of the CURRENT multi-selection moves the whole
+    // selection (#691). Without this, selecting a group and then dragging one of
+    // its highlighted members moved only that member — the selection looked like
+    // a unit and behaved like a pile.
+    const inSelection =
+      (hit.type === 'pin' && selectedPins.some((s) => s.hi === hit.hi && s.pi === hit.pi)) ||
+      (hit.type !== 'pin' &&
+        'index' in hit &&
+        selComponents.some((c) => c.type === (hit.type as GroupComponentKind) && c.index === hit.index))
+    if (inSelection && selectedPins.length + selComponents.length > 1 && !gridMod) {
+      const bundle: NonNullable<Drag['groupBundle']> = { pins: [], comps: [] }
+      for (const sp of selectedPins) {
+        const p = part.headers[sp.hi]?.pins[sp.pi]
+        if (p?.x != null && p?.y != null) bundle.pins.push({ hi: sp.hi, pi: sp.pi, dx: p.x - nx, dy: p.y - ny })
+      }
+      for (const c of selComponents) {
+        const ctr = componentCenter(c.type, c.index)
+        if (ctr) bundle.comps.push({ kind: c.type, index: c.index, dx: ctr.cx - nx, dy: ctr.cy - ny })
+      }
+      if (bundle.pins.length + bundle.comps.length > 1) {
+        dragRef.current = { kind: 'move-group', sel: hit, startNX: nx, startNY: ny, ox: nx, oy: ny, groupBundle: bundle }
+        return
+      }
+    }
     // Grouped item (#630): a plain click selects the WHOLE group tree and drags
     // it as a rigid unit. A servo-header trio (pins only) keeps its grid-snapping
     // via the pin path below; a general group (any shape/label) free-moves.
+    // Must read `group` from EVERY groupable kind (#665): when this only knew
+    // pins/shapes/labels, clicking a grouped connector, LED, button or hole
+    // picked up nothing, so the group neither selected nor dragged as a unit.
     const hitGroup =
       hit.type === 'pin'
         ? part.headers[hit.hi]?.pins[hit.pi]?.group
@@ -2328,22 +2498,27 @@ export function PartCanvas({
           ? shapes[hit.index]?.group
           : hit.type === 'label'
             ? labels[hit.index]?.group
-            : undefined
+            : hit.type === 'connector'
+              ? connectors[hit.index]?.group
+              : hit.type === 'led'
+                ? onboardLeds[hit.index]?.group
+                : hit.type === 'button'
+                  ? buttons[hit.index]?.group
+                  : hit.type === 'hole'
+                    ? holes[hit.index]?.group
+                    : undefined
     if (hitGroup && !gridMod) {
       const root = groupRootId(part.groups, hitGroup)
       const members = selectWholeGroup(root, hit)
       if (members.some((m) => m.kind !== 'pin')) {
-        const bundle: NonNullable<Drag['groupBundle']> = { pins: [], shapes: [], labels: [] }
+        const bundle: NonNullable<Drag['groupBundle']> = { pins: [], comps: [] }
         for (const m of members) {
           if (m.kind === 'pin') {
             const p = part.headers[m.hi]?.pins[m.pi]
             if (p?.x != null && p?.y != null) bundle.pins.push({ hi: m.hi, pi: m.pi, dx: p.x - nx, dy: p.y - ny })
-          } else if (m.kind === 'shape') {
-            const s = shapes[m.index]
-            bundle.shapes.push({ index: m.index, dx: s.x - nx, dy: s.y - ny })
           } else {
-            const l = labels[m.index]
-            bundle.labels.push({ index: m.index, dx: l.x - nx, dy: l.y - ny })
+            const ctr = componentCenter(m.kind, m.index)
+            if (ctr) bundle.comps.push({ kind: m.kind, index: m.index, dx: ctr.cx - nx, dy: ctr.cy - ny })
           }
         }
         dragRef.current = { kind: 'move-group', sel: hit, startNX: nx, startNY: ny, ox: nx, oy: ny, groupBundle: bundle }
@@ -2697,7 +2872,7 @@ export function PartCanvas({
         const inside = pinsPickable
           ? pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
           : []
-        const insideComps: { type: 'shape' | 'label'; index: number }[] = []
+        const insideComps: { type: GroupComponentKind; index: number }[] = []
         if (compsPickable) {
           shapes.forEach((_, i) => {
             const c = componentCenter('shape', i)
@@ -3147,12 +3322,34 @@ export function PartCanvas({
           )
         })}
 
+        {/* Housed-group shells (#678) — behind the pins, so a QWIIC/Grove/JST/
+            terminal's pads sit inside their housing. A servo header draws none:
+            its pins ARE the connector. */}
+        {visible.components &&
+          housedGroupConnectors(part).map(({ gid, conn }) =>
+            housingDrawsShell(conn.kind) ? (
+              <g
+                key={`hg${gid}`}
+                transform={conn.rotation ? `rotate(${conn.rotation} ${px(conn.x)} ${py(conn.y)})` : undefined}
+                style={{ pointerEvents: 'none' }}
+              >
+                {connectorGlyph(px(conn.x), py(conn.y), conn, false, connPxPerMm, true)}
+              </g>
+            ) : null
+          )}
+
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&
           pins.map((rp: ResolvedPin, i) => {
             const face = padOnFace(rp.pin, rp.x)
             if (!shown(rp.pin) || !face.show) return null
-            rp = face.x === rp.x ? rp : { ...rp, x: face.x }
+            // Seen from the far side, a through pad is mirrored — so its FACING
+            // mirrors too (#688). Without this a castellation kept its half-hole
+            // on the original edge and pointed back into the board.
+            rp =
+              face.x === rp.x
+                ? rp
+                : { ...rp, x: face.x, pin: { ...rp.pin, rotation: mirrorRotationX(rp.pin.rotation) } }
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             // A selected group shows a single outline (below) instead of ringing
             // each member — so suppress the per-pin ring when a group is selected.
@@ -3247,7 +3444,7 @@ export function PartCanvas({
                     group so it can be DRAGGED to a hand-placed spot (#…), stored as
                     `labelOffset` and applied here as a translate. `labelHidden` pins
                     (a servo header's V+/GND rows) draw the pad only — no annotation. */}
-                {!rp.pin.labelHidden && (
+                {!pinLabelHidden(part, rp.pin) && (
                 <g
                   transform={labelTf}
                   className={labelDraggable ? 'pcv__pinlabel--drag' : undefined}
@@ -3533,9 +3730,12 @@ export function PartCanvas({
               const labelY = cy + connH / 2 + 11
               const draggable = interactive && !locked.components
               return (
-                // Rotate the whole connector — body, pins AND label — about its
-                // centre when it has a body rotation.
-                <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
+                <g key={`conn${i}`}>
+                  {/* Only the HOUSING turns. Contact labels are rendered outside
+                      this transform, through the shared pin-label path, at
+                      positions that already account for the rotation (#672). */}
+                  {connectorContactLabels(part, conn, box, `c${i}`)}
+                  <g transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
                   <g
                     transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
@@ -3543,6 +3743,7 @@ export function PartCanvas({
                     onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'connector', index: i }, conn.labelOffset) : undefined}
                   >
                     {styledText({ text: connectorLabel(conn), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                   </g>
                 </g>
               )
@@ -3625,7 +3826,7 @@ export function PartCanvas({
             single z-ordered loop above (#130). */}
 
         {/* Selection chrome: image box + handles */}
-        {interactive && selection?.type === 'image' && visible.image && !locked.image && part.imageData && (
+        {interactive && selection?.type === 'image' && visible.image && !locked.image && faceImageData && (
           <g>
             <rect x={px(layer.x)} y={py(layer.y)} width={layer.w * box.w} height={layer.h * box.h} fill="none" stroke="#4ea1ff" strokeDasharray="4 3" strokeWidth={1.5} />
             {[
@@ -3801,6 +4002,21 @@ export function PartCanvas({
                 </button>
               )}
               <span className="pcv__align-sep" />
+              {/* Duplicate. The other mini-toolbars have had one per item all
+                  along; a selected GROUP had none, so the one thing you most want
+                  to copy — a finished servo header — was the one thing you
+                  couldn't (#693). */}
+              {selGroup && (
+                <button
+                  type="button"
+                  className="pcv__align-btn"
+                  onClick={() => duplicateSelectedGroup(selGroup)}
+                  title="Duplicate group"
+                  aria-label="Duplicate group"
+                >
+                  {DUPE_ICON}
+                </button>
+              )}
               <button
                 type="button"
                 className="pcv__align-btn"
@@ -3839,7 +4055,7 @@ export function PartCanvas({
           const shape = sel.type === 'shape' ? shapes[sel.index] : null
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit component" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateComponent(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate component 90 degrees" onClick={() => rotateComponent(sel)}>
@@ -4097,7 +4313,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit pin" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicatePin(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90° (turns the label; the half-hole on castellated pads)" aria-label="Rotate pin 90 degrees" onClick={() => rotatePin(sel)}>
@@ -4124,7 +4340,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit mounting hole" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate hole" onClick={() => duplicateHole(sel.index)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate hole" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <div className="pcv__ctb-size">
@@ -4194,7 +4410,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit connector" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate connector" onClick={() => duplicateComponent(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate connector" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate connector 90 degrees" onClick={() => rotateComponent(sel)}>

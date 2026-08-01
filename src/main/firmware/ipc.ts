@@ -7,6 +7,7 @@
  * / `flasher.ts`, keeping this file to thin glue.
  */
 import { dialog, ipcMain, BrowserWindow, type WebContents } from 'electron'
+import type { FlashMethod } from '../../shared/board-profiles'
 import type { IpcResult } from '../device/types'
 import { detectBoards } from './detect'
 import { detectEsptool, flash } from './flasher'
@@ -64,16 +65,29 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
 
   ipcMain.handle(FIRMWARE_CHANNELS.esptool, () => wrap<EsptoolInfo>(() => detectEsptool()))
 
-  ipcMain.handle(FIRMWARE_CHANNELS.pickFile, () =>
+  ipcMain.handle(FIRMWARE_CHANNELS.pickFile, (_e, method?: FlashMethod) =>
     wrap<string | null>(async () => {
       const win = getWindow()
+      // Offer only what THIS board can actually be flashed with (#686). Showing
+      // every firmware extension to everyone is how a `.uf2` got picked for an
+      // ESP32-S3 — esptool wrote the container, reported success, and the board
+      // boot-looped. The renderer still validates, but the dialog should not
+      // present a file that cannot work in the first place.
+      const forMethod: Record<FlashMethod, { name: string; ext: string }> = {
+        esptool: { name: 'ESP firmware', ext: 'bin' },
+        uf2: { name: 'UF2 firmware', ext: 'uf2' },
+        daplink: { name: 'micro:bit firmware', ext: 'hex' }
+      }
+      const pick = method ? forMethod[method] : null
       const options: Electron.OpenDialogOptions = {
         title: 'Choose firmware file',
         properties: ['openFile'],
-        filters: [
-          { name: 'Firmware', extensions: ['bin', 'uf2', 'hex'] },
-          { name: 'All files', extensions: ['*'] }
-        ]
+        filters: pick
+          ? [{ name: pick.name, extensions: [pick.ext] }, { name: 'All files', extensions: ['*'] }]
+          : [
+              { name: 'Firmware', extensions: ['bin', 'uf2', 'hex'] },
+              { name: 'All files', extensions: ['*'] }
+            ]
       }
       const result = win
         ? await dialog.showOpenDialog(win, options)

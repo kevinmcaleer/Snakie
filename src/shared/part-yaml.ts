@@ -17,7 +17,13 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceGroveVariant, coercePinShape, coerceSide } from './part'
+import {
+  coerceConnectorKind,
+  coerceConnectorVariant,
+  coerceGroupHousing,
+  coercePinShape,
+  coerceSide
+} from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -39,6 +45,7 @@ import type {
   PartLibrary,
   PartMount,
   PartPin,
+  PartRail,
   PartPinBuses,
   PartPinCapability,
   PartPinSignals,
@@ -226,6 +233,13 @@ export function coerceElectrical(raw: unknown): PartElectrical | null {
     const lo = num(r.supplyRange[0])
     const hi = num(r.supplyRange[1])
     if (lo !== undefined && hi !== undefined && hi >= lo) el.supplyRange = [lo, hi]
+  }
+  // What the part needs FROM a supply (#687) — the opposite direction to
+  // `supplyRange`, which is what an adjustable source can be set to.
+  if (Array.isArray(r.operatingV) && r.operatingV.length === 2) {
+    const lo = posNum(r.operatingV[0])
+    const hi = posNum(r.operatingV[1])
+    if (lo !== undefined && hi !== undefined && hi >= lo) el.operatingV = [lo, hi]
   }
   const maxCurrentA = posNum(r.maxCurrentA)
   if (maxCurrentA !== undefined) el.maxCurrentA = maxCurrentA
@@ -448,6 +462,7 @@ export function partToYaml(part: PartDefinition): string {
     features: part.features,
     shapes: part.shapes,
     labels: part.labels,
+    rails: part.rails,
     groups: part.groups,
     onboardLeds: part.onboardLeds,
     // NB: field-by-field, so every new PartConnector field must be added HERE and
@@ -651,6 +666,20 @@ export function partFromYaml(text: string): PartDefinition {
       .filter((l): l is PartLabel => l !== null)
     if (labels.length) part.labels = labels
   }
+  if (Array.isArray(raw.rails)) {
+    const rails = raw.rails
+      .map((r): PartRail | null => {
+        const o = r as Record<string, unknown>
+        const name = str(o?.name)
+        const pins = Array.isArray(o?.pins)
+          ? (o.pins as unknown[]).map((x) => str(x)).filter((x): x is string => !!x)
+          : []
+        // Fewer than two pins joins nothing.
+        return name && pins.length >= 2 ? { name, pins } : null
+      })
+      .filter((r): r is PartRail => r !== null)
+    if (rails.length) part.rails = rails
+  }
   if (Array.isArray(raw.groups)) {
     const groups = raw.groups
       .map((g): PartGroup | null => {
@@ -663,6 +692,8 @@ export function partFromYaml(text: string): PartDefinition {
         if (name) out.name = name
         const parent = str(gr?.parent)
         if (parent) out.parent = parent
+        const housing = coerceGroupHousing(gr?.housing)
+        if (housing) out.housing = housing
         return out
       })
       .filter((g): g is PartGroup => g !== null)
@@ -677,7 +708,13 @@ export function partFromYaml(text: string): PartDefinition {
         const y = num(r.y)
         if (x === undefined || y === undefined) return null
         const kind: OnboardLed['kind'] =
-          r.kind === 'rgb' ? 'rgb' : r.kind === 'neopixel' ? 'neopixel' : 'single'
+          r.kind === 'rgb'
+            ? 'rgb'
+            : r.kind === 'neopixel'
+              ? 'neopixel'
+              : r.kind === 'power'
+                ? 'power'
+                : 'single'
         const led: OnboardLed = { kind, x, y }
         readItemFlags(r, led as unknown as Record<string, unknown>)
         const label = str(r.label)
@@ -695,8 +732,12 @@ export function partFromYaml(text: string): PartDefinition {
             if (Object.keys(obj).length) led.rgb = obj
           }
         } else {
-          const g = num(r.gpio)
-          if (g !== undefined) led.gpio = g
+          // A `power` LED sits across the supply — nothing drives it, so there is
+          // no GPIO to read (#698). It keeps its colour like any single LED.
+          if (kind !== 'power') {
+            const g = num(r.gpio)
+            if (g !== undefined) led.gpio = g
+          }
           if (kind === 'neopixel') {
             const p = num(r.power)
             if (p !== undefined) led.power = p
@@ -724,7 +765,7 @@ export function partFromYaml(text: string): PartDefinition {
           : []
         const conn: PartConnector = { kind, x, y, pins }
         readItemFlags(r, conn as unknown as Record<string, unknown>)
-        const variant = coerceGroveVariant(r.variant)
+        const variant = coerceConnectorVariant(kind, r.variant)
         if (variant) conn.variant = variant
         const label = str(r.label)
         if (label) conn.label = label

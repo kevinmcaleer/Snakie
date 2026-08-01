@@ -21,6 +21,14 @@ import {
   type LayerLocks
 } from './PartCanvas'
 import { connectorDefaultName, pinOutwardDir } from './part-body'
+import {
+  hasI2cInterface,
+  hexAddr,
+  isReservedI2cAddress,
+  knownDevicesFor,
+  parseI2cAddress,
+  partsClaimingAddress
+} from './i2c-known-devices'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
@@ -34,9 +42,21 @@ import {
   PIN_SHAPE_LABEL,
   PIN_TYPES,
   PIN_TYPE_LABEL,
+  addTags,
   blankPart,
   collectUsedColors,
   dissolveGroup,
+  connectorsToHousedGroups,
+  duplicateGroup,
+  duplicateSelection,
+  pruneEmptyGroups,
+  faceImageData as faceImageDataOf,
+  faceImageLayer,
+  itemGroupOf,
+  withFaceImageLayer,
+  selectionGroupId,
+  resizeContacts,
+  terminalPins,
   groupRootId,
   groupTreeIds,
   translateShape,
@@ -44,6 +64,7 @@ import {
   orderedItems,
   partLayerTree,
   withGroupFlag,
+  withGroupHousing,
   withGroupName,
   withItemFlag,
   applyItemOrder,
@@ -62,8 +83,19 @@ import {
   type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
-import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, itemLocked } from '../../../shared/part'
+import {
+  GROVE_VARIANTS,
+  JST_FAMILIES,
+  PART_CONNECTOR_KINDS,
+  TERMINAL_MAX,
+  TERMINAL_MIN,
+  coerceGroveVariant,
+  coerceJstFamily,
+  itemLocked
+} from '../../../shared/part'
 import type {
+  ConnectorVariant,
+  JstFamily,
   ComponentShape,
   ComponentShapeKind,
   ElectricalModel,
@@ -177,13 +209,23 @@ const CONN_KIND_TITLE: Record<PartConnectorKind, string> = {
   qwiic: 'QWIIC / STEMMA QT',
   jst: 'JST connector',
   grove: 'Grove port',
-  dupont: 'Servo / DuPont header'
+  dupont: 'Servo / DuPont header',
+  terminal: 'Screw terminal block'
 }
 const CONN_KIND_LABEL: Record<PartConnectorKind, string> = {
   qwiic: 'QWIIC',
   jst: 'JST',
   grove: 'Grove',
-  dupont: 'Servo / DuPont'
+  dupont: 'Servo / DuPont',
+  terminal: 'Screw terminal'
+}
+const JST_FAMILY_LABEL: Record<JstFamily, string> = {
+  sh: 'SH — 1.00 mm',
+  gh: 'GH — 1.25 mm',
+  zh: 'ZH — 1.50 mm',
+  ph: 'PH — 2.00 mm',
+  xh: 'XH — 2.50 mm',
+  vh: 'VH — 3.96 mm'
 }
 const GROVE_VARIANT_LABEL: Record<GroveVariant, string> = {
   i2c: 'I²C',
@@ -201,15 +243,17 @@ const cloneConnPins = (pins: PartPin[]): PartPin[] =>
 /** The standard contacts for a connector kind — Grove's four wirings, a 3-way
  *  servo block, QWIIC's I2C four, or four blank JST pins. Used both when adding a
  *  connector and by the inspector's "Standard contacts" reset. */
-const standardConnPins = (kind: PartConnectorKind, variant?: GroveVariant): PartPin[] =>
+const standardConnPins = (kind: PartConnectorKind, variant?: ConnectorVariant): PartPin[] =>
   cloneConnPins(
     kind === 'grove'
-      ? GROVE_PINS[variant ?? 'i2c']
+      ? GROVE_PINS[coerceGroveVariant(variant) ?? 'i2c']
       : kind === 'dupont'
         ? SERVO_PINS
         : kind === 'jst'
           ? JST_PINS
-          : QWIIC_PINS
+          : kind === 'terminal'
+            ? terminalPins(TERMINAL_MIN)
+            : QWIIC_PINS
   )
 
 /**
@@ -545,6 +589,9 @@ export function PartEditor({
   // A "select this whole group" request from the Layers panel → the canvas selects
   // every member (#631). The bumping nonce lets re-selecting the same group re-fire.
   const [groupSelect, setGroupSelect] = useState<{ id: string; nonce: number } | null>(null)
+  /** Ask the canvas to delete its MULTI-selection (#667) — the marquee's selection
+   *  lives in PartCanvas, so Delete here can't reach it directly. */
+  const [deleteRequest, setDeleteRequest] = useState<{ nonce: number } | null>(null)
   const selectGroup = (id: string): void => {
     // Selecting the GROUP clears any individual member marker — the answer to
     // "which one?" is now "all of them".
@@ -578,8 +625,13 @@ export function PartEditor({
 
   // Read the image's native pixel aspect whenever the image changes (upload or a
   // re-opened part), so "lock aspect" can use the photo's true proportions.
+  // The face's OWN photo (#687). Reading the front's while editing the rear is
+  // what made "lock aspect" reshape the rear to the front picture's proportions.
+  // Derived OUTSIDE the effect so it depends on the photo itself rather than the
+  // whole part — otherwise every keystroke re-decodes the image.
+  const measuredFace = side === 'rear' ? part.rear?.imageData : part.imageData
   useEffect(() => {
-    const data = part.imageData
+    const data = measuredFace
     if (!data) {
       setImageNativeAspect(null)
       return
@@ -595,7 +647,7 @@ export function PartEditor({
     return () => {
       cancelled = true
     }
-  }, [part.imageData])
+  }, [measuredFace])
 
   // Snapshot the pristine image the first time one is present (a re-opened part
   // or a fresh upload), so background erasing has an original to reset to. Once
@@ -735,7 +787,9 @@ export function PartEditor({
   const eraseBgAt = async (nx: number, ny: number): Promise<void> => {
     const src = faceImageData
     if (!src) return
-    const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    // The face's own layer (#687) — mapping the click through the FRONT's box put
+    // the erase somewhere else entirely when working on the back.
+    const layer = faceImageLayer(part, side)
     const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
     const v = (ny - layer.y) / (layer.h || 1)
     if (u < 0 || u > 1 || v < 0 || v > 1) return
@@ -754,23 +808,26 @@ export function PartEditor({
     }
   }
   const canResetBg = imageOriginal !== undefined && part.imageData !== undefined && part.imageData !== imageOriginal
-  const setImageLayer = (p: Partial<ImageLayer>): void => {
-    const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
-    patch({ imageLayer: { ...cur, ...p } })
-  }
+  // Edit the layer of the face ON SCREEN (#687): the rear photo has its own
+  // placement, and writing the front's while showing the rear moved the wrong one.
+  const setImageLayer = (p: Partial<ImageLayer>): void => patch(withFaceImageLayer(part, side, p))
   // Toggle the lock; when turning it ON, immediately reshape the image layer to
   // the photo's native aspect (so an already-stretched image snaps back).
   const toggleLockAspect = (): void => {
     const next = !lockImageAspect
     setLockImageAspect(next)
-    if (next && imageNativeAspect && imageNativeAspect > 0 && part.imageData) {
-      const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    if (next && imageNativeAspect && imageNativeAspect > 0 && faceImageDataOf(part, side)) {
+      const cur = faceImageLayer(part, side)
       // (w·boardAspect)/(h) === native  ⇒  h = w·boardAspect/native (box w/h ratio = boardAspect)
-      patch({ imageLayer: { ...cur, h: (cur.w * boardAspectOf(part)) / imageNativeAspect } })
+      patch(withFaceImageLayer(part, side, { h: (cur.w * boardAspectOf(part)) / imageNativeAspect }))
     }
   }
 
   // --- delete the selected object ------------------------------------------
+  /** Drop any group left with no members after a delete (#690) — otherwise it
+   *  lists in the Layers panel, selects nothing, and Delete appears to do nothing. */
+  const dropEmptyGroups = (d: PartDefinition): PartDefinition => ({ ...d, groups: pruneEmptyGroups(d) })
+
   const deleteSelection = (): void => {
     const sel = selection
     if (!sel) return
@@ -799,31 +856,31 @@ export function PartEditor({
     if (selFlags && itemLocked(part.groups, selFlags)) return
     // A grouped item (#630) deletes its whole group tree — every member pin,
     // shape + label (recursively through nested sub-groups) + the registry entries.
-    const selGroup =
-      sel.type === 'pin'
-        ? part.headers[sel.hi]?.pins[sel.pi]?.group
-        : sel.type === 'shape'
-          ? part.shapes?.[sel.index]?.group
-          : sel.type === 'label'
-            ? part.labels?.[sel.index]?.group
-            : undefined
+    // Every groupable kind, not three (#665) — otherwise deleting a group whose
+    // primary is a connector/LED/button/hole removed just that one item and left
+    // the rest of the group behind.
+    const selGroup = selectionGroupId(part, sel)
     if (selGroup) {
       const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
       const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
-      setPart((d) => ({
+      setPart((d) => dropEmptyGroups({
         ...d,
         headers: d.headers
           .map((h) => ({ ...h, pins: h.pins.filter((p) => !inTree(p.group)) }))
           .filter((h) => h.pins.length > 0),
         shapes: (d.shapes ?? []).filter((s) => !inTree(s.group)),
         labels: (d.labels ?? []).filter((l) => !inTree(l.group)),
+        connectors: (d.connectors ?? []).filter((c) => !inTree(c.group)),
+        onboardLeds: (d.onboardLeds ?? []).filter((l) => !inTree(l.group)),
+        buttons: (d.buttons ?? []).filter((b) => !inTree(b.group)),
+        mountingHoles: (d.mountingHoles ?? []).filter((h) => !inTree(h.group)),
         groups: (d.groups ?? []).filter((g) => !ids.has(g.id))
       }))
       setSelection(null)
       return
     }
     if (sel.type === 'pin') {
-      setPart((d) => ({
+      setPart((d) => dropEmptyGroups({
         ...d,
         headers: d.headers
           .map((h, i) => ({
@@ -876,14 +933,10 @@ export function PartEditor({
     const clamp = (v: number): number => Math.min(1, Math.max(0, v))
     const shiftPin = (p: (typeof part.headers)[number]['pins'][number]): typeof p =>
       p.x != null && p.y != null ? { ...p, x: clamp(p.x + dx), y: clamp(p.y + dy) } : p
-    const selGroup =
-      sel.type === 'pin'
-        ? part.headers[sel.hi]?.pins[sel.pi]?.group
-        : sel.type === 'shape'
-          ? part.shapes?.[sel.index]?.group
-          : sel.type === 'label'
-            ? part.labels?.[sel.index]?.group
-            : undefined
+    // Every groupable kind, not three (#665) — otherwise deleting a group whose
+    // primary is a connector/LED/button/hole removed just that one item and left
+    // the rest of the group behind.
+    const selGroup = selectionGroupId(part, sel)
     if (selGroup) {
       const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
       const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
@@ -1023,6 +1076,18 @@ export function PartEditor({
         redo()
         return
       }
+      // Ctrl/Cmd+D duplicates the selected item (#661) — the same action as the
+      // canvas mini-toolbar's ⧉ button, through the same helper. preventDefault
+      // matters: in the web build this is the browser's "bookmark page".
+      if (mod && (e.key === 'd' || e.key === 'D')) {
+        if (typing || !selection) return
+        const res = duplicateSelection(part, selection)
+        if (!res) return // nothing duplicable selected — leave the key alone
+        e.preventDefault()
+        setPart(res.part)
+        setSelection(res.selection)
+        return
+      }
       // Arrow keys nudge the selected item / group (#632); Shift = a coarser step.
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         if (typing || !selection || mod) return
@@ -1034,8 +1099,15 @@ export function PartEditor({
         return
       }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (!selection) return
       if (typing) return
+      // A marquee leaves `selection` null and the picked items in the canvas's own
+      // multi-selection, so with no single selection ask the canvas to delete
+      // that instead of doing nothing (#667).
+      if (!selection) {
+        e.preventDefault()
+        setDeleteRequest((r) => ({ nonce: (r?.nonce ?? 0) + 1 }))
+        return
+      }
       e.preventDefault()
       deleteSelection()
     }
@@ -1236,6 +1308,8 @@ export function PartEditor({
                   tool={tool}
                   selection={selection}
                   groupSelect={groupSelect ?? undefined}
+                deleteRequest={deleteRequest ?? undefined}
+                onGroupDuplicated={selectGroup}
                   onChange={setPart}
                   peek={peek}
                   onSelect={(sel) => {
@@ -1329,6 +1403,7 @@ export function PartEditor({
                 footprints={footprints}
                 onSelect={setSelection}
                 footprintOps={footprintOps}
+                existingParts={existingParts}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -1455,6 +1530,8 @@ function LayersPanel({
   // a board of servo headers reads as one row each, not three).
   // The group node (in the Parts list) whose name is being edited inline (#631).
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  /** Which group row has its housing menu open (#673). */
+  const [housingMenu, setHousingMenu] = useState<string | null>(null)
   // Pin list sort (#…): click a column header to sort by it; `col: null` is the
   // default insertion order. Clicking the active column toggles asc ⇄ desc.
   type PinSortCol = 'number' | 'type' | 'gpio'
@@ -1496,7 +1573,7 @@ function LayersPanel({
   const connectors = part.connectors ?? []
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
-  const addLed = (kind: 'single' | 'rgb' | 'neopixel' = 'single'): void => {
+  const addLed = (kind: OnboardLed['kind'] = 'single'): void => {
     const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
@@ -1547,7 +1624,14 @@ function LayersPanel({
       }
       case 'led': {
         const l = onboardLeds[it.index]
-        const word = l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED'
+        const word =
+          l.kind === 'rgb'
+            ? 'RGB'
+            : l.kind === 'neopixel'
+              ? 'NeoPixel'
+              : l.kind === 'power'
+                ? 'PWR'
+                : 'LED'
         return { name: `${l.label || word} ${it.index + 1}`, sub: l.kind, sel: { type: 'led', index: it.index } }
       }
       case 'connector': {
@@ -1691,6 +1775,40 @@ function LayersPanel({
   /** Eye + padlock for one GROUP row. */
   const groupFlags = (groupId: string, what: string): JSX.Element | null =>
     flagRow(nodeById.get(`group:${groupId}`), (flag, value) => patch(withGroupFlag(part, groupId, flag, value)), what)
+  /** The root group the current selection belongs to, if any (#691). A canvas
+   *  click on a grouped item selects the whole group, so this lights that row. */
+  const selectedGroupRoot = useMemo(() => {
+    const g = selectionGroupId(part, selection)
+    return g ? groupRootId(part.groups, g) : null
+  }, [part, selection])
+  /**
+   * Every group id in the selected tree (#692).
+   *
+   * Selecting a group selects all of it, so its MEMBER rows have to light up too
+   * — otherwise the panel showed the group highlighted and its contents not, apart
+   * from the one member that happens to be the selection's primary.
+   *
+   * Derived rather than read from the canvas's multi-selection, which the panel
+   * has no access to: "this item's group is in the selected tree" is exactly the
+   * same answer and needs only the part.
+   */
+  const selectedGroupIds = useMemo(
+    () => (selectedGroupRoot ? groupTreeIds(part.groups, selectedGroupRoot) : null),
+    [part.groups, selectedGroupRoot]
+  )
+  /** Is this item inside the selected group tree? */
+  const inSelGroup = (g?: string): boolean => !!g && !!selectedGroupIds && selectedGroupIds.has(g)
+
+  /** Duplicate a whole group — its members, its housing and all (#691). */
+  const duplicateGroupNode = (gid: string): void => {
+    const res = duplicateGroup(part, gid)
+    if (!res) return
+    patch(res.part)
+    // Land on the copy, so a second duplicate makes a third rather than another
+    // copy of the original.
+    onSelectGroup?.(res.gid)
+  }
+
   const commitRename = (gid: string, text: string): void => {
     patch(withGroupName(part, gid, text))
     setRenamingGroup(null)
@@ -1705,10 +1823,11 @@ function LayersPanel({
       it.kind === 'shape'
         ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
         : selEq(sel)
+    const inGroup = inSelGroup(itemGroupOf(part, it.kind, it.index))
     return (
       <li
         key={`${it.kind}${it.index}`}
-        className={`pe__flatrow${active ? ' is-active' : ''}`}
+        className={`pe__flatrow${active || inGroup ? ' is-active' : ''}`}
         style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
       >
         {itemFlags({ kind: it.kind, index: it.index }, name)}
@@ -1749,7 +1868,9 @@ function LayersPanel({
   const pinRowHier = (rp: ResolvedPin, depth: number): JSX.Element => (
     <li
       key={`p${rp.hi}-${rp.pi}`}
-      className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+      className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${
+        selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) || inSelGroup(rp.pin.group) ? ' is-active' : ''
+      }`}
       style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
     >
       {itemFlags({ kind: 'pin', index: flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1 }, rp.pin.name || 'pin')}
@@ -1776,7 +1897,7 @@ function LayersPanel({
     return (
       <li
         key={`hole${index}`}
-        className={`pe__flatrow pe__flatrow--hole${selEq({ type: 'hole', index }) ? ' is-active' : ''}`}
+        className={`pe__flatrow pe__flatrow--hole${selEq({ type: 'hole', index }) || inSelGroup(h?.group) ? ' is-active' : ''}`}
         style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
       >
         {itemFlags({ kind: 'hole', index }, `hole ${index + 1}`)}
@@ -1830,7 +1951,13 @@ function LayersPanel({
       n.children.reduce((sum, c) => sum + (c.kind === 'item' ? 1 : leaves(c)), 0)
     return (
       <li key={node.id} className="pe__grouprow">
-        <div className="pe__flatrow pe__flatrow--partgroup" style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
+        {/* Clicking a group selects the WHOLE group on the canvas, so the GROUP
+            row is what should light up — it used to highlight whichever member
+            happened to be picked as the selection's primary (#691). */}
+        <div
+          className={`pe__flatrow pe__flatrow--partgroup${selectedGroupRoot === groupRootId(part.groups, gid) ? ' is-active' : ''}`}
+          style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
+        >
           <button
             type="button"
             className="pe__flatcaret"
@@ -1884,6 +2011,75 @@ function LayersPanel({
               </button>
             </>
           )}
+          {/* Make the group a CONNECTOR (#673): its pins become the contacts of a
+              housing, so a lead can plug into them. The pins do not move — which
+              is what keeps every saved wire pointing where it did.
+
+              An icon button rather than a dropdown: the row is already dense, and
+              this is a rare, deliberate act — not a field you scan. It reads as
+              set/unset at a glance and only asks which KIND when you open it. */}
+          <div className="pe__hwrap">
+            <button
+              type="button"
+              className={`pe__group-plug${g?.housing ? ' is-on' : ''}`}
+              onClick={() => setHousingMenu((m) => (m === gid ? null : gid))}
+              title={
+                g?.housing
+                  ? `${CONN_KIND_LABEL[g.housing.kind]} — a lead can plug into this group`
+                  : 'Make this group a connector, so a lead can plug into its pins'
+              }
+              aria-label={`Connector housing for ${node.label}`}
+              aria-haspopup="menu"
+              aria-expanded={housingMenu === gid}
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+                <rect x="1.5" y="4" width="9" height="5.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M4 4V2.2M8 4V2.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {housingMenu === gid && (
+              <>
+                <button type="button" className="pe__addback" aria-label="Close" onClick={() => setHousingMenu(null)} />
+                <div className="pe__addmenu pe__addmenu--housing" role="menu">
+                  {PART_CONNECTOR_KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHousingMenu(null)
+                        patch(withGroupHousing(part, gid, k))
+                      }}
+                    >
+                      {CONN_KIND_LABEL[k]}
+                      {g?.housing?.kind === k ? ' ✓' : ''}
+                    </button>
+                  ))}
+                  {g?.housing && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHousingMenu(null)
+                        patch(withGroupHousing(part, gid, null))
+                      }}
+                    >
+                      Remove housing
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            className="pe__group-ungroup"
+            onClick={() => duplicateGroupNode(gid)}
+            title={`Duplicate ${node.label} and everything in it`}
+            aria-label={`Duplicate ${node.label}`}
+          >
+            ⧉
+          </button>
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>
@@ -1933,7 +2129,8 @@ function LayersPanel({
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
-                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND) — a real housing, so a servo lead can cable to it">Servo header</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('terminal') }} title="Add a green screw terminal block (set how many terminals in the inspector)">Terminal block</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
                   </div>
                 </>
@@ -1959,7 +2156,7 @@ function LayersPanel({
                 type="button"
                 className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
                 onClick={() => setTool('servo-header')}
-                title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
+                title="Add a servo header (Signal / V+ / GND) — click to place one, or drag to place a row. A servo lead cables all three in one drag."
                 aria-label="Add servo header"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
@@ -2322,6 +2519,8 @@ interface InspectorProps {
   footprints: FootprintInfo[]
   onSelect: (sel: CanvasSelection) => void
   footprintOps: FootprintOps
+  /** Other parts in the same library — for the I²C address-clash warning. */
+  existingParts: PartDefinition[]
 }
 
 /** "Add footprint…" dropdown (#166): a scrollable, fixed-positioned menu of
@@ -2520,7 +2719,144 @@ function Inspector(props: InspectorProps): JSX.Element {
 
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
       <ElectricalSection part={part} patch={patch} names={props.names} />
+
+      {/* I²C addresses — what the I²C-detect instrument matches a scan against (#653) */}
+      <I2cSection part={part} patch={patch} existingParts={props.existingParts} />
     </>
+  )
+}
+
+/**
+ * The **I²C** inspector section (#653, epic #654) — declares the address(es) this
+ * part answers on, so the I²C-detect instrument can match a live bus scan back to
+ * it and offer "add this part".
+ *
+ * Until now `i2cAddresses` could only be hand-written into `parts.yml`, which put
+ * the commonest breadboard part there is — an I²C sensor — out of reach of anyone
+ * authoring in the app.
+ *
+ * Deliberately NOT the generic key/value `properties` table: that is display-only,
+ * so an address typed there looks declared and does nothing. Follows
+ * {@link ElectricalSection} instead — a typed field consumed by a subsystem gets a
+ * control that can validate it.
+ */
+function I2cSection({
+  part,
+  patch,
+  existingParts
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  existingParts: PartDefinition[]
+}): JSX.Element {
+  const [draft, setDraft] = useState('')
+  const addrs = part.i2cAddresses ?? []
+  // `76` is decimal 0x4C, but I²C addresses are conventionally written in hex — so
+  // rather than guess what the author meant, show them the parse as they type.
+  const parsed = parseI2cAddress(draft)
+  const duplicate = parsed !== null && addrs.includes(parsed)
+
+  const commit = (next: number[]): void =>
+    patch({ i2cAddresses: next.length ? [...next].sort((a, b) => a - b) : undefined })
+
+  const add = (): void => {
+    if (parsed === null || duplicate) return
+    commit([...addrs, parsed])
+    setDraft('')
+  }
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">I²C</h3>
+
+      {addrs.length > 0 && (
+        <ul className="pe__addrs">
+          {addrs.map((a) => {
+            const clash = partsClaimingAddress(a, existingParts, part.id)
+            const known = knownDevicesFor(a)
+            return (
+              <li key={a} className="pe__addr">
+                <span className="pe__addr-hex">{hexAddr(a)}</span>
+                {known.length > 0 && <span className="pe__addr-known">{known[0]}</span>}
+                {isReservedI2cAddress(a) && (
+                  <span className="pe__addr-warn" title="The I²C spec reserves this address">
+                    reserved
+                  </span>
+                )}
+                {clash.length > 0 && (
+                  <span
+                    className="pe__addr-warn"
+                    title={`Also claimed by: ${clash.map((p) => p.name).join(', ')}`}
+                  >
+                    also {clash.length === 1 ? clash[0].name : `${clash.length} parts`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="pe__chip pe__chip--del"
+                  aria-label={`Remove ${hexAddr(a)}`}
+                  onClick={() => commit(addrs.filter((x) => x !== a))}
+                >
+                  ✕
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="pe__row">
+        <label className="pe__field">
+          <span>Add address</span>
+          <input
+            type="text"
+            value={draft}
+            placeholder="0x76"
+            spellCheck={false}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                add()
+              }
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="pe__add pe__add--inline"
+          disabled={parsed === null || duplicate}
+          onClick={add}
+        >
+          Add
+        </button>
+      </div>
+
+      {/* The live parse. This is the whole answer to "did you mean 0x76 or 76?" */}
+      {draft.trim() !== '' && (
+        <p className="pe__hint">
+          {parsed === null ? (
+            <span className="pe__addr-warn">
+              Not a 7-bit address — use <code>0x76</code>, <code>76h</code> or a decimal 0–127.
+            </span>
+          ) : duplicate ? (
+            <span className="pe__addr-warn">{hexAddr(parsed)} is already listed.</span>
+          ) : (
+            <>
+              → <code>{hexAddr(parsed)}</code>
+              {knownDevicesFor(parsed).length > 0 && ` — ${knownDevicesFor(parsed)[0]}`}
+              {isReservedI2cAddress(parsed) && ' (reserved by the I²C spec)'}
+            </>
+          )}
+        </p>
+      )}
+
+      <p className="pe__hint pe__hint--muted">
+        {hasI2cInterface(part)
+          ? 'The I²C-detect instrument offers this part when a scan finds one of these addresses.'
+          : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
+      </p>
+    </section>
   )
 }
 
@@ -2571,6 +2907,22 @@ function ElectricalSection({
     if (next.model === 'passive') patch({ electrical: undefined })
     else patch({ electrical: next })
   }
+  /** Edit one end of the operating range, dropping the pair when both are empty. */
+  const setOperating = (i: 0 | 1, raw: string): void => {
+    const cur = el.operatingV ?? [Number.NaN, Number.NaN]
+    const next: [number, number] = [cur[0], cur[1]]
+    next[i] = raw === '' ? Number.NaN : Number(raw)
+    if (!Number.isFinite(next[0]) && !Number.isFinite(next[1])) {
+      setEl({ operatingV: undefined })
+      return
+    }
+    // A half-filled range is not usable, so mirror the one end until the other is
+    // typed — better than storing a NaN the coercer would silently drop.
+    const lo = Number.isFinite(next[0]) ? next[0] : next[1]
+    const hi = Number.isFinite(next[1]) ? next[1] : next[0]
+    setEl({ operatingV: [Math.min(lo, hi), Math.max(lo, hi)] })
+  }
+
   const num = (key: ElectricalNumKey, label: string, step = 'any', hint?: string): JSX.Element => (
     <label className="pe__field">
       <span>{label}</span>
@@ -2660,6 +3012,34 @@ function ElectricalSection({
             {num('stallCurrentA', 'Peak / stall (A)')}
           </div>
           {num('maxCurrentA', 'Max current (A)')}
+          {/* What the part needs FROM a supply (#687). The model described amps
+              only, so the sim knew a servo drew 100 mA and had no idea it wanted
+              4.8–6 V — the commonest way to destroy a part, invisible to the ERC. */}
+          <div className="pe__row">
+            <label className="pe__field">
+              <span>Supply min (V)</span>
+              <input
+                type="number"
+                step="any"
+                value={el.operatingV?.[0] ?? ''}
+                placeholder={part.voltage || undefined}
+                onChange={(e) => setOperating(0, e.target.value)}
+              />
+            </label>
+            <label className="pe__field">
+              <span>Supply max (V)</span>
+              <input
+                type="number"
+                step="any"
+                value={el.operatingV?.[1] ?? ''}
+                placeholder={part.voltage || undefined}
+                onChange={(e) => setOperating(1, e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="pe__hint">
+            Warns when the part is wired to a rail outside this range. Absent ⇒ no check.
+          </p>
           {terminals()}
         </>
       )}
@@ -2861,6 +3241,7 @@ function SelectionInspector({
   selection,
   setPart,
   patch,
+  onSelect,
   setImageLayer,
   lockImageAspect,
   onToggleLockAspect,
@@ -3222,7 +3603,13 @@ function SelectionInspector({
     const led = (part.onboardLeds ?? [])[selection.index]
     if (led) {
       title =
-        led.kind === 'rgb' ? 'Onboard RGB LED' : led.kind === 'neopixel' ? 'Onboard NeoPixel' : 'Onboard LED'
+        led.kind === 'rgb'
+          ? 'Onboard RGB LED'
+          : led.kind === 'neopixel'
+            ? 'Onboard NeoPixel'
+            : led.kind === 'power'
+              ? 'Power indicator LED'
+              : 'Onboard LED'
       const upd = (p: Partial<OnboardLed>): void =>
         patch({ onboardLeds: (part.onboardLeds ?? []).map((l, i) => (i === selection.index ? { ...l, ...p } : l)) })
       const updRgb = (ch: 'r' | 'g' | 'b', v: number | undefined): void =>
@@ -3247,6 +3634,7 @@ function SelectionInspector({
                 <option value="single">LED</option>
                 <option value="rgb">RGB</option>
                 <option value="neopixel">NeoPixel</option>
+                <option value="power">Power indicator</option>
               </select>
             </label>
             <label className="pe__field">
@@ -3255,7 +3643,15 @@ function SelectionInspector({
                 type="text"
                 value={led.label ?? ''}
                 onChange={(e) => upd({ label: e.target.value || undefined })}
-                placeholder={led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED'}
+                placeholder={
+                  led.kind === 'rgb'
+                    ? 'RGB'
+                    : led.kind === 'neopixel'
+                      ? 'NeoPixel'
+                      : led.kind === 'power'
+                        ? 'PWR'
+                        : 'LED'
+                }
               />
             </label>
           </div>
@@ -3267,6 +3663,24 @@ function SelectionInspector({
                 <input type="color" value={led.color ?? '#39d353'} onChange={(e) => upd({ color: e.target.value })} />
               </label>
             </div>
+          )}
+          {led.kind === 'power' && (
+            <>
+              <div className="pe__row">
+                <label className="pe__field">
+                  <span>Colour</span>
+                  <input type="color" value={led.color ?? '#39d353'} onChange={(e) => upd({ color: e.target.value })} />
+                </label>
+              </div>
+              {/* No GPIO field: nothing drives a power LED. Saying so beats leaving
+                  an empty box that looks unfinished (#698). */}
+              <p className="pe__hint">
+                Lights in the Board View when this part&rsquo;s supply is present
+                {part.electrical?.operatingV
+                  ? ` — at or above ${part.electrical.operatingV[0]} V.`
+                  : '. Set a supply range in Electrical to say how much it needs.'}
+              </p>
+            </>
           )}
           {led.kind === 'rgb' && (
             <div className="pe__row">
@@ -3328,11 +3742,50 @@ function SelectionInspector({
                 ))}
               </select>
             </label>
+            {/* Ways. Terminal blocks, JST housings and DuPont headers all come in
+                a range; QWIIC and Grove are 4 by definition, so they don't (#694). */}
+            {(conn.kind === 'terminal' || conn.kind === 'jst' || conn.kind === 'dupont') && (
+              <label className="pe__field">
+                <span>{conn.kind === 'terminal' ? 'Terminals' : 'Contacts'}</span>
+                {/* The block's way-count IS its contact count, so this grows and
+                    shrinks the contacts directly — configured ones are kept. */}
+                <input
+                  type="number"
+                  min={TERMINAL_MIN}
+                  max={TERMINAL_MAX}
+                  step={1}
+                  value={conn.pins.length}
+                  onChange={(e) =>
+                    upd({
+                      pins: resizeContacts(conn.pins, Number(e.target.value), conn.kind === 'terminal' ? 'T' : 'P')
+                    })
+                  }
+                />
+              </label>
+            )}
+            {conn.kind === 'jst' && (
+              <label className="pe__field">
+                <span>Family</span>
+                {/* The family is the PITCH, so it decides the drawn size and
+                    whether a lead can seat at all. Absent ⇒ PH, which is how
+                    every JST connector authored before families behaved. */}
+                <select
+                  value={coerceJstFamily(conn.variant) ?? 'ph'}
+                  onChange={(e) => upd({ variant: e.target.value as JstFamily })}
+                >
+                  {JST_FAMILIES.map((f) => (
+                    <option key={f} value={f}>
+                      {JST_FAMILY_LABEL[f]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {conn.kind === 'grove' && (
               <label className="pe__field">
                 <span>Port type</span>
                 <select
-                  value={conn.variant ?? 'i2c'}
+                  value={coerceGroveVariant(conn.variant) ?? 'i2c'}
                   onChange={(e) => upd({ variant: e.target.value as GroveVariant })}
                 >
                   {GROVE_VARIANTS.map((v) => (
@@ -3364,49 +3817,109 @@ function SelectionInspector({
           >
             Standard contacts
           </button>
-          {/* Each contact is a full pin — assign GP## (+ I2C bus for SDA/SCL). */}
-          {conn.pins.map((p, pi) => (
-            <div key={pi} className="pe__conn-pin">
-              <div className="pe__row">
-                <label className="pe__field">
-                  <span>Pin {pi + 1}</span>
-                  <input type="text" value={p.name} onChange={(e) => updPin(pi, { name: e.target.value })} />
-                </label>
-                <label className="pe__field">
-                  <span>Type</span>
-                  <select value={p.type} onChange={(e) => updPin(pi, { type: e.target.value as PartPinType })}>
-                    {PIN_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {PIN_TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {p.type === 'io' && (
-                <div className="pe__row">
-                  <label className="pe__field">
-                    <span>GPIO</span>
-                    <input
-                      type="number"
-                      value={p.gpio ?? ''}
-                      onChange={(e) => updPin(pi, { gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
-                    />
-                  </label>
-                  {p.capabilities?.includes('i2c') && (
-                    <label className="pe__field">
-                      <span>I2C bus</span>
-                      <input
-                        type="number"
-                        value={p.buses?.i2c ?? ''}
-                        onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
+          {/* Convert to the model where a contact is simply a pin (#677): it
+              becomes selectable, marquee-able and editable by the full pin
+              inspector, while the group's housing keeps it a connector a lead can
+              plug into. Converts EVERY connector on the part, because the flattened
+              pin order is the wiring endpoint index and moving one connector's
+              contacts ahead of another's would rewire saved designs. */}
+          <button
+            type="button"
+            className="pe__btn"
+            onClick={() => {
+              const next = connectorsToHousedGroups(part)
+              if (next) {
+                patch(next)
+                onSelect(null)
+              }
+            }}
+            title="Turn this part's connectors into groups of ordinary pins, each keeping its housing — so the contacts can be selected and edited like any other pin"
+          >
+            Convert to pin groups
+          </button>
+          {/* Each contact is a full pin. One ROW each, under a single header, rather
+              than two labelled rows apiece — a 16-way block was otherwise 32 rows
+              of mostly whitespace (#694). */}
+          <div className="pe__contacts">
+            <div className="pe__contacts-head" aria-hidden="true">
+              <span>#</span>
+              <span>Name</span>
+              <span>Type</span>
+              <span>GPIO</span>
             </div>
-          ))}
+            {conn.pins.map((p, pi) => (
+              <div key={pi} className="pe__contact">
+                <span className="pe__contact-n">{pi + 1}</span>
+                <input
+                  type="text"
+                  className="pe__contact-name"
+                  value={p.name}
+                  aria-label={`Contact ${pi + 1} name`}
+                  onChange={(e) => updPin(pi, { name: e.target.value })}
+                />
+                <select
+                  value={p.type}
+                  aria-label={`Contact ${pi + 1} type`}
+                  onChange={(e) => updPin(pi, { type: e.target.value as PartPinType })}
+                >
+                  {PIN_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {PIN_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+                {/* Only an io contact has a GPIO; the cell stays so the columns
+                    line up down the list rather than jumping about. */}
+                {p.type === 'io' ? (
+                  <input
+                    type="number"
+                    value={p.gpio ?? ''}
+                    aria-label={`Contact ${pi + 1} GPIO`}
+                    onChange={(e) => updPin(pi, { gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  />
+                ) : (
+                  <span className="pe__contact-gap" />
+                )}
+                {p.type === 'io' && p.capabilities?.includes('i2c') && (
+                  <input
+                    type="number"
+                    className="pe__contact-bus"
+                    value={p.buses?.i2c ?? ''}
+                    aria-label={`Contact ${pi + 1} I2C bus`}
+                    title="I²C bus number"
+                    onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
+                  />
+                )}
+                {/* Capabilities, on a second line for `io` contacts only (#677).
+                    The one thing this editor could never reach, so a QWIIC's SDA
+                    could not be marked i2c without hand-editing the YAML. Toggle
+                    chips rather than a field row, to keep the list compact. */}
+                {p.type === 'io' && (
+                  <div className="pe__contact-caps">
+                    {CAPABILITIES.map((c) => {
+                      const on = p.capabilities?.includes(c) === true
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`pe__chip pe__chip--cap${on ? ' is-active' : ''}`}
+                          aria-pressed={on}
+                          title={`${CAPABILITY_LABEL[c]}${on ? ' — on' : ''}`}
+                          onClick={() => {
+                            const cur = p.capabilities ?? []
+                            const next = on ? cur.filter((x) => x !== c) : [...cur, c]
+                            updPin(pi, { capabilities: next.length ? next : undefined })
+                          }}
+                        >
+                          {CAPABILITY_LABEL[c]}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
           <div className="pe__row">
             {num('x', conn.x, (v) => upd({ x: v }))}
             {num('y', conn.y, (v) => upd({ y: v }))}
@@ -3611,6 +4124,98 @@ function SelectionInspector({
 }
 
 /** The catalogue/identity fields (collapsed by default). */
+/**
+ * The **Tags** field (#660) — tags as removable chips rather than one
+ * comma-separated string.
+ *
+ * The string version was unusable: its `value` was derived from the parsed model
+ * (`tags.join(', ')`) and the parse dropped empties, so pressing `,` produced a
+ * model identical to the one before it, React re-rendered the old string, and the
+ * comma was erased. A second tag was literally unreachable by typing.
+ *
+ * Chips remove the bug class rather than patching it: the comma is a **command**
+ * that commits a chip, so no intermediate typing state has to survive a
+ * round-trip through the model. The draft lives here in local state and the
+ * committed tags live on the part, which is the same split the `properties` table
+ * already uses.
+ */
+function TagsField({
+  tags,
+  onChange
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => void
+}): JSX.Element {
+  const [draft, setDraft] = useState('')
+
+  /** Commit whatever is in the draft. Returns true if anything was added. */
+  const commit = (text: string): boolean => {
+    const next = addTags(tags, text)
+    setDraft('')
+    if (next.length === tags.length) return false
+    onChange(next)
+    return true
+  }
+
+  return (
+    <div className="pe__field">
+      <span>Tags</span>
+      {tags.length > 0 && (
+        <ul className="pe__tags">
+          {tags.map((t, i) => (
+            <li key={`${t}-${i}`} className="pe__tag">
+              <span className="pe__tag-text">{t}</span>
+              <button
+                type="button"
+                className="pe__tag-x"
+                aria-label={`Remove tag ${t}`}
+                onClick={() => onChange(tags.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        type="text"
+        value={draft}
+        placeholder="Add a tag, then press Enter"
+        spellCheck={false}
+        aria-label="Add a tag"
+        onChange={(e) => {
+          // A pasted "i2c, distance, tof" arrives as ONE change — commit the
+          // complete tags and leave any unterminated remainder in the draft, so
+          // pasting keeps working exactly as it did before.
+          const v = e.target.value
+          if (!v.includes(',')) {
+            setDraft(v)
+            return
+          }
+          const cut = v.lastIndexOf(',')
+          const remainder = v.slice(cut + 1)
+          commit(v.slice(0, cut))
+          setDraft(remainder.trim())
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commit(draft)
+          } else if (e.key === 'Backspace' && draft === '' && tags.length > 0) {
+            // The standard chip gesture: backspace on an empty box eats the last chip.
+            e.preventDefault()
+            onChange(tags.slice(0, -1))
+          }
+        }}
+        // Commit on blur so a typed-but-uncommitted tag isn't silently lost when
+        // the author clicks Save — losing it would be the same class of quiet
+        // data loss the chips are here to fix.
+        onBlur={() => commit(draft)}
+      />
+    </div>
+  )
+}
+
 function DetailsFields({
   part,
   patch,
@@ -3662,15 +4267,7 @@ function DetailsFields({
           This part is a <strong>microcontroller board</strong> — it appears in the Board Viewer&rsquo;s board selector.
         </span>
       </label>
-      <label className="pe__field">
-        <span>Tags (comma-separated)</span>
-        <input
-          type="text"
-          value={(part.tags ?? []).join(', ')}
-          onChange={(e) => patch({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })}
-          placeholder="i2c, distance, tof"
-        />
-      </label>
+      <TagsField tags={part.tags ?? []} onChange={(tags) => patch({ tags: tags.length ? tags : undefined })} />
       <div className="pe__row">
         <label className="pe__field">
           <span>Package</span>

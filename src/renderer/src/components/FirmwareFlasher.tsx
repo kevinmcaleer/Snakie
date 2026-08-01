@@ -6,6 +6,13 @@ import type {
   FirmwareCatalog,
   FlashProgress
 } from '../../../preload/index.d'
+import {
+  BOARD_PROFILES,
+  boardProfile,
+  firmwareFileIssue,
+  firmwareMismatch,
+  methodForBoardType
+} from '../../../shared/board-profiles'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
@@ -48,12 +55,14 @@ type Source = 'local' | 'catalog'
  * here — rather than imported from `src/main` — so the renderer bundle stays
  * free of main-only modules, mirroring `sanitiseBoardId`.
  */
+const ESP_BOOTLOADER_OFFSET: Record<string, string> = { esp32: '0x1000', esp32s2: '0x1000' }
+
 function flashTargetForFamily(family: string): { board: BoardType; offset?: string } {
   const fam = family.trim().toLowerCase()
   if (fam.startsWith('rp2')) return { board: 'rp2040' }
   if (fam.startsWith('nrf') || fam === 'microbit') return { board: 'microbit' }
   if (fam === 'esp8266') return { board: 'esp8266', offset: '0x0' }
-  if (fam.startsWith('esp')) return { board: 'esp32', offset: fam === 'esp32' ? '0x1000' : '0x0' }
+  if (fam.startsWith('esp')) return { board: 'esp32', offset: ESP_BOOTLOADER_OFFSET[fam] ?? '0x0' }
   return { board: 'rp2040' }
 }
 
@@ -100,6 +109,21 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
 export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
+  /** The chosen board profile (#682) — drives the mechanics below it. */
+  const [profileId, setProfileId] = useState<string>('')
+  /** Erase the whole flash before writing (#683). */
+  const [eraseFirst, setEraseFirst] = useState<boolean>(false)
+  /** Brief "Copied" confirmation on the copy-log button (#685). */
+  const [copied, setCopied] = useState(false)
+  /**
+   * Mirrors {@link profileId} for the async board detection (#684).
+   *
+   * Detection `await`s a port scan AND an esptool check, so it commonly resolves
+   * AFTER the user has picked a board — and it captured `profileId` as it was
+   * when the effect ran, i.e. empty. Reading the ref lets it see a choice made
+   * while it was in flight.
+   */
+  const profileRef = useRef<string>('')
   const [port, setPort] = useState<string>('')
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
@@ -185,9 +209,13 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       ])
       setCandidates(found)
       setEsptool(tool)
-      // Adopt the first detected candidate as a sensible default.
+      // Adopt the first detected candidate as a sensible default — but NEVER
+      // over an explicitly chosen board (#684). Detection only knows the coarse
+      // BoardType, whose ESP offset is the original ESP32's 0x1000; silently
+      // applying that over a profile's 0x0 is what made an ESP32-S3 flash to the
+      // wrong address after the user had picked the right board.
       const first = found[0]
-      if (first) {
+      if (first && !profileRef.current) {
         setBoard(first.board)
         setOffset(DEFAULT_OFFSET[first.board])
         // port / mountPath / detectedMicrobit are derived from the selected board
@@ -214,7 +242,37 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     setDetectedMicrobit(match?.board === 'microbit' ? match.microbitVersion : undefined)
   }, [board, candidates])
 
+  /**
+   * Copy the whole log for troubleshooting (#685).
+   *
+   * The whole log, not the visible part: what matters when a flash goes wrong is
+   * usually the chip/feature banner at the top, which has scrolled away by the
+   * time it finishes. Strips the terminal escape sequences esptool emits to
+   * redraw its progress bar, so what lands on the clipboard is readable.
+   */
+  const copyLog = useCallback(async (): Promise<void> => {
+    // eslint-disable-next-line no-control-regex
+    const clean = (t: string): string => t.replace(/\u001b?\[[0-9;]*[A-Za-z]/g, '').trimEnd()
+    const text = log
+      .map((l) => clean(l.message))
+      .filter((l) => l !== '')
+      .join('\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      // Clipboard denied (or no permission outside a secure context) — say so
+      // rather than silently doing nothing.
+      setLog((cur) => [...cur, { kind: 'error', message: 'Could not copy — your browser blocked clipboard access.' }])
+    }
+  }, [log])
+
   const handleBoardChange = useCallback((next: BoardType): void => {
+    // Changing the coarse type by hand means going manual: drop the profile
+    // rather than leave it claiming settings the user has just overridden.
+    setProfileId('')
+    profileRef.current = ''
     setBoard(next)
     setOffset(DEFAULT_OFFSET[next])
     // Reset the drive-copy opt-in so switching away from and back to
@@ -232,12 +290,17 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       return
     }
     try {
-      const picked = await window.api.firmware.pickFirmwareFile()
+      // Ask only for what this board can be flashed with, so the dialog can't
+      // offer a file that could never work (#686).
+      const picked = await window.api.firmware.pickFirmwareFile(
+        profileRef.current ? boardProfile(profileRef.current)?.method : methodForBoardType(board)
+      )
       if (picked) setFirmwarePath(picked)
     } catch {
       // Cancelled / unavailable — keep the current selection.
     }
-  }, [])
+    // `board` is read for the dialog filter; `profileRef` is a ref and needs no dep.
+  }, [board])
 
   // Handles the hidden browser file input's change event: reads the picked
   // file into bytes for `flashEspInBrowser` and shows its name in the
@@ -283,6 +346,36 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     [families, selFamily]
   )
   const models = useMemo(() => family?.models ?? [], [family])
+
+  const profile = useMemo(() => (profileId ? boardProfile(profileId) : undefined), [profileId])
+
+  /**
+   * Pick the actual BOARD, and everything mechanical follows (#682).
+   *
+   * The offset is the reason this exists. Only the original ESP32 flashes at
+   * `0x1000`; every other ESP chip is `0x0`. Choosing "ESP32" from the board TYPE
+   * list and browsing to an ESP32-S3 binary wrote it at `0x1000` — esptool
+   * reported success, the ROM found no bootloader, and the board never came back
+   * as a REPL. Naming the board removes the chance to get that wrong.
+   */
+  const handleProfileChange = useCallback(
+    (id: string): void => {
+      setProfileId(id)
+      profileRef.current = id
+      const p = boardProfile(id)
+      if (!p) return
+      const next: BoardType =
+        p.method === 'uf2' ? 'rp2040' : p.method === 'daplink' ? 'microbit' : p.chipFamily === 'esp8266' ? 'esp8266' : 'esp32'
+      setBoard(next)
+      setOffset(p.offset ?? DEFAULT_OFFSET[next])
+      setEraseFirst(p.eraseByDefault === true)
+      // Pre-select the firmware family too, so the catalog opens on builds that
+      // fit — a generic build is keyed on the chip, which the profile knows.
+      if (families.some((f) => f.family === p.chipFamily)) setSelFamily(p.chipFamily)
+    },
+    [families]
+  )
+
   const model = useMemo(
     () => models.find((m) => `${m.vendor}|${m.model}` === selModel),
     [models, selModel]
@@ -344,6 +437,24 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive' && c.board === board)
 
   const usingCatalog = source === 'catalog'
+  /**
+   * The chosen file is the wrong KIND for how this board flashes (#685).
+   *
+   * Only for a local file — a catalog download always serves the right kind.
+   */
+  const fileIssue = useMemo(
+    () =>
+      usingCatalog || !firmwarePath
+        ? null
+        : firmwareFileIssue(profile?.method ?? methodForBoardType(board), firmwarePath),
+    [usingCatalog, firmwarePath, profile?.method, board]
+  )
+  /** Warn when the chosen firmware is for a different chip than the chosen board
+   *  — the mistake that flashes cleanly and leaves the board silent (#682). */
+  const mismatch = useMemo(
+    () => (profile && usingCatalog && selFamily ? firmwareMismatch(profile, selFamily) : null),
+    [profile, usingCatalog, selFamily]
+  )
 
   // The firmware to flash: a catalog URL (download) or a picked local path.
   const haveFirmware = usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
@@ -356,6 +467,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const canFlash = useMemo(() => {
     if (flashing) return false
+    // A file of the wrong KIND flashes "successfully" and bricks the boot (#685),
+    // so this blocks rather than warns.
+    if (fileIssue) return false
     if (!isElectron() && (isEsp || browserMicrobitViaWebUsb || browserDriveCopy)) {
       // Every browser flash path reads bytes picked via `<input type=file>`
       // directly — there's no IPC firmwarePath/esptool-availability check to
@@ -374,6 +488,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     // micro:bit must NOT be in maintenance mode.
     return mountPath.length > 0 && !selectedMaintenance
   }, [
+    fileIssue,
     flashing,
     isEsp,
     browserMicrobitViaWebUsb,
@@ -455,7 +570,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           firmwarePath,
           port: isEsp ? port : undefined,
           mountPath: isEsp ? undefined : mountPath,
-          offset: isEsp ? offset : undefined
+          offset: isEsp ? offset : undefined,
+          eraseFirst: isEsp ? eraseFirst : undefined,
+          // Name the chip when the board profile knows it, so esptool doesn't
+          // have to guess on a board that answers slowly (#683).
+          chip: isEsp ? profile?.chipFamily : undefined
         })
       }
       // The terminal `done` progress event drives `flashing` / `outcome`.
@@ -481,7 +600,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     board,
     mountPath,
     firmwarePath,
-    port
+    port,
+    // Both are read inside; without them the callback flashes with whatever they
+    // were when it was last created — so toggling Erase would not take effect.
+    eraseFirst,
+    profile?.chipFamily
   ])
 
   const finished = outcome === 'success' || outcome === 'error'
@@ -516,6 +639,61 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         </header>
 
         <div className="firmware-modal__body">
+          {/* Name the board FIRST (#682): it fills in the board type, the flash
+              offset and the firmware family, and warns if the chosen build is for
+              a different chip. Optional — "Other" leaves every field manual. */}
+          <div className="firmware-field">
+            <label className="firmware-field__label" htmlFor="firmware-profile">
+              Board
+            </label>
+            <select
+              id="firmware-profile"
+              className="firmware-select"
+              value={profileId}
+              disabled={flashing}
+              onChange={(e) => handleProfileChange(e.target.value)}
+            >
+              <option value="">Other / set up manually…</option>
+              {BOARD_PROFILES.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            {profile?.notes && <p className="firmware-hint">{profile.notes}</p>}
+            {/* Advisory, not a warning: a board runs on the plain build too, it
+                just may not get everything the board can do. */}
+            {profile?.preferredBuild && (
+              <p className="firmware-hint">
+                Best build: <code>{profile.preferredBuild.name}</code>. {profile.preferredBuild.why}
+                {profile.preferredBuild.url && (
+                  <>
+                    {' '}
+                    <a href={profile.preferredBuild.url} target="_blank" rel="noreferrer">
+                      Download it
+                    </a>
+                    , then choose it as a local file.
+                  </>
+                )}
+              </p>
+            )}
+            {mismatch && <p className="firmware-hint firmware-hint--warn">{mismatch}</p>}
+            {board !== 'rp2040' && board !== 'microbit' && (
+              <label className="firmware-check">
+                <input
+                  type="checkbox"
+                  checked={eraseFirst}
+                  disabled={flashing}
+                  onChange={(e) => setEraseFirst(e.target.checked)}
+                />
+                <span>
+                  Erase the whole flash first — slower, but a board arriving from other firmware
+                  keeps its old partition table and boot-loops without it.
+                </span>
+              </label>
+            )}
+          </div>
+
           <div className="firmware-field">
             <label className="firmware-field__label" htmlFor="firmware-board">
               Board type
@@ -603,7 +781,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   value={offset}
                   disabled={flashing}
                   onChange={(e) => setOffset(e.target.value)}
-                  placeholder="0x1000"
+                  placeholder="0x0"
                 />
               </div>
 
@@ -884,6 +1062,9 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 style={{ display: 'none' }}
                 onChange={(e) => void handleWebFileChange(e)}
               />
+              {/* Wrong KIND of file. Blocks the flash rather than warning: this one
+                  reports success at every step and leaves the board dead (#685). */}
+              {fileIssue && <p className="firmware-hint firmware-hint--warn">{fileIssue}</p>}
             </div>
           )}
 
@@ -903,6 +1084,20 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
             </div>
           )}
 
+          {(log.length > 0 || flashing) && (
+            <div className="firmware-log__bar">
+              <span className="firmware-log__title">Output</span>
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => void copyLog()}
+                disabled={log.length === 0}
+                title="Copy the whole log, including the parts scrolled out of view"
+              >
+                {copied ? 'Copied' : 'Copy log'}
+              </button>
+            </div>
+          )}
           {(log.length > 0 || flashing) && (
             <div
               className={`firmware-log firmware-log--${outcome}`}

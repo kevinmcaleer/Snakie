@@ -227,10 +227,22 @@ export interface PartHeader {
  *               block reads Signal · V+ · GND in a fixed order and a lead plugged
  *               the wrong way round is a mistake we can show rather than allow.
  */
-export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont'
+export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont' | 'terminal'
 
 /** Every connector kind, in picker order (the first is the default). */
-export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = ['qwiic', 'jst', 'grove', 'dupont']
+export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = [
+  'qwiic',
+  'jst',
+  'grove',
+  'dupont',
+  'terminal'
+]
+
+/** Terminal counts a screw-terminal block is allowed to have (#662). Two is the
+ *  smallest block sold; the upper bound just stops a slip in the number field
+ *  generating hundreds of contacts. */
+export const TERMINAL_MIN = 2
+export const TERMINAL_MAX = 24
 
 /**
  * Which standard signal set a **Grove** socket carries. Grove ports are all the
@@ -242,6 +254,32 @@ export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = ['qwiic', 'jst
  *  - `analog`  — A(n) · A(n+1) · VCC · GND
  */
 export type GroveVariant = 'i2c' | 'uart' | 'digital' | 'analog'
+
+/**
+ * Which **JST family** a `jst` connector is (#668). They are the same idea in a
+ * range of pitches, and the pitch is what decides whether a lead physically fits:
+ * a PH plug will not enter an XH socket. Naming the family is therefore what lets
+ * the board draw the housing life-size AND refuse a lead that couldn't seat.
+ *
+ *  - `sh` 1.00 mm — the QWIIC / STEMMA QT housing
+ *  - `gh` 1.25 mm — common on LiPo/battery leads
+ *  - `zh` 1.50 mm
+ *  - `ph` 2.00 mm — the classic hobby battery/JST lead (the default)
+ *  - `xh` 2.50 mm — balance leads, bigger battery packs
+ *  - `vh` 3.96 mm — high current
+ */
+export type JstFamily = 'sh' | 'gh' | 'zh' | 'ph' | 'xh' | 'vh'
+
+/** Every JST family, in picker order. */
+export const JST_FAMILIES: readonly JstFamily[] = ['sh', 'gh', 'zh', 'ph', 'xh', 'vh']
+
+/**
+ * The flavour of a connector's housing. One field rather than a per-kind pile of
+ * near-identical ones: `variant` has always meant "which flavour of this
+ * housing", and Grove's wiring and JST's pitch are the same question asked of
+ * different kinds. Validated PER KIND — see {@link coerceConnectorVariant}.
+ */
+export type ConnectorVariant = GroveVariant | JstFamily
 
 /** Every Grove variant, in picker order (the first is the default). */
 export const GROVE_VARIANTS: readonly GroveVariant[] = ['i2c', 'uart', 'digital', 'analog']
@@ -256,6 +294,55 @@ export function coerceConnectorKind(v: unknown): PartConnectorKind {
 /** Validate a Grove `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
 export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
   return GROVE_VARIANTS.includes(v as GroveVariant) ? (v as GroveVariant) : undefined
+}
+
+/** Validate a JST `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
+export function coerceJstFamily(v: unknown): JstFamily | undefined {
+  return JST_FAMILIES.includes(v as JstFamily) ? (v as JstFamily) : undefined
+}
+
+/**
+ * Validate a connector `variant` for the kind that carries it. A variant only
+ * means something on `grove` and `jst`; anything else drops it rather than
+ * carrying a value no renderer reads.
+ */
+export function coerceConnectorVariant(
+  kind: PartConnectorKind,
+  v: unknown
+): ConnectorVariant | undefined {
+  if (kind === 'grove') return coerceGroveVariant(v)
+  if (kind === 'jst') return coerceJstFamily(v)
+  return undefined
+}
+
+/**
+ * Validate a {@link GroupHousing} off untrusted YAML / editor state (#673).
+ *
+ * ONE coercer, called by both `parts.yml` and the editor's normaliser — the pair
+ * that has drifted before and silently dropped fields on save.
+ */
+export function coerceGroupHousing(raw: unknown): GroupHousing | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const r = raw as Record<string, unknown>
+  const x = Number(r.x)
+  const y = Number(r.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined
+  const kind = coerceConnectorKind(r.kind)
+  const out: GroupHousing = {
+    kind,
+    x: Math.min(1, Math.max(0, x)),
+    y: Math.min(1, Math.max(0, y))
+  }
+  const variant = coerceConnectorVariant(kind, r.variant)
+  if (variant) out.variant = variant
+  const rot = Number(r.rotation)
+  if (Number.isFinite(rot)) {
+    const q = (((Math.round(rot / 90) * 90) % 360) + 360) % 360
+    if (q) out.rotation = q
+  }
+  const label = typeof r.label === 'string' ? r.label.trim() : ''
+  if (label) out.label = label
+  return out
 }
 
 /**
@@ -288,7 +375,7 @@ export interface PartConnector {
   /** The connector family — see {@link PartConnectorKind}. */
   kind: PartConnectorKind
   /** For `grove`: which signal set the port carries. Ignored by other kinds. */
-  variant?: GroveVariant
+  variant?: ConnectorVariant
   /** Silk label (defaults to the kind's name — `"QWIIC"` / `"GROVE"` / …). */
   label?: string
   /** Normalised 0..1 position of the connector body within the outline. */
@@ -418,6 +505,14 @@ export interface PartButton {
  *                 line ({@link gpio}); some boards gate its supply with a
  *                 power-enable GPIO ({@link power}, e.g. the Seeed XIAO RP2350's
  *                 DATA GP22 + POWER GP23). The power pin is optional.
+ *  - `power`    — a supply indicator, sitting across the part's own power rail.
+ *                 The odd one out: nothing DRIVES it, so it has no GPIO, and the
+ *                 Board View lights it from the solved supply instead (#698).
+ *
+ * `power` is a declared kind rather than something inferred from a missing GPIO,
+ * because the bundled library proves that inference wrong: `grove-led-bar` has ten
+ * GPIO-less `single` LEDs driven by the bar's own chip, and the XIAO RP2350 has one
+ * that is really its user LED. Only the author knows which LED is the indicator.
  */
 export interface OnboardLed {
   /** Which face of the board this sits on (#636). Absent ⇒ front. */
@@ -435,8 +530,8 @@ export interface OnboardLed {
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
-  kind: 'single' | 'rgb' | 'neopixel'
-  /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"`). */
+  kind: 'single' | 'rgb' | 'neopixel' | 'power'
+  /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"` / `"PWR"`). */
   label?: string
   /** GPIO driving a `single` LED, or the DATA line of a `neopixel`. */
   gpio?: number
@@ -670,6 +765,19 @@ export interface PartElectrical {
   /** Battery capacity in **milliamp-hours** — a `source` battery; feeds the
    *  battery-life estimate (#607). */
   capacityMah?: number
+  /**
+   * The supply range this part is DESIGNED to run at, `[min, max]` volts (#687).
+   *
+   * Deliberately not {@link supplyRange}, which means "the range an adjustable
+   * SOURCE can be set to" — the opposite direction. This is what the part needs
+   * FROM a supply, so the ERC can say a 3.3 V-only breakout is sitting on a 5 V
+   * rail. Without it the sim knows a servo draws 100 mA and has no idea it wants
+   * 4.8–6 V, which is the commonest way to destroy a part.
+   *
+   * The free-text {@link PartDefinition.voltage} stays as the human description
+   * ("2.3–5.5V"); this is the machine-readable pair. Absent ⇒ no check.
+   */
+  operatingV?: [number, number]
   /** Typical steady current draw in **amps** — a `consumer` (a sensor's quiescent
    *  draw, a servo's idle). */
   currentDrawA?: number
@@ -777,6 +885,24 @@ export function mirrorX(x: number): number {
 }
 
 /**
+ * Mirror a pin's outward direction horizontally, for a through pad seen from the
+ * FAR side of the board (#688).
+ *
+ * `rotation` is which way a pad faces — 0 right, 90 down, 180 left, 270 up — and
+ * a castellation's half-hole is cut on that side. Flip the board over and a pad
+ * that ran off the left edge now runs off the right, so the direction has to flip
+ * with it. Vertical directions are unchanged: mirroring in x leaves up as up.
+ *
+ * Absent stays absent, so a pad with no explicit direction keeps falling back to
+ * "the nearer edge" — which already mirrors, because its x does.
+ */
+export function mirrorRotationX(deg?: number): number | undefined {
+  if (deg === undefined || !Number.isFinite(deg)) return undefined
+  const r = (((Math.round(deg / 90) * 90) % 360) + 360) % 360
+  return r === 0 ? 180 : r === 180 ? 0 : r
+}
+
+/**
  * A group's ancestry, innermost first. Tolerates a cycle (only reachable by hand-
  * editing parts.yml) by stopping rather than looping forever, and a dangling
  * `parent` by stopping at the last group that exists.
@@ -809,6 +935,43 @@ export function itemLocked(groups: PartGroup[] | undefined, item: PartItemFlags)
   return !!item.locked || groupChain(groups, item.group).some((g) => g.locked)
 }
 
+/**
+ * The housing a group of pins sits in (#673) — what turns a set of pads into a
+ * connector: a QWIIC socket, a Grove port, a JST shell, a servo header, a screw
+ * terminal block.
+ *
+ * The pins stay ordinary pins in `headers[]`. That is not only the simpler model
+ * — it is the only migration-safe one. A wiring endpoint is
+ * `"<key>.<pinName>#<index>"` where the **index into the flattened pin list is
+ * authoritative** (see `shared/netlist.ts`), so moving pins between arrays
+ * silently rewires every saved design that uses the part. Naming the group they
+ * are already in moves nothing.
+ *
+ * Contact ORDER is the group's member order, and it is load-bearing: a lead pairs
+ * two housings contact-for-contact by position, which is what makes it land the
+ * right way round however it is dragged.
+ */
+export interface GroupHousing {
+  kind: PartConnectorKind
+  /** Grove wiring / JST family — validated per kind, as on a connector. */
+  variant?: ConnectorVariant
+  /** Normalised 0..1 centre of the housing on the board. */
+  x: number
+  y: number
+  /** Body rotation in degrees (0/90/180/270). */
+  rotation?: number
+  /** Silk label; absent ⇒ the kind's default name. */
+  label?: string
+}
+
+/** One net joined inside a part — the pins a PCB trace ties together (#695). */
+export interface PartRail {
+  /** What the net is, for the ERC's explanation (`V+`, `MOTOR`, `VBAT`). */
+  name: string
+  /** The pin NAMES joined. Fewer than two is not a net and is dropped. */
+  pins: string[]
+}
+
 export interface PartGroup {
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
@@ -820,6 +983,8 @@ export interface PartGroup {
   name?: string
   /** The id of the group this one is nested inside, if any. */
   parent?: string
+  /** Makes this group a CONNECTOR: its member pins are the contacts (#673). */
+  housing?: GroupHousing
 }
 
 /**
@@ -904,6 +1069,21 @@ export interface PartDefinition {
    *  base — the XIAO expansion board, a Pico Explorer). Absent ⇒ nothing stacks
    *  onto it. */
   mounts?: PartMount[]
+  /**
+   * Nets joined INSIDE the part — pins the PCB wires together (#695).
+   *
+   * A distribution board passes power through rather than consuming it: a
+   * PCA9685's `V+` terminal feeds all sixteen servo headers, and the trace doing
+   * that is invisible to the netlist. Without it the terminal is wired to a
+   * battery and every servo on the headers still reads as unpowered.
+   *
+   * The board's own like-named rails are bonded automatically, but that rule is
+   * NOT extended to parts on purpose: an opto-isolated driver has two grounds that
+   * must stay apart, and bonding by name would silently join the isolated side to
+   * the logic side — the exact fault the ERC exists to catch. So a part says which
+   * of its pins are joined, and says nothing by default.
+   */
+  rails?: PartRail[]
   /** Groups (#627): items carry a `group` id; this registry names them + records
    *  nesting (`parent`), so a group can hold items AND sub-groups. Membership is
    *  the `group` id on items (robust to reorder), not index refs. */

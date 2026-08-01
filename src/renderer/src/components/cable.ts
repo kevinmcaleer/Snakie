@@ -18,6 +18,7 @@
  * by drag direction, a servo lead dragged on "backwards" still lands Signal to
  * Signal, V+ to V+, GND to GND.
  */
+import { coerceJstFamily } from '../../../shared/part'
 import type { PartConnector, PartPin } from '../../../shared/part'
 
 /**
@@ -69,7 +70,9 @@ export function connectorKindName(c: PartConnector): string {
   if (c.kind === 'grove') return c.variant ? `Grove ${c.variant.toUpperCase()}` : 'Grove'
   if (c.kind === 'dupont') return c.pins.length === 3 ? 'servo header' : 'DuPont header'
   if (c.kind === 'qwiic') return 'QWIIC'
-  return 'JST'
+  if (c.kind === 'terminal') return `${c.pins.length}-way terminal block`
+  const fam = coerceJstFamily(c.variant)
+  return fam ? `JST-${fam.toUpperCase()}` : 'JST'
 }
 
 /**
@@ -131,6 +134,15 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
   if (a.kind === 'grove' && b.kind === 'grove' && a.variant && b.variant && a.variant !== b.variant) {
     return NO(`That's a ${connectorKindName(b)} port — this one is ${connectorKindName(a)}.`)
   }
+  // JST families differ by PITCH, so unlike Grove these genuinely can't seat —
+  // refusing is describing the housing, not second-guessing the user (#668).
+  if (a.kind === 'jst' && b.kind === 'jst') {
+    const fa = coerceJstFamily(a.variant) ?? 'ph'
+    const fb = coerceJstFamily(b.variant) ?? 'ph'
+    if (fa !== fb) {
+      return NO(`A ${connectorKindName(a)} lead doesn't fit a ${connectorKindName(b)} socket.`)
+    }
+  }
   const pairs = pairContacts(a, b)
   if (!pairs.some(([ia]) => SIGNAL_ROLES.has(cableRole(a.pins[ia])))) {
     return NO(`These two share no signal — a lead between them would only join power and ground.`)
@@ -142,32 +154,32 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
 }
 
 /**
- * The angle (degrees) a cable plug sits at, from its connector's contact normals.
+ * The angle a plug sits at — the ONE rule, for every connector kind (#697).
  *
- * A plug is part of the SOCKET it's pushed into, so its orientation belongs to the
- * part it's mounted on — not to whatever happens to be wired to it. Deriving it
- * from the mate's position (as this once did) made every header swing round to
- * face the other component, and re-orient again whenever that component moved.
- * Only the lead between them should move.
+ * Seen from above, a plug's shell covers the contacts it is pushed onto and the
+ * cable leaves one END of that shell. So the angle runs ALONG the row of
+ * contacts, not across it: a COLUMN of contacts takes its lead off the top or
+ * bottom, a ROW off one side. Which end is the one nearer the board edge, so the
+ * cable runs off the board rather than back across it.
  *
- * Each contact carries an outward normal that is already rotated with the placed
- * part, so averaging them gives the direction the lead leaves the socket, in world
- * space. Contacts of one connector share a normal; the average is a cheap way to
- * be robust to a malformed part whose contacts disagree.
+ * This deliberately replaced averaging the contacts' outward normals, which was
+ * a second rule that only agreed with this one for connectors stored in
+ * `connectors[]`. A HOUSED GROUP's contacts are ordinary pins that each work out
+ * their own facing, so in a servo trio — where only the signal pin carries a
+ * rotation — the three disagree and their average lands on a diagonal. That was
+ * the plug drawn at an angle. Deriving from the housing instead means a new
+ * connector kind cannot reintroduce the split, because there is nothing to keep
+ * in step: the housing is the only thing consulted.
  *
- * Returns `0` for an empty or degenerate set (normals that cancel out), so a bad
- * part yields a consistently-placed plug rather than a NaN transform.
+ * A plug is part of the SOCKET it is pushed into, so this reads only the part it
+ * is mounted on and never the mate. Deriving it from whatever is wired up (as
+ * this once did) made every header swing round to face the other component, and
+ * swing again whenever that component moved (#647). Only the lead should move.
+ *
+ * Degrees, in PART space — the caller turns it with the placed part.
  */
-export function plugAngle(normals: readonly { ox: number; oy: number }[]): number {
-  if (normals.length === 0) return 0
-  let nx = 0
-  let ny = 0
-  for (const n of normals) {
-    nx += n.ox
-    ny += n.oy
-  }
-  nx /= normals.length
-  ny /= normals.length
-  if (Math.hypot(nx, ny) < 1e-6) return 0
-  return (Math.atan2(ny, nx) * 180) / Math.PI
+export function housingPlugAngle(conn: PartConnector): number {
+  const column = ((conn.rotation ?? 0) / 90) % 2 === 1
+  if (column) return conn.y < 0.5 ? -90 : 90 // off the top / bottom of the column
+  return conn.x < 0.5 ? 180 : 0 //              off the left / right end of the row
 }

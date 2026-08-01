@@ -416,6 +416,35 @@ export function buildNetlist(
     })
   }
 
+  // 1a. Part internal rails (#695): the pins a part's own PCB wires together — a
+  //     PCA9685's `V+` terminal feeding all sixteen servo headers, a distribution
+  //     board's shared motor supply. Declared per part rather than inferred from
+  //     matching names, because an opto-isolated driver has two grounds that must
+  //     stay apart and name-bonding would silently join them.
+  for (const placed of robot.parts ?? []) {
+    const def = partDefs.get(placed.id)
+    if (!def?.rails?.length) continue
+    // Pin name → its endpoint. First occurrence wins, matching the carrier-bond
+    // rule above; a part repeating a pin name is malformed either way.
+    const byName = new Map<string, string>()
+    flattenPartPins(def).forEach((pin, i) => {
+      if (pin.name && !byName.has(pin.name)) byName.set(pin.name, `${placed.id}.${pin.name}#${i}`)
+    })
+    for (const rail of def.rails) {
+      let anchor: string | undefined
+      for (const name of rail.pins) {
+        const endpoint = byName.get(name)
+        if (!endpoint || !register(endpoint)) continue
+        if (anchor === undefined) {
+          anchor = endpoint
+          continue
+        }
+        uf.union(anchor, endpoint)
+        edges.push({ id: `part:rail:${placed.id}:${rail.name}:${name}`, from: anchor, to: endpoint, internal: true })
+      }
+    }
+  }
+
   // 1b. Board stacking (#166): a part seated in a carrier's mount is electrically
   //     the carrier wherever the two share a pin name — that is exactly what
   //     pushing a board into a header socket does. Without these bonds a Grove

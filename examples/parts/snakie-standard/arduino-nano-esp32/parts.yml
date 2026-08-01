@@ -6,7 +6,7 @@ family: Microcontroller
 package: THT
 pinSpacing: 2.54
 voltage: 3.3V
-version: 0.1.16
+version: 0.1.17
 pcbColor: "#047283"
 aspect: 0.5
 dimensions:
@@ -391,7 +391,7 @@ onboardLeds:
     label: LED_Builtin
     gpio: 48
     color: "#e99d1c"
-  - kind: single
+  - kind: power
     x: 0.8404210006718591
     y: 0.05078656208307335
     z: 1

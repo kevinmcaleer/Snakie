@@ -9,7 +9,9 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import { itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
+import { isPowerLed, powerLedState } from '../../../shared/power-led'
+import type { PowerLedState } from '../../../shared/power-led'
+import { itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
@@ -282,6 +284,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
  */
 
 export type { Box } from './part-editor.util'
+import { connectorContacts, connectorDims, housedGroupConnectors, pinLabelHidden } from './part-editor.util'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -553,7 +556,9 @@ export function boxedPinLabel(
   const anchor = (a: 'start' | 'end'): 'start' | 'end' => (upright ? (a === 'start' ? 'end' : 'start') : a)
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
-      <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
+      {/* No number and no GPIO ⇒ no chip. An empty grey box is noise, and every
+          connector contact would draw one now that contacts label this way. */}
+      {shownNum !== '' && <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />}
       {shownNum && (
         <text
           x={bx + B / 2}
@@ -811,6 +816,12 @@ export interface PartBodyProps {
    *  The node-graph draws `'hidden'` under the wires and `'only'` over them so
    *  the wires never obscure a pin label / variable name. */
   pinLabels?: 'all' | 'hidden' | 'only'
+  /**
+   * The supply voltage this placed part is sitting on, from the DC solver (#698)
+   * — it lights a `power` LED. Absent ⇒ nothing solved, so a power LED draws like
+   * any other indicator rather than claiming the part is unpowered.
+   */
+  supplyV?: number
 }
 
 /** On-board push-button size (viewBox units) — the tactile-switch cap + base. */
@@ -849,7 +860,10 @@ export function onboardLedGlyph(
   cy: number,
   led: OnboardLed,
   selected = false,
-  pxPerMm = 0
+  pxPerMm = 0,
+  /** For a `power` LED: whether its supply is actually present (#698). `unknown`
+   *  draws it exactly as every other LED, so nothing changes off the Board View. */
+  state: PowerLedState = 'unknown'
 ): JSX.Element {
   const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
   if (led.kind === 'neopixel') {
@@ -885,9 +899,23 @@ export function onboardLedGlyph(
     )
   }
   const color = led.color || '#39d353'
+  // A power indicator that the solver says has no supply: the unlit package —
+  // the LED's own colour dimmed almost out, no glow, no specular highlight. It
+  // reads as "this part isn't powered" at a glance, which is the point (#698).
+  if (state === 'dark') {
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <circle cx={cx} cy={cy} r={5} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
+        {ring}
+      </g>
+    )
+  }
+  // Supplied: the same LED with a wider, stronger halo, so lit reads as brighter
+  // than an ordinary indicator rather than merely different.
+  const halo = state === 'lit' ? { r: 12, o: 0.45 } : { r: 9, o: 0.3 }
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <circle cx={cx} cy={cy} r={9} fill={color} opacity={0.3} />
+      <circle cx={cx} cy={cy} r={halo.r} fill={color} opacity={halo.o} />
       <circle cx={cx} cy={cy} r={5} fill={color} stroke="#0006" strokeWidth={0.8} />
       <circle cx={cx - 1.6} cy={cy - 1.6} r={1.5} fill="#fff" opacity={0.85} />
       {ring}
@@ -898,7 +926,15 @@ export function onboardLedGlyph(
 /** The silk label for an onboard LED: its name + GPIO(s) — e.g. `LED · GP25`,
  *  `RGB · GP18 GP19 GP20`, `NeoPixel · GP22 · PWR GP23`. */
 export function onboardLedLabel(led: OnboardLed): string {
-  const name = led.label || (led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED')
+  const name =
+    led.label ||
+    (led.kind === 'rgb'
+      ? 'RGB'
+      : led.kind === 'neopixel'
+        ? 'NeoPixel'
+        : led.kind === 'power'
+          ? 'PWR'
+          : 'LED')
   let gps = ''
   if (led.kind === 'rgb') {
     gps = [led.rgb?.r, led.rgb?.g, led.rgb?.b]
@@ -917,20 +953,6 @@ export function onboardLedLabel(led: OnboardLed): string {
  *  1.0 mm-pitch family; a plain JST here is the 2.0 mm-pitch PH family; Grove is
  *  Seeed's 4-way 2.0 mm keyed shell; DuPont is a 0.1" male header strip. Values
  *  are the visible top-down housing (a touch larger than the contact span). */
-function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
-  switch (conn.kind) {
-    case 'grove':
-      // Seeed Grove: 4-way 2.0 mm shell, ~11.8 × 6.6 mm where it meets the board.
-      return { pitch: 2.0, sideMargin: 2.9, depthMm: 6.6 }
-    case 'dupont':
-      // 0.1" male header strip — one 2.54 mm square cell per pin.
-      return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
-    case 'jst':
-      return { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 }
-    default:
-      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
-  }
-}
 
 /**
  * Per-kind housing palette. `male` distinguishes a **header block you push a lead
@@ -950,6 +972,10 @@ function connectorStyle(kind: PartConnector['kind']): {
       return { shell: '#f1efe6', edge: '#8e8a7e', contact: '#e6c34a', male: false }
     case 'dupont':
       return { shell: '#15181c', edge: '#0b0d10', contact: '#e6c34a', male: true }
+    case 'terminal':
+      // The colour these blocks are known by. Screws are steel, not gold — the
+      // one visual cue that says "screw terminal" rather than "pin header".
+      return { shell: '#1f7a3a', edge: '#0d3d1d', contact: '#c9ccd1', male: false }
     default:
       // QWIIC / STEMMA QT and plain JST — dark JST-SH / JST-PH housings.
       return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
@@ -977,7 +1003,29 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
  *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).
  *  `withLabels` draws the per-contact silk labels (SDA/SCL/…); the board view gates
  *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0, withLabels = true): JSX.Element {
+/**
+ * Does a HOUSED GROUP of this kind draw a shell behind its pads? (#678)
+ *
+ * A shelled socket — QWIIC, Grove, JST, a screw terminal — is a body you plug
+ * into, and without it the part is just loose pads. A servo/DuPont header is the
+ * opposite: the pins ARE the connector, and a block drawn behind them doubles the
+ * visual (servo2040's trios read correctly as bare pads).
+ *
+ * That distinction is exactly the `male` flag `connectorStyle` already carries.
+ */
+export function housingDrawsShell(kind: PartConnector['kind']): boolean {
+  return !connectorStyle(kind).male
+}
+
+export function connectorGlyph(
+  cx: number,
+  cy: number,
+  conn: PartConnector,
+  selected = false,
+  pxPerMm = 0,
+  /** Draw the housing only — its contacts are real pins, drawn separately (#678). */
+  bodyOnly = false
+): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
   const { shell, edge, contact, male } = connectorStyle(conn.kind)
   const x0 = cx - w / 2
@@ -990,10 +1038,6 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
   // the current selection in the Part Editor, never a white border).
   // Per-contact silk labels (SDA/SCL/GND/pwr) so a QWIIC socket's pinout is legible
-  // on the board — needed to assign SDA/SCL in code. Vertical + haloed to survive
-  // the tight contact pitch; only when the housing is big enough to read.
-  const labelFs = Math.max(4.5, Math.min(7, w / 8))
-  const showLabels = withLabels && w >= 24
   // Contact 1 is the ORIENTATION reference: a cable can only seat one way round, so
   // mark it the way a PCB does — pin 1 square, the rest plain. Drawn as a hairline
   // box around the first contact, big enough to spot without shouting.
@@ -1008,11 +1052,47 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
       {conn.kind === 'grove' && h >= 6 && (
         <rect x={x0 + w * 0.06} y={y0 + h * 0.12} width={w * 0.88} height={h * 0.34} fill="#d9d5c7" stroke="none" />
       )}
-      {Array.from({ length: n }, (_, i) => {
-        const cxp = x0 + (w / (n + 1)) * (i + 1)
-        return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={contact} />
-      })}
-      {showMark && (
+      {bodyOnly
+        ? null
+        : conn.kind === 'terminal'
+        ? // A screw terminal reads by its SCREWS, not by contact blades: a slotted
+          // steel head per way, with the wire aperture below it on the mating face.
+          Array.from({ length: n }, (_, i) => {
+            const cxp = x0 + (w / (n + 1)) * (i + 1)
+            const r = Math.max(1, Math.min((w / n) * 0.3, h * 0.22))
+            const sy = y0 + h * 0.34 // screw sits in the upper half of the body
+            const wy = y0 + h * 0.74 // wire entry below it
+            const wh = Math.max(0.8, h * 0.16)
+            const ww = Math.max(1.2, r * 1.7)
+            return (
+              <g key={i}>
+                <rect x={cxp - ww / 2} y={wy - wh / 2} width={ww} height={wh} fill="#0a2413" />
+                <circle cx={cxp} cy={sy} r={r} fill={contact} stroke="#6f7478" strokeWidth={Math.max(0.25, r * 0.16)} />
+                <line
+                  x1={cxp - r * 0.6}
+                  y1={sy}
+                  x2={cxp + r * 0.6}
+                  y2={sy}
+                  stroke="#5a5f63"
+                  strokeWidth={Math.max(0.35, r * 0.26)}
+                  strokeLinecap="round"
+                />
+              </g>
+            )
+          })
+        : Array.from({ length: n }, (_, i) => {
+            const cxp = x0 + (w / (n + 1)) * (i + 1)
+            // A servo / DuPont block is a PIN HEADER, and its three pins read at a
+            // glance by electrical role — amber signal, red V+, dark ground — the
+            // same palette the board's own pads use. A shelled socket (QWIIC /
+            // Grove / JST) is gold metal in a housing, so those stay one colour.
+            const fill =
+              conn.kind === 'dupont' ? (PAD_FILL[conn.pins[i]?.type ?? 'other'] ?? contact) : contact
+            return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={fill} />
+          })}
+      {/* The pin-1 box would land on top of a screw head and read as damage, and a
+          terminal block's ordering is already legible from its T1…Tn silk. */}
+      {showMark && conn.kind !== 'terminal' && (
         <rect
           x={p1x - markR}
           y={cy - markR}
@@ -1024,32 +1104,67 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           opacity={0.85}
         />
       )}
-      {showLabels &&
-        conn.pins.map((pin, i) => {
-          if (!pin.name || i >= n) return null
-          const cxp = x0 + (w / (n + 1)) * (i + 1)
-          const ly = y0 - 2 // reads upward, just above the housing
-          return (
-            <text
-              key={`lbl${i}`}
-              x={cxp}
-              y={ly}
-              transform={`rotate(-90 ${cxp} ${ly})`}
-              textAnchor="start"
-              fontSize={labelFs}
-              fontWeight={700}
-              fill="#eef1f4"
-              stroke="#0b1410"
-              strokeWidth={labelFs * 0.35}
-              style={{ paintOrder: 'stroke' }}
-              className="pb__conn-pinlabel"
-            >
-              {pin.name}
-            </text>
-          )
-        })}
     </g>
   )
+}
+
+/**
+ * A connector's contact labels, drawn through the SHARED pin-label path (#672).
+ *
+ * `connectorGlyph` used to draw these itself, reimplementing what
+ * {@link boxedPinLabel} already does — and got it wrong three times: the wrong
+ * board edge, off-centre on the contact, and swinging onto the neighbouring
+ * header when the housing was rotated.
+ *
+ * Two things fall out of routing them through the shared path. Contacts label
+ * exactly like every other pin, out at the board edge. And because these are
+ * rendered OUTSIDE the housing's rotation transform, at positions that already
+ * account for that rotation, the whole counter-rotation dance disappears — a
+ * rotated header's labels simply stay where they belong.
+ */
+export function connectorContactLabels(
+  part: PartDefinition,
+  conn: PartConnector,
+  box: Box,
+  key: string
+): JSX.Element[] {
+  const pts = connectorContacts(part, conn)
+  return conn.pins.flatMap((pin, i) => {
+    const p = pts[i]
+    if (!p || !pin.name || contactLabelHidden(conn, pin)) return []
+    return [
+      <g key={`${key}-cl${i}`}>
+        {boxedPinLabel(
+          box,
+          box.x + p.x * box.w,
+          box.y + p.y * box.h,
+          pinOutwardDir(undefined, p.x, p.y),
+          String(pin.number ?? pin.gpio ?? ''),
+          pin.label || pin.name,
+          undefined,
+          '#cfd6dd'
+        )}
+      </g>
+    ]
+  })
+}
+
+/**
+ * Should this contact's silk label be suppressed? (#666)
+ *
+ * A servo / DuPont header is three contacts of which only ONE is interesting: the
+ * signal. Its V+ and GND are the same two rails on every header, so printing them
+ * across a row of eight headers is sixteen labels of pure noise over the part
+ * that most needs its signal names readable.
+ *
+ * Power and ground therefore DEFAULT to hidden on that kind — a default, not
+ * stored data, so it applies to headers already on a board and nothing is
+ * rewritten on disk. An explicit `labelHidden` still wins either way, which is
+ * how the pin-based servo trios (which set the flag themselves) already behave.
+ */
+function contactLabelHidden(conn: PartConnector, pin: PartPin): boolean {
+  if (pin.labelHidden !== undefined) return pin.labelHidden
+  return conn.kind === 'dupont' && (pin.type === 'pwr' || pin.type === 'gnd')
 }
 
 /** The default silk name for a connector when the author hasn't set one. A Grove
@@ -1063,6 +1178,8 @@ export function connectorDefaultName(conn: PartConnector): string {
       return conn.pins.length === 3 ? 'SERVO' : 'HDR'
     case 'jst':
       return 'JST'
+    case 'terminal':
+      return 'TERM'
     default:
       return 'QWIIC'
   }
@@ -1114,7 +1231,8 @@ export function PartBody({
   capsPins,
   capsHoverPin,
   pinLabels = 'all',
-  side = 'front'
+  side = 'front',
+  supplyV
 }: PartBodyProps): JSX.Element {
   // Two-layer split so a caller (the node-graph) can paint the board body under
   // its wires and the pin labels over them.
@@ -1232,7 +1350,8 @@ export function PartBody({
   const pinHoleList = visible.pins
     ? pins.flatMap((rp) => {
         const f = padOnFace(rp.pin, rp.x)
-        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rp.pin.rotation) : []
+        const rot = f.x === rp.x ? rp.pin.rotation : mirrorRotationX(rp.pin.rotation)
+        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rot) : []
       })
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
@@ -1310,13 +1429,32 @@ export function PartBody({
       </>
       )}
 
+      {/* Layer 3a: housed-group shells (#678). Drawn BEFORE the pins so the pads
+          of a QWIIC/Grove/JST/terminal sit inside their housing. A servo header
+          draws none — its pins are the connector, and a block behind them just
+          doubles the visual. */}
+      {!labelsOnly && visible.components &&
+        housedGroupConnectors(part).map(({ gid, conn }) =>
+          housingDrawsShell(conn.kind) ? (
+            <g key={`hg${gid}`} transform={conn.rotation ? `rotate(${conn.rotation} ${px(conn.x)} ${py(conn.y)})` : undefined}>
+              {connectorGlyph(px(conn.x), py(conn.y), conn, false, connPxPerMm, true)}
+            </g>
+          ) : null
+        )}
+
       {/* Layer 3: pins — pads (body layer) + their labels (overlay layer). The
           pinLabels mode paints the pads with the body and the labels on top. */}
       {visible.pins &&
         pins.map((rp: ResolvedPin, i) => {
           const face = padOnFace(rp.pin, rp.x)
           if (!face.show) return null
-          rp = face.x === rp.x ? rp : { ...rp, x: face.x }
+          // Seen from the far side, a through pad is mirrored — so its FACING
+          // mirrors too (#688). Without this a castellation kept its half-hole
+          // on the original edge and pointed back into the board.
+          rp =
+            face.x === rp.x
+              ? rp
+              : { ...rp, x: face.x, pin: { ...rp.pin, rotation: mirrorRotationX(rp.pin.rotation) } }
           // `true` boxes every pin; a Set boxes only those indices (mini board:
           // just the used pins, so a dense board's number boxes don't overlap).
           const boxAll = boxedPins === true
@@ -1425,7 +1563,7 @@ export function PartBody({
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
-              {!bodyOnly && !rp.pin.labelHidden && (
+              {!bodyOnly && !pinLabelHidden(part, rp.pin) && (
               <g transform={labelGroupTf}>
               {boxThis ? (
                 <g transform={boxedCounter}>
@@ -1619,7 +1757,14 @@ export function PartBody({
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>
-              {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
+              {onboardLedGlyph(
+                cx,
+                cy,
+                led,
+                sel,
+                connPxPerMm,
+                isPowerLed(led) ? powerLedState(supplyV, part.electrical) : 'unknown'
+              )}
               {styledText({
                 text: onboardLedLabel(led),
                 cx,
@@ -1652,8 +1797,13 @@ export function PartBody({
           return (
             // Turn the connector (body, pins + label) about its centre when it has
             // a body rotation — mirrors the Part Editor (PartCanvas).
-            <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
-              {connectorGlyph(cx, cy, conn, sel, connPxPerMm, capsPins === 'all')}
+            <g key={`conn${i}`}>
+              {/* Only the HOUSING turns. Labels sit outside this transform, at
+                  resolved positions that already account for the rotation. */}
+              <g transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
+                {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+              </g>
+              {!labelsOnly && capsPins === 'all' && connectorContactLabels(part, conn, box, `c${i}`)}
               {styledText({
                 text: connectorLabel(conn),
                 cx,

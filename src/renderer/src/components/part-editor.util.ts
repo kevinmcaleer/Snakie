@@ -21,11 +21,20 @@ import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
-  coerceGroveVariant,
+  coerceConnectorVariant,
   PART_PIN_SHAPES,
+  coerceGroupHousing,
+  coerceJstFamily,
+  TERMINAL_MAX,
+  TERMINAL_MIN,
   itemHidden,
   itemLocked,
   type ComponentShape,
+  type GroupHousing,
+  type PartConnectorKind,
+  type PartRail,
+  type PartSide,
+  type JstFamily,
   type ComponentShapeKind,
   type DriverFile,
   type SuggestedModule,
@@ -54,6 +63,7 @@ import {
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
 import { coerceElectrical } from '../../../shared/part-yaml'
+import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
@@ -326,7 +336,14 @@ function normalisePin(pin: PartPin): PartPin {
   if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
   if (typeof pin.derived === 'string' && pin.derived.trim()) out.derived = pin.derived.trim()
   if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
-    out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
+    // A servo signal's label reads along the trio's own axis, toward the nearer
+    // top/bottom edge (#689). Boards authored when the tool preset a fixed 270
+    // are re-aimed by position rather than left pointing at the top of the board
+    // however far down they sit. Converges: a top-half pin re-aims to 270 and
+    // matches again; a bottom-half pin becomes 90 and stops matching.
+    out.rotation = isPresetServoSignal(pin)
+      ? servoSignalRotation(pin.y ?? 0.5)
+      : ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
   if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
@@ -339,6 +356,34 @@ function normalisePin(pin: PartPin): PartPin {
     out.labelOffset = { x: clamp(pin.labelOffset.x, -1.5, 1.5), y: clamp(pin.labelOffset.y, -1.5, 1.5) }
   }
   return out
+}
+
+/**
+ * MIGRATION (#664): is this the label-direction preset the servo-header tool used
+ * to stamp on its signal pin?
+ *
+ * The tool set `rotation: 270` on every servo signal, which pinned the label to
+ * the TOP of the board however far down the header sat. The preset is gone, but
+ * headers placed before that fix carry it in their saved parts.yml, so it is
+ * cleared on load and the label falls back to the nearest edge.
+ *
+ * Deliberately narrow — ALL FOUR marks of the tool's own output must match — so a
+ * rotation someone aimed by hand with the pin inspector is never touched. That
+ * control is offered for every pad shape and its whole point is to override the
+ * default, so clearing one the user chose would be the worse bug.
+ */
+export function isPresetServoSignal(pin: {
+  rotation?: number
+  shape?: string
+  type?: string
+  group?: string
+}): boolean {
+  return (
+    pin.rotation === 270 &&
+    pin.shape === 'octagonal' &&
+    pin.type === 'io' &&
+    /^servo-\d+$/.test(pin.group ?? '')
+  )
 }
 
 /** Normalise one component shape: validate kind, clamp coords, default colours. */
@@ -527,10 +572,57 @@ export function applyItemOrder(
 // records nesting (`parent`) + names. These pure helpers resolve a group's tree
 // so move / rotate / delete / select act on every member, recursively (#630).
 
+/**
+ * One member of a group. The `kind` list must cover EVERY item type that can
+ * carry a `group` id (#665) — when it was narrower than that set, a group whose
+ * members were connectors/LEDs/buttons/holes resolved to nothing, so clicking it
+ * in the Layers panel selected nothing and dragging a member moved only that
+ * member. `PartItemFlags` carriers are the authority on what belongs here.
+ */
 export type GroupMemberRef =
   | { kind: 'pin'; hi: number; pi: number }
   | { kind: 'shape'; index: number }
   | { kind: 'label'; index: number }
+  | { kind: 'connector'; index: number }
+  | { kind: 'led'; index: number }
+  | { kind: 'button'; index: number }
+  | { kind: 'hole'; index: number }
+
+/** The non-pin member kinds — the ones addressed by a single array index. */
+export const GROUP_COMPONENT_KINDS = ['shape', 'label', 'connector', 'led', 'button', 'hole'] as const
+export type GroupComponentKind = (typeof GROUP_COMPONENT_KINDS)[number]
+
+/**
+ * The `group` id of whatever a selection points at, across every groupable kind
+ * (#665). Returns undefined for a selection that can't belong to a group.
+ *
+ * One lookup for both the delete path and the canvas, so a new groupable kind
+ * can't be added to one and missed by the other.
+ */
+export function selectionGroupId(
+  part: PartDefinition,
+  sel: { type: string; index?: number; hi?: number; pi?: number } | null | undefined
+): string | undefined {
+  if (!sel) return undefined
+  if (sel.type === 'pin') return part.headers?.[sel.hi ?? -1]?.pins?.[sel.pi ?? -1]?.group
+  const i = sel.index ?? -1
+  switch (sel.type) {
+    case 'shape':
+      return part.shapes?.[i]?.group
+    case 'label':
+      return part.labels?.[i]?.group
+    case 'connector':
+      return part.connectors?.[i]?.group
+    case 'led':
+      return part.onboardLeds?.[i]?.group
+    case 'button':
+      return part.buttons?.[i]?.group
+    case 'hole':
+      return part.mountingHoles?.[i]?.group
+    default:
+      return undefined
+  }
+}
 
 /** Every group id in the subtree rooted at `rootId` (itself + nested descendants). */
 export function groupTreeIds(groups: PartGroup[] | undefined, rootId: string): Set<string> {
@@ -561,7 +653,7 @@ export function groupRootId(groups: PartGroup[] | undefined, gid: string): strin
   return cur
 }
 
-/** Every item (pin/shape/label) whose `group` id is in `ids`. */
+/** Every item whose `group` id is in `ids`, across all groupable kinds. */
 export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMemberRef[] {
   const out: GroupMemberRef[] = []
   part.headers?.forEach((h, hi) =>
@@ -569,12 +661,20 @@ export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMembe
       if (p.group && ids.has(p.group)) out.push({ kind: 'pin', hi, pi })
     })
   )
-  part.shapes?.forEach((s, i) => {
-    if (s.group && ids.has(s.group)) out.push({ kind: 'shape', index: i })
-  })
-  part.labels?.forEach((l, i) => {
-    if (l.group && ids.has(l.group)) out.push({ kind: 'label', index: i })
-  })
+  const each = <T extends { group?: string }>(
+    list: T[] | undefined,
+    kind: GroupComponentKind
+  ): void => {
+    list?.forEach((it, index) => {
+      if (it.group && ids.has(it.group)) out.push({ kind, index } as GroupMemberRef)
+    })
+  }
+  each(part.shapes, 'shape')
+  each(part.labels, 'label')
+  each(part.connectors, 'connector')
+  each(part.onboardLeds, 'led')
+  each(part.buttons, 'button')
+  each(part.mountingHoles, 'hole')
   return out
 }
 
@@ -658,6 +758,779 @@ export function uniquePinName(base: string, used: ReadonlySet<string>): string {
   // Bounded so a pathological part can't spin here; 999 is far past any real board.
   while (used.has(`${stem}${n}`) && n < 1000) n++
   return `${stem}${n}`
+}
+
+/**
+ * The contacts for an `n`-way screw terminal block (#662), named `T1`…`Tn`.
+ *
+ * `io` is the neutral default: a block might be motor outputs, a power input or
+ * a sensor lead, and the author retypes each contact anyway — they are ordinary
+ * {@link PartPin}s, so everything that configures a header pin configures these.
+ */
+export function terminalPins(n: number): PartPin[] {
+  const count = clamp(Math.round(n) || TERMINAL_MIN, TERMINAL_MIN, TERMINAL_MAX)
+  return Array.from({ length: count }, (_, i) => ({ name: `T${i + 1}`, type: 'io' as PartPinType }))
+}
+
+/**
+ * Grow or shrink a terminal block to `n` ways, **keeping the contacts already
+ * configured**.
+ *
+ * Growing appends fresh `T<k>` contacts; shrinking drops from the end. Shrinking
+ * does lose the trailing contacts' configuration — which is what "fewer
+ * terminals" has to mean — so it only ever removes from the end, where the loss
+ * is predictable, rather than choosing which ones looked unused.
+ */
+export function resizeTerminals(pins: PartPin[], n: number): PartPin[] {
+  return resizeContacts(pins, n, 'T')
+}
+
+/**
+ * Grow or shrink ANY connector's contact list (#694).
+ *
+ * A JST housing comes in as many ways as the family has; a DuPont block is a 2-,
+ * 3- or 4-way header. Both were stuck at whatever they were created with, so a
+ * 2-pin battery lead had to be built as a 4-pin one and edited down by hand.
+ *
+ * Same rules as a terminal block: keep what is already configured, append fresh
+ * contacts, and shrink from the END so what is lost is predictable.
+ */
+export function resizeContacts(pins: PartPin[], n: number, prefix = 'P'): PartPin[] {
+  const count = clamp(Math.round(n) || TERMINAL_MIN, TERMINAL_MIN, TERMINAL_MAX)
+  const kept = pins.slice(0, count)
+  for (let i = kept.length; i < count; i++) {
+    kept.push({ name: `${prefix}${i + 1}`, type: 'io' as PartPinType })
+  }
+  return kept
+}
+
+/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
+export const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
+  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
+  gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
+  zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
+  ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
+  xh: { pitch: 2.5, sideMargin: 1.75, depthMm: 5.8 },
+  vh: { pitch: 3.96, sideMargin: 2.6, depthMm: 9.0 }
+}
+
+export function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
+  switch (conn.kind) {
+    case 'grove':
+      // Seeed Grove: 4-way 2.0 mm shell, ~11.8 × 6.6 mm where it meets the board.
+      return { pitch: 2.0, sideMargin: 2.9, depthMm: 6.6 }
+    case 'dupont':
+      // 0.1" male header strip — one 2.54 mm square cell per pin.
+      return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
+    case 'jst':
+      // The family IS the pitch, which is what makes a JST housing recognisable
+      // and what decides whether a lead fits. `ph` is the default so every JST
+      // connector authored before families existed draws exactly as it did.
+      return JST_DIMS[coerceJstFamily(conn.variant) ?? 'ph']
+    case 'terminal':
+      // The ubiquitous green screw-terminal block (KF301/KF128 family): 5.08 mm
+      // pitch, a deep body because the wire goes IN from the side rather than a
+      // plug seating on top.
+      return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
+    default:
+      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+  }
+}
+
+/**
+ * Where a connector's contacts sit, in normalised 0..1 BOARD coordinates (#672).
+ *
+ * Contacts have no stored coordinates — they are laid out from the housing's
+ * position, size and rotation — which is why they were invisible to everything
+ * that works in pin positions: the netlist's flat walk, hit-testing, selection,
+ * and the label renderer. Resolving them once, here, is what lets a contact be
+ * treated as an ordinary pin everywhere else.
+ *
+ * The spread matches what {@link connectorGlyph} DRAWS (`(i+1)/(n+1)` across the
+ * housing), not an idealised pitch — a resolved position that disagrees with the
+ * glyph would put labels and click targets slightly off the contact they name.
+ *
+ * Geometry is done in MILLIMETRES and normalised per axis at the end. Normalised
+ * space is `x/boardWidth` by `y/boardHeight`, so on a non-square board those axes
+ * have different scales and rotating in them would shear the housing.
+ */
+export function connectorContacts(
+  part: PartDefinition,
+  conn: PartConnector
+): { x: number; y: number }[] {
+  const n = Math.max(2, conn.pins.length || 4)
+  const { pitch, sideMargin } = connectorDims(conn)
+  const dims = part.dimensions
+  const real = !!dims && dims.width > 0 && dims.height > 0
+  // Without real dimensions the glyph falls back to a fixed on-screen size, so
+  // match it: treat the board as a nominal box and the housing as that many of
+  // the same units, which keeps resolved positions on the drawn contacts.
+  const NOMINAL_PX = 420
+  const boardW = real ? dims.width : NOMINAL_PX
+  const boardH = real ? dims.height : NOMINAL_PX / (aspectOf(part) || 1)
+  const wMm = real ? (n - 1) * pitch + 2 * sideMargin : Math.max(18, n * 5 + 6)
+  const rot = ((((conn.rotation ?? 0) % 360) + 360) % 360) * (Math.PI / 180)
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  return Array.from({ length: n }, (_, i) => {
+    const dx = wMm * ((i + 1) / (n + 1) - 0.5)
+    // Rotate about the housing centre, in mm, then normalise per axis.
+    const rx = dx * cos
+    const ry = dx * sin
+    return { x: clamp(conn.x + rx / boardW, 0, 1), y: clamp(conn.y + ry / boardH, 0, 1) }
+  })
+}
+
+/** The board outline aspect (w/h): real dimensions win, else `aspect`, else 1. */
+function aspectOf(part: PartDefinition): number {
+  if (part.dimensions && part.dimensions.width > 0 && part.dimensions.height > 0) {
+    return part.dimensions.width / part.dimensions.height
+  }
+  return typeof part.aspect === 'number' && part.aspect > 0 ? part.aspect : 1
+}
+
+/** A connector contact resolved to a board position, addressable back to source. */
+export interface ResolvedContact {
+  pin: PartPin
+  x: number
+  y: number
+  /** Connector index + contact index, so a caller can mutate the right contact. */
+  ci: number
+  cpi: number
+}
+
+/**
+ * Every connector contact in the part, with a resolved position (#672).
+ *
+ * Deliberately SEPARATE from {@link resolvedPins} rather than appended to it:
+ * that list's flat index is an identity used by the layer tree and pin refs
+ * (`resolvedPins(part)[flatIndex]`), so extending it would silently redefine
+ * every stored reference. Callers that want both use {@link allResolvedPins}.
+ */
+export function resolvedContacts(part: PartDefinition): ResolvedContact[] {
+  const out: ResolvedContact[] = []
+  ;(part.connectors ?? []).forEach((conn, ci) => {
+    const pts = connectorContacts(part, conn)
+    conn.pins.forEach((pin, cpi) => {
+      const p = pts[cpi]
+      if (p) out.push({ pin, x: p.x, y: p.y, ci, cpi })
+    })
+  })
+  return out
+}
+
+/** Header pins and connector contacts together, each with a board position. */
+export function allResolvedPins(
+  part: PartDefinition
+): (ResolvedPin | (ResolvedContact & { edge?: PartEdge }))[] {
+  return [...resolvedPins(part), ...resolvedContacts(part)]
+}
+
+/**
+ * Where a housing sits and which way it faces, from the pins it holds (#696).
+ *
+ * The centre is the pins' mean; the rotation is the axis they run along — a
+ * column of pads is a housing stood on end, a row is one lying flat. Both are
+ * facts about the pins, so deriving them means the shell can never disagree with
+ * the pads it is drawn around, whatever moved them.
+ */
+export function housingGeometry(
+  pins: { x?: number; y?: number }[]
+): { x: number; y: number; rotation?: number } {
+  const xs = pins.map((p) => p.x ?? 0)
+  const ys = pins.map((p) => p.y ?? 0)
+  const x = xs.reduce((a, b) => a + b, 0) / xs.length
+  const y = ys.reduce((a, b) => a + b, 0) / ys.length
+  const spanX = Math.max(...xs) - Math.min(...xs)
+  const spanY = Math.max(...ys) - Math.min(...ys)
+  return spanY > spanX ? { x, y, rotation: 90 } : { x, y }
+}
+
+/**
+ * Every housed group, presented as a {@link PartConnector} (#673).
+ *
+ * This is the adapter that makes "a connector is a group of pins with a housing"
+ * cheap: the cable layer, the fit checks and the renderers keep taking a
+ * `PartConnector` and need no idea that some of them are groups. The pins are not
+ * copied anywhere — they stay ordinary pins in `headers[]`, which is what keeps
+ * the flattened endpoint order (and therefore every saved wire) untouched.
+ *
+ * Contact ORDER is the group's member order, which `groupMembers` yields in
+ * header→pin order. That order is load-bearing: a lead pairs two housings
+ * contact-for-contact by position.
+ */
+export function housedGroupConnectors(
+  part: PartDefinition
+): { gid: string; conn: PartConnector }[] {
+  const out: { gid: string; conn: PartConnector }[] = []
+  for (const g of part.groups ?? []) {
+    if (!g.housing) continue
+    const members = groupMembers(part, new Set([g.id]))
+    const pins = members
+      .filter((m): m is Extract<GroupMemberRef, { kind: 'pin' }> => m.kind === 'pin')
+      .map((m) => part.headers[m.hi]?.pins[m.pi])
+      .filter((p): p is PartPin => !!p)
+    if (!pins.length) continue
+    const h = g.housing
+    // Position and rotation are DERIVED from the member pins, not read back from
+    // the housing (#696). They used to be stored state that every mutation had to
+    // remember to update — and none of them did, so dragging, aligning or rotating
+    // a housed group moved its pads and left the shell behind. Deriving removes
+    // the second copy entirely, for every connector kind at once, rather than
+    // syncing it at each of the mutation sites.
+    const placed = pins.filter((p) => p.x !== undefined && p.y !== undefined)
+    const geom = placed.length ? housingGeometry(placed) : { x: h.x, y: h.y, rotation: h.rotation }
+    const conn: PartConnector = { kind: h.kind, x: geom.x, y: geom.y, pins }
+    if (h.variant) conn.variant = h.variant
+    if (geom.rotation) conn.rotation = geom.rotation
+    if (h.label) conn.label = h.label
+    out.push({ gid: g.id, conn })
+  }
+  return out
+}
+
+/**
+ * Every connector on the part: the ones stored in `connectors[]` AND the housed
+ * groups. Callers that ask "what can a lead plug into?" want this, not either
+ * list alone.
+ */
+export function allConnectors(part: PartDefinition): PartConnector[] {
+  return [...(part.connectors ?? []), ...housedGroupConnectors(part).map((h) => h.conn)]
+}
+
+/**
+ * The flat wiring-endpoint index of every contact of `conn`, in contact order.
+ *
+ * A wiring endpoint is `"<key>.<pinName>#<index>"` where the index into the
+ * flattened pin list is authoritative. For a connector stored in `connectors[]`
+ * those indices are a contiguous block after the header pins; for a HOUSED GROUP
+ * (#673) the contacts are header pins, so their indices sit wherever those pins
+ * do — scattered, not contiguous.
+ *
+ * Resolving by pin IDENTITY against `flattenPartPins` therefore handles both, and
+ * removes the base+offset arithmetic that only ever worked for the first shape.
+ */
+export function connectorEndpointIndices(part: PartDefinition, conn: PartConnector): number[] {
+  const flat = flattenPartPins(part)
+  return conn.pins.map((pin) => flat.indexOf(pin))
+}
+
+/**
+ * Give a group a connector housing, or take it away (#673).
+ *
+ * The housing is centred on the group's own pins, so "make this a connector" needs
+ * no placement step — the pads are already where the socket is. Passing `null`
+ * removes it, leaving the group an ordinary group.
+ *
+ * Pure, and it moves no pins: the flattened endpoint order — which is what every
+ * saved wire is addressed by — is untouched either way.
+ */
+export function withGroupHousing(
+  part: PartDefinition,
+  gid: string,
+  kind: PartConnectorKind | null
+): Partial<PartDefinition> {
+  const groups = part.groups ?? []
+  const known = groups.some((g) => g.id === gid)
+  if (kind === null) {
+    return { groups: groups.map((g) => (g.id === gid ? { ...g, housing: undefined } : g)) }
+  }
+  const pins = groupMembers(part, new Set([gid]))
+    .filter((m): m is Extract<GroupMemberRef, { kind: 'pin' }> => m.kind === 'pin')
+    .map((m) => part.headers[m.hi]?.pins[m.pi])
+    .filter((p): p is PartPin => !!p && p.x !== undefined && p.y !== undefined)
+  if (!pins.length) return {}
+  // Same maths the renderer derives with, so what is stored and what is drawn
+  // can't disagree the moment either changes (#696).
+  const geom = housingGeometry(pins)
+  const housing: GroupHousing = { kind, x: geom.x, y: geom.y }
+  if (geom.rotation) housing.rotation = geom.rotation
+  const next = known
+    ? groups.map((g) => (g.id === gid ? { ...g, housing } : g))
+    : [...groups, { id: gid, housing }]
+  return { groups: next }
+}
+
+/**
+ * The image layer of the face being edited (#687).
+ *
+ * A part has TWO photos — the front's `imageLayer` and the rear's
+ * `rear.imageLayer` — and every control that moves, resizes or locks the aspect
+ * of "the image" has to mean the one on screen. When they didn't, editing the
+ * rear silently rewrote the front's placement.
+ */
+export function faceImageLayer(part: PartDefinition, side: PartSide): ImageLayer {
+  const l = side === 'rear' ? part.rear?.imageLayer : part.imageLayer
+  return l ?? { x: 0, y: 0, w: 1, h: 1 }
+}
+
+/** The image DATA of the face being edited — what its native aspect is read from. */
+export function faceImageData(part: PartDefinition, side: PartSide): string | undefined {
+  return side === 'rear' ? part.rear?.imageData : part.imageData
+}
+
+/**
+ * Patch the image layer of the face being edited, returning the part fields to
+ * commit. Writing the rear's layer never touches the front's, and vice versa.
+ */
+export function withFaceImageLayer(
+  part: PartDefinition,
+  side: PartSide,
+  p: Partial<ImageLayer>
+): Partial<PartDefinition> {
+  const next = { ...faceImageLayer(part, side), ...p }
+  if (side !== 'rear') return { imageLayer: next }
+  // Keep the rest of the rear block (its filename, its inlined data) intact.
+  return { rear: { ...(part.rear ?? {}), imageLayer: next } }
+}
+
+/**
+ * Should this pin's silk label be suppressed? (#689)
+ *
+ * A servo header's V+ and GND are the same two rails on every header, so a row of
+ * sixteen prints thirty-two labels of noise over the signal names that are the
+ * only ones you read. They are hidden by DEFAULT on a pin belonging to a servo
+ * (dupont) housing — a display rule, not stored data, so headers already on a
+ * board pick it up and nothing is rewritten on disk.
+ *
+ * An explicit {@link PartPin.labelHidden} still wins in both directions. Mirrors
+ * `contactLabelHidden`, which does the same for a connector's own contacts.
+ */
+export function pinLabelHidden(part: PartDefinition, pin: PartPin): boolean {
+  if (pin.labelHidden !== undefined) return pin.labelHidden
+  if (pin.type !== 'pwr' && pin.type !== 'gnd') return false
+  if (!pin.group) return false
+  return (part.groups ?? []).find((g) => g.id === pin.group)?.housing?.kind === 'dupont'
+}
+
+/**
+ * Which way a servo header's signal label should read (#689).
+ *
+ * The trio is a vertical column — signal, V+, ground — so its label belongs at
+ * the TOP or BOTTOM board edge, never the left or right: a row of sixteen headers
+ * throwing their labels sideways stacks them all on one edge, across each other.
+ *
+ * Which of the two is the nearer one, measured from the trio. That is what makes
+ * a row along the bottom read downward and a row along the top read upward,
+ * rather than every header pointing the same way whatever the board looks like.
+ */
+export function servoSignalRotation(trioCentreY: number): number {
+  return trioCentreY > 0.5 ? 90 : 270 // 90 = bottom, 270 = top
+}
+
+/**
+ * The group registry with every EMPTY group dropped (#690).
+ *
+ * A group is kept while some item still carries its id, or while it is some other
+ * kept group's `parent`. Delete the last thing in a group and the entry is dead
+ * weight: it lists in the Layers panel, selecting it selects nothing, and so
+ * pressing Delete on it appears to do nothing at all.
+ *
+ * The scan must cover EVERY kind that can carry a `group` id — when it was
+ * narrower, groups of connectors/LEDs/buttons/holes were pruned while still in
+ * use. Nesting is resolved to a fixed point, so dropping a group also drops a
+ * parent left holding nothing but it.
+ *
+ * Returns `undefined` when nothing survives, matching how the field is stored.
+ */
+export function pruneEmptyGroups(part: PartDefinition): PartGroup[] | undefined {
+  const all = part.groups ?? []
+  if (!all.length) return undefined
+  const used = new Set<string>()
+  for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) used.add(p.group)
+  for (const s of part.shapes ?? []) if (s.group) used.add(s.group)
+  for (const l of part.labels ?? []) if (l.group) used.add(l.group)
+  for (const c of part.connectors ?? []) {
+    if (c.group) used.add(c.group)
+    for (const p of c.pins ?? []) if (p.group) used.add(p.group)
+  }
+  for (const l of part.onboardLeds ?? []) if (l.group) used.add(l.group)
+  for (const b of part.buttons ?? []) if (b.group) used.add(b.group)
+  for (const h of part.mountingHoles ?? []) if (h.group) used.add(h.group)
+
+  // A group also survives as the parent of one that survives. Repeat until it
+  // settles, so a chain of ancestors is kept (or dropped) together.
+  const kept = new Set<string>([...used].filter((id) => all.some((g) => g.id === id)))
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const g of all) {
+      if (g.parent && kept.has(g.id) && !kept.has(g.parent) && all.some((x) => x.id === g.parent)) {
+        kept.add(g.parent)
+        changed = true
+      }
+    }
+  }
+  const out = all
+    .filter((g) => kept.has(g.id))
+    .map((g): PartGroup => {
+      const grp: PartGroup = { id: String(g.id) }
+      if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
+      if (typeof g.parent === 'string' && g.parent.trim() && kept.has(g.parent)) grp.parent = g.parent.trim()
+      if (g.hidden === true) grp.hidden = true
+      if (g.locked === true) grp.locked = true
+      // Validated, not passed through: this runs from `normalisePart`, so an
+      // untrusted housing has to be coerced here or the whitelist has a hole.
+      const housing = coerceGroupHousing(g.housing)
+      if (housing) grp.housing = housing
+      return grp
+    })
+  return out.length ? out : undefined
+}
+
+/**
+ * Duplicate a whole group and everything in it (#691).
+ *
+ * Copies every member, offset as a block so the copy is visibly its own, and
+ * gives them a NEW group id — with the housing carried over, so duplicating a
+ * servo header gives you another servo header rather than three loose pads.
+ *
+ * Pin names are made unique: a name is a wire endpoint (`<part>.<name>`), so two
+ * pins called `S1` make that endpoint ambiguous. `S1` becomes `S2`, which is what
+ * a second servo channel should be called anyway.
+ *
+ * Returns the fields to commit plus the new group's id, or `null` when there is
+ * nothing to copy.
+ */
+export function duplicateGroup(
+  part: PartDefinition,
+  gid: string
+): { part: Partial<PartDefinition>; gid: string } | null {
+  const ids = groupTreeIds(part.groups, groupRootId(part.groups, gid))
+  const members = groupMembers(part, ids)
+  if (!members.length) return null
+  const off = DUPLICATE_OFFSET
+  const c01 = (n: number): number => clamp(n, 0, 1)
+  const newGid = `${gid}-copy-${(part.groups ?? []).length + 1}`
+  const used = usedPinNames(part)
+
+  const headers = part.headers.map((h) => ({ ...h }))
+  const add: Record<string, unknown[]> = { shapes: [], labels: [], connectors: [], leds: [], buttons: [], holes: [] }
+  for (const m of members) {
+    if (m.kind === 'pin') {
+      const src = part.headers[m.hi]?.pins[m.pi]
+      if (!src) continue
+      const rp = resolvedPins(part).find((r) => r.hi === m.hi && r.pi === m.pi)
+      const name = uniquePinName(src.name, used)
+      used.add(name)
+      headers[m.hi] = {
+        ...headers[m.hi],
+        pins: [
+          ...headers[m.hi].pins,
+          {
+            ...src,
+            name,
+            capabilities: src.capabilities ? [...src.capabilities] : undefined,
+            group: newGid,
+            x: c01((rp?.x ?? 0) + off),
+            y: c01((rp?.y ?? 0) + off)
+          }
+        ]
+      }
+      continue
+    }
+    const list =
+      m.kind === 'shape' ? part.shapes : m.kind === 'label' ? part.labels
+      : m.kind === 'connector' ? part.connectors : m.kind === 'led' ? part.onboardLeds
+      : m.kind === 'button' ? part.buttons : part.mountingHoles
+    const src = list?.[m.index] as ({ x: number; y: number } & Record<string, unknown>) | undefined
+    if (!src) continue
+    const key = m.kind === 'led' ? 'leds' : m.kind === 'hole' ? 'holes' : `${m.kind}s`
+    add[key].push({ ...src, group: newGid, x: c01(src.x + off), y: c01(src.y + off) })
+  }
+
+  const src = (part.groups ?? []).find((g) => g.id === gid)
+  const housing = src?.housing
+  const grp: PartGroup = { id: newGid }
+  if (src?.name) grp.name = `${src.name} copy`
+  if (housing) {
+    grp.housing = { ...housing, x: c01(housing.x + off), y: c01(housing.y + off) }
+  }
+  const cat = <T,>(cur: T[] | undefined, extra: unknown[]): T[] | undefined =>
+    extra.length ? [...(cur ?? []), ...(extra as T[])] : cur
+
+  return {
+    gid: newGid,
+    part: {
+      headers,
+      shapes: cat(part.shapes, add.shapes),
+      labels: cat(part.labels, add.labels),
+      connectors: cat(part.connectors, add.connectors),
+      onboardLeds: cat(part.onboardLeds, add.leds),
+      buttons: cat(part.buttons, add.buttons),
+      mountingHoles: cat(part.mountingHoles, add.holes),
+      groups: [...(part.groups ?? []), grp]
+    }
+  }
+}
+
+/**
+ * The `group` id of one item, addressed by kind + index (#692).
+ *
+ * The row renderers know an item as "a connector at index 3"; this answers which
+ * group it belongs to without each of them reaching into a different array.
+ */
+export function itemGroupOf(
+  part: PartDefinition,
+  kind: GroupComponentKind | 'pin',
+  index: number
+): string | undefined {
+  switch (kind) {
+    case 'shape':
+      return part.shapes?.[index]?.group
+    case 'label':
+      return part.labels?.[index]?.group
+    case 'connector':
+      return part.connectors?.[index]?.group
+    case 'led':
+      return part.onboardLeds?.[index]?.group
+    case 'button':
+      return part.buttons?.[index]?.group
+    case 'hole':
+      return part.mountingHoles?.[index]?.group
+    default:
+      return undefined
+  }
+}
+
+/**
+ * Convert a part's stored `connectors[]` into housed groups of ordinary pins
+ * (#677).
+ *
+ * A contact nested in `connectors[]` is a second-class pin: not individually
+ * selectable, not reachable by the marquee, and editable only through the
+ * connector's own contact editor. As a HEADER pin in a housed group (#673) it is
+ * simply a pin, and gets all of that for free.
+ *
+ * **Converts ALL of them at once, deliberately.** The flattened pin order is the
+ * authoritative wiring endpoint index (`shared/netlist.ts`), and it runs
+ * `[all header pins][all connector contacts, in connector order]`. Appending one
+ * connector's contacts to the headers keeps its own indices only if every
+ * connector before it has already moved — convert the second of two and its
+ * contacts jump ahead of the first's, silently rewiring saved designs. Converting
+ * the lot reproduces the original order exactly.
+ *
+ * Contacts keep their names and gain the position they were already drawn at, so
+ * nothing moves on screen either.
+ *
+ * Returns `null` when the part has no stored connectors.
+ */
+export function connectorsToHousedGroups(part: PartDefinition): Partial<PartDefinition> | null {
+  const conns = part.connectors ?? []
+  if (!conns.length) return null
+
+  const groups: PartGroup[] = [...(part.groups ?? [])]
+  const taken = new Set(groups.map((g) => g.id))
+  const added: PartPin[] = []
+
+  conns.forEach((conn, ci) => {
+    let gid = `conn-${ci + 1}`
+    for (let n = 2; taken.has(gid) && n < 1000; n++) gid = `conn-${ci + 1}-${n}`
+    taken.add(gid)
+
+    // The positions the contacts are ALREADY drawn at, so converting moves nothing.
+    const pts = connectorContacts(part, conn)
+    conn.pins.forEach((pin, i) => {
+      const p = pts[i]
+      added.push({ ...pin, group: gid, x: p?.x ?? conn.x, y: p?.y ?? conn.y })
+    })
+
+    const housing: GroupHousing = { kind: conn.kind, x: conn.x, y: conn.y }
+    if (conn.variant) housing.variant = conn.variant
+    if (conn.rotation) housing.rotation = conn.rotation
+    if (conn.label) housing.label = conn.label
+    const grp: PartGroup = { id: gid, housing }
+    grp.name = conn.label || connectorDefaultLabel(conn)
+    if (conn.group) grp.parent = conn.group
+    groups.push(grp)
+  })
+
+  // Appended AFTER every existing header pin — which, with `connectors` emptied,
+  // reproduces `[headers][contacts]` exactly.
+  const headers = part.headers.length ? [...part.headers] : [{ edge: 'left' as PartEdge, pins: [] }]
+  const last = headers.length - 1
+  headers[last] = { ...headers[last], pins: [...headers[last].pins, ...added] }
+
+  return { headers, connectors: undefined, groups }
+}
+
+/** A readable name for a converted connector, when it had no label of its own. */
+function connectorDefaultLabel(conn: PartConnector): string {
+  const n = conn.pins.length
+  switch (conn.kind) {
+    case 'grove':
+      return conn.variant ? `Grove ${conn.variant.toUpperCase()}` : 'Grove port'
+    case 'dupont':
+      return n === 3 ? 'Servo header' : `${n}-way header`
+    case 'terminal':
+      return `${n}-way terminal block`
+    case 'qwiic':
+      return 'QWIIC'
+    default:
+      return 'JST'
+  }
+}
+
+/** The selection kinds a duplicate is defined for (#661). */
+export type DuplicableSelection =
+  | { type: 'pin'; hi: number; pi: number }
+  | { type: 'hole'; index: number }
+  | { type: 'connector'; index: number }
+  | { type: 'shape'; index: number }
+  | { type: 'label'; index: number }
+
+/** How far a copy is offset from its source, as a fraction of the board box. */
+const DUPLICATE_OFFSET = 0.04
+
+/**
+ * Duplicate the selected item, returning the new part and the copy's selection —
+ * or `null` when the selection isn't something we can duplicate.
+ *
+ * **One implementation, two callers**: the canvas mini-toolbar's ⧉ buttons and the
+ * Ctrl/Cmd+D shortcut (#661). They previously would have been two copies of this
+ * logic, which is the failure mode that keeps biting this codebase — the shortcut
+ * would quietly drift from the button (a new field copied in one and not the
+ * other) with nothing to catch it.
+ *
+ * Pure: the caller commits the part and applies the selection.
+ */
+export function duplicateSelection(
+  part: PartDefinition,
+  sel: { type: string; index?: number; hi?: number; pi?: number } | null | undefined
+): { part: PartDefinition; selection: DuplicableSelection } | null {
+  if (!sel) return null
+  const off = DUPLICATE_OFFSET
+  const c01 = (n: number): number => clamp(n, 0, 1)
+
+  if (sel.type === 'shape' && sel.index !== undefined) {
+    const shapes = part.shapes ?? []
+    const s = shapes[sel.index]
+    if (!s) return null
+    const copy: ComponentShape = {
+      ...s,
+      x: c01(s.x + off),
+      y: c01(s.y + off),
+      points: s.points?.map((p) => ({ x: c01(p.x + off), y: c01(p.y + off) })),
+      z: nextComponentZ(part)
+    }
+    const next = [...shapes, copy]
+    return { part: { ...part, shapes: next }, selection: { type: 'shape', index: next.length - 1 } }
+  }
+
+  if (sel.type === 'label' && sel.index !== undefined) {
+    const labels = part.labels ?? []
+    const l = labels[sel.index]
+    if (!l) return null
+    const next = [...labels, { ...l, x: c01(l.x + off), y: c01(l.y + off), z: nextComponentZ(part) }]
+    return { part: { ...part, labels: next }, selection: { type: 'label', index: next.length - 1 } }
+  }
+
+  if (sel.type === 'connector' && sel.index !== undefined) {
+    const connectors = part.connectors ?? []
+    const c = connectors[sel.index]
+    if (!c) return null
+    // Contacts carry no coordinates of their own — they're laid out from the
+    // body's position and rotation — so only the body moves.
+    const used = usedPinNames(part)
+    const copy: PartConnector = {
+      ...c,
+      // A duplicate is a NEW, standalone connector. Inheriting the source's group
+      // would make the copy move, rotate and delete as part of it — so dragging
+      // the original would drag its own duplicate around.
+      group: undefined,
+      x: c01(c.x + off),
+      y: c01(c.y + off),
+      z: nextComponentZ(part),
+      // Contacts share one namespace with every other pin (a wire endpoint is
+      // `<partId>.<PinName>`), so a verbatim copy would give a board two pins
+      // called SCL and make that endpoint ambiguous. Suffix them: SCL → SCL2.
+      pins: c.pins.map((p) => {
+        const name = uniquePinName(p.name, used)
+        used.add(name)
+        return { ...p, name, capabilities: p.capabilities ? [...p.capabilities] : undefined }
+      })
+    }
+    const next = [...connectors, copy]
+    return {
+      part: { ...part, connectors: next },
+      selection: { type: 'connector', index: next.length - 1 }
+    }
+  }
+
+  if (sel.type === 'hole' && sel.index !== undefined) {
+    const holes = part.mountingHoles ?? []
+    const h = holes[sel.index]
+    if (!h) return null
+    const next = [...holes, { x: c01(h.x + off), y: c01(h.y + off), diameter: h.diameter }]
+    return {
+      part: { ...part, mountingHoles: next },
+      selection: { type: 'hole', index: next.length - 1 }
+    }
+  }
+
+  if (sel.type === 'pin' && sel.hi !== undefined && sel.pi !== undefined) {
+    const { hi, pi } = sel
+    const src = part.headers?.[hi]?.pins?.[pi]
+    if (!src) return null
+    // Position comes from the RESOLVED pin: a legacy pin carries no x/y of its
+    // own and is placed from its edge, so copying `src.x` would give the duplicate
+    // no position at all.
+    const rp = resolvedPins(part).find((p) => p.hi === hi && p.pi === pi)
+    if (!rp) return null
+    const used = usedPinNames(part)
+    const copy: PartPin = {
+      ...src,
+      name: uniquePinName(src.name, used),
+      capabilities: src.capabilities ? [...src.capabilities] : undefined,
+      x: c01(rp.x + off),
+      y: c01(rp.y + off)
+    }
+    const newPi = part.headers[hi].pins.length
+    return {
+      part: {
+        ...part,
+        headers: part.headers.map((h, i) => (i === hi ? { ...h, pins: [...h.pins, copy] } : h))
+      },
+      selection: { type: 'pin', hi, pi: newPi }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Split what an author typed or pasted into the Tags field into individual tags
+ * (#660). Commas separate; surrounding whitespace and empty entries are dropped.
+ *
+ * A tag can never contain a comma — which is the point: with commas acting as a
+ * *command* rather than a character that has to survive a round-trip through the
+ * model, the old bug (a trailing comma normalising away, so a second tag was
+ * unreachable by typing) cannot come back.
+ */
+export function splitTagInput(input: string): string[] {
+  return String(input ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t !== '')
+}
+
+/**
+ * Add typed/pasted tags to an existing list, preserving order.
+ *
+ * Duplicates are rejected **case-insensitively** — `I2C` alongside `i2c` is just
+ * noise in search — but only for the tags being ADDED. Existing entries are never
+ * rewritten or de-duplicated, so merely opening a part in the editor can't
+ * silently mutate data someone authored by hand.
+ */
+export function addTags(existing: string[], input: string): string[] {
+  const out = [...existing]
+  const seen = new Set(out.map((t) => t.toLowerCase()))
+  for (const tag of splitTagInput(input)) {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+  }
+  return out
 }
 
 /**
@@ -1104,30 +1977,35 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
   }
-  // Group registry (#627) — kept only for ids still referenced by an item's `group`
-  // or by a nested group's `parent`, so ungrouping/deleting leaves no orphan groups.
-  if (Array.isArray(part.groups) && part.groups.length) {
-    const referenced = new Set<string>()
-    for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) referenced.add(p.group)
-    for (const s of part.shapes ?? []) if (s.group) referenced.add(s.group)
-    for (const l of part.labels ?? []) if (l.group) referenced.add(l.group)
-    for (const g of part.groups) if (g.parent) referenced.add(g.parent)
-    const groups = part.groups
-      .filter((g) => g.id && referenced.has(g.id))
-      .map((g): PartGroup => {
-        const grp: PartGroup = { id: String(g.id) }
-        if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
-        if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
-        if (g.hidden === true) grp.hidden = true
-        if (g.locked === true) grp.locked = true
-        return grp
+  // Internal rails (#695) — the nets a part's own PCB joins. Same shape check as
+  // `parts.yml`: a name, and at least two pins, or it joins nothing.
+  if (Array.isArray(part.rails)) {
+    const rails = part.rails
+      .map((r): PartRail | null => {
+        const name = text(r?.name)
+        const pins = Array.isArray(r?.pins)
+          ? r.pins.map((x) => text(x)).filter((x): x is string => !!x)
+          : []
+        return name && pins.length >= 2 ? { name, pins } : null
       })
-    if (groups.length) out.groups = groups
+      .filter((r): r is PartRail => r !== null)
+    if (rails.length) out.rails = rails
   }
+  // Group registry (#627): keep only the ids still in use — see
+  // {@link pruneEmptyGroups}, which is also what the delete paths call so a
+  // group vanishes the moment its last member does, not at the next save.
+  const keptGroups = pruneEmptyGroups(part)
+  if (keptGroups) out.groups = keptGroups
   if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
     out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {
       const kind: OnboardLed['kind'] =
-        l.kind === 'rgb' ? 'rgb' : l.kind === 'neopixel' ? 'neopixel' : 'single'
+        l.kind === 'rgb'
+          ? 'rgb'
+          : l.kind === 'neopixel'
+            ? 'neopixel'
+            : l.kind === 'power'
+              ? 'power'
+              : 'single'
       const led: OnboardLed = { kind, x: clamp(l.x, 0, 1), y: clamp(l.y, 0, 1) }
       keepItemFlags(l, led as unknown as Record<string, unknown>)
       const label = text(l.label)
@@ -1141,7 +2019,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           if (Object.keys(obj).length) led.rgb = obj
         }
       } else {
-        if (typeof l.gpio === 'number' && Number.isFinite(l.gpio)) led.gpio = l.gpio
+        // Nothing drives a `power` LED, so it carries no GPIO (#698).
+        if (kind !== 'power' && typeof l.gpio === 'number' && Number.isFinite(l.gpio)) led.gpio = l.gpio
         if (kind === 'neopixel') {
           if (typeof l.power === 'number' && Number.isFinite(l.power)) led.power = l.power
         } else {
@@ -1164,7 +2043,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
       }
       keepItemFlags(c, conn as unknown as Record<string, unknown>)
-      const variant = coerceGroveVariant(c.variant)
+      const variant = coerceConnectorVariant(kind, c.variant)
       if (variant) conn.variant = variant
       const label = text(c.label)
       if (label) conn.label = label
@@ -1289,6 +2168,14 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         order: Number.isFinite(sp.order) ? sp.order : 0
       }))
     }
+  }
+  // I²C address list (#214). The 7-bit range check mirrors `partFromYaml`'s, so
+  // the editor and the on-disk coercer agree on what a valid address is.
+  if (Array.isArray(part.i2cAddresses)) {
+    const addrs = part.i2cAddresses.filter(
+      (a) => Number.isInteger(a) && a >= 0 && a <= 0x7f
+    )
+    if (addrs.length) out.i2cAddresses = addrs
   }
   if (part.library) {
     const lib: NonNullable<PartDefinition['library']> = {}

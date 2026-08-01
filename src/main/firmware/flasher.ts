@@ -72,6 +72,38 @@ function runStreaming(
  * Probe for the external `esptool` prerequisite by attempting `--version`.
  * Returns `{ available: false }` when neither candidate command runs.
  */
+/**
+ * esptool's command spelling, chosen from its version (#680).
+ *
+ * v5 renamed the subcommands to hyphens and prints a deprecation warning for the
+ * underscore forms on every run:
+ *
+ *   Warning: Deprecated: Command 'write_flash' is deprecated. Use 'write-flash'.
+ *
+ * A deprecation is a removal notice, so v6 dropping the old spelling would break
+ * every ESP flash at once — and meanwhile it puts two alarming yellow warnings in
+ * front of someone whose flash is going fine.
+ *
+ * An unreadable or absent version keeps the UNDERSCORE form: it works on every
+ * released version to date, so it is the safe guess when we cannot tell. Exported
+ * for tests — this is the kind of thing that should not need a board to verify.
+ */
+export function esptoolCommandStyle(version?: string): 'hyphen' | 'underscore' {
+  const m = /\bv?(\d+)\./.exec(version ?? '')
+  const major = m ? Number(m[1]) : Number.NaN
+  return Number.isFinite(major) && major >= 5 ? 'hyphen' : 'underscore'
+}
+
+/** `erase_flash` / `erase-flash` for the detected esptool. */
+export function eraseFlashCommand(version?: string): string {
+  return esptoolCommandStyle(version) === 'hyphen' ? 'erase-flash' : 'erase_flash'
+}
+
+/** `write_flash` / `write-flash` for the detected esptool. */
+export function writeFlashCommand(version?: string): string {
+  return esptoolCommandStyle(version) === 'hyphen' ? 'write-flash' : 'write_flash'
+}
+
 export async function detectEsptool(): Promise<EsptoolInfo> {
   for (const command of ESPTOOL_COMMANDS) {
     const result = await new Promise<EsptoolInfo | null>((resolve) => {
@@ -128,15 +160,27 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
 
   const offset = opts.offset ?? DEFAULT_OFFSET[opts.board === 'esp8266' ? 'esp8266' : 'esp32']
   const baud = String(opts.baud ?? 460800)
-  const args = [
-    '--port',
-    opts.port,
-    '--baud',
-    baud,
-    'write_flash',
-    offset,
-    opts.firmwarePath
-  ]
+  // `--chip` when we know it: auto-detect is usually right, but naming the chip
+  // removes a guess on a board that answers slowly.
+  const base = ['--port', opts.port, '--baud', baud]
+  if (opts.chip) base.unshift('--chip', opts.chip)
+
+  // Erase first when asked. A board arriving from vendor/Arduino firmware keeps
+  // its old partition table and NVS through a plain `write_flash`, and plenty of
+  // ESP32 boards then boot-loop: they enumerate for a moment, panic, and drop off
+  // again. That reads exactly like a failed flash, except the flash succeeded.
+  if (opts.eraseFirst) {
+    const eraseArgs = [...base, eraseFlashCommand(tool.version)]
+    emit({ kind: 'log', message: `> ${tool.command} ${eraseArgs.join(' ')}` })
+    const erased = await runStreaming(tool.command, eraseArgs, emit)
+    if (erased.spawnError || erased.code !== 0) {
+      const msg = `Erase failed (exit ${erased.code ?? '?'}). The board may be in the wrong mode — hold BOOT while plugging it in.`
+      emit({ kind: 'error', message: msg })
+      return { ok: false, error: msg }
+    }
+  }
+
+  const args = [...base, writeFlashCommand(tool.version), offset, opts.firmwarePath]
 
   emit({ kind: 'log', message: `Using ${tool.command}${tool.version ? ` (${tool.version})` : ''}` })
   emit({ kind: 'log', message: `> ${tool.command} ${args.join(' ')}` })
