@@ -132,6 +132,121 @@ class TestTeleop(unittest.TestCase):
         self.assertEqual((left, right), (1.0, -1.0))
 
 
+class TestLsm6ds3AxisMap(unittest.TestCase):
+    """Mounting orientation (#702).
+
+    The tilt maths takes Z as up. A module mounted on its edge reports gravity on
+    Y, which reads as a permanent ~90 deg roll and sends every rotation to the
+    wrong axis of the display — the fault that prompted this. `axes` remaps once
+    at the source so accel, gyro and the Euler estimate all agree.
+    """
+
+    #: The real reading from a board whose sensor sits on its edge.
+    ON_EDGE = (-0.061183, -1.012844, -0.0907070032)
+
+    def test_none_is_identity(self):
+        self.assertIsNone(lsm6ds3.parse_axes(None))
+        self.assertEqual(lsm6ds3.apply_axes(None, (1, 2, 3)), (1, 2, 3))
+
+    def test_remaps_and_negates(self):
+        m = lsm6ds3.parse_axes(("x", "z", "-y"))
+        self.assertEqual(lsm6ds3.apply_axes(m, (1, 2, 3)), (1, 3, -2))
+
+    def test_accepts_a_string_spelling(self):
+        self.assertEqual(lsm6ds3.parse_axes("x z -y"), lsm6ds3.parse_axes(("x", "z", "-y")))
+        self.assertEqual(lsm6ds3.parse_axes("x,z,-y"), lsm6ds3.parse_axes(("x", "z", "-y")))
+
+    def test_puts_gravity_back_on_z(self):
+        # The whole point: an on-edge module reads flat once mapped.
+        m = lsm6ds3.parse_axes(("x", "z", "-y"))
+        x, y, z = lsm6ds3.apply_axes(m, self.ON_EDGE)
+        self.assertAlmostEqual(z, 1.0128, places=3)
+        self.assertLess(abs(x), 0.1)
+        self.assertLess(abs(y), 0.1)
+
+    def test_suggests_the_map_from_one_resting_reading(self):
+        self.assertEqual(lsm6ds3.axes_for_resting(self.ON_EDGE), ("x", "z", "-y"))
+        # A board already flat needs no remapping at all.
+        self.assertEqual(lsm6ds3.axes_for_resting((0.0, 0.0, 1.0)), ("x", "y", "z"))
+
+    def test_suggestion_always_lands_gravity_on_plus_z(self):
+        # Every orientation, both signs — the suggestion has to work for all of
+        # them, not just the one that prompted it.
+        for axis in range(3):
+            for sign in (1, -1):
+                reading = [0.0, 0.0, 0.0]
+                reading[axis] = sign * 1.0
+                m = lsm6ds3.parse_axes(lsm6ds3.axes_for_resting(tuple(reading)))
+                self.assertAlmostEqual(lsm6ds3.apply_axes(m, tuple(reading))[2], 1.0, places=6)
+
+    def test_refuses_a_mirrored_map(self):
+        # A left-handed map looks right on a STATIONARY board and then turns every
+        # rotation backwards, so it is refused rather than quietly used.
+        self.assertEqual(lsm6ds3.axes_determinant(lsm6ds3.parse_axes(("x", "z", "-y"))), 1)
+        with self.assertRaises(ValueError) as e:
+            lsm6ds3.parse_axes(("x", "z", "y"))  # mirrored
+        self.assertIn("mirrored", str(e.exception))
+
+    def test_rejects_malformed_maps(self):
+        for bad in (("x", "y"), ("x", "y", "w"), ("x", "x", "z"), ("x", "y", "z", "z")):
+            with self.assertRaises(ValueError):
+                lsm6ds3.parse_axes(bad)
+
+    def test_accel_and_gyro_share_the_map(self):
+        # They must, or a fusion step would blend two different frames.
+        class FakeI2c:
+            def readfrom_mem(self, addr, reg, n):
+                if n == 1:
+                    return bytes([0x69])  # WHO_AM_I
+                # +1 g / +1 unit on the sensor's Y, zero elsewhere (little-endian).
+                return bytes([0, 0, 0x00, 0x40, 0, 0])
+
+            def writeto_mem(self, addr, reg, data):
+                pass
+
+        imu = lsm6ds3.LSM6DS3(FakeI2c(), axes=("x", "z", "-y"))
+        # Sensor Y is mapped to output -Z, so both readings land there negated.
+        self.assertAlmostEqual(imu.accel()[2], -0.99942, places=4)
+        self.assertAlmostEqual(imu.gyro()[2], -143.35, places=1)
+
+    def test_two_poses_fully_determine_the_frame(self):
+        # Gravity alone fixes only the vertical axis; the rotation ABOUT vertical
+        # stays free, which is why one reading can only guess. A nose-down pose
+        # names the forward axis the way a level pose names the up axis.
+        self.assertEqual(lsm6ds3.axes_from_two((0, 0, 1), (-1, 0, 0)), ("x", "y", "z"))
+
+    def test_two_pose_maps_are_always_right_handed(self):
+        # Every level/nose-down combination, so the cross-product step cannot
+        # produce a mirrored frame for some orientation nobody tried.
+        for iz in range(3):
+            for sz in (1, -1):
+                for ix in range(3):
+                    if ix == iz:
+                        continue
+                    for sx in (1, -1):
+                        level = [0.0, 0.0, 0.0]
+                        level[iz] = float(sz)
+                        nose = [0.0, 0.0, 0.0]
+                        nose[ix] = float(sx)
+                        m = lsm6ds3.parse_axes(lsm6ds3.axes_from_two(tuple(level), tuple(nose)))
+                        self.assertEqual(lsm6ds3.axes_determinant(m), 1)
+                        # Level really does read +1 on the mapped Z.
+                        self.assertAlmostEqual(lsm6ds3.apply_axes(m, tuple(level))[2], 1.0, places=6)
+                        # Nose-DOWN reads -1 on the mapped X (the nose points at the floor).
+                        self.assertAlmostEqual(lsm6ds3.apply_axes(m, tuple(nose))[0], -1.0, places=6)
+
+    def test_two_indistinct_poses_are_refused(self):
+        # Both readings on the same axis means the board was not actually moved,
+        # so there is no second constraint to use.
+        with self.assertRaises(ValueError) as e:
+            lsm6ds3.axes_from_two((0, 0, 1), (0, 0, -1))
+        self.assertIn("same axis", str(e.exception))
+
+    def test_a_bad_map_fails_at_construction(self):
+        with self.assertRaises(ValueError):
+            lsm6ds3.LSM6DS3(object(), axes=("x", "x", "z"))
+
+
 class TestLsm6ds3(unittest.TestCase):
     def test_output_is_little_endian(self):
         # The LSM6DS3 emits low byte first — the OPPOSITE of the MPU-6050. Read

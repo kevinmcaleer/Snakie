@@ -26,6 +26,18 @@ Usage on a board::
         gx, gy, gz = imu.gyro()           # degrees/second
         inst.imu(*imu.euler_estimate())   # -> IMU instrument
 
+Mounting
+--------
+The tilt maths assumes the module lies flat with **Z up**. A chassis rarely
+allows that, and a module on its edge reports gravity on Y — which shows up as a
+permanent ~90 deg roll and sends rotations to the wrong axis. Pass ``axes`` to
+say how it is mounted:
+
+    imu = LSM6DS3(i2c, addr=0x6B, axes=('x', 'z', '-y'))   # module on its edge
+
+`axes_for_resting(imu.accel())` works the map out for you from one reading of a
+stationary board.
+
 Addressing
 ----------
 The chip's own default is ``0x6A`` (SA0 low). **Seeed's Grove module ships SA0
@@ -136,6 +148,153 @@ def ctrl2_g(odr_hz=104, dps_range=245):
     return _ODR[odr_hz] | _FS_G[dps_range]
 
 
+# --- Axis mapping (mounting orientation) -------------------------------------
+# A sensor is almost never mounted the way a driver assumes. The tilt maths here
+# takes Z as "up", but a chassis usually dictates the orientation, and a module
+# stood on its edge reports gravity on Y — which reads as a permanent ~90 deg roll
+# and sends every rotation to the wrong axis of the display.
+#
+# Rather than make every sketch re-derive it, the driver remaps ONCE at the source
+# so `accel`, `gyro` and `euler_estimate` are all in the board's frame.
+
+_AXIS_NAMES = ("x", "y", "z")
+
+
+def parse_axes(spec):
+    """Parse an axis map into ``[(source_index, sign), ...]`` for output X, Y, Z.
+
+    `spec` names which SENSOR axis supplies each output axis, optionally negated:
+    ``('x', 'z', '-y')`` means output Z is the negated sensor Y. Accepts a string
+    (``"x z -y"`` or ``"x,z,-y"``) or any 3-sequence. ``None`` means no remapping.
+
+    Raises `ValueError` on anything that isn't a clean right-handed map — see
+    :func:`axes_determinant` for why a mirrored one is refused rather than used.
+    """
+    if spec is None:
+        return None
+    parts = spec.replace(",", " ").split() if isinstance(spec, str) else list(spec)
+    if len(parts) != 3:
+        raise ValueError("axes needs three entries, e.g. ('x','z','-y')")
+    out = []
+    for p in parts:
+        p = str(p).strip().lower()
+        sign = 1
+        if p[:1] == "-":
+            sign, p = -1, p[1:]
+        elif p[:1] == "+":
+            p = p[1:]
+        if p not in _AXIS_NAMES:
+            raise ValueError("axis %r is not one of x/y/z" % (p,))
+        out.append((_AXIS_NAMES.index(p), sign))
+    if len(set(i for i, _ in out)) != 3:
+        raise ValueError("axes must use x, y and z exactly once (got %r)" % (spec,))
+    if axes_determinant(out) != 1:
+        raise ValueError(
+            "axes %r is mirrored (left-handed) — negate one entry. A mirrored map "
+            "reads plausibly at rest and then turns every rotation the wrong way, "
+            "which is far harder to spot than an error here." % (spec,)
+        )
+    return out
+
+
+def axes_determinant(mapped):
+    """Determinant of a parsed axis map: ``+1`` right-handed, ``-1`` mirrored. Pure.
+
+    Worth checking explicitly. A left-handed map still puts gravity where you want
+    it, so it looks correct on a stationary board — but it inverts the SENSE of
+    rotation, so roll runs backwards and no amount of staring at a resting reading
+    reveals it.
+    """
+    m = [[0, 0, 0], [0, 0, 0], [0, 0, 0]]
+    for row, (i, sign) in enumerate(mapped):
+        m[row][i] = sign
+    return (
+        m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+        - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+        + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0])
+    )
+
+
+def apply_axes(mapped, v):
+    """Apply a parsed axis map to an ``(x, y, z)`` reading. Pure; `None` = identity."""
+    if not mapped:
+        return v
+    return tuple(v[i] * sign for i, sign in mapped)
+
+
+def axes_for_resting(reading):
+    """Suggest an axis map from ONE accelerometer sample of a board sitting still.
+
+    Hold the board the way it will be mounted, take a reading, and this returns the
+    `axes` that puts gravity back on +Z where the tilt maths expects it — turning
+    "work out your axis map" into one call.
+
+    Only the vertical axis is determined by gravity: any rotation ABOUT vertical
+    leaves the reading identical, which is the same reason yaw is unobservable
+    without a magnetometer. So of the several valid answers this returns the one
+    that disturbs X and Y least, and it is a starting point, not a survey.
+    """
+    d, up_sign = _dominant(reading)
+    rest = [i for i in range(3) if i != d]
+    for sign in (1, -1):
+        cand = [(rest[0], 1), (rest[1], sign), (d, up_sign)]
+        if axes_determinant(cand) == 1:
+            return tuple(
+                ("-" if s < 0 else "") + _AXIS_NAMES[i] for i, s in cand
+            )
+    raise ValueError("could not build a right-handed map from %r" % (reading,))
+
+
+#: Cross product of two signed unit basis vectors: ``(a, b) -> (index, sign)``.
+_CROSS = {
+    (0, 1): (2, 1), (1, 2): (0, 1), (2, 0): (1, 1),
+    (1, 0): (2, -1), (2, 1): (0, -1), (0, 2): (1, -1),
+}
+
+
+def axes_from_two(level, nose_down):
+    """The full axis map from TWO resting readings — the complete calibration.
+
+    Gravity gives you the vertical direction and nothing else. That fixes roll and
+    pitch, but leaves the rotation ABOUT vertical free, which is precisely the
+    ambiguity :func:`axes_for_resting` has to guess at: get it wrong by 90 deg and
+    tilting the nose up still shows as roll. A second pose collapses it.
+
+      1. `level`     — the board sitting as it is mounted, still.
+      2. `nose_down` — the same board with its FORWARD direction pointing at the
+         floor.
+
+    In pose 2 gravity lies along the robot's forward axis, so it names that axis
+    the way pose 1 names the vertical one. Between them the frame is fully
+    determined, and the third axis follows from the right-hand rule rather than
+    from another measurement.
+
+    Returns an `axes` tuple for the constructor. Raises `ValueError` if the two
+    poses aren't distinct enough to be telling us different things.
+    """
+    iz, sz = _dominant(level)
+    ix, sx = _dominant(nose_down)
+    # Pose 2 has the nose pointing DOWN, so the axis reading +1g there is the
+    # nose's opposite.
+    sx = -sx
+    if iz == ix:
+        raise ValueError(
+            "both readings put gravity on the same axis — pose 2 should have the "
+            "board's FORWARD direction pointing at the floor, about 90 deg from pose 1"
+        )
+    iy, cross_sign = _CROSS[(iz, ix)]
+    sy = sz * sx * cross_sign
+    out = [(ix, sx), (iy, sy), (iz, sz)]
+    return tuple(("-" if s < 0 else "") + _AXIS_NAMES[i] for i, s in out)
+
+
+def _dominant(reading):
+    """``(index, sign)`` of the axis carrying gravity in a resting reading. Pure."""
+    mags = (abs(reading[0]), abs(reading[1]), abs(reading[2]))
+    d = mags.index(max(mags))
+    return d, (-1 if reading[d] < 0 else 1)
+
+
 def accel_to_euler(ax, ay, az):
     """Estimate (roll, pitch) in degrees from an accelerometer vector (g).
 
@@ -152,13 +311,23 @@ class LSM6DS3:
 
     `g_range` is 2/4/8/16 (g) and `dps_range` is 125/245/500/1000/2000 — both
     also select the conversion factor, so a reading is always in real units.
+
+    `axes` describes how the module is MOUNTED — see :func:`parse_axes`. Leave it
+    out for a board lying flat with its component face up; set it once when the
+    chassis dictates otherwise, and every reading arrives in the board's frame.
     """
 
-    def __init__(self, i2c, addr=_DEFAULT_ADDR, odr_hz=104, g_range=2, dps_range=245, check=True):
+    def __init__(
+        self, i2c, addr=_DEFAULT_ADDR, odr_hz=104, g_range=2, dps_range=245, check=True, axes=None
+    ):
         self._i2c = i2c
         self._addr = addr
         self._g_range = g_range
         self._dps_range = dps_range
+        # Mounting orientation. Validated HERE, at construction, so a bad map is a
+        # clear error at the line that set it rather than silently wrong readings
+        # for the life of the program.
+        self._axes = parse_axes(axes)
         # IDENTIFY before configuring. Blind-writing the three control registers
         # turns a wrong address, the wrong bus, or a half-seated Grove lead into a
         # bare `OSError: [Errno 5] EIO` from whichever write happened to go first,
@@ -228,23 +397,33 @@ class LSM6DS3:
             return False
 
     def accel(self):
-        """Return the (x, y, z) acceleration in g."""
+        """Return the (x, y, z) acceleration in g, in the BOARD's frame."""
         b = self._i2c.readfrom_mem(self._addr, _OUTX_L_XL, 6)
         r = self._g_range
-        return (
-            raw_to_g(b[0], b[1], r),
-            raw_to_g(b[2], b[3], r),
-            raw_to_g(b[4], b[5], r),
+        return apply_axes(
+            self._axes,
+            (
+                raw_to_g(b[0], b[1], r),
+                raw_to_g(b[2], b[3], r),
+                raw_to_g(b[4], b[5], r),
+            ),
         )
 
     def gyro(self):
-        """Return the (x, y, z) angular rate in degrees/second."""
+        """Return the (x, y, z) angular rate in degrees/second, in the BOARD's frame.
+
+        Remapped with the same `axes` as :meth:`accel` — they MUST agree, or a
+        fusion step would be blending two different coordinate frames.
+        """
         b = self._i2c.readfrom_mem(self._addr, _OUTX_L_G, 6)
         r = self._dps_range
-        return (
-            raw_to_dps(b[0], b[1], r),
-            raw_to_dps(b[2], b[3], r),
-            raw_to_dps(b[4], b[5], r),
+        return apply_axes(
+            self._axes,
+            (
+                raw_to_dps(b[0], b[1], r),
+                raw_to_dps(b[2], b[3], r),
+                raw_to_dps(b[4], b[5], r),
+            ),
         )
 
     def temperature(self):

@@ -53,3 +53,48 @@ The gyro has a constant bias — leave the board still and it will still report 
 few tenths of a degree per second. Average a few hundred samples at startup while
 the robot is stationary and subtract that offset, or any heading you integrate
 will wander.
+
+## Mounted on its side?
+
+The tilt maths assumes the module lies **flat, component face up**. A chassis
+rarely allows that, and a module on its edge reports gravity on Y instead of Z —
+which shows up as a permanent ~90° roll, and sends rotations to the wrong axis of
+the IMU panel. Nothing is broken; the sensor is simply rotated.
+
+Tell the driver how it is mounted and every reading arrives in the board's frame:
+
+```python
+imu = LSM6DS3(i2c, addr=0x6B, axes=('x', 'z', '-y'))   # module on its edge
+```
+
+### Working the map out
+
+Hold the board still, as mounted, and ask:
+
+```python
+print(lsm6ds3.axes_for_resting(imu.accel()))     # -> ('x', 'z', '-y')
+```
+
+Gravity fixes which way is **up**, and that is all it can fix — rotating about
+vertical leaves the reading identical, which is the same reason yaw is
+unobservable. So a single reading gets roll and pitch upright but has to guess the
+remaining quarter-turn: guess wrong and tilting the nose up still reads as roll.
+
+A second pose settles it. Take one reading level, then one with the robot's
+**forward** direction pointing at the floor:
+
+```python
+print(lsm6ds3.axes_from_two(level, nose_down))   # fully determined
+```
+
+A mirrored (left-handed) map is refused rather than used: it puts gravity exactly
+where you want it, so it looks right on a stationary board, and then turns every
+rotation backwards.
+
+## Yaw always reads 0
+
+This is a **6-axis** part — accelerometer + gyroscope, no magnetometer. Roll and
+pitch come from where gravity sits, but rotating about the gravity vector doesn't
+change gravity, so yaw cannot be measured at all. It is not a calibration problem.
+For a real heading you need a 9-axis part (`icm20948`, `bno055`) or gyro
+integration, which drifts.

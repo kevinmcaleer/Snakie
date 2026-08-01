@@ -6,6 +6,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Tell Snakie how your IMU is mounted.** The tilt maths assumed a sensor lying
+  flat, so a module mounted on its edge showed a permanent 90° lean and sent your
+  rotations to the wrong axis of the IMU panel. The LSM6DS3 driver now takes an
+  `axes` argument describing the mounting, applied once at the source so
+  acceleration, gyro and attitude all arrive the right way up. It can work the
+  setting out for you: one reading of a stationary board tells you which way is up,
+  and a second with the nose pointed at the floor pins the rest down exactly.
+
 ### Fixed
 - **The I²C pin dropdowns match the board you actually have.** The bus/SDA/SCL
   lists were built from one hardcoded rule — the Pico family's, where SDA must be
