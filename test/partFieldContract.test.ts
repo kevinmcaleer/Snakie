@@ -168,7 +168,7 @@ const EVERY_FIELD: Required<PartDefinition> = {
   contacts: [[0, 0, -5]],
 
   // --- Circuit sim ---------------------------------------------------------
-  electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5] },
+  electrical: { model: 'consumer', currentDrawA: 0.02, maxCurrentA: 0.05, supplyRange: [2.8, 5], operatingV: [3, 5.5] },
 
   // --- Editor display state ------------------------------------------------
   layerVisibility: { pcb: true, image: false, holes: true, pins: true, components: true }

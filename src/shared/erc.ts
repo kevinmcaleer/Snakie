@@ -223,9 +223,61 @@ export function runErc(netlist: Netlist, partDefs: Map<string, PartDefinition>):
     ...checkShorts(netlist),
     ...checkRailConflicts(netlist),
     ...checkLedResistors(netlist, partDefs),
-    ...checkI2cPullups(netlist, partDefs)
+    ...checkI2cPullups(netlist, partDefs),
+    ...checkSupplyVoltage(netlist, partDefs)
   ]
   return issues.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity] || a.rule.localeCompare(b.rule))
+}
+
+/**
+ * Rule: a part is sitting on a rail outside the voltage it is designed for (#687).
+ *
+ * The commonest way to destroy a breakout is to put a 3.3 V-only part on 5 V, and
+ * the sim could not see it: a part declared how much current it draws and nothing
+ * about the voltage it wants. `electrical.operatingV` supplies that, and the rail
+ * labels already carry known voltages.
+ *
+ * Only fires on a rail whose voltage is KNOWN — `3V3`, `5V`, `VBUS`… A generic or
+ * unlabelled net says nothing, and guessing would train people to ignore this.
+ *
+ * Over-voltage is an ERROR (it destroys parts); under-voltage a WARNING, because a
+ * part below its minimum usually misbehaves or browns out rather than dying, and
+ * plenty of parts run happily a little under their nominal minimum.
+ */
+function checkSupplyVoltage(
+  netlist: Netlist,
+  partDefs: Map<string, PartDefinition>
+): ErcIssue[] {
+  const out: ErcIssue[] = []
+  const seen = new Set<string>()
+  for (const node of netlist.nodes) {
+    if (node.kind !== 'power' || !node.rail) continue
+    const v = railVoltage(node.rail)
+    if (v === undefined) continue
+    for (const t of node.terminals) {
+      if (t.key === 'board' || t.role !== 'pwr') continue
+      const range = partDefs.get(t.key)?.electrical?.operatingV
+      if (!range) continue
+      const [lo, hi] = range
+      if (v >= lo && v <= hi) continue
+      const key = `${t.key}:${node.id}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const over = v > hi
+      out.push({
+        rule: over ? 'supply-over-voltage' : 'supply-under-voltage',
+        severity: over ? 'error' : 'warning',
+        title: over ? 'Part is on too high a supply' : 'Part is on too low a supply',
+        message: `${partName(t.key, partDefs)} runs at ${lo}–${hi} V and is wired to ${node.rail} (${v} V).`,
+        why: over
+          ? 'Above its rated supply a part is damaged, often instantly and invisibly — it may keep working for a while and then fail. Move it to a lower rail, or add a regulator or level shifter.'
+          : 'Below its minimum a part is not damaged but is not reliable either: it may work unloaded and then brown out, reset or return nonsense the moment it draws current. Give it a supply inside its range.',
+        nodes: [node.id],
+        parts: [t.key]
+      })
+    }
+  }
+  return out
 }
 
 /** Roll issues up into a badge summary (counts per severity + the worst present). */

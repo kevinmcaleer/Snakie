@@ -233,6 +233,13 @@ export function coerceElectrical(raw: unknown): PartElectrical | null {
     const hi = num(r.supplyRange[1])
     if (lo !== undefined && hi !== undefined && hi >= lo) el.supplyRange = [lo, hi]
   }
+  // What the part needs FROM a supply (#687) — the opposite direction to
+  // `supplyRange`, which is what an adjustable source can be set to.
+  if (Array.isArray(r.operatingV) && r.operatingV.length === 2) {
+    const lo = posNum(r.operatingV[0])
+    const hi = posNum(r.operatingV[1])
+    if (lo !== undefined && hi !== undefined && hi >= lo) el.operatingV = [lo, hi]
+  }
   const maxCurrentA = posNum(r.maxCurrentA)
   if (maxCurrentA !== undefined) el.maxCurrentA = maxCurrentA
   const capacityMah = posNum(r.capacityMah)

@@ -757,6 +757,19 @@ export interface PartElectrical {
   /** Battery capacity in **milliamp-hours** — a `source` battery; feeds the
    *  battery-life estimate (#607). */
   capacityMah?: number
+  /**
+   * The supply range this part is DESIGNED to run at, `[min, max]` volts (#687).
+   *
+   * Deliberately not {@link supplyRange}, which means "the range an adjustable
+   * SOURCE can be set to" — the opposite direction. This is what the part needs
+   * FROM a supply, so the ERC can say a 3.3 V-only breakout is sitting on a 5 V
+   * rail. Without it the sim knows a servo draws 100 mA and has no idea it wants
+   * 4.8–6 V, which is the commonest way to destroy a part.
+   *
+   * The free-text {@link PartDefinition.voltage} stays as the human description
+   * ("2.3–5.5V"); this is the machine-readable pair. Absent ⇒ no check.
+   */
+  operatingV?: [number, number]
   /** Typical steady current draw in **amps** — a `consumer` (a sensor's quiescent
    *  draw, a servo's idle). */
   currentDrawA?: number

@@ -2900,6 +2900,22 @@ function ElectricalSection({
     if (next.model === 'passive') patch({ electrical: undefined })
     else patch({ electrical: next })
   }
+  /** Edit one end of the operating range, dropping the pair when both are empty. */
+  const setOperating = (i: 0 | 1, raw: string): void => {
+    const cur = el.operatingV ?? [Number.NaN, Number.NaN]
+    const next: [number, number] = [cur[0], cur[1]]
+    next[i] = raw === '' ? Number.NaN : Number(raw)
+    if (!Number.isFinite(next[0]) && !Number.isFinite(next[1])) {
+      setEl({ operatingV: undefined })
+      return
+    }
+    // A half-filled range is not usable, so mirror the one end until the other is
+    // typed — better than storing a NaN the coercer would silently drop.
+    const lo = Number.isFinite(next[0]) ? next[0] : next[1]
+    const hi = Number.isFinite(next[1]) ? next[1] : next[0]
+    setEl({ operatingV: [Math.min(lo, hi), Math.max(lo, hi)] })
+  }
+
   const num = (key: ElectricalNumKey, label: string, step = 'any', hint?: string): JSX.Element => (
     <label className="pe__field">
       <span>{label}</span>
@@ -2989,6 +3005,34 @@ function ElectricalSection({
             {num('stallCurrentA', 'Peak / stall (A)')}
           </div>
           {num('maxCurrentA', 'Max current (A)')}
+          {/* What the part needs FROM a supply (#687). The model described amps
+              only, so the sim knew a servo drew 100 mA and had no idea it wanted
+              4.8–6 V — the commonest way to destroy a part, invisible to the ERC. */}
+          <div className="pe__row">
+            <label className="pe__field">
+              <span>Supply min (V)</span>
+              <input
+                type="number"
+                step="any"
+                value={el.operatingV?.[0] ?? ''}
+                placeholder={part.voltage || undefined}
+                onChange={(e) => setOperating(0, e.target.value)}
+              />
+            </label>
+            <label className="pe__field">
+              <span>Supply max (V)</span>
+              <input
+                type="number"
+                step="any"
+                value={el.operatingV?.[1] ?? ''}
+                placeholder={part.voltage || undefined}
+                onChange={(e) => setOperating(1, e.target.value)}
+              />
+            </label>
+          </div>
+          <p className="pe__hint">
+            Warns when the part is wired to a rail outside this range. Absent ⇒ no check.
+          </p>
           {terminals()}
         </>
       )}

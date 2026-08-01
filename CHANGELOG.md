@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Snakie warns when a part is on the wrong supply.** A part's electrical model
+  only described the current it draws, so nothing knew a 3.3 V sensor was wired to
+  5 V — the commonest way to destroy a breakout. Give a part a supply range in its
+  properties and the checker flags it: too high is an error (it damages the part),
+  too low a warning (it browns out rather than dying).
 - **Turn a part's connectors into groups of ordinary pins.** A connector's contacts
   couldn't be clicked, rubber-band selected, or edited with the full pin inspector
   — they were only reachable through the connector's own small editor. **Convert to
