@@ -46,6 +46,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   direction, so they disagreed. A plug now lies along the contacts it covers with
   the cable leaving one end — one rule for every connector type — and every
   conductor leaves through that same end, so a servo lead bundles like a QWIIC one.
+  Plugs are also drawn at their real size now — a 3-way servo plug is 7.62 × 2.54 mm,
+  one 0.1" cell per pin — so wiring several servos to a PCA9685 no longer piles
+  overlapping plugs on top of each other.
 - **A connector's housing follows its pins.** Move, align or rotate a group with a
   connector on it and the pads went where you put them while the housing stayed
   behind, drawn at the old spot and often facing the wrong way. The housing is now

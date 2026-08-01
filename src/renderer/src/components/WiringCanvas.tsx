@@ -1536,7 +1536,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   /** `angle` is the socket's OWN facing (degrees), from its contact normals — it
    *  belongs to the part the connector is mounted on, not to whatever is wired to
    *  it (#647). */
-  type ConnectorTarget = EndpointConn & { cx: number; cy: number; r: number; angle: number }
+  /** `w`/`h` are the housing's REAL footprint in canvas px — length along the
+   *  contacts × depth across them — as opposed to `r`, which stays a generous
+   *  drag target. */
+  type ConnectorTarget = EndpointConn & {
+    cx: number
+    cy: number
+    r: number
+    angle: number
+    w: number
+    h: number
+  }
   const connectorTargets: ConnectorTarget[] = []
   for (const s of subjects) {
     const def = s.partDef
@@ -1555,6 +1565,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       const cy = pts.reduce((n, p) => n + p.y, 0) / pts.length
       // Pad the contact span so the target covers the housing, not just the pins.
       const r = Math.max(...pts.map((p) => Math.hypot(p.x - cx, p.y - cy))) * 1.6
+      // The housing's real size, from the SAME function that draws the socket, so
+      // a plug can't disagree with the thing it seats on. `box` is the body's
+      // local frame and `scale` takes it to canvas px.
+      const mmW = def.dimensions?.width ?? 0
+      const pxPerMm = s.box && mmW > 0 ? (s.box.w / mmW) * (s.scale ?? 1) : 0
+      const size = connectorSize(conn, pxPerMm)
       connectorTargets.push({
         key: s.key,
         connIndex: ci,
@@ -1566,7 +1582,9 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         // One rule for every connector, stored or housed: the shell lies along
         // its contacts and the lead leaves one end (#697). Turned with the placed
         // part, exactly as the contact normals are.
-        angle: housingPlugAngle(conn) + (s.rotation ?? 0)
+        angle: housingPlugAngle(conn) + (s.rotation ?? 0),
+        w: size.w,
+        h: size.h
       })
     })
   }
@@ -2767,8 +2785,12 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
             {/* Seated plug shells, drawn over the wires so the lead's four
                 conductors disappear into the housing the way they really do. */}
             {cablePlugs.map(({ t, kind, angle }, i) => {
-              const w = t.r * 1.5
-              const h = t.r * 1.0
+              // The housing's real footprint (#697). It used to be sized off the
+              // contact-span radius, which drew a 3-way servo plug ~4 mm deep
+              // against a real 2.54 mm — so on a PCA9685, whose servo headers sit
+              // one 2.54 mm pitch apart, neighbouring plugs overlapped.
+              const w = t.w
+              const h = t.h
               // Grove and its lead are both off-white; QWIIC/JST/DuPont are dark.
               const shell = kind === 'grove' ? '#e8e5da' : '#22262c'
               const edge = kind === 'grove' ? '#9a968a' : '#0b0d10'
