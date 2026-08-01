@@ -4,7 +4,8 @@ import {
   allConnectors,
   connectorEndpointIndices,
   housedGroupConnectors,
-  normalisePart
+  normalisePart,
+  withGroupHousing
 } from '../src/renderer/src/components/part-editor.util'
 import { coerceGroupHousing } from '../src/shared/part'
 import { flattenPartPins } from '../src/shared/netlist'
@@ -197,5 +198,53 @@ describe('connectorEndpointIndices (#673)', () => {
         expect(flat[idx]).toBe(conn.pins[i])
       })
     }
+  })
+})
+
+/** "Make this group a connector" (#673). */
+describe('withGroupHousing (#673)', () => {
+  it('centres the housing on the group"s own pins — no placement step', () => {
+    const { groups } = withGroupHousing(PART, 'g1', 'dupont')
+    const h = groups!.find((g) => g.id === 'g1')!.housing!
+    expect(h.kind).toBe('dupont')
+    expect(h.x).toBeCloseTo(0.2, 6)
+    expect(h.y).toBeCloseTo(0.2, 6) // mean of 0.1 / 0.2 / 0.3
+  })
+
+  it('stands the housing on end when the pads run in a column', () => {
+    const { groups } = withGroupHousing(PART, 'g1', 'dupont')
+    expect(groups!.find((g) => g.id === 'g1')!.housing!.rotation).toBe(90)
+  })
+
+  it('lies flat when they run in a row', () => {
+    const row = {
+      ...PART,
+      headers: [
+        {
+          edge: 'left',
+          pins: [
+            { name: 'A', type: 'io', x: 0.1, y: 0.5, group: 'g1' },
+            { name: 'B', type: 'pwr', x: 0.3, y: 0.5, group: 'g1' }
+          ]
+        }
+      ]
+    } as unknown as PartDefinition
+    expect(withGroupHousing(row, 'g1', 'dupont').groups![0].housing!.rotation).toBeUndefined()
+  })
+
+  it('removes the housing with null, leaving an ordinary group', () => {
+    const housed = { ...PART, ...withGroupHousing(PART, 'g1', 'qwiic') } as PartDefinition
+    const { groups } = withGroupHousing(housed, 'g1', null)
+    expect(groups!.find((g) => g.id === 'g1')!.housing).toBeUndefined()
+  })
+
+  it('moves no pins either way — saved wiring is untouched', () => {
+    const housed = { ...PART, ...withGroupHousing(PART, 'g1', 'qwiic') } as PartDefinition
+    expect(flattenPartPins(housed).map((p) => p.name)).toEqual(flattenPartPins(PART).map((p) => p.name))
+  })
+
+  it('does nothing for a group with no positioned pins', () => {
+    const empty = { ...PART, headers: [{ edge: 'left', pins: [] }] } as unknown as PartDefinition
+    expect(withGroupHousing(empty, 'g1', 'dupont')).toEqual({})
   })
 })

@@ -57,6 +57,7 @@ import {
   orderedItems,
   partLayerTree,
   withGroupFlag,
+  withGroupHousing,
   withGroupName,
   withItemFlag,
   applyItemOrder,
@@ -1940,6 +1941,27 @@ function LayersPanel({
               </button>
             </>
           )}
+          {/* Make the group a CONNECTOR (#673): its pins become the contacts of a
+              housing, so a lead can plug into them. The pins do not move — which
+              is what keeps every saved wire pointing where it did. */}
+          <select
+            className="pe__group-housing"
+            value={g?.housing?.kind ?? ''}
+            onChange={(e) => patch(withGroupHousing(part, gid, (e.target.value || null) as PartConnectorKind | null))}
+            title={
+              g?.housing
+                ? `This group is a ${CONN_KIND_LABEL[g.housing.kind]} — a lead can plug into it`
+                : 'Make this group a connector, so a lead can plug into its pins'
+            }
+            aria-label={`Connector housing for ${node.label}`}
+          >
+            <option value="">No housing</option>
+            {PART_CONNECTOR_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {CONN_KIND_LABEL[k]}
+              </option>
+            ))}
+          </select>
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>

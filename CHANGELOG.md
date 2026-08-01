@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Turn a group of pins into a connector.** Select a group in the Part Editor's
+  layers list and pick a housing — QWIIC, Grove, JST, servo header or terminal
+  block — and its pins become that connector's contacts, so a lead can plug into
+  them. The housing centres itself on the pins you already placed, and stands on
+  end when they run in a column. Nothing about the pins changes, so a part you
+  convert keeps every wire that was already attached to it.
 - **A servo lead cables to the Servo 2040's headers.** All 24 of its 3-pin headers
   (18 servo outputs and 6 sensor headers) now carry a real connector housing, so a
   servo plugs in with one drag instead of three wires. Nothing about the board's

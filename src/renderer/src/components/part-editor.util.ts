@@ -30,6 +30,8 @@ import {
   itemHidden,
   itemLocked,
   type ComponentShape,
+  type GroupHousing,
+  type PartConnectorKind,
   type JstFamily,
   type ComponentShapeKind,
   type DriverFile,
@@ -960,6 +962,44 @@ export function allConnectors(part: PartDefinition): PartConnector[] {
 export function connectorEndpointIndices(part: PartDefinition, conn: PartConnector): number[] {
   const flat = flattenPartPins(part)
   return conn.pins.map((pin) => flat.indexOf(pin))
+}
+
+/**
+ * Give a group a connector housing, or take it away (#673).
+ *
+ * The housing is centred on the group's own pins, so "make this a connector" needs
+ * no placement step — the pads are already where the socket is. Passing `null`
+ * removes it, leaving the group an ordinary group.
+ *
+ * Pure, and it moves no pins: the flattened endpoint order — which is what every
+ * saved wire is addressed by — is untouched either way.
+ */
+export function withGroupHousing(
+  part: PartDefinition,
+  gid: string,
+  kind: PartConnectorKind | null
+): Partial<PartDefinition> {
+  const groups = part.groups ?? []
+  const known = groups.some((g) => g.id === gid)
+  if (kind === null) {
+    return { groups: groups.map((g) => (g.id === gid ? { ...g, housing: undefined } : g)) }
+  }
+  const pins = groupMembers(part, new Set([gid]))
+    .filter((m): m is Extract<GroupMemberRef, { kind: 'pin' }> => m.kind === 'pin')
+    .map((m) => part.headers[m.hi]?.pins[m.pi])
+    .filter((p): p is PartPin => !!p && p.x !== undefined && p.y !== undefined)
+  if (!pins.length) return {}
+  const cx = pins.reduce((n, p) => n + (p.x as number), 0) / pins.length
+  const cy = pins.reduce((n, p) => n + (p.y as number), 0) / pins.length
+  // A column of pads is a housing stood on end; a row is one lying flat.
+  const spanX = Math.max(...pins.map((p) => p.x as number)) - Math.min(...pins.map((p) => p.x as number))
+  const spanY = Math.max(...pins.map((p) => p.y as number)) - Math.min(...pins.map((p) => p.y as number))
+  const housing: GroupHousing = { kind, x: cx, y: cy }
+  if (spanY > spanX) housing.rotation = 90
+  const next = known
+    ? groups.map((g) => (g.id === gid ? { ...g, housing } : g))
+    : [...groups, { id: gid, housing }]
+  return { groups: next }
 }
 
 /** The selection kinds a duplicate is defined for (#661). */

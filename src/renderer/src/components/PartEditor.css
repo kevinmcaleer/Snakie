@@ -2139,3 +2139,22 @@
   color: #fff;
   background: #c0392b;
 }
+
+/* "Make this group a connector" (#673) — sits in the group row beside Ungroup. */
+.pe__group-housing {
+  flex: 0 0 auto;
+  max-width: 7.5rem;
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  color: var(--text-muted);
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.02rem 0.15rem;
+  cursor: pointer;
+}
+
+.pe__group-housing:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
