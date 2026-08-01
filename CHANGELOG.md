@@ -7,6 +7,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Copy the flashing log.** A **Copy log** button above the output puts the whole
+  log on the clipboard — including the chip details at the top, which have usually
+  scrolled out of sight by the time a flash finishes — with the terminal escape
+  codes stripped so it pastes cleanly into a bug report.
+
+### Fixed
+- **Flashing a `.uf2` to an ESP board is now refused.** esptool can only write a
+  raw `.bin`. Handed a `.uf2` it wrote the container instead of the firmware —
+  reporting success at every step, verifying the same wrong data, and leaving the
+  board restarting in a loop with nothing to say why. The file you pick is now
+  checked against how your board flashes, and a mismatch explains itself instead
+  of flashing.
 - **Erase before flashing, and a steer towards the best build for your board.** A board
   arriving from other firmware keeps its old partition table through a plain
   flash, and then boot-loops — appearing for a second and dropping off again,

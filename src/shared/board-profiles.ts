@@ -232,3 +232,39 @@ export function firmwareMismatch(profile: BoardProfile, family: string): string 
   if (!family || familyFitsBoard(profile, family)) return null
   return `That firmware is for ${family} — a ${profile.model} is ${profile.chipFamily}. It will flash without error and the board will not start.`
 }
+
+/**
+ * Is this firmware FILE the right kind for how the board is flashed? (#683)
+ *
+ * esptool writes raw bytes to an address. Hand it a `.uf2` and it writes the
+ * container verbatim — UF2 is a wrapper of 512-byte blocks each carrying 256
+ * bytes of payload, so what lands at `0x0` is block headers, not a bootloader.
+ * Every step still reports success: esptool wrote what it was given, and the
+ * verify pass checks that same data. The board then boot-loops, with nothing
+ * anywhere saying why.
+ *
+ * The 2× size is the tell — a UF2 is roughly double the `.bin` it wraps.
+ *
+ * Returns a message naming the mismatch, or `null` when the file fits.
+ */
+export function firmwareFileIssue(method: FlashMethod, path: string): string | null {
+  const name = path.trim().toLowerCase()
+  if (!name) return null
+  const ext = name.slice(name.lastIndexOf('.'))
+  if (method === 'esptool') {
+    if (ext === '.bin') return null
+    if (ext === '.uf2') {
+      return 'That is a .uf2 file, which esptool cannot flash — it would write the container instead of the firmware, and the board would not start. Download the .bin build for this chip instead.'
+    }
+    return `esptool needs a .bin file; this is ${ext || 'a file with no extension'}.`
+  }
+  if (method === 'uf2') {
+    return ext === '.uf2' ? null : `This board is flashed by copying a .uf2 file; this is ${ext || 'a file with no extension'}.`
+  }
+  return ext === '.hex' ? null : `A micro:bit is flashed by copying a .hex file; this is ${ext || 'a file with no extension'}.`
+}
+
+/** The flash method implied by a coarse board type, for callers without a profile. */
+export function methodForBoardType(board: 'esp32' | 'esp8266' | 'rp2040' | 'microbit'): FlashMethod {
+  return board === 'rp2040' ? 'uf2' : board === 'microbit' ? 'daplink' : 'esptool'
+}

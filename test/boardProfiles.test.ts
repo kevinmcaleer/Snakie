@@ -4,7 +4,9 @@ import {
   BOARD_PROFILES,
   boardProfile,
   familyFitsBoard,
-  firmwareMismatch
+  firmwareFileIssue,
+  firmwareMismatch,
+  methodForBoardType
 } from '../src/shared/board-profiles'
 import { flashTargetForFamily } from '../src/main/firmware/catalog'
 
@@ -124,5 +126,47 @@ describe('the mirrored offset rule stays in step', () => {
   it('the renderer no longer infers the offset from "is it plain esp32"', () => {
     // That inference is what got the S2 wrong.
     expect(RENDERER).not.toContain("fam === 'esp32' ? '0x1000' : '0x0'")
+  })
+})
+
+/**
+ * The firmware FILE has to match how the board is flashed (#683).
+ *
+ * From a real report: a `.uf2` was flashed to an ESP32-S3 with esptool. Every
+ * step reported success — esptool wrote what it was given and verified that same
+ * data — and the board boot-looped. The log showed 3378176 bytes written, about
+ * double a real S3 `.bin`, which is the UF2 container overhead.
+ */
+describe('firmwareFileIssue (#683)', () => {
+  it('rejects a .uf2 for an esptool board, explaining what would happen', () => {
+    const msg = firmwareFileIssue('esptool', '/Users/kev/Downloads/ESP32_GENERIC_S3-20260406-v1.28.0.uf2')
+    expect(msg).toContain('.uf2')
+    expect(msg).toContain('would not start')
+    expect(msg).toContain('.bin')
+  })
+
+  it('accepts the right file for each method', () => {
+    expect(firmwareFileIssue('esptool', 'ESP32_GENERIC_S3.bin')).toBeNull()
+    expect(firmwareFileIssue('uf2', 'RPI_PICO.uf2')).toBeNull()
+    expect(firmwareFileIssue('daplink', 'microbit.hex')).toBeNull()
+  })
+
+  it('rejects the wrong file for each method', () => {
+    expect(firmwareFileIssue('uf2', 'firmware.bin')).toContain('.uf2')
+    expect(firmwareFileIssue('daplink', 'firmware.uf2')).toContain('.hex')
+    expect(firmwareFileIssue('esptool', 'firmware.hex')).toContain('.bin')
+  })
+
+  it('is case-insensitive and says nothing before a file is chosen', () => {
+    expect(firmwareFileIssue('esptool', 'FIRMWARE.BIN')).toBeNull()
+    expect(firmwareFileIssue('esptool', '')).toBeNull()
+    expect(firmwareFileIssue('esptool', '   ')).toBeNull()
+  })
+
+  it('maps a coarse board type to its method', () => {
+    expect(methodForBoardType('esp32')).toBe('esptool')
+    expect(methodForBoardType('esp8266')).toBe('esptool')
+    expect(methodForBoardType('rp2040')).toBe('uf2')
+    expect(methodForBoardType('microbit')).toBe('daplink')
   })
 })

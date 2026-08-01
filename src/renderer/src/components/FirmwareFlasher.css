@@ -290,3 +290,20 @@
   margin-top: 0.15rem;
   flex: 0 0 auto;
 }
+
+/* Log header: a label and the copy button, so a failed flash can be pasted into
+   a bug report whole (#683). */
+.firmware-log__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: -0.5rem;
+}
+
+.firmware-log__title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(230, 230, 230, 0.65);
+}
