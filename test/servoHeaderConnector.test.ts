@@ -83,3 +83,38 @@ describe('a servo header reads by electrical role (#669)', () => {
     expect(html).toContain('#e6c34a')
   })
 })
+
+/** Labels resolve in BOARD space, not the rotated body's frame (#670). */
+describe('a rotated header keeps its labels pointing off the board (#670)', () => {
+  const at = (rotation: number, y: number): PartConnector =>
+    ({ ...header(), rotation, y }) as unknown as PartConnector
+  /** The label anchor the glyph emits (the only <text> once V+/GND are hidden). */
+  const anchor = (c: PartConnector): { x: number; y: number; rot: number } => {
+    const html = renderToStaticMarkup(connectorGlyph(50, 50, c, false, 10))
+    const m = /<text[^>]*x="([-\d.]+)"[^>]*y="([-\d.]+)"[^>]*transform="rotate\(([-\d.]+)/.exec(html)!
+    return { x: Number(m[1]), y: Number(m[2]), rot: Number(m[3]) }
+  }
+
+  it('offsets ALONG the housing for an upright header (unrotated)', () => {
+    // Body horizontal: outward is board-y, so the label sits above the contact.
+    expect(anchor(at(0, 0.2)).y).toBeLessThan(50)
+    expect(anchor(at(0, 0.8)).y).toBeGreaterThan(50)
+  })
+
+  it('offsets ACROSS the housing for a vertical header, so it clears its neighbour', () => {
+    // Body turned 90°, so "off the board" is local -x. Before this fix the label
+    // kept its local -y offset and swung onto the next header along.
+    const top = anchor(at(90, 0.2))
+    expect(top.x).toBeLessThan(50)
+    expect(top.y).toBeCloseTo(50, 5)
+    const bottom = anchor(at(90, 0.8))
+    expect(bottom.x).toBeGreaterThan(50)
+  })
+
+  it('counter-rotates the text so it reads the same however the body is turned', () => {
+    // local label rotation + body rotation is constant in board space.
+    expect(anchor(at(0, 0.2)).rot + 0).toBe(-90)
+    expect(anchor(at(90, 0.2)).rot + 90).toBe(-90)
+    expect(anchor(at(180, 0.2)).rot + 180).toBe(-90)
+  })
+})

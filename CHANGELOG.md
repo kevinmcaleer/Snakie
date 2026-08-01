@@ -72,6 +72,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sitting beside the contact rather than on it. They are now centred on the
   contact they name, on QWIIC, Grove, JST and servo headers as well as terminal
   blocks.
+- **A rotated connector's labels still point off the board.** A connector's silk
+  labels swung round with its body, so a vertical servo header threw its signal
+  label sideways onto the next header along instead of out toward the board edge.
+  The outward direction is now worked out in board space and the text
+  counter-rotated, so a label reads the same way and sits clear of its neighbours
+  whichever way the housing is turned.
 - **Connector labels follow the nearest board edge.** A row of servo headers along
   the bottom of a board drew its signal labels above the housing, throwing them
   back across the board instead of out past the edge. Contact labels now sit on

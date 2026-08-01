@@ -1017,12 +1017,22 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // the tight contact pitch; only when the housing is big enough to read.
   const labelFs = Math.max(4.5, Math.min(7, w / 8))
   const showLabels = withLabels && w >= 24
-  // Labels go on the side of the housing nearer the board EDGE, so a row of servo
-  // headers along the bottom doesn't throw its signal labels back across the
-  // board. Mirrors what `boxedPinLabel` already does for pins: read away from the
-  // board, `rotate(-90)` above and `rotate(90)` below.
+  // Labels read AWAY FROM THE BOARD, resolved in BOARD space (#670).
+  //
+  // The caller wraps this glyph in `rotate(conn.rotation)`, so a label placed
+  // "above the housing" in local coordinates swings round with the body — on a
+  // vertical servo header that put it sideways, on top of the next header along.
+  // So pick the outward direction in board space and rotate it back INTO the
+  // glyph's frame, and counter-rotate the text by the same amount so it reads the
+  // same way whichever way the body is turned.
   const labelsBelow = (conn.y ?? 0.5) > 0.5
-  const labelRot = labelsBelow ? 90 : -90
+  const bodyRot = ((Math.round((conn.rotation ?? 0) / 90) * 90) % 360 + 360) % 360
+  const rad = (-bodyRot * Math.PI) / 180
+  const awayY = labelsBelow ? 1 : -1
+  // R(-bodyRot) applied to (0, awayY); rounded so the axis is exact at 90° steps.
+  const ux = Math.round(-awayY * Math.sin(rad))
+  const uy = Math.round(awayY * Math.cos(rad))
+  const labelRot = (labelsBelow ? 90 : -90) - bodyRot
   // Contact 1 is the ORIENTATION reference: a cable can only seat one way round, so
   // mark it the way a PCB does — pin 1 square, the rest plain. Drawn as a hairline
   // box around the first contact, big enough to spot without shouting.
@@ -1099,7 +1109,11 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           // haloed text they need to stay legible at a 2 mm pitch.
           const term = conn.kind === 'terminal'
           const gap = term ? 4 : 2
-          const ly = labelsBelow ? y0 + h + gap : y0 - gap
+          // Reach far enough to clear the housing along whichever local axis the
+          // outward direction landed on.
+          const reach = (ux !== 0 ? w / 2 : h / 2) + gap
+          const lax = cxp + ux * reach
+          const ly = cy + uy * reach
           const paint = term
             ? { className: 'pcv__pin-label' }
             : {
@@ -1114,9 +1128,9 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           return (
             <text
               key={`lbl${i}`}
-              x={cxp}
+              x={lax}
               y={ly}
-              transform={`rotate(${labelRot} ${cxp} ${ly})`}
+              transform={`rotate(${labelRot} ${lax} ${ly})`}
               textAnchor="start"
               // Rotating about the BASELINE hangs the glyphs off to one side:
               // `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and text
