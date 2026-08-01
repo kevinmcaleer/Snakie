@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-08-01
+
 ### Added
 - **A part's power LED lights when it actually has power.** Add a **Power indicator**
   LED to a part and the Board View lights it from the solved circuit, so a breakout
@@ -43,93 +45,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a servo header gives you another servo header rather than three loose pads. The
   copied pins are renamed (`S1` → `S2`), because a pin's name is what a wire
   points at.
-
-### Fixed
-- **Cable plugs sit the right way round, and their leads run as one bundle.** The
-  plug drawn at each end of a lead was angled diagonally when the socket was a
-  group of pins rather than a built-in connector, and the lead's conductors fanned
-  apart instead of staying together: the contacts each worked out their own
-  direction, so they disagreed. A plug now lies along the contacts it covers with
-  the cable leaving one end — one rule for every connector type — and every
-  conductor leaves through that same end, so a servo lead bundles like a QWIIC one.
-  Plugs are also drawn at their real size now — a 3-way servo plug is 7.62 × 2.54 mm,
-  one 0.1" cell per pin — so wiring several servos to a PCA9685 no longer piles
-  overlapping plugs on top of each other.
-- **A connector's housing follows its pins.** Move, align or rotate a group with a
-  connector on it and the pads went where you put them while the housing stayed
-  behind, drawn at the old spot and often facing the wrong way. The housing is now
-  worked out from the pins it holds, so it can't drift from them — for every
-  connector type, not just the one this showed up on.
-- **A servo lead now cables to a servo header in one drag.** The SG90's three pins
-  were grouped but the group had no connector on it, so there was nothing to drag
-  a lead *from* — the header end was ready, the servo end wasn't. Its lead is now a
-  proper 3-way connector, so dragging it onto a PCA9685 or Servo 2040 channel wires
-  signal, power and ground together.
-- **A converted connector still looks like a connector.** Turning a part's
-  connectors into pin groups left its sockets drawn as bare pads. A QWIIC, Grove,
-  JST or terminal housing is now drawn behind its pads, as it always was. A servo
-  header deliberately isn't — its pins are the connector, and a block behind them
-  just doubles it.
-- **No more deprecation warnings when flashing an ESP board.** Newer versions of
-  the flashing tool renamed their commands, printing two warnings on every
-  otherwise-successful flash — and would have stopped accepting the old names
-  altogether in a future release. Snakie now uses whichever spelling the installed
-  version expects.
-- **The connector contact list is far more compact.** Each contact took two
-  labelled rows — name and type, then GPIO underneath — so a sixteen-way block ran
-  to thirty-two rows of mostly empty space and the fields never lined up. Contacts
-  are now one row each under a single header, in aligned columns.
-- **Selecting a group highlights everything in it.** The group row lit up but its
-  contents didn't — apart from one pin in the first group, which happened to be
-  the selection's anchor. Every member of a selected group is now highlighted,
-  including members of any nested groups inside it.
-- **Dragging a selected group moves all of it.** With a group selected, dragging
-  one of the highlighted parts moved only the part under the cursor — the
-  selection looked like a unit and behaved like a pile. Dragging anything in the
-  current selection now moves the whole selection together.
 - **Copy the flashing log.** A **Copy log** button above the output puts the whole
   log on the clipboard — including the chip details at the top, which have usually
   scrolled out of sight by the time a flash finishes — with the terminal escape
   codes stripped so it pastes cleanly into a bug report.
-
-### Fixed
-- **A group disappears when you delete the last thing in it.** Removing some servo
-  headers left their groups listed in the Layers panel with nothing inside, and
-  they couldn't be got rid of: clicking an empty group selects nothing, so pressing
-  Delete on it appeared to do nothing at all. Groups are now cleared out the moment
-  their last member goes, and any already stranded on a board are cleared when it's
-  next opened.
-- **Servo headers label themselves sensibly.** A row of headers near a side of the
-  board threw every signal label out to that edge, stacked over each other,
-  because the label followed the nearest edge without regard for which way the
-  header runs. A servo trio is a vertical column, so its label now reads to the
-  nearer top or bottom edge instead — never sideways. Boards made before this are
-  re-aimed the same way when opened.
-- **A servo header shows only its signal label again.** V+ and GND started
-  printing alongside it, which on sixteen headers is thirty-two labels of noise
-  over the names you actually read. They are hidden by default once more — as a
-  display rule, so headers already on your board pick it up with nothing rewritten.
-- **Castellated pads face the right way when you flip the board.** Turning a board
-  over moved its castellations to the mirrored side but left them pointing the way
-  they were authored, so their half-holes were cut on the wrong edge and ran back
-  into the board instead of off it. A pad seen from the far side now mirrors its
-  facing along with its position — including the hole cut out of the PCB beneath it.
-- **A board's front and back photos are placed independently.** Adding a rear
-  image gave it the front board's proportions, and moving, resizing or
-  aspect-locking the back quietly changed the front instead — the change only
-  showing up when you flipped over. Every image control now acts on the face
-  you're looking at, including the background eraser, which was mapping clicks
-  through the front photo's box while you worked on the back.
-- **The firmware file picker only offers files your board can use.** It listed
-  `.bin`, `.uf2` and `.hex` to everyone, so browsing for ESP firmware showed UF2
-  files that could never work. It now offers just the one kind your board flashes
-  with.
-- **Flashing a `.uf2` to an ESP board is now refused.** esptool can only write a
-  raw `.bin`. Handed a `.uf2` it wrote the container instead of the firmware —
-  reporting success at every step, verifying the same wrong data, and leaving the
-  board restarting in a loop with nothing to say why. The file you pick is now
-  checked against how your board flashes, and a mismatch explains itself instead
-  of flashing.
 - **Erase before flashing, and a steer towards the best build for your board.** A board
   arriving from other firmware keeps its old partition table through a plain
   flash, and then boot-loops — appearing for a second and dropping off again,
@@ -190,6 +109,85 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Cable plugs sit the right way round, and their leads run as one bundle.** The
+  plug drawn at each end of a lead was angled diagonally when the socket was a
+  group of pins rather than a built-in connector, and the lead's conductors fanned
+  apart instead of staying together: the contacts each worked out their own
+  direction, so they disagreed. A plug now lies along the contacts it covers with
+  the cable leaving one end — one rule for every connector type — and every
+  conductor leaves through that same end, so a servo lead bundles like a QWIIC one.
+  Plugs are also drawn at their real size now — a 3-way servo plug is 7.62 × 2.54 mm,
+  one 0.1" cell per pin — so wiring several servos to a PCA9685 no longer piles
+  overlapping plugs on top of each other.
+- **A connector's housing follows its pins.** Move, align or rotate a group with a
+  connector on it and the pads went where you put them while the housing stayed
+  behind, drawn at the old spot and often facing the wrong way. The housing is now
+  worked out from the pins it holds, so it can't drift from them — for every
+  connector type, not just the one this showed up on.
+- **A servo lead now cables to a servo header in one drag.** The SG90's three pins
+  were grouped but the group had no connector on it, so there was nothing to drag
+  a lead *from* — the header end was ready, the servo end wasn't. Its lead is now a
+  proper 3-way connector, so dragging it onto a PCA9685 or Servo 2040 channel wires
+  signal, power and ground together.
+- **A converted connector still looks like a connector.** Turning a part's
+  connectors into pin groups left its sockets drawn as bare pads. A QWIIC, Grove,
+  JST or terminal housing is now drawn behind its pads, as it always was. A servo
+  header deliberately isn't — its pins are the connector, and a block behind them
+  just doubles it.
+- **No more deprecation warnings when flashing an ESP board.** Newer versions of
+  the flashing tool renamed their commands, printing two warnings on every
+  otherwise-successful flash — and would have stopped accepting the old names
+  altogether in a future release. Snakie now uses whichever spelling the installed
+  version expects.
+- **The connector contact list is far more compact.** Each contact took two
+  labelled rows — name and type, then GPIO underneath — so a sixteen-way block ran
+  to thirty-two rows of mostly empty space and the fields never lined up. Contacts
+  are now one row each under a single header, in aligned columns.
+- **Selecting a group highlights everything in it.** The group row lit up but its
+  contents didn't — apart from one pin in the first group, which happened to be
+  the selection's anchor. Every member of a selected group is now highlighted,
+  including members of any nested groups inside it.
+- **Dragging a selected group moves all of it.** With a group selected, dragging
+  one of the highlighted parts moved only the part under the cursor — the
+  selection looked like a unit and behaved like a pile. Dragging anything in the
+  current selection now moves the whole selection together.
+- **A group disappears when you delete the last thing in it.** Removing some servo
+  headers left their groups listed in the Layers panel with nothing inside, and
+  they couldn't be got rid of: clicking an empty group selects nothing, so pressing
+  Delete on it appeared to do nothing at all. Groups are now cleared out the moment
+  their last member goes, and any already stranded on a board are cleared when it's
+  next opened.
+- **Servo headers label themselves sensibly.** A row of headers near a side of the
+  board threw every signal label out to that edge, stacked over each other,
+  because the label followed the nearest edge without regard for which way the
+  header runs. A servo trio is a vertical column, so its label now reads to the
+  nearer top or bottom edge instead — never sideways. Boards made before this are
+  re-aimed the same way when opened.
+- **A servo header shows only its signal label again.** V+ and GND started
+  printing alongside it, which on sixteen headers is thirty-two labels of noise
+  over the names you actually read. They are hidden by default once more — as a
+  display rule, so headers already on your board pick it up with nothing rewritten.
+- **Castellated pads face the right way when you flip the board.** Turning a board
+  over moved its castellations to the mirrored side but left them pointing the way
+  they were authored, so their half-holes were cut on the wrong edge and ran back
+  into the board instead of off it. A pad seen from the far side now mirrors its
+  facing along with its position — including the hole cut out of the PCB beneath it.
+- **A board's front and back photos are placed independently.** Adding a rear
+  image gave it the front board's proportions, and moving, resizing or
+  aspect-locking the back quietly changed the front instead — the change only
+  showing up when you flipped over. Every image control now acts on the face
+  you're looking at, including the background eraser, which was mapping clicks
+  through the front photo's box while you worked on the back.
+- **The firmware file picker only offers files your board can use.** It listed
+  `.bin`, `.uf2` and `.hex` to everyone, so browsing for ESP firmware showed UF2
+  files that could never work. It now offers just the one kind your board flashes
+  with.
+- **Flashing a `.uf2` to an ESP board is now refused.** esptool can only write a
+  raw `.bin`. Handed a `.uf2` it wrote the container instead of the firmware —
+  reporting success at every step, verifying the same wrong data, and leaving the
+  board restarting in a loop with nothing to say why. The file you pick is now
+  checked against how your board flashes, and a mismatch explains itself instead
+  of flashing.
 - **The board you pick keeps its flash offset.** Choosing a board set the right
   offset, and then the background scan for connected boards quietly set it back —
   it only knows the coarse board type, whose ESP default is the original ESP32's
@@ -3856,7 +3854,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...v0.40.0
 [0.39.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.38.0...v0.39.0
