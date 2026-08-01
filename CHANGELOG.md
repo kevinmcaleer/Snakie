@@ -29,6 +29,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **No more deprecation warnings when flashing an ESP board.** Newer versions of
+  the flashing tool renamed their commands, printing two warnings on every
+  otherwise-successful flash — and would have stopped accepting the old names
+  altogether in a future release. Snakie now uses whichever spelling the installed
+  version expects.
 - **The connector contact list is far more compact.** Each contact took two
   labelled rows — name and type, then GPIO underneath — so a sixteen-way block ran
   to thirty-two rows of mostly empty space and the fields never lined up. Contacts
