@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Say which wiring a Grove or JST group is.** A connector built as a group of
+  pins could pick its housing type but not its wiring, so a Grove port couldn't
+  declare itself I²C, UART, digital or analog — and a lead that shouldn't fit was
+  allowed to. The housing menu now offers **Port type** for Grove and **Family**
+  for JST, so the check that catches a plug fitting a differently-wired port works
+  for these as well as for built-in connectors.
 - **A Grove Ultrasonic Ranger demo.** `examples/grove_ultrasonic_demo.py` reads the
   distance and feeds the Range instrument's gauge, with the two things that make an
   ultrasonic reading trustworthy built in: it paces the pings so it never measures

@@ -30,6 +30,7 @@ import {
   itemHidden,
   itemLocked,
   type ComponentShape,
+  type ConnectorVariant,
   type GroupHousing,
   type PartConnectorKind,
   type PartRail,
@@ -1028,7 +1029,14 @@ export function connectorEndpointIndices(part: PartDefinition, conn: PartConnect
 export function withGroupHousing(
   part: PartDefinition,
   gid: string,
-  kind: PartConnectorKind | null
+  kind: PartConnectorKind | null,
+  /**
+   * The Grove wiring / JST family (#705). Absent ⇒ keep whatever the group has,
+   * which is what makes "change the kind" and "change the variant" the same call
+   * without either clobbering the other. Validated per kind, so switching a Grove
+   * `i2c` group to a JST drops a variant that would then mean nothing.
+   */
+  variant?: ConnectorVariant
 ): Partial<PartDefinition> {
   const groups = part.groups ?? []
   const known = groups.some((g) => g.id === gid)
@@ -1045,6 +1053,12 @@ export function withGroupHousing(
   const geom = housingGeometry(pins)
   const housing: GroupHousing = { kind, x: geom.x, y: geom.y }
   if (geom.rotation) housing.rotation = geom.rotation
+  const prev = groups.find((g) => g.id === gid)?.housing
+  const wanted = coerceConnectorVariant(kind, variant ?? prev?.variant)
+  if (wanted) housing.variant = wanted
+  // The silk label is the author's, not a consequence of the kind — changing a
+  // Grove port's wiring shouldn't wipe what it is called.
+  if (prev?.label) housing.label = prev.label
   const next = known
     ? groups.map((g) => (g.id === gid ? { ...g, housing } : g))
     : [...groups, { id: gid, housing }]

@@ -2055,6 +2055,50 @@ function LayersPanel({
                       {g?.housing?.kind === k ? ' ✓' : ''}
                     </button>
                   ))}
+                  {/* The WIRING, for the kinds where the same shell is wired
+                      several ways (#705). Grove's four ports are physically
+                      identical, so this is the only thing that can stop an I2C
+                      module being cabled into a digital port — where the plug
+                      fits, nothing looks wrong, and the module never responds.
+                      Only shown for the current kind, so the menu stays short. */}
+                  {g?.housing?.kind === 'grove' && (
+                    <>
+                      <div className="pe__addmenu-head">Port type</div>
+                      {GROVE_VARIANTS.map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setHousingMenu(null)
+                            patch(withGroupHousing(part, gid, 'grove', v))
+                          }}
+                        >
+                          {GROVE_VARIANT_LABEL[v]}
+                          {coerceGroveVariant(g.housing?.variant) === v ? ' ✓' : ''}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {g?.housing?.kind === 'jst' && (
+                    <>
+                      <div className="pe__addmenu-head">Family</div>
+                      {JST_FAMILIES.map((f) => (
+                        <button
+                          key={f}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => {
+                            setHousingMenu(null)
+                            patch(withGroupHousing(part, gid, 'jst', f))
+                          }}
+                        >
+                          {JST_FAMILY_LABEL[f]}
+                          {(coerceJstFamily(g.housing?.variant) ?? 'ph') === f ? ' ✓' : ''}
+                        </button>
+                      ))}
+                    </>
+                  )}
                   {g?.housing && (
                     <button
                       type="button"

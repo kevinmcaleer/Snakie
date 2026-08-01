@@ -1381,6 +1381,18 @@
   background: var(--bg-sunken);
 }
 
+/* Section heading inside a menu (the housing menu's Port type / Family groups). */
+.pe__addmenu-head {
+  padding: 0.35rem 0.5rem 0.15rem;
+  margin-top: 0.15rem;
+  border-top: var(--border-w) solid var(--border);
+  font-family: var(--font-ui);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 /* Background-removal popup — like the add menu but wide enough for the slider. */
 .pe__bgmenu {
   position: absolute;
