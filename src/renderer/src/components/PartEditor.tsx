@@ -1573,7 +1573,7 @@ function LayersPanel({
   const connectors = part.connectors ?? []
   const shapes = part.shapes ?? []
   const labels = part.labels ?? []
-  const addLed = (kind: 'single' | 'rgb' | 'neopixel' = 'single'): void => {
+  const addLed = (kind: OnboardLed['kind'] = 'single'): void => {
     const next = [...onboardLeds, { kind, x: 0.5, y: 0.5, z: nextItemZ(part) } as (typeof onboardLeds)[number]]
     patch({ onboardLeds: next })
     setSelection({ type: 'led', index: next.length - 1 })
@@ -1624,7 +1624,14 @@ function LayersPanel({
       }
       case 'led': {
         const l = onboardLeds[it.index]
-        const word = l.kind === 'rgb' ? 'RGB' : l.kind === 'neopixel' ? 'NeoPixel' : 'LED'
+        const word =
+          l.kind === 'rgb'
+            ? 'RGB'
+            : l.kind === 'neopixel'
+              ? 'NeoPixel'
+              : l.kind === 'power'
+                ? 'PWR'
+                : 'LED'
         return { name: `${l.label || word} ${it.index + 1}`, sub: l.kind, sel: { type: 'led', index: it.index } }
       }
       case 'connector': {
@@ -3596,7 +3603,13 @@ function SelectionInspector({
     const led = (part.onboardLeds ?? [])[selection.index]
     if (led) {
       title =
-        led.kind === 'rgb' ? 'Onboard RGB LED' : led.kind === 'neopixel' ? 'Onboard NeoPixel' : 'Onboard LED'
+        led.kind === 'rgb'
+          ? 'Onboard RGB LED'
+          : led.kind === 'neopixel'
+            ? 'Onboard NeoPixel'
+            : led.kind === 'power'
+              ? 'Power indicator LED'
+              : 'Onboard LED'
       const upd = (p: Partial<OnboardLed>): void =>
         patch({ onboardLeds: (part.onboardLeds ?? []).map((l, i) => (i === selection.index ? { ...l, ...p } : l)) })
       const updRgb = (ch: 'r' | 'g' | 'b', v: number | undefined): void =>
@@ -3621,6 +3634,7 @@ function SelectionInspector({
                 <option value="single">LED</option>
                 <option value="rgb">RGB</option>
                 <option value="neopixel">NeoPixel</option>
+                <option value="power">Power indicator</option>
               </select>
             </label>
             <label className="pe__field">
@@ -3629,7 +3643,15 @@ function SelectionInspector({
                 type="text"
                 value={led.label ?? ''}
                 onChange={(e) => upd({ label: e.target.value || undefined })}
-                placeholder={led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED'}
+                placeholder={
+                  led.kind === 'rgb'
+                    ? 'RGB'
+                    : led.kind === 'neopixel'
+                      ? 'NeoPixel'
+                      : led.kind === 'power'
+                        ? 'PWR'
+                        : 'LED'
+                }
               />
             </label>
           </div>
@@ -3641,6 +3663,24 @@ function SelectionInspector({
                 <input type="color" value={led.color ?? '#39d353'} onChange={(e) => upd({ color: e.target.value })} />
               </label>
             </div>
+          )}
+          {led.kind === 'power' && (
+            <>
+              <div className="pe__row">
+                <label className="pe__field">
+                  <span>Colour</span>
+                  <input type="color" value={led.color ?? '#39d353'} onChange={(e) => upd({ color: e.target.value })} />
+                </label>
+              </div>
+              {/* No GPIO field: nothing drives a power LED. Saying so beats leaving
+                  an empty box that looks unfinished (#698). */}
+              <p className="pe__hint">
+                Lights in the Board View when this part&rsquo;s supply is present
+                {part.electrical?.operatingV
+                  ? ` — at or above ${part.electrical.operatingV[0]} V.`
+                  : '. Set a supply range in Electrical to say how much it needs.'}
+              </p>
+            </>
           )}
           {led.kind === 'rgb' && (
             <div className="pe__row">

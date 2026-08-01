@@ -708,7 +708,13 @@ export function partFromYaml(text: string): PartDefinition {
         const y = num(r.y)
         if (x === undefined || y === undefined) return null
         const kind: OnboardLed['kind'] =
-          r.kind === 'rgb' ? 'rgb' : r.kind === 'neopixel' ? 'neopixel' : 'single'
+          r.kind === 'rgb'
+            ? 'rgb'
+            : r.kind === 'neopixel'
+              ? 'neopixel'
+              : r.kind === 'power'
+                ? 'power'
+                : 'single'
         const led: OnboardLed = { kind, x, y }
         readItemFlags(r, led as unknown as Record<string, unknown>)
         const label = str(r.label)
@@ -726,8 +732,12 @@ export function partFromYaml(text: string): PartDefinition {
             if (Object.keys(obj).length) led.rgb = obj
           }
         } else {
-          const g = num(r.gpio)
-          if (g !== undefined) led.gpio = g
+          // A `power` LED sits across the supply — nothing drives it, so there is
+          // no GPIO to read (#698). It keeps its colour like any single LED.
+          if (kind !== 'power') {
+            const g = num(r.gpio)
+            if (g !== undefined) led.gpio = g
+          }
           if (kind === 'neopixel') {
             const p = num(r.power)
             if (p !== undefined) led.power = p

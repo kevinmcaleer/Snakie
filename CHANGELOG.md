@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A part's power LED lights when it actually has power.** Add a **Power indicator**
+  LED to a part and the Board View lights it from the solved circuit, so a breakout
+  that isn't reaching its supply simply sits there dark — the same thing you'd look
+  for on the bench. It uses the part's supply range if it has one, so an under-volted
+  part reads as browned out. With no solvable circuit at all the LED draws as it
+  always has, rather than claiming a part is unpowered when nothing is known.
 - **A part can say which of its own pins are wired together.** A driver board
   passes power through rather than using it — a PCA9685's V+ terminal feeds all
   sixteen servo headers — and that connection was invisible, so a servo on a

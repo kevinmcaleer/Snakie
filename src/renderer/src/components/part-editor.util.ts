@@ -1999,7 +1999,13 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
     out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {
       const kind: OnboardLed['kind'] =
-        l.kind === 'rgb' ? 'rgb' : l.kind === 'neopixel' ? 'neopixel' : 'single'
+        l.kind === 'rgb'
+          ? 'rgb'
+          : l.kind === 'neopixel'
+            ? 'neopixel'
+            : l.kind === 'power'
+              ? 'power'
+              : 'single'
       const led: OnboardLed = { kind, x: clamp(l.x, 0, 1), y: clamp(l.y, 0, 1) }
       keepItemFlags(l, led as unknown as Record<string, unknown>)
       const label = text(l.label)
@@ -2013,7 +2019,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
           if (Object.keys(obj).length) led.rgb = obj
         }
       } else {
-        if (typeof l.gpio === 'number' && Number.isFinite(l.gpio)) led.gpio = l.gpio
+        // Nothing drives a `power` LED, so it carries no GPIO (#698).
+        if (kind !== 'power' && typeof l.gpio === 'number' && Number.isFinite(l.gpio)) led.gpio = l.gpio
         if (kind === 'neopixel') {
           if (typeof l.power === 'number' && Number.isFinite(l.power)) led.power = l.power
         } else {

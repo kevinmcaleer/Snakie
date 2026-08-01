@@ -25,6 +25,7 @@ import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
 import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
+import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
@@ -1588,6 +1589,25 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
       })
     })
   }
+  /**
+   * The supply each placed part is sitting on, from the DC solve (#698) — it lights
+   * a part's power LED.
+   *
+   * `undefined` means "nothing solved", which is NOT the same as 0 V: with no
+   * source and no electrical models there is nothing to read, and a dark LED would
+   * assert the part is unpowered on the strength of knowing nothing. Once a solve
+   * HAS run, a part whose power pin reaches no node simply isn't connected to it —
+   * that is a real 0 V, and the LED is right to go out.
+   */
+  const supplyByKey = new Map<string, number>()
+  if (voltage?.ready) {
+    for (const s2 of subjects) {
+      if (s2.kind !== 'part') continue
+      const pins = s2.pins.map((p) => ({ net: p.net, endpoint: endpointOf(s2.key, p.name, p.index) }))
+      supplyByKey.set(s2.key, partSupplyVoltage(pins, voltage.byEndpoint) ?? 0)
+    }
+  }
+
   /** Every endpoint that sits in a connector, and which one — so a cabled wire can
    *  ask where its plug is rather than where its own contact points. */
   const targetByEndpoint = new Map<string, ConnectorTarget>()
@@ -2485,6 +2505,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
                   key={s.key}
                   subject={s}
                   liveByPad={live?.byPad}
+                  supplyV={supplyByKey.get(s.key)}
                   // #650: only the part you're looking at is named — selected, or
                   // hovered so you can identify one without committing to a click.
                   showTitle={selectedKey === s.key || hover?.key === s.key}
@@ -3747,6 +3768,7 @@ function SubjectBody({
   capsPins,
   capsHoverPin,
   liveByPad,
+  supplyV,
   showTitle = true
 }: {
   subject: Subject
@@ -3766,6 +3788,9 @@ function SubjectBody({
   /** LIVE device readings by board pad index (#…) — appended to each used pad's
    *  code-variable label so the Breadboard shows live values. */
   liveByPad?: Map<number, { text: string; asserted: boolean }>
+  /** The solved supply this part is sitting on (#698) — lights its power LED.
+   *  Absent ⇒ no solve, so the LED draws as it always has. */
+  supplyV?: number
 }): JSX.Element {
   // Centre the title over the VISIBLE body (shifted for a rotated non-square
   // part); 0 for everything else. (Delete is on the selected-part toolbar now.)
@@ -3843,6 +3868,7 @@ function SubjectBody({
                   pinVariables={pinVars}
                   capsPins={capsPins}
                   capsHoverPin={capsHoverPin}
+                  supplyV={supplyV}
                 />
               )
               return tf ? <g transform={tf}>{body}</g> : body

@@ -9,6 +9,8 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
+import { isPowerLed, powerLedState } from '../../../shared/power-led'
+import type { PowerLedState } from '../../../shared/power-led'
 import { itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
@@ -814,6 +816,12 @@ export interface PartBodyProps {
    *  The node-graph draws `'hidden'` under the wires and `'only'` over them so
    *  the wires never obscure a pin label / variable name. */
   pinLabels?: 'all' | 'hidden' | 'only'
+  /**
+   * The supply voltage this placed part is sitting on, from the DC solver (#698)
+   * — it lights a `power` LED. Absent ⇒ nothing solved, so a power LED draws like
+   * any other indicator rather than claiming the part is unpowered.
+   */
+  supplyV?: number
 }
 
 /** On-board push-button size (viewBox units) — the tactile-switch cap + base. */
@@ -852,7 +860,10 @@ export function onboardLedGlyph(
   cy: number,
   led: OnboardLed,
   selected = false,
-  pxPerMm = 0
+  pxPerMm = 0,
+  /** For a `power` LED: whether its supply is actually present (#698). `unknown`
+   *  draws it exactly as every other LED, so nothing changes off the Board View. */
+  state: PowerLedState = 'unknown'
 ): JSX.Element {
   const ring = selected ? <circle cx={cx} cy={cy} r={11} fill="none" stroke="#fff" strokeWidth={2} /> : null
   if (led.kind === 'neopixel') {
@@ -888,9 +899,23 @@ export function onboardLedGlyph(
     )
   }
   const color = led.color || '#39d353'
+  // A power indicator that the solver says has no supply: the unlit package —
+  // the LED's own colour dimmed almost out, no glow, no specular highlight. It
+  // reads as "this part isn't powered" at a glance, which is the point (#698).
+  if (state === 'dark') {
+    return (
+      <g style={{ pointerEvents: 'none' }}>
+        <circle cx={cx} cy={cy} r={5} fill={color} opacity={0.22} stroke="#0006" strokeWidth={0.8} />
+        {ring}
+      </g>
+    )
+  }
+  // Supplied: the same LED with a wider, stronger halo, so lit reads as brighter
+  // than an ordinary indicator rather than merely different.
+  const halo = state === 'lit' ? { r: 12, o: 0.45 } : { r: 9, o: 0.3 }
   return (
     <g style={{ pointerEvents: 'none' }}>
-      <circle cx={cx} cy={cy} r={9} fill={color} opacity={0.3} />
+      <circle cx={cx} cy={cy} r={halo.r} fill={color} opacity={halo.o} />
       <circle cx={cx} cy={cy} r={5} fill={color} stroke="#0006" strokeWidth={0.8} />
       <circle cx={cx - 1.6} cy={cy - 1.6} r={1.5} fill="#fff" opacity={0.85} />
       {ring}
@@ -901,7 +926,15 @@ export function onboardLedGlyph(
 /** The silk label for an onboard LED: its name + GPIO(s) — e.g. `LED · GP25`,
  *  `RGB · GP18 GP19 GP20`, `NeoPixel · GP22 · PWR GP23`. */
 export function onboardLedLabel(led: OnboardLed): string {
-  const name = led.label || (led.kind === 'rgb' ? 'RGB' : led.kind === 'neopixel' ? 'NeoPixel' : 'LED')
+  const name =
+    led.label ||
+    (led.kind === 'rgb'
+      ? 'RGB'
+      : led.kind === 'neopixel'
+        ? 'NeoPixel'
+        : led.kind === 'power'
+          ? 'PWR'
+          : 'LED')
   let gps = ''
   if (led.kind === 'rgb') {
     gps = [led.rgb?.r, led.rgb?.g, led.rgb?.b]
@@ -1198,7 +1231,8 @@ export function PartBody({
   capsPins,
   capsHoverPin,
   pinLabels = 'all',
-  side = 'front'
+  side = 'front',
+  supplyV
 }: PartBodyProps): JSX.Element {
   // Two-layer split so a caller (the node-graph) can paint the board body under
   // its wires and the pin labels over them.
@@ -1723,7 +1757,14 @@ export function PartBody({
           const sel = isSel({ type: 'led', index: i })
           return (
             <g key={`led${i}`}>
-              {onboardLedGlyph(cx, cy, led, sel, connPxPerMm)}
+              {onboardLedGlyph(
+                cx,
+                cy,
+                led,
+                sel,
+                connPxPerMm,
+                isPowerLed(led) ? powerLedState(supplyV, part.electrical) : 'unknown'
+              )}
               {styledText({
                 text: onboardLedLabel(led),
                 cx,

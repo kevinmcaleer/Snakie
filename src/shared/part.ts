@@ -505,6 +505,14 @@ export interface PartButton {
  *                 line ({@link gpio}); some boards gate its supply with a
  *                 power-enable GPIO ({@link power}, e.g. the Seeed XIAO RP2350's
  *                 DATA GP22 + POWER GP23). The power pin is optional.
+ *  - `power`    — a supply indicator, sitting across the part's own power rail.
+ *                 The odd one out: nothing DRIVES it, so it has no GPIO, and the
+ *                 Board View lights it from the solved supply instead (#698).
+ *
+ * `power` is a declared kind rather than something inferred from a missing GPIO,
+ * because the bundled library proves that inference wrong: `grove-led-bar` has ten
+ * GPIO-less `single` LEDs driven by the bar's own chip, and the XIAO RP2350 has one
+ * that is really its user LED. Only the author knows which LED is the indicator.
  */
 export interface OnboardLed {
   /** Which face of the board this sits on (#636). Absent ⇒ front. */
@@ -522,8 +530,8 @@ export interface OnboardLed {
   /** Paint/click z-order among components (higher = on top). Absent ⇒ legacy
    *  category default; set explicitly when reordered in the Layers panel. */
   z?: number
-  kind: 'single' | 'rgb' | 'neopixel'
-  /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"`). */
+  kind: 'single' | 'rgb' | 'neopixel' | 'power'
+  /** Silk label (defaults to `"LED"` / `"RGB"` / `"NeoPixel"` / `"PWR"`). */
   label?: string
   /** GPIO driving a `single` LED, or the DATA line of a `neopixel`. */
   gpio?: number
