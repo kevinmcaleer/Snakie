@@ -106,3 +106,36 @@ describe('terminal contact labels match ordinary pin labels (#662)', () => {
     expect(html).toContain('rotate(-90')
   })
 })
+
+/** Connector contact labels sit on the side nearest the board edge (#663). */
+describe('connector labels follow the nearest board edge (#663)', () => {
+  const at = (kind: string, y: number): Parameters<typeof connectorGlyph>[2] =>
+    ({ kind, x: 0.5, y, pins: terminalPins(4) }) as unknown as Parameters<typeof connectorGlyph>[2]
+
+  it('reads upward for a connector in the TOP half', () => {
+    for (const kind of ['terminal', 'dupont']) {
+      const html = renderToStaticMarkup(connectorGlyph(50, 50, at(kind, 0.2)))
+      expect(html).toContain('rotate(-90')
+      expect(html).not.toContain('rotate(90')
+    }
+  })
+
+  it('reads downward for a connector in the BOTTOM half', () => {
+    // The reported case: servo headers along the bottom edge threw their signal
+    // labels back across the board.
+    for (const kind of ['terminal', 'dupont']) {
+      const html = renderToStaticMarkup(connectorGlyph(50, 50, at(kind, 0.8)))
+      expect(html).toContain('rotate(90')
+      expect(html).not.toContain('rotate(-90')
+    }
+  })
+
+  it('places the label clear of the housing on the side it reads toward', () => {
+    const top = renderToStaticMarkup(connectorGlyph(50, 50, at('dupont', 0.2)))
+    const bottom = renderToStaticMarkup(connectorGlyph(50, 50, at('dupont', 0.8)))
+    const yOf = (h: string): number => Number(/<text[^>]*\sy="([-\d.]+)"/.exec(h)![1])
+    // Housing is centred on cy=50, so above < 50 < below.
+    expect(yOf(top)).toBeLessThan(50)
+    expect(yOf(bottom)).toBeGreaterThan(50)
+  })
+})

@@ -1003,6 +1003,12 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // the tight contact pitch; only when the housing is big enough to read.
   const labelFs = Math.max(4.5, Math.min(7, w / 8))
   const showLabels = withLabels && w >= 24
+  // Labels go on the side of the housing nearer the board EDGE, so a row of servo
+  // headers along the bottom doesn't throw its signal labels back across the
+  // board. Mirrors what `boxedPinLabel` already does for pins: read away from the
+  // board, `rotate(-90)` above and `rotate(90)` below.
+  const labelsBelow = (conn.y ?? 0.5) > 0.5
+  const labelRot = labelsBelow ? 90 : -90
   // Contact 1 is the ORIENTATION reference: a cable can only seat one way round, so
   // mark it the way a PCB does — pin 1 square, the rest plain. Drawn as a hairline
   // box around the first contact, big enough to spot without shouting.
@@ -1071,13 +1077,13 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           // over its own way, and vertical is what keeps a wide block's labels
           // from running into each other.
           if (conn.kind === 'terminal') {
-            const ty = y0 - 4
+            const ty = labelsBelow ? y0 + h + 4 : y0 - 4
             return (
               <text
                 key={`lbl${i}`}
                 x={cxp}
                 y={ty}
-                transform={`rotate(-90 ${cxp} ${ty})`}
+                transform={`rotate(${labelRot} ${cxp} ${ty})`}
                 textAnchor="start"
                 // Rotating about the BASELINE would hang the glyphs off to one
                 // side: `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and
@@ -1092,13 +1098,13 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
               </text>
             )
           }
-          const ly = y0 - 2 // reads upward, just above the housing
+          const ly = labelsBelow ? y0 + h + 2 : y0 - 2 // just clear of the housing
           return (
             <text
               key={`lbl${i}`}
               x={cxp}
               y={ly}
-              transform={`rotate(-90 ${cxp} ${ly})`}
+              transform={`rotate(${labelRot} ${cxp} ${ly})`}
               textAnchor="start"
               fontSize={labelFs}
               fontWeight={700}

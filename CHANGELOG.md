@@ -27,6 +27,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Connector labels follow the nearest board edge.** A row of servo headers along
+  the bottom of a board drew its signal labels above the housing, throwing them
+  back across the board instead of out past the edge. Contact labels now sit on
+  whichever side of the connector is nearer the board edge and read away from it —
+  the same convention the board's own pin labels already followed.
 - **Duplicating a pin gives the copy a fresh name.** A duplicated pin kept the
   source's name, so a board could end up with two pins called `SCL` and a wire
   endpoint (`<part>.SCL`) that pointed at either of them. The copy is now
