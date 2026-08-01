@@ -7,6 +7,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A part can say which of its own pins are wired together.** A driver board
+  passes power through rather than using it — a PCA9685's V+ terminal feeds all
+  sixteen servo headers — and that connection was invisible, so a servo on a
+  header read as unpowered even with the terminal wired to a battery. Parts can now
+  declare their internal rails, and the PCA9685 and Servo 2040 do.
 - **Snakie warns when a part is on the wrong supply.** A part's electrical model
   only described the current it draws, so nothing knew a 3.3 V sensor was wired to
   5 V — the commonest way to destroy a breakout. Give a part a supply range in its

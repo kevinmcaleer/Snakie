@@ -956,6 +956,14 @@ export interface GroupHousing {
   label?: string
 }
 
+/** One net joined inside a part — the pins a PCB trace ties together (#695). */
+export interface PartRail {
+  /** What the net is, for the ERC's explanation (`V+`, `MOTOR`, `VBAT`). */
+  name: string
+  /** The pin NAMES joined. Fewer than two is not a net and is dropped. */
+  pins: string[]
+}
+
 export interface PartGroup {
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
@@ -1053,6 +1061,21 @@ export interface PartDefinition {
    *  base — the XIAO expansion board, a Pico Explorer). Absent ⇒ nothing stacks
    *  onto it. */
   mounts?: PartMount[]
+  /**
+   * Nets joined INSIDE the part — pins the PCB wires together (#695).
+   *
+   * A distribution board passes power through rather than consuming it: a
+   * PCA9685's `V+` terminal feeds all sixteen servo headers, and the trace doing
+   * that is invisible to the netlist. Without it the terminal is wired to a
+   * battery and every servo on the headers still reads as unpowered.
+   *
+   * The board's own like-named rails are bonded automatically, but that rule is
+   * NOT extended to parts on purpose: an opto-isolated driver has two grounds that
+   * must stay apart, and bonding by name would silently join the isolated side to
+   * the logic side — the exact fault the ERC exists to catch. So a part says which
+   * of its pins are joined, and says nothing by default.
+   */
+  rails?: PartRail[]
   /** Groups (#627): items carry a `group` id; this registry names them + records
    *  nesting (`parent`), so a group can hold items AND sub-groups. Membership is
    *  the `group` id on items (robust to reorder), not index refs. */

@@ -45,6 +45,7 @@ import type {
   PartLibrary,
   PartMount,
   PartPin,
+  PartRail,
   PartPinBuses,
   PartPinCapability,
   PartPinSignals,
@@ -461,6 +462,7 @@ export function partToYaml(part: PartDefinition): string {
     features: part.features,
     shapes: part.shapes,
     labels: part.labels,
+    rails: part.rails,
     groups: part.groups,
     onboardLeds: part.onboardLeds,
     // NB: field-by-field, so every new PartConnector field must be added HERE and
@@ -663,6 +665,20 @@ export function partFromYaml(text: string): PartDefinition {
       })
       .filter((l): l is PartLabel => l !== null)
     if (labels.length) part.labels = labels
+  }
+  if (Array.isArray(raw.rails)) {
+    const rails = raw.rails
+      .map((r): PartRail | null => {
+        const o = r as Record<string, unknown>
+        const name = str(o?.name)
+        const pins = Array.isArray(o?.pins)
+          ? (o.pins as unknown[]).map((x) => str(x)).filter((x): x is string => !!x)
+          : []
+        // Fewer than two pins joins nothing.
+        return name && pins.length >= 2 ? { name, pins } : null
+      })
+      .filter((r): r is PartRail => r !== null)
+    if (rails.length) part.rails = rails
   }
   if (Array.isArray(raw.groups)) {
     const groups = raw.groups

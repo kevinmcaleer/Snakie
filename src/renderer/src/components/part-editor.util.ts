@@ -32,6 +32,7 @@ import {
   type ComponentShape,
   type GroupHousing,
   type PartConnectorKind,
+  type PartRail,
   type PartSide,
   type JstFamily,
   type ComponentShapeKind,
@@ -1949,6 +1950,20 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       })
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
+  }
+  // Internal rails (#695) — the nets a part's own PCB joins. Same shape check as
+  // `parts.yml`: a name, and at least two pins, or it joins nothing.
+  if (Array.isArray(part.rails)) {
+    const rails = part.rails
+      .map((r): PartRail | null => {
+        const name = text(r?.name)
+        const pins = Array.isArray(r?.pins)
+          ? r.pins.map((x) => text(x)).filter((x): x is string => !!x)
+          : []
+        return name && pins.length >= 2 ? { name, pins } : null
+      })
+      .filter((r): r is PartRail => r !== null)
+    if (rails.length) out.rails = rails
   }
   // Group registry (#627): keep only the ids still in use — see
   // {@link pruneEmptyGroups}, which is also what the delete paths call so a

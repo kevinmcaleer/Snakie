@@ -12,7 +12,7 @@ tags:
 pinSpacing: 2.54
 voltage: 3.3V
 partNumber: PIM613
-version: 0.1.23
+version: 0.1.24
 mcu: RP2040
 pcbColor: '#12181f'
 aspect: 1.476
@@ -1009,3 +1009,57 @@ layerVisibility:
   holes: true
   pins: true
   components: true
+rails:
+- name: Servo V+
+  pins:
+  - V1
+  - V1
+  - V2
+  - V2
+  - V3
+  - V3
+  - V4
+  - V4
+  - V5
+  - V5
+  - V6
+  - V6
+  - V7
+  - V8
+  - V9
+  - V10
+  - V11
+  - V12
+  - V13
+  - V14
+  - V15
+  - V16
+  - V17
+  - V18
+- name: GND
+  pins:
+  - GND
+  - G1
+  - G1
+  - G2
+  - G2
+  - G3
+  - G3
+  - G4
+  - G4
+  - G5
+  - G5
+  - G6
+  - G6
+  - G7
+  - G8
+  - G9
+  - G10
+  - G11
+  - G12
+  - G13
+  - G14
+  - G15
+  - G16
+  - G17
+  - G18
