@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Editing a part no longer discards its I²C addresses.** A part's
+  `i2cAddresses` survived on disk but was dropped the moment the Part Editor
+  normalised it, so opening a sensor and saving it silently unlinked it from the
+  I²C-detect instrument — a scan would find the device and no longer offer the
+  part that matched it.
+- **A group whose members are connectors, LEDs, buttons or holes keeps its name.**
+  The check for "is this group still in use?" only looked at pins, shapes and
+  labels, so a named group made of anything else looked abandoned and was pruned
+  on save. The group itself kept working (an unregistered id is reconstructed on
+  load), but its name and its hidden/locked flags were lost.
 - **The board picker shows its scrollbar.** macOS hides overlay scrollbars until
   you scroll, so a capped list of twenty-odd boards read as the whole list rather
   than a truncated one — you cannot discover a scrollbar you have to scroll to

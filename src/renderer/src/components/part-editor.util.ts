@@ -1106,11 +1106,26 @@ export function normalisePart(part: PartDefinition): PartDefinition {
   }
   // Group registry (#627) — kept only for ids still referenced by an item's `group`
   // or by a nested group's `parent`, so ungrouping/deleting leaves no orphan groups.
+  //
+  // This scan must cover EVERY item kind that carries a `group` id. When it was
+  // narrower than that set, a group whose only members were connectors/LEDs/
+  // buttons/holes looked unreferenced and was pruned — the items kept working
+  // (`partLayerTree` synthesises a group for an unregistered id) but the group's
+  // NAME and its hidden/locked flags were silently lost on save.
   if (Array.isArray(part.groups) && part.groups.length) {
     const referenced = new Set<string>()
     for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) referenced.add(p.group)
     for (const s of part.shapes ?? []) if (s.group) referenced.add(s.group)
     for (const l of part.labels ?? []) if (l.group) referenced.add(l.group)
+    for (const c of part.connectors ?? []) {
+      if (c.group) referenced.add(c.group)
+      // A connector's contacts are ordinary pins and can be grouped separately
+      // from the body (the body + its contacts are usually one group).
+      for (const p of c.pins ?? []) if (p.group) referenced.add(p.group)
+    }
+    for (const l of part.onboardLeds ?? []) if (l.group) referenced.add(l.group)
+    for (const b of part.buttons ?? []) if (b.group) referenced.add(b.group)
+    for (const h of part.mountingHoles ?? []) if (h.group) referenced.add(h.group)
     for (const g of part.groups) if (g.parent) referenced.add(g.parent)
     const groups = part.groups
       .filter((g) => g.id && referenced.has(g.id))
@@ -1289,6 +1304,14 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         order: Number.isFinite(sp.order) ? sp.order : 0
       }))
     }
+  }
+  // I²C address list (#214). The 7-bit range check mirrors `partFromYaml`'s, so
+  // the editor and the on-disk coercer agree on what a valid address is.
+  if (Array.isArray(part.i2cAddresses)) {
+    const addrs = part.i2cAddresses.filter(
+      (a) => Number.isInteger(a) && a >= 0 && a <= 0x7f
+    )
+    if (addrs.length) out.i2cAddresses = addrs
   }
   if (part.library) {
     const lib: NonNullable<PartDefinition['library']> = {}
