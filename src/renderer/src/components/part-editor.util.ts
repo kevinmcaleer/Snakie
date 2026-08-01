@@ -781,10 +781,24 @@ export function terminalPins(n: number): PartPin[] {
  * is predictable, rather than choosing which ones looked unused.
  */
 export function resizeTerminals(pins: PartPin[], n: number): PartPin[] {
+  return resizeContacts(pins, n, 'T')
+}
+
+/**
+ * Grow or shrink ANY connector's contact list (#694).
+ *
+ * A JST housing comes in as many ways as the family has; a DuPont block is a 2-,
+ * 3- or 4-way header. Both were stuck at whatever they were created with, so a
+ * 2-pin battery lead had to be built as a 4-pin one and edited down by hand.
+ *
+ * Same rules as a terminal block: keep what is already configured, append fresh
+ * contacts, and shrink from the END so what is lost is predictable.
+ */
+export function resizeContacts(pins: PartPin[], n: number, prefix = 'P'): PartPin[] {
   const count = clamp(Math.round(n) || TERMINAL_MIN, TERMINAL_MIN, TERMINAL_MAX)
   const kept = pins.slice(0, count)
   for (let i = kept.length; i < count; i++) {
-    kept.push({ name: `T${i + 1}`, type: 'io' as PartPinType })
+    kept.push({ name: `${prefix}${i + 1}`, type: 'io' as PartPinType })
   }
   return kept
 }

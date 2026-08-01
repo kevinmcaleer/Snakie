@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Set how many contacts a JST or DuPont connector has.** Both were stuck at
+  whatever they were created with — four — so a two-wire battery lead had to be
+  built as a four-way and trimmed by hand. There's now a Contacts field, working
+  the same way a terminal block's does: what you've already set up is kept, and
+  shrinking drops from the end. QWIIC and Grove stay fixed at four, because that's
+  what they are.
 - **Duplicate a whole group.** A ⧉ button on a group row in the layers list copies
   the group and everything in it — including its connector housing, so duplicating
   a servo header gives you another servo header rather than three loose pads. The
@@ -14,6 +20,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **The connector contact list is far more compact.** Each contact took two
+  labelled rows — name and type, then GPIO underneath — so a sixteen-way block ran
+  to thirty-two rows of mostly empty space and the fields never lined up. Contacts
+  are now one row each under a single header, in aligned columns.
 - **Selecting a group highlights everything in it.** The group row lit up but its
   contents didn't — apart from one pin in the first group, which happened to be
   the selection's anchor. Every member of a selected group is now highlighted,

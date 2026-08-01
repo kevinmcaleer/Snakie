@@ -54,7 +54,7 @@ import {
   itemGroupOf,
   withFaceImageLayer,
   selectionGroupId,
-  resizeTerminals,
+  resizeContacts,
   terminalPins,
   groupRootId,
   groupTreeIds,
@@ -3656,9 +3656,11 @@ function SelectionInspector({
                 ))}
               </select>
             </label>
-            {conn.kind === 'terminal' && (
+            {/* Ways. Terminal blocks, JST housings and DuPont headers all come in
+                a range; QWIIC and Grove are 4 by definition, so they don't (#694). */}
+            {(conn.kind === 'terminal' || conn.kind === 'jst' || conn.kind === 'dupont') && (
               <label className="pe__field">
-                <span>Terminals</span>
+                <span>{conn.kind === 'terminal' ? 'Terminals' : 'Contacts'}</span>
                 {/* The block's way-count IS its contact count, so this grows and
                     shrinks the contacts directly — configured ones are kept. */}
                 <input
@@ -3667,7 +3669,11 @@ function SelectionInspector({
                   max={TERMINAL_MAX}
                   step={1}
                   value={conn.pins.length}
-                  onChange={(e) => upd({ pins: resizeTerminals(conn.pins, Number(e.target.value)) })}
+                  onChange={(e) =>
+                    upd({
+                      pins: resizeContacts(conn.pins, Number(e.target.value), conn.kind === 'terminal' ? 'T' : 'P')
+                    })
+                  }
                 />
               </label>
             )}
@@ -3725,49 +3731,62 @@ function SelectionInspector({
           >
             Standard contacts
           </button>
-          {/* Each contact is a full pin — assign GP## (+ I2C bus for SDA/SCL). */}
-          {conn.pins.map((p, pi) => (
-            <div key={pi} className="pe__conn-pin">
-              <div className="pe__row">
-                <label className="pe__field">
-                  <span>Pin {pi + 1}</span>
-                  <input type="text" value={p.name} onChange={(e) => updPin(pi, { name: e.target.value })} />
-                </label>
-                <label className="pe__field">
-                  <span>Type</span>
-                  <select value={p.type} onChange={(e) => updPin(pi, { type: e.target.value as PartPinType })}>
-                    {PIN_TYPES.map((t) => (
-                      <option key={t} value={t}>
-                        {PIN_TYPE_LABEL[t]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {p.type === 'io' && (
-                <div className="pe__row">
-                  <label className="pe__field">
-                    <span>GPIO</span>
-                    <input
-                      type="number"
-                      value={p.gpio ?? ''}
-                      onChange={(e) => updPin(pi, { gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
-                    />
-                  </label>
-                  {p.capabilities?.includes('i2c') && (
-                    <label className="pe__field">
-                      <span>I2C bus</span>
-                      <input
-                        type="number"
-                        value={p.buses?.i2c ?? ''}
-                        onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
+          {/* Each contact is a full pin. One ROW each, under a single header, rather
+              than two labelled rows apiece — a 16-way block was otherwise 32 rows
+              of mostly whitespace (#694). */}
+          <div className="pe__contacts">
+            <div className="pe__contacts-head" aria-hidden="true">
+              <span>#</span>
+              <span>Name</span>
+              <span>Type</span>
+              <span>GPIO</span>
             </div>
-          ))}
+            {conn.pins.map((p, pi) => (
+              <div key={pi} className="pe__contact">
+                <span className="pe__contact-n">{pi + 1}</span>
+                <input
+                  type="text"
+                  className="pe__contact-name"
+                  value={p.name}
+                  aria-label={`Contact ${pi + 1} name`}
+                  onChange={(e) => updPin(pi, { name: e.target.value })}
+                />
+                <select
+                  value={p.type}
+                  aria-label={`Contact ${pi + 1} type`}
+                  onChange={(e) => updPin(pi, { type: e.target.value as PartPinType })}
+                >
+                  {PIN_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {PIN_TYPE_LABEL[t]}
+                    </option>
+                  ))}
+                </select>
+                {/* Only an io contact has a GPIO; the cell stays so the columns
+                    line up down the list rather than jumping about. */}
+                {p.type === 'io' ? (
+                  <input
+                    type="number"
+                    value={p.gpio ?? ''}
+                    aria-label={`Contact ${pi + 1} GPIO`}
+                    onChange={(e) => updPin(pi, { gpio: e.target.value === '' ? undefined : Number(e.target.value) })}
+                  />
+                ) : (
+                  <span className="pe__contact-gap" />
+                )}
+                {p.type === 'io' && p.capabilities?.includes('i2c') && (
+                  <input
+                    type="number"
+                    className="pe__contact-bus"
+                    value={p.buses?.i2c ?? ''}
+                    aria-label={`Contact ${pi + 1} I2C bus`}
+                    title="I²C bus number"
+                    onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
           <div className="pe__row">
             {num('x', conn.x, (v) => upd({ x: v }))}
             {num('y', conn.y, (v) => upd({ y: v }))}

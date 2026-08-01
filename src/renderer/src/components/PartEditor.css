@@ -2183,3 +2183,54 @@
   left: auto;
   min-width: 9rem;
 }
+
+/* Connector contacts (#694): one grid ROW per contact under a single header,
+   instead of two labelled fields apiece — a 16-way block was 32 rows of mostly
+   whitespace, and the columns never lined up. */
+.pe__contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0.3rem 0;
+}
+
+.pe__contacts-head,
+.pe__contact {
+  display: grid;
+  grid-template-columns: 1.1rem minmax(0, 1fr) 4.6rem 3.2rem auto;
+  gap: 0.25rem;
+  align-items: center;
+}
+
+.pe__contacts-head {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding-bottom: 0.1rem;
+}
+
+.pe__contact input,
+.pe__contact select {
+  min-width: 0;
+  padding: 0.12rem 0.25rem;
+  font-size: 0.7rem;
+}
+
+.pe__contact-n {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+/* Keeps the GPIO column present for a non-io contact so the grid stays aligned
+   down the list rather than shuffling as types change. */
+.pe__contact-gap {
+  display: block;
+}
+
+.pe__contact-bus {
+  width: 2.6rem;
+}

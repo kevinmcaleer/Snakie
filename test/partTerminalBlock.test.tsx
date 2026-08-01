@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { connectorContactLabels, connectorGlyph } from '../src/renderer/src/components/part-body'
-import { resizeTerminals, terminalPins } from '../src/renderer/src/components/part-editor.util'
+import { resizeContacts, resizeTerminals, terminalPins } from '../src/renderer/src/components/part-editor.util'
 import { PART_CONNECTOR_KINDS, TERMINAL_MAX, TERMINAL_MIN, coerceConnectorKind } from '../src/shared/part'
 import { partFromYaml, partToYaml } from '../src/shared/part-yaml'
 import { normalisePart } from '../src/renderer/src/components/part-editor.util'
@@ -139,5 +139,38 @@ describe('contact labels go through the shared pin-label path (#672)', () => {
 
   it('no number and no GPIO means no empty number chip', () => {
     expect(html(conn('terminal', 3))).not.toContain('pcv__pin-numbox')
+  })
+})
+
+/** Any variable-width connector can be resized, not just a terminal block (#694). */
+describe('resizeContacts (#694)', () => {
+  const jst = [
+    { name: 'VBAT', type: 'pwr' },
+    { name: 'GND', type: 'gnd' }
+  ] as unknown as PartPin[]
+
+  it('grows with a per-kind prefix, keeping what is configured', () => {
+    const out = resizeContacts(jst, 4, 'P')
+    expect(out.map((p) => p.name)).toEqual(['VBAT', 'GND', 'P3', 'P4'])
+    expect(out[0].type).toBe('pwr')
+  })
+
+  it('shrinks from the END, so what is lost is predictable', () => {
+    expect(resizeContacts(resizeContacts(jst, 4, 'P'), 2, 'P').map((p) => p.name)).toEqual(['VBAT', 'GND'])
+  })
+
+  it('clamps to the allowed range', () => {
+    expect(resizeContacts(jst, 0, 'P')).toHaveLength(TERMINAL_MIN)
+    expect(resizeContacts(jst, 9999, 'P')).toHaveLength(TERMINAL_MAX)
+  })
+
+  it('resizeTerminals is the same thing with the T prefix', () => {
+    expect(resizeTerminals(jst, 3).map((p) => p.name)).toEqual(['VBAT', 'GND', 'T3'])
+  })
+
+  it('is pure', () => {
+    const before = JSON.stringify(jst)
+    resizeContacts(jst, 6, 'P')
+    expect(JSON.stringify(jst)).toBe(before)
   })
 })
