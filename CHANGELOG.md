@@ -13,6 +13,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codes stripped so it pastes cleanly into a bug report.
 
 ### Fixed
+- **The firmware file picker only offers files your board can use.** It listed
+  `.bin`, `.uf2` and `.hex` to everyone, so browsing for ESP firmware showed UF2
+  files that could never work. It now offers just the one kind your board flashes
+  with.
 - **Flashing a `.uf2` to an ESP board is now refused.** esptool can only write a
   raw `.bin`. Handed a `.uf2` it wrote the container instead of the firmware —
   reporting success at every step, verifying the same wrong data, and leaving the

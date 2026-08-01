@@ -9,6 +9,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 // additionally de-duplicated to a single shared listener (see useDeviceStatus),
 // and this raises the ceiling so the per-channel fan-out never warns.
 ipcRenderer.setMaxListeners(40)
+import type { FlashMethod } from '../shared/board-profiles'
 import type {
   ConnectOptions,
   DeviceStatus,
@@ -600,9 +601,10 @@ const firmware = {
     unwrap(ipcRenderer.invoke('firmware:detect')),
   /** Probe for the external esptool prerequisite (presence + version). */
   checkEsptool: (): Promise<EsptoolInfo> => unwrap(ipcRenderer.invoke('firmware:esptool')),
-  /** Show the native firmware (`.bin`/`.uf2`) file picker. Resolves path or null. */
-  pickFirmwareFile: (): Promise<string | null> =>
-    unwrap(ipcRenderer.invoke('firmware:pickFile')),
+  /** Show the native firmware file picker, offering only the extension the given
+   *  flash method can use (#684). Resolves the path, or null if cancelled. */
+  pickFirmwareFile: (method?: FlashMethod): Promise<string | null> =>
+    unwrap(ipcRenderer.invoke('firmware:pickFile', method)),
   /** Flash the given firmware; progress streams via {@link firmware.onProgress}. */
   flash: (opts: FlashOptions): Promise<FlashResult> =>
     unwrap(ipcRenderer.invoke('firmware:flash', opts)),

@@ -290,12 +290,17 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       return
     }
     try {
-      const picked = await window.api.firmware.pickFirmwareFile()
+      // Ask only for what this board can be flashed with, so the dialog can't
+      // offer a file that could never work (#684).
+      const picked = await window.api.firmware.pickFirmwareFile(
+        profileRef.current ? boardProfile(profileRef.current)?.method : methodForBoardType(board)
+      )
       if (picked) setFirmwarePath(picked)
     } catch {
       // Cancelled / unavailable — keep the current selection.
     }
-  }, [])
+    // `board` is read for the dialog filter; `profileRef` is a ref and needs no dep.
+  }, [board])
 
   // Handles the hidden browser file input's change event: reads the picked
   // file into bytes for `flashEspInBrowser` and shows its name in the
