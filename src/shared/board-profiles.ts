@@ -234,7 +234,7 @@ export function firmwareMismatch(profile: BoardProfile, family: string): string 
 }
 
 /**
- * Is this firmware FILE the right kind for how the board is flashed? (#683)
+ * Is this firmware FILE the right kind for how the board is flashed? (#685)
  *
  * esptool writes raw bytes to an address. Hand it a `.uf2` and it writes the
  * container verbatim — UF2 is a wrapper of 512-byte blocks each carrying 256

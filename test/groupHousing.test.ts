@@ -250,13 +250,13 @@ describe('withGroupHousing (#673)', () => {
 })
 
 /**
- * The servo-header tool makes pin trios in a HOUSED GROUP (#679).
+ * The servo-header tool makes pin trios in a HOUSED GROUP (#681).
  *
  * #669 briefly made them stored connectors, which bought cabling at the cost of
  * the pins: contacts nested in `connectors[]` can't be selected, edited or seen
  * in the layers hierarchy as a group. Housing-on-group needs no such trade.
  */
-describe('servo headers are pins in a housed group (#679)', () => {
+describe('servo headers are pins in a housed group (#681)', () => {
   /** Mirrors what the canvas tool builds, so the shape is asserted in one place. */
   const built = {
     id: 'p',

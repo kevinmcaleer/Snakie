@@ -602,7 +602,7 @@ const firmware = {
   /** Probe for the external esptool prerequisite (presence + version). */
   checkEsptool: (): Promise<EsptoolInfo> => unwrap(ipcRenderer.invoke('firmware:esptool')),
   /** Show the native firmware file picker, offering only the extension the given
-   *  flash method can use (#684). Resolves the path, or null if cancelled. */
+   *  flash method can use (#686). Resolves the path, or null if cancelled. */
   pickFirmwareFile: (method?: FlashMethod): Promise<string | null> =>
     unwrap(ipcRenderer.invoke('firmware:pickFile', method)),
   /** Flash the given firmware; progress streams via {@link firmware.onProgress}. */

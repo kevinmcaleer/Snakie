@@ -68,7 +68,7 @@ export function registerFirmwareIpc(getWindow: () => BrowserWindow | undefined):
   ipcMain.handle(FIRMWARE_CHANNELS.pickFile, (_e, method?: FlashMethod) =>
     wrap<string | null>(async () => {
       const win = getWindow()
-      // Offer only what THIS board can actually be flashed with (#684). Showing
+      // Offer only what THIS board can actually be flashed with (#686). Showing
       // every firmware extension to everyone is how a `.uf2` got picked for an
       // ESP32-S3 — esptool wrote the container, reported success, and the board
       // boot-looped. The renderer still validates, but the dialog should not

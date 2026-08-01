@@ -109,14 +109,14 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
 export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
-  /** The chosen board profile (#680) — drives the mechanics below it. */
+  /** The chosen board profile (#682) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
-  /** Erase the whole flash before writing (#681). */
+  /** Erase the whole flash before writing (#683). */
   const [eraseFirst, setEraseFirst] = useState<boolean>(false)
-  /** Brief "Copied" confirmation on the copy-log button (#683). */
+  /** Brief "Copied" confirmation on the copy-log button (#685). */
   const [copied, setCopied] = useState(false)
   /**
-   * Mirrors {@link profileId} for the async board detection (#682).
+   * Mirrors {@link profileId} for the async board detection (#684).
    *
    * Detection `await`s a port scan AND an esptool check, so it commonly resolves
    * AFTER the user has picked a board — and it captured `profileId` as it was
@@ -210,7 +210,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       setCandidates(found)
       setEsptool(tool)
       // Adopt the first detected candidate as a sensible default — but NEVER
-      // over an explicitly chosen board (#682). Detection only knows the coarse
+      // over an explicitly chosen board (#684). Detection only knows the coarse
       // BoardType, whose ESP offset is the original ESP32's 0x1000; silently
       // applying that over a profile's 0x0 is what made an ESP32-S3 flash to the
       // wrong address after the user had picked the right board.
@@ -243,7 +243,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   }, [board, candidates])
 
   /**
-   * Copy the whole log for troubleshooting (#683).
+   * Copy the whole log for troubleshooting (#685).
    *
    * The whole log, not the visible part: what matters when a flash goes wrong is
    * usually the chip/feature banner at the top, which has scrolled away by the
@@ -291,7 +291,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     }
     try {
       // Ask only for what this board can be flashed with, so the dialog can't
-      // offer a file that could never work (#684).
+      // offer a file that could never work (#686).
       const picked = await window.api.firmware.pickFirmwareFile(
         profileRef.current ? boardProfile(profileRef.current)?.method : methodForBoardType(board)
       )
@@ -350,7 +350,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const profile = useMemo(() => (profileId ? boardProfile(profileId) : undefined), [profileId])
 
   /**
-   * Pick the actual BOARD, and everything mechanical follows (#680).
+   * Pick the actual BOARD, and everything mechanical follows (#682).
    *
    * The offset is the reason this exists. Only the original ESP32 flashes at
    * `0x1000`; every other ESP chip is `0x0`. Choosing "ESP32" from the board TYPE
@@ -438,7 +438,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const usingCatalog = source === 'catalog'
   /**
-   * The chosen file is the wrong KIND for how this board flashes (#683).
+   * The chosen file is the wrong KIND for how this board flashes (#685).
    *
    * Only for a local file — a catalog download always serves the right kind.
    */
@@ -450,7 +450,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     [usingCatalog, firmwarePath, profile?.method, board]
   )
   /** Warn when the chosen firmware is for a different chip than the chosen board
-   *  — the mistake that flashes cleanly and leaves the board silent (#680). */
+   *  — the mistake that flashes cleanly and leaves the board silent (#682). */
   const mismatch = useMemo(
     () => (profile && usingCatalog && selFamily ? firmwareMismatch(profile, selFamily) : null),
     [profile, usingCatalog, selFamily]
@@ -467,7 +467,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
 
   const canFlash = useMemo(() => {
     if (flashing) return false
-    // A file of the wrong KIND flashes "successfully" and bricks the boot (#683),
+    // A file of the wrong KIND flashes "successfully" and bricks the boot (#685),
     // so this blocks rather than warns.
     if (fileIssue) return false
     if (!isElectron() && (isEsp || browserMicrobitViaWebUsb || browserDriveCopy)) {
@@ -573,7 +573,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           offset: isEsp ? offset : undefined,
           eraseFirst: isEsp ? eraseFirst : undefined,
           // Name the chip when the board profile knows it, so esptool doesn't
-          // have to guess on a board that answers slowly (#681).
+          // have to guess on a board that answers slowly (#683).
           chip: isEsp ? profile?.chipFamily : undefined
         })
       }
@@ -639,7 +639,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         </header>
 
         <div className="firmware-modal__body">
-          {/* Name the board FIRST (#680): it fills in the board type, the flash
+          {/* Name the board FIRST (#682): it fills in the board type, the flash
               offset and the firmware family, and warns if the chosen build is for
               a different chip. Optional — "Other" leaves every field manual. */}
           <div className="firmware-field">
@@ -1063,7 +1063,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                 onChange={(e) => void handleWebFileChange(e)}
               />
               {/* Wrong KIND of file. Blocks the flash rather than warning: this one
-                  reports success at every step and leaves the board dead (#683). */}
+                  reports success at every step and leaves the board dead (#685). */}
               {fileIssue && <p className="firmware-hint firmware-hint--warn">{fileIssue}</p>}
             </div>
           )}

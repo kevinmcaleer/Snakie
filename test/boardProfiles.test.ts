@@ -11,7 +11,7 @@ import {
 import { flashTargetForFamily } from '../src/main/firmware/catalog'
 
 /**
- * Board profiles (#680) — naming the board carries the mechanics the user should
+ * Board profiles (#682) — naming the board carries the mechanics the user should
  * not have to know, and covers boards an upstream catalog happens to lack.
  */
 describe('board profiles', () => {
@@ -74,7 +74,7 @@ describe('firmware / board compatibility', () => {
   })
 })
 
-/** Boot-loop causes the profile has to carry (#681). */
+/** Boot-loop causes the profile has to carry (#683). */
 describe('boot-loop guards', () => {
   it('steers XIAO ESP32-S3 owners to the octal-PSRAM build, ADVISORY only', () => {
     // Verified against micropython.org and the MicroPython discussions: the wrong
@@ -107,7 +107,7 @@ describe('boot-loop guards', () => {
 })
 
 /**
- * The two copies of the offset rule must never disagree (#682).
+ * The two copies of the offset rule must never disagree (#684).
  *
  * `flashTargetForFamily` is duplicated — once in `src/main/firmware/catalog.ts`
  * (canonical) and once inside `FirmwareFlasher.tsx`, so the renderer bundle stays
@@ -130,14 +130,14 @@ describe('the mirrored offset rule stays in step', () => {
 })
 
 /**
- * The firmware FILE has to match how the board is flashed (#683).
+ * The firmware FILE has to match how the board is flashed (#685).
  *
  * From a real report: a `.uf2` was flashed to an ESP32-S3 with esptool. Every
  * step reported success — esptool wrote what it was given and verified that same
  * data — and the board boot-looped. The log showed 3378176 bytes written, about
  * double a real S3 `.bin`, which is the UF2 container overhead.
  */
-describe('firmwareFileIssue (#683)', () => {
+describe('firmwareFileIssue (#685)', () => {
   it('rejects a .uf2 for an esptool board, explaining what would happen', () => {
     const msg = firmwareFileIssue('esptool', '/Users/kev/Downloads/ESP32_GENERIC_S3-20260406-v1.28.0.uf2')
     expect(msg).toContain('.uf2')
