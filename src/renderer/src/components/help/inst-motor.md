@@ -8,12 +8,17 @@ The bars show what the board **applied**, from its `SNK MOTOR <a> <b>` report, f
 ## How to use it
 Install the `tb6612` module, then run a program that services the control channel:
 
+> **Which pins?** The Grove I²C port is `D4`/`D5` on every XIAO, but the GPIO
+> numbers behind those silk names are board-specific — a XIAO **RP2040/RP2350**
+> is `sda=Pin(6), scl=Pin(7)`, a XIAO **ESP32-S3** is `sda=Pin(5), scl=Pin(6)`.
+> Get it wrong and nothing answers: there is no error, just an empty `scan()`.
+
 ```python
 import instruments as inst, time
 from machine import I2C, Pin
 from tb6612 import GroveMotorDriver
 
-inst.motor.driver = GroveMotorDriver(I2C(1, sda=Pin(6), scl=Pin(7)))
+inst.motor.driver = GroveMotorDriver(I2C(1, sda=Pin(5), scl=Pin(6)))  # XIAO ESP32-S3
 inst.motor.standby(False)      # nothing turns until standby is released
 while True:
     inst.control.poll()        # sliders → motor.drive(a, b)

@@ -161,7 +161,7 @@ export function ImuInstrument({
           // Driver-agnostic on purpose: the old snippet named ICM20948 only, which
           // reads as "this panel needs that chip" when any watched IMU works.
           code={
-            'import instruments as inst\nfrom machine import I2C, Pin\nfrom lsm6ds3 import LSM6DS3   # or icm20948, mpu6050, bno055\n\nimu = LSM6DS3(I2C(1, sda=Pin(6), scl=Pin(7)), addr=0x6B)\ninst.watch(imu=imu)          # then inst.update() in your loop'
+            'import instruments as inst\nfrom machine import I2C, Pin\nfrom lsm6ds3 import LSM6DS3   # or icm20948, mpu6050, bno055\n\n# D4/D5 on a XIAO: ESP32-S3 is Pin(5)/Pin(6), RP2040/RP2350 is Pin(6)/Pin(7)\nimu = LSM6DS3(I2C(1, sda=Pin(5), scl=Pin(6)), addr=0x6B)\ninst.watch(imu=imu)          # then inst.update() in your loop'
           }
           helpId={`inst-${def.id}`}
           accent={def.accent}

@@ -10,7 +10,10 @@ Usage on a board::
     from machine import I2C, Pin
     from pcf8563 import PCF8563
 
-    rtc = PCF8563(I2C(1, sda=Pin(6), scl=Pin(7)))
+    # D4/D5 on a XIAO — the GPIOs behind those names are board-specific:
+    #     RP2040 / RP2350   sda=Pin(6), scl=Pin(7)
+    #     ESP32-S3          sda=Pin(5), scl=Pin(6)
+    rtc = PCF8563(I2C(1, sda=Pin(5), scl=Pin(6)))   # XIAO ESP32-S3
     if rtc.unset():
         rtc.datetime((2026, 7, 30, 9, 30, 0, 3))   # Y, M, D, h, m, s, weekday
     print(rtc.datetime())

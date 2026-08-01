@@ -11,6 +11,8 @@ Usage on a board::
     from mpu6050 import MPU6050
     import instruments as inst
 
+    # Example pins — check your board. On a XIAO the Grove I2C port is D4/D5,
+    # which is Pin(6)/Pin(7) on an RP2040/RP2350 and Pin(5)/Pin(6) on an ESP32-S3.
     imu = MPU6050(I2C(0, sda=Pin(0), scl=Pin(1)))
     while True:
         ax, ay, az = imu.accel()

@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+- **I²C examples now say which board they're for.** Every example shipped with
+  Snakie used the XIAO RP2040's pin numbers while calling them "a XIAO" — but the
+  Grove port is `D4`/`D5` on every XIAO and the GPIOs behind those names differ by
+  board, so on a XIAO ESP32-S3 the examples addressed the wrong pins entirely. The
+  bus just goes quiet: an I²C device that isn't there doesn't report anything.
+  Examples now name their board and give the ESP32-S3 numbers alongside, and the
+  bundled XIAO ESP32-S3 part's pins are corrected — all eleven had been copied from
+  the RP2040.
+
 ## [0.42.0] - 2026-08-01
 
 ### Added

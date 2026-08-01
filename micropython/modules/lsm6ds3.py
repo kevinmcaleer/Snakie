@@ -16,7 +16,11 @@ Usage on a board::
     from lsm6ds3 import LSM6DS3
     import instruments as inst
 
-    imu = LSM6DS3(I2C(1, sda=Pin(6), scl=Pin(7)))   # Grove port on a XIAO
+    # The Grove I2C port is D4/D5 on every XIAO, but the GPIO NUMBERS behind
+    # those silk names differ by board:
+    #     XIAO RP2040 / RP2350   sda=Pin(6),  scl=Pin(7)
+    #     XIAO ESP32-S3          sda=Pin(5),  scl=Pin(6)
+    imu = LSM6DS3(I2C(1, sda=Pin(5), scl=Pin(6)), addr=0x6B)   # XIAO ESP32-S3
     while True:
         ax, ay, az = imu.accel()          # g
         gx, gy, gz = imu.gyro()           # degrees/second

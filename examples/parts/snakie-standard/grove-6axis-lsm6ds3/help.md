@@ -12,9 +12,14 @@ The silk says `0x6A`, which is the address with `SA0` low. Most units ship with
 device ACKs its address but `WHO_AM_I` reads `0xFF`, that's a marginal Grove
 cable, not a dead sensor — reseat it.
 
+> **Which pins?** The Grove I²C port is `D4`/`D5` on every XIAO, but the GPIO
+> numbers behind those silk names are board-specific — a XIAO **RP2040/RP2350**
+> is `sda=Pin(6), scl=Pin(7)`, a XIAO **ESP32-S3** is `sda=Pin(5), scl=Pin(6)`.
+> Get it wrong and nothing answers: there is no error, just an empty `scan()`.
+
 ```python
 from machine import Pin, I2C
-i2c = I2C(1, sda=Pin(6), scl=Pin(7), freq=400_000)
+i2c = I2C(1, sda=Pin(5), scl=Pin(6), freq=400_000)   # XIAO ESP32-S3
 
 addr = next((a for a in (0x6B, 0x6A) if a in i2c.scan()), None)
 print("IMU at", hex(addr), "who_am_i", hex(i2c.readfrom_mem(addr, 0x0F, 1)[0]))

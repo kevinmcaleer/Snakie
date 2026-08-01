@@ -17,7 +17,10 @@ Usage on a board::
     from machine import I2C, Pin
     from tb6612 import GroveMotorDriver, CH_A, CH_B
 
-    m = GroveMotorDriver(I2C(1, sda=Pin(6), scl=Pin(7)))
+    # D4/D5 on a XIAO — the GPIOs behind those names are board-specific:
+    #     RP2040 / RP2350   sda=Pin(6), scl=Pin(7)
+    #     ESP32-S3          sda=Pin(5), scl=Pin(6)
+    m = GroveMotorDriver(I2C(1, sda=Pin(5), scl=Pin(6)))   # XIAO ESP32-S3
     m.wake()                # leave standby before anything will turn
     m.run(CH_A, 200)        # forward, 0..255
     m.run(CH_B, -200)       # reverse

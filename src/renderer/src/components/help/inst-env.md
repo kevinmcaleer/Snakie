@@ -12,6 +12,10 @@ environmental sensor like the BME280.
 Bind the sensor object and let the type drive the panel — or print readings
 yourself:
 
+> Pin numbers here are an example — check your board's I²C pins. On a XIAO the
+> Grove port is `D4`/`D5`, but that is `Pin(6)`/`Pin(7)` on an RP2040/RP2350 and
+> `Pin(5)`/`Pin(6)` on an ESP32-S3.
+
 ```python
 import time
 import instruments as inst

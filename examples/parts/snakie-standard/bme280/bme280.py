@@ -9,6 +9,8 @@ to return calibrated readings.
     from machine import I2C, Pin
     from bme280 import BME280
 
+    # Example pins — check your board. On a XIAO the Grove I2C port is D4/D5,
+    # which is Pin(6)/Pin(7) on an RP2040/RP2350 and Pin(5)/Pin(6) on an ESP32-S3.
     i2c = I2C(0, sda=Pin(0), scl=Pin(1))
     bme = BME280(i2c)             # Pimoroni default address 0x76 (0x77 selectable)
     temp, pressure, humidity = bme.read()   # °C, hPa, %RH

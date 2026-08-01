@@ -26,11 +26,16 @@ like a dead device even when it's working perfectly.
 
 `channel` is `0` for motor A, `1` for motor B. `speed` is `0–255`.
 
+> **Which pins?** The Grove I²C port is `D4`/`D5` on every XIAO, but the GPIO
+> numbers behind those silk names are board-specific — a XIAO **RP2040/RP2350**
+> is `sda=Pin(6), scl=Pin(7)`, a XIAO **ESP32-S3** is `sda=Pin(5), scl=Pin(6)`.
+> Get it wrong and nothing answers: there is no error, just an empty `scan()`.
+
 ```python
 from machine import Pin, I2C
 import time
 
-i2c = I2C(1, sda=Pin(6), scl=Pin(7), freq=100_000)
+i2c = I2C(1, sda=Pin(5), scl=Pin(6), freq=100_000)   # XIAO ESP32-S3
 MOTOR = 0x14                       # or wherever yours scanned
 
 def motor(ch, speed):              # speed -255..255

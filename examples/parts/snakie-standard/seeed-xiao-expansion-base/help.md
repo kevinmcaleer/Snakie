@@ -67,18 +67,40 @@ mapping, which is the same for both:
 | `D4` | GP6 (SDA) | | `D10` | GP3 |
 | `D5` | GP7 (SCL) | | | |
 
+### A XIAO with a different MCU has different numbers
+
+The silk names stay the same when you seat a different XIAO; the GPIOs behind
+them do not. This is the single commonest way to get a dead bus on this board,
+because the port you plugged into is right and the code is addressing something
+else entirely. On a **XIAO ESP32-S3**:
+
+| Silk | GPIO | | Silk | GPIO |
+|---|---|---|---|---|
+| `D0` | 1 | | `D6` | 43 (TX) |
+| `D1` | 2 | | `D7` | 44 (RX) |
+| `D2` | 3 | | `D8` | 7 (SCK) |
+| `D3` | 4 | | `D9` | 8 (MISO) |
+| `D4` | **5** (SDA) | | `D10` | 9 (MOSI) |
+| `D5` | **6** (SCL) | | | |
+
 So the I²C bus everything hangs off — OLED, RTC and both Grove I²C ports — is
-**I²C1 on GP6/GP7**:
+**GP6/GP7 on an RP2040/RP2350** and **GPIO5/GPIO6 on an ESP32-S3**:
 
 ```python
 from machine import Pin, I2C
-i2c = I2C(1, sda=Pin(6), scl=Pin(7), freq=400_000)
+
+# i2c = I2C(1, sda=Pin(6), scl=Pin(7), freq=400_000)   # XIAO RP2040 / RP2350
+i2c = I2C(1, sda=Pin(5), scl=Pin(6), freq=400_000)     # XIAO ESP32-S3
 print([hex(a) for a in i2c.scan()])   # 0x3c OLED, 0x51 RTC, + your modules
 ```
 
-A XIAO with a different MCU (ESP32, nRF52840) keeps the same `D`/`A` silk names
-but different GPIO numbers — the mount re-maps them when you seat that board
-instead.
+**That scan is the board's own self-test.** The OLED (`0x3c`) and RTC (`0x51`)
+are soldered to this bus, so they answer whatever you have plugged in. See both
+and your pins are right — anything still missing is the module or the port. See
+nothing at all and you are on the wrong pins for the XIAO you seated.
+
+Two of the four Grove ports are I²C; the others are UART (`D6`/`D7`) and
+analog/digital (`D0`/`D1`). A module in one of those will never show in a scan.
 
 ## Silk layout
 

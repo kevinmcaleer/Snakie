@@ -194,7 +194,7 @@ export function EnvInstrument({
             'The barometer shows temperature, pressure and humidity from an environment sensor (like a BME280). Watch one in your program and the dials come alive.'
           ]}
           code={
-            'import instruments as inst\nfrom machine import I2C, Pin\nfrom bme280 import BME280\n\nbme = BME280(I2C(0, sda=Pin(0), scl=Pin(1)))\ninst.watch(env=bme)   # then inst.update() in your loop'
+            'import instruments as inst\nfrom machine import I2C, Pin\nfrom bme280 import BME280\n\n# example pins — check your board (XIAO ESP32-S3: 5/6, RP2040: 6/7)\nbme = BME280(I2C(0, sda=Pin(0), scl=Pin(1)))\ninst.watch(env=bme)   # then inst.update() in your loop'
           }
           helpId={`inst-${def.id}`}
           accent={def.accent}
