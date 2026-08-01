@@ -9,7 +9,7 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import { itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
+import { itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
@@ -1292,7 +1292,8 @@ export function PartBody({
   const pinHoleList = visible.pins
     ? pins.flatMap((rp) => {
         const f = padOnFace(rp.pin, rp.x)
-        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rp.pin.rotation) : []
+        const rot = f.x === rp.x ? rp.pin.rotation : mirrorRotationX(rp.pin.rotation)
+        return f.show ? pinThroughHoles(pinShapeOf(rp.pin), px(f.x), py(rp.y), padSize, f.x, rot) : []
       })
     : []
   const hasCuts = cutHoles || pinHoleList.length > 0
@@ -1376,7 +1377,13 @@ export function PartBody({
         pins.map((rp: ResolvedPin, i) => {
           const face = padOnFace(rp.pin, rp.x)
           if (!face.show) return null
-          rp = face.x === rp.x ? rp : { ...rp, x: face.x }
+          // Seen from the far side, a through pad is mirrored — so its FACING
+          // mirrors too (#688). Without this a castellation kept its half-hole
+          // on the original edge and pointed back into the board.
+          rp =
+            face.x === rp.x
+              ? rp
+              : { ...rp, x: face.x, pin: { ...rp.pin, rotation: mirrorRotationX(rp.pin.rotation) } }
           // `true` boxes every pin; a Set boxes only those indices (mini board:
           // just the used pins, so a dense board's number boxes don't overlap).
           const boxAll = boxedPins === true

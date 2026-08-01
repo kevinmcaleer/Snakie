@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codes stripped so it pastes cleanly into a bug report.
 
 ### Fixed
+- **Castellated pads face the right way when you flip the board.** Turning a board
+  over moved its castellations to the mirrored side but left them pointing the way
+  they were authored, so their half-holes were cut on the wrong edge and ran back
+  into the board instead of off it. A pad seen from the far side now mirrors its
+  facing along with its position — including the hole cut out of the PCB beneath it.
 - **A board's front and back photos are placed independently.** Adding a rear
   image gave it the front board's proportions, and moving, resizing or
   aspect-locking the back quietly changed the front instead — the change only

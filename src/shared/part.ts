@@ -864,6 +864,24 @@ export function mirrorX(x: number): number {
 }
 
 /**
+ * Mirror a pin's outward direction horizontally, for a through pad seen from the
+ * FAR side of the board (#688).
+ *
+ * `rotation` is which way a pad faces — 0 right, 90 down, 180 left, 270 up — and
+ * a castellation's half-hole is cut on that side. Flip the board over and a pad
+ * that ran off the left edge now runs off the right, so the direction has to flip
+ * with it. Vertical directions are unchanged: mirroring in x leaves up as up.
+ *
+ * Absent stays absent, so a pad with no explicit direction keeps falling back to
+ * "the nearer edge" — which already mirrors, because its x does.
+ */
+export function mirrorRotationX(deg?: number): number | undefined {
+  if (deg === undefined || !Number.isFinite(deg)) return undefined
+  const r = (((Math.round(deg / 90) * 90) % 360) + 360) % 360
+  return r === 0 ? 180 : r === 180 ? 0 : r
+}
+
+/**
  * A group's ancestry, innermost first. Tolerates a cycle (only reachable by hand-
  * editing parts.yml) by stopping rather than looping forever, and a dangling
  * `parent` by stopping at the last group that exists.

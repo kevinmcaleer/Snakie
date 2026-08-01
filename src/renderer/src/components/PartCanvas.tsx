@@ -40,7 +40,7 @@ import {
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
-import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
+import { itemHidden, itemLocked, itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   PartGroup,
@@ -3270,7 +3270,13 @@ export function PartCanvas({
           pins.map((rp: ResolvedPin, i) => {
             const face = padOnFace(rp.pin, rp.x)
             if (!shown(rp.pin) || !face.show) return null
-            rp = face.x === rp.x ? rp : { ...rp, x: face.x }
+            // Seen from the far side, a through pad is mirrored — so its FACING
+            // mirrors too (#688). Without this a castellation kept its half-hole
+            // on the original edge and pointed back into the board.
+            rp =
+              face.x === rp.x
+                ? rp
+                : { ...rp, x: face.x, pin: { ...rp.pin, rotation: mirrorRotationX(rp.pin.rotation) } }
             const fill = PAD_FILL[rp.pin.type] ?? PAD_FILL.other
             // A selected group shows a single outline (below) instead of ringing
             // each member — so suppress the per-pin ring when a group is selected.
