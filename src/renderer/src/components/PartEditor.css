@@ -2088,3 +2088,54 @@
 .pe__addr > .pe__chip--del {
   margin-left: auto;
 }
+
+/* Tags as chips (#660). Theme tokens only, so it reads in both skins. */
+.pe__tags {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin: 0.25rem 0 0.3rem;
+  padding: 0;
+}
+
+.pe__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  max-width: 100%;
+  padding: 0.1rem 0.2rem 0.1rem 0.4rem;
+  font-size: 0.68rem;
+  color: var(--text);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: 999px;
+}
+
+.pe__tag-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pe__tag-x {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  padding: 0;
+  font-size: 0.6rem;
+  line-height: 1;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.pe__tag-x:hover {
+  color: #fff;
+  background: #c0392b;
+}

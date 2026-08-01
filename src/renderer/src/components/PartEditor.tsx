@@ -42,6 +42,7 @@ import {
   PIN_SHAPE_LABEL,
   PIN_TYPES,
   PIN_TYPE_LABEL,
+  addTags,
   blankPart,
   collectUsedColors,
   dissolveGroup,
@@ -3759,6 +3760,98 @@ function SelectionInspector({
 }
 
 /** The catalogue/identity fields (collapsed by default). */
+/**
+ * The **Tags** field (#660) — tags as removable chips rather than one
+ * comma-separated string.
+ *
+ * The string version was unusable: its `value` was derived from the parsed model
+ * (`tags.join(', ')`) and the parse dropped empties, so pressing `,` produced a
+ * model identical to the one before it, React re-rendered the old string, and the
+ * comma was erased. A second tag was literally unreachable by typing.
+ *
+ * Chips remove the bug class rather than patching it: the comma is a **command**
+ * that commits a chip, so no intermediate typing state has to survive a
+ * round-trip through the model. The draft lives here in local state and the
+ * committed tags live on the part, which is the same split the `properties` table
+ * already uses.
+ */
+function TagsField({
+  tags,
+  onChange
+}: {
+  tags: string[]
+  onChange: (tags: string[]) => void
+}): JSX.Element {
+  const [draft, setDraft] = useState('')
+
+  /** Commit whatever is in the draft. Returns true if anything was added. */
+  const commit = (text: string): boolean => {
+    const next = addTags(tags, text)
+    setDraft('')
+    if (next.length === tags.length) return false
+    onChange(next)
+    return true
+  }
+
+  return (
+    <div className="pe__field">
+      <span>Tags</span>
+      {tags.length > 0 && (
+        <ul className="pe__tags">
+          {tags.map((t, i) => (
+            <li key={`${t}-${i}`} className="pe__tag">
+              <span className="pe__tag-text">{t}</span>
+              <button
+                type="button"
+                className="pe__tag-x"
+                aria-label={`Remove tag ${t}`}
+                onClick={() => onChange(tags.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <input
+        type="text"
+        value={draft}
+        placeholder="Add a tag, then press Enter"
+        spellCheck={false}
+        aria-label="Add a tag"
+        onChange={(e) => {
+          // A pasted "i2c, distance, tof" arrives as ONE change — commit the
+          // complete tags and leave any unterminated remainder in the draft, so
+          // pasting keeps working exactly as it did before.
+          const v = e.target.value
+          if (!v.includes(',')) {
+            setDraft(v)
+            return
+          }
+          const cut = v.lastIndexOf(',')
+          const remainder = v.slice(cut + 1)
+          commit(v.slice(0, cut))
+          setDraft(remainder.trim())
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault()
+            commit(draft)
+          } else if (e.key === 'Backspace' && draft === '' && tags.length > 0) {
+            // The standard chip gesture: backspace on an empty box eats the last chip.
+            e.preventDefault()
+            onChange(tags.slice(0, -1))
+          }
+        }}
+        // Commit on blur so a typed-but-uncommitted tag isn't silently lost when
+        // the author clicks Save — losing it would be the same class of quiet
+        // data loss the chips are here to fix.
+        onBlur={() => commit(draft)}
+      />
+    </div>
+  )
+}
+
 function DetailsFields({
   part,
   patch,
@@ -3810,15 +3903,7 @@ function DetailsFields({
           This part is a <strong>microcontroller board</strong> — it appears in the Board Viewer&rsquo;s board selector.
         </span>
       </label>
-      <label className="pe__field">
-        <span>Tags (comma-separated)</span>
-        <input
-          type="text"
-          value={(part.tags ?? []).join(', ')}
-          onChange={(e) => patch({ tags: e.target.value.split(',').map((t) => t.trim()).filter(Boolean) })}
-          placeholder="i2c, distance, tof"
-        />
-      </label>
+      <TagsField tags={part.tags ?? []} onChange={(tags) => patch({ tags: tags.length ? tags : undefined })} />
       <div className="pe__row">
         <label className="pe__field">
           <span>Package</span>

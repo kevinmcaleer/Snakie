@@ -18,6 +18,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   library already claims.
 
 ### Fixed
+- **You can type more than one tag on a part.** The Part Editor's Tags field
+  ignored the comma key: its contents were rebuilt from the parsed tag list on
+  every keystroke, and a trailing comma parsed away to nothing — so the field
+  re-rendered without it and a second tag was unreachable by typing (pasting a
+  whole list was the only way in). Tags are now chips: type one and press
+  <kbd>Enter</kbd> or <kbd>,</kbd> to add it, <kbd>Backspace</kbd> on an empty box
+  or the ✕ to remove one. Pasting a comma-separated list still works, and a tag
+  left half-typed is committed rather than lost when you click away.
 - **Editing a part no longer discards its I²C addresses.** A part's
   `i2cAddresses` survived on disk but was dropped the moment the Part Editor
   normalised it, so opening a sensor and saving it silently unlinked it from the

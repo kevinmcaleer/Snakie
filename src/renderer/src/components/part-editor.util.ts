@@ -661,6 +661,42 @@ export function uniquePinName(base: string, used: ReadonlySet<string>): string {
 }
 
 /**
+ * Split what an author typed or pasted into the Tags field into individual tags
+ * (#660). Commas separate; surrounding whitespace and empty entries are dropped.
+ *
+ * A tag can never contain a comma — which is the point: with commas acting as a
+ * *command* rather than a character that has to survive a round-trip through the
+ * model, the old bug (a trailing comma normalising away, so a second tag was
+ * unreachable by typing) cannot come back.
+ */
+export function splitTagInput(input: string): string[] {
+  return String(input ?? '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter((t) => t !== '')
+}
+
+/**
+ * Add typed/pasted tags to an existing list, preserving order.
+ *
+ * Duplicates are rejected **case-insensitively** — `I2C` alongside `i2c` is just
+ * noise in search — but only for the tags being ADDED. Existing entries are never
+ * rewritten or de-duplicated, so merely opening a part in the editor can't
+ * silently mutate data someone authored by hand.
+ */
+export function addTags(existing: string[], input: string): string[] {
+  const out = [...existing]
+  const seen = new Set(out.map((t) => t.toLowerCase()))
+  for (const tag of splitTagInput(input)) {
+    const key = tag.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(tag)
+  }
+  return out
+}
+
+/**
  * Append a shape or label and put it strictly ON TOP of every existing component,
  * renormalising all `z` to 0..n in the resolved order. Pure. (Computing a single
  * `z` before the append is unsafe: the no-`z` label fallback depends on the shape
