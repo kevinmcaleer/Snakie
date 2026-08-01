@@ -33,6 +33,7 @@ import {
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
+  duplicateGroup,
   duplicateSelection,
   orderedItems,
   pasteStyle,
@@ -103,6 +104,14 @@ const PAD_FILL: Record<PartPinType, string> = {
 
 /** The toolbar / layer-add tools, in display order. `rect`/`circle`/`cpoly` add
  *  component shapes; `shape` edits the board outline polygon. */
+/** ⧉ — the duplicate glyph the per-item mini-toolbars already use. */
+const DUPE_ICON = (
+  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+    <rect x="2.5" y="2.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+  </svg>
+)
+
 export type CanvasTool =
   | 'select'
   | 'move'
@@ -192,6 +201,8 @@ export interface PartCanvasProps {
   /** A request to select a whole group by id (from the Layers panel) — the
    *  `nonce` makes repeat selects of the same group re-fire the effect (#631). */
   groupSelect?: { id: string; nonce: number }
+  /** A group was duplicated from the canvas toolbar — select the copy (#693). */
+  onGroupDuplicated?: (gid: string) => void
   /** A request to delete the MULTI-selection (#667). The marquee's selection lives
    *  in here, not in the editor's single `selection`, so the editor's Delete key
    *  can't reach it — it asks instead. `nonce` re-fires for repeat presses. */
@@ -400,6 +411,7 @@ export function PartCanvas({
   selection = null,
   groupSelect,
   deleteRequest,
+  onGroupDuplicated,
   snap = false,
   lockAspect = false,
   imageNativeAspect = null,
@@ -1480,6 +1492,15 @@ export function PartCanvas({
   /** Rotate every selected item 90° about the selection's combined centre. Works
    *  for a formal group (its members are all selected) or a loose multi-select. */
   const rotateSelection = (): void => rotateMembers(selectionMembers())
+
+  /** Duplicate the selected group — members, housing and all (#693), then select
+   *  the copy so a second press makes a third rather than another of the first. */
+  const duplicateSelectedGroup = (gid: string): void => {
+    const res = duplicateGroup(part, gid)
+    if (!res) return
+    commit({ ...part, ...res.part })
+    onGroupDuplicated?.(res.gid)
+  }
 
   /** Delete every selected item; drop any group registry entry left unreferenced. */
   const deleteSelectionItems = (): void => {
@@ -3964,6 +3985,21 @@ export function PartCanvas({
                 </button>
               )}
               <span className="pcv__align-sep" />
+              {/* Duplicate. The other mini-toolbars have had one per item all
+                  along; a selected GROUP had none, so the one thing you most want
+                  to copy — a finished servo header — was the one thing you
+                  couldn't (#693). */}
+              {selGroup && (
+                <button
+                  type="button"
+                  className="pcv__align-btn"
+                  onClick={() => duplicateSelectedGroup(selGroup)}
+                  title="Duplicate group"
+                  aria-label="Duplicate group"
+                >
+                  {DUPE_ICON}
+                </button>
+              )}
               <button
                 type="button"
                 className="pcv__align-btn"

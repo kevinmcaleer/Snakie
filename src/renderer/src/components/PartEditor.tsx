@@ -1308,6 +1308,7 @@ export function PartEditor({
                   selection={selection}
                   groupSelect={groupSelect ?? undefined}
                 deleteRequest={deleteRequest ?? undefined}
+                onGroupDuplicated={selectGroup}
                   onChange={setPart}
                   peek={peek}
                   onSelect={(sel) => {
