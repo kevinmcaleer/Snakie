@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Grove Ultrasonic Ranger demo.** `examples/grove_ultrasonic_demo.py` reads the
+  distance and feeds the Range instrument's gauge, with the two things that make an
+  ultrasonic reading trustworthy built in: it paces the pings so it never measures
+  the previous one's echo, and it takes a median of the last few readings so a
+  single bad reflection doesn't make the gauge jump. "No echo" is reported as
+  exactly that rather than sent to the gauge as a distance.
 - **Tell Snakie how your IMU is mounted.** The tilt maths assumed a sensor lying
   flat, so a module mounted on its edge showed a permanent 90° lean and sent your
   rotations to the wrong axis of the IMU panel. The LSM6DS3 driver now takes an
