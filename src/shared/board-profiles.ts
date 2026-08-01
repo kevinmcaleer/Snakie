@@ -62,14 +62,16 @@ export interface BoardProfile {
    */
   eraseByDefault?: boolean
   /**
-   * The firmware BUILD this board needs, when a generic one will not do.
+   * A firmware BUILD worth preferring for this board, and why.
    *
-   * Some boards only run a specific variant, and picking the wrong one produces
-   * a board that flashes cleanly and then boot-loops. The XIAO ESP32-S3 is the
-   * case in point: it carries 8 MB of OCTAL-SPI PSRAM, so it needs the
-   * `SPIRAM_OCT` build — and the upstream catalog only offers the plain one.
+   * Advisory, NOT a hard requirement — the distinction matters. An ESP32-S3 with
+   * octal PSRAM flashed with the plain build prints
+   * `PSRAM ID read error … PSRAM enabled but initialization failed` at boot and
+   * then **carries on booting**; it simply has no PSRAM. It is worth steering
+   * people to the right variant, but a wrong one here is not why a board fails to
+   * come up, and saying so sends them down a dead end.
    */
-  requiredBuild?: { name: string; why: string; url?: string }
+  preferredBuild?: { name: string; why: string; url?: string }
 }
 
 const ESP32_S3 = { chipFamily: 'esp32s3', method: 'esptool' as const, offset: '0x0', nativeUsb: true }
@@ -91,9 +93,9 @@ export const BOARD_PROFILES: BoardProfile[] = [
     label: 'Seeed Studio XIAO ESP32-S3',
     ...ESP32_S3,
     eraseByDefault: true,
-    requiredBuild: {
+    preferredBuild: {
       name: 'ESP32_GENERIC_S3-SPIRAM_OCT',
-      why: 'This board has 8 MB of octal-SPI PSRAM. The plain ESP32_GENERIC_S3 build flashes cleanly and then boot-loops — the board appears for a moment and drops off again.',
+      why: 'This board has 8 MB of octal-SPI PSRAM, so the SPIRAM_OCT build is the one that can use it. The plain ESP32_GENERIC_S3 build also runs — Seeed\u2019s own guide uses it — it just leaves the PSRAM unavailable and prints a PSRAM error at boot.',
       url: 'https://micropython.org/download/ESP32_GENERIC_S3/'
     },
     notes:

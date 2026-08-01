@@ -74,13 +74,15 @@ describe('firmware / board compatibility', () => {
 
 /** Boot-loop causes the profile has to carry (#681). */
 describe('boot-loop guards', () => {
-  it('tells XIAO ESP32-S3 owners which build they need, and why', () => {
-    // The catalog only offers the plain ESP32_GENERIC_S3; this board has octal
-    // PSRAM and boot-loops on it — flashes clean, then drops off repeatedly.
+  it('steers XIAO ESP32-S3 owners to the octal-PSRAM build, ADVISORY only', () => {
+    // Verified against micropython.org and the MicroPython discussions: the wrong
+    // SPIRAM variant prints a PSRAM error and CARRIES ON BOOTING. It is worth
+    // preferring the right one; it is not a reason a board fails to come up, and
+    // claiming otherwise sends people down a dead end.
     const b = boardProfile('xiao-esp32s3')!
-    expect(b.requiredBuild?.name).toContain('SPIRAM_OCT')
-    expect(b.requiredBuild?.why).toMatch(/boot-loop/i)
-    expect(b.requiredBuild?.url).toContain('micropython.org')
+    expect(b.preferredBuild?.name).toContain('SPIRAM_OCT')
+    expect(b.preferredBuild?.why).not.toMatch(/boot-?loop/i)
+    expect(b.preferredBuild?.url).toContain('micropython.org')
   })
 
   it('erases by default on the boards that arrive running something else', () => {
@@ -95,9 +97,9 @@ describe('boot-loop guards', () => {
     }
   })
 
-  it('gives a required build only where a generic one genuinely will not do', () => {
+  it('explains any preferred build, rather than just naming it', () => {
     for (const b of BOARD_PROFILES) {
-      if (b.requiredBuild) expect(b.requiredBuild.why.length, b.id).toBeGreaterThan(20)
+      if (b.preferredBuild) expect(b.preferredBuild.why.length, b.id).toBeGreaterThan(20)
     }
   })
 })

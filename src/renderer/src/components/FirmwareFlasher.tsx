@@ -606,15 +606,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
               ))}
             </select>
             {profile?.notes && <p className="firmware-hint">{profile.notes}</p>}
-            {/* Some boards only run one specific build, and the wrong one flashes
-                cleanly then boot-loops. Say which, and why, before they flash. */}
-            {profile?.requiredBuild && (
-              <p className="firmware-hint firmware-hint--warn">
-                Needs the <code>{profile.requiredBuild.name}</code> build. {profile.requiredBuild.why}
-                {profile.requiredBuild.url && (
+            {/* Advisory, not a warning: a board runs on the plain build too, it
+                just may not get everything the board can do. */}
+            {profile?.preferredBuild && (
+              <p className="firmware-hint">
+                Best build: <code>{profile.preferredBuild.name}</code>. {profile.preferredBuild.why}
+                {profile.preferredBuild.url && (
                   <>
                     {' '}
-                    <a href={profile.requiredBuild.url} target="_blank" rel="noreferrer">
+                    <a href={profile.preferredBuild.url} target="_blank" rel="noreferrer">
                       Download it
                     </a>
                     , then choose it as a local file.
