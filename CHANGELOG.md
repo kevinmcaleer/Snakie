@@ -67,6 +67,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **The flashing log is big enough to read.** The output from the flashing tool
+  showed about ten lines and collapsed to a couple early on — exactly when the
+  connection messages appear — so you couldn't tell whether a flash was
+  progressing. It now holds a minimum of ten lines and grows to about twenty.
 - **Servo headers you add are selectable again.** The servo-header tool briefly
   made each header a single connector, which bought one-drag cabling at the cost
   of the pads: you could no longer click a signal pin, edit it, or find the header
