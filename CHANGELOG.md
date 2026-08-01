@@ -7,6 +7,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A servo lead cables to a servo header in one drag.** The servo-header tool now
+  places a real 3-way connector rather than three loose pads, so dragging a
+  servo's lead onto it wires Signal, V+ and GND together — the way a QWIIC cable
+  already worked. It still looks like the familiar three-pin column, and its
+  contacts are coloured by electrical role: amber signal, red V+, dark ground.
+  Dragged on backwards it still lands the right way round, because a lead pairs by
+  position, not by drag direction.
 - **JST connectors have a family.** A JST housing is a range of pitches, not one
   part — SH 1.00, GH 1.25, ZH 1.50, PH 2.00, XH 2.50, VH 3.96 mm — and the pitch
   is what decides whether a lead physically seats. Pick the family in the

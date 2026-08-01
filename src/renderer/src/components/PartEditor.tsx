@@ -2016,8 +2016,8 @@ function LayersPanel({
                 type="button"
                 className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
                 onClick={() => setTool('servo-header')}
-                title="Add servo PINS (Signal / V+ / GND) — three loose pads, no connector housing. For a lead that cables to a servo, use Add → Servo header."
-                aria-label="Add servo pins"
+                title="Add a servo header (Signal / V+ / GND) — click to place one, or drag to place a row. A servo lead cables all three in one drag."
+                aria-label="Add servo header"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
                   <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />

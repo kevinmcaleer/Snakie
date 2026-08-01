@@ -19,6 +19,7 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  usedPinNames,
   type GroupComponentKind,
   groupRootId,
   groupTreeIds,
@@ -39,6 +40,7 @@ import {
 import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
+  PartConnector,
   ComponentShape,
   ComponentShapeKind,
   MountingHole,
@@ -885,15 +887,32 @@ export function PartCanvas({
   // here pinned every servo label to the top of the board no matter where the
   // header sat. Left absent, the label follows the NEAREST EDGE, and the rotate
   // control still aims it by hand when that's wanted.
-  const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', group: gid, x: sx, y: sy }),
-    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
-    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
-  ]
+  /** One servo/DuPont header as a real 3-way CONNECTOR: Signal / V+ / GND at the
+   *  2.54 mm pitch, standing vertical (rotation 90) so it reads as the familiar
+   *  three-pin column. Contacts are ordinary pins, coloured by role. */
+  const servoHeaderConnector = (sx: number, sy: number, idx: number): PartConnector => ({
+    kind: 'dupont',
+    x: sx,
+    y: sy,
+    rotation: 90,
+    pins: [
+      { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], signals: { pwm: 'A' } },
+      { name: `V${idx}`, type: 'pwr' },
+      { name: `G${idx}`, type: 'gnd' }
+    ]
+  })
 
-  /** Drop `n` pre-wired servo headers in a row starting at (nx, ny), spaced one pin
-   *  pitch apart along x (n = 1 for a plain click; more for a drag-strip). The
-   *  signals' GPIOs are left for the user to set. */
+  /**
+   * Drop `n` servo headers in a row starting at (nx, ny), one pin pitch apart
+   * along x (n = 1 for a plain click; more for a drag-strip).
+   *
+   * These are CONNECTORS, not loose pin trios (#669). The look is unchanged — the
+   * housing draws its three contacts in the same role colours the pads used — but
+   * a connector is the thing a lead can plug into, so dragging a servo's cable to
+   * one now wires Signal, V+ and GND in a single gesture instead of three. Loose
+   * pins can't do that: `connectorFit` joins two connectors, and a bare pad has no
+   * housing to seat against.
+   */
   const addServoHeaders = (nx: number, ny: number, n = 1): void => {
     const sx = snapX(nx)
     const sy = snapY(ny)
@@ -901,17 +920,20 @@ export function PartCanvas({
       onNotify?.("Can't place a servo header on a mounting hole.")
       return
     }
-    const groups = new Set<string>()
-    for (const h of part.headers) for (const p of h.pins) if (p.group) groups.add(p.group)
-    let idx = groups.size
-    const trios: PartPin[] = []
+    // Continue the numbering already on the board so channels stay S1..Sn rather
+    // than restarting and colliding with existing contacts.
+    const used = usedPinNames(part)
+    let idx = 0
+    const made: PartConnector[] = []
     for (let k = 0; k < Math.max(1, n); k++) {
-      idx += 1
-      trios.push(...servoTrio(clamp01(sx + k * stepNX), sy, `servo-${idx}`, idx))
+      do idx += 1
+      while (used.has(`S${idx}`) && idx < 1000)
+      used.add(`S${idx}`)
+      made.push(servoHeaderConnector(clamp01(sx + k * stepNX), sy, idx))
     }
-    const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
-    commit({ ...part, headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)) })
-    onSelect?.({ type: 'pin', hi: 0, pi: headers[0].pins.length }) // select the first signal
+    const next = [...connectors, ...made]
+    commit({ ...part, connectors: next })
+    onSelect?.({ type: 'connector', index: connectors.length })
   }
 
   /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and

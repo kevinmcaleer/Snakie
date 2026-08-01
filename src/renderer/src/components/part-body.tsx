@@ -1065,7 +1065,13 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           })
         : Array.from({ length: n }, (_, i) => {
             const cxp = x0 + (w / (n + 1)) * (i + 1)
-            return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={contact} />
+            // A servo / DuPont block is a PIN HEADER, and its three pins read at a
+            // glance by electrical role — amber signal, red V+, dark ground — the
+            // same palette the board's own pads use. A shelled socket (QWIIC /
+            // Grove / JST) is gold metal in a housing, so those stay one colour.
+            const fill =
+              conn.kind === 'dupont' ? (PAD_FILL[conn.pins[i]?.type ?? 'other'] ?? contact) : contact
+            return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={fill} />
           })}
       {/* The pin-1 box would land on top of a screw head and read as damage, and a
           terminal block's ordering is already legible from its T1…Tn silk. */}
