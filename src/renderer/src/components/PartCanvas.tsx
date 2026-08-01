@@ -873,8 +873,14 @@ export function PartCanvas({
   /** One servo/DuPont header trio at (sx, sy): a vertical Signal / V+ / GND stack at
    *  the 2.54mm pitch, octagonal pads, the V+/GND rows power/ground + label-hidden,
    *  all sharing `gid` so they move + delete as one unit. */
+  // NB: no `rotation` on the signal pin. An explicit rotation is a deliberate
+  // "aim the label this way" override (the pin inspector's rotate control sets
+  // it), and `pinOutwardDir` honours it over everything else — so presetting one
+  // here pinned every servo label to the top of the board no matter where the
+  // header sat. Left absent, the label follows the NEAREST EDGE, and the rotate
+  // control still aims it by hand when that's wanted.
   const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', rotation: 270, group: gid, x: sx, y: sy }),
+    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], shape: 'octagonal', group: gid, x: sx, y: sy }),
     { name: `V${idx}`, type: 'pwr', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + stepNY) },
     { name: `G${idx}`, type: 'gnd', shape: 'octagonal', labelHidden: true, group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
   ]

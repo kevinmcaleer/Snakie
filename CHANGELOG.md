@@ -27,6 +27,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Servo header labels follow the nearest board edge.** Headers placed with the
+  canvas's servo-header tool had a label direction preset on them, which pinned
+  every signal label to the TOP of the board however far down the header sat. The
+  preset is gone, so labels now read out toward the nearest edge; the pin
+  inspector's rotate control still aims a label by hand when you want that.
+  (Headers placed before this fix keep their stored direction — re-add them, or
+  use the rotate control, to pick up the new behaviour.)
 - **Connector contact labels line up with their contact.** Every connector's
   labels were anchored on the text baseline, which after rotation left them
   sitting beside the contact rather than on it. They are now centred on the
