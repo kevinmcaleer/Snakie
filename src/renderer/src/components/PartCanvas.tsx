@@ -19,6 +19,7 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  type GroupComponentKind,
   groupRootId,
   groupTreeIds,
   translateShape,
@@ -370,8 +371,8 @@ interface Drag {
    *  whole group tree (pins + shapes + labels, recursive) moves rigidly (#630). */
   groupBundle?: {
     pins: { hi: number; pi: number; dx: number; dy: number }[]
-    shapes: { index: number; dx: number; dy: number }[]
-    labels: { index: number; dx: number; dy: number }[]
+    /** Per non-pin kind: each member's offset from the pointer's start (#665). */
+    comps: { kind: GroupComponentKind; index: number; dx: number; dy: number }[]
   }
 }
 
@@ -415,7 +416,7 @@ export function PartCanvas({
   const [selectedPins, setSelectedPins] = useState<{ hi: number; pi: number }[]>([])
   // Multi-select of components (shapes + labels) — same marquee / shift-click
   // gesture, same alignment toolbar.
-  const [selComponents, setSelComponents] = useState<{ type: 'shape' | 'label'; index: number }[]>([])
+  const [selComponents, setSelComponents] = useState<{ type: GroupComponentKind; index: number }[]>([])
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null)
   // Smart alignment guides (#169): green center-lines shown while dragging a pin /
   // hole that lines up with another's centre. Normalised x (vertical line) / y.
@@ -925,6 +926,20 @@ export function PartCanvas({
 
   /** Move a whole group tree (pins + shapes + labels) rigidly, each member placed
    *  at `base + its captured offset`. One commit so undo treats it as one move. */
+  /** Reposition the members of one point-positioned kind from their captured
+   *  offsets. Shapes are excluded — they translate their polygon points too. */
+  const movePoints = <T extends { x: number; y: number }>(
+    list: T[],
+    bundle: NonNullable<Drag['groupBundle']>,
+    kind: GroupComponentKind,
+    baseX: number,
+    baseY: number
+  ): T[] =>
+    list.map((it, i) => {
+      const o = bundle.comps.find((c) => c.kind === kind && c.index === i)
+      return o ? { ...it, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : it
+    })
+
   const moveGroupBundleTo = (bundle: NonNullable<Drag['groupBundle']>, baseX: number, baseY: number): void => {
     commit({
       ...part,
@@ -935,14 +950,17 @@ export function PartCanvas({
           return o ? { ...p, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : p
         })
       })),
+      // A shape carries its polygon points, so it translates rather than being
+      // repositioned; every other kind is point-positioned and just takes x/y.
       shapes: shapes.map((s, i) => {
-        const o = bundle.shapes.find((off) => off.index === i)
+        const o = bundle.comps.find((c) => c.kind === 'shape' && c.index === i)
         return o ? translateShape(s, baseX + o.dx - s.x, baseY + o.dy - s.y) : s
       }),
-      labels: labels.map((l, i) => {
-        const o = bundle.labels.find((off) => off.index === i)
-        return o ? { ...l, x: clamp01(baseX + o.dx), y: clamp01(baseY + o.dy) } : l
-      })
+      labels: movePoints(labels, bundle, 'label', baseX, baseY),
+      connectors: movePoints(connectors, bundle, 'connector', baseX, baseY),
+      onboardLeds: movePoints(onboardLeds, bundle, 'led', baseX, baseY),
+      buttons: movePoints(buttons, bundle, 'button', baseX, baseY),
+      mountingHoles: movePoints(holes, bundle, 'hole', baseX, baseY)
     })
   }
 
@@ -970,10 +988,31 @@ export function PartCanvas({
     | { kind: 'label'; index: number }
 
   /** Geometric centre of a shape/label in normalised coords. */
-  const componentCenter = (type: 'shape' | 'label', index: number): { cx: number; cy: number } | null => {
+  const componentCenter = (
+    type: GroupComponentKind,
+    index: number
+  ): { cx: number; cy: number } | null => {
     if (type === 'label') {
       const l = labels[index]
       return l ? { cx: l.x, cy: l.y } : null
+    }
+    // Connectors, LEDs, buttons and holes are all point-positioned: their x/y IS
+    // the centre, so no bounding-box maths is needed for any of them (#665).
+    if (type === 'connector') {
+      const c = connectors[index]
+      return c ? { cx: c.x, cy: c.y } : null
+    }
+    if (type === 'led') {
+      const l = onboardLeds[index]
+      return l ? { cx: l.x, cy: l.y } : null
+    }
+    if (type === 'button') {
+      const b = buttons[index]
+      return b ? { cx: b.x, cy: b.y } : null
+    }
+    if (type === 'hole') {
+      const h = holes[index]
+      return h ? { cx: h.x, cy: h.y } : null
     }
     const s = shapes[index]
     if (!s) return null
@@ -1023,6 +1062,10 @@ export function PartCanvas({
       if (rp) out.push({ ref: { kind: 'pin', hi: s.hi, pi: s.pi }, cx: rp.x, cy: rp.y })
     }
     for (const c of selComponents) {
+      // Align / distribute deliberately still act on pins, shapes and labels only
+      // (#665 widened SELECTION and DRAG); the other kinds are skipped rather
+      // than half-supported.
+      if (c.type !== 'shape' && c.type !== 'label') continue
       const ctr = componentCenter(c.type, c.index)
       if (ctr) out.push({ ref: { kind: c.type, index: c.index }, cx: ctr.cx, cy: ctr.cy })
     }
@@ -1378,12 +1421,13 @@ export function PartCanvas({
     const root = groupRootId(part.groups, groupSelect.id)
     const first = groupMembers(part, groupTreeIds(part.groups, root))[0]
     if (!first) return
+    // `first` may now be any groupable kind, and CanvasSelection names them the
+    // same way GroupMemberRef does — so the mapping is direct rather than a
+    // three-way ladder that silently fell through to 'label' (#665).
     const primary: CanvasSelection =
       first.kind === 'pin'
         ? { type: 'pin', hi: first.hi, pi: first.pi }
-        : first.kind === 'shape'
-          ? { type: 'shape', index: first.index }
-          : { type: 'label', index: first.index }
+        : { type: first.kind, index: first.index }
     selectWholeGroup(root, primary)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSelect?.nonce])
@@ -2256,6 +2300,9 @@ export function PartCanvas({
     // Grouped item (#630): a plain click selects the WHOLE group tree and drags
     // it as a rigid unit. A servo-header trio (pins only) keeps its grid-snapping
     // via the pin path below; a general group (any shape/label) free-moves.
+    // Must read `group` from EVERY groupable kind (#665): when this only knew
+    // pins/shapes/labels, clicking a grouped connector, LED, button or hole
+    // picked up nothing, so the group neither selected nor dragged as a unit.
     const hitGroup =
       hit.type === 'pin'
         ? part.headers[hit.hi]?.pins[hit.pi]?.group
@@ -2263,22 +2310,27 @@ export function PartCanvas({
           ? shapes[hit.index]?.group
           : hit.type === 'label'
             ? labels[hit.index]?.group
-            : undefined
+            : hit.type === 'connector'
+              ? connectors[hit.index]?.group
+              : hit.type === 'led'
+                ? onboardLeds[hit.index]?.group
+                : hit.type === 'button'
+                  ? buttons[hit.index]?.group
+                  : hit.type === 'hole'
+                    ? holes[hit.index]?.group
+                    : undefined
     if (hitGroup && !gridMod) {
       const root = groupRootId(part.groups, hitGroup)
       const members = selectWholeGroup(root, hit)
       if (members.some((m) => m.kind !== 'pin')) {
-        const bundle: NonNullable<Drag['groupBundle']> = { pins: [], shapes: [], labels: [] }
+        const bundle: NonNullable<Drag['groupBundle']> = { pins: [], comps: [] }
         for (const m of members) {
           if (m.kind === 'pin') {
             const p = part.headers[m.hi]?.pins[m.pi]
             if (p?.x != null && p?.y != null) bundle.pins.push({ hi: m.hi, pi: m.pi, dx: p.x - nx, dy: p.y - ny })
-          } else if (m.kind === 'shape') {
-            const s = shapes[m.index]
-            bundle.shapes.push({ index: m.index, dx: s.x - nx, dy: s.y - ny })
           } else {
-            const l = labels[m.index]
-            bundle.labels.push({ index: m.index, dx: l.x - nx, dy: l.y - ny })
+            const ctr = componentCenter(m.kind, m.index)
+            if (ctr) bundle.comps.push({ kind: m.kind, index: m.index, dx: ctr.cx - nx, dy: ctr.cy - ny })
           }
         }
         dragRef.current = { kind: 'move-group', sel: hit, startNX: nx, startNY: ny, ox: nx, oy: ny, groupBundle: bundle }
@@ -2632,7 +2684,7 @@ export function PartCanvas({
         const inside = pinsPickable
           ? pins.filter((p) => within(p.x, p.y)).map((p) => ({ hi: p.hi, pi: p.pi }))
           : []
-        const insideComps: { type: 'shape' | 'label'; index: number }[] = []
+        const insideComps: { type: GroupComponentKind; index: number }[] = []
         if (compsPickable) {
           shapes.forEach((_, i) => {
             const c = componentCenter('shape', i)

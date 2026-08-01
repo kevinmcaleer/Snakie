@@ -557,10 +557,25 @@ export function applyItemOrder(
 // records nesting (`parent`) + names. These pure helpers resolve a group's tree
 // so move / rotate / delete / select act on every member, recursively (#630).
 
+/**
+ * One member of a group. The `kind` list must cover EVERY item type that can
+ * carry a `group` id (#665) — when it was narrower than that set, a group whose
+ * members were connectors/LEDs/buttons/holes resolved to nothing, so clicking it
+ * in the Layers panel selected nothing and dragging a member moved only that
+ * member. `PartItemFlags` carriers are the authority on what belongs here.
+ */
 export type GroupMemberRef =
   | { kind: 'pin'; hi: number; pi: number }
   | { kind: 'shape'; index: number }
   | { kind: 'label'; index: number }
+  | { kind: 'connector'; index: number }
+  | { kind: 'led'; index: number }
+  | { kind: 'button'; index: number }
+  | { kind: 'hole'; index: number }
+
+/** The non-pin member kinds — the ones addressed by a single array index. */
+export const GROUP_COMPONENT_KINDS = ['shape', 'label', 'connector', 'led', 'button', 'hole'] as const
+export type GroupComponentKind = (typeof GROUP_COMPONENT_KINDS)[number]
 
 /** Every group id in the subtree rooted at `rootId` (itself + nested descendants). */
 export function groupTreeIds(groups: PartGroup[] | undefined, rootId: string): Set<string> {
@@ -591,7 +606,7 @@ export function groupRootId(groups: PartGroup[] | undefined, gid: string): strin
   return cur
 }
 
-/** Every item (pin/shape/label) whose `group` id is in `ids`. */
+/** Every item whose `group` id is in `ids`, across all groupable kinds. */
 export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMemberRef[] {
   const out: GroupMemberRef[] = []
   part.headers?.forEach((h, hi) =>
@@ -599,12 +614,20 @@ export function groupMembers(part: PartDefinition, ids: Set<string>): GroupMembe
       if (p.group && ids.has(p.group)) out.push({ kind: 'pin', hi, pi })
     })
   )
-  part.shapes?.forEach((s, i) => {
-    if (s.group && ids.has(s.group)) out.push({ kind: 'shape', index: i })
-  })
-  part.labels?.forEach((l, i) => {
-    if (l.group && ids.has(l.group)) out.push({ kind: 'label', index: i })
-  })
+  const each = <T extends { group?: string }>(
+    list: T[] | undefined,
+    kind: GroupComponentKind
+  ): void => {
+    list?.forEach((it, index) => {
+      if (it.group && ids.has(it.group)) out.push({ kind, index } as GroupMemberRef)
+    })
+  }
+  each(part.shapes, 'shape')
+  each(part.labels, 'label')
+  each(part.connectors, 'connector')
+  each(part.onboardLeds, 'led')
+  each(part.buttons, 'button')
+  each(part.mountingHoles, 'hole')
   return out
 }
 

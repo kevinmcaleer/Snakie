@@ -27,6 +27,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Groups of connectors, LEDs, buttons or holes select and drag as one.** Only
+  pins, shapes and labels counted as group members, so a group made of anything
+  else resolved to nothing: clicking it in the Layers panel selected nothing on
+  the canvas, and dragging a member moved just that member out of its group. Every
+  groupable kind now counts, so the group highlights on click and moves as a rigid
+  unit. (Align and distribute still act on pins, shapes and labels only.)
 - **Servo header labels follow the nearest board edge.** Headers placed with the
   canvas's servo-header tool had a label direction preset on them, which pinned
   every signal label to the TOP of the board however far down the header sat. The
