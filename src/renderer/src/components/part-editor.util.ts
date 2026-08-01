@@ -23,6 +23,8 @@ import {
   coerceConnectorKind,
   coerceGroveVariant,
   PART_PIN_SHAPES,
+  TERMINAL_MAX,
+  TERMINAL_MIN,
   itemHidden,
   itemLocked,
   type ComponentShape,
@@ -658,6 +660,36 @@ export function uniquePinName(base: string, used: ReadonlySet<string>): string {
   // Bounded so a pathological part can't spin here; 999 is far past any real board.
   while (used.has(`${stem}${n}`) && n < 1000) n++
   return `${stem}${n}`
+}
+
+/**
+ * The contacts for an `n`-way screw terminal block (#662), named `T1`…`Tn`.
+ *
+ * `io` is the neutral default: a block might be motor outputs, a power input or
+ * a sensor lead, and the author retypes each contact anyway — they are ordinary
+ * {@link PartPin}s, so everything that configures a header pin configures these.
+ */
+export function terminalPins(n: number): PartPin[] {
+  const count = clamp(Math.round(n) || TERMINAL_MIN, TERMINAL_MIN, TERMINAL_MAX)
+  return Array.from({ length: count }, (_, i) => ({ name: `T${i + 1}`, type: 'io' as PartPinType }))
+}
+
+/**
+ * Grow or shrink a terminal block to `n` ways, **keeping the contacts already
+ * configured**.
+ *
+ * Growing appends fresh `T<k>` contacts; shrinking drops from the end. Shrinking
+ * does lose the trailing contacts' configuration — which is what "fewer
+ * terminals" has to mean — so it only ever removes from the end, where the loss
+ * is predictable, rather than choosing which ones looked unused.
+ */
+export function resizeTerminals(pins: PartPin[], n: number): PartPin[] {
+  const count = clamp(Math.round(n) || TERMINAL_MIN, TERMINAL_MIN, TERMINAL_MAX)
+  const kept = pins.slice(0, count)
+  for (let i = kept.length; i < count; i++) {
+    kept.push({ name: `T${i + 1}`, type: 'io' as PartPinType })
+  }
+  return kept
 }
 
 /** The selection kinds a duplicate is defined for (#661). */

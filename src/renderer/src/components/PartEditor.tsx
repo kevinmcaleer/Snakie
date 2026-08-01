@@ -47,6 +47,8 @@ import {
   collectUsedColors,
   dissolveGroup,
   duplicateSelection,
+  resizeTerminals,
+  terminalPins,
   groupRootId,
   groupTreeIds,
   translateShape,
@@ -72,7 +74,7 @@ import {
   type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
-import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, itemLocked } from '../../../shared/part'
+import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, TERMINAL_MAX, TERMINAL_MIN, itemLocked } from '../../../shared/part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -187,13 +189,15 @@ const CONN_KIND_TITLE: Record<PartConnectorKind, string> = {
   qwiic: 'QWIIC / STEMMA QT',
   jst: 'JST connector',
   grove: 'Grove port',
-  dupont: 'Servo / DuPont header'
+  dupont: 'Servo / DuPont header',
+  terminal: 'Screw terminal block'
 }
 const CONN_KIND_LABEL: Record<PartConnectorKind, string> = {
   qwiic: 'QWIIC',
   jst: 'JST',
   grove: 'Grove',
-  dupont: 'Servo / DuPont'
+  dupont: 'Servo / DuPont',
+  terminal: 'Screw terminal'
 }
 const GROVE_VARIANT_LABEL: Record<GroveVariant, string> = {
   i2c: 'I²C',
@@ -219,7 +223,9 @@ const standardConnPins = (kind: PartConnectorKind, variant?: GroveVariant): Part
         ? SERVO_PINS
         : kind === 'jst'
           ? JST_PINS
-          : QWIIC_PINS
+          : kind === 'terminal'
+            ? terminalPins(TERMINAL_MIN)
+            : QWIIC_PINS
   )
 
 /**
@@ -1957,6 +1963,7 @@ function LayersPanel({
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('terminal') }} title="Add a green screw terminal block (set how many terminals in the inspector)">Terminal block</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
                   </div>
                 </>
@@ -3490,6 +3497,21 @@ function SelectionInspector({
                 ))}
               </select>
             </label>
+            {conn.kind === 'terminal' && (
+              <label className="pe__field">
+                <span>Terminals</span>
+                {/* The block's way-count IS its contact count, so this grows and
+                    shrinks the contacts directly — configured ones are kept. */}
+                <input
+                  type="number"
+                  min={TERMINAL_MIN}
+                  max={TERMINAL_MAX}
+                  step={1}
+                  value={conn.pins.length}
+                  onChange={(e) => upd({ pins: resizeTerminals(conn.pins, Number(e.target.value)) })}
+                />
+              </label>
+            )}
             {conn.kind === 'grove' && (
               <label className="pe__field">
                 <span>Port type</span>

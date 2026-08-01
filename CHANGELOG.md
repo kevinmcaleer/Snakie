@@ -16,6 +16,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   address it parsed back to you, names the device usually found there, and warns
   (without blocking) on addresses the I²C spec reserves or that another part in the
   library already claims.
+- **Screw terminal blocks in the Part Editor.** Add → **Terminal block** places the
+  familiar green block; set how many terminals it has in the inspector and it
+  grows or shrinks to match, keeping the contacts you had already configured. Its
+  terminals are ordinary pins — name them, give them a GPIO, a type and
+  capabilities exactly like header pins — and because they belong to the block
+  itself they travel with it and can't be scattered out of it.
 - **<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>D</kbd> duplicates the selected item** in the
   Part Editor — the same action as the canvas toolbar's ⧉ button, for pins,
   shapes, labels, connectors and mounting holes.

@@ -927,6 +927,11 @@ function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number
       return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
     case 'jst':
       return { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 }
+    case 'terminal':
+      // The ubiquitous green screw-terminal block (KF301/KF128 family): 5.08 mm
+      // pitch, a deep body because the wire goes IN from the side rather than a
+      // plug seating on top.
+      return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
     default:
       return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
   }
@@ -950,6 +955,10 @@ function connectorStyle(kind: PartConnector['kind']): {
       return { shell: '#f1efe6', edge: '#8e8a7e', contact: '#e6c34a', male: false }
     case 'dupont':
       return { shell: '#15181c', edge: '#0b0d10', contact: '#e6c34a', male: true }
+    case 'terminal':
+      // The colour these blocks are known by. Screws are steel, not gold — the
+      // one visual cue that says "screw terminal" rather than "pin header".
+      return { shell: '#1f7a3a', edge: '#0d3d1d', contact: '#c9ccd1', male: false }
     default:
       // QWIIC / STEMMA QT and plain JST — dark JST-SH / JST-PH housings.
       return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
@@ -1008,11 +1017,39 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
       {conn.kind === 'grove' && h >= 6 && (
         <rect x={x0 + w * 0.06} y={y0 + h * 0.12} width={w * 0.88} height={h * 0.34} fill="#d9d5c7" stroke="none" />
       )}
-      {Array.from({ length: n }, (_, i) => {
-        const cxp = x0 + (w / (n + 1)) * (i + 1)
-        return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={contact} />
-      })}
-      {showMark && (
+      {conn.kind === 'terminal'
+        ? // A screw terminal reads by its SCREWS, not by contact blades: a slotted
+          // steel head per way, with the wire aperture below it on the mating face.
+          Array.from({ length: n }, (_, i) => {
+            const cxp = x0 + (w / (n + 1)) * (i + 1)
+            const r = Math.max(1, Math.min((w / n) * 0.3, h * 0.22))
+            const sy = y0 + h * 0.34 // screw sits in the upper half of the body
+            const wy = y0 + h * 0.74 // wire entry below it
+            const wh = Math.max(0.8, h * 0.16)
+            const ww = Math.max(1.2, r * 1.7)
+            return (
+              <g key={i}>
+                <rect x={cxp - ww / 2} y={wy - wh / 2} width={ww} height={wh} fill="#0a2413" />
+                <circle cx={cxp} cy={sy} r={r} fill={contact} stroke="#6f7478" strokeWidth={Math.max(0.25, r * 0.16)} />
+                <line
+                  x1={cxp - r * 0.6}
+                  y1={sy}
+                  x2={cxp + r * 0.6}
+                  y2={sy}
+                  stroke="#5a5f63"
+                  strokeWidth={Math.max(0.35, r * 0.26)}
+                  strokeLinecap="round"
+                />
+              </g>
+            )
+          })
+        : Array.from({ length: n }, (_, i) => {
+            const cxp = x0 + (w / (n + 1)) * (i + 1)
+            return <rect key={i} x={cxp - contactW / 2} y={y0 + contactInset} width={contactW} height={h - contactInset * 2} fill={contact} />
+          })}
+      {/* The pin-1 box would land on top of a screw head and read as damage, and a
+          terminal block's ordering is already legible from its T1…Tn silk. */}
+      {showMark && conn.kind !== 'terminal' && (
         <rect
           x={p1x - markR}
           y={cy - markR}
@@ -1028,6 +1065,33 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
         conn.pins.map((pin, i) => {
           if (!pin.name || i >= n) return null
           const cxp = x0 + (w / (n + 1)) * (i + 1)
+          // A screw terminal takes the ordinary pin-label STYLE (`.pcv__pin-label`:
+          // themed silk text at the shared size, no halo) but still reads
+          // bottom-to-top, rotated 90° anticlockwise — a terminal's label belongs
+          // over its own way, and vertical is what keeps a wide block's labels
+          // from running into each other.
+          if (conn.kind === 'terminal') {
+            const ty = y0 - 4
+            return (
+              <text
+                key={`lbl${i}`}
+                x={cxp}
+                y={ty}
+                transform={`rotate(-90 ${cxp} ${ty})`}
+                textAnchor="start"
+                // Rotating about the BASELINE would hang the glyphs off to one
+                // side: `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and
+                // text occupies dy ∈ [-ascent, +descent] — with ascent ~3×
+                // descent, the band lands left of the terminal. Anchoring on the
+                // glyph centre instead puts the label's centre line on the
+                // terminal's.
+                dominantBaseline="central"
+                className="pcv__pin-label"
+              >
+                {pin.name}
+              </text>
+            )
+          }
           const ly = y0 - 2 // reads upward, just above the housing
           return (
             <text
@@ -1063,6 +1127,8 @@ export function connectorDefaultName(conn: PartConnector): string {
       return conn.pins.length === 3 ? 'SERVO' : 'HDR'
     case 'jst':
       return 'JST'
+    case 'terminal':
+      return 'TERM'
     default:
       return 'QWIIC'
   }

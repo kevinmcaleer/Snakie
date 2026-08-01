@@ -227,10 +227,22 @@ export interface PartHeader {
  *               block reads Signal · V+ · GND in a fixed order and a lead plugged
  *               the wrong way round is a mistake we can show rather than allow.
  */
-export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont'
+export type PartConnectorKind = 'qwiic' | 'jst' | 'grove' | 'dupont' | 'terminal'
 
 /** Every connector kind, in picker order (the first is the default). */
-export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = ['qwiic', 'jst', 'grove', 'dupont']
+export const PART_CONNECTOR_KINDS: readonly PartConnectorKind[] = [
+  'qwiic',
+  'jst',
+  'grove',
+  'dupont',
+  'terminal'
+]
+
+/** Terminal counts a screw-terminal block is allowed to have (#662). Two is the
+ *  smallest block sold; the upper bound just stops a slip in the number field
+ *  generating hundreds of contacts. */
+export const TERMINAL_MIN = 2
+export const TERMINAL_MAX = 24
 
 /**
  * Which standard signal set a **Grove** socket carries. Grove ports are all the
