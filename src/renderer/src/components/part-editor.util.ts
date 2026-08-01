@@ -1136,6 +1136,92 @@ export function pruneEmptyGroups(part: PartDefinition): PartGroup[] | undefined 
   return out.length ? out : undefined
 }
 
+/**
+ * Duplicate a whole group and everything in it (#691).
+ *
+ * Copies every member, offset as a block so the copy is visibly its own, and
+ * gives them a NEW group id — with the housing carried over, so duplicating a
+ * servo header gives you another servo header rather than three loose pads.
+ *
+ * Pin names are made unique: a name is a wire endpoint (`<part>.<name>`), so two
+ * pins called `S1` make that endpoint ambiguous. `S1` becomes `S2`, which is what
+ * a second servo channel should be called anyway.
+ *
+ * Returns the fields to commit plus the new group's id, or `null` when there is
+ * nothing to copy.
+ */
+export function duplicateGroup(
+  part: PartDefinition,
+  gid: string
+): { part: Partial<PartDefinition>; gid: string } | null {
+  const ids = groupTreeIds(part.groups, groupRootId(part.groups, gid))
+  const members = groupMembers(part, ids)
+  if (!members.length) return null
+  const off = DUPLICATE_OFFSET
+  const c01 = (n: number): number => clamp(n, 0, 1)
+  const newGid = `${gid}-copy-${(part.groups ?? []).length + 1}`
+  const used = usedPinNames(part)
+
+  const headers = part.headers.map((h) => ({ ...h }))
+  const add: Record<string, unknown[]> = { shapes: [], labels: [], connectors: [], leds: [], buttons: [], holes: [] }
+  for (const m of members) {
+    if (m.kind === 'pin') {
+      const src = part.headers[m.hi]?.pins[m.pi]
+      if (!src) continue
+      const rp = resolvedPins(part).find((r) => r.hi === m.hi && r.pi === m.pi)
+      const name = uniquePinName(src.name, used)
+      used.add(name)
+      headers[m.hi] = {
+        ...headers[m.hi],
+        pins: [
+          ...headers[m.hi].pins,
+          {
+            ...src,
+            name,
+            capabilities: src.capabilities ? [...src.capabilities] : undefined,
+            group: newGid,
+            x: c01((rp?.x ?? 0) + off),
+            y: c01((rp?.y ?? 0) + off)
+          }
+        ]
+      }
+      continue
+    }
+    const list =
+      m.kind === 'shape' ? part.shapes : m.kind === 'label' ? part.labels
+      : m.kind === 'connector' ? part.connectors : m.kind === 'led' ? part.onboardLeds
+      : m.kind === 'button' ? part.buttons : part.mountingHoles
+    const src = list?.[m.index] as ({ x: number; y: number } & Record<string, unknown>) | undefined
+    if (!src) continue
+    const key = m.kind === 'led' ? 'leds' : m.kind === 'hole' ? 'holes' : `${m.kind}s`
+    add[key].push({ ...src, group: newGid, x: c01(src.x + off), y: c01(src.y + off) })
+  }
+
+  const src = (part.groups ?? []).find((g) => g.id === gid)
+  const housing = src?.housing
+  const grp: PartGroup = { id: newGid }
+  if (src?.name) grp.name = `${src.name} copy`
+  if (housing) {
+    grp.housing = { ...housing, x: c01(housing.x + off), y: c01(housing.y + off) }
+  }
+  const cat = <T,>(cur: T[] | undefined, extra: unknown[]): T[] | undefined =>
+    extra.length ? [...(cur ?? []), ...(extra as T[])] : cur
+
+  return {
+    gid: newGid,
+    part: {
+      headers,
+      shapes: cat(part.shapes, add.shapes),
+      labels: cat(part.labels, add.labels),
+      connectors: cat(part.connectors, add.connectors),
+      onboardLeds: cat(part.onboardLeds, add.leds),
+      buttons: cat(part.buttons, add.buttons),
+      mountingHoles: cat(part.mountingHoles, add.holes),
+      groups: [...(part.groups ?? []), grp]
+    }
+  }
+}
+
 /** The selection kinds a duplicate is defined for (#661). */
 export type DuplicableSelection =
   | { type: 'pin'; hi: number; pi: number }

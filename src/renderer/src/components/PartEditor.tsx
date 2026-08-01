@@ -46,6 +46,7 @@ import {
   blankPart,
   collectUsedColors,
   dissolveGroup,
+  duplicateGroup,
   duplicateSelection,
   pruneEmptyGroups,
   faceImageData as faceImageDataOf,
@@ -1764,6 +1765,23 @@ function LayersPanel({
   /** Eye + padlock for one GROUP row. */
   const groupFlags = (groupId: string, what: string): JSX.Element | null =>
     flagRow(nodeById.get(`group:${groupId}`), (flag, value) => patch(withGroupFlag(part, groupId, flag, value)), what)
+  /** The root group the current selection belongs to, if any (#691). A canvas
+   *  click on a grouped item selects the whole group, so this lights that row. */
+  const selectedGroupRoot = useMemo(() => {
+    const g = selectionGroupId(part, selection)
+    return g ? groupRootId(part.groups, g) : null
+  }, [part, selection])
+
+  /** Duplicate a whole group — its members, its housing and all (#691). */
+  const duplicateGroupNode = (gid: string): void => {
+    const res = duplicateGroup(part, gid)
+    if (!res) return
+    patch(res.part)
+    // Land on the copy, so a second duplicate makes a third rather than another
+    // copy of the original.
+    onSelectGroup?.(res.gid)
+  }
+
   const commitRename = (gid: string, text: string): void => {
     patch(withGroupName(part, gid, text))
     setRenamingGroup(null)
@@ -1903,7 +1921,13 @@ function LayersPanel({
       n.children.reduce((sum, c) => sum + (c.kind === 'item' ? 1 : leaves(c)), 0)
     return (
       <li key={node.id} className="pe__grouprow">
-        <div className="pe__flatrow pe__flatrow--partgroup" style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}>
+        {/* Clicking a group selects the WHOLE group on the canvas, so the GROUP
+            row is what should light up — it used to highlight whichever member
+            happened to be picked as the selection's primary (#691). */}
+        <div
+          className={`pe__flatrow pe__flatrow--partgroup${selectedGroupRoot === groupRootId(part.groups, gid) ? ' is-active' : ''}`}
+          style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
+        >
           <button
             type="button"
             className="pe__flatcaret"
@@ -2017,6 +2041,15 @@ function LayersPanel({
               </>
             )}
           </div>
+          <button
+            type="button"
+            className="pe__group-ungroup"
+            onClick={() => duplicateGroupNode(gid)}
+            title={`Duplicate ${node.label} and everything in it`}
+            aria-label={`Duplicate ${node.label}`}
+          >
+            ⧉
+          </button>
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>

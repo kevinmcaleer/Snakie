@@ -7,6 +7,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Duplicate a whole group.** A ⧉ button on a group row in the layers list copies
+  the group and everything in it — including its connector housing, so duplicating
+  a servo header gives you another servo header rather than three loose pads. The
+  copied pins are renamed (`S1` → `S2`), because a pin's name is what a wire
+  points at.
+
+### Fixed
+- **Selecting a group highlights the group.** Clicking a group's name selected the
+  whole group on the canvas, as it should, but the layers list lit up the first
+  pin inside it instead of the group row.
+- **Dragging a selected group moves all of it.** With a group selected, dragging
+  one of the highlighted parts moved only the part under the cursor — the
+  selection looked like a unit and behaved like a pile. Dragging anything in the
+  current selection now moves the whole selection together.
 - **Copy the flashing log.** A **Copy log** button above the output puts the whole
   log on the clipboard — including the chip details at the top, which have usually
   scrolled out of sight by the time a flash finishes — with the terminal escape

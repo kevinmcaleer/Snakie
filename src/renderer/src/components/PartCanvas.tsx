@@ -2439,6 +2439,30 @@ export function PartCanvas({
       }
       return
     }
+    // Dragging an item that is part of the CURRENT multi-selection moves the whole
+    // selection (#691). Without this, selecting a group and then dragging one of
+    // its highlighted members moved only that member — the selection looked like
+    // a unit and behaved like a pile.
+    const inSelection =
+      (hit.type === 'pin' && selectedPins.some((s) => s.hi === hit.hi && s.pi === hit.pi)) ||
+      (hit.type !== 'pin' &&
+        'index' in hit &&
+        selComponents.some((c) => c.type === (hit.type as GroupComponentKind) && c.index === hit.index))
+    if (inSelection && selectedPins.length + selComponents.length > 1 && !gridMod) {
+      const bundle: NonNullable<Drag['groupBundle']> = { pins: [], comps: [] }
+      for (const sp of selectedPins) {
+        const p = part.headers[sp.hi]?.pins[sp.pi]
+        if (p?.x != null && p?.y != null) bundle.pins.push({ hi: sp.hi, pi: sp.pi, dx: p.x - nx, dy: p.y - ny })
+      }
+      for (const c of selComponents) {
+        const ctr = componentCenter(c.type, c.index)
+        if (ctr) bundle.comps.push({ kind: c.type, index: c.index, dx: ctr.cx - nx, dy: ctr.cy - ny })
+      }
+      if (bundle.pins.length + bundle.comps.length > 1) {
+        dragRef.current = { kind: 'move-group', sel: hit, startNX: nx, startNY: ny, ox: nx, oy: ny, groupBundle: bundle }
+        return
+      }
+    }
     // Grouped item (#630): a plain click selects the WHOLE group tree and drags
     // it as a rigid unit. A servo-header trio (pins only) keeps its grid-snapping
     // via the pin path below; a general group (any shape/label) free-moves.
