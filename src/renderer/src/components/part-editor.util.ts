@@ -1265,6 +1265,84 @@ export function itemGroupOf(
   }
 }
 
+/**
+ * Convert a part's stored `connectors[]` into housed groups of ordinary pins
+ * (#677).
+ *
+ * A contact nested in `connectors[]` is a second-class pin: not individually
+ * selectable, not reachable by the marquee, and editable only through the
+ * connector's own contact editor. As a HEADER pin in a housed group (#673) it is
+ * simply a pin, and gets all of that for free.
+ *
+ * **Converts ALL of them at once, deliberately.** The flattened pin order is the
+ * authoritative wiring endpoint index (`shared/netlist.ts`), and it runs
+ * `[all header pins][all connector contacts, in connector order]`. Appending one
+ * connector's contacts to the headers keeps its own indices only if every
+ * connector before it has already moved — convert the second of two and its
+ * contacts jump ahead of the first's, silently rewiring saved designs. Converting
+ * the lot reproduces the original order exactly.
+ *
+ * Contacts keep their names and gain the position they were already drawn at, so
+ * nothing moves on screen either.
+ *
+ * Returns `null` when the part has no stored connectors.
+ */
+export function connectorsToHousedGroups(part: PartDefinition): Partial<PartDefinition> | null {
+  const conns = part.connectors ?? []
+  if (!conns.length) return null
+
+  const groups: PartGroup[] = [...(part.groups ?? [])]
+  const taken = new Set(groups.map((g) => g.id))
+  const added: PartPin[] = []
+
+  conns.forEach((conn, ci) => {
+    let gid = `conn-${ci + 1}`
+    for (let n = 2; taken.has(gid) && n < 1000; n++) gid = `conn-${ci + 1}-${n}`
+    taken.add(gid)
+
+    // The positions the contacts are ALREADY drawn at, so converting moves nothing.
+    const pts = connectorContacts(part, conn)
+    conn.pins.forEach((pin, i) => {
+      const p = pts[i]
+      added.push({ ...pin, group: gid, x: p?.x ?? conn.x, y: p?.y ?? conn.y })
+    })
+
+    const housing: GroupHousing = { kind: conn.kind, x: conn.x, y: conn.y }
+    if (conn.variant) housing.variant = conn.variant
+    if (conn.rotation) housing.rotation = conn.rotation
+    if (conn.label) housing.label = conn.label
+    const grp: PartGroup = { id: gid, housing }
+    grp.name = conn.label || connectorDefaultLabel(conn)
+    if (conn.group) grp.parent = conn.group
+    groups.push(grp)
+  })
+
+  // Appended AFTER every existing header pin — which, with `connectors` emptied,
+  // reproduces `[headers][contacts]` exactly.
+  const headers = part.headers.length ? [...part.headers] : [{ edge: 'left' as PartEdge, pins: [] }]
+  const last = headers.length - 1
+  headers[last] = { ...headers[last], pins: [...headers[last].pins, ...added] }
+
+  return { headers, connectors: undefined, groups }
+}
+
+/** A readable name for a converted connector, when it had no label of its own. */
+function connectorDefaultLabel(conn: PartConnector): string {
+  const n = conn.pins.length
+  switch (conn.kind) {
+    case 'grove':
+      return conn.variant ? `Grove ${conn.variant.toUpperCase()}` : 'Grove port'
+    case 'dupont':
+      return n === 3 ? 'Servo header' : `${n}-way header`
+    case 'terminal':
+      return `${n}-way terminal block`
+    case 'qwiic':
+      return 'QWIIC'
+    default:
+      return 'JST'
+  }
+}
+
 /** The selection kinds a duplicate is defined for (#661). */
 export type DuplicableSelection =
   | { type: 'pin'; hi: number; pi: number }

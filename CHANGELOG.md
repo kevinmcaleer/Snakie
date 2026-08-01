@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Turn a part's connectors into groups of ordinary pins.** A connector's contacts
+  couldn't be clicked, rubber-band selected, or edited with the full pin inspector
+  — they were only reachable through the connector's own small editor. **Convert to
+  pin groups** in the connector's properties turns them into ordinary pins that
+  keep their housing, so they behave like every other pin while still taking a
+  lead. Nothing moves on screen and existing wiring is untouched.
+- **Set a connector contact's capabilities.** The contact editor could set a name,
+  type, GPIO and I²C bus but never the capabilities, so a socket's SDA couldn't be
+  marked as I²C without editing the file by hand.
 - **Set how many contacts a JST or DuPont connector has.** Both were stuck at
   whatever they were created with — four — so a two-wire battery lead had to be
   built as a four-way and trimmed by hand. There's now a Contacts field, working

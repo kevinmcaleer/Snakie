@@ -46,6 +46,7 @@ import {
   blankPart,
   collectUsedColors,
   dissolveGroup,
+  connectorsToHousedGroups,
   duplicateGroup,
   duplicateSelection,
   pruneEmptyGroups,
@@ -3189,6 +3190,7 @@ function SelectionInspector({
   selection,
   setPart,
   patch,
+  onSelect,
   setImageLayer,
   lockImageAspect,
   onToggleLockAspect,
@@ -3731,6 +3733,26 @@ function SelectionInspector({
           >
             Standard contacts
           </button>
+          {/* Convert to the model where a contact is simply a pin (#677): it
+              becomes selectable, marquee-able and editable by the full pin
+              inspector, while the group's housing keeps it a connector a lead can
+              plug into. Converts EVERY connector on the part, because the flattened
+              pin order is the wiring endpoint index and moving one connector's
+              contacts ahead of another's would rewire saved designs. */}
+          <button
+            type="button"
+            className="pe__btn"
+            onClick={() => {
+              const next = connectorsToHousedGroups(part)
+              if (next) {
+                patch(next)
+                onSelect(null)
+              }
+            }}
+            title="Turn this part's connectors into groups of ordinary pins, each keeping its housing — so the contacts can be selected and edited like any other pin"
+          >
+            Convert to pin groups
+          </button>
           {/* Each contact is a full pin. One ROW each, under a single header, rather
               than two labelled rows apiece — a 16-way block was otherwise 32 rows
               of mostly whitespace (#694). */}
@@ -3783,6 +3805,33 @@ function SelectionInspector({
                     title="I²C bus number"
                     onChange={(e) => updBus(pi, e.target.value === '' ? undefined : Number(e.target.value))}
                   />
+                )}
+                {/* Capabilities, on a second line for `io` contacts only (#677).
+                    The one thing this editor could never reach, so a QWIIC's SDA
+                    could not be marked i2c without hand-editing the YAML. Toggle
+                    chips rather than a field row, to keep the list compact. */}
+                {p.type === 'io' && (
+                  <div className="pe__contact-caps">
+                    {CAPABILITIES.map((c) => {
+                      const on = p.capabilities?.includes(c) === true
+                      return (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`pe__chip pe__chip--cap${on ? ' is-active' : ''}`}
+                          aria-pressed={on}
+                          title={`${CAPABILITY_LABEL[c]}${on ? ' — on' : ''}`}
+                          onClick={() => {
+                            const cur = p.capabilities ?? []
+                            const next = on ? cur.filter((x) => x !== c) : [...cur, c]
+                            updPin(pi, { capabilities: next.length ? next : undefined })
+                          }}
+                        >
+                          {CAPABILITY_LABEL[c]}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
             ))}

@@ -2234,3 +2234,25 @@
 .pe__contact-bus {
   width: 2.6rem;
 }
+
+/* Capability toggles under an `io` contact (#677). Chips rather than another
+   field row, so the compact contact list stays compact — only io contacts get
+   the extra line, and most connectors have one or two. */
+.pe__contact-caps {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  margin: 0.05rem 0 0.15rem;
+}
+
+.pe__chip--cap {
+  padding: 0.02rem 0.28rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+.pe__chip--cap.is-active {
+  opacity: 1;
+}
