@@ -1,0 +1,590 @@
+id: pca9685
+name: PCA9685
+description: Servo and LED Driver board
+manufacturer: Generic
+family: Breakout
+tags:
+  - i2c
+  - led
+  - servo
+package: THT
+pinSpacing: 2.54
+voltage: 3.3V
+version: 0.1.7
+pcbColor: "#0f5a2e"
+aspect: 0.5
+dimensions:
+  width: 65
+  height: 25
+shape:
+  kind: rect
+  cornerRadius: 0
+headers:
+  - edge: left
+    pins:
+      - name: V+
+        type: pwr
+        number: 6
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.738557493456828
+      - name: GND
+        type: gnd
+        number: 1
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.24419973306030288
+      - name: SDA
+        type: io
+        number: 4
+        gpio: 0
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.5338844040625511
+      - name: SCL
+        type: io
+        number: 3
+        capabilities:
+          - digital
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.43881837292902653
+      - name: OE
+        type: io
+        number: 1
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.33738512853617364
+      - name: VCC
+        type: pwr
+        number: 5
+        shape: octagonal
+        x: 0.09031791751054134
+        y: 0.6367135503319805
+      - name: S1
+        type: io
+        group: servo-1
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.16149820963541667
+        y: 0.7244855244954426
+      - name: V1
+        type: pwr
+        group: servo-1
+        shape: octagonal
+        x: 0.16149820963541667
+        y: 0.8244855244954425
+      - name: G1
+        type: gnd
+        group: servo-1
+        shape: octagonal
+        x: 0.16149820963541667
+        y: 0.9244855244954426
+      - name: S2
+        type: io
+        group: servo-2
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.19995974809695513
+        y: 0.7244855244954426
+      - name: V2
+        type: pwr
+        group: servo-2
+        shape: octagonal
+        x: 0.19995974809695513
+        y: 0.8244855244954425
+      - name: G2
+        type: gnd
+        group: servo-2
+        shape: octagonal
+        x: 0.19995974809695513
+        y: 0.9244855244954426
+      - name: S3
+        type: io
+        group: servo-3
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.2384212865584936
+        y: 0.7244855244954426
+      - name: V3
+        type: pwr
+        group: servo-3
+        shape: octagonal
+        x: 0.2384212865584936
+        y: 0.8244855244954425
+      - name: G3
+        type: gnd
+        group: servo-3
+        shape: octagonal
+        x: 0.2384212865584936
+        y: 0.9244855244954426
+      - name: S4
+        type: io
+        group: servo-4
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.27688282502003203
+        y: 0.7244855244954426
+      - name: V4
+        type: pwr
+        group: servo-4
+        shape: octagonal
+        x: 0.27688282502003203
+        y: 0.8244855244954425
+      - name: G4
+        type: gnd
+        group: servo-4
+        shape: octagonal
+        x: 0.27688282502003203
+        y: 0.9244855244954426
+      - name: S5
+        type: io
+        group: servo-5
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.36084935506184895
+        y: 0.7182984110514322
+      - name: V5
+        type: pwr
+        group: servo-5
+        shape: octagonal
+        x: 0.36084935506184895
+        y: 0.8182984110514322
+      - name: G5
+        type: gnd
+        group: servo-5
+        shape: octagonal
+        x: 0.36084935506184895
+        y: 0.9182984110514323
+      - name: S6
+        type: io
+        group: servo-6
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.39931089352338744
+        y: 0.7182984110514322
+      - name: V6
+        type: pwr
+        group: servo-6
+        shape: octagonal
+        x: 0.39931089352338744
+        y: 0.8182984110514322
+      - name: G6
+        type: gnd
+        group: servo-6
+        shape: octagonal
+        x: 0.39931089352338744
+        y: 0.9182984110514323
+      - name: S7
+        type: io
+        group: servo-7
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.4377724319849259
+        y: 0.7182984110514322
+      - name: V7
+        type: pwr
+        group: servo-7
+        shape: octagonal
+        x: 0.4377724319849259
+        y: 0.8182984110514322
+      - name: G7
+        type: gnd
+        group: servo-7
+        shape: octagonal
+        x: 0.4377724319849259
+        y: 0.9182984110514323
+      - name: S8
+        type: io
+        group: servo-8
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.4762339704464643
+        y: 0.7182984110514322
+      - name: V8
+        type: pwr
+        group: servo-8
+        shape: octagonal
+        x: 0.4762339704464643
+        y: 0.8182984110514322
+      - name: G8
+        type: gnd
+        group: servo-8
+        shape: octagonal
+        x: 0.4762339704464643
+        y: 0.9182984110514323
+      - name: S9
+        type: io
+        group: servo-9
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.5869422403971354
+        y: 0.7262598266601561
+      - name: V9
+        type: pwr
+        group: servo-9
+        shape: octagonal
+        x: 0.5869422403971354
+        y: 0.8262598266601561
+      - name: G9
+        type: gnd
+        group: servo-9
+        shape: octagonal
+        x: 0.5869422403971354
+        y: 0.926259826660156
+      - name: S10
+        type: io
+        group: servo-10
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.6254037788586738
+        y: 0.7262598266601561
+      - name: V10
+        type: pwr
+        group: servo-10
+        shape: octagonal
+        x: 0.6254037788586738
+        y: 0.8262598266601561
+      - name: G10
+        type: gnd
+        group: servo-10
+        shape: octagonal
+        x: 0.6254037788586738
+        y: 0.926259826660156
+      - name: S11
+        type: io
+        group: servo-11
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.6638653173202123
+        y: 0.7262598266601561
+      - name: V11
+        type: pwr
+        group: servo-11
+        shape: octagonal
+        x: 0.6638653173202123
+        y: 0.8262598266601561
+      - name: G11
+        type: gnd
+        group: servo-11
+        shape: octagonal
+        x: 0.6638653173202123
+        y: 0.926259826660156
+      - name: S12
+        type: io
+        group: servo-12
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.7023268557817508
+        y: 0.7262598266601561
+      - name: V12
+        type: pwr
+        group: servo-12
+        shape: octagonal
+        x: 0.7023268557817508
+        y: 0.8262598266601561
+      - name: G12
+        type: gnd
+        group: servo-12
+        shape: octagonal
+        x: 0.7023268557817508
+        y: 0.926259826660156
+      - name: S13
+        type: io
+        group: servo-13
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.7768646240234375
+        y: 0.7230612691243489
+      - name: V13
+        type: pwr
+        group: servo-13
+        shape: octagonal
+        x: 0.7768646240234375
+        y: 0.8230612691243488
+      - name: G13
+        type: gnd
+        group: servo-13
+        shape: octagonal
+        x: 0.7768646240234375
+        y: 0.9230612691243489
+      - name: S14
+        type: io
+        group: servo-14
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.8153261624849759
+        y: 0.7230612691243489
+      - name: V14
+        type: pwr
+        group: servo-14
+        shape: octagonal
+        x: 0.8153261624849759
+        y: 0.8230612691243488
+      - name: G14
+        type: gnd
+        group: servo-14
+        shape: octagonal
+        x: 0.8153261624849759
+        y: 0.9230612691243489
+      - name: S15
+        type: io
+        group: servo-15
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.8537877009465145
+        y: 0.7230612691243489
+      - name: V15
+        type: pwr
+        group: servo-15
+        shape: octagonal
+        x: 0.8537877009465145
+        y: 0.8230612691243488
+      - name: G15
+        type: gnd
+        group: servo-15
+        shape: octagonal
+        x: 0.8537877009465145
+        y: 0.9230612691243489
+      - name: S16
+        type: io
+        group: servo-16
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          pwm: A
+        shape: octagonal
+        x: 0.8922492394080529
+        y: 0.7230612691243489
+      - name: V16
+        type: pwr
+        group: servo-16
+        shape: octagonal
+        x: 0.8922492394080529
+        y: 0.8230612691243488
+      - name: G16
+        type: gnd
+        group: servo-16
+        shape: octagonal
+        x: 0.8922492394080529
+        y: 0.9230612691243489
+groups:
+  - id: servo-13
+    parent: grp-qdgj9cb
+    housing:
+      kind: dupont
+      x: 0.7768646240234375
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-14
+    parent: grp-qdgj9cb
+    housing:
+      kind: dupont
+      x: 0.8153261624849759
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-15
+    parent: grp-qdgj9cb
+    housing:
+      kind: dupont
+      x: 0.8537877009465143
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-16
+    parent: grp-qdgj9cb
+  - id: grp-qdgj9cb
+  - id: servo-1
+    name: Servo 1
+    housing:
+      kind: dupont
+      x: 0.16149820963541667
+      y: 0.8244855244954425
+      rotation: 90
+  - id: servo-2
+    name: Servo 2
+    housing:
+      kind: dupont
+      x: 0.19995974809695513
+      y: 0.8244855244954424
+      rotation: 90
+  - id: servo-3
+    name: Servo 3
+    housing:
+      kind: dupont
+      x: 0.2384212865584936
+      y: 0.8244855244954425
+      rotation: 90
+  - id: servo-4
+    name: Servo 4
+    housing:
+      kind: dupont
+      x: 0.27688282502003203
+      y: 0.8244855244954425
+      rotation: 90
+  - id: servo-5
+    name: Servo 5
+    housing:
+      kind: dupont
+      x: 0.36084935506184895
+      y: 0.8182984110514322
+      rotation: 90
+  - id: servo-6
+    name: Servo 6
+    housing:
+      kind: dupont
+      x: 0.39931089352338744
+      y: 0.8182984110514322
+      rotation: 90
+  - id: servo-7
+    name: Servo 7
+    housing:
+      kind: dupont
+      x: 0.4377724319849259
+      y: 0.8182984110514322
+      rotation: 90
+  - id: servo-8
+    name: Servo 8
+    housing:
+      kind: dupont
+      x: 0.4762339704464643
+      y: 0.8182984110514322
+      rotation: 90
+  - id: servo-9
+    name: Servo 9
+    housing:
+      kind: dupont
+      x: 0.5869422403971354
+      y: 0.8262598266601561
+      rotation: 90
+  - id: servo-10
+    name: Servo 10
+    housing:
+      kind: dupont
+      x: 0.6254037788586738
+      y: 0.8262598266601561
+      rotation: 90
+  - id: servo-11
+    name: Servo 11
+    housing:
+      kind: dupont
+      x: 0.6638653173202123
+      y: 0.8262598266601561
+      rotation: 90
+  - id: servo-12
+    name: Servo 12
+    housing:
+      kind: dupont
+      x: 0.7023268557817508
+      y: 0.8262598266601561
+      rotation: 90
+  - id: servo-13
+    name: Servo 13
+    housing:
+      kind: dupont
+      x: 0.7768646240234375
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-14
+    name: Servo 14
+    housing:
+      kind: dupont
+      x: 0.8153261624849759
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-15
+    name: Servo 15
+    housing:
+      kind: dupont
+      x: 0.8537877009465143
+      y: 0.823061269124349
+      rotation: 90
+  - id: servo-16
+    name: Servo 16
+    housing:
+      kind: dupont
+      x: 0.8922492394080529
+      y: 0.8230612691243488
+      rotation: 90
+connectors:
+  - z: 0
+    kind: terminal
+    x: 0.5394592220587224
+    y: 0.17180067378986258
+    pins:
+      - name: V+
+        type: pwr
+      - name: GND
+        type: gnd
+image: image.png
+imageLayer:
+  x: -0.027718060811360745
+  y: -0.02911828198390576
+  w: 1.029302838643392
+  h: 1.0284366651466372
+layerVisibility:
+  pcb: false
+  image: true
+  holes: true
+  pins: true
+  components: true

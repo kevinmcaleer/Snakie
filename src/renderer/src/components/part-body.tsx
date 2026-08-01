@@ -282,7 +282,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
  */
 
 export type { Box } from './part-editor.util'
-import { connectorContacts, connectorDims } from './part-editor.util'
+import { connectorContacts, connectorDims, pinLabelHidden } from './part-editor.util'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -1492,7 +1492,7 @@ export function PartBody({
               {/* Mask the pad (not its label) so the through-hole shows the real
                   background, not a painted dot (#171). */}
               {!labelsOnly && (hasCuts ? <g mask={`url(#${maskId})`}>{pad}</g> : pad)}
-              {!bodyOnly && !rp.pin.labelHidden && (
+              {!bodyOnly && !pinLabelHidden(part, rp.pin) && (
               <g transform={labelGroupTf}>
               {boxThis ? (
                 <g transform={boxedCounter}>

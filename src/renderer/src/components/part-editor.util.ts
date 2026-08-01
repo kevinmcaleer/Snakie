@@ -334,8 +334,15 @@ function normalisePin(pin: PartPin): PartPin {
   if (pin.labelHidden === true) out.labelHidden = true
   if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
   if (typeof pin.derived === 'string' && pin.derived.trim()) out.derived = pin.derived.trim()
-  if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation) && !isPresetServoSignal(pin)) {
-    out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
+  if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
+    // A servo signal's label reads along the trio's own axis, toward the nearer
+    // top/bottom edge (#689). Boards authored when the tool preset a fixed 270
+    // are re-aimed by position rather than left pointing at the top of the board
+    // however far down they sit. Converges: a top-half pin re-aims to 270 and
+    // matches again; a bottom-half pin becomes 90 and stops matching.
+    out.rotation = isPresetServoSignal(pin)
+      ? servoSignalRotation(pin.y ?? 0.5)
+      : ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
   if (typeof pin.y === 'number' && Number.isFinite(pin.y)) out.y = clamp(pin.y, 0, 1)
@@ -1034,6 +1041,40 @@ export function withFaceImageLayer(
   if (side !== 'rear') return { imageLayer: next }
   // Keep the rest of the rear block (its filename, its inlined data) intact.
   return { rear: { ...(part.rear ?? {}), imageLayer: next } }
+}
+
+/**
+ * Should this pin's silk label be suppressed? (#689)
+ *
+ * A servo header's V+ and GND are the same two rails on every header, so a row of
+ * sixteen prints thirty-two labels of noise over the signal names that are the
+ * only ones you read. They are hidden by DEFAULT on a pin belonging to a servo
+ * (dupont) housing — a display rule, not stored data, so headers already on a
+ * board pick it up and nothing is rewritten on disk.
+ *
+ * An explicit {@link PartPin.labelHidden} still wins in both directions. Mirrors
+ * `contactLabelHidden`, which does the same for a connector's own contacts.
+ */
+export function pinLabelHidden(part: PartDefinition, pin: PartPin): boolean {
+  if (pin.labelHidden !== undefined) return pin.labelHidden
+  if (pin.type !== 'pwr' && pin.type !== 'gnd') return false
+  if (!pin.group) return false
+  return (part.groups ?? []).find((g) => g.id === pin.group)?.housing?.kind === 'dupont'
+}
+
+/**
+ * Which way a servo header's signal label should read (#689).
+ *
+ * The trio is a vertical column — signal, V+, ground — so its label belongs at
+ * the TOP or BOTTOM board edge, never the left or right: a row of sixteen headers
+ * throwing their labels sideways stacks them all on one edge, across each other.
+ *
+ * Which of the two is the nearer one, measured from the trio. That is what makes
+ * a row along the bottom read downward and a row along the top read upward,
+ * rather than every header pointing the same way whatever the board looks like.
+ */
+export function servoSignalRotation(trioCentreY: number): number {
+  return trioCentreY > 0.5 ? 90 : 270 // 90 = bottom, 270 = top
 }
 
 /** The selection kinds a duplicate is defined for (#661). */

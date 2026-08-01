@@ -13,6 +13,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codes stripped so it pastes cleanly into a bug report.
 
 ### Fixed
+- **Servo headers label themselves sensibly.** A row of headers near a side of the
+  board threw every signal label out to that edge, stacked over each other,
+  because the label followed the nearest edge without regard for which way the
+  header runs. A servo trio is a vertical column, so its label now reads to the
+  nearer top or bottom edge instead — never sideways. Boards made before this are
+  re-aimed the same way when opened.
+- **A servo header shows only its signal label again.** V+ and GND started
+  printing alongside it, which on sixteen headers is thirty-two labels of noise
+  over the names you actually read. They are hidden by default once more — as a
+  display rule, so headers already on your board pick it up with nothing rewritten.
 - **Castellated pads face the right way when you flip the board.** Turning a board
   over moved its castellations to the mirrored side but left them pointing the way
   they were authored, so their half-holes were cut on the wrong edge and ran back

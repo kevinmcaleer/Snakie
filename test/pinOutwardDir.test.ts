@@ -46,7 +46,10 @@ describe('isPresetServoSignal migration (#664)', () => {
     expect(isPresetServoSignal({ rotation: 270 })).toBe(false)
   })
 
-  it('is cleared by normalisePart, so an existing header reads to the nearest edge', () => {
+  it('is RE-AIMED by normalisePart along the trio, not cleared (#689)', () => {
+    // Superseded #664's clear-it behaviour: clearing fell back to "nearest edge",
+    // which threw a row of headers near the left edge sideways. Now the preset is
+    // re-aimed to the nearer TOP/BOTTOM edge instead — along the trio's own axis.
     const part = normalisePart({
       id: 'p',
       name: 'P',
@@ -62,8 +65,8 @@ describe('isPresetServoSignal migration (#664)', () => {
       ]
     } as unknown as PartDefinition)
     const pins = part.headers[0].pins
-    expect(pins[0].rotation).toBeUndefined()
-    expect(pins[1].rotation).toBe(270)
+    expect(pins[0].rotation).toBe(90) // bottom half -> reads downward
+    expect(pins[1].rotation).toBe(270) // untouched
     expect(pinOutwardDir(pins[0].rotation, pins[0].x!, pins[0].y!)).toBe('bottom')
   })
 })

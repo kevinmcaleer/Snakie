@@ -20,6 +20,8 @@ import {
   dissolveGroup,
   groupMembers,
   faceImageLayer,
+  pinLabelHidden,
+  servoSignalRotation,
   withFaceImageLayer,
   selectionGroupId,
   usedPinNames,
@@ -907,7 +909,20 @@ export function PartCanvas({
    *  at the 2.54 mm pitch, octagonal pads, sharing `gid` — plus a housing on that
    *  group, which is what a lead plugs into. */
   const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
-    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], signals: { pwm: 'A' }, shape: 'octagonal', group: gid, x: sx, y: sy }),
+    // The trio runs vertically, so its label reads to the nearer TOP/BOTTOM edge
+    // — never sideways, which on a row of sixteen stacks them all on one edge
+    // across each other (#689).
+    onFace({
+      name: `S${idx}`,
+      type: 'io',
+      capabilities: ['digital', 'pwm'],
+      signals: { pwm: 'A' },
+      shape: 'octagonal',
+      rotation: servoSignalRotation(clamp01(sy + stepNY)),
+      group: gid,
+      x: sx,
+      y: sy
+    }),
     { name: `V${idx}`, type: 'pwr', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + stepNY) },
     { name: `G${idx}`, type: 'gnd', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
   ]
@@ -3371,7 +3386,7 @@ export function PartCanvas({
                     group so it can be DRAGGED to a hand-placed spot (#…), stored as
                     `labelOffset` and applied here as a translate. `labelHidden` pins
                     (a servo header's V+/GND rows) draw the pad only — no annotation. */}
-                {!rp.pin.labelHidden && (
+                {!pinLabelHidden(part, rp.pin) && (
                 <g
                   transform={labelTf}
                   className={labelDraggable ? 'pcv__pinlabel--drag' : undefined}
