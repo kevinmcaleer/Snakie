@@ -39,6 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **A connector's housing follows its pins.** Move, align or rotate a group with a
+  connector on it and the pads went where you put them while the housing stayed
+  behind, drawn at the old spot and often facing the wrong way. The housing is now
+  worked out from the pins it holds, so it can't drift from them — for every
+  connector type, not just the one this showed up on.
 - **A servo lead now cables to a servo header in one drag.** The SG90's three pins
   were grouped but the group had no connector on it, so there was nothing to drag
   a lead *from* — the header end was ready, the servo end wasn't. Its lead is now a

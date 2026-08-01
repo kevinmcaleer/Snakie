@@ -927,6 +927,26 @@ export function allResolvedPins(
 }
 
 /**
+ * Where a housing sits and which way it faces, from the pins it holds (#696).
+ *
+ * The centre is the pins' mean; the rotation is the axis they run along — a
+ * column of pads is a housing stood on end, a row is one lying flat. Both are
+ * facts about the pins, so deriving them means the shell can never disagree with
+ * the pads it is drawn around, whatever moved them.
+ */
+export function housingGeometry(
+  pins: { x?: number; y?: number }[]
+): { x: number; y: number; rotation?: number } {
+  const xs = pins.map((p) => p.x ?? 0)
+  const ys = pins.map((p) => p.y ?? 0)
+  const x = xs.reduce((a, b) => a + b, 0) / xs.length
+  const y = ys.reduce((a, b) => a + b, 0) / ys.length
+  const spanX = Math.max(...xs) - Math.min(...xs)
+  const spanY = Math.max(...ys) - Math.min(...ys)
+  return spanY > spanX ? { x, y, rotation: 90 } : { x, y }
+}
+
+/**
  * Every housed group, presented as a {@link PartConnector} (#673).
  *
  * This is the adapter that makes "a connector is a group of pins with a housing"
@@ -952,9 +972,17 @@ export function housedGroupConnectors(
       .filter((p): p is PartPin => !!p)
     if (!pins.length) continue
     const h = g.housing
-    const conn: PartConnector = { kind: h.kind, x: h.x, y: h.y, pins }
+    // Position and rotation are DERIVED from the member pins, not read back from
+    // the housing (#696). They used to be stored state that every mutation had to
+    // remember to update — and none of them did, so dragging, aligning or rotating
+    // a housed group moved its pads and left the shell behind. Deriving removes
+    // the second copy entirely, for every connector kind at once, rather than
+    // syncing it at each of the mutation sites.
+    const placed = pins.filter((p) => p.x !== undefined && p.y !== undefined)
+    const geom = placed.length ? housingGeometry(placed) : { x: h.x, y: h.y, rotation: h.rotation }
+    const conn: PartConnector = { kind: h.kind, x: geom.x, y: geom.y, pins }
     if (h.variant) conn.variant = h.variant
-    if (h.rotation) conn.rotation = h.rotation
+    if (geom.rotation) conn.rotation = geom.rotation
     if (h.label) conn.label = h.label
     out.push({ gid: g.id, conn })
   }
@@ -1012,13 +1040,11 @@ export function withGroupHousing(
     .map((m) => part.headers[m.hi]?.pins[m.pi])
     .filter((p): p is PartPin => !!p && p.x !== undefined && p.y !== undefined)
   if (!pins.length) return {}
-  const cx = pins.reduce((n, p) => n + (p.x as number), 0) / pins.length
-  const cy = pins.reduce((n, p) => n + (p.y as number), 0) / pins.length
-  // A column of pads is a housing stood on end; a row is one lying flat.
-  const spanX = Math.max(...pins.map((p) => p.x as number)) - Math.min(...pins.map((p) => p.x as number))
-  const spanY = Math.max(...pins.map((p) => p.y as number)) - Math.min(...pins.map((p) => p.y as number))
-  const housing: GroupHousing = { kind, x: cx, y: cy }
-  if (spanY > spanX) housing.rotation = 90
+  // Same maths the renderer derives with, so what is stored and what is drawn
+  // can't disagree the moment either changes (#696).
+  const geom = housingGeometry(pins)
+  const housing: GroupHousing = { kind, x: geom.x, y: geom.y }
+  if (geom.rotation) housing.rotation = geom.rotation
   const next = known
     ? groups.map((g) => (g.id === gid ? { ...g, housing } : g))
     : [...groups, { id: gid, housing }]
