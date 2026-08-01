@@ -13,6 +13,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   allowed to. The housing menu now offers **Port type** for Grove and **Family**
   for JST, so the check that catches a plug fitting a differently-wired port works
   for these as well as for built-in connectors.
+- **A Grove Ultrasonic Ranger test.** `examples/ultrasonic_test.py` answers "is it
+  wired right, and is it any good?" — a burst of pings that stops with a plain-
+  English checklist if nothing comes back, then raw unsmoothed readings with the
+  echo rate, spread and worst jump between consecutive readings. The demo hides a
+  bad reading; this one shows it to you.
 - **A Grove Ultrasonic Ranger demo.** `examples/grove_ultrasonic_demo.py` reads the
   distance and feeds the Range instrument's gauge, with the two things that make an
   ultrasonic reading trustworthy built in: it paces the pings so it never measures
