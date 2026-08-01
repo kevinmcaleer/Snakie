@@ -154,6 +154,28 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
 }
 
 /**
+ * The angle a plug sits at for a HOUSED GROUP, from the housing itself (#697).
+ *
+ * A stored connector's contacts are laid out from its body, so they all share one
+ * outward normal and averaging them is exact. A housed group's contacts are
+ * ordinary pins that each work out their own facing — and in a servo trio only
+ * the signal pin carries a rotation, so the three disagree and the average comes
+ * out at a diagonal. That is the plug drawn at an angle.
+ *
+ * They are one physical connector, so the facing is a property of the HOUSING: a
+ * lead goes in perpendicular to the row of contacts, and outward from the board.
+ * A column of contacts is entered from the side; a row from above or below.
+ *
+ * Returned in the same convention as {@link plugAngle} — degrees of the outward
+ * normal — and in PART space, so the caller must turn it with the placed part.
+ */
+export function housingPlugAngle(conn: PartConnector): number {
+  const column = ((conn.rotation ?? 0) / 90) % 2 === 1
+  if (column) return conn.x < 0.5 ? 180 : 0 // entered from the left / right
+  return conn.y < 0.5 ? -90 : 90 //            entered from above / below
+}
+
+/**
  * The angle (degrees) a cable plug sits at, from its connector's contact normals.
  *
  * A plug is part of the SOCKET it's pushed into, so its orientation belongs to the

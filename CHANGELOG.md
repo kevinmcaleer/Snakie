@@ -39,6 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **Cable plugs sit square to their socket.** The plug drawn at each end of a lead
+  was angled diagonally when the socket was a group of pins rather than a built-in
+  connector — its contacts each worked out their own direction and the average came
+  out on the skew. The plug now takes its angle from the socket itself, so it is
+  always square to it.
 - **A connector's housing follows its pins.** Move, align or rotate a group with a
   connector on it and the pads went where you put them while the housing stayed
   behind, drawn at the old spot and often facing the wrong way. The housing is now

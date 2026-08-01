@@ -24,7 +24,7 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit, plugAngle } from './cable'
+import { cableRole, conductorColour, connectorFit, housingPlugAngle, plugAngle } from './cable'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
@@ -1482,8 +1482,15 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    * contacts are header pins, so their indices sit wherever those pins do rather
    * than in a contiguous block at the end.
    */
-  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector }[] =>
-    allConnectors(def).map((conn) => ({ conn, idx: connectorEndpointIndices(def, conn) }))
+  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector; housed: boolean }[] => {
+    const stored = def.connectors?.length ?? 0
+    return allConnectors(def).map((conn, i) => ({
+      conn,
+      idx: connectorEndpointIndices(def, conn),
+      // `allConnectors` lists the stored ones first, then the housed groups.
+      housed: i >= stored
+    }))
+  }
   const endpointConnector = (endpoint: string): EndpointConn | null => {
     const { key, index } = parseEp(endpoint)
     const def = subjByKey.get(key)?.partDef
@@ -1541,7 +1548,7 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   for (const s of subjects) {
     const def = s.partDef
     if (!def) continue
-    connectorRanges(def).forEach(({ idx, conn }, ci) => {
+    connectorRanges(def).forEach(({ idx, conn, housed }, ci) => {
       const pts: { x: number; y: number }[] = []
       // The contacts' outward normals — already turned with the placed part by
       // `rotateNormal`, so they give the socket's facing in WORLD space.
@@ -1569,7 +1576,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         cx,
         cy,
         r,
-        angle: plugAngle(norms)
+        // A housed group's contacts are ordinary pins that each work out their
+        // own facing, so averaging them lands on a diagonal (#697). They are one
+        // connector, so take the facing from the housing and turn it with the
+        // placed part, exactly as the contact normals were turned.
+        angle: housed ? housingPlugAngle(conn) + (s.rotation ?? 0) : plugAngle(norms)
       })
     })
   }
