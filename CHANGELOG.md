@@ -40,6 +40,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Align, distribute and rotate now cover every kind of grouped item.** Selecting
+  and dragging a group already treated connectors, LEDs, buttons and mounting
+  holes as members; aligning or rotating one silently ignored them. A group made
+  of any mix now aligns, distributes and rotates as one rigid unit — and a
+  connector's own body rotation is turned a quarter with the group rather than
+  being overwritten.
 - **Connector contact labels sit at the board edge, like every other pin.** They
   were drawn by the connector renderer, which had its own copy of the pin-label
   logic and its own idea of where a label goes. Contacts now label through the

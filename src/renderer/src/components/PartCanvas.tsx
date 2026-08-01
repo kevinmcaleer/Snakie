@@ -19,6 +19,7 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  selectionGroupId,
   usedPinNames,
   type GroupComponentKind,
   groupRootId,
@@ -1009,10 +1010,11 @@ export function PartCanvas({
   // The alignment toolbar aligns a UNION of selected pins + components. Each is
   // resolved to a normalised centre (cx, cy); pins/labels move to absolute
   // targets, shapes translate by the delta (so polygon points come along too).
+  // Every groupable kind (#676). A shape translates (it carries polygon points);
+  // everything else is point-positioned and takes x/y directly.
   type AlignRef =
     | { kind: 'pin'; hi: number; pi: number }
-    | { kind: 'shape'; index: number }
-    | { kind: 'label'; index: number }
+    | { kind: GroupComponentKind; index: number }
 
   /** Geometric centre of a shape/label in normalised coords. */
   const componentCenter = (
@@ -1089,10 +1091,6 @@ export function PartCanvas({
       if (rp) out.push({ ref: { kind: 'pin', hi: s.hi, pi: s.pi }, cx: rp.x, cy: rp.y })
     }
     for (const c of selComponents) {
-      // Align / distribute deliberately still act on pins, shapes and labels only
-      // (#665 widened SELECTION and DRAG); the other kinds are skipped rather
-      // than half-supported.
-      if (c.type !== 'shape' && c.type !== 'label') continue
       const ctr = componentCenter(c.type, c.index)
       if (ctr) out.push({ ref: { kind: c.type, index: c.index }, cx: ctr.cx, cy: ctr.cy })
     }
@@ -1101,11 +1099,7 @@ export function PartCanvas({
 
   /** The `group` id of an align ref (undefined = loose). */
   const groupOfRef = (ref: AlignRef): string | undefined =>
-    ref.kind === 'pin'
-      ? part.headers[ref.hi]?.pins[ref.pi]?.group
-      : ref.kind === 'shape'
-        ? shapes[ref.index]?.group
-        : labels[ref.index]?.group
+    selectionGroupId(part, ref.kind === 'pin' ? { type: 'pin', hi: ref.hi, pi: ref.pi } : { type: ref.kind, index: ref.index })
 
   /** Partition the selection into ALIGNMENT UNITS: each grouped item's whole group
    *  (by root) is ONE rigid unit — aligned/distributed by its bounding-box centre,
@@ -1142,18 +1136,34 @@ export function PartCanvas({
   /** Apply per-item axis targets: pins/labels set absolute, shapes translate. */
   const commitAlignment = (targets: { ref: AlignRef; tcx?: number; tcy?: number }[]): void => {
     const pinSet = new Map<string, { x?: number; y?: number }>()
-    const labelSet = new Map<number, { x?: number; y?: number }>()
+    /** Point-positioned kinds: kind -> index -> new centre. */
+    const moves = new Map<GroupComponentKind, Map<number, { x?: number; y?: number }>>()
     const shapeDelta = new Map<number, { dx: number; dy: number }>()
     for (const t of targets) {
-      if (t.ref.kind === 'pin') pinSet.set(pinKey(t.ref.hi, t.ref.pi), { x: t.tcx, y: t.tcy })
-      else if (t.ref.kind === 'label') labelSet.set(t.ref.index, { x: t.tcx, y: t.tcy })
-      else {
+      if (t.ref.kind === 'pin') {
+        pinSet.set(pinKey(t.ref.hi, t.ref.pi), { x: t.tcx, y: t.tcy })
+      } else if (t.ref.kind === 'shape') {
+        // A shape owns polygon points, so it TRANSLATES rather than being moved.
         const c = componentCenter('shape', t.ref.index)
         shapeDelta.set(t.ref.index, {
           dx: t.tcx !== undefined ? t.tcx - (c?.cx ?? 0) : 0,
           dy: t.tcy !== undefined ? t.tcy - (c?.cy ?? 0) : 0
         })
+      } else {
+        const m = moves.get(t.ref.kind) ?? new Map()
+        m.set(t.ref.index, { x: t.tcx, y: t.tcy })
+        moves.set(t.ref.kind, m)
       }
+    }
+    const place = <T extends { x: number; y: number }>(list: T[], kind: GroupComponentKind): T[] => {
+      const m = moves.get(kind)
+      if (!m) return list
+      return list.map((it, i) => {
+        const u = m.get(i)
+        return u
+          ? { ...it, ...(u.x !== undefined ? { x: clamp01(u.x) } : {}), ...(u.y !== undefined ? { y: clamp01(u.y) } : {}) }
+          : it
+      })
     }
     commit({
       ...part,
@@ -1168,10 +1178,11 @@ export function PartCanvas({
         const d = shapeDelta.get(i)
         return d ? translateShape(s, d.dx, d.dy) : s
       }),
-      labels: labels.map((l, i) => {
-        const u = labelSet.get(i)
-        return u ? { ...l, ...(u.x !== undefined ? { x: clamp01(u.x) } : {}), ...(u.y !== undefined ? { y: clamp01(u.y) } : {}) } : l
-      })
+      labels: place(labels, 'label'),
+      connectors: place(connectors, 'connector'),
+      onboardLeds: place(onboardLeds, 'led'),
+      buttons: place(buttons, 'button'),
+      mountingHoles: place(holes, 'hole')
     })
   }
 
@@ -1352,7 +1363,13 @@ export function PartCanvas({
     }
     const pinUpd = new Map<string, { x: number; y: number; rotation: number }>()
     const shapeUpd = new Map<number, { x: number; y: number; rotation: number }>()
-    const labelUpd = new Map<number, { x: number; y: number }>()
+    /** Point-positioned kinds: kind -> index -> new position (+ own rotation). */
+    const pointUpds = new Map<GroupComponentKind, Map<number, { x: number; y: number; rotation?: number }>>()
+    const pointUpd = (k: GroupComponentKind): Map<number, { x: number; y: number; rotation?: number }> => {
+      const m = pointUpds.get(k) ?? new Map()
+      pointUpds.set(k, m)
+      return m
+    }
     for (const { m, cx: mcx, cy: mcy } of pts) {
       const r = rotedCentre(mcx, mcy)
       if (m.kind === 'pin') {
@@ -1368,9 +1385,29 @@ export function PartCanvas({
         const offX = ctr ? ctr.cx - s.x : 0
         const offY = ctr ? ctr.cy - s.y : 0
         shapeUpd.set(m.index, { x: r.x - offX, y: r.y - offY, rotation: ((s.rotation ?? 0) + 90) % 360 })
+      } else if (m.kind === 'connector') {
+        // A connector carries its OWN body rotation, which turns its contacts and
+        // silk together — compose with it rather than overwrite it, the same way
+        // a pin's rotation is turned rather than replaced.
+        const c = connectors[m.index]
+        pointUpd('connector').set(m.index, { x: r.x, y: r.y, rotation: ((c.rotation ?? 0) + 90) % 360 })
+      } else if (m.kind === 'led') {
+        pointUpd('led').set(m.index, { x: r.x, y: r.y })
+      } else if (m.kind === 'button') {
+        pointUpd('button').set(m.index, { x: r.x, y: r.y })
+      } else if (m.kind === 'hole') {
+        pointUpd('hole').set(m.index, { x: r.x, y: r.y })
       } else {
-        labelUpd.set(m.index, { x: r.x, y: r.y })
+        pointUpd('label').set(m.index, { x: r.x, y: r.y })
       }
+    }
+    const turn = <T extends { x: number; y: number }>(list: T[], kind: GroupComponentKind): T[] => {
+      const m = pointUpds.get(kind)
+      if (!m) return list
+      return list.map((it, i) => {
+        const u = m.get(i)
+        return u ? { ...it, x: u.x, y: u.y, ...(u.rotation !== undefined ? { rotation: u.rotation } : {}) } : it
+      })
     }
     commit({
       ...part,
@@ -1385,10 +1422,11 @@ export function PartCanvas({
         const u = shapeUpd.get(i)
         return u ? { ...s, x: u.x, y: u.y, rotation: u.rotation } : s
       }),
-      labels: labels.map((l, i) => {
-        const u = labelUpd.get(i)
-        return u ? { ...l, x: u.x, y: u.y } : l
-      })
+      labels: turn(labels, 'label'),
+      connectors: turn(connectors, 'connector'),
+      onboardLeds: turn(onboardLeds, 'led'),
+      buttons: turn(buttons, 'button'),
+      mountingHoles: turn(holes, 'hole')
     })
   }
 
