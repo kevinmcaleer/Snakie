@@ -49,12 +49,14 @@ type Source = 'local' | 'catalog'
  * here — rather than imported from `src/main` — so the renderer bundle stays
  * free of main-only modules, mirroring `sanitiseBoardId`.
  */
+const ESP_BOOTLOADER_OFFSET: Record<string, string> = { esp32: '0x1000', esp32s2: '0x1000' }
+
 function flashTargetForFamily(family: string): { board: BoardType; offset?: string } {
   const fam = family.trim().toLowerCase()
   if (fam.startsWith('rp2')) return { board: 'rp2040' }
   if (fam.startsWith('nrf') || fam === 'microbit') return { board: 'microbit' }
   if (fam === 'esp8266') return { board: 'esp8266', offset: '0x0' }
-  if (fam.startsWith('esp')) return { board: 'esp32', offset: fam === 'esp32' ? '0x1000' : '0x0' }
+  if (fam.startsWith('esp')) return { board: 'esp32', offset: ESP_BOOTLOADER_OFFSET[fam] ?? '0x0' }
   return { board: 'rp2040' }
 }
 
@@ -105,6 +107,15 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [profileId, setProfileId] = useState<string>('')
   /** Erase the whole flash before writing (#681). */
   const [eraseFirst, setEraseFirst] = useState<boolean>(false)
+  /**
+   * Mirrors {@link profileId} for the async board detection (#682).
+   *
+   * Detection `await`s a port scan AND an esptool check, so it commonly resolves
+   * AFTER the user has picked a board — and it captured `profileId` as it was
+   * when the effect ran, i.e. empty. Reading the ref lets it see a choice made
+   * while it was in flight.
+   */
+  const profileRef = useRef<string>('')
   const [port, setPort] = useState<string>('')
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
@@ -190,9 +201,13 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
       ])
       setCandidates(found)
       setEsptool(tool)
-      // Adopt the first detected candidate as a sensible default.
+      // Adopt the first detected candidate as a sensible default — but NEVER
+      // over an explicitly chosen board (#682). Detection only knows the coarse
+      // BoardType, whose ESP offset is the original ESP32's 0x1000; silently
+      // applying that over a profile's 0x0 is what made an ESP32-S3 flash to the
+      // wrong address after the user had picked the right board.
       const first = found[0]
-      if (first) {
+      if (first && !profileRef.current) {
         setBoard(first.board)
         setOffset(DEFAULT_OFFSET[first.board])
         // port / mountPath / detectedMicrobit are derived from the selected board
@@ -220,6 +235,10 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   }, [board, candidates])
 
   const handleBoardChange = useCallback((next: BoardType): void => {
+    // Changing the coarse type by hand means going manual: drop the profile
+    // rather than leave it claiming settings the user has just overridden.
+    setProfileId('')
+    profileRef.current = ''
     setBoard(next)
     setOffset(DEFAULT_OFFSET[next])
     // Reset the drive-copy opt-in so switching away from and back to
@@ -303,6 +322,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const handleProfileChange = useCallback(
     (id: string): void => {
       setProfileId(id)
+      profileRef.current = id
       const p = boardProfile(id)
       if (!p) return
       const next: BoardType =
@@ -706,7 +726,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
                   value={offset}
                   disabled={flashing}
                   onChange={(e) => setOffset(e.target.value)}
-                  placeholder="0x1000"
+                  placeholder="0x0"
                 />
               </div>
 

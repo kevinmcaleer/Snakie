@@ -67,6 +67,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **The board you pick keeps its flash offset.** Choosing a board set the right
+  offset, and then the background scan for connected boards quietly set it back —
+  it only knows the coarse board type, whose ESP default is the original ESP32's
+  `0x1000`. On an ESP32-S3 that flashes to the wrong address, which succeeds and
+  leaves the board dead. Your choice now wins over the scan, and changing the
+  board type by hand drops the board selection rather than half-overriding it.
+- **ESP32-S2 firmware flashes to the right address.** It was being written at
+  `0x0`. Espressif moved the bootloader to `0x0` from the S3 onwards — the S2 keeps
+  the original ESP32's `0x1000`.
 - **The flashing log is big enough to read.** The output from the flashing tool
   showed about ten lines and collapsed to a couple early on — exactly when the
   connection messages appear — so you couldn't tell whether a flash was

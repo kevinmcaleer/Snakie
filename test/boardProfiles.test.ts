@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
 import {
   BOARD_PROFILES,
   boardProfile,
@@ -98,5 +99,28 @@ describe('boot-loop guards', () => {
     for (const b of BOARD_PROFILES) {
       if (b.requiredBuild) expect(b.requiredBuild.why.length, b.id).toBeGreaterThan(20)
     }
+  })
+})
+
+/**
+ * The two copies of the offset rule must never disagree (#682).
+ *
+ * `flashTargetForFamily` is duplicated — once in `src/main/firmware/catalog.ts`
+ * (canonical) and once inside `FirmwareFlasher.tsx`, so the renderer bundle stays
+ * free of main-only modules. A silent divergence there flashes to the wrong
+ * address, which succeeds and leaves the board dead.
+ */
+describe('the mirrored offset rule stays in step', () => {
+  const RENDERER = readFileSync('src/renderer/src/components/FirmwareFlasher.tsx', 'utf8')
+
+  it('both copies list the same 0x1000 exceptions', () => {
+    // The S2 shares the original ESP32's 0x1000; everything from the S3 on is 0x0.
+    expect(RENDERER).toContain("esp32: '0x1000'")
+    expect(RENDERER).toContain("esp32s2: '0x1000'")
+  })
+
+  it('the renderer no longer infers the offset from "is it plain esp32"', () => {
+    // That inference is what got the S2 wrong.
+    expect(RENDERER).not.toContain("fam === 'esp32' ? '0x1000' : '0x0'")
   })
 })
