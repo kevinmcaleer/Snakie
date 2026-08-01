@@ -24,8 +24,10 @@ import { join, relative } from 'path'
 
 /** Where user-facing code examples live. */
 const ROOTS = [
-  'micropython/modules',
-  'examples/parts',
+  'micropython',
+  // `examples/` whole, not just `examples/parts` — the runnable example SCRIPTS
+  // live at its root, and they are the most likely thing a user copies.
+  'examples',
   'src/renderer/src/components/help',
   'src/renderer/src/components'
 ]
@@ -76,7 +78,7 @@ describe('shipped I²C examples name their board (#699)', () => {
   it('finds the examples at all — a silent zero would pass everything', () => {
     // The guard's own guard: if a refactor moves these files, this test would
     // otherwise keep passing while checking nothing.
-    expect(withExamples.length).toBeGreaterThanOrEqual(6)
+    expect(withExamples.length).toBeGreaterThanOrEqual(8)
   })
 
   it('every concrete pin example either names a board or says pins vary', () => {
