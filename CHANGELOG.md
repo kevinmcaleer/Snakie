@@ -32,8 +32,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   every signal label to the TOP of the board however far down the header sat. The
   preset is gone, so labels now read out toward the nearest edge; the pin
   inspector's rotate control still aims a label by hand when you want that.
-  (Headers placed before this fix keep their stored direction — re-add them, or
-  use the rotate control, to pick up the new behaviour.)
+  Headers placed before this fix are migrated on load, so existing boards pick the
+  new behaviour up without being re-added; a direction you set by hand is left
+  alone.
 - **Connector contact labels line up with their contact.** Every connector's
   labels were anchored on the text baseline, which after rotation left them
   sitting beside the contact rather than on it. They are now centred on the

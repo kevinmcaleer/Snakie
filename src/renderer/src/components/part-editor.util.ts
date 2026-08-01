@@ -327,7 +327,7 @@ function normalisePin(pin: PartPin): PartPin {
   if (pin.labelHidden === true) out.labelHidden = true
   if (typeof pin.group === 'string' && pin.group.trim()) out.group = pin.group.trim()
   if (typeof pin.derived === 'string' && pin.derived.trim()) out.derived = pin.derived.trim()
-  if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation)) {
+  if (typeof pin.rotation === 'number' && Number.isFinite(pin.rotation) && !isPresetServoSignal(pin)) {
     out.rotation = ((Math.round(pin.rotation / 90) * 90) % 360 + 360) % 360
   }
   if (typeof pin.x === 'number' && Number.isFinite(pin.x)) out.x = clamp(pin.x, 0, 1)
@@ -341,6 +341,34 @@ function normalisePin(pin: PartPin): PartPin {
     out.labelOffset = { x: clamp(pin.labelOffset.x, -1.5, 1.5), y: clamp(pin.labelOffset.y, -1.5, 1.5) }
   }
   return out
+}
+
+/**
+ * MIGRATION (#664): is this the label-direction preset the servo-header tool used
+ * to stamp on its signal pin?
+ *
+ * The tool set `rotation: 270` on every servo signal, which pinned the label to
+ * the TOP of the board however far down the header sat. The preset is gone, but
+ * headers placed before that fix carry it in their saved parts.yml, so it is
+ * cleared on load and the label falls back to the nearest edge.
+ *
+ * Deliberately narrow — ALL FOUR marks of the tool's own output must match — so a
+ * rotation someone aimed by hand with the pin inspector is never touched. That
+ * control is offered for every pad shape and its whole point is to override the
+ * default, so clearing one the user chose would be the worse bug.
+ */
+export function isPresetServoSignal(pin: {
+  rotation?: number
+  shape?: string
+  type?: string
+  group?: string
+}): boolean {
+  return (
+    pin.rotation === 270 &&
+    pin.shape === 'octagonal' &&
+    pin.type === 'io' &&
+    /^servo-\d+$/.test(pin.group ?? '')
+  )
 }
 
 /** Normalise one component shape: validate kind, clamp coords, default colours. */
