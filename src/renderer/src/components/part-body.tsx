@@ -282,7 +282,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
  */
 
 export type { Box } from './part-editor.util'
-import { connectorContacts, connectorDims, pinLabelHidden } from './part-editor.util'
+import { connectorContacts, connectorDims, housedGroupConnectors, pinLabelHidden } from './part-editor.util'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -970,7 +970,29 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
  *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).
  *  `withLabels` draws the per-contact silk labels (SDA/SCL/…); the board view gates
  *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0): JSX.Element {
+/**
+ * Does a HOUSED GROUP of this kind draw a shell behind its pads? (#678)
+ *
+ * A shelled socket — QWIIC, Grove, JST, a screw terminal — is a body you plug
+ * into, and without it the part is just loose pads. A servo/DuPont header is the
+ * opposite: the pins ARE the connector, and a block drawn behind them doubles the
+ * visual (servo2040's trios read correctly as bare pads).
+ *
+ * That distinction is exactly the `male` flag `connectorStyle` already carries.
+ */
+export function housingDrawsShell(kind: PartConnector['kind']): boolean {
+  return !connectorStyle(kind).male
+}
+
+export function connectorGlyph(
+  cx: number,
+  cy: number,
+  conn: PartConnector,
+  selected = false,
+  pxPerMm = 0,
+  /** Draw the housing only — its contacts are real pins, drawn separately (#678). */
+  bodyOnly = false
+): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
   const { shell, edge, contact, male } = connectorStyle(conn.kind)
   const x0 = cx - w / 2
@@ -997,7 +1019,9 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
       {conn.kind === 'grove' && h >= 6 && (
         <rect x={x0 + w * 0.06} y={y0 + h * 0.12} width={w * 0.88} height={h * 0.34} fill="#d9d5c7" stroke="none" />
       )}
-      {conn.kind === 'terminal'
+      {bodyOnly
+        ? null
+        : conn.kind === 'terminal'
         ? // A screw terminal reads by its SCREWS, not by contact blades: a slotted
           // steel head per way, with the wire aperture below it on the mating face.
           Array.from({ length: n }, (_, i) => {
@@ -1370,6 +1394,19 @@ export function PartBody({
         )}
       </>
       )}
+
+      {/* Layer 3a: housed-group shells (#678). Drawn BEFORE the pins so the pads
+          of a QWIIC/Grove/JST/terminal sit inside their housing. A servo header
+          draws none — its pins are the connector, and a block behind them just
+          doubles the visual. */}
+      {!labelsOnly && visible.components &&
+        housedGroupConnectors(part).map(({ gid, conn }) =>
+          housingDrawsShell(conn.kind) ? (
+            <g key={`hg${gid}`} transform={conn.rotation ? `rotate(${conn.rotation} ${px(conn.x)} ${py(conn.y)})` : undefined}>
+              {connectorGlyph(px(conn.x), py(conn.y), conn, false, connPxPerMm, true)}
+            </g>
+          ) : null
+        )}
 
       {/* Layer 3: pins — pads (body layer) + their labels (overlay layer). The
           pinLabels mode paints the pads with the body and the labels on top. */}

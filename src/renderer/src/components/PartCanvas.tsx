@@ -19,6 +19,7 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  housedGroupConnectors,
   faceImageLayer,
   pinLabelHidden,
   pruneEmptyGroups,
@@ -59,7 +60,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, connectorContactLabels, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, connectorContactLabels, housingDrawsShell, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -3320,6 +3321,22 @@ export function PartCanvas({
             </g>
           )
         })}
+
+        {/* Housed-group shells (#678) — behind the pins, so a QWIIC/Grove/JST/
+            terminal's pads sit inside their housing. A servo header draws none:
+            its pins ARE the connector. */}
+        {visible.components &&
+          housedGroupConnectors(part).map(({ gid, conn }) =>
+            housingDrawsShell(conn.kind) ? (
+              <g
+                key={`hg${gid}`}
+                transform={conn.rotation ? `rotate(${conn.rotation} ${px(conn.x)} ${py(conn.y)})` : undefined}
+                style={{ pointerEvents: 'none' }}
+              >
+                {connectorGlyph(px(conn.x), py(conn.y), conn, false, connPxPerMm, true)}
+              </g>
+            ) : null
+          )}
 
         {/* Layer 3: pins (square / round / castellated / header) */}
         {visible.pins &&

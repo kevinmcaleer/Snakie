@@ -7,11 +7,13 @@ import {
   normalisePart,
   withGroupHousing
 } from '../src/renderer/src/components/part-editor.util'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { connectorGlyph, housingDrawsShell } from '../src/renderer/src/components/part-body'
 import { coerceGroupHousing } from '../src/shared/part'
 import { flattenPartPins } from '../src/shared/netlist'
 import { partFromYaml, partToYaml } from '../src/shared/part-yaml'
 import { connectorFit } from '../src/renderer/src/components/cable'
-import type { PartDefinition } from '../src/shared/part'
+import type { PartConnector, PartDefinition } from '../src/shared/part'
 
 /**
  * A connector as a group of pins with a housing (#673).
@@ -301,5 +303,32 @@ describe('servo headers are pins in a housed group (#681)', () => {
 
   it('registers the group, so it shows in the layers hierarchy', () => {
     expect(built.groups?.[0]).toMatchObject({ id: 'servo-1', name: 'Servo 1' })
+  })
+})
+
+/** Which housings draw a shell behind their pads (#678). */
+describe('housingDrawsShell (#678)', () => {
+  it('shells the sockets you plug INTO', () => {
+    for (const k of ['qwiic', 'grove', 'jst', 'terminal'] as const) {
+      expect(housingDrawsShell(k), k).toBe(true)
+    }
+  })
+
+  it('draws nothing behind a servo/DuPont header', () => {
+    // Its pins ARE the connector — servo2040's trios read correctly as bare
+    // pads, and a block behind them just doubles the visual.
+    expect(housingDrawsShell('dupont')).toBe(false)
+  })
+
+  it('the glyph can draw the body alone, for a housed group whose pins are real', () => {
+    const conn = { kind: 'qwiic', x: 0.5, y: 0.5, pins: [
+      { name: 'GND', type: 'gnd' }, { name: 'VCC', type: 'pwr' },
+      { name: 'SDA', type: 'io' }, { name: 'SCL', type: 'io' }
+    ] } as unknown as PartConnector
+    const full = renderToStaticMarkup(connectorGlyph(50, 50, conn, false, 10, false))
+    const body = renderToStaticMarkup(connectorGlyph(50, 50, conn, false, 10, true))
+    // Same housing, minus the contact blades the real pins now draw themselves.
+    expect(body.length).toBeLessThan(full.length)
+    expect(body).toContain('rect')
   })
 })

@@ -39,6 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **A converted connector still looks like a connector.** Turning a part's
+  connectors into pin groups left its sockets drawn as bare pads. A QWIIC, Grove,
+  JST or terminal housing is now drawn behind its pads, as it always was. A servo
+  header deliberately isn't — its pins are the connector, and a block behind them
+  just doubles it.
 - **No more deprecation warnings when flashing an ESP board.** Newer versions of
   the flashing tool renamed their commands, printing two warnings on every
   otherwise-successful flash — and would have stopped accepting the old names
