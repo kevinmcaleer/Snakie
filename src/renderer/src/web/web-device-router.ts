@@ -67,6 +67,7 @@ export function createWebDeviceRouter(): Record<string, unknown> {
     listDir: async (p = '/') => call(active, 'listDir', p),
     df: async () => call(active, 'df'),
     readFile: async (p: string) => call(active, 'readFile', p),
+    readFileLine: async (p: string, prefix: string) => call(active, 'readFileLine', p, prefix),
     readFileBytes: async (p: string) => call(active, 'readFileBytes', p),
     writeFile: async (p: string, contents: string) => call(active, 'writeFile', p, contents),
     remove: async (p: string) => call(active, 'remove', p),

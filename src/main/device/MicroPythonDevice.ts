@@ -74,6 +74,8 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     resolve: (data: Buffer) => void
     reject: (err: Error) => void
     timer: NodeJS.Timeout
+    /** The IDLE window, re-armed on every chunk — see {@link readUntil}. */
+    idleMs: number
   } | null = null
 
   /** Active while {@link runProgram} streams a program's stdout/stderr to the
@@ -235,6 +237,13 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
   private handleData(chunk: Buffer): void {
     // Always buffer for the raw-REPL reader (readUntil / stream pump).
     this.rxBuffer = Buffer.concat([this.rxBuffer, chunk])
+    // Bytes arrived, so the device is alive and answering: restart the idle
+    // window (#700). A read only fails when the device goes QUIET, never because
+    // what it is sending is large.
+    if (this.pending) {
+      clearTimeout(this.pending.timer)
+      this.pending.timer = this.armIdleTimer(this.pending.idleMs)
+    }
     if (this.streamPending) this.pumpStream()
     else this.tryResolvePending()
     // Forward raw bytes to the renderer REPL — EXCEPT while an internal `exec` or
@@ -322,20 +331,42 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     })
   }
 
+  /** Arm the idle timer that fails the current read after `ms` of SILENCE. */
+  private armIdleTimer(ms: number): NodeJS.Timeout {
+    return setTimeout(() => {
+      const p = this.pending
+      this.pending = null
+      p?.reject(new Error(`Device went quiet for ${ms}ms waiting for ${JSON.stringify(p.marker.toString('binary'))}`))
+    }, ms)
+  }
+
   /**
    * Wait until `marker` appears in the receive buffer, returning everything up
-   * to and including it. Rejects after `timeoutMs`.
+   * to and including it.
+   *
+   * `timeoutMs` is an **idle** window, not a total budget: it is restarted every
+   * time a byte arrives, so a read fails when the device stops answering and never
+   * merely because the answer is long (#700).
+   *
+   * A total budget was wrong by construction here. Reading a file hex-encodes it,
+   * so the wire time is proportional to its SIZE: reading the 80 KB
+   * `instruments.py` puts 161 KB on the wire, which is 14 s at 115200 baud against
+   * a 10 s limit. It could never succeed — and worse, aborting mid-transfer left
+   * the board still sending, so the remainder landed in the user's terminal as raw
+   * hex.
    */
   private readUntil(marker: string, timeoutMs = 5000): Promise<Buffer> {
     if (this.pending) {
       return Promise.reject(new Error('A read is already in progress'))
     }
     return new Promise<Buffer>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending = null
-        reject(new Error(`Timed out waiting for ${JSON.stringify(marker)}`))
-      }, timeoutMs)
-      this.pending = { marker: Buffer.from(marker, 'binary'), resolve, reject, timer }
+      this.pending = {
+        marker: Buffer.from(marker, 'binary'),
+        resolve,
+        reject,
+        timer: this.armIdleTimer(timeoutMs),
+        idleMs: timeoutMs
+      }
       // The marker may already be in the buffer from a previous read.
       this.tryResolvePending()
     })
@@ -427,6 +458,51 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     return op
   }
 
+  /**
+   * After an exec dies mid-flight, get the wire quiet again BEFORE the console
+   * starts listening (#700).
+   *
+   * A failed exec leaves the board still talking — mid `hexlify` dump, mid
+   * traceback — and the next thing those bytes reach is the user's terminal, which
+   * is how an aborted file read spewed raw hex into a REPL. Interrupt the board,
+   * wait for it to actually stop, and bin whatever arrived.
+   *
+   * Bounded and never throws: this runs on the failure path, where the connection
+   * may already be gone, and it must not replace the original error.
+   */
+  private async resyncAfterFailure(): Promise<void> {
+    try {
+      if (!this.isConnected()) return
+      // Drop any half-read state so nothing tries to resolve against the drain.
+      if (this.pending) {
+        clearTimeout(this.pending.timer)
+        this.pending = null
+      }
+      await this.write(CTRL_C).catch(() => undefined)
+      // Quiet means QUIET: wait for a gap with no new bytes, not a fixed sleep,
+      // because how long a board takes to stop depends on what it was doing.
+      const QUIET_MS = 250
+      const GIVE_UP_MS = 3000
+      const started = Date.now()
+      let last = this.rxBuffer.length
+      let lastChange = Date.now()
+      while (Date.now() - started < GIVE_UP_MS) {
+        await new Promise((r) => setTimeout(r, 50))
+        if (this.rxBuffer.length !== last) {
+          last = this.rxBuffer.length
+          lastChange = Date.now()
+        } else if (Date.now() - lastChange >= QUIET_MS) {
+          break
+        }
+      }
+    } catch {
+      // Never mask the real failure.
+    } finally {
+      // Whatever it managed to send is protocol debris, not console output.
+      this.rxBuffer = Buffer.alloc(0)
+    }
+  }
+
   private async execLocked(code: string, timeoutMs: number): Promise<ExecResult> {
     if (!this.isConnected()) {
       throw new Error('Not connected')
@@ -434,6 +510,7 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     // Suppress the renderer-console broadcast for the WHOLE exec (raw-REPL enter
     // through exit) so probe/banner/interrupt bytes never reach the terminal.
     this.execActive = true
+    let failed = false
     try {
       const enteredHere = !this.inRawRepl
       if (enteredHere) {
@@ -462,11 +539,18 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
         await this.readUntil('>', timeoutMs)
 
         return { stdout, stderr }
+      } catch (err) {
+        // Drain FIRST, while the console broadcast is still suppressed (#700).
+        failed = true
+        await this.resyncAfterFailure()
+        throw err
       } finally {
-        if (enteredHere) {
-          // Best-effort return to friendly REPL.
+        if (enteredHere && !failed) {
+          // Best-effort return to friendly REPL. Skipped after a resync, which
+          // already interrupted the board and left it at the friendly prompt.
           await this.exitRawRepl().catch(() => undefined)
         }
+        if (failed) this.inRawRepl = false
       }
     } finally {
       this.execActive = false
@@ -590,6 +674,35 @@ export class MicroPythonDevice extends EventEmitter implements SnakieDevice {
     ].join('\n')
     const hex = (await this.eval(code)).trim()
     return Buffer.from(hex, 'hex')
+  }
+
+  /**
+   * The first line of `path` starting with `prefix`, or `''` if there is none.
+   *
+   * The board does the searching, so what crosses the wire is one line rather than
+   * the file (#700). That distinction is not a micro-optimisation: reading a file
+   * hex-encodes it, so asking for `instruments.py` to learn its `__version__` put
+   * 161 KB on the wire — 14 s at 115200 baud — to keep about 25 bytes of it.
+   *
+   * Line-oriented rather than a head-read on purpose: it does not care where in
+   * the file the line sits, so it cannot start failing because a file grew or its
+   * header was reordered.
+   */
+  async readFileLine(path: string, prefix: string): Promise<string> {
+    const code = [
+      `_l = ''`,
+      `try:`,
+      `    with open(${pyStr(path)}) as _f:`,
+      `        for _x in _f:`,
+      `            if _x.startswith(${pyStr(prefix)}):`,
+      `                _l = _x`,
+      `                break`,
+      `except OSError:`,
+      `    pass`,
+      `print(_l)`,
+      `del _l`
+    ].join('\n')
+    return (await this.eval(code)).trim()
   }
 
   /**

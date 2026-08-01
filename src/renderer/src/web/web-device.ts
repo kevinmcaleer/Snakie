@@ -182,6 +182,25 @@ export function createWebDeviceApi(): Record<string, unknown> {
     readFile: async (path: string) =>
       capture(`import sys\nwith open(${pyStr(path)}) as f:\n    sys.stdout.write(f.read())`),
 
+    // The board finds the line, so one line crosses the wire, not the file (#700).
+    readFileLine: async (path: string, prefix: string) =>
+      (
+        await capture(
+          [
+            `_l = ''`,
+            `try:`,
+            `    with open(${pyStr(path)}) as _f:`,
+            `        for _x in _f:`,
+            `            if _x.startswith(${pyStr(prefix)}):`,
+            `                _l = _x`,
+            `                break`,
+            `except OSError:`,
+            `    pass`,
+            `print(_l)`
+          ].join('\n')
+        )
+      ).trim(),
+
     writeFile: async (path: string, contents: string) => {
       const hex = Array.from(enc.encode(contents))
         .map((b) => b.toString(16).padStart(2, '0'))

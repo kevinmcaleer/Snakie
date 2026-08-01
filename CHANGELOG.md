@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **Connecting a board no longer freezes the REPL and fills it with gibberish.**
+  Snakie checked whether your board's copy of the instruments library was current
+  by reading the whole 80 KB file back — 161 KB once encoded for the serial link,
+  about 14 seconds at the usual speed, against a 10-second limit it could never
+  meet. So every connection locked the terminal up, gave up, and then spilled the
+  half-delivered file into it as a wall of hex. It now asks the board for the
+  version line alone, so the check is instant; a read only times out if the board
+  actually goes quiet, rather than because the file is big; and if one does fail,
+  the connection is settled before the terminal starts listening again.
 - **I²C examples now say which board they're for.** Every example shipped with
   Snakie used the XIAO RP2040's pin numbers while calling them "a XIAO" — but the
   Grove port is `D4`/`D5` on every XIAO and the GPIOs behind those names differ by

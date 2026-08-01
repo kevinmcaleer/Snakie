@@ -96,6 +96,9 @@ export interface SnakieDevice {
   softReset(): Promise<void>
   listDir(path?: string): Promise<DirEntry[]>
   readFile(path: string): Promise<string>
+  /** The first line of `path` starting with `prefix` (`''` if none) — the board
+   *  searches, so one line crosses the wire instead of the file (#700). */
+  readFileLine(path: string, prefix: string): Promise<string>
   writeFile(path: string, contents: string | Buffer): Promise<void>
   remove(path: string): Promise<void>
   mkdir(path: string): Promise<void>

@@ -234,6 +234,7 @@ export function createWebSerialBackend(): Record<string, unknown> {
     listDir: async (p = '/') => need().listDir(p),
     df: async () => null,
     readFile: async (p: string) => need().readFile(p),
+    readFileLine: async (p: string, prefix: string) => need().readFileLine(p, prefix),
     readFileBytes: async (p: string) => need().readFileBytes(p),
     writeFile: async (p: string, contents: string) => need().writeFile(p, contents),
     remove: async (p: string) => need().remove(p),

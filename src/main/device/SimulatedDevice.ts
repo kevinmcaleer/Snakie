@@ -245,6 +245,22 @@ export class SimulatedDevice extends EventEmitter implements SnakieDevice {
     return this.runtime.runCaptured(code)
   }
 
+  async readFileLine(path: string, prefix: string): Promise<string> {
+    const code = [
+      `_l = ''`,
+      `try:`,
+      `    with open(${pyStr(path)}) as _f:`,
+      `        for _x in _f:`,
+      `            if _x.startswith(${pyStr(prefix)}):`,
+      `                _l = _x`,
+      `                break`,
+      `except OSError:`,
+      `    pass`,
+      `print(_l)`
+    ].join('\n')
+    return (await this.runtime.runCaptured(code)).trim()
+  }
+
   async writeFile(path: string, contents: string | Buffer): Promise<void> {
     const data = Buffer.isBuffer(contents) ? contents : Buffer.from(contents, 'utf8')
     // The VFS starts EMPTY (no `/lib` by default), so create any missing parent

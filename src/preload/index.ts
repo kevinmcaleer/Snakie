@@ -213,6 +213,8 @@ const device = {
     unwrap(ipcRenderer.invoke('device:df')),
   /** Read a file's contents (UTF-8). */
   readFile: (path: string): Promise<string> => unwrap(ipcRenderer.invoke('device:readFile', path)),
+  readFileLine: (path: string, prefix: string): Promise<string> =>
+    unwrap(ipcRenderer.invoke('device:readFileLine', path, prefix)),
   /** Write contents to a file (created/overwritten), chunked. */
   writeFile: (path: string, contents: string): Promise<void> =>
     unwrap(ipcRenderer.invoke('device:writeFile', path, contents)),

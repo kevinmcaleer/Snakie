@@ -87,6 +87,8 @@ type Pending = {
   resolve: (v: Uint8Array) => void
   reject: (e: Error) => void
   timer: ReturnType<typeof setTimeout>
+  /** The IDLE window, re-armed on every chunk — see `readUntil`. */
+  idleMs: number
 }
 
 export class RawReplClient {
@@ -113,6 +115,12 @@ export class RawReplClient {
 
   private handleData(chunk: Uint8Array): void {
     this.rxBuffer = concat(this.rxBuffer, chunk)
+    // The device is answering, so restart the idle window (#700): a read fails
+    // only on SILENCE, never because the reply is long.
+    if (this.pending) {
+      clearTimeout(this.pending.timer)
+      this.pending.timer = this.armIdleTimer(this.pending.idleMs)
+    }
     if (this.streamPending) this.pumpStream()
     else this.tryResolvePending()
     if (!this.execActive) this.onConsole(chunk)
@@ -165,14 +173,34 @@ export class RawReplClient {
     return this.transport.write(typeof data === 'string' ? bin(data) : data)
   }
 
+  /** Fail the current read after `ms` of SILENCE (not of elapsed time). */
+  private armIdleTimer(ms: number): ReturnType<typeof setTimeout> {
+    return setTimeout(() => {
+      const p = this.pending
+      this.pending = null
+      p?.reject(new Error(`Device went quiet for ${ms}ms waiting for ${JSON.stringify(dec.decode(p.marker))}`))
+    }, ms)
+  }
+
+  /**
+   * Wait until `marker` appears in the receive buffer.
+   *
+   * `timeoutMs` is an **idle** window, restarted on every byte that arrives, so a
+   * read fails when the device stops answering rather than because the answer is
+   * long (#700). A total budget failed large reads *because* they were large:
+   * reading a file hex-encodes it, so an 80 KB library is 161 KB on the wire and
+   * cannot land inside a fixed 10 s no matter how healthy the link is.
+   */
   private readUntil(marker: string, timeoutMs = 5000): Promise<Uint8Array> {
     if (this.pending) return Promise.reject(new Error('A read is already in progress'))
     return new Promise<Uint8Array>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending = null
-        reject(new Error(`Timed out waiting for ${JSON.stringify(marker)}`))
-      }, timeoutMs)
-      this.pending = { marker: bin(marker), resolve, reject, timer }
+      this.pending = {
+        marker: bin(marker),
+        resolve,
+        reject,
+        timer: this.armIdleTimer(timeoutMs),
+        idleMs: timeoutMs
+      }
       this.tryResolvePending()
     })
   }
@@ -317,6 +345,30 @@ export class RawReplClient {
 
   async readFile(path: string): Promise<string> {
     return dec.decode(await this.readFileBytes(path))
+  }
+
+  /**
+   * The first line of `path` starting with `prefix`, or `''`.
+   *
+   * The BOARD searches, so one line crosses the wire instead of the whole file
+   * (#700) — reading a library back just to learn its `__version__` was 161 KB of
+   * hex to keep about 25 bytes.
+   */
+  async readFileLine(path: string, prefix: string): Promise<string> {
+    const code = [
+      `_l = ''`,
+      `try:`,
+      `    with open(${pyStr(path)}) as _f:`,
+      `        for _x in _f:`,
+      `            if _x.startswith(${pyStr(prefix)}):`,
+      `                _l = _x`,
+      `                break`,
+      `except OSError:`,
+      `    pass`,
+      `print(_l)`,
+      `del _l`
+    ].join('\n')
+    return (await this.eval(code)).trim()
   }
 
   async readFileBytes(path: string): Promise<Uint8Array> {

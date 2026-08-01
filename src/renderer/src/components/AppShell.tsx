@@ -639,8 +639,13 @@ export function AppShell(): JSX.Element {
       // copy actually imported, so its freshness is what matters (otherwise a
       // current /lib masks a stale root copy and we'd never offer the update).
       const path = rootFound ? INSTRUMENTS_ROOT_PATH : INSTRUMENTS_LIB_PATH
+      // Ask the board for the VERSION LINE, not the file (#700). Reading the whole
+      // library back to keep one line put 161 KB of hex on the wire — 14 s at
+      // 115200 baud against a 10 s limit — so this check could never complete: it
+      // froze the REPL on every connect and then spilled the undelivered remainder
+      // into the user's terminal.
       const [boardSrc, bundledSrc] = await Promise.all([
-        window.api.device.readFile(path).catch(() => null),
+        window.api.device.readFileLine(path, '__version__').catch(() => null),
         window.api.instruments.librarySource().catch(() => null)
       ])
       if (!active) return

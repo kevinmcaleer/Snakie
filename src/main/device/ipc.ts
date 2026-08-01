@@ -175,6 +175,9 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   )
 
   ipcMain.handle('device:readFile', (_e, path: string) => wrap(() => getActive().readFile(path)))
+  ipcMain.handle('device:readFileLine', (_e, path: string, prefix: string) =>
+    wrap(() => getActive().readFileLine(path, prefix))
+  )
 
   ipcMain.handle('device:writeFile', (_e, path: string, contents: string) =>
     wrap(() => getActive().writeFile(path, contents))
