@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'fs'
 import {
   allConnectors,
+  connectorEndpointIndices,
   housedGroupConnectors,
   normalisePart
 } from '../src/renderer/src/components/part-editor.util'
@@ -152,5 +153,49 @@ describe('servo2040 ships housed servo headers (#675)', () => {
     expect(part.headers.reduce((n, h) => n + h.pins.length, 0)).toBe(92)
     expect(part.connectors).toHaveLength(1)
     expect(flattenPartPins(part)).toHaveLength(96)
+  })
+})
+
+/** Endpoint indices resolve for BOTH connector shapes (#673). */
+describe('connectorEndpointIndices (#673)', () => {
+  const mixed = {
+    id: 'p',
+    name: 'P',
+    dimensions: { width: 40, height: 20 },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'GP0', type: 'io', x: 0.9, y: 0.5 },
+          ...trio(1, 'g1'),
+          { name: 'GP1', type: 'io', x: 0.9, y: 0.7 }
+        ]
+      }
+    ],
+    connectors: [
+      { kind: 'qwiic', x: 0.7, y: 0.7, pins: [{ name: 'SDA', type: 'io' }, { name: 'SCL', type: 'io' }] }
+    ],
+    groups: [{ id: 'g1', housing: { kind: 'dupont', x: 0.2, y: 0.2 } }]
+  } as unknown as PartDefinition
+
+  it('gives a stored connector its contiguous block after the header pins', () => {
+    const qwiic = mixed.connectors![0]
+    // 5 header pins, so the QWIIC's contacts are 5 and 6.
+    expect(connectorEndpointIndices(mixed, qwiic)).toEqual([5, 6])
+  })
+
+  it('gives a housed group the indices its pins ALREADY have', () => {
+    const [h] = housedGroupConnectors(mixed)
+    // The trio sits at header positions 1..3 — not appended at the end.
+    expect(connectorEndpointIndices(mixed, h.conn)).toEqual([1, 2, 3])
+  })
+
+  it('agrees with the authoritative flattened order', () => {
+    const flat = flattenPartPins(mixed)
+    for (const conn of allConnectors(mixed)) {
+      connectorEndpointIndices(mixed, conn).forEach((idx, i) => {
+        expect(flat[idx]).toBe(conn.pins[i])
+      })
+    }
   })
 })

@@ -31,7 +31,14 @@ import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type 
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
-import { pinPositions, resolvedPins, schematicSymbolLayout, type Box } from './part-editor.util'
+import {
+  allConnectors,
+  connectorEndpointIndices,
+  pinPositions,
+  resolvedPins,
+  schematicSymbolLayout,
+  type Box
+} from './part-editor.util'
 import { Board, BoardDefs } from './BoardGraph'
 import { McuSymbol, PartSchematicSymbol } from './SchematicSymbols'
 import { routeOrthogonal, toSvgPath, type RBox, type RSide, type RWire } from './ortho-router'
@@ -1467,23 +1474,25 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   }
   /** The connector contacts of a part def as [firstPinIndex, connector] pairs —
    *  connector contacts are numbered after the header pins. */
-  const connectorRanges = (def: PartDefinition): { base: number; conn: PartConnector }[] => {
-    let acc = resolvedPins(def).length
-    return (def.connectors ?? []).map((conn) => {
-      const base = acc
-      acc += conn.pins.length
-      return { base, conn }
-    })
-  }
+  /**
+   * Every connector on a part — stored in `connectors[]` OR a housed group (#673)
+   * — with the flat endpoint index of each of its contacts.
+   *
+   * Indices come from pin IDENTITY, not base+offset arithmetic: a housed group's
+   * contacts are header pins, so their indices sit wherever those pins do rather
+   * than in a contiguous block at the end.
+   */
+  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector }[] =>
+    allConnectors(def).map((conn) => ({ conn, idx: connectorEndpointIndices(def, conn) }))
   const endpointConnector = (endpoint: string): EndpointConn | null => {
     const { key, index } = parseEp(endpoint)
     const def = subjByKey.get(key)?.partDef
     if (!def) return null
     const ranges = connectorRanges(def)
     for (let ci = 0; ci < ranges.length; ci++) {
-      const { base, conn } = ranges[ci]
-      if (index >= base && index < base + conn.pins.length) {
-        const endpoints = conn.pins.map((pin, pi) => endpointOf(key, pin.name, base + pi))
+      const { idx, conn } = ranges[ci]
+      if (idx.includes(index)) {
+        const endpoints = conn.pins.map((pin, pi) => endpointOf(key, pin.name, idx[pi]))
         return { key, connIndex: ci, conn, endpoints }
       }
     }
@@ -1531,16 +1540,17 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   const connectorTargets: ConnectorTarget[] = []
   for (const s of subjects) {
     const def = s.partDef
-    if (!def?.connectors?.length) continue
-    connectorRanges(def).forEach(({ base, conn }, ci) => {
+    if (!def) continue
+    connectorRanges(def).forEach(({ idx, conn }, ci) => {
       const pts: { x: number; y: number }[] = []
       // The contacts' outward normals — already turned with the placed part by
       // `rotateNormal`, so they give the socket's facing in WORLD space.
       const norms: { ox: number; oy: number }[] = []
       const endpoints: string[] = []
       for (const p of s.pins) {
-        if (p.index < base || p.index >= base + conn.pins.length) continue
-        endpoints[p.index - base] = endpointOf(s.key, p.name, p.index)
+        const at = idx.indexOf(p.index)
+        if (at < 0) continue
+        endpoints[at] = endpointOf(s.key, p.name, p.index)
         for (const a of p.anchors) {
           pts.push({ x: s.x + a.x, y: s.y + a.y })
           norms.push({ ox: a.ox, oy: a.oy })

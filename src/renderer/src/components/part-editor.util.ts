@@ -59,6 +59,7 @@ import {
 } from '../../../shared/part'
 import type { RobotPart } from '../../../shared/robot'
 import { coerceElectrical } from '../../../shared/part-yaml'
+import { flattenPartPins } from '../../../shared/netlist'
 
 /** The pin types the editor offers, in UI order. */
 export const PIN_TYPES: PartPinType[] = ['io', 'pwr', 'gnd', 'other']
@@ -942,6 +943,23 @@ export function housedGroupConnectors(
  */
 export function allConnectors(part: PartDefinition): PartConnector[] {
   return [...(part.connectors ?? []), ...housedGroupConnectors(part).map((h) => h.conn)]
+}
+
+/**
+ * The flat wiring-endpoint index of every contact of `conn`, in contact order.
+ *
+ * A wiring endpoint is `"<key>.<pinName>#<index>"` where the index into the
+ * flattened pin list is authoritative. For a connector stored in `connectors[]`
+ * those indices are a contiguous block after the header pins; for a HOUSED GROUP
+ * (#673) the contacts are header pins, so their indices sit wherever those pins
+ * do — scattered, not contiguous.
+ *
+ * Resolving by pin IDENTITY against `flattenPartPins` therefore handles both, and
+ * removes the base+offset arithmetic that only ever worked for the first shape.
+ */
+export function connectorEndpointIndices(part: PartDefinition, conn: PartConnector): number[] {
+  const flat = flattenPartPins(part)
+  return conn.pins.map((pin) => flat.indexOf(pin))
 }
 
 /** The selection kinds a duplicate is defined for (#661). */
