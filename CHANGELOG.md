@@ -27,6 +27,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Connector contact labels line up with their contact.** Every connector's
+  labels were anchored on the text baseline, which after rotation left them
+  sitting beside the contact rather than on it. They are now centred on the
+  contact they name, on QWIIC, Grove, JST and servo headers as well as terminal
+  blocks.
 - **Connector labels follow the nearest board edge.** A row of servo headers along
   the bottom of a board drew its signal labels above the housing, throwing them
   back across the board instead of out past the edge. Contact labels now sit on

@@ -104,6 +104,15 @@ describe('terminal contact labels match ordinary pin labels (#662)', () => {
     const html = renderToStaticMarkup(connectorGlyph(50, 50, conn('qwiic', 4)))
     expect(html).toContain('pb__conn-pinlabel')
     expect(html).toContain('rotate(-90')
+    expect(html).toContain('paint-order') // the halo they need at a 2mm pitch
+  })
+
+  it('centres EVERY connector kind on its contact, not just the terminal', () => {
+    // Geometry is shared by construction; only the paint differs per kind.
+    for (const kind of ['terminal', 'qwiic', 'grove', 'jst', 'dupont']) {
+      const html = renderToStaticMarkup(connectorGlyph(50, 50, conn(kind, 4)))
+      expect(html).toContain('dominant-baseline="central"')
+    }
   })
 })
 

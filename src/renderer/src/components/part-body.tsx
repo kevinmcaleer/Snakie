@@ -1071,34 +1071,25 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
         conn.pins.map((pin, i) => {
           if (!pin.name || i >= n) return null
           const cxp = x0 + (w / (n + 1)) * (i + 1)
-          // A screw terminal takes the ordinary pin-label STYLE (`.pcv__pin-label`:
-          // themed silk text at the shared size, no halo) but still reads
-          // bottom-to-top, rotated 90° anticlockwise — a terminal's label belongs
-          // over its own way, and vertical is what keeps a wide block's labels
-          // from running into each other.
-          if (conn.kind === 'terminal') {
-            const ty = labelsBelow ? y0 + h + 4 : y0 - 4
-            return (
-              <text
-                key={`lbl${i}`}
-                x={cxp}
-                y={ty}
-                transform={`rotate(${labelRot} ${cxp} ${ty})`}
-                textAnchor="start"
-                // Rotating about the BASELINE would hang the glyphs off to one
-                // side: `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and
-                // text occupies dy ∈ [-ascent, +descent] — with ascent ~3×
-                // descent, the band lands left of the terminal. Anchoring on the
-                // glyph centre instead puts the label's centre line on the
-                // terminal's.
-                dominantBaseline="central"
-                className="pcv__pin-label"
-              >
-                {pin.name}
-              </text>
-            )
-          }
-          const ly = labelsBelow ? y0 + h + 2 : y0 - 2 // just clear of the housing
+          // ONE element for both label styles, so the geometry — which side of
+          // the housing, the rotation, the anchor and the baseline — cannot drift
+          // between them. Only the PAINT differs: a terminal gets the ordinary
+          // `.pcv__pin-label` silk, while the tight-pitch sockets keep the bold
+          // haloed text they need to stay legible at a 2 mm pitch.
+          const term = conn.kind === 'terminal'
+          const gap = term ? 4 : 2
+          const ly = labelsBelow ? y0 + h + gap : y0 - gap
+          const paint = term
+            ? { className: 'pcv__pin-label' }
+            : {
+                className: 'pb__conn-pinlabel',
+                fontSize: labelFs,
+                fontWeight: 700,
+                fill: '#eef1f4',
+                stroke: '#0b1410',
+                strokeWidth: labelFs * 0.35,
+                style: { paintOrder: 'stroke' as const }
+              }
           return (
             <text
               key={`lbl${i}`}
@@ -1106,13 +1097,13 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
               y={ly}
               transform={`rotate(${labelRot} ${cxp} ${ly})`}
               textAnchor="start"
-              fontSize={labelFs}
-              fontWeight={700}
-              fill="#eef1f4"
-              stroke="#0b1410"
-              strokeWidth={labelFs * 0.35}
-              style={{ paintOrder: 'stroke' }}
-              className="pb__conn-pinlabel"
+              // Rotating about the BASELINE hangs the glyphs off to one side:
+              // `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and text
+              // occupies dy ∈ [-ascent, +descent] — with ascent ~3× descent the
+              // band lands beside the contact rather than on it. Anchoring on the
+              // glyph centre puts each label's centre line on its own contact.
+              dominantBaseline="central"
+              {...paint}
             >
               {pin.name}
             </text>
