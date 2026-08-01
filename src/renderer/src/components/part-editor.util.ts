@@ -32,6 +32,7 @@ import {
   type ComponentShape,
   type GroupHousing,
   type PartConnectorKind,
+  type PartSide,
   type JstFamily,
   type ComponentShapeKind,
   type DriverFile,
@@ -1000,6 +1001,39 @@ export function withGroupHousing(
     ? groups.map((g) => (g.id === gid ? { ...g, housing } : g))
     : [...groups, { id: gid, housing }]
   return { groups: next }
+}
+
+/**
+ * The image layer of the face being edited (#687).
+ *
+ * A part has TWO photos — the front's `imageLayer` and the rear's
+ * `rear.imageLayer` — and every control that moves, resizes or locks the aspect
+ * of "the image" has to mean the one on screen. When they didn't, editing the
+ * rear silently rewrote the front's placement.
+ */
+export function faceImageLayer(part: PartDefinition, side: PartSide): ImageLayer {
+  const l = side === 'rear' ? part.rear?.imageLayer : part.imageLayer
+  return l ?? { x: 0, y: 0, w: 1, h: 1 }
+}
+
+/** The image DATA of the face being edited — what its native aspect is read from. */
+export function faceImageData(part: PartDefinition, side: PartSide): string | undefined {
+  return side === 'rear' ? part.rear?.imageData : part.imageData
+}
+
+/**
+ * Patch the image layer of the face being edited, returning the part fields to
+ * commit. Writing the rear's layer never touches the front's, and vice versa.
+ */
+export function withFaceImageLayer(
+  part: PartDefinition,
+  side: PartSide,
+  p: Partial<ImageLayer>
+): Partial<PartDefinition> {
+  const next = { ...faceImageLayer(part, side), ...p }
+  if (side !== 'rear') return { imageLayer: next }
+  // Keep the rest of the rear block (its filename, its inlined data) intact.
+  return { rear: { ...(part.rear ?? {}), imageLayer: next } }
 }
 
 /** The selection kinds a duplicate is defined for (#661). */

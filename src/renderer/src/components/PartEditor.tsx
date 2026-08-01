@@ -47,6 +47,9 @@ import {
   collectUsedColors,
   dissolveGroup,
   duplicateSelection,
+  faceImageData as faceImageDataOf,
+  faceImageLayer,
+  withFaceImageLayer,
   selectionGroupId,
   resizeTerminals,
   terminalPins,
@@ -618,8 +621,13 @@ export function PartEditor({
 
   // Read the image's native pixel aspect whenever the image changes (upload or a
   // re-opened part), so "lock aspect" can use the photo's true proportions.
+  // The face's OWN photo (#687). Reading the front's while editing the rear is
+  // what made "lock aspect" reshape the rear to the front picture's proportions.
+  // Derived OUTSIDE the effect so it depends on the photo itself rather than the
+  // whole part — otherwise every keystroke re-decodes the image.
+  const measuredFace = side === 'rear' ? part.rear?.imageData : part.imageData
   useEffect(() => {
-    const data = part.imageData
+    const data = measuredFace
     if (!data) {
       setImageNativeAspect(null)
       return
@@ -635,7 +643,7 @@ export function PartEditor({
     return () => {
       cancelled = true
     }
-  }, [part.imageData])
+  }, [measuredFace])
 
   // Snapshot the pristine image the first time one is present (a re-opened part
   // or a fresh upload), so background erasing has an original to reset to. Once
@@ -775,7 +783,9 @@ export function PartEditor({
   const eraseBgAt = async (nx: number, ny: number): Promise<void> => {
     const src = faceImageData
     if (!src) return
-    const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    // The face's own layer (#687) — mapping the click through the FRONT's box put
+    // the erase somewhere else entirely when working on the back.
+    const layer = faceImageLayer(part, side)
     const u = (nx - layer.x) / (layer.w || 1) // 0..1 across the image
     const v = (ny - layer.y) / (layer.h || 1)
     if (u < 0 || u > 1 || v < 0 || v > 1) return
@@ -794,19 +804,18 @@ export function PartEditor({
     }
   }
   const canResetBg = imageOriginal !== undefined && part.imageData !== undefined && part.imageData !== imageOriginal
-  const setImageLayer = (p: Partial<ImageLayer>): void => {
-    const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
-    patch({ imageLayer: { ...cur, ...p } })
-  }
+  // Edit the layer of the face ON SCREEN (#687): the rear photo has its own
+  // placement, and writing the front's while showing the rear moved the wrong one.
+  const setImageLayer = (p: Partial<ImageLayer>): void => patch(withFaceImageLayer(part, side, p))
   // Toggle the lock; when turning it ON, immediately reshape the image layer to
   // the photo's native aspect (so an already-stretched image snaps back).
   const toggleLockAspect = (): void => {
     const next = !lockImageAspect
     setLockImageAspect(next)
-    if (next && imageNativeAspect && imageNativeAspect > 0 && part.imageData) {
-      const cur = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+    if (next && imageNativeAspect && imageNativeAspect > 0 && faceImageDataOf(part, side)) {
+      const cur = faceImageLayer(part, side)
       // (w·boardAspect)/(h) === native  ⇒  h = w·boardAspect/native (box w/h ratio = boardAspect)
-      patch({ imageLayer: { ...cur, h: (cur.w * boardAspectOf(part)) / imageNativeAspect } })
+      patch(withFaceImageLayer(part, side, { h: (cur.w * boardAspectOf(part)) / imageNativeAspect }))
     }
   }
 

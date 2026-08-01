@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codes stripped so it pastes cleanly into a bug report.
 
 ### Fixed
+- **A board's front and back photos are placed independently.** Adding a rear
+  image gave it the front board's proportions, and moving, resizing or
+  aspect-locking the back quietly changed the front instead — the change only
+  showing up when you flipped over. Every image control now acts on the face
+  you're looking at, including the background eraser, which was mapping clicks
+  through the front photo's box while you worked on the back.
 - **The firmware file picker only offers files your board can use.** It listed
   `.bin`, `.uf2` and `.hex` to everyone, so browsing for ESP firmware showed UF2
   files that could never work. It now offers just the one kind your board flashes

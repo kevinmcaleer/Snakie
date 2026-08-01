@@ -19,6 +19,8 @@ import {
   derivePinPosition,
   dissolveGroup,
   groupMembers,
+  faceImageLayer,
+  withFaceImageLayer,
   selectionGroupId,
   usedPinNames,
   type GroupComponentKind,
@@ -481,7 +483,13 @@ export function PartCanvas({
     }
   }, [interactive])
 
-  const layer = part.imageLayer ?? { x: 0, y: 0, w: 1, h: 1 }
+  // The layer of the face being edited (#687). This drives the drawn <image>, the
+  // resize handles and the image hit-test alike, so it must follow `side` — it
+  // used to be the FRONT's unconditionally, which drew the rear photo inside the
+  // front's box (hence its aspect) and edited the front's placement.
+  const layer = faceImageLayer(part, side ?? 'front')
+  /** The image data of the face being edited — what there is to interact with. */
+  const faceImageData = side === 'rear' ? part.rear?.imageData : part.imageData
   // Colours already used in this part, for the quick-pick swatch grids on every
   // colour well (fill / border / label). Deduped, in first-seen order.
   const usedColors = collectUsedColors(part)
@@ -841,9 +849,13 @@ export function PartCanvas({
     commit({ ...part, polygon: next, shape: { kind: 'polygon' } })
     onSelect?.({ type: 'vertex', index: edgeI + 1 })
   }
-  const moveImage = (nx: number, ny: number): void => commit({ ...part, imageLayer: { ...layer, x: nx, y: ny } })
+  // Move/resize the layer of the face ON SCREEN (#687). These used to write
+  // `part.imageLayer` unconditionally while the canvas RENDERED `faceLayer`, so
+  // dragging the rear photo moved the front one — invisibly, until you flipped.
+  const moveImage = (nx: number, ny: number): void =>
+    commit({ ...part, ...withFaceImageLayer(part, side ?? 'front', { x: nx, y: ny }) })
   const resizeImage = (x: number, y: number, w: number, h: number): void =>
-    commit({ ...part, imageLayer: { ...layer, x, y, w, h } })
+    commit({ ...part, ...withFaceImageLayer(part, side ?? 'front', { x, y, w, h }) })
 
   const addPin = (nx: number, ny: number): void => {
     const sx = snapX(nx)
@@ -2157,7 +2169,7 @@ export function PartCanvas({
   /** Stamp the face onto a newly-created item. Without this you'd place a pad
    *  while looking at the back and watch it disappear onto the front. */
   const onFace = <T,>(item: T): T => (rear ? { ...item, side: 'rear' as const } : item)
-  const faceLayer = (rear ? part.rear?.imageLayer : part.imageLayer) ?? { x: 0, y: 0, w: 1, h: 1 }
+  const faceLayer = layer // same thing: the face being edited (#687)
 
   const hitTest = (nx: number, ny: number): CanvasSelection => {
     // Hit-test in REVERSE PAINT ORDER — the top-most drawn item wins the click.
@@ -2241,7 +2253,7 @@ export function PartCanvas({
     }
     // Erase-background: clicking on the image flood-fills the backdrop there.
     if (tool === 'erasebg') {
-      if (locked.image || !part.imageData) return
+      if (locked.image || !faceImageData) return
       const inX = nx >= layer.x && nx <= layer.x + layer.w
       const inY = ny >= layer.y && ny <= layer.y + layer.h
       if (inX && inY) onEraseImageAt?.(nx, ny)
@@ -2311,7 +2323,7 @@ export function PartCanvas({
     }
 
     // select tool — image resize handles (when the image is selected)
-    if (selection?.type === 'image' && visible.image && !locked.image && part.imageData) {
+    if (selection?.type === 'image' && visible.image && !locked.image && faceImageData) {
       const corners = [
         [layer.x, layer.y],
         [layer.x + layer.w, layer.y],
@@ -3735,7 +3747,7 @@ export function PartCanvas({
             single z-ordered loop above (#130). */}
 
         {/* Selection chrome: image box + handles */}
-        {interactive && selection?.type === 'image' && visible.image && !locked.image && part.imageData && (
+        {interactive && selection?.type === 'image' && visible.image && !locked.image && faceImageData && (
           <g>
             <rect x={px(layer.x)} y={py(layer.y)} width={layer.w * box.w} height={layer.h * box.h} fill="none" stroke="#4ea1ff" strokeDasharray="4 3" strokeWidth={1.5} />
             {[
