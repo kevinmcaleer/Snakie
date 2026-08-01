@@ -184,6 +184,10 @@ export interface PartCanvasProps {
   /** A request to select a whole group by id (from the Layers panel) — the
    *  `nonce` makes repeat selects of the same group re-fire the effect (#631). */
   groupSelect?: { id: string; nonce: number }
+  /** A request to delete the MULTI-selection (#667). The marquee's selection lives
+   *  in here, not in the editor's single `selection`, so the editor's Delete key
+   *  can't reach it — it asks instead. `nonce` re-fires for repeat presses. */
+  deleteRequest?: { nonce: number }
   /** Snap placed/moved positions to the pin-spacing grid. */
   snap?: boolean
   /** Keep the image layer's width:height ratio fixed while resizing it. */
@@ -387,6 +391,7 @@ export function PartCanvas({
   tool = 'select',
   selection = null,
   groupSelect,
+  deleteRequest,
   snap = false,
   lockAspect = false,
   imageNativeAspect = null,
@@ -1431,6 +1436,47 @@ export function PartCanvas({
     selectWholeGroup(root, primary)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSelect?.nonce])
+
+  /**
+   * Delete every item in the multi-selection (#667).
+   *
+   * Locked items are skipped, matching the single-item Delete: locking is worth
+   * little if a rubber band still removes what you froze.
+   */
+  const deleteMultiSelection = (): void => {
+    if (!selectedPins.length && !selComponents.length) return
+    const pinKeys = new Set(selectedPins.map((s) => `${s.hi}:${s.pi}`))
+    const idx = (kind: GroupComponentKind): Set<number> =>
+      new Set(selComponents.filter((c) => c.type === kind).map((c) => c.index))
+    const drop = <T extends Partial<PartItemFlags>>(list: T[] | undefined, kind: GroupComponentKind): T[] => {
+      const gone = idx(kind)
+      return (list ?? []).filter((it, i) => !gone.has(i) || itemLocked(part.groups, it))
+    }
+    commit({
+      ...part,
+      headers: part.headers
+        .map((h, hi) => ({
+          ...h,
+          pins: h.pins.filter((p, pi) => !pinKeys.has(`${hi}:${pi}`) || itemLocked(part.groups, p))
+        }))
+        .filter((h) => h.pins.length > 0),
+      shapes: drop(shapes, 'shape'),
+      labels: drop(labels, 'label'),
+      connectors: drop(connectors, 'connector'),
+      onboardLeds: drop(onboardLeds, 'led'),
+      buttons: drop(buttons, 'button'),
+      mountingHoles: drop(holes, 'hole')
+    })
+    setSelectedPins([])
+    setSelComponents([])
+    onSelect?.(null)
+  }
+
+  useEffect(() => {
+    if (!deleteRequest) return
+    deleteMultiSelection()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteRequest?.nonce])
 
   /** Container-pixel position of the selection's TOP-CENTRE, so the align toolbar
    *  floats above the whole selection (not over its lowest pin — which would cover

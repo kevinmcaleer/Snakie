@@ -47,6 +47,7 @@ import {
   collectUsedColors,
   dissolveGroup,
   duplicateSelection,
+  selectionGroupId,
   resizeTerminals,
   terminalPins,
   groupRootId,
@@ -561,6 +562,9 @@ export function PartEditor({
   // A "select this whole group" request from the Layers panel → the canvas selects
   // every member (#631). The bumping nonce lets re-selecting the same group re-fire.
   const [groupSelect, setGroupSelect] = useState<{ id: string; nonce: number } | null>(null)
+  /** Ask the canvas to delete its MULTI-selection (#667) — the marquee's selection
+   *  lives in PartCanvas, so Delete here can't reach it directly. */
+  const [deleteRequest, setDeleteRequest] = useState<{ nonce: number } | null>(null)
   const selectGroup = (id: string): void => {
     // Selecting the GROUP clears any individual member marker — the answer to
     // "which one?" is now "all of them".
@@ -815,14 +819,10 @@ export function PartEditor({
     if (selFlags && itemLocked(part.groups, selFlags)) return
     // A grouped item (#630) deletes its whole group tree — every member pin,
     // shape + label (recursively through nested sub-groups) + the registry entries.
-    const selGroup =
-      sel.type === 'pin'
-        ? part.headers[sel.hi]?.pins[sel.pi]?.group
-        : sel.type === 'shape'
-          ? part.shapes?.[sel.index]?.group
-          : sel.type === 'label'
-            ? part.labels?.[sel.index]?.group
-            : undefined
+    // Every groupable kind, not three (#665) — otherwise deleting a group whose
+    // primary is a connector/LED/button/hole removed just that one item and left
+    // the rest of the group behind.
+    const selGroup = selectionGroupId(part, sel)
     if (selGroup) {
       const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
       const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
@@ -833,6 +833,10 @@ export function PartEditor({
           .filter((h) => h.pins.length > 0),
         shapes: (d.shapes ?? []).filter((s) => !inTree(s.group)),
         labels: (d.labels ?? []).filter((l) => !inTree(l.group)),
+        connectors: (d.connectors ?? []).filter((c) => !inTree(c.group)),
+        onboardLeds: (d.onboardLeds ?? []).filter((l) => !inTree(l.group)),
+        buttons: (d.buttons ?? []).filter((b) => !inTree(b.group)),
+        mountingHoles: (d.mountingHoles ?? []).filter((h) => !inTree(h.group)),
         groups: (d.groups ?? []).filter((g) => !ids.has(g.id))
       }))
       setSelection(null)
@@ -892,14 +896,10 @@ export function PartEditor({
     const clamp = (v: number): number => Math.min(1, Math.max(0, v))
     const shiftPin = (p: (typeof part.headers)[number]['pins'][number]): typeof p =>
       p.x != null && p.y != null ? { ...p, x: clamp(p.x + dx), y: clamp(p.y + dy) } : p
-    const selGroup =
-      sel.type === 'pin'
-        ? part.headers[sel.hi]?.pins[sel.pi]?.group
-        : sel.type === 'shape'
-          ? part.shapes?.[sel.index]?.group
-          : sel.type === 'label'
-            ? part.labels?.[sel.index]?.group
-            : undefined
+    // Every groupable kind, not three (#665) — otherwise deleting a group whose
+    // primary is a connector/LED/button/hole removed just that one item and left
+    // the rest of the group behind.
+    const selGroup = selectionGroupId(part, sel)
     if (selGroup) {
       const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
       const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
@@ -1062,8 +1062,15 @@ export function PartEditor({
         return
       }
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
-      if (!selection) return
       if (typing) return
+      // A marquee leaves `selection` null and the picked items in the canvas's own
+      // multi-selection, so with no single selection ask the canvas to delete
+      // that instead of doing nothing (#667).
+      if (!selection) {
+        e.preventDefault()
+        setDeleteRequest((r) => ({ nonce: (r?.nonce ?? 0) + 1 }))
+        return
+      }
       e.preventDefault()
       deleteSelection()
     }
@@ -1264,6 +1271,7 @@ export function PartEditor({
                   tool={tool}
                   selection={selection}
                   groupSelect={groupSelect ?? undefined}
+                deleteRequest={deleteRequest ?? undefined}
                   onChange={setPart}
                   peek={peek}
                   onSelect={(sel) => {

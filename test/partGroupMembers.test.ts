@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupMembers, groupTreeIds } from '../src/renderer/src/components/part-editor.util'
+import { groupMembers, groupTreeIds, selectionGroupId } from '../src/renderer/src/components/part-editor.util'
 import type { PartDefinition } from '../src/shared/part'
 
 /**
@@ -56,5 +56,29 @@ describe('groupMembers covers every groupable kind (#665)', () => {
       groupMembers(PART, ids).map((m) => [m.kind, m.kind === 'pin' ? m.pi : m.index])
     )
     expect(byKind).toMatchObject({ connector: 0, led: 0, button: 0, hole: 0, shape: 0, label: 0, pin: 0 })
+  })
+})
+
+/** Deleting a whole group, whatever kind its primary item is (#665/#667). */
+describe('selectionGroupId covers every groupable kind (#667)', () => {
+  it('finds the group from any kind of selection', () => {
+    expect(selectionGroupId(PART, { type: 'pin', hi: 0, pi: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'shape', index: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'label', index: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'connector', index: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'led', index: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'button', index: 0 })).toBe('g')
+    expect(selectionGroupId(PART, { type: 'hole', index: 0 })).toBe('g')
+  })
+
+  it('is undefined for a selection that cannot belong to a group', () => {
+    expect(selectionGroupId(PART, null)).toBeUndefined()
+    expect(selectionGroupId(PART, { type: 'image' })).toBeUndefined()
+    expect(selectionGroupId(PART, { type: 'mount', index: 0 })).toBeUndefined()
+  })
+
+  it('is undefined for an out-of-range index rather than throwing', () => {
+    expect(selectionGroupId(PART, { type: 'connector', index: 99 })).toBeUndefined()
+    expect(selectionGroupId(PART, { type: 'pin', hi: 9, pi: 9 })).toBeUndefined()
   })
 })

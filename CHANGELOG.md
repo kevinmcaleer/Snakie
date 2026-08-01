@@ -27,6 +27,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Delete removes a marquee selection.** Rubber-band a group of items and press
+  Delete and nothing happened: the marquee's selection lives in the canvas while
+  the Delete key was only looking at the single selected item, which a marquee
+  clears. Delete now removes everything selected, and deleting a group whose
+  primary item is a connector, LED, button or hole removes the whole group rather
+  than just that one item. Locked items are still skipped.
 - **Servo headers show only their signal label.** A servo / DuPont header's V+ and
   GND are the same two rails on every header, so a row of eight printed sixteen
   labels of noise over the signal names you actually read. Power and ground are

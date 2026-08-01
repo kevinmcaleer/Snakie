@@ -577,6 +577,38 @@ export type GroupMemberRef =
 export const GROUP_COMPONENT_KINDS = ['shape', 'label', 'connector', 'led', 'button', 'hole'] as const
 export type GroupComponentKind = (typeof GROUP_COMPONENT_KINDS)[number]
 
+/**
+ * The `group` id of whatever a selection points at, across every groupable kind
+ * (#665). Returns undefined for a selection that can't belong to a group.
+ *
+ * One lookup for both the delete path and the canvas, so a new groupable kind
+ * can't be added to one and missed by the other.
+ */
+export function selectionGroupId(
+  part: PartDefinition,
+  sel: { type: string; index?: number; hi?: number; pi?: number } | null | undefined
+): string | undefined {
+  if (!sel) return undefined
+  if (sel.type === 'pin') return part.headers?.[sel.hi ?? -1]?.pins?.[sel.pi ?? -1]?.group
+  const i = sel.index ?? -1
+  switch (sel.type) {
+    case 'shape':
+      return part.shapes?.[i]?.group
+    case 'label':
+      return part.labels?.[i]?.group
+    case 'connector':
+      return part.connectors?.[i]?.group
+    case 'led':
+      return part.onboardLeds?.[i]?.group
+    case 'button':
+      return part.buttons?.[i]?.group
+    case 'hole':
+      return part.mountingHoles?.[i]?.group
+    default:
+      return undefined
+  }
+}
+
 /** Every group id in the subtree rooted at `rootId` (itself + nested descendants). */
 export function groupTreeIds(groups: PartGroup[] | undefined, rootId: string): Set<string> {
   const ids = new Set<string>([rootId])
