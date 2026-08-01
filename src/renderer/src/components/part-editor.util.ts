@@ -23,6 +23,7 @@ import {
   coerceConnectorKind,
   coerceConnectorVariant,
   PART_PIN_SHAPES,
+  coerceGroupHousing,
   coerceJstFamily,
   TERMINAL_MAX,
   TERMINAL_MIN,
@@ -899,6 +900,50 @@ export function allResolvedPins(
   return [...resolvedPins(part), ...resolvedContacts(part)]
 }
 
+/**
+ * Every housed group, presented as a {@link PartConnector} (#673).
+ *
+ * This is the adapter that makes "a connector is a group of pins with a housing"
+ * cheap: the cable layer, the fit checks and the renderers keep taking a
+ * `PartConnector` and need no idea that some of them are groups. The pins are not
+ * copied anywhere — they stay ordinary pins in `headers[]`, which is what keeps
+ * the flattened endpoint order (and therefore every saved wire) untouched.
+ *
+ * Contact ORDER is the group's member order, which `groupMembers` yields in
+ * header→pin order. That order is load-bearing: a lead pairs two housings
+ * contact-for-contact by position.
+ */
+export function housedGroupConnectors(
+  part: PartDefinition
+): { gid: string; conn: PartConnector }[] {
+  const out: { gid: string; conn: PartConnector }[] = []
+  for (const g of part.groups ?? []) {
+    if (!g.housing) continue
+    const members = groupMembers(part, new Set([g.id]))
+    const pins = members
+      .filter((m): m is Extract<GroupMemberRef, { kind: 'pin' }> => m.kind === 'pin')
+      .map((m) => part.headers[m.hi]?.pins[m.pi])
+      .filter((p): p is PartPin => !!p)
+    if (!pins.length) continue
+    const h = g.housing
+    const conn: PartConnector = { kind: h.kind, x: h.x, y: h.y, pins }
+    if (h.variant) conn.variant = h.variant
+    if (h.rotation) conn.rotation = h.rotation
+    if (h.label) conn.label = h.label
+    out.push({ gid: g.id, conn })
+  }
+  return out
+}
+
+/**
+ * Every connector on the part: the ones stored in `connectors[]` AND the housed
+ * groups. Callers that ask "what can a lead plug into?" want this, not either
+ * list alone.
+ */
+export function allConnectors(part: PartDefinition): PartConnector[] {
+  return [...(part.connectors ?? []), ...housedGroupConnectors(part).map((h) => h.conn)]
+}
+
 /** The selection kinds a duplicate is defined for (#661). */
 export type DuplicableSelection =
   | { type: 'pin'; hi: number; pi: number }
@@ -1537,6 +1582,8 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
         if (g.hidden === true) grp.hidden = true
         if (g.locked === true) grp.locked = true
+        const housing = coerceGroupHousing(g.housing)
+        if (housing) grp.housing = housing
         return grp
       })
     if (groups.length) out.groups = groups

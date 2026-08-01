@@ -129,7 +129,7 @@ const EVERY_FIELD: Required<PartDefinition> = {
   ],
   footprint: 'xiao',
   mounts: [{ id: 'top-socket', footprint: 'xiao', x: 0.5, y: 0.5 }],
-  groups: [{ id: 'grove-port', name: 'Grove port' }],
+  groups: [{ id: 'grove-port', name: 'Grove port', housing: { kind: 'grove', variant: 'i2c', x: 0.15, y: 0.5, rotation: 90 } }],
   ledLabel: 'LED',
 
   // --- Assets --------------------------------------------------------------

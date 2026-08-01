@@ -17,7 +17,13 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceConnectorVariant, coercePinShape, coerceSide } from './part'
+import {
+  coerceConnectorKind,
+  coerceConnectorVariant,
+  coerceGroupHousing,
+  coercePinShape,
+  coerceSide
+} from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -663,6 +669,8 @@ export function partFromYaml(text: string): PartDefinition {
         if (name) out.name = name
         const parent = str(gr?.parent)
         if (parent) out.parent = parent
+        const housing = coerceGroupHousing(gr?.housing)
+        if (housing) out.housing = housing
         return out
       })
       .filter((g): g is PartGroup => g !== null)

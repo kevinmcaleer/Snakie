@@ -1,0 +1,118 @@
+import { describe, it, expect } from 'vitest'
+import {
+  allConnectors,
+  housedGroupConnectors,
+  normalisePart
+} from '../src/renderer/src/components/part-editor.util'
+import { coerceGroupHousing } from '../src/shared/part'
+import { flattenPartPins } from '../src/shared/netlist'
+import { partFromYaml, partToYaml } from '../src/shared/part-yaml'
+import { connectorFit } from '../src/renderer/src/components/cable'
+import type { PartDefinition } from '../src/shared/part'
+
+/**
+ * A connector as a group of pins with a housing (#673).
+ *
+ * The pins stay ordinary pins in `headers[]` — which is the whole point. A wiring
+ * endpoint is `<key>.<name>#<index>` where the FLATTENED index is authoritative,
+ * so moving pins between arrays would silently rewire every saved design.
+ */
+const trio = (n: number, gid: string): unknown[] => [
+  { name: `S${n}`, type: 'io', capabilities: ['pwm'], x: 0.2, y: 0.1, group: gid },
+  { name: `V${n}`, type: 'pwr', x: 0.2, y: 0.2, group: gid },
+  { name: `G${n}`, type: 'gnd', x: 0.2, y: 0.3, group: gid }
+]
+
+const PART = {
+  id: 'p',
+  name: 'P',
+  dimensions: { width: 40, height: 20 },
+  headers: [{ edge: 'left', pins: [{ name: 'GP0', type: 'io', x: 0.9, y: 0.5 }, ...trio(1, 'g1')] }],
+  groups: [{ id: 'g1', name: 'Servo 1', housing: { kind: 'dupont', x: 0.2, y: 0.2, rotation: 90 } }]
+} as unknown as PartDefinition
+
+describe('coerceGroupHousing (#673)', () => {
+  it('validates the variant against the housing kind', () => {
+    expect(coerceGroupHousing({ kind: 'jst', variant: 'xh', x: 0.5, y: 0.5 })?.variant).toBe('xh')
+    expect(coerceGroupHousing({ kind: 'jst', variant: 'i2c', x: 0.5, y: 0.5 })?.variant).toBeUndefined()
+    expect(coerceGroupHousing({ kind: 'grove', variant: 'i2c', x: 0.5, y: 0.5 })?.variant).toBe('i2c')
+  })
+
+  it('needs a position, and quantises rotation', () => {
+    expect(coerceGroupHousing({ kind: 'dupont' })).toBeUndefined()
+    expect(coerceGroupHousing({ kind: 'dupont', x: 0.5, y: 0.5, rotation: 87 })?.rotation).toBe(90)
+    expect(coerceGroupHousing({ kind: 'dupont', x: 0.5, y: 0.5, rotation: 0 })?.rotation).toBeUndefined()
+  })
+
+  it('rejects junk rather than inventing a housing', () => {
+    expect(coerceGroupHousing(null)).toBeUndefined()
+    expect(coerceGroupHousing('dupont')).toBeUndefined()
+    expect(coerceGroupHousing({ kind: 'dupont', x: 'a', y: 0.5 })).toBeUndefined()
+  })
+})
+
+describe('housedGroupConnectors (#673)', () => {
+  it('presents a housed group as an ordinary connector', () => {
+    const [h] = housedGroupConnectors(PART)
+    expect(h.gid).toBe('g1')
+    expect(h.conn.kind).toBe('dupont')
+    expect(h.conn.rotation).toBe(90)
+    expect(h.conn.pins.map((p) => p.name)).toEqual(['S1', 'V1', 'G1'])
+  })
+
+  it('orders contacts by group membership — the order a lead pairs on', () => {
+    const [h] = housedGroupConnectors(PART)
+    expect(h.conn.pins.map((p) => p.type)).toEqual(['io', 'pwr', 'gnd'])
+  })
+
+  it('ignores groups with no housing, and housings with no pins', () => {
+    const plain = { ...PART, groups: [{ id: 'g1', name: 'Servo 1' }] } as unknown as PartDefinition
+    expect(housedGroupConnectors(plain)).toEqual([])
+    const empty = { ...PART, groups: [{ id: 'gX', housing: { kind: 'dupont', x: 0.5, y: 0.5 } }] } as unknown as PartDefinition
+    expect(housedGroupConnectors(empty)).toEqual([])
+  })
+
+  it('allConnectors offers stored connectors AND housed groups', () => {
+    const both = {
+      ...PART,
+      connectors: [{ kind: 'qwiic', x: 0.7, y: 0.7, pins: [{ name: 'SDA', type: 'io' }] }]
+    } as unknown as PartDefinition
+    expect(allConnectors(both).map((c) => c.kind)).toEqual(['qwiic', 'dupont'])
+  })
+
+  it('a housed group can take a lead, like any other connector', () => {
+    const [h] = housedGroupConnectors(PART)
+    const lead = {
+      kind: 'dupont',
+      x: 0.5,
+      y: 0.5,
+      pins: [
+        { name: 'Signal', type: 'io' },
+        { name: 'VCC', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    } as unknown as (typeof h)['conn']
+    const fit = connectorFit(lead, h.conn)
+    expect(fit.ok).toBe(true)
+    expect(fit.pairs).toHaveLength(3)
+  })
+})
+
+describe('adding a housing does not disturb saved wiring (#673)', () => {
+  it('leaves the flattened endpoint order byte-identical', () => {
+    // The flattened index IS the wiring endpoint. Naming a group the pins are
+    // already in must move nothing.
+    const without = { ...PART, groups: [{ id: 'g1', name: 'Servo 1' }] } as unknown as PartDefinition
+    expect(flattenPartPins(PART).map((p) => p.name)).toEqual(flattenPartPins(without).map((p) => p.name))
+  })
+
+  it('round-trips the housing through parts.yml', () => {
+    const back = partFromYaml(partToYaml(normalisePart(PART)))
+    expect(back.groups?.[0].housing).toEqual({ kind: 'dupont', x: 0.2, y: 0.2, rotation: 90 })
+    expect(flattenPartPins(back).map((p) => p.name)).toEqual(flattenPartPins(PART).map((p) => p.name))
+  })
+
+  it('survives the editor normaliser too — both whitelists, one coercer', () => {
+    expect(normalisePart(PART).groups?.[0].housing?.kind).toBe('dupont')
+  })
+})

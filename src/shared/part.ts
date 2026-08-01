@@ -316,6 +316,36 @@ export function coerceConnectorVariant(
 }
 
 /**
+ * Validate a {@link GroupHousing} off untrusted YAML / editor state (#673).
+ *
+ * ONE coercer, called by both `parts.yml` and the editor's normaliser — the pair
+ * that has drifted before and silently dropped fields on save.
+ */
+export function coerceGroupHousing(raw: unknown): GroupHousing | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const r = raw as Record<string, unknown>
+  const x = Number(r.x)
+  const y = Number(r.y)
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return undefined
+  const kind = coerceConnectorKind(r.kind)
+  const out: GroupHousing = {
+    kind,
+    x: Math.min(1, Math.max(0, x)),
+    y: Math.min(1, Math.max(0, y))
+  }
+  const variant = coerceConnectorVariant(kind, r.variant)
+  if (variant) out.variant = variant
+  const rot = Number(r.rotation)
+  if (Number.isFinite(rot)) {
+    const q = (((Math.round(rot / 90) * 90) % 360) + 360) % 360
+    if (q) out.rotation = q
+  }
+  const label = typeof r.label === 'string' ? r.label.trim() : ''
+  if (label) out.label = label
+  return out
+}
+
+/**
  * A physical connector on the board drawn as a placed body — e.g. a **QWIIC** /
  * **STEMMA QT** 4-pin JST-SH I2C socket, a **Grove** port, a **DuPont** / servo
  * header block, or a generic **jst** header. Its {@link pins} are full
@@ -866,6 +896,35 @@ export function itemLocked(groups: PartGroup[] | undefined, item: PartItemFlags)
   return !!item.locked || groupChain(groups, item.group).some((g) => g.locked)
 }
 
+/**
+ * The housing a group of pins sits in (#673) — what turns a set of pads into a
+ * connector: a QWIIC socket, a Grove port, a JST shell, a servo header, a screw
+ * terminal block.
+ *
+ * The pins stay ordinary pins in `headers[]`. That is not only the simpler model
+ * — it is the only migration-safe one. A wiring endpoint is
+ * `"<key>.<pinName>#<index>"` where the **index into the flattened pin list is
+ * authoritative** (see `shared/netlist.ts`), so moving pins between arrays
+ * silently rewires every saved design that uses the part. Naming the group they
+ * are already in moves nothing.
+ *
+ * Contact ORDER is the group's member order, and it is load-bearing: a lead pairs
+ * two housings contact-for-contact by position, which is what makes it land the
+ * right way round however it is dragged.
+ */
+export interface GroupHousing {
+  kind: PartConnectorKind
+  /** Grove wiring / JST family — validated per kind, as on a connector. */
+  variant?: ConnectorVariant
+  /** Normalised 0..1 centre of the housing on the board. */
+  x: number
+  y: number
+  /** Body rotation in degrees (0/90/180/270). */
+  rotation?: number
+  /** Silk label; absent ⇒ the kind's default name. */
+  label?: string
+}
+
 export interface PartGroup {
   /** Hidden in the editor and on the rendered part. Independent of any group's
    *  own flag — see {@link itemHidden}, which is what callers should ask. */
@@ -877,6 +936,8 @@ export interface PartGroup {
   name?: string
   /** The id of the group this one is nested inside, if any. */
   parent?: string
+  /** Makes this group a CONNECTOR: its member pins are the contacts (#673). */
+  housing?: GroupHousing
 }
 
 /**
