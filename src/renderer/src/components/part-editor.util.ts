@@ -1222,6 +1222,35 @@ export function duplicateGroup(
   }
 }
 
+/**
+ * The `group` id of one item, addressed by kind + index (#692).
+ *
+ * The row renderers know an item as "a connector at index 3"; this answers which
+ * group it belongs to without each of them reaching into a different array.
+ */
+export function itemGroupOf(
+  part: PartDefinition,
+  kind: GroupComponentKind | 'pin',
+  index: number
+): string | undefined {
+  switch (kind) {
+    case 'shape':
+      return part.shapes?.[index]?.group
+    case 'label':
+      return part.labels?.[index]?.group
+    case 'connector':
+      return part.connectors?.[index]?.group
+    case 'led':
+      return part.onboardLeds?.[index]?.group
+    case 'button':
+      return part.buttons?.[index]?.group
+    case 'hole':
+      return part.mountingHoles?.[index]?.group
+    default:
+      return undefined
+  }
+}
+
 /** The selection kinds a duplicate is defined for (#661). */
 export type DuplicableSelection =
   | { type: 'pin'; hi: number; pi: number }

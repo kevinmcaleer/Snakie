@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { duplicateGroup, groupMembers, housedGroupConnectors } from '../src/renderer/src/components/part-editor.util'
+import {
+  duplicateGroup,
+  groupMembers,
+  groupTreeIds,
+  housedGroupConnectors,
+  itemGroupOf
+} from '../src/renderer/src/components/part-editor.util'
 import { flattenPartPins } from '../src/shared/netlist'
 import type { PartDefinition } from '../src/shared/part'
 
@@ -74,5 +80,48 @@ describe('duplicateGroup (#691)', () => {
     const before = JSON.stringify(PART)
     duplicateGroup(PART, 'servo-1')
     expect(JSON.stringify(PART)).toBe(before)
+  })
+})
+
+/**
+ * A selected group lights up its MEMBERS too (#692).
+ *
+ * The panel has no access to the canvas's multi-selection, so it answers "is this
+ * item in the selected group tree?" from the part instead — the same answer.
+ */
+describe('itemGroupOf (#692)', () => {
+  const p = {
+    id: 'p',
+    name: 'P',
+    headers: [{ edge: 'left', pins: [{ name: 'S1', type: 'io', group: 'g', x: 0.2, y: 0.1 }] }],
+    shapes: [{ kind: 'rect', x: 0.3, y: 0.3, w: 0.1, h: 0.1, group: 'g' }],
+    labels: [{ text: 'L', x: 0.4, y: 0.4 }],
+    connectors: [{ kind: 'qwiic', x: 0.5, y: 0.5, group: 'g', pins: [] }],
+    onboardLeds: [{ kind: 'single', x: 0.6, y: 0.6, group: 'g' }],
+    buttons: [{ label: 'B', x: 0.7, y: 0.7, group: 'g' }],
+    mountingHoles: [{ x: 0.8, y: 0.8, diameter: 2, group: 'g' }],
+    groups: [{ id: 'g', name: 'Everything' }]
+  } as unknown as PartDefinition
+
+  it('finds the group for every addressable kind', () => {
+    for (const k of ['shape', 'connector', 'led', 'button', 'hole'] as const) {
+      expect(itemGroupOf(p, k, 0), k).toBe('g')
+    }
+  })
+
+  it('is undefined for an ungrouped item, and out of range', () => {
+    expect(itemGroupOf(p, 'label', 0)).toBeUndefined()
+    expect(itemGroupOf(p, 'connector', 99)).toBeUndefined()
+  })
+
+  it('the whole tree resolves, so a nested member lights up with its ancestor', () => {
+    const nested = {
+      ...p,
+      headers: [{ edge: 'left', pins: [{ name: 'S1', type: 'io', group: 'inner', x: 0.2, y: 0.1 }] }],
+      groups: [{ id: 'outer' }, { id: 'inner', parent: 'outer' }]
+    } as unknown as PartDefinition
+    const ids = groupTreeIds(nested.groups, 'outer')
+    expect(ids.has('inner')).toBe(true)
+    expect(ids.has('outer')).toBe(true)
   })
 })

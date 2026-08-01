@@ -14,9 +14,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
-- **Selecting a group highlights the group.** Clicking a group's name selected the
-  whole group on the canvas, as it should, but the layers list lit up the first
-  pin inside it instead of the group row.
+- **Selecting a group highlights everything in it.** The group row lit up but its
+  contents didn't — apart from one pin in the first group, which happened to be
+  the selection's anchor. Every member of a selected group is now highlighted,
+  including members of any nested groups inside it.
 - **Dragging a selected group moves all of it.** With a group selected, dragging
   one of the highlighted parts moved only the part under the cursor — the
   selection looked like a unit and behaved like a pile. Dragging anything in the

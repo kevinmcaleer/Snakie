@@ -51,6 +51,7 @@ import {
   pruneEmptyGroups,
   faceImageData as faceImageDataOf,
   faceImageLayer,
+  itemGroupOf,
   withFaceImageLayer,
   selectionGroupId,
   resizeTerminals,
@@ -1771,6 +1772,23 @@ function LayersPanel({
     const g = selectionGroupId(part, selection)
     return g ? groupRootId(part.groups, g) : null
   }, [part, selection])
+  /**
+   * Every group id in the selected tree (#692).
+   *
+   * Selecting a group selects all of it, so its MEMBER rows have to light up too
+   * — otherwise the panel showed the group highlighted and its contents not, apart
+   * from the one member that happens to be the selection's primary.
+   *
+   * Derived rather than read from the canvas's multi-selection, which the panel
+   * has no access to: "this item's group is in the selected tree" is exactly the
+   * same answer and needs only the part.
+   */
+  const selectedGroupIds = useMemo(
+    () => (selectedGroupRoot ? groupTreeIds(part.groups, selectedGroupRoot) : null),
+    [part.groups, selectedGroupRoot]
+  )
+  /** Is this item inside the selected group tree? */
+  const inSelGroup = (g?: string): boolean => !!g && !!selectedGroupIds && selectedGroupIds.has(g)
 
   /** Duplicate a whole group — its members, its housing and all (#691). */
   const duplicateGroupNode = (gid: string): void => {
@@ -1796,10 +1814,11 @@ function LayersPanel({
       it.kind === 'shape'
         ? (selection?.type === 'shape' || selection?.type === 'shape-vertex') && selection.index === it.index
         : selEq(sel)
+    const inGroup = inSelGroup(itemGroupOf(part, it.kind, it.index))
     return (
       <li
         key={`${it.kind}${it.index}`}
-        className={`pe__flatrow${active ? ' is-active' : ''}`}
+        className={`pe__flatrow${active || inGroup ? ' is-active' : ''}`}
         style={{ paddingLeft: `${0.5 + depth * 0.85}rem` }}
       >
         {itemFlags({ kind: it.kind, index: it.index }, name)}
@@ -1840,7 +1859,9 @@ function LayersPanel({
   const pinRowHier = (rp: ResolvedPin, depth: number): JSX.Element => (
     <li
       key={`p${rp.hi}-${rp.pi}`}
-      className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) ? ' is-active' : ''}`}
+      className={`pe__flatrow pe__flatrow--pin${depth ? ' pe__flatrow--member' : ''}${
+        selEq({ type: 'pin', hi: rp.hi, pi: rp.pi }) || inSelGroup(rp.pin.group) ? ' is-active' : ''
+      }`}
       style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
     >
       {itemFlags({ kind: 'pin', index: flatPin.get(`${rp.hi}-${rp.pi}`) ?? -1 }, rp.pin.name || 'pin')}
@@ -1867,7 +1888,7 @@ function LayersPanel({
     return (
       <li
         key={`hole${index}`}
-        className={`pe__flatrow pe__flatrow--hole${selEq({ type: 'hole', index }) ? ' is-active' : ''}`}
+        className={`pe__flatrow pe__flatrow--hole${selEq({ type: 'hole', index }) || inSelGroup(h?.group) ? ' is-active' : ''}`}
         style={depth ? { paddingLeft: `${0.4 + depth * 0.7}rem` } : undefined}
       >
         {itemFlags({ kind: 'hole', index }, `hole ${index + 1}`)}
