@@ -23,11 +23,13 @@ import {
   coerceConnectorKind,
   coerceConnectorVariant,
   PART_PIN_SHAPES,
+  coerceJstFamily,
   TERMINAL_MAX,
   TERMINAL_MIN,
   itemHidden,
   itemLocked,
   type ComponentShape,
+  type JstFamily,
   type ComponentShapeKind,
   type DriverFile,
   type SuggestedModule,
@@ -773,6 +775,128 @@ export function resizeTerminals(pins: PartPin[], n: number): PartPin[] {
     kept.push({ name: `T${i + 1}`, type: 'io' as PartPinType })
   }
   return kept
+}
+
+/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
+export const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
+  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
+  gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
+  zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
+  ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
+  xh: { pitch: 2.5, sideMargin: 1.75, depthMm: 5.8 },
+  vh: { pitch: 3.96, sideMargin: 2.6, depthMm: 9.0 }
+}
+
+export function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
+  switch (conn.kind) {
+    case 'grove':
+      // Seeed Grove: 4-way 2.0 mm shell, ~11.8 × 6.6 mm where it meets the board.
+      return { pitch: 2.0, sideMargin: 2.9, depthMm: 6.6 }
+    case 'dupont':
+      // 0.1" male header strip — one 2.54 mm square cell per pin.
+      return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
+    case 'jst':
+      // The family IS the pitch, which is what makes a JST housing recognisable
+      // and what decides whether a lead fits. `ph` is the default so every JST
+      // connector authored before families existed draws exactly as it did.
+      return JST_DIMS[coerceJstFamily(conn.variant) ?? 'ph']
+    case 'terminal':
+      // The ubiquitous green screw-terminal block (KF301/KF128 family): 5.08 mm
+      // pitch, a deep body because the wire goes IN from the side rather than a
+      // plug seating on top.
+      return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
+    default:
+      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+  }
+}
+
+/**
+ * Where a connector's contacts sit, in normalised 0..1 BOARD coordinates (#672).
+ *
+ * Contacts have no stored coordinates — they are laid out from the housing's
+ * position, size and rotation — which is why they were invisible to everything
+ * that works in pin positions: the netlist's flat walk, hit-testing, selection,
+ * and the label renderer. Resolving them once, here, is what lets a contact be
+ * treated as an ordinary pin everywhere else.
+ *
+ * The spread matches what {@link connectorGlyph} DRAWS (`(i+1)/(n+1)` across the
+ * housing), not an idealised pitch — a resolved position that disagrees with the
+ * glyph would put labels and click targets slightly off the contact they name.
+ *
+ * Geometry is done in MILLIMETRES and normalised per axis at the end. Normalised
+ * space is `x/boardWidth` by `y/boardHeight`, so on a non-square board those axes
+ * have different scales and rotating in them would shear the housing.
+ */
+export function connectorContacts(
+  part: PartDefinition,
+  conn: PartConnector
+): { x: number; y: number }[] {
+  const n = Math.max(2, conn.pins.length || 4)
+  const { pitch, sideMargin } = connectorDims(conn)
+  const dims = part.dimensions
+  const real = !!dims && dims.width > 0 && dims.height > 0
+  // Without real dimensions the glyph falls back to a fixed on-screen size, so
+  // match it: treat the board as a nominal box and the housing as that many of
+  // the same units, which keeps resolved positions on the drawn contacts.
+  const NOMINAL_PX = 420
+  const boardW = real ? dims.width : NOMINAL_PX
+  const boardH = real ? dims.height : NOMINAL_PX / (aspectOf(part) || 1)
+  const wMm = real ? (n - 1) * pitch + 2 * sideMargin : Math.max(18, n * 5 + 6)
+  const rot = ((((conn.rotation ?? 0) % 360) + 360) % 360) * (Math.PI / 180)
+  const cos = Math.cos(rot)
+  const sin = Math.sin(rot)
+  return Array.from({ length: n }, (_, i) => {
+    const dx = wMm * ((i + 1) / (n + 1) - 0.5)
+    // Rotate about the housing centre, in mm, then normalise per axis.
+    const rx = dx * cos
+    const ry = dx * sin
+    return { x: clamp(conn.x + rx / boardW, 0, 1), y: clamp(conn.y + ry / boardH, 0, 1) }
+  })
+}
+
+/** The board outline aspect (w/h): real dimensions win, else `aspect`, else 1. */
+function aspectOf(part: PartDefinition): number {
+  if (part.dimensions && part.dimensions.width > 0 && part.dimensions.height > 0) {
+    return part.dimensions.width / part.dimensions.height
+  }
+  return typeof part.aspect === 'number' && part.aspect > 0 ? part.aspect : 1
+}
+
+/** A connector contact resolved to a board position, addressable back to source. */
+export interface ResolvedContact {
+  pin: PartPin
+  x: number
+  y: number
+  /** Connector index + contact index, so a caller can mutate the right contact. */
+  ci: number
+  cpi: number
+}
+
+/**
+ * Every connector contact in the part, with a resolved position (#672).
+ *
+ * Deliberately SEPARATE from {@link resolvedPins} rather than appended to it:
+ * that list's flat index is an identity used by the layer tree and pin refs
+ * (`resolvedPins(part)[flatIndex]`), so extending it would silently redefine
+ * every stored reference. Callers that want both use {@link allResolvedPins}.
+ */
+export function resolvedContacts(part: PartDefinition): ResolvedContact[] {
+  const out: ResolvedContact[] = []
+  ;(part.connectors ?? []).forEach((conn, ci) => {
+    const pts = connectorContacts(part, conn)
+    conn.pins.forEach((pin, cpi) => {
+      const p = pts[cpi]
+      if (p) out.push({ pin, x: p.x, y: p.y, ci, cpi })
+    })
+  })
+  return out
+}
+
+/** Header pins and connector contacts together, each with a board position. */
+export function allResolvedPins(
+  part: PartDefinition
+): (ResolvedPin | (ResolvedContact & { edge?: PartEdge }))[] {
+  return [...resolvedPins(part), ...resolvedContacts(part)]
 }
 
 /** The selection kinds a duplicate is defined for (#661). */

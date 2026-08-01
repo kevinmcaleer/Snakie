@@ -9,9 +9,8 @@ import {
   type Box,
   type ResolvedPin
 } from './part-editor.util'
-import { coerceJstFamily, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
+import { itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
-  JstFamily,
   OnboardLed,
   PartConnector,
   PartDefinition,
@@ -283,6 +282,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
  */
 
 export type { Box } from './part-editor.util'
+import { connectorDims } from './part-editor.util'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -918,38 +918,6 @@ export function onboardLedLabel(led: OnboardLed): string {
  *  1.0 mm-pitch family; a plain JST here is the 2.0 mm-pitch PH family; Grove is
  *  Seeed's 4-way 2.0 mm keyed shell; DuPont is a 0.1" male header strip. Values
  *  are the visible top-down housing (a touch larger than the contact span). */
-/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
-const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
-  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
-  gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
-  zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
-  ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
-  xh: { pitch: 2.5, sideMargin: 1.75, depthMm: 5.8 },
-  vh: { pitch: 3.96, sideMargin: 2.6, depthMm: 9.0 }
-}
-
-function connectorDims(conn: PartConnector): { pitch: number; sideMargin: number; depthMm: number } {
-  switch (conn.kind) {
-    case 'grove':
-      // Seeed Grove: 4-way 2.0 mm shell, ~11.8 × 6.6 mm where it meets the board.
-      return { pitch: 2.0, sideMargin: 2.9, depthMm: 6.6 }
-    case 'dupont':
-      // 0.1" male header strip — one 2.54 mm square cell per pin.
-      return { pitch: 2.54, sideMargin: 1.27, depthMm: 2.54 }
-    case 'jst':
-      // The family IS the pitch, which is what makes a JST housing recognisable
-      // and what decides whether a lead fits. `ph` is the default so every JST
-      // connector authored before families existed draws exactly as it did.
-      return JST_DIMS[coerceJstFamily(conn.variant) ?? 'ph']
-    case 'terminal':
-      // The ubiquitous green screw-terminal block (KF301/KF128 family): 5.08 mm
-      // pitch, a deep body because the wire goes IN from the side rather than a
-      // plug seating on top.
-      return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
-    default:
-      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
-  }
-}
 
 /**
  * Per-kind housing palette. `male` distinguishes a **header block you push a lead
