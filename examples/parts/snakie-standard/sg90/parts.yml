@@ -16,7 +16,7 @@ properties:
   speed: 0.1 s/60°
   rotation: 180°
   signal: 50 Hz PWM (1–2 ms)
-version: 0.1.4
+version: 0.1.6
 pcbColor: "#2b6cb0"
 aspect: 0.38
 dimensions:
@@ -30,26 +30,29 @@ headers:
     pins:
       - name: Signal
         type: io
+        group: servo-1
         capabilities:
-          - digital
           - pwm
         signals:
           pwm: A
-        label: PWM
-        shape: round
-        x: 0.33593686735618533
-        y: 0.9911576753504135
+        shape: octagonal
+        rotation: 90
+        x: 0.2781314659981702
+        y: 0.7982772136705493
       - name: VCC
         type: pwr
-        label: +5V
-        shape: round
-        x: 0.46333760330509194
-        y: 0.9911576753504135
+        group: servo-1
+        shape: octagonal
+        rotation: 90
+        x: 0.48115794771317666
+        y: 0.7982772136705493
       - name: GND
         type: gnd
-        shape: round
-        x: 0.5907383392539985
-        y: 0.9911576753504135
+        group: servo-1
+        shape: octagonal
+        rotation: 90
+        x: 0.6841844294281828
+        y: 0.7982772136705493
 mountingHoles:
   - x: 0.5114881664485802
     y: 0.07762830397661995
@@ -61,82 +64,82 @@ shapes:
   - kind: rect
     x: 0.16
     y: 0.15
+    z: 0
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
     w: 0.68
     h: 0.58
-    z: 0
     cornerRadius: 3
   - kind: rect
     x: 0.02
     y: 0.1
+    z: 1
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
     w: 0.96
     h: 0.06
-    z: 1
     cornerRadius: 2
   - kind: rect
     x: 0.02
     y: 0.72
+    z: 2
     fill: "#2b6cb0"
     stroke: "#1a4a80"
     strokeWidth: 1
     w: 0.96
     h: 0.06
-    z: 2
     cornerRadius: 2
   - kind: circle
     x: 0.5
     y: 0.31
+    z: 3
     fill: "#f2f2f2"
     stroke: "#b9bec6"
     strokeWidth: 1
     r: 0.15
-    z: 3
   - kind: circle
     x: 0.5
     y: 0.31
+    z: 4
     fill: "#3a3f44"
     stroke: "#8a8f96"
     strokeWidth: 1
     r: 0.045
-    z: 4
   - kind: rect
     x: 0
     y: 0.412
+    z: 5
     fill: "#e8862b"
     stroke: "#8a8f96"
     strokeWidth: 1
     w: 0.16
     h: 0.016
-    z: 5
   - kind: rect
     x: 0
     y: 0.492
+    z: 6
     fill: "#c0392b"
     stroke: "#8a8f96"
     strokeWidth: 1
     w: 0.16
     h: 0.016
-    z: 6
   - kind: rect
     x: 0
     y: 0.572
+    z: 7
     fill: "#5a3a22"
     stroke: "#8a8f96"
     strokeWidth: 1
     w: 0.16
     h: 0.016
-    z: 7
 labels:
   - text: SG90
     x: 0.5
     y: 0.55
-    fontSize: 10
     z: 8
+    fontSize: 10
     color: "#ffffff"
 image: image.png
 help: help.md

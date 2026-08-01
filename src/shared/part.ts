@@ -255,6 +255,32 @@ export const TERMINAL_MAX = 24
  */
 export type GroveVariant = 'i2c' | 'uart' | 'digital' | 'analog'
 
+/**
+ * Which **JST family** a `jst` connector is (#668). They are the same idea in a
+ * range of pitches, and the pitch is what decides whether a lead physically fits:
+ * a PH plug will not enter an XH socket. Naming the family is therefore what lets
+ * the board draw the housing life-size AND refuse a lead that couldn't seat.
+ *
+ *  - `sh` 1.00 mm — the QWIIC / STEMMA QT housing
+ *  - `gh` 1.25 mm — common on LiPo/battery leads
+ *  - `zh` 1.50 mm
+ *  - `ph` 2.00 mm — the classic hobby battery/JST lead (the default)
+ *  - `xh` 2.50 mm — balance leads, bigger battery packs
+ *  - `vh` 3.96 mm — high current
+ */
+export type JstFamily = 'sh' | 'gh' | 'zh' | 'ph' | 'xh' | 'vh'
+
+/** Every JST family, in picker order. */
+export const JST_FAMILIES: readonly JstFamily[] = ['sh', 'gh', 'zh', 'ph', 'xh', 'vh']
+
+/**
+ * The flavour of a connector's housing. One field rather than a per-kind pile of
+ * near-identical ones: `variant` has always meant "which flavour of this
+ * housing", and Grove's wiring and JST's pitch are the same question asked of
+ * different kinds. Validated PER KIND — see {@link coerceConnectorVariant}.
+ */
+export type ConnectorVariant = GroveVariant | JstFamily
+
 /** Every Grove variant, in picker order (the first is the default). */
 export const GROVE_VARIANTS: readonly GroveVariant[] = ['i2c', 'uart', 'digital', 'analog']
 
@@ -268,6 +294,25 @@ export function coerceConnectorKind(v: unknown): PartConnectorKind {
 /** Validate a Grove `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
 export function coerceGroveVariant(v: unknown): GroveVariant | undefined {
   return GROVE_VARIANTS.includes(v as GroveVariant) ? (v as GroveVariant) : undefined
+}
+
+/** Validate a JST `variant` off untrusted YAML/JSON (absent/unknown ⇒ undefined). */
+export function coerceJstFamily(v: unknown): JstFamily | undefined {
+  return JST_FAMILIES.includes(v as JstFamily) ? (v as JstFamily) : undefined
+}
+
+/**
+ * Validate a connector `variant` for the kind that carries it. A variant only
+ * means something on `grove` and `jst`; anything else drops it rather than
+ * carrying a value no renderer reads.
+ */
+export function coerceConnectorVariant(
+  kind: PartConnectorKind,
+  v: unknown
+): ConnectorVariant | undefined {
+  if (kind === 'grove') return coerceGroveVariant(v)
+  if (kind === 'jst') return coerceJstFamily(v)
+  return undefined
 }
 
 /**
@@ -300,7 +345,7 @@ export interface PartConnector {
   /** The connector family — see {@link PartConnectorKind}. */
   kind: PartConnectorKind
   /** For `grove`: which signal set the port carries. Ignored by other kinds. */
-  variant?: GroveVariant
+  variant?: ConnectorVariant
   /** Silk label (defaults to the kind's name — `"QWIIC"` / `"GROVE"` / …). */
   label?: string
   /** Normalised 0..1 position of the connector body within the outline. */

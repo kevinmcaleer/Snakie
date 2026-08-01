@@ -17,7 +17,7 @@
  */
 
 import { parse, stringify } from 'yaml'
-import { coerceConnectorKind, coerceGroveVariant, coercePinShape, coerceSide } from './part'
+import { coerceConnectorKind, coerceConnectorVariant, coercePinShape, coerceSide } from './part'
 import type {
   ComponentShape,
   ComponentShapeKind,
@@ -724,7 +724,7 @@ export function partFromYaml(text: string): PartDefinition {
           : []
         const conn: PartConnector = { kind, x, y, pins }
         readItemFlags(r, conn as unknown as Record<string, unknown>)
-        const variant = coerceGroveVariant(r.variant)
+        const variant = coerceConnectorVariant(kind, r.variant)
         if (variant) conn.variant = variant
         const label = str(r.label)
         if (label) conn.label = label

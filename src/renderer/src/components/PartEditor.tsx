@@ -75,8 +75,19 @@ import {
   type ResolvedPin,
   type LayerNode
 } from './part-editor.util'
-import { GROVE_VARIANTS, PART_CONNECTOR_KINDS, TERMINAL_MAX, TERMINAL_MIN, itemLocked } from '../../../shared/part'
+import {
+  GROVE_VARIANTS,
+  JST_FAMILIES,
+  PART_CONNECTOR_KINDS,
+  TERMINAL_MAX,
+  TERMINAL_MIN,
+  coerceGroveVariant,
+  coerceJstFamily,
+  itemLocked
+} from '../../../shared/part'
 import type {
+  ConnectorVariant,
+  JstFamily,
   ComponentShape,
   ComponentShapeKind,
   ElectricalModel,
@@ -200,6 +211,14 @@ const CONN_KIND_LABEL: Record<PartConnectorKind, string> = {
   dupont: 'Servo / DuPont',
   terminal: 'Screw terminal'
 }
+const JST_FAMILY_LABEL: Record<JstFamily, string> = {
+  sh: 'SH — 1.00 mm',
+  gh: 'GH — 1.25 mm',
+  zh: 'ZH — 1.50 mm',
+  ph: 'PH — 2.00 mm',
+  xh: 'XH — 2.50 mm',
+  vh: 'VH — 3.96 mm'
+}
 const GROVE_VARIANT_LABEL: Record<GroveVariant, string> = {
   i2c: 'I²C',
   uart: 'UART',
@@ -216,10 +235,10 @@ const cloneConnPins = (pins: PartPin[]): PartPin[] =>
 /** The standard contacts for a connector kind — Grove's four wirings, a 3-way
  *  servo block, QWIIC's I2C four, or four blank JST pins. Used both when adding a
  *  connector and by the inspector's "Standard contacts" reset. */
-const standardConnPins = (kind: PartConnectorKind, variant?: GroveVariant): PartPin[] =>
+const standardConnPins = (kind: PartConnectorKind, variant?: ConnectorVariant): PartPin[] =>
   cloneConnPins(
     kind === 'grove'
-      ? GROVE_PINS[variant ?? 'i2c']
+      ? GROVE_PINS[coerceGroveVariant(variant) ?? 'i2c']
       : kind === 'dupont'
         ? SERVO_PINS
         : kind === 'jst'
@@ -1970,7 +1989,7 @@ function LayersPanel({
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addShape() }} title="Add a component body (a grey rectangle — an IC/regulator/connector)">Component</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('qwiic') }} title="Add a QWIIC / STEMMA QT socket (switch kind in the inspector)">Connector</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('grove', 'i2c') }} title="Add a Grove port (pick I2C / UART / digital / analog in the inspector)">Grove port</button>
-                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND)">Servo header</button>
+                    <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('dupont') }} title="Add a 3-way servo / DuPont header (Signal · V+ · GND) — a real housing, so a servo lead can cable to it">Servo header</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); addConnector('terminal') }} title="Add a green screw terminal block (set how many terminals in the inspector)">Terminal block</button>
                     <button type="button" role="menuitem" onClick={() => { setAddOpen(false); setTool('pin') }} title="Click the board to place a pin">Pin</button>
                   </div>
@@ -1997,8 +2016,8 @@ function LayersPanel({
                 type="button"
                 className={`pe__chip${tool === 'servo-header' ? ' is-active' : ''}`}
                 onClick={() => setTool('servo-header')}
-                title="Add a servo header (Signal / V+ / GND) — click the board to place the trio"
-                aria-label="Add servo header"
+                title="Add servo PINS (Signal / V+ / GND) — three loose pads, no connector housing. For a lead that cables to a servo, use Add → Servo header."
+                aria-label="Add servo pins"
               >
                 <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
                   <rect x="4" y="0.5" width="4" height="3" rx="0.6" fill="currentColor" />
@@ -3520,11 +3539,29 @@ function SelectionInspector({
                 />
               </label>
             )}
+            {conn.kind === 'jst' && (
+              <label className="pe__field">
+                <span>Family</span>
+                {/* The family is the PITCH, so it decides the drawn size and
+                    whether a lead can seat at all. Absent ⇒ PH, which is how
+                    every JST connector authored before families behaved. */}
+                <select
+                  value={coerceJstFamily(conn.variant) ?? 'ph'}
+                  onChange={(e) => upd({ variant: e.target.value as JstFamily })}
+                >
+                  {JST_FAMILIES.map((f) => (
+                    <option key={f} value={f}>
+                      {JST_FAMILY_LABEL[f]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {conn.kind === 'grove' && (
               <label className="pe__field">
                 <span>Port type</span>
                 <select
-                  value={conn.variant ?? 'i2c'}
+                  value={coerceGroveVariant(conn.variant) ?? 'i2c'}
                   onChange={(e) => upd({ variant: e.target.value as GroveVariant })}
                 >
                   {GROVE_VARIANTS.map((v) => (

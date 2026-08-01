@@ -21,7 +21,7 @@ import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
   coerceConnectorKind,
-  coerceGroveVariant,
+  coerceConnectorVariant,
   PART_PIN_SHAPES,
   TERMINAL_MAX,
   TERMINAL_MIN,
@@ -1457,7 +1457,7 @@ export function normalisePart(part: PartDefinition): PartDefinition {
         pins: (Array.isArray(c.pins) ? c.pins : []).map(normalisePin).filter((p) => p.name !== '')
       }
       keepItemFlags(c, conn as unknown as Record<string, unknown>)
-      const variant = coerceGroveVariant(c.variant)
+      const variant = coerceConnectorVariant(kind, c.variant)
       if (variant) conn.variant = variant
       const label = text(c.label)
       if (label) conn.label = label

@@ -18,6 +18,7 @@
  * by drag direction, a servo lead dragged on "backwards" still lands Signal to
  * Signal, V+ to V+, GND to GND.
  */
+import { coerceJstFamily } from '../../../shared/part'
 import type { PartConnector, PartPin } from '../../../shared/part'
 
 /**
@@ -69,7 +70,9 @@ export function connectorKindName(c: PartConnector): string {
   if (c.kind === 'grove') return c.variant ? `Grove ${c.variant.toUpperCase()}` : 'Grove'
   if (c.kind === 'dupont') return c.pins.length === 3 ? 'servo header' : 'DuPont header'
   if (c.kind === 'qwiic') return 'QWIIC'
-  return 'JST'
+  if (c.kind === 'terminal') return `${c.pins.length}-way terminal block`
+  const fam = coerceJstFamily(c.variant)
+  return fam ? `JST-${fam.toUpperCase()}` : 'JST'
 }
 
 /**
@@ -130,6 +133,15 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
   }
   if (a.kind === 'grove' && b.kind === 'grove' && a.variant && b.variant && a.variant !== b.variant) {
     return NO(`That's a ${connectorKindName(b)} port — this one is ${connectorKindName(a)}.`)
+  }
+  // JST families differ by PITCH, so unlike Grove these genuinely can't seat —
+  // refusing is describing the housing, not second-guessing the user (#668).
+  if (a.kind === 'jst' && b.kind === 'jst') {
+    const fa = coerceJstFamily(a.variant) ?? 'ph'
+    const fb = coerceJstFamily(b.variant) ?? 'ph'
+    if (fa !== fb) {
+      return NO(`A ${connectorKindName(a)} lead doesn't fit a ${connectorKindName(b)} socket.`)
+    }
   }
   const pairs = pairContacts(a, b)
   if (!pairs.some(([ia]) => SIGNAL_ROLES.has(cableRole(a.pins[ia])))) {

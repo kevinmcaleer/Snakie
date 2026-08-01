@@ -7,6 +7,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **JST connectors have a family.** A JST housing is a range of pitches, not one
+  part — SH 1.00, GH 1.25, ZH 1.50, PH 2.00, XH 2.50, VH 3.96 mm — and the pitch
+  is what decides whether a lead physically seats. Pick the family in the
+  connector's properties and the housing draws life-size for it; a lead between
+  two different families is refused, naming both. Connectors authored before this
+  are treated as PH, exactly how they drew before.
 - **Declare a part's I²C addresses in the Part Editor.** A new **I²C** section in
   the inspector lists the addresses a part answers on — which is what lets the
   I²C-detect instrument offer that part when a scan finds it on a real bus. Until
