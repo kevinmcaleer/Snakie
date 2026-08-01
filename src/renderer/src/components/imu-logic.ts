@@ -192,15 +192,24 @@ export function applyCalibration(current: Euler, offset: Euler): Euler {
 /**
  * Build the CSS `transform` value that rotates the 3D board into `e`.
  *
- * Applied in the order `rotateZ(yaw) rotateX(pitch) rotateY(roll)` — CSS applies
- * transforms left-to-right as nested frames, so this realises the intrinsic
- * ZYX (yaw→pitch→roll) Tait–Bryan convention that {@link quaternionToEuler}
- * produces. Angles are rounded to 3 dp to keep the style string stable across
- * tiny float jitter. Pure string builder; safe with the neutral orientation.
+ * `rotateZ(yaw) rotateY(pitch) rotateX(roll)` — CSS composes transforms
+ * left-to-right as nested frames, so this realises the intrinsic ZYX
+ * (yaw→pitch→roll) Tait–Bryan convention, matching {@link eulerToMatrix} and
+ * {@link quaternionToEuler} exactly. Angles are rounded to 3 dp to keep the style
+ * string stable across tiny float jitter. Pure; safe with the neutral orientation.
+ *
+ * **Pitch drives `rotateY` and roll drives `rotateX`, not the other way round.**
+ * The model is built with its nose along the CSS **x** axis (the 96 px dimension)
+ * and its top face at +z, so a rotation about x turns the board about its NOSE —
+ * which is roll. Feeding pitch to `rotateX` therefore rendered every pitch as a
+ * roll: at pitch 90° the nose stayed pointing screen-right instead of swinging out
+ * of the screen. It also silently disagreed with `eulerToMatrix`, which composes
+ * Rz·Ry·Rx, despite the docs claiming the two matched — so a quaternion and its
+ * converted Euler angles drove the board differently.
  */
 export function eulerToCssTransform(e: Euler): string {
   const r = (v: number): string => (Number.isFinite(v) ? v.toFixed(3) : '0.000')
-  return `rotateZ(${r(e.yaw)}deg) rotateX(${r(e.pitch)}deg) rotateY(${r(e.roll)}deg)`
+  return `rotateZ(${r(e.yaw)}deg) rotateY(${r(e.pitch)}deg) rotateX(${r(e.roll)}deg)`
 }
 
 /**

@@ -89,6 +89,18 @@
 }
 
 /* --- The CSS-3D board model --- */
+/*
+ * The VIEWPOINT, separate from the board's own orientation.
+ *
+ * Without this you look straight down the board's up-axis, so a level board fills
+ * the frame face-on — it reads as a wall, and a pitch just moves the nose toward
+ * the camera where perspective barely shows it. Tilting the stage puts the camera
+ * above and in front, so level reads as a slab lying flat and a 90° pitch stands
+ * it visibly on end.
+ *
+ * On the STAGE, not the model: the model's transform is pure telemetry, and mixing
+ * a fixed viewing angle into it would make every reading look off by 60°.
+ */
 .imu__stage {
   position: absolute;
   inset: 0;
@@ -96,6 +108,7 @@
   align-items: center;
   justify-content: center;
   transform-style: preserve-3d;
+  transform: rotateX(60deg);
 }
 
 .imu__model {

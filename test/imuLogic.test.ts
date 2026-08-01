@@ -236,26 +236,110 @@ describe('imu-logic applyCalibration', () => {
   })
 })
 
+/**
+ * The CSS transform's GEOMETRY, not its spelling (#704).
+ *
+ * The old tests asserted the exact string, so they happily pinned a transform that
+ * rendered every pitch as a roll. These parse the string, compose the rotation, and
+ * ask where the board actually ends up — which is the thing that was wrong.
+ *
+ * The model is built with its nose along CSS **x** (the 96 px dimension) and its
+ * top face at +z, so a rotation about x turns the board about its nose (roll) and
+ * one about y tips the nose up or down (pitch).
+ */
+const RAD = Math.PI / 180
+const rx = (a: number): number[][] => [
+  [1, 0, 0],
+  [0, Math.cos(a * RAD), -Math.sin(a * RAD)],
+  [0, Math.sin(a * RAD), Math.cos(a * RAD)]
+]
+const ry = (a: number): number[][] => [
+  [Math.cos(a * RAD), 0, Math.sin(a * RAD)],
+  [0, 1, 0],
+  [-Math.sin(a * RAD), 0, Math.cos(a * RAD)]
+]
+const rz = (a: number): number[][] => [
+  [Math.cos(a * RAD), -Math.sin(a * RAD), 0],
+  [Math.sin(a * RAD), Math.cos(a * RAD), 0],
+  [0, 0, 1]
+]
+const mul = (a: number[][], b: number[][]): number[][] =>
+  a.map((row) => b[0].map((_, j) => row.reduce((s, v, k) => s + v * b[k][j], 0)))
+const apply = (m: number[][], v: number[]): number[] =>
+  m.map((row) => row.reduce((s, x, i) => s + x * v[i], 0))
+
+/** Compose the matrix the browser would build from the emitted transform string. */
+function cssMatrix(e: { roll: number; pitch: number; yaw: number }): number[][] {
+  const s = eulerToCssTransform(e)
+  const fns: Record<string, (a: number) => number[][]> = { rotateX: rx, rotateY: ry, rotateZ: rz }
+  let m = [
+    [1, 0, 0],
+    [0, 1, 0],
+    [0, 0, 1]
+  ]
+  for (const [, fn, deg] of s.matchAll(/(rotate[XYZ])\(([-\d.]+)deg\)/g)) {
+    m = mul(m, fns[fn](Number(deg))) // left-to-right = nested frames = intrinsic
+  }
+  return m
+}
+
+const NOSE = [1, 0, 0]
+
+describe('imu-logic CSS transform geometry (#704)', () => {
+  it('a 90° PITCH swings the nose out of the screen', () => {
+    // The bug: it used to leave the nose pointing screen-right, which is what a
+    // ROLL looks like, so the board never appeared to pitch at all.
+    const nose = apply(cssMatrix({ roll: 0, pitch: 90, yaw: 0 }), NOSE)
+    expect(Math.abs(nose[2])).toBeCloseTo(1, 6) // along the view axis
+    expect(Math.abs(nose[0])).toBeCloseTo(0, 6) // no longer screen-right
+  })
+
+  it('a 90° ROLL leaves the nose pointing screen-right', () => {
+    // Roll turns the board ABOUT its nose, so the nose itself must not move.
+    const nose = apply(cssMatrix({ roll: 90, pitch: 0, yaw: 0 }), NOSE)
+    expect(nose[0]).toBeCloseTo(1, 6)
+  })
+
+  it('agrees with eulerToMatrix, which the docs always claimed', () => {
+    // They disagreed: the CSS emitted Rz·Rx·Ry while eulerToMatrix composed
+    // Rz·Ry·Rx, so a quaternion and its converted Euler angles drove the board
+    // differently — the inconsistency that hid the swap.
+    for (const e of [
+      { roll: 10, pitch: 20, yaw: 30 },
+      { roll: -45, pitch: 15, yaw: 0 },
+      { roll: 0, pitch: 0, yaw: 0 }
+    ]) {
+      const css = cssMatrix(e).flat()
+      eulerToMatrix(e).forEach((v, i) => expect(css[i]).toBeCloseTo(v, 6))
+    }
+  })
+
+  it('level leaves the board flat — identity', () => {
+    const m = cssMatrix({ roll: 0, pitch: 0, yaw: 0 }).flat()
+    expect(m).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 1])
+  })
+})
+
 describe('imu-logic eulerToCssTransform', () => {
   it('emits ZYX (yaw→pitch→roll) order with deg units', () => {
     const s = eulerToCssTransform({ roll: 1, pitch: 2, yaw: 3 })
-    expect(s).toBe('rotateZ(3.000deg) rotateX(2.000deg) rotateY(1.000deg)')
+    expect(s).toBe('rotateZ(3.000deg) rotateY(2.000deg) rotateX(1.000deg)')
   })
 
   it('handles the neutral orientation', () => {
     expect(eulerToCssTransform(NEUTRAL_EULER)).toBe(
-      'rotateZ(0.000deg) rotateX(0.000deg) rotateY(0.000deg)'
+      'rotateZ(0.000deg) rotateY(0.000deg) rotateX(0.000deg)'
     )
   })
 
   it('rounds tiny float jitter to a stable 3-dp string', () => {
     const s = eulerToCssTransform({ roll: 1.23456, pitch: 0, yaw: 0 })
-    expect(s).toContain('rotateY(1.235deg)')
+    expect(s).toContain('rotateX(1.235deg)')
   })
 
   it('non-finite components fall back to 0', () => {
     const s = eulerToCssTransform({ roll: NaN, pitch: 0, yaw: 0 })
-    expect(s).toContain('rotateY(0.000deg)')
+    expect(s).toContain('rotateX(0.000deg)')
   })
 })
 

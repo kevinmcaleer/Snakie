@@ -18,6 +18,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   can't tell a mounting from the same one turned a quarter-turn.
 
 ### Fixed
+- **The IMU's 3-D board now moves the way the numbers say.** Pitching the sensor
+  rolled the picture instead — the model is built with its nose along the screen's
+  horizontal axis, so the pitch angle was being applied about the nose, which is
+  what roll means. The readouts underneath were right all along. The board is also
+  drawn from above and in front now, so a level sensor reads as a slab lying flat
+  and a 90° pitch visibly stands it on end, rather than the previous straight-down
+  view where a pitch mostly moved the board toward you.
 - **Deleting a driver from your board now offers it again.** Snakie decided a
   driver was installed by importing it, and MicroPython remembers imported modules
   for the rest of the session — so once anything had used a driver, deleting the
