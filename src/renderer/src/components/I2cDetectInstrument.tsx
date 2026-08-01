@@ -3,7 +3,7 @@ import { InstrumentWindow, PhosphorScreen, type FloatProps } from './InstrumentW
 import { type InstrumentDef } from './instruments-registry'
 import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { buildI2cGrid, formatI2cAddr, type I2cGridModel } from './scanner-logic'
-import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption } from './i2c-pins'
+import { i2cOptions, i2cBuses, sdaOptions, sclOptions, type I2cOption, type I2cPad } from './i2c-pins'
 import { hexAddr, knownDevicesFor, partsForAddress } from './i2c-known-devices'
 import { useBoards } from './use-boards'
 import type { BoardDefinition } from '../../../shared/board'
@@ -26,13 +26,19 @@ import './I2cDetectInstrument.css'
 /** Sweep-playback speed (#218): ms per grid cell (128 cells ≈ 1.2 s total). */
 const SWEEP_MS_PER_CELL = 9
 
-/** GPIO numbers a board exposes (for the I²C pin dropdowns). */
-function boardGpios(boards: BoardDefinition[], boardId: string | null): number[] {
+/**
+ * The pads a board exposes, WITH any I²C role it declares (#701).
+ *
+ * Passing whole pads rather than bare GPIO numbers is the fix: the board names its
+ * own I²C pins, and throwing that away left the options re-derived from the GPIO
+ * number — an RP2040 rule that cannot produce a XIAO ESP32-S3's GPIO5/GPIO6.
+ */
+function boardPads(boards: BoardDefinition[], boardId: string | null): I2cPad[] {
   const def = boards.find((b) => b.id === boardId) ?? boards[0]
   return (def?.headers ?? [])
     .flatMap((h) => h.pins)
-    .map((p) => p.gpio)
-    .filter((g): g is number => typeof g === 'number')
+    .filter((p) => typeof p.gpio === 'number')
+    .map((p) => ({ gpio: p.gpio, i2c: p.i2c, i2cBus: p.i2cBus }))
 }
 
 /** The SCAN exec snippet: build I²C on the chosen pins, print the addresses. */
@@ -74,7 +80,7 @@ export function I2cDetectInstrument({
   } catch {
     boardId = null
   }
-  const opts = i2cOptions(boardGpios(boards, boardId))
+  const opts = i2cOptions(boardPads(boards, boardId))
   const buses = i2cBuses(opts)
 
   const [sel, setSel] = useState<I2cOption>(() => opts[0] ?? { bus: 0, sda: 0, scl: 1 })

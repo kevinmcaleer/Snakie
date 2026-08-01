@@ -2284,6 +2284,14 @@ export function partToBoardDefinition(part: PartDefinition): BoardDefinition {
         pad.y = p.y
       }
       if (p.type === 'io' && typeof p.gpio === 'number') pad.gpio = p.gpio
+      // The board's declared I²C pins (#701). Dropping these left the I²C
+      // instrument re-deriving them from the GPIO number, which is an RP2040 rule
+      // and wrong on every other chip.
+      const role = p.signals?.i2c
+      if (role === 'SDA' || role === 'SCL') {
+        pad.i2c = role
+        if (typeof p.buses?.i2c === 'number') pad.i2cBus = p.buses.i2c
+      }
       return pad
     })
   }))

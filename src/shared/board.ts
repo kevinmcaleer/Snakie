@@ -31,6 +31,17 @@ export interface BoardPad {
   y?: number
   /** The numeric GPIO this pad breaks out, matched against numeric `Pin(n)`. */
   gpio?: number
+  /**
+   * The I²C role this pad is the board's designated pin for, if any (#701).
+   *
+   * Carried from the source part's `signals.i2c` because it is the only thing
+   * that knows: which GPIOs can be I²C is a property of the CHIP, and guessing it
+   * from the pin number only works on the RP2040 family. Absent ⇒ nothing
+   * declared, not "cannot be I²C".
+   */
+  i2c?: 'SDA' | 'SCL'
+  /** The I²C peripheral (bus) this pad's role belongs to; absent ⇒ bus 0. */
+  i2cBus?: number
   /** The silk text drawn on/next to the pad (e.g. `"GP0"`, `"3V3"`, `"IO34"`). */
   label: string
   /**

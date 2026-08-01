@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Fixed
+- **The I²C pin dropdowns match the board you actually have.** The bus/SDA/SCL
+  lists were built from one hardcoded rule — the Pico family's, where SDA must be
+  a multiple of 4 (or 2) and SCL the very next pin. On anything else that rule is
+  wrong: a XIAO ESP32-S3's Grove port is GPIO5/GPIO6, which the rule can't express,
+  so the pair that works was never offered and the nearest legal-looking one was
+  shown instead — scanning it finds nothing on a correctly wired board. The lists
+  now start from the pins the board itself declares, and keep the derived ones for
+  boards that declare none.
 - **Connecting a board no longer freezes the REPL and fills it with gibberish.**
   Snakie checked whether your board's copy of the instruments library was current
   by reading the whole 80 KB file back — 161 KB once encoded for the serial link,
