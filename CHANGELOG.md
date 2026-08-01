@@ -39,6 +39,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   points at.
 
 ### Fixed
+- **A servo lead now cables to a servo header in one drag.** The SG90's three pins
+  were grouped but the group had no connector on it, so there was nothing to drag
+  a lead *from* — the header end was ready, the servo end wasn't. Its lead is now a
+  proper 3-way connector, so dragging it onto a PCA9685 or Servo 2040 channel wires
+  signal, power and ground together.
 - **A converted connector still looks like a connector.** Turning a part's
   connectors into pin groups left its sockets drawn as bare pads. A QWIIC, Grove,
   JST or terminal housing is now drawn behind its pads, as it always was. A servo

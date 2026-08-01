@@ -4,9 +4,9 @@ description: 9g hobby micro servo, ~180° range, 50 Hz PWM control.
 manufacturer: TowerPro
 family: Motor
 tags:
-  - servo
-  - pwm
-  - motor
+- servo
+- pwm
+- motor
 package: THT
 pinSpacing: 2.54
 voltage: 4.8–6V
@@ -16,8 +16,8 @@ properties:
   speed: 0.1 s/60°
   rotation: 180°
   signal: 50 Hz PWM (1–2 ms)
-version: 0.1.6
-pcbColor: "#2b6cb0"
+version: 0.1.7
+pcbColor: '#2b6cb0'
 aspect: 0.38
 dimensions:
   width: 12.2
@@ -26,121 +26,121 @@ shape:
   kind: rect
   cornerRadius: 0
 headers:
-  - edge: left
-    pins:
-      - name: Signal
-        type: io
-        group: servo-1
-        capabilities:
-          - pwm
-        signals:
-          pwm: A
-        shape: octagonal
-        rotation: 90
-        x: 0.2781314659981702
-        y: 0.7982772136705493
-      - name: VCC
-        type: pwr
-        group: servo-1
-        shape: octagonal
-        rotation: 90
-        x: 0.48115794771317666
-        y: 0.7982772136705493
-      - name: GND
-        type: gnd
-        group: servo-1
-        shape: octagonal
-        rotation: 90
-        x: 0.6841844294281828
-        y: 0.7982772136705493
+- edge: left
+  pins:
+  - name: Signal
+    type: io
+    group: servo-1
+    capabilities:
+    - pwm
+    signals:
+      pwm: A
+    shape: octagonal
+    rotation: 90
+    x: 0.2781314659981702
+    y: 0.7982772136705493
+  - name: VCC
+    type: pwr
+    group: servo-1
+    shape: octagonal
+    rotation: 90
+    x: 0.48115794771317666
+    y: 0.7982772136705493
+  - name: GND
+    type: gnd
+    group: servo-1
+    shape: octagonal
+    rotation: 90
+    x: 0.6841844294281828
+    y: 0.7982772136705493
 mountingHoles:
-  - x: 0.5114881664485802
-    y: 0.07762830397661995
-    diameter: 1.5
-  - x: 0.4571048990394937
-    y: 0.9242361629710477
-    diameter: 1.5
+- x: 0.5114881664485802
+  y: 0.07762830397661995
+  diameter: 1.5
+- x: 0.4571048990394937
+  y: 0.9242361629710477
+  diameter: 1.5
 shapes:
-  - kind: rect
-    x: 0.16
-    y: 0.15
-    z: 0
-    fill: "#2b6cb0"
-    stroke: "#1a4a80"
-    strokeWidth: 1
-    w: 0.68
-    h: 0.58
-    cornerRadius: 3
-  - kind: rect
-    x: 0.02
-    y: 0.1
-    z: 1
-    fill: "#2b6cb0"
-    stroke: "#1a4a80"
-    strokeWidth: 1
-    w: 0.96
-    h: 0.06
-    cornerRadius: 2
-  - kind: rect
-    x: 0.02
-    y: 0.72
-    z: 2
-    fill: "#2b6cb0"
-    stroke: "#1a4a80"
-    strokeWidth: 1
-    w: 0.96
-    h: 0.06
-    cornerRadius: 2
-  - kind: circle
-    x: 0.5
-    y: 0.31
-    z: 3
-    fill: "#f2f2f2"
-    stroke: "#b9bec6"
-    strokeWidth: 1
-    r: 0.15
-  - kind: circle
-    x: 0.5
-    y: 0.31
-    z: 4
-    fill: "#3a3f44"
-    stroke: "#8a8f96"
-    strokeWidth: 1
-    r: 0.045
-  - kind: rect
-    x: 0
-    y: 0.412
-    z: 5
-    fill: "#e8862b"
-    stroke: "#8a8f96"
-    strokeWidth: 1
-    w: 0.16
-    h: 0.016
-  - kind: rect
-    x: 0
-    y: 0.492
-    z: 6
-    fill: "#c0392b"
-    stroke: "#8a8f96"
-    strokeWidth: 1
-    w: 0.16
-    h: 0.016
-  - kind: rect
-    x: 0
-    y: 0.572
-    z: 7
-    fill: "#5a3a22"
-    stroke: "#8a8f96"
-    strokeWidth: 1
-    w: 0.16
-    h: 0.016
+- kind: rect
+  x: 0.16
+  y: 0.15
+  z: 0
+  fill: '#2b6cb0'
+  stroke: '#1a4a80'
+  strokeWidth: 1
+  w: 0.68
+  h: 0.58
+  cornerRadius: 3
+- kind: rect
+  x: 0.02
+  y: 0.1
+  z: 1
+  fill: '#2b6cb0'
+  stroke: '#1a4a80'
+  strokeWidth: 1
+  w: 0.96
+  h: 0.06
+  cornerRadius: 2
+- kind: rect
+  x: 0.02
+  y: 0.72
+  z: 2
+  fill: '#2b6cb0'
+  stroke: '#1a4a80'
+  strokeWidth: 1
+  w: 0.96
+  h: 0.06
+  cornerRadius: 2
+- kind: circle
+  x: 0.5
+  y: 0.31
+  z: 3
+  fill: '#f2f2f2'
+  stroke: '#b9bec6'
+  strokeWidth: 1
+  r: 0.15
+- kind: circle
+  x: 0.5
+  y: 0.31
+  z: 4
+  fill: '#3a3f44'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  r: 0.045
+- kind: rect
+  x: 0
+  y: 0.412
+  z: 5
+  fill: '#e8862b'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.16
+  h: 0.016
+- kind: rect
+  x: 0
+  y: 0.492
+  z: 6
+  fill: '#c0392b'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.16
+  h: 0.016
+- kind: rect
+  x: 0
+  y: 0.572
+  z: 7
+  fill: '#5a3a22'
+  stroke: '#8a8f96'
+  strokeWidth: 1
+  w: 0.16
+  h: 0.016
 labels:
-  - text: SG90
-    x: 0.5
-    y: 0.55
-    z: 8
-    fontSize: 10
-    color: "#ffffff"
+- text: SG90
+  x: 0.5
+  y: 0.55
+  z: 8
+  fontSize: 10
+  color: '#ffffff'
 image: image.png
 help: help.md
 mesh: model.stl
@@ -157,12 +157,19 @@ electrical:
 library:
   module: servo
 drivers:
-  - source: servo.py
-    target: lib/servo.py
-    label: Servo driver
+- source: servo.py
+  target: lib/servo.py
+  label: Servo driver
 layerVisibility:
   pcb: false
   image: true
   holes: true
   pins: true
   components: false
+groups:
+- id: servo-1
+  name: Servo lead
+  housing:
+    kind: dupont
+    x: 0.481158
+    y: 0.798277
