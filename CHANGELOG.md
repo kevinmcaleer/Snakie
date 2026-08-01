@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Pick your board in the firmware flasher, and it sets the rest up.** Choosing
+  the actual board — a XIAO ESP32-S3, a Pico, a micro:bit — now fills in the board
+  type, the flash offset and the firmware family, and warns you if the build you
+  picked is for a different chip. This matters most on ESP: only the original
+  ESP32 flashes at `0x1000`, every other ESP chip at `0x0`, and getting it wrong
+  flashes **without any error** and leaves the board silent. Boards that use their
+  own USB (like the XIAO ESP32-S3) now say so, because they come back on a
+  different port after flashing. The list includes boards the upstream firmware
+  catalog doesn't carry, the XIAO ESP32-S3 among them.
 - **Turn a group of pins into a connector.** Select a group in the Part Editor's
   layers list and pick a housing — QWIIC, Grove, JST, servo header or terminal
   block — and its pins become that connector's contacts, so a lead can plug into

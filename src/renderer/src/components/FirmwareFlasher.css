@@ -250,3 +250,17 @@
   padding: 0.85rem 1.1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
+
+/* Board profile hints (#680) — what the board needs you to know, and the warning
+   when the chosen firmware is for a different chip. */
+.firmware-hint {
+  margin: 0.3rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.firmware-hint--warn {
+  color: var(--warn);
+  font-weight: 600;
+}

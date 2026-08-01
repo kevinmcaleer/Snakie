@@ -6,6 +6,7 @@ import type {
   FirmwareCatalog,
   FlashProgress
 } from '../../../preload/index.d'
+import { BOARD_PROFILES, boardProfile, firmwareMismatch } from '../../../shared/board-profiles'
 import { useFocusTrap } from '../hooks/useFocusTrap'
 import { hasWebUSB, isElectron } from '../lib/platform'
 import { flashEspInBrowser, requestEspPort } from '../lib/webFirmware/espFlash'
@@ -100,6 +101,8 @@ function flashTargetForFamily(family: string): { board: BoardType; offset?: stri
 export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
   const [board, setBoard] = useState<BoardType>('esp32')
+  /** The chosen board profile (#680) — drives the mechanics below it. */
+  const [profileId, setProfileId] = useState<string>('')
   const [port, setPort] = useState<string>('')
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
@@ -283,6 +286,34 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     [families, selFamily]
   )
   const models = useMemo(() => family?.models ?? [], [family])
+
+  const profile = useMemo(() => (profileId ? boardProfile(profileId) : undefined), [profileId])
+
+  /**
+   * Pick the actual BOARD, and everything mechanical follows (#680).
+   *
+   * The offset is the reason this exists. Only the original ESP32 flashes at
+   * `0x1000`; every other ESP chip is `0x0`. Choosing "ESP32" from the board TYPE
+   * list and browsing to an ESP32-S3 binary wrote it at `0x1000` — esptool
+   * reported success, the ROM found no bootloader, and the board never came back
+   * as a REPL. Naming the board removes the chance to get that wrong.
+   */
+  const handleProfileChange = useCallback(
+    (id: string): void => {
+      setProfileId(id)
+      const p = boardProfile(id)
+      if (!p) return
+      const next: BoardType =
+        p.method === 'uf2' ? 'rp2040' : p.method === 'daplink' ? 'microbit' : p.chipFamily === 'esp8266' ? 'esp8266' : 'esp32'
+      setBoard(next)
+      setOffset(p.offset ?? DEFAULT_OFFSET[next])
+      // Pre-select the firmware family too, so the catalog opens on builds that
+      // fit — a generic build is keyed on the chip, which the profile knows.
+      if (families.some((f) => f.family === p.chipFamily)) setSelFamily(p.chipFamily)
+    },
+    [families]
+  )
+
   const model = useMemo(
     () => models.find((m) => `${m.vendor}|${m.model}` === selModel),
     [models, selModel]
@@ -344,6 +375,12 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const uf2Candidates = candidates.filter((c) => c.source === 'uf2-drive' && c.board === board)
 
   const usingCatalog = source === 'catalog'
+  /** Warn when the chosen firmware is for a different chip than the chosen board
+   *  — the mistake that flashes cleanly and leaves the board silent (#680). */
+  const mismatch = useMemo(
+    () => (profile && usingCatalog && selFamily ? firmwareMismatch(profile, selFamily) : null),
+    [profile, usingCatalog, selFamily]
+  )
 
   // The firmware to flash: a catalog URL (download) or a picked local path.
   const haveFirmware = usingCatalog ? selVersionUrl.length > 0 : firmwarePath.length > 0
@@ -516,6 +553,31 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         </header>
 
         <div className="firmware-modal__body">
+          {/* Name the board FIRST (#680): it fills in the board type, the flash
+              offset and the firmware family, and warns if the chosen build is for
+              a different chip. Optional — "Other" leaves every field manual. */}
+          <div className="firmware-field">
+            <label className="firmware-field__label" htmlFor="firmware-profile">
+              Board
+            </label>
+            <select
+              id="firmware-profile"
+              className="firmware-select"
+              value={profileId}
+              disabled={flashing}
+              onChange={(e) => handleProfileChange(e.target.value)}
+            >
+              <option value="">Other / set up manually…</option>
+              {BOARD_PROFILES.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.label}
+                </option>
+              ))}
+            </select>
+            {profile?.notes && <p className="firmware-hint">{profile.notes}</p>}
+            {mismatch && <p className="firmware-hint firmware-hint--warn">{mismatch}</p>}
+          </div>
+
           <div className="firmware-field">
             <label className="firmware-field__label" htmlFor="firmware-board">
               Board type
