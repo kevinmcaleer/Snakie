@@ -24,7 +24,7 @@ import { isServoPart, servoBoardGpio, boundJoint, bindServoJoint } from './servo
 import type { BoardDefinition } from '../../../shared/board'
 import type { PartDefinition, PartLibraryWithParts } from '../../../preload/index.d'
 import type { PartConnector, PartPinBuses, PartPinCapability, PartPinSignals } from '../../../shared/part'
-import { cableRole, conductorColour, connectorFit, housingPlugAngle, plugAngle } from './cable'
+import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './cable'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
@@ -1482,15 +1482,8 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
    * contacts are header pins, so their indices sit wherever those pins do rather
    * than in a contiguous block at the end.
    */
-  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector; housed: boolean }[] => {
-    const stored = def.connectors?.length ?? 0
-    return allConnectors(def).map((conn, i) => ({
-      conn,
-      idx: connectorEndpointIndices(def, conn),
-      // `allConnectors` lists the stored ones first, then the housed groups.
-      housed: i >= stored
-    }))
-  }
+  const connectorRanges = (def: PartDefinition): { idx: number[]; conn: PartConnector }[] =>
+    allConnectors(def).map((conn) => ({ conn, idx: connectorEndpointIndices(def, conn) }))
   const endpointConnector = (endpoint: string): EndpointConn | null => {
     const { key, index } = parseEp(endpoint)
     const def = subjByKey.get(key)?.partDef
@@ -1548,20 +1541,14 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
   for (const s of subjects) {
     const def = s.partDef
     if (!def) continue
-    connectorRanges(def).forEach(({ idx, conn, housed }, ci) => {
+    connectorRanges(def).forEach(({ idx, conn }, ci) => {
       const pts: { x: number; y: number }[] = []
-      // The contacts' outward normals — already turned with the placed part by
-      // `rotateNormal`, so they give the socket's facing in WORLD space.
-      const norms: { ox: number; oy: number }[] = []
       const endpoints: string[] = []
       for (const p of s.pins) {
         const at = idx.indexOf(p.index)
         if (at < 0) continue
         endpoints[at] = endpointOf(s.key, p.name, p.index)
-        for (const a of p.anchors) {
-          pts.push({ x: s.x + a.x, y: s.y + a.y })
-          norms.push({ ox: a.ox, oy: a.oy })
-        }
+        for (const a of p.anchors) pts.push({ x: s.x + a.x, y: s.y + a.y })
       }
       if (pts.length < 2 || endpoints.length !== conn.pins.length) return
       const cx = pts.reduce((n, p) => n + p.x, 0) / pts.length
@@ -1576,14 +1563,18 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
         cx,
         cy,
         r,
-        // A housed group's contacts are ordinary pins that each work out their
-        // own facing, so averaging them lands on a diagonal (#697). They are one
-        // connector, so take the facing from the housing and turn it with the
-        // placed part, exactly as the contact normals were turned.
-        angle: housed ? housingPlugAngle(conn) + (s.rotation ?? 0) : plugAngle(norms)
+        // One rule for every connector, stored or housed: the shell lies along
+        // its contacts and the lead leaves one end (#697). Turned with the placed
+        // part, exactly as the contact normals are.
+        angle: housingPlugAngle(conn) + (s.rotation ?? 0)
       })
     })
   }
+  /** Every endpoint that sits in a connector, and which one — so a cabled wire can
+   *  ask where its plug is rather than where its own contact points. */
+  const targetByEndpoint = new Map<string, ConnectorTarget>()
+  for (const t of connectorTargets) for (const ep of t.endpoints) if (ep) targetByEndpoint.set(ep, t)
+
   /** The connector body nearest a world point, if the point is inside it. */
   const connectorAt = (wx: number, wy: number): ConnectorTarget | null => {
     let best: ConnectorTarget | null = null
@@ -2163,6 +2154,31 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeSig])
 
+  /**
+   * Which way a CABLED wire leaves its end — the plug's boot, not its own contact.
+   *
+   * An ordinary wire is soldered to one pad, so it leaves along that pad's normal.
+   * A cable's conductors do not: they all emerge from the one boot, which is why a
+   * real lead reads as a single bundle. Taking the direction from the connector
+   * gives every conductor the same exit, so they run parallel out of the shell.
+   *
+   * It matters most on a HOUSED GROUP, whose contacts are ordinary pins that each
+   * work out their own facing: a servo trio's three disagreed (bottom, left,
+   * bottom), so the conductors fanned apart, and the left-facing one tripped the
+   * `vbow` U-turn guard below and bowed away on its own. Same rule as the shell
+   * itself, so lead and boot cannot disagree (#697).
+   *
+   * `null` for anything that isn't a cabled connector endpoint — those keep the
+   * pad normal.
+   */
+  const cableExit = (c: RobotConnection, endpoint: string): { ox: number; oy: number } | null => {
+    if (!c.cable) return null
+    const t = targetByEndpoint.get(endpoint)
+    if (!t) return null
+    const r = (t.angle * Math.PI) / 180
+    return { ox: Math.cos(r), oy: Math.sin(r) }
+  }
+
   // Resolve a connection's two endpoints in canvas coords + their outward normals.
   const wireEnds = (
     c: RobotConnection
@@ -2176,7 +2192,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (!fs || !ts || !fp || !tp) return null
     const fa = fp.anchors[0]
     const ta = tp.anchors[0]
-    return { ax: fs.x + fa.x, ay: fs.y + fa.y, aox: fa.ox, aoy: fa.oy, bx: ts.x + ta.x, by: ts.y + ta.y, box: ta.ox, boy: ta.oy }
+    // A cabled wire leaves through its plug's boot; anything else off its own pad.
+    const fe = cableExit(c, c.from) ?? fa
+    const te = cableExit(c, c.to) ?? ta
+    return { ax: fs.x + fa.x, ay: fs.y + fa.y, aox: fe.ox, aoy: fe.oy, bx: ts.x + ta.x, by: ts.y + ta.y, box: te.ox, boy: te.oy }
   }
 
   // --- wire path: orthogonal in Schematic, a Node-RED-style Bézier noodle in

@@ -154,54 +154,32 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
 }
 
 /**
- * The angle a plug sits at for a HOUSED GROUP, from the housing itself (#697).
+ * The angle a plug sits at — the ONE rule, for every connector kind (#697).
  *
- * A stored connector's contacts are laid out from its body, so they all share one
- * outward normal and averaging them is exact. A housed group's contacts are
- * ordinary pins that each work out their own facing — and in a servo trio only
- * the signal pin carries a rotation, so the three disagree and the average comes
- * out at a diagonal. That is the plug drawn at an angle.
+ * Seen from above, a plug's shell covers the contacts it is pushed onto and the
+ * cable leaves one END of that shell. So the angle runs ALONG the row of
+ * contacts, not across it: a COLUMN of contacts takes its lead off the top or
+ * bottom, a ROW off one side. Which end is the one nearer the board edge, so the
+ * cable runs off the board rather than back across it.
  *
- * They are one physical connector, so the facing is a property of the HOUSING: a
- * lead goes in perpendicular to the row of contacts, and outward from the board.
- * A column of contacts is entered from the side; a row from above or below.
+ * This deliberately replaced averaging the contacts' outward normals, which was
+ * a second rule that only agreed with this one for connectors stored in
+ * `connectors[]`. A HOUSED GROUP's contacts are ordinary pins that each work out
+ * their own facing, so in a servo trio — where only the signal pin carries a
+ * rotation — the three disagree and their average lands on a diagonal. That was
+ * the plug drawn at an angle. Deriving from the housing instead means a new
+ * connector kind cannot reintroduce the split, because there is nothing to keep
+ * in step: the housing is the only thing consulted.
  *
- * Returned in the same convention as {@link plugAngle} — degrees of the outward
- * normal — and in PART space, so the caller must turn it with the placed part.
+ * A plug is part of the SOCKET it is pushed into, so this reads only the part it
+ * is mounted on and never the mate. Deriving it from whatever is wired up (as
+ * this once did) made every header swing round to face the other component, and
+ * swing again whenever that component moved (#647). Only the lead should move.
+ *
+ * Degrees, in PART space — the caller turns it with the placed part.
  */
 export function housingPlugAngle(conn: PartConnector): number {
   const column = ((conn.rotation ?? 0) / 90) % 2 === 1
-  if (column) return conn.x < 0.5 ? 180 : 0 // entered from the left / right
-  return conn.y < 0.5 ? -90 : 90 //            entered from above / below
-}
-
-/**
- * The angle (degrees) a cable plug sits at, from its connector's contact normals.
- *
- * A plug is part of the SOCKET it's pushed into, so its orientation belongs to the
- * part it's mounted on — not to whatever happens to be wired to it. Deriving it
- * from the mate's position (as this once did) made every header swing round to
- * face the other component, and re-orient again whenever that component moved.
- * Only the lead between them should move.
- *
- * Each contact carries an outward normal that is already rotated with the placed
- * part, so averaging them gives the direction the lead leaves the socket, in world
- * space. Contacts of one connector share a normal; the average is a cheap way to
- * be robust to a malformed part whose contacts disagree.
- *
- * Returns `0` for an empty or degenerate set (normals that cancel out), so a bad
- * part yields a consistently-placed plug rather than a NaN transform.
- */
-export function plugAngle(normals: readonly { ox: number; oy: number }[]): number {
-  if (normals.length === 0) return 0
-  let nx = 0
-  let ny = 0
-  for (const n of normals) {
-    nx += n.ox
-    ny += n.oy
-  }
-  nx /= normals.length
-  ny /= normals.length
-  if (Math.hypot(nx, ny) < 1e-6) return 0
-  return (Math.atan2(ny, nx) * 180) / Math.PI
+  if (column) return conn.y < 0.5 ? -90 : 90 // off the top / bottom of the column
+  return conn.x < 0.5 ? 180 : 0 //              off the left / right end of the row
 }
