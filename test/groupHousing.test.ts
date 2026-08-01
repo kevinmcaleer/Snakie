@@ -248,3 +248,58 @@ describe('withGroupHousing (#673)', () => {
     expect(withGroupHousing(empty, 'g1', 'dupont')).toEqual({})
   })
 })
+
+/**
+ * The servo-header tool makes pin trios in a HOUSED GROUP (#679).
+ *
+ * #669 briefly made them stored connectors, which bought cabling at the cost of
+ * the pins: contacts nested in `connectors[]` can't be selected, edited or seen
+ * in the layers hierarchy as a group. Housing-on-group needs no such trade.
+ */
+describe('servo headers are pins in a housed group (#679)', () => {
+  /** Mirrors what the canvas tool builds, so the shape is asserted in one place. */
+  const built = {
+    id: 'p',
+    name: 'P',
+    dimensions: { width: 40, height: 20 },
+    headers: [
+      {
+        edge: 'left',
+        pins: [
+          { name: 'S1', type: 'io', shape: 'octagonal', group: 'servo-1', x: 0.2, y: 0.1 },
+          { name: 'V1', type: 'pwr', shape: 'octagonal', group: 'servo-1', x: 0.2, y: 0.2 },
+          { name: 'G1', type: 'gnd', shape: 'octagonal', group: 'servo-1', x: 0.2, y: 0.3 }
+        ]
+      }
+    ],
+    groups: [{ id: 'servo-1', name: 'Servo 1', housing: { kind: 'dupont', x: 0.2, y: 0.2, rotation: 90 } }]
+  } as unknown as PartDefinition
+
+  it('keeps the pads as ordinary pins, so they stay selectable and editable', () => {
+    // The regression: as a stored connector these were nested and unreachable.
+    expect(built.headers[0].pins).toHaveLength(3)
+    expect(built.connectors ?? []).toHaveLength(0)
+    expect(flattenPartPins(built).map((p) => p.name)).toEqual(['S1', 'V1', 'G1'])
+  })
+
+  it('still presents a connector, so a servo lead cables to it', () => {
+    const [h] = housedGroupConnectors(built)
+    expect(h.conn.kind).toBe('dupont')
+    expect(h.conn.pins.map((p) => p.name)).toEqual(['S1', 'V1', 'G1'])
+    const lead = {
+      kind: 'dupont',
+      x: 0.5,
+      y: 0.5,
+      pins: [
+        { name: 'Signal', type: 'io' },
+        { name: 'VCC', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    } as unknown as (typeof h)['conn']
+    expect(connectorFit(lead, h.conn).ok).toBe(true)
+  })
+
+  it('registers the group, so it shows in the layers hierarchy', () => {
+    expect(built.groups?.[0]).toMatchObject({ id: 'servo-1', name: 'Servo 1' })
+  })
+})

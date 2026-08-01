@@ -1512,6 +1512,8 @@ function LayersPanel({
   // a board of servo headers reads as one row each, not three).
   // The group node (in the Parts list) whose name is being edited inline (#631).
   const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+  /** Which group row has its housing menu open (#673). */
+  const [housingMenu, setHousingMenu] = useState<string | null>(null)
   // Pin list sort (#…): click a column header to sort by it; `col: null` is the
   // default insertion order. Clicking the active column toggles asc ⇄ desc.
   type PinSortCol = 'number' | 'type' | 'gpio'
@@ -1943,25 +1945,64 @@ function LayersPanel({
           )}
           {/* Make the group a CONNECTOR (#673): its pins become the contacts of a
               housing, so a lead can plug into them. The pins do not move — which
-              is what keeps every saved wire pointing where it did. */}
-          <select
-            className="pe__group-housing"
-            value={g?.housing?.kind ?? ''}
-            onChange={(e) => patch(withGroupHousing(part, gid, (e.target.value || null) as PartConnectorKind | null))}
-            title={
-              g?.housing
-                ? `This group is a ${CONN_KIND_LABEL[g.housing.kind]} — a lead can plug into it`
-                : 'Make this group a connector, so a lead can plug into its pins'
-            }
-            aria-label={`Connector housing for ${node.label}`}
-          >
-            <option value="">No housing</option>
-            {PART_CONNECTOR_KINDS.map((k) => (
-              <option key={k} value={k}>
-                {CONN_KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
+              is what keeps every saved wire pointing where it did.
+
+              An icon button rather than a dropdown: the row is already dense, and
+              this is a rare, deliberate act — not a field you scan. It reads as
+              set/unset at a glance and only asks which KIND when you open it. */}
+          <div className="pe__hwrap">
+            <button
+              type="button"
+              className={`pe__group-plug${g?.housing ? ' is-on' : ''}`}
+              onClick={() => setHousingMenu((m) => (m === gid ? null : gid))}
+              title={
+                g?.housing
+                  ? `${CONN_KIND_LABEL[g.housing.kind]} — a lead can plug into this group`
+                  : 'Make this group a connector, so a lead can plug into its pins'
+              }
+              aria-label={`Connector housing for ${node.label}`}
+              aria-haspopup="menu"
+              aria-expanded={housingMenu === gid}
+            >
+              <svg width="11" height="11" viewBox="0 0 12 12" aria-hidden="true">
+                <rect x="1.5" y="4" width="9" height="5.5" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M4 4V2.2M8 4V2.2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+              </svg>
+            </button>
+            {housingMenu === gid && (
+              <>
+                <button type="button" className="pe__addback" aria-label="Close" onClick={() => setHousingMenu(null)} />
+                <div className="pe__addmenu pe__addmenu--housing" role="menu">
+                  {PART_CONNECTOR_KINDS.map((k) => (
+                    <button
+                      key={k}
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHousingMenu(null)
+                        patch(withGroupHousing(part, gid, k))
+                      }}
+                    >
+                      {CONN_KIND_LABEL[k]}
+                      {g?.housing?.kind === k ? ' ✓' : ''}
+                    </button>
+                  ))}
+                  {g?.housing && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setHousingMenu(null)
+                        patch(withGroupHousing(part, gid, null))
+                      }}
+                    >
+                      Remove housing
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
           <button type="button" className="pe__group-ungroup" onClick={() => ungroupNode(gid)} title="Ungroup" aria-label="Ungroup">
             ⊟
           </button>

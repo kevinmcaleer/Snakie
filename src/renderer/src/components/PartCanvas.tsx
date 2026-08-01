@@ -41,7 +41,7 @@ import {
 import { itemHidden, itemLocked, itemSide, mirrorX, padPassesThrough } from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
-  PartConnector,
+  PartGroup,
   ComponentShape,
   ComponentShapeKind,
   MountingHole,
@@ -891,28 +891,27 @@ export function PartCanvas({
   /** One servo/DuPont header as a real 3-way CONNECTOR: Signal / V+ / GND at the
    *  2.54 mm pitch, standing vertical (rotation 90) so it reads as the familiar
    *  three-pin column. Contacts are ordinary pins, coloured by role. */
-  const servoHeaderConnector = (sx: number, sy: number, idx: number): PartConnector => ({
-    kind: 'dupont',
-    x: sx,
-    y: sy,
-    rotation: 90,
-    pins: [
-      { name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], signals: { pwm: 'A' } },
-      { name: `V${idx}`, type: 'pwr' },
-      { name: `G${idx}`, type: 'gnd' }
-    ]
-  })
+  /** One servo/DuPont header: a vertical Signal / V+ / GND trio of ordinary pins
+   *  at the 2.54 mm pitch, octagonal pads, sharing `gid` — plus a housing on that
+   *  group, which is what a lead plugs into. */
+  const servoTrio = (sx: number, sy: number, gid: string, idx: number): PartPin[] => [
+    onFace({ name: `S${idx}`, type: 'io', capabilities: ['digital', 'pwm'], signals: { pwm: 'A' }, shape: 'octagonal', group: gid, x: sx, y: sy }),
+    { name: `V${idx}`, type: 'pwr', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + stepNY) },
+    { name: `G${idx}`, type: 'gnd', shape: 'octagonal', group: gid, x: sx, y: clamp01(sy + 2 * stepNY) }
+  ]
 
   /**
    * Drop `n` servo headers in a row starting at (nx, ny), one pin pitch apart
    * along x (n = 1 for a plain click; more for a drag-strip).
    *
-   * These are CONNECTORS, not loose pin trios (#669). The look is unchanged — the
-   * housing draws its three contacts in the same role colours the pads used — but
-   * a connector is the thing a lead can plug into, so dragging a servo's cable to
-   * one now wires Signal, V+ and GND in a single gesture instead of three. Loose
-   * pins can't do that: `connectorFit` joins two connectors, and a bare pad has no
-   * housing to seat against.
+   * Each header is a trio of ORDINARY PINS in a group that carries a `dupont`
+   * housing (#673). That is the shape that gives both halves at once: the pins are
+   * selectable, editable and appear in the layers hierarchy as a group like any
+   * other, AND the housing means a servo lead plugs into all three in one drag.
+   *
+   * #669 briefly made these stored connectors instead, which bought the cabling at
+   * the cost of the pins — contacts nested in `connectors[]` can't be selected or
+   * fully edited (#677). Housing-on-group needs no such trade.
    */
   const addServoHeaders = (nx: number, ny: number, n = 1): void => {
     const sx = snapX(nx)
@@ -922,19 +921,33 @@ export function PartCanvas({
       return
     }
     // Continue the numbering already on the board so channels stay S1..Sn rather
-    // than restarting and colliding with existing contacts.
+    // than restarting and colliding with pins that are already there.
     const used = usedPinNames(part)
+    const trios: PartPin[] = []
+    const groups: PartGroup[] = [...(part.groups ?? [])]
     let idx = 0
-    const made: PartConnector[] = []
     for (let k = 0; k < Math.max(1, n); k++) {
       do idx += 1
       while (used.has(`S${idx}`) && idx < 1000)
       used.add(`S${idx}`)
-      made.push(servoHeaderConnector(clamp01(sx + k * stepNX), sy, idx))
+      const gid = `servo-${idx}`
+      const x = clamp01(sx + k * stepNX)
+      trios.push(...servoTrio(x, sy, gid, idx))
+      groups.push({
+        id: gid,
+        name: `Servo ${idx}`,
+        // Centred on the trio; standing on end, because the pads run in a column.
+        housing: { kind: 'dupont', x, y: clamp01(sy + stepNY), rotation: 90 }
+      })
     }
-    const next = [...connectors, ...made]
-    commit({ ...part, connectors: next })
-    onSelect?.({ type: 'connector', index: connectors.length })
+    const headers = part.headers.length ? part.headers : [{ edge: 'left' as const, pins: [] }]
+    const firstPi = headers[0].pins.length
+    commit({
+      ...part,
+      headers: headers.map((h, i) => (i === 0 ? { ...h, pins: [...h.pins, ...trios] } : h)),
+      groups
+    })
+    onSelect?.({ type: 'pin', hi: 0, pi: firstPi }) // the first signal pad
   }
 
   /** Move every pin of a group rigidly: the dragged pin snaps to (baseX, baseY) and

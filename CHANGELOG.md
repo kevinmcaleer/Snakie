@@ -50,6 +50,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Servo headers you add are selectable again.** The servo-header tool briefly
+  made each header a single connector, which bought one-drag cabling at the cost
+  of the pads: you could no longer click a signal pin, edit it, or find the header
+  in the layers list. Each header is once more a trio of ordinary pins in a named
+  group — and that group carries the connector, so a servo lead still plugs into
+  all three at once. You get both.
 - **Align, distribute and rotate now cover every kind of grouped item.** Selecting
   and dragging a group already treated connectors, LEDs, buttons and mounting
   holes as members; aligning or rotating one silently ignored them. A group made

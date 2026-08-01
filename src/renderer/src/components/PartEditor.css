@@ -2140,21 +2140,46 @@
   background: #c0392b;
 }
 
-/* "Make this group a connector" (#673) — sits in the group row beside Ungroup. */
-.pe__group-housing {
+/* "Make this group a connector" (#673) — an icon button in the group row. The
+   row is dense and this is a rare, deliberate act, so it reads as set/unset and
+   only asks which KIND when opened. */
+.pe__hwrap {
+  position: relative;
   flex: 0 0 auto;
-  max-width: 7.5rem;
-  font-family: var(--font-ui);
-  font-size: 0.62rem;
-  color: var(--text-muted);
-  background: var(--bg-sunken);
-  border: var(--border-w) solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.02rem 0.15rem;
-  cursor: pointer;
+  display: inline-flex;
 }
 
-.pe__group-housing:hover {
+.pe__group-plug {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  padding: 0;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  opacity: 0.55;
+}
+
+.pe__group-plug:hover {
   color: var(--text);
-  border-color: var(--text-muted);
+  background: var(--bg-sunken);
+  opacity: 1;
+}
+
+/* Housed: the group IS a connector — solid, and in the accent so it reads as a
+   state rather than another affordance. */
+.pe__group-plug.is-on {
+  color: var(--accent);
+  opacity: 1;
+}
+
+.pe__addmenu--housing {
+  top: 1.3rem;
+  right: 0;
+  left: auto;
+  min-width: 9rem;
 }
