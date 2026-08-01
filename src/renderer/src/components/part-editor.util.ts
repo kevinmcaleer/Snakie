@@ -1077,6 +1077,65 @@ export function servoSignalRotation(trioCentreY: number): number {
   return trioCentreY > 0.5 ? 90 : 270 // 90 = bottom, 270 = top
 }
 
+/**
+ * The group registry with every EMPTY group dropped (#690).
+ *
+ * A group is kept while some item still carries its id, or while it is some other
+ * kept group's `parent`. Delete the last thing in a group and the entry is dead
+ * weight: it lists in the Layers panel, selecting it selects nothing, and so
+ * pressing Delete on it appears to do nothing at all.
+ *
+ * The scan must cover EVERY kind that can carry a `group` id — when it was
+ * narrower, groups of connectors/LEDs/buttons/holes were pruned while still in
+ * use. Nesting is resolved to a fixed point, so dropping a group also drops a
+ * parent left holding nothing but it.
+ *
+ * Returns `undefined` when nothing survives, matching how the field is stored.
+ */
+export function pruneEmptyGroups(part: PartDefinition): PartGroup[] | undefined {
+  const all = part.groups ?? []
+  if (!all.length) return undefined
+  const used = new Set<string>()
+  for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) used.add(p.group)
+  for (const s of part.shapes ?? []) if (s.group) used.add(s.group)
+  for (const l of part.labels ?? []) if (l.group) used.add(l.group)
+  for (const c of part.connectors ?? []) {
+    if (c.group) used.add(c.group)
+    for (const p of c.pins ?? []) if (p.group) used.add(p.group)
+  }
+  for (const l of part.onboardLeds ?? []) if (l.group) used.add(l.group)
+  for (const b of part.buttons ?? []) if (b.group) used.add(b.group)
+  for (const h of part.mountingHoles ?? []) if (h.group) used.add(h.group)
+
+  // A group also survives as the parent of one that survives. Repeat until it
+  // settles, so a chain of ancestors is kept (or dropped) together.
+  const kept = new Set<string>([...used].filter((id) => all.some((g) => g.id === id)))
+  for (let changed = true; changed; ) {
+    changed = false
+    for (const g of all) {
+      if (g.parent && kept.has(g.id) && !kept.has(g.parent) && all.some((x) => x.id === g.parent)) {
+        kept.add(g.parent)
+        changed = true
+      }
+    }
+  }
+  const out = all
+    .filter((g) => kept.has(g.id))
+    .map((g): PartGroup => {
+      const grp: PartGroup = { id: String(g.id) }
+      if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
+      if (typeof g.parent === 'string' && g.parent.trim() && kept.has(g.parent)) grp.parent = g.parent.trim()
+      if (g.hidden === true) grp.hidden = true
+      if (g.locked === true) grp.locked = true
+      // Validated, not passed through: this runs from `normalisePart`, so an
+      // untrusted housing has to be coerced here or the whitelist has a hole.
+      const housing = coerceGroupHousing(g.housing)
+      if (housing) grp.housing = housing
+      return grp
+    })
+  return out.length ? out : undefined
+}
+
 /** The selection kinds a duplicate is defined for (#661). */
 export type DuplicableSelection =
   | { type: 'pin'; hi: number; pi: number }
@@ -1684,43 +1743,11 @@ export function normalisePart(part: PartDefinition): PartDefinition {
       .filter((l) => l.text !== '')
     if (labels.length) out.labels = labels
   }
-  // Group registry (#627) — kept only for ids still referenced by an item's `group`
-  // or by a nested group's `parent`, so ungrouping/deleting leaves no orphan groups.
-  //
-  // This scan must cover EVERY item kind that carries a `group` id. When it was
-  // narrower than that set, a group whose only members were connectors/LEDs/
-  // buttons/holes looked unreferenced and was pruned — the items kept working
-  // (`partLayerTree` synthesises a group for an unregistered id) but the group's
-  // NAME and its hidden/locked flags were silently lost on save.
-  if (Array.isArray(part.groups) && part.groups.length) {
-    const referenced = new Set<string>()
-    for (const h of part.headers ?? []) for (const p of h.pins) if (p.group) referenced.add(p.group)
-    for (const s of part.shapes ?? []) if (s.group) referenced.add(s.group)
-    for (const l of part.labels ?? []) if (l.group) referenced.add(l.group)
-    for (const c of part.connectors ?? []) {
-      if (c.group) referenced.add(c.group)
-      // A connector's contacts are ordinary pins and can be grouped separately
-      // from the body (the body + its contacts are usually one group).
-      for (const p of c.pins ?? []) if (p.group) referenced.add(p.group)
-    }
-    for (const l of part.onboardLeds ?? []) if (l.group) referenced.add(l.group)
-    for (const b of part.buttons ?? []) if (b.group) referenced.add(b.group)
-    for (const h of part.mountingHoles ?? []) if (h.group) referenced.add(h.group)
-    for (const g of part.groups) if (g.parent) referenced.add(g.parent)
-    const groups = part.groups
-      .filter((g) => g.id && referenced.has(g.id))
-      .map((g): PartGroup => {
-        const grp: PartGroup = { id: String(g.id) }
-        if (typeof g.name === 'string' && g.name.trim()) grp.name = g.name.trim()
-        if (typeof g.parent === 'string' && g.parent.trim()) grp.parent = g.parent.trim()
-        if (g.hidden === true) grp.hidden = true
-        if (g.locked === true) grp.locked = true
-        const housing = coerceGroupHousing(g.housing)
-        if (housing) grp.housing = housing
-        return grp
-      })
-    if (groups.length) out.groups = groups
-  }
+  // Group registry (#627): keep only the ids still in use — see
+  // {@link pruneEmptyGroups}, which is also what the delete paths call so a
+  // group vanishes the moment its last member does, not at the next save.
+  const keptGroups = pruneEmptyGroups(part)
+  if (keptGroups) out.groups = keptGroups
   if (Array.isArray(part.onboardLeds) && part.onboardLeds.length) {
     out.onboardLeds = part.onboardLeds.map((l): OnboardLed => {
       const kind: OnboardLed['kind'] =

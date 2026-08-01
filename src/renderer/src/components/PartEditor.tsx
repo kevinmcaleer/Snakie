@@ -47,6 +47,7 @@ import {
   collectUsedColors,
   dissolveGroup,
   duplicateSelection,
+  pruneEmptyGroups,
   faceImageData as faceImageDataOf,
   faceImageLayer,
   withFaceImageLayer,
@@ -820,6 +821,10 @@ export function PartEditor({
   }
 
   // --- delete the selected object ------------------------------------------
+  /** Drop any group left with no members after a delete (#690) — otherwise it
+   *  lists in the Layers panel, selects nothing, and Delete appears to do nothing. */
+  const dropEmptyGroups = (d: PartDefinition): PartDefinition => ({ ...d, groups: pruneEmptyGroups(d) })
+
   const deleteSelection = (): void => {
     const sel = selection
     if (!sel) return
@@ -855,7 +860,7 @@ export function PartEditor({
     if (selGroup) {
       const ids = groupTreeIds(part.groups, groupRootId(part.groups, selGroup))
       const inTree = (g: string | undefined): boolean => !!g && ids.has(g)
-      setPart((d) => ({
+      setPart((d) => dropEmptyGroups({
         ...d,
         headers: d.headers
           .map((h) => ({ ...h, pins: h.pins.filter((p) => !inTree(p.group)) }))
@@ -872,7 +877,7 @@ export function PartEditor({
       return
     }
     if (sel.type === 'pin') {
-      setPart((d) => ({
+      setPart((d) => dropEmptyGroups({
         ...d,
         headers: d.headers
           .map((h, i) => ({

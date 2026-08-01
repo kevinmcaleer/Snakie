@@ -21,6 +21,7 @@ import {
   groupMembers,
   faceImageLayer,
   pinLabelHidden,
+  pruneEmptyGroups,
   servoSignalRotation,
   withFaceImageLayer,
   selectionGroupId,
@@ -1491,29 +1492,10 @@ export function PartCanvas({
       .filter((h) => h.pins.length > 0)
     const nextShapes = shapes.filter((_, i) => !shapeSel.has(i))
     const nextLabels = labels.filter((_, i) => !labelSel.has(i))
-    // Keep only group ids still referenced by a surviving item (plus their
-    // ancestor chain), so deleting a whole group drops its registry entry.
-    const referenced = new Set<string>()
-    const keepWithAncestors = (g: string | undefined): void => {
-      let cur = g
-      const seen = new Set<string>()
-      while (cur && !seen.has(cur)) {
-        seen.add(cur)
-        referenced.add(cur)
-        cur = (part.groups ?? []).find((x) => x.id === cur)?.parent
-      }
-    }
-    nextHeaders.forEach((h) => h.pins.forEach((p) => keepWithAncestors(p.group)))
-    nextShapes.forEach((s) => keepWithAncestors(s.group))
-    nextLabels.forEach((l) => keepWithAncestors(l.group))
-    const nextGroups = (part.groups ?? []).filter((g) => referenced.has(g.id))
-    commit({
-      ...part,
-      headers: nextHeaders,
-      shapes: nextShapes,
-      labels: nextLabels,
-      groups: nextGroups.length ? nextGroups : undefined
-    })
+    // Drop any group left with nothing in it. Was a local scan of pins, shapes
+    // and labels only — the same narrow list that kept biting elsewhere (#690).
+    const next = { ...part, headers: nextHeaders, shapes: nextShapes, labels: nextLabels }
+    commit({ ...next, groups: pruneEmptyGroups(next) })
     setSelectedPins([])
     setSelComponents([])
     onSelect?.(null)
@@ -1565,7 +1547,21 @@ export function PartCanvas({
       connectors: drop(connectors, 'connector'),
       onboardLeds: drop(onboardLeds, 'led'),
       buttons: drop(buttons, 'button'),
-      mountingHoles: drop(holes, 'hole')
+      mountingHoles: drop(holes, 'hole'),
+      // No group is left listing nothing once its last member goes (#690).
+      groups: pruneEmptyGroups({
+        ...part,
+        headers: part.headers.map((h, hi) => ({
+          ...h,
+          pins: h.pins.filter((p, pi) => !pinKeys.has(`${hi}:${pi}`) || itemLocked(part.groups, p))
+        })),
+        shapes: drop(shapes, 'shape'),
+        labels: drop(labels, 'label'),
+        connectors: drop(connectors, 'connector'),
+        onboardLeds: drop(onboardLeds, 'led'),
+        buttons: drop(buttons, 'button'),
+        mountingHoles: drop(holes, 'hole')
+      })
     })
     setSelectedPins([])
     setSelComponents([])

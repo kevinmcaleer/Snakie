@@ -13,6 +13,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   codes stripped so it pastes cleanly into a bug report.
 
 ### Fixed
+- **A group disappears when you delete the last thing in it.** Removing some servo
+  headers left their groups listed in the Layers panel with nothing inside, and
+  they couldn't be got rid of: clicking an empty group selects nothing, so pressing
+  Delete on it appeared to do nothing at all. Groups are now cleared out the moment
+  their last member goes, and any already stranded on a board are cleared when it's
+  next opened.
 - **Servo headers label themselves sensibly.** A row of headers near a side of the
   board threw every signal label out to that edge, stacked over each other,
   because the label followed the nearest edge without regard for which way the
