@@ -233,6 +233,13 @@ def axes_for_resting(reading):
     leaves the reading identical, which is the same reason yaw is unobservable
     without a magnetometer. So of the several valid answers this returns the one
     that disturbs X and Y least, and it is a starting point, not a survey.
+
+    A wrong guess at that quarter-turn is what "roll and pitch are swapped" looks
+    like — tilting the nose up reads as roll. Use :func:`axes_from_two` to settle
+    it rather than trying the other three by hand.
+
+    Pass a reading from :meth:`LSM6DS3.raw_accel` (or a driver with no `axes` set):
+    an already-mapped reading yields a map relative to the one in force.
     """
     d, up_sign = _dominant(reading)
     rest = [i for i in range(3) if i != d]
@@ -271,6 +278,11 @@ def axes_from_two(level, nose_down):
 
     Returns an `axes` tuple for the constructor. Raises `ValueError` if the two
     poses aren't distinct enough to be telling us different things.
+
+    Both readings must come from :meth:`LSM6DS3.raw_accel` (or a driver with no
+    `axes` set) — an already-mapped reading derives a map relative to the one in
+    force, which looks like it worked and is wrong by exactly the correction
+    already applied.
     """
     iz, sz = _dominant(level)
     ix, sx = _dominant(nose_down)
@@ -398,15 +410,21 @@ class LSM6DS3:
 
     def accel(self):
         """Return the (x, y, z) acceleration in g, in the BOARD's frame."""
+        return apply_axes(self._axes, self.raw_accel())
+
+    def raw_accel(self):
+        """Acceleration in the SENSOR's own frame, ignoring any `axes` map.
+
+        What the calibration helpers need. Feeding them :meth:`accel` from a driver
+        that ALREADY has a map would derive a map relative to that one — it would
+        look like it worked and be wrong by exactly the correction already applied.
+        """
         b = self._i2c.readfrom_mem(self._addr, _OUTX_L_XL, 6)
         r = self._g_range
-        return apply_axes(
-            self._axes,
-            (
-                raw_to_g(b[0], b[1], r),
-                raw_to_g(b[2], b[3], r),
-                raw_to_g(b[4], b[5], r),
-            ),
+        return (
+            raw_to_g(b[0], b[1], r),
+            raw_to_g(b[2], b[3], r),
+            raw_to_g(b[4], b[5], r),
         )
 
     def gyro(self):

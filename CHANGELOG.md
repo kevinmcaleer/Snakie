@@ -13,7 +13,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `axes` argument describing the mounting, applied once at the source so
   acceleration, gyro and attitude all arrive the right way up. It can work the
   setting out for you: one reading of a stationary board tells you which way is up,
-  and a second with the nose pointed at the floor pins the rest down exactly.
+  and a second with the nose pointed at the floor pins the rest down exactly. That
+  second reading is what stops roll and pitch coming out swapped — gravity alone
+  can't tell a mounting from the same one turned a quarter-turn.
 
 ### Fixed
 - **Deleting a driver from your board now offers it again.** Snakie decided a

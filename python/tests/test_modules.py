@@ -242,6 +242,68 @@ class TestLsm6ds3AxisMap(unittest.TestCase):
             lsm6ds3.axes_from_two((0, 0, 1), (0, 0, -1))
         self.assertIn("same axis", str(e.exception))
 
+    def test_raw_accel_bypasses_the_map(self):
+        # Calibration must see the SENSOR frame. Feeding the helpers an
+        # already-mapped reading derives a map relative to the one in force —
+        # it looks like it worked and is wrong by exactly the applied correction.
+        class FakeI2c:
+            def readfrom_mem(self, addr, reg, n):
+                if n == 1:
+                    return bytes([0x69])
+                return bytes([0, 0, 0x00, 0x40, 0, 0])  # +1 g on sensor Y
+
+            def writeto_mem(self, addr, reg, data):
+                pass
+
+        imu = lsm6ds3.LSM6DS3(FakeI2c(), axes=("x", "z", "-y"))
+        raw = imu.raw_accel()
+        self.assertAlmostEqual(raw[1], 0.99942, places=4)  # still on Y
+        self.assertAlmostEqual(imu.accel()[2], -0.99942, places=4)  # mapped to -Z
+        # Calibrating from raw gets the right answer; from accel() it would not.
+        # This fake reads +1 g on Y (the real on-edge board read -1), so the map
+        # that lands gravity on +Z is the mirror of the on-edge one.
+        suggested = lsm6ds3.axes_for_resting(raw)
+        self.assertEqual(suggested, ("x", "-z", "y"))
+        mapped = lsm6ds3.apply_axes(lsm6ds3.parse_axes(suggested), raw)
+        self.assertAlmostEqual(mapped[2], 0.99942, places=4)
+
+    def test_a_quarter_turn_guess_is_what_swaps_roll_and_pitch(self):
+        # Gravity cannot see rotation ABOUT vertical, so four right-handed maps fit
+        # any resting reading. Picking the wrong one by 90 deg makes a nose-up tilt
+        # read as roll — the "pitch and roll are swapped" report.
+        from math import atan2, sqrt, degrees, sin, cos, radians
+
+        def reported(spec, sensor):
+            ax, ay, az = lsm6ds3.apply_axes(lsm6ds3.parse_axes(spec), sensor)
+            return (
+                degrees(atan2(ay, az)),
+                degrees(atan2(-ax, sqrt(ay * ay + az * az))),
+            )
+
+        # True frame is ('z','-x','-y'); tilt the robot nose-up 20 deg.
+        true = lsm6ds3.parse_axes(("z", "-x", "-y"))
+        board = (-sin(radians(20)), 0.0, cos(radians(20)))
+        sensor = [0.0, 0.0, 0.0]
+        for out_i, (src_i, sgn) in enumerate(true):
+            sensor[src_i] = board[out_i] * sgn
+        sensor = tuple(sensor)
+
+        roll, pitch = reported(("z", "-x", "-y"), sensor)  # correct
+        self.assertAlmostEqual(pitch, 20.0, places=3)
+        self.assertAlmostEqual(roll, 0.0, places=3)
+
+        roll, pitch = reported(("x", "z", "-y"), sensor)  # a quarter-turn out
+        self.assertAlmostEqual(roll, -20.0, places=3)  # nose-up arrives as ROLL
+        self.assertAlmostEqual(pitch, 0.0, places=3)
+
+        # And the two-pose calibration picks the correct one, not the guess.
+        nose_down = [0.0, 0.0, 0.0]
+        for out_i, (src_i, sgn) in enumerate(true):
+            nose_down[src_i] = (-1.0 if out_i == 0 else 0.0) * sgn
+        self.assertEqual(
+            lsm6ds3.axes_from_two((0.0, -1.0, 0.0), tuple(nose_down)), ("z", "-x", "-y")
+        )
+
     def test_a_bad_map_fails_at_construction(self):
         with self.assertRaises(ValueError):
             lsm6ds3.LSM6DS3(object(), axes=("x", "x", "z"))

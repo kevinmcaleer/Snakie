@@ -80,12 +80,29 @@ vertical leaves the reading identical, which is the same reason yaw is
 unobservable. So a single reading gets roll and pitch upright but has to guess the
 remaining quarter-turn: guess wrong and tilting the nose up still reads as roll.
 
+A wrong guess there is what **"roll and pitch are swapped"** looks like: tilt the
+nose up and it reads as roll. Four right-handed maps fit any resting reading —
+they differ only by that quarter-turn — so don't try the other three by hand.
+
 A second pose settles it. Take one reading level, then one with the robot's
 **forward** direction pointing at the floor:
 
 ```python
-print(lsm6ds3.axes_from_two(level, nose_down))   # fully determined
+from lsm6ds3 import LSM6DS3, axes_from_two
+
+imu = LSM6DS3(i2c, addr=0x6A)          # no axes= — calibration needs the raw frame
+
+input("hold the robot LEVEL, then press Enter")
+level = imu.raw_accel()
+input("now point its NOSE at the floor, then press Enter")
+nose = imu.raw_accel()
+
+print("axes =", axes_from_two(level, nose))
 ```
+
+Use `raw_accel()`, not `accel()`. A reading that has already been through an
+`axes` map yields a map relative to that one — it looks like it worked, and is
+wrong by exactly the correction already in force.
 
 A mirrored (left-handed) map is refused rather than used: it puts gravity exactly
 where you want it, so it looks right on a stationary board, and then turns every
