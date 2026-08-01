@@ -52,6 +52,24 @@ export interface BoardProfile {
   nativeUsb?: boolean
   /** Anything the user genuinely needs to know, shown next to the picker. */
   notes?: string
+  /**
+   * Erase the whole flash before writing, by default, for this board.
+   *
+   * On when the board commonly arrives running something else: a leftover
+   * partition table or NVS survives a plain `write_flash`, and the board then
+   * boot-loops — enumerating for a second and dropping off — which reads exactly
+   * like a failed flash even though the flash succeeded.
+   */
+  eraseByDefault?: boolean
+  /**
+   * The firmware BUILD this board needs, when a generic one will not do.
+   *
+   * Some boards only run a specific variant, and picking the wrong one produces
+   * a board that flashes cleanly and then boot-loops. The XIAO ESP32-S3 is the
+   * case in point: it carries 8 MB of OCTAL-SPI PSRAM, so it needs the
+   * `SPIRAM_OCT` build — and the upstream catalog only offers the plain one.
+   */
+  requiredBuild?: { name: string; why: string; url?: string }
 }
 
 const ESP32_S3 = { chipFamily: 'esp32s3', method: 'esptool' as const, offset: '0x0', nativeUsb: true }
@@ -72,6 +90,12 @@ export const BOARD_PROFILES: BoardProfile[] = [
     model: 'XIAO ESP32-S3',
     label: 'Seeed Studio XIAO ESP32-S3',
     ...ESP32_S3,
+    eraseByDefault: true,
+    requiredBuild: {
+      name: 'ESP32_GENERIC_S3-SPIRAM_OCT',
+      why: 'This board has 8 MB of octal-SPI PSRAM. The plain ESP32_GENERIC_S3 build flashes cleanly and then boot-loops — the board appears for a moment and drops off again.',
+      url: 'https://micropython.org/download/ESP32_GENERIC_S3/'
+    },
     notes:
       'Native USB: after flashing, unplug and replug the board — MicroPython comes back on a different port than the bootloader used.'
   },
@@ -143,7 +167,8 @@ export const BOARD_PROFILES: BoardProfile[] = [
     vendor: 'Espressif',
     model: 'ESP32-S3 (generic)',
     label: 'Espressif ESP32-S3 (generic)',
-    ...ESP32_S3
+    ...ESP32_S3,
+    eraseByDefault: true
   },
   {
     id: 'esp32-c3-generic',

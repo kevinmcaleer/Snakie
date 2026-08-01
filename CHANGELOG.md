@@ -7,6 +7,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Erase before flashing, and know which build your board needs.** A board
+  arriving from other firmware keeps its old partition table through a plain
+  flash, and then boot-loops — appearing for a second and dropping off again,
+  which looks exactly like a failed flash even though the flash worked. The
+  flasher can now erase first, and does by default on the boards that need it.
+  Boards that only run one specific build say so up front: a XIAO ESP32-S3 needs
+  the `SPIRAM_OCT` firmware, because it has octal PSRAM and boot-loops on the
+  plain ESP32-S3 build the standard catalog offers.
 - **Pick your board in the firmware flasher, and it sets the rest up.** Choosing
   the actual board — a XIAO ESP32-S3, a Pico, a micro:bit — now fills in the board
   type, the flash offset and the firmware family, and warns you if the build you

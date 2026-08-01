@@ -70,3 +70,33 @@ describe('firmware / board compatibility', () => {
     expect(firmwareMismatch(s3, '')).toBeNull()
   })
 })
+
+/** Boot-loop causes the profile has to carry (#681). */
+describe('boot-loop guards', () => {
+  it('tells XIAO ESP32-S3 owners which build they need, and why', () => {
+    // The catalog only offers the plain ESP32_GENERIC_S3; this board has octal
+    // PSRAM and boot-loops on it — flashes clean, then drops off repeatedly.
+    const b = boardProfile('xiao-esp32s3')!
+    expect(b.requiredBuild?.name).toContain('SPIRAM_OCT')
+    expect(b.requiredBuild?.why).toMatch(/boot-loop/i)
+    expect(b.requiredBuild?.url).toContain('micropython.org')
+  })
+
+  it('erases by default on the boards that arrive running something else', () => {
+    expect(boardProfile('xiao-esp32s3')!.eraseByDefault).toBe(true)
+    // A drive-copy board has no erase step at all.
+    expect(boardProfile('pico')!.eraseByDefault).toBeUndefined()
+  })
+
+  it('only ever sets eraseByDefault on esptool boards', () => {
+    for (const b of BOARD_PROFILES) {
+      if (b.eraseByDefault) expect(b.method, b.id).toBe('esptool')
+    }
+  })
+
+  it('gives a required build only where a generic one genuinely will not do', () => {
+    for (const b of BOARD_PROFILES) {
+      if (b.requiredBuild) expect(b.requiredBuild.why.length, b.id).toBeGreaterThan(20)
+    }
+  })
+})

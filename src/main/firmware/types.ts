@@ -86,6 +86,20 @@ export interface FlashOptions {
   offset?: string
   /** esptool baud rate. Defaults to 460800. */
   baud?: number
+  /**
+   * Erase the whole flash before writing (`esptool erase_flash`).
+   *
+   * Worth doing whenever the board is coming from other firmware: a stale
+   * partition table or NVS left behind by an Arduino/vendor image makes plenty of
+   * ESP32 boards boot-loop after an otherwise clean MicroPython flash — the board
+   * enumerates for a moment, panics, and drops off again.
+   */
+  eraseFirst?: boolean
+  /**
+   * Chip to pass as `--chip` (e.g. `esp32s3`). Omitted ⇒ esptool auto-detects,
+   * which is usually right but silently guesses on a board that answers slowly.
+   */
+  chip?: string
 }
 
 /** Result of a flash operation, returned in addition to the streamed logs. */

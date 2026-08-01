@@ -128,15 +128,27 @@ async function flashEsp(opts: FlashOptions, emit: Emit): Promise<FlashResult> {
 
   const offset = opts.offset ?? DEFAULT_OFFSET[opts.board === 'esp8266' ? 'esp8266' : 'esp32']
   const baud = String(opts.baud ?? 460800)
-  const args = [
-    '--port',
-    opts.port,
-    '--baud',
-    baud,
-    'write_flash',
-    offset,
-    opts.firmwarePath
-  ]
+  // `--chip` when we know it: auto-detect is usually right, but naming the chip
+  // removes a guess on a board that answers slowly.
+  const base = ['--port', opts.port, '--baud', baud]
+  if (opts.chip) base.unshift('--chip', opts.chip)
+
+  // Erase first when asked. A board arriving from vendor/Arduino firmware keeps
+  // its old partition table and NVS through a plain `write_flash`, and plenty of
+  // ESP32 boards then boot-loop: they enumerate for a moment, panic, and drop off
+  // again. That reads exactly like a failed flash, except the flash succeeded.
+  if (opts.eraseFirst) {
+    const eraseArgs = [...base, 'erase_flash']
+    emit({ kind: 'log', message: `> ${tool.command} ${eraseArgs.join(' ')}` })
+    const erased = await runStreaming(tool.command, eraseArgs, emit)
+    if (erased.spawnError || erased.code !== 0) {
+      const msg = `Erase failed (exit ${erased.code ?? '?'}). The board may be in the wrong mode — hold BOOT while plugging it in.`
+      emit({ kind: 'error', message: msg })
+      return { ok: false, error: msg }
+    }
+  }
+
+  const args = [...base, 'write_flash', offset, opts.firmwarePath]
 
   emit({ kind: 'log', message: `Using ${tool.command}${tool.version ? ` (${tool.version})` : ''}` })
   emit({ kind: 'log', message: `> ${tool.command} ${args.join(' ')}` })

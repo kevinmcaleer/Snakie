@@ -103,6 +103,8 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
   const [board, setBoard] = useState<BoardType>('esp32')
   /** The chosen board profile (#680) — drives the mechanics below it. */
   const [profileId, setProfileId] = useState<string>('')
+  /** Erase the whole flash before writing (#681). */
+  const [eraseFirst, setEraseFirst] = useState<boolean>(false)
   const [port, setPort] = useState<string>('')
   const [mountPath, setMountPath] = useState<string>('')
   const [offset, setOffset] = useState<string>(DEFAULT_OFFSET.esp32)
@@ -307,6 +309,7 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
         p.method === 'uf2' ? 'rp2040' : p.method === 'daplink' ? 'microbit' : p.chipFamily === 'esp8266' ? 'esp8266' : 'esp32'
       setBoard(next)
       setOffset(p.offset ?? DEFAULT_OFFSET[next])
+      setEraseFirst(p.eraseByDefault === true)
       // Pre-select the firmware family too, so the catalog opens on builds that
       // fit — a generic build is keyed on the chip, which the profile knows.
       if (families.some((f) => f.family === p.chipFamily)) setSelFamily(p.chipFamily)
@@ -492,7 +495,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
           firmwarePath,
           port: isEsp ? port : undefined,
           mountPath: isEsp ? undefined : mountPath,
-          offset: isEsp ? offset : undefined
+          offset: isEsp ? offset : undefined,
+          eraseFirst: isEsp ? eraseFirst : undefined,
+          // Name the chip when the board profile knows it, so esptool doesn't
+          // have to guess on a board that answers slowly (#681).
+          chip: isEsp ? profile?.chipFamily : undefined
         })
       }
       // The terminal `done` progress event drives `flashing` / `outcome`.
@@ -518,7 +525,11 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
     board,
     mountPath,
     firmwarePath,
-    port
+    port,
+    // Both are read inside; without them the callback flashes with whatever they
+    // were when it was last created — so toggling Erase would not take effect.
+    eraseFirst,
+    profile?.chipFamily
   ])
 
   const finished = outcome === 'success' || outcome === 'error'
@@ -575,7 +586,37 @@ export function FirmwareFlasher({ onClose }: FirmwareFlasherProps): JSX.Element 
               ))}
             </select>
             {profile?.notes && <p className="firmware-hint">{profile.notes}</p>}
+            {/* Some boards only run one specific build, and the wrong one flashes
+                cleanly then boot-loops. Say which, and why, before they flash. */}
+            {profile?.requiredBuild && (
+              <p className="firmware-hint firmware-hint--warn">
+                Needs the <code>{profile.requiredBuild.name}</code> build. {profile.requiredBuild.why}
+                {profile.requiredBuild.url && (
+                  <>
+                    {' '}
+                    <a href={profile.requiredBuild.url} target="_blank" rel="noreferrer">
+                      Download it
+                    </a>
+                    , then choose it as a local file.
+                  </>
+                )}
+              </p>
+            )}
             {mismatch && <p className="firmware-hint firmware-hint--warn">{mismatch}</p>}
+            {board !== 'rp2040' && board !== 'microbit' && (
+              <label className="firmware-check">
+                <input
+                  type="checkbox"
+                  checked={eraseFirst}
+                  disabled={flashing}
+                  onChange={(e) => setEraseFirst(e.target.checked)}
+                />
+                <span>
+                  Erase the whole flash first — slower, but a board arriving from other firmware
+                  keeps its old partition table and boot-loops without it.
+                </span>
+              </label>
+            )}
           </div>
 
           <div className="firmware-field">

@@ -264,3 +264,20 @@
   color: var(--warn);
   font-weight: 600;
 }
+
+/* "Erase first" opt-in (#681). */
+.firmware-check {
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.firmware-check input {
+  margin-top: 0.15rem;
+  flex: 0 0 auto;
+}
