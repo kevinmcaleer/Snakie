@@ -6,6 +6,8 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.43.0] - 2026-08-02
+
 ### Added
 - **Define a part's internal wiring in the editor.** A new **Rails** section lists
   one row per internal net — name it, then add its pins — so a distribution board
@@ -3928,7 +3930,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...HEAD
+[0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0
 [0.40.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.39.0...v0.40.0
