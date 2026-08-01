@@ -21,6 +21,14 @@ import {
   type LayerLocks
 } from './PartCanvas'
 import { connectorDefaultName, pinOutwardDir } from './part-body'
+import {
+  hasI2cInterface,
+  hexAddr,
+  isReservedI2cAddress,
+  knownDevicesFor,
+  parseI2cAddress,
+  partsClaimingAddress
+} from './i2c-known-devices'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
@@ -1329,6 +1337,7 @@ export function PartEditor({
                 footprints={footprints}
                 onSelect={setSelection}
                 footprintOps={footprintOps}
+                existingParts={existingParts}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -2322,6 +2331,8 @@ interface InspectorProps {
   footprints: FootprintInfo[]
   onSelect: (sel: CanvasSelection) => void
   footprintOps: FootprintOps
+  /** Other parts in the same library — for the I²C address-clash warning. */
+  existingParts: PartDefinition[]
 }
 
 /** "Add footprint…" dropdown (#166): a scrollable, fixed-positioned menu of
@@ -2520,7 +2531,144 @@ function Inspector(props: InspectorProps): JSX.Element {
 
       {/* Electrical behaviour — what the netlist / ERC / DC solver read (#597) */}
       <ElectricalSection part={part} patch={patch} names={props.names} />
+
+      {/* I²C addresses — what the I²C-detect instrument matches a scan against (#653) */}
+      <I2cSection part={part} patch={patch} existingParts={props.existingParts} />
     </>
+  )
+}
+
+/**
+ * The **I²C** inspector section (#653, epic #654) — declares the address(es) this
+ * part answers on, so the I²C-detect instrument can match a live bus scan back to
+ * it and offer "add this part".
+ *
+ * Until now `i2cAddresses` could only be hand-written into `parts.yml`, which put
+ * the commonest breadboard part there is — an I²C sensor — out of reach of anyone
+ * authoring in the app.
+ *
+ * Deliberately NOT the generic key/value `properties` table: that is display-only,
+ * so an address typed there looks declared and does nothing. Follows
+ * {@link ElectricalSection} instead — a typed field consumed by a subsystem gets a
+ * control that can validate it.
+ */
+function I2cSection({
+  part,
+  patch,
+  existingParts
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  existingParts: PartDefinition[]
+}): JSX.Element {
+  const [draft, setDraft] = useState('')
+  const addrs = part.i2cAddresses ?? []
+  // `76` is decimal 0x4C, but I²C addresses are conventionally written in hex — so
+  // rather than guess what the author meant, show them the parse as they type.
+  const parsed = parseI2cAddress(draft)
+  const duplicate = parsed !== null && addrs.includes(parsed)
+
+  const commit = (next: number[]): void =>
+    patch({ i2cAddresses: next.length ? [...next].sort((a, b) => a - b) : undefined })
+
+  const add = (): void => {
+    if (parsed === null || duplicate) return
+    commit([...addrs, parsed])
+    setDraft('')
+  }
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">I²C</h3>
+
+      {addrs.length > 0 && (
+        <ul className="pe__addrs">
+          {addrs.map((a) => {
+            const clash = partsClaimingAddress(a, existingParts, part.id)
+            const known = knownDevicesFor(a)
+            return (
+              <li key={a} className="pe__addr">
+                <span className="pe__addr-hex">{hexAddr(a)}</span>
+                {known.length > 0 && <span className="pe__addr-known">{known[0]}</span>}
+                {isReservedI2cAddress(a) && (
+                  <span className="pe__addr-warn" title="The I²C spec reserves this address">
+                    reserved
+                  </span>
+                )}
+                {clash.length > 0 && (
+                  <span
+                    className="pe__addr-warn"
+                    title={`Also claimed by: ${clash.map((p) => p.name).join(', ')}`}
+                  >
+                    also {clash.length === 1 ? clash[0].name : `${clash.length} parts`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="pe__chip pe__chip--del"
+                  aria-label={`Remove ${hexAddr(a)}`}
+                  onClick={() => commit(addrs.filter((x) => x !== a))}
+                >
+                  ✕
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      <div className="pe__row">
+        <label className="pe__field">
+          <span>Add address</span>
+          <input
+            type="text"
+            value={draft}
+            placeholder="0x76"
+            spellCheck={false}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                add()
+              }
+            }}
+          />
+        </label>
+        <button
+          type="button"
+          className="pe__add pe__add--inline"
+          disabled={parsed === null || duplicate}
+          onClick={add}
+        >
+          Add
+        </button>
+      </div>
+
+      {/* The live parse. This is the whole answer to "did you mean 0x76 or 76?" */}
+      {draft.trim() !== '' && (
+        <p className="pe__hint">
+          {parsed === null ? (
+            <span className="pe__addr-warn">
+              Not a 7-bit address — use <code>0x76</code>, <code>76h</code> or a decimal 0–127.
+            </span>
+          ) : duplicate ? (
+            <span className="pe__addr-warn">{hexAddr(parsed)} is already listed.</span>
+          ) : (
+            <>
+              → <code>{hexAddr(parsed)}</code>
+              {knownDevicesFor(parsed).length > 0 && ` — ${knownDevicesFor(parsed)[0]}`}
+              {isReservedI2cAddress(parsed) && ' (reserved by the I²C spec)'}
+            </>
+          )}
+        </p>
+      )}
+
+      <p className="pe__hint pe__hint--muted">
+        {hasI2cInterface(part)
+          ? 'The I²C-detect instrument offers this part when a scan finds one of these addresses.'
+          : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
+      </p>
+    </section>
   )
 }
 

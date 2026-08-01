@@ -2037,3 +2037,54 @@
   color: var(--pe-row-ink);
   border-color: color-mix(in srgb, var(--pe-row-ink) 45%, transparent);
 }
+
+/* I²C addresses (#653) — the declared address list in the Inspector. Colours are
+   theme tokens throughout so the section reads in both the dark and skeuomorph
+   skins; `--warn` is defined per-skin for exactly this. */
+.pe__addrs {
+  list-style: none;
+  margin: 0.3rem 0 0.15rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pe__addr {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.3rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.pe__addr-hex {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* The device this address usually is — context, so a wrong number is obvious. */
+.pe__addr-known {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+}
+
+.pe__addr-warn {
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+/* Push the delete button right when there's no device name to take up the slack. */
+.pe__addr > .pe__chip--del {
+  margin-left: auto;
+}

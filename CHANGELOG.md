@@ -6,6 +6,17 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Declare a part's I²C addresses in the Part Editor.** A new **I²C** section in
+  the inspector lists the addresses a part answers on — which is what lets the
+  I²C-detect instrument offer that part when a scan finds it on a real bus. Until
+  now the field existed in the schema but could only be hand-written into
+  `parts.yml`, so the commonest breakout there is — an I²C sensor — could not be
+  fully authored in the app. Type `0x76`, `76h` or a decimal; the editor shows the
+  address it parsed back to you, names the device usually found there, and warns
+  (without blocking) on addresses the I²C spec reserves or that another part in the
+  library already claims.
+
 ### Fixed
 - **Editing a part no longer discards its I²C addresses.** A part's
   `i2cAddresses` survived on disk but was dropped the moment the Part Editor
