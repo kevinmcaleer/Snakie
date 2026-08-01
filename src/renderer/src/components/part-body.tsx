@@ -1070,6 +1070,7 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
       {showLabels &&
         conn.pins.map((pin, i) => {
           if (!pin.name || i >= n) return null
+          if (contactLabelHidden(conn, pin)) return null
           const cxp = x0 + (w / (n + 1)) * (i + 1)
           // ONE element for both label styles, so the geometry — which side of
           // the housing, the rotation, the anchor and the baseline — cannot drift
@@ -1111,6 +1112,24 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
         })}
     </g>
   )
+}
+
+/**
+ * Should this contact's silk label be suppressed? (#666)
+ *
+ * A servo / DuPont header is three contacts of which only ONE is interesting: the
+ * signal. Its V+ and GND are the same two rails on every header, so printing them
+ * across a row of eight headers is sixteen labels of pure noise over the part
+ * that most needs its signal names readable.
+ *
+ * Power and ground therefore DEFAULT to hidden on that kind — a default, not
+ * stored data, so it applies to headers already on a board and nothing is
+ * rewritten on disk. An explicit `labelHidden` still wins either way, which is
+ * how the pin-based servo trios (which set the flag themselves) already behave.
+ */
+function contactLabelHidden(conn: PartConnector, pin: PartPin): boolean {
+  if (pin.labelHidden !== undefined) return pin.labelHidden
+  return conn.kind === 'dupont' && (pin.type === 'pwr' || pin.type === 'gnd')
 }
 
 /** The default silk name for a connector when the author hasn't set one. A Grove

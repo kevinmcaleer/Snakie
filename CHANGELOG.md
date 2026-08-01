@@ -27,6 +27,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Servo headers show only their signal label.** A servo / DuPont header's V+ and
+  GND are the same two rails on every header, so a row of eight printed sixteen
+  labels of noise over the signal names you actually read. Power and ground are
+  now hidden by default on that connector kind — it's a display default rather
+  than saved data, so headers already on a board pick it up and nothing is
+  rewritten on disk. Other connector kinds are unchanged: a QWIIC's GND and 3V3
+  are worth printing, because you wire to them.
 - **Groups of connectors, LEDs, buttons or holes select and drag as one.** Only
   pins, shapes and labels counted as group members, so a group made of anything
   else resolved to nothing: clicking it in the Layers panel selected nothing on

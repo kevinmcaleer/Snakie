@@ -148,3 +148,51 @@ describe('connector labels follow the nearest board edge (#663)', () => {
     expect(yOf(bottom)).toBeGreaterThan(50)
   })
 })
+
+/** Servo headers show only their signal label (#666). */
+describe('servo header power/ground labels are hidden by default (#666)', () => {
+  const servo = (over: Record<string, unknown> = {}): Parameters<typeof connectorGlyph>[2] =>
+    ({
+      kind: 'dupont',
+      x: 0.5,
+      y: 0.3,
+      pins: [
+        { name: 'SIG', type: 'io', capabilities: ['pwm'] },
+        { name: 'V+', type: 'pwr', ...over },
+        { name: 'GND', type: 'gnd', ...over }
+      ]
+    }) as unknown as Parameters<typeof connectorGlyph>[2]
+
+  // pxPerMm > 0 so the 3-way housing is wide enough for labels to draw at all
+  // (they are gated on width, and a 3-pin block at the fallback scale is 21px).
+  it('draws the signal label and drops V+ / GND', () => {
+    const html = renderToStaticMarkup(connectorGlyph(50, 50, servo(), false, 10))
+    expect(html).toContain('SIG')
+    expect(html).not.toContain('V+')
+    expect(html).not.toContain('GND')
+  })
+
+  it('an explicit labelHidden:false still wins, so the default is overridable', () => {
+    const html = renderToStaticMarkup(connectorGlyph(50, 50, servo({ labelHidden: false }), false, 10))
+    expect(html).toContain('V+')
+    expect(html).toContain('GND')
+  })
+
+  it('leaves other connector kinds showing every contact', () => {
+    // A QWIIC's GND/3V3 are worth printing — you wire to them.
+    const qwiic = {
+      kind: 'qwiic',
+      x: 0.5,
+      y: 0.3,
+      pins: [
+        { name: 'GND', type: 'gnd' },
+        { name: 'VCC', type: 'pwr' },
+        { name: 'SDA', type: 'io' },
+        { name: 'SCL', type: 'io' }
+      ]
+    } as unknown as Parameters<typeof connectorGlyph>[2]
+    const html = renderToStaticMarkup(connectorGlyph(50, 50, qwiic, false, 10))
+    expect(html).toContain('GND')
+    expect(html).toContain('VCC')
+  })
+})
