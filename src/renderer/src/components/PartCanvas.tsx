@@ -52,7 +52,7 @@ import type {
   PartPinType,
   TextAlign
 } from '../../../shared/part'
-import { boxedPinLabel, capabilityChips, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
+import { boxedPinLabel, capabilityChips, connectorContactLabels, castellatedPad, componentLabelTransform, connectorGlyph, connectorLabel, connectorSize, octagonalPad, onboardLedGlyph, onboardLedLabel, partButtonGlyph, PART_BUTTON_SIZE, pinOutwardDir, pinThroughHoles, styledText } from './part-body'
 import './PartCanvas.css'
 
 /**
@@ -3588,9 +3588,12 @@ export function PartCanvas({
               const labelY = cy + connH / 2 + 11
               const draggable = interactive && !locked.components
               return (
-                // Rotate the whole connector — body, pins AND label — about its
-                // centre when it has a body rotation.
-                <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
+                <g key={`conn${i}`}>
+                  {/* Only the HOUSING turns. Contact labels are rendered outside
+                      this transform, through the shared pin-label path, at
+                      positions that already account for the rotation (#672). */}
+                  {connectorContactLabels(part, conn, box, `c${i}`)}
+                  <g transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
                   {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
                   <g
                     transform={componentLabelTransform(cx, labelY, box.w, box.h, conn.labelOffset, conn.labelRotation)}
@@ -3598,6 +3601,7 @@ export function PartCanvas({
                     onPointerDown={draggable ? (e) => startCompLabelDrag(e, { type: 'connector', index: i }, conn.labelOffset) : undefined}
                   >
                     {styledText({ text: connectorLabel(conn), cx, cy: labelY, fontSize: 9, fill: sel ? '#fff' : '#cfd6dd' })}
+                  </g>
                   </g>
                 </g>
               )

@@ -282,7 +282,7 @@ export function capabilityBadges(cx: number, cy: number, caps: PartPinCapability
  */
 
 export type { Box } from './part-editor.util'
-import { connectorDims } from './part-editor.util'
+import { connectorContacts, connectorDims } from './part-editor.util'
 
 /** Pad fill by electrical role (kept close to the Board View's palette). */
 export const PAD_FILL: Record<PartPinType, string> = {
@@ -554,7 +554,9 @@ export function boxedPinLabel(
   const anchor = (a: 'start' | 'end'): 'start' | 'end' => (upright ? (a === 'start' ? 'end' : 'start') : a)
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
-      <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />
+      {/* No number and no GPIO ⇒ no chip. An empty grey box is noise, and every
+          connector contact would draw one now that contacts label this way. */}
+      {shownNum !== '' && <rect x={bx} y={by} width={B} height={B} rx={2} className="pcv__pin-numbox" />}
       {shownNum && (
         <text
           x={bx + B / 2}
@@ -968,7 +970,7 @@ export function connectorSize(conn: PartConnector, pxPerMm = 0): { n: number; w:
  *  `pxPerMm` scales the housing to the board's real size (0 ⇒ legacy fixed size).
  *  `withLabels` draws the per-contact silk labels (SDA/SCL/…); the board view gates
  *  this on part-hover so a dense board isn't cluttered, the Part Editor keeps them. */
-export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0, withLabels = true): JSX.Element {
+export function connectorGlyph(cx: number, cy: number, conn: PartConnector, selected = false, pxPerMm = 0): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
   const { shell, edge, contact, male } = connectorStyle(conn.kind)
   const x0 = cx - w / 2
@@ -981,26 +983,6 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
   // trim — so no `rx` rounding and a subtle dark edge (the accent blue only marks
   // the current selection in the Part Editor, never a white border).
   // Per-contact silk labels (SDA/SCL/GND/pwr) so a QWIIC socket's pinout is legible
-  // on the board — needed to assign SDA/SCL in code. Vertical + haloed to survive
-  // the tight contact pitch; only when the housing is big enough to read.
-  const labelFs = Math.max(4.5, Math.min(7, w / 8))
-  const showLabels = withLabels && w >= 24
-  // Labels read AWAY FROM THE BOARD, resolved in BOARD space (#670).
-  //
-  // The caller wraps this glyph in `rotate(conn.rotation)`, so a label placed
-  // "above the housing" in local coordinates swings round with the body — on a
-  // vertical servo header that put it sideways, on top of the next header along.
-  // So pick the outward direction in board space and rotate it back INTO the
-  // glyph's frame, and counter-rotate the text by the same amount so it reads the
-  // same way whichever way the body is turned.
-  const labelsBelow = (conn.y ?? 0.5) > 0.5
-  const bodyRot = ((Math.round((conn.rotation ?? 0) / 90) * 90) % 360 + 360) % 360
-  const rad = (-bodyRot * Math.PI) / 180
-  const awayY = labelsBelow ? 1 : -1
-  // R(-bodyRot) applied to (0, awayY); rounded so the axis is exact at 90° steps.
-  const ux = Math.round(-awayY * Math.sin(rad))
-  const uy = Math.round(awayY * Math.cos(rad))
-  const labelRot = (labelsBelow ? 90 : -90) - bodyRot
   // Contact 1 is the ORIENTATION reference: a cable can only seat one way round, so
   // mark it the way a PCB does — pin 1 square, the rest plain. Drawn as a hairline
   // box around the first contact, big enough to spot without shouting.
@@ -1065,55 +1047,49 @@ export function connectorGlyph(cx: number, cy: number, conn: PartConnector, sele
           opacity={0.85}
         />
       )}
-      {showLabels &&
-        conn.pins.map((pin, i) => {
-          if (!pin.name || i >= n) return null
-          if (contactLabelHidden(conn, pin)) return null
-          const cxp = x0 + (w / (n + 1)) * (i + 1)
-          // ONE element for both label styles, so the geometry — which side of
-          // the housing, the rotation, the anchor and the baseline — cannot drift
-          // between them. Only the PAINT differs: a terminal gets the ordinary
-          // `.pcv__pin-label` silk, while the tight-pitch sockets keep the bold
-          // haloed text they need to stay legible at a 2 mm pitch.
-          const term = conn.kind === 'terminal'
-          const gap = term ? 4 : 2
-          // Reach far enough to clear the housing along whichever local axis the
-          // outward direction landed on.
-          const reach = (ux !== 0 ? w / 2 : h / 2) + gap
-          const lax = cxp + ux * reach
-          const ly = cy + uy * reach
-          const paint = term
-            ? { className: 'pcv__pin-label' }
-            : {
-                className: 'pb__conn-pinlabel',
-                fontSize: labelFs,
-                fontWeight: 700,
-                fill: '#eef1f4',
-                stroke: '#0b1410',
-                strokeWidth: labelFs * 0.35,
-                style: { paintOrder: 'stroke' as const }
-              }
-          return (
-            <text
-              key={`lbl${i}`}
-              x={lax}
-              y={ly}
-              transform={`rotate(${labelRot} ${lax} ${ly})`}
-              textAnchor="start"
-              // Rotating about the BASELINE hangs the glyphs off to one side:
-              // `rotate(-90)` maps a relative (dx, dy) to (dy, -dx), and text
-              // occupies dy ∈ [-ascent, +descent] — with ascent ~3× descent the
-              // band lands beside the contact rather than on it. Anchoring on the
-              // glyph centre puts each label's centre line on its own contact.
-              dominantBaseline="central"
-              {...paint}
-            >
-              {pin.name}
-            </text>
-          )
-        })}
     </g>
   )
+}
+
+/**
+ * A connector's contact labels, drawn through the SHARED pin-label path (#672).
+ *
+ * `connectorGlyph` used to draw these itself, reimplementing what
+ * {@link boxedPinLabel} already does — and got it wrong three times: the wrong
+ * board edge, off-centre on the contact, and swinging onto the neighbouring
+ * header when the housing was rotated.
+ *
+ * Two things fall out of routing them through the shared path. Contacts label
+ * exactly like every other pin, out at the board edge. And because these are
+ * rendered OUTSIDE the housing's rotation transform, at positions that already
+ * account for that rotation, the whole counter-rotation dance disappears — a
+ * rotated header's labels simply stay where they belong.
+ */
+export function connectorContactLabels(
+  part: PartDefinition,
+  conn: PartConnector,
+  box: Box,
+  key: string
+): JSX.Element[] {
+  const pts = connectorContacts(part, conn)
+  return conn.pins.flatMap((pin, i) => {
+    const p = pts[i]
+    if (!p || !pin.name || contactLabelHidden(conn, pin)) return []
+    return [
+      <g key={`${key}-cl${i}`}>
+        {boxedPinLabel(
+          box,
+          box.x + p.x * box.w,
+          box.y + p.y * box.h,
+          pinOutwardDir(undefined, p.x, p.y),
+          String(pin.number ?? pin.gpio ?? ''),
+          pin.label || pin.name,
+          undefined,
+          '#cfd6dd'
+        )}
+      </g>
+    ]
+  })
 }
 
 /**
@@ -1736,8 +1712,13 @@ export function PartBody({
           return (
             // Turn the connector (body, pins + label) about its centre when it has
             // a body rotation — mirrors the Part Editor (PartCanvas).
-            <g key={`conn${i}`} transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
-              {connectorGlyph(cx, cy, conn, sel, connPxPerMm, capsPins === 'all')}
+            <g key={`conn${i}`}>
+              {/* Only the HOUSING turns. Labels sit outside this transform, at
+                  resolved positions that already account for the rotation. */}
+              <g transform={conn.rotation ? `rotate(${conn.rotation} ${cx} ${cy})` : undefined}>
+                {connectorGlyph(cx, cy, conn, sel, connPxPerMm)}
+              </g>
+              {!labelsOnly && capsPins === 'all' && connectorContactLabels(part, conn, box, `c${i}`)}
               {styledText({
                 text: connectorLabel(conn),
                 cx,

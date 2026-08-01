@@ -40,6 +40,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Connector contact labels sit at the board edge, like every other pin.** They
+  were drawn by the connector renderer, which had its own copy of the pin-label
+  logic and its own idea of where a label goes. Contacts now label through the
+  same path as header pins, so they land at the board outline in the standard
+  style — and a rotated housing no longer needs any special handling, because the
+  labels are placed from the contacts' real positions rather than being spun round
+  with the body. A contact with no pin number no longer draws an empty grey chip.
 - **Delete removes a marquee selection.** Rubber-band a group of items and press
   Delete and nothing happened: the marquee's selection lives in the canvas while
   the Delete key was only looking at the single selected item, which a marquee

@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { connectorGlyph, PAD_FILL } from '../src/renderer/src/components/part-body'
+import { connectorContactLabels, connectorGlyph, PAD_FILL } from '../src/renderer/src/components/part-body'
 import { connectorFit } from '../src/renderer/src/components/cable'
-import type { PartConnector } from '../src/shared/part'
+import type { PartConnector, PartDefinition } from '../src/shared/part'
 
 /**
  * The servo header is a real connector (#669), so a servo lead cables all three
@@ -84,37 +84,50 @@ describe('a servo header reads by electrical role (#669)', () => {
   })
 })
 
-/** Labels resolve in BOARD space, not the rotated body's frame (#670). */
-describe('a rotated header keeps its labels pointing off the board (#670)', () => {
-  const at = (rotation: number, y: number): PartConnector =>
-    ({ ...header(), rotation, y }) as unknown as PartConnector
-  /** The label anchor the glyph emits (the only <text> once V+/GND are hidden). */
-  const anchor = (c: PartConnector): { x: number; y: number; rot: number } => {
-    const html = renderToStaticMarkup(connectorGlyph(50, 50, c, false, 10))
-    const m = /<text[^>]*x="([-\d.]+)"[^>]*y="([-\d.]+)"[^>]*transform="rotate\(([-\d.]+)/.exec(html)!
-    return { x: Number(m[1]), y: Number(m[2]), rot: Number(m[3]) }
+/**
+ * The #670 counter-rotation is GONE (#672): labels are rendered outside the
+ * housing's rotation transform, at resolved positions that already account for
+ * it. So a rotated header's labels simply follow its contacts.
+ */
+describe('a rotated header labels its contacts where they actually are (#672)', () => {
+  const BOX = { x: 0, y: 0, w: 400, h: 200 }
+  const part = (rotation: number): PartDefinition =>
+    ({
+      id: 'p',
+      name: 'P',
+      dimensions: { width: 40, height: 20 },
+      headers: [],
+      // A terminal block, so every contact labels — a servo header hides its
+      // power and ground, leaving one label and nothing to measure.
+      connectors: [
+        {
+          kind: 'terminal',
+          x: 0.5,
+          y: 0.3,
+          rotation,
+          pins: [
+            { name: 'T1', type: 'io' },
+            { name: 'T2', type: 'io' },
+            { name: 'T3', type: 'io' }
+          ]
+        }
+      ]
+    }) as unknown as PartDefinition
+  const xs = (rotation: number): number[] => {
+    const p = part(rotation)
+    const html = renderToStaticMarkup(<>{connectorContactLabels(p, p.connectors![0], BOX, 'k')}</>)
+    return [...html.matchAll(/<text[^>]*\sx="([-\d.]+)"/g)].map((m) => Number(m[1]))
   }
 
-  it('offsets ALONG the housing for an upright header (unrotated)', () => {
-    // Body horizontal: outward is board-y, so the label sits above the contact.
-    expect(anchor(at(0, 0.2)).y).toBeLessThan(50)
-    expect(anchor(at(0, 0.8)).y).toBeGreaterThan(50)
+  it('spreads labels ALONG the row when the housing is upright', () => {
+    const all = xs(0)
+    expect(all).toHaveLength(3)
+    expect(Math.max(...all) - Math.min(...all)).toBeGreaterThan(0)
   })
 
-  it('offsets ACROSS the housing for a vertical header, so it clears its neighbour', () => {
-    // Body turned 90°, so "off the board" is local -x. Before this fix the label
-    // kept its local -y offset and swung onto the next header along.
-    const top = anchor(at(90, 0.2))
-    expect(top.x).toBeLessThan(50)
-    expect(top.y).toBeCloseTo(50, 5)
-    const bottom = anchor(at(90, 0.8))
-    expect(bottom.x).toBeGreaterThan(50)
-  })
-
-  it('counter-rotates the text so it reads the same however the body is turned', () => {
-    // local label rotation + body rotation is constant in board space.
-    expect(anchor(at(0, 0.2)).rot + 0).toBe(-90)
-    expect(anchor(at(90, 0.2)).rot + 90).toBe(-90)
-    expect(anchor(at(180, 0.2)).rot + 180).toBe(-90)
+  it('stacks them when the housing is turned 90 degrees', () => {
+    // Contacts now share an x, so their labels do too — they follow the pins.
+    const all = xs(90)
+    expect(Math.max(...all) - Math.min(...all)).toBeCloseTo(0, 6)
   })
 })
