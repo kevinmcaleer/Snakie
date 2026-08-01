@@ -16,8 +16,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   address it parsed back to you, names the device usually found there, and warns
   (without blocking) on addresses the I²C spec reserves or that another part in the
   library already claims.
+- **<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>D</kbd> duplicates the selected item** in the
+  Part Editor — the same action as the canvas toolbar's ⧉ button, for pins,
+  shapes, labels, connectors and mounting holes.
 
 ### Fixed
+- **Duplicating a pin gives the copy a fresh name.** A duplicated pin kept the
+  source's name, so a board could end up with two pins called `SCL` and a wire
+  endpoint (`<part>.SCL`) that pointed at either of them. The copy is now
+  suffixed — `SCL` → `SCL2` — which is what duplicating a connector already did
+  to its contacts.
 - **You can type more than one tag on a part.** The Part Editor's Tags field
   ignored the comma key: its contents were rebuilt from the parsed tag list on
   every keystroke, and a trailing comma parsed away to nothing — so the field

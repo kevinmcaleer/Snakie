@@ -25,13 +25,11 @@ import {
   insertPolygonPoint,
   nearestCenter,
   nearestPolygonEdge,
-  nextComponentZ,
+  duplicateSelection,
   orderedItems,
   pasteStyle,
   pinShapeOf,
   resolvedPins,
-  uniquePinName,
-  usedPinNames,
   type GroupMemberRef,
   type PartStyleClipboard,
   type ResolvedPin,
@@ -44,7 +42,6 @@ import type {
   ComponentShapeKind,
   MountingHole,
   PartDefinition,
-  PartConnector,
   PartItemFlags,
   PartLabel,
   PartSide,
@@ -1427,57 +1424,17 @@ export function PartCanvas({
   const updateShape = (index: number, patch: Partial<ComponentShape>): void =>
     commit({ ...part, shapes: shapes.map((s, i) => (i === index ? { ...s, ...patch } : s)) })
 
-  /** Duplicate the selected shape/label (offset a little) and select the copy. */
-  const duplicateComponent = (sel: CanvasSelection): void => {
-    if (sel?.type === 'shape') {
-      const s = shapes[sel.index]
-      if (!s) return
-      const off = 0.04
-      const copy: ComponentShape = {
-        ...s,
-        x: clamp01(s.x + off),
-        y: clamp01(s.y + off),
-        points: s.points?.map((p) => ({ x: clamp01(p.x + off), y: clamp01(p.y + off) })),
-        z: nextComponentZ(part)
-      }
-      const next = [...shapes, copy]
-      commit({ ...part, shapes: next })
-      onSelect?.({ type: 'shape', index: next.length - 1 })
-    } else if (sel?.type === 'label') {
-      const l = labels[sel.index]
-      if (!l) return
-      const next = [...labels, { ...l, x: clamp01(l.x + 0.04), y: clamp01(l.y + 0.04), z: nextComponentZ(part) }]
-      commit({ ...part, labels: next })
-      onSelect?.({ type: 'label', index: next.length - 1 })
-    } else if (sel?.type === 'connector') {
-      const c = connectors[sel.index]
-      if (!c) return
-      // Contacts carry no coordinates of their own — they're laid out from the
-      // body's position and rotation — so only the body moves.
-      const off = 0.04
-      const used = usedPinNames(part)
-      const copy: PartConnector = {
-        ...c,
-        // A duplicate is a NEW, standalone connector. Inheriting the source's
-        // group would make the copy move, rotate and delete as part of it — so
-        // dragging the original would drag its own duplicate around.
-        group: undefined,
-        x: clamp01(c.x + off),
-        y: clamp01(c.y + off),
-        z: nextComponentZ(part),
-        // Contacts share one namespace with every other pin (a wire endpoint is
-        // `<partId>.<PinName>`), so a verbatim copy would give a board two pins
-        // called SCL and make that endpoint ambiguous. Suffix them: SCL → SCL2.
-        pins: c.pins.map((p) => {
-          const name = uniquePinName(p.name, used)
-          used.add(name)
-          return { ...p, name, capabilities: p.capabilities ? [...p.capabilities] : undefined }
-        })
-      }
-      const next = [...connectors, copy]
-      commit({ ...part, connectors: next })
-      onSelect?.({ type: 'connector', index: next.length - 1 })
-    }
+  /**
+   * Duplicate the selected item (offset a little) and select the copy.
+   *
+   * The logic itself lives in {@link duplicateSelection} so the mini-toolbar's ⧉
+   * buttons and the Ctrl/Cmd+D shortcut (#661) can't drift apart.
+   */
+  const duplicateSel = (sel: CanvasSelection): void => {
+    const res = duplicateSelection(part, sel)
+    if (!res) return
+    commit(res.part)
+    onSelect?.(res.selection)
   }
 
   /** Delete the selected shape/label. */
@@ -1493,38 +1450,10 @@ export function PartCanvas({
   const updateHole = (index: number, patch: Partial<MountingHole>): void =>
     commit({ ...part, mountingHoles: holes.map((h, i) => (i === index ? { ...h, ...patch } : h)) })
 
-  /** Duplicate a mounting hole (offset a little) and select the copy. */
-  const duplicateHole = (index: number): void => {
-    const h = holes[index]
-    if (!h) return
-    const off = 0.04
-    const next = [...holes, { x: clamp01(h.x + off), y: clamp01(h.y + off), diameter: h.diameter }]
-    commit({ ...part, mountingHoles: next })
-    onSelect?.({ type: 'hole', index: next.length - 1 })
-  }
-
   /** Delete a mounting hole. */
   const deleteHole = (index: number): void => {
     commit({ ...part, mountingHoles: holes.filter((_, i) => i !== index) })
     onSelect?.(null)
-  }
-
-  /** Duplicate the selected pin (offset a little, same header) and select the copy. */
-  const duplicatePin = (sel: CanvasSelection): void => {
-    if (sel?.type !== 'pin') return
-    const rp = pins.find((p) => p.hi === sel.hi && p.pi === sel.pi)
-    const src = part.headers[sel.hi]?.pins[sel.pi]
-    if (!rp || !src) return
-    const off = 0.04
-    const copy: PartPin = {
-      ...src,
-      capabilities: src.capabilities ? [...src.capabilities] : undefined,
-      x: clamp01(rp.x + off),
-      y: clamp01(rp.y + off)
-    }
-    const newPi = part.headers[sel.hi].pins.length
-    commit({ ...part, headers: part.headers.map((h, i) => (i === sel.hi ? { ...h, pins: [...h.pins, copy] } : h)) })
-    onSelect?.({ type: 'pin', hi: sel.hi, pi: newPi })
   }
 
   // --- copy style / paste style (per-type style clipboard) ------------------
@@ -3839,7 +3768,7 @@ export function PartCanvas({
           const shape = sel.type === 'shape' ? shapes[sel.index] : null
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit component" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateComponent(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate component" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate component 90 degrees" onClick={() => rotateComponent(sel)}>
@@ -4097,7 +4026,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit pin" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicatePin(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate pin" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90° (turns the label; the half-hole on castellated pads)" aria-label="Rotate pin 90 degrees" onClick={() => rotatePin(sel)}>
@@ -4124,7 +4053,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit mounting hole" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate hole" onClick={() => duplicateHole(sel.index)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate hole" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <div className="pcv__ctb-size">
@@ -4194,7 +4123,7 @@ export function PartCanvas({
             : undefined
           return (
             <div className="pcv__ctb" role="toolbar" aria-label="Edit connector" style={style}>
-              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate connector" onClick={() => duplicateComponent(sel)}>
+              <button type="button" className="pcv__ctb-btn" title="Duplicate" aria-label="Duplicate connector" onClick={() => duplicateSel(sel)}>
                 {dupIcon}
               </button>
               <button type="button" className="pcv__ctb-btn" title="Rotate 90°" aria-label="Rotate connector 90 degrees" onClick={() => rotateComponent(sel)}>

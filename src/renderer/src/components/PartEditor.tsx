@@ -46,6 +46,7 @@ import {
   blankPart,
   collectUsedColors,
   dissolveGroup,
+  duplicateSelection,
   groupRootId,
   groupTreeIds,
   translateShape,
@@ -1030,6 +1031,18 @@ export function PartEditor({
         if (typing) return
         e.preventDefault()
         redo()
+        return
+      }
+      // Ctrl/Cmd+D duplicates the selected item (#661) — the same action as the
+      // canvas mini-toolbar's ⧉ button, through the same helper. preventDefault
+      // matters: in the web build this is the browser's "bookmark page".
+      if (mod && (e.key === 'd' || e.key === 'D')) {
+        if (typing || !selection) return
+        const res = duplicateSelection(part, selection)
+        if (!res) return // nothing duplicable selected — leave the key alone
+        e.preventDefault()
+        setPart(res.part)
+        setSelection(res.selection)
         return
       }
       // Arrow keys nudge the selected item / group (#632); Shift = a coarser step.

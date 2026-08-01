@@ -660,6 +660,133 @@ export function uniquePinName(base: string, used: ReadonlySet<string>): string {
   return `${stem}${n}`
 }
 
+/** The selection kinds a duplicate is defined for (#661). */
+export type DuplicableSelection =
+  | { type: 'pin'; hi: number; pi: number }
+  | { type: 'hole'; index: number }
+  | { type: 'connector'; index: number }
+  | { type: 'shape'; index: number }
+  | { type: 'label'; index: number }
+
+/** How far a copy is offset from its source, as a fraction of the board box. */
+const DUPLICATE_OFFSET = 0.04
+
+/**
+ * Duplicate the selected item, returning the new part and the copy's selection —
+ * or `null` when the selection isn't something we can duplicate.
+ *
+ * **One implementation, two callers**: the canvas mini-toolbar's ⧉ buttons and the
+ * Ctrl/Cmd+D shortcut (#661). They previously would have been two copies of this
+ * logic, which is the failure mode that keeps biting this codebase — the shortcut
+ * would quietly drift from the button (a new field copied in one and not the
+ * other) with nothing to catch it.
+ *
+ * Pure: the caller commits the part and applies the selection.
+ */
+export function duplicateSelection(
+  part: PartDefinition,
+  sel: { type: string; index?: number; hi?: number; pi?: number } | null | undefined
+): { part: PartDefinition; selection: DuplicableSelection } | null {
+  if (!sel) return null
+  const off = DUPLICATE_OFFSET
+  const c01 = (n: number): number => clamp(n, 0, 1)
+
+  if (sel.type === 'shape' && sel.index !== undefined) {
+    const shapes = part.shapes ?? []
+    const s = shapes[sel.index]
+    if (!s) return null
+    const copy: ComponentShape = {
+      ...s,
+      x: c01(s.x + off),
+      y: c01(s.y + off),
+      points: s.points?.map((p) => ({ x: c01(p.x + off), y: c01(p.y + off) })),
+      z: nextComponentZ(part)
+    }
+    const next = [...shapes, copy]
+    return { part: { ...part, shapes: next }, selection: { type: 'shape', index: next.length - 1 } }
+  }
+
+  if (sel.type === 'label' && sel.index !== undefined) {
+    const labels = part.labels ?? []
+    const l = labels[sel.index]
+    if (!l) return null
+    const next = [...labels, { ...l, x: c01(l.x + off), y: c01(l.y + off), z: nextComponentZ(part) }]
+    return { part: { ...part, labels: next }, selection: { type: 'label', index: next.length - 1 } }
+  }
+
+  if (sel.type === 'connector' && sel.index !== undefined) {
+    const connectors = part.connectors ?? []
+    const c = connectors[sel.index]
+    if (!c) return null
+    // Contacts carry no coordinates of their own — they're laid out from the
+    // body's position and rotation — so only the body moves.
+    const used = usedPinNames(part)
+    const copy: PartConnector = {
+      ...c,
+      // A duplicate is a NEW, standalone connector. Inheriting the source's group
+      // would make the copy move, rotate and delete as part of it — so dragging
+      // the original would drag its own duplicate around.
+      group: undefined,
+      x: c01(c.x + off),
+      y: c01(c.y + off),
+      z: nextComponentZ(part),
+      // Contacts share one namespace with every other pin (a wire endpoint is
+      // `<partId>.<PinName>`), so a verbatim copy would give a board two pins
+      // called SCL and make that endpoint ambiguous. Suffix them: SCL → SCL2.
+      pins: c.pins.map((p) => {
+        const name = uniquePinName(p.name, used)
+        used.add(name)
+        return { ...p, name, capabilities: p.capabilities ? [...p.capabilities] : undefined }
+      })
+    }
+    const next = [...connectors, copy]
+    return {
+      part: { ...part, connectors: next },
+      selection: { type: 'connector', index: next.length - 1 }
+    }
+  }
+
+  if (sel.type === 'hole' && sel.index !== undefined) {
+    const holes = part.mountingHoles ?? []
+    const h = holes[sel.index]
+    if (!h) return null
+    const next = [...holes, { x: c01(h.x + off), y: c01(h.y + off), diameter: h.diameter }]
+    return {
+      part: { ...part, mountingHoles: next },
+      selection: { type: 'hole', index: next.length - 1 }
+    }
+  }
+
+  if (sel.type === 'pin' && sel.hi !== undefined && sel.pi !== undefined) {
+    const { hi, pi } = sel
+    const src = part.headers?.[hi]?.pins?.[pi]
+    if (!src) return null
+    // Position comes from the RESOLVED pin: a legacy pin carries no x/y of its
+    // own and is placed from its edge, so copying `src.x` would give the duplicate
+    // no position at all.
+    const rp = resolvedPins(part).find((p) => p.hi === hi && p.pi === pi)
+    if (!rp) return null
+    const used = usedPinNames(part)
+    const copy: PartPin = {
+      ...src,
+      name: uniquePinName(src.name, used),
+      capabilities: src.capabilities ? [...src.capabilities] : undefined,
+      x: c01(rp.x + off),
+      y: c01(rp.y + off)
+    }
+    const newPi = part.headers[hi].pins.length
+    return {
+      part: {
+        ...part,
+        headers: part.headers.map((h, i) => (i === hi ? { ...h, pins: [...h.pins, copy] } : h))
+      },
+      selection: { type: 'pin', hi, pi: newPi }
+    }
+  }
+
+  return null
+}
+
 /**
  * Split what an author typed or pasted into the Tags field into individual tags
  * (#660). Commas separate; surrounding whitespace and empty entries are dropped.
