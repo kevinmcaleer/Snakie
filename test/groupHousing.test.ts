@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync } from 'fs'
 import {
   allConnectors,
   housedGroupConnectors,
@@ -114,5 +115,42 @@ describe('adding a housing does not disturb saved wiring (#673)', () => {
 
   it('survives the editor normaliser too — both whitelists, one coercer', () => {
     expect(normalisePart(PART).groups?.[0].housing?.kind).toBe('dupont')
+  })
+})
+
+/** servo2040's headers, converted the safe way (#675). */
+describe('servo2040 ships housed servo headers (#675)', () => {
+  const part = partFromYaml(
+    readFileSync('examples/parts/snakie-standard/servo2040/parts.yml', 'utf8')
+  )
+
+  it('every 3-pin trio has a housing, so a servo lead can cable to it', () => {
+    const housed = (part.groups ?? []).filter((g) => g.housing)
+    expect(housed).toHaveLength(24)
+    expect(housed.every((g) => g.housing?.kind === 'dupont')).toBe(true)
+  })
+
+  it('presents them as connectors a lead can fit', () => {
+    const conns = housedGroupConnectors(part)
+    expect(conns).toHaveLength(24)
+    expect(conns.every((c) => c.conn.pins.length === 3)).toBe(true)
+    const lead = {
+      kind: 'dupont',
+      x: 0.5,
+      y: 0.5,
+      pins: [
+        { name: 'Signal', type: 'io' },
+        { name: 'VCC', type: 'pwr' },
+        { name: 'GND', type: 'gnd' }
+      ]
+    } as unknown as (typeof conns)[0]['conn']
+    expect(connectorFit(lead, conns[0].conn).ok).toBe(true)
+  })
+
+  it('did NOT move a single pin — saved designs keep their wiring', () => {
+    // 92 header pins + the QWIIC's 4 contacts, in that order, exactly as before.
+    expect(part.headers.reduce((n, h) => n + h.pins.length, 0)).toBe(92)
+    expect(part.connectors).toHaveLength(1)
+    expect(flattenPartPins(part)).toHaveLength(96)
   })
 })

@@ -12,7 +12,7 @@ tags:
 pinSpacing: 2.54
 voltage: 3.3V
 partNumber: PIM613
-version: 0.1.22
+version: 0.1.23
 mcu: RP2040
 pcbColor: '#12181f'
 aspect: 1.476
@@ -775,60 +775,180 @@ mountingHoles:
 groups:
 - id: sensor-4
   name: Sensor 4
+  housing:
+    kind: dupont
+    x: 0.899156
+    y: 0.584215
+    rotation: 90
 - id: sensor-5
   name: Sensor 5
+  housing:
+    kind: dupont
+    x: 0.899816
+    y: 0.461753
+    rotation: 90
 - id: sensor-6
   name: Sensor 6
+  housing:
+    kind: dupont
+    x: 0.897507
+    y: 0.522913
+    rotation: 90
 - id: grp-ethxa0b
   name: S7
+  housing:
+    kind: dupont
+    x: 0.395416
+    y: 0.085796
+    rotation: 90
 - id: grp-9p2t4l2
   name: S8
+  housing:
+    kind: dupont
+    x: 0.43365
+    y: 0.085628
+    rotation: 90
 - id: grp-m4gq5id
   name: S9
+  housing:
+    kind: dupont
+    x: 0.471768
+    y: 0.085628
+    rotation: 90
 - id: grp-vcspefm
   name: S10
+  housing:
+    kind: dupont
+    x: 0.509754
+    y: 0.085628
+    rotation: 90
 - id: grp-6h8zflg
   name: S11
+  housing:
+    kind: dupont
+    x: 0.548002
+    y: 0.085628
+    rotation: 90
 - id: grp-gyp6zey
   name: S12
+  housing:
+    kind: dupont
+    x: 0.58612
+    y: 0.085628
+    rotation: 90
 - id: grp-ngrz33p
   name: S18
+  housing:
+    kind: dupont
+    x: 0.848893
+    y: 0.085628
+    rotation: 90
 - id: grp-wz4ltnc
   name: S17
+  housing:
+    kind: dupont
+    x: 0.810522
+    y: 0.085628
+    rotation: 90
 - id: grp-tuh1i9p
   name: S16
+  housing:
+    kind: dupont
+    x: 0.772228
+    y: 0.085628
+    rotation: 90
 - id: grp-ftk6lrf
   name: S15
+  housing:
+    kind: dupont
+    x: 0.733967
+    y: 0.085731
+    rotation: 90
 - id: grp-yqf71i4
   name: S14
+  housing:
+    kind: dupont
+    x: 0.695689
+    y: 0.085735
+    rotation: 90
 - id: grp-q6kmqg8
   name: S13
+  housing:
+    kind: dupont
+    x: 0.657423
+    y: 0.085592
+    rotation: 90
 - id: grp-wa5n0k2
   name: s1
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.135113
+    y: 0.085975
+    rotation: 90
 - id: grp-pynihf8
   name: S2
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.173962
+    y: 0.086003
+    rotation: 90
 - id: grp-x8zl6s2
   name: S3
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.214278
+    y: 0.086681
+    rotation: 90
 - id: grp-idk0mpn
   name: S4
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.248778
+    y: 0.085628
+    rotation: 90
 - id: grp-7q4b7cy
   name: S5
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.286038
+    y: 0.085628
+    rotation: 90
 - id: grp-g1t15fs
   name: S6
   parent: grp-dezaf9e
+  housing:
+    kind: dupont
+    x: 0.325703
+    y: 0.085684
+    rotation: 90
 - id: sensor-1
   name: Sensor 1
+  housing:
+    kind: dupont
+    x: 0.897903
+    y: 0.767833
+    rotation: 90
 - id: grp-dezaf9e
   name: Servo Block 1
 - id: sensor-2
   name: Sensor 2
+  housing:
+    kind: dupont
+    x: 0.898056
+    y: 0.706719
+    rotation: 90
 - id: sensor-3
   name: Sensor 3
+  housing:
+    kind: dupont
+    x: 0.8982
+    y: 0.645375
+    rotation: 90
 onboardLeds:
 - kind: neopixel
   x: 0.7472065635101834

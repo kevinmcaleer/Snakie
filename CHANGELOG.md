@@ -7,6 +7,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A servo lead cables to the Servo 2040's headers.** All 24 of its 3-pin headers
+  (18 servo outputs and 6 sensor headers) now carry a real connector housing, so a
+  servo plugs in with one drag instead of three wires. Nothing about the board's
+  pins moved, so existing designs keep their wiring exactly as it was.
 - **A servo lead cables to a servo header in one drag.** The servo-header tool now
   places a real 3-way connector rather than three loose pads, so dragging a
   servo's lead onto it wires Signal, V+ and GND together — the way a QWIIC cable
