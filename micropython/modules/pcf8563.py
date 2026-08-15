@@ -29,6 +29,12 @@ The BCD conversions are pure, so they can be unit-tested under CPython without a
 I²C bus.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 _DEFAULT_ADDR = 0x51
 
 # Register map. The time block is 7 consecutive registers from 0x02.

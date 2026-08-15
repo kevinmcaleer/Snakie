@@ -58,6 +58,14 @@ export type ModuleSource =
       kind: 'bundled'
       /** The bundled file's basename, e.g. `ssd1306.py`. */
       file: string
+      /**
+       * The `__version__` the shipped file declares (#707) — what a board copy is
+       * compared against to offer an UPDATE for a stale driver. Declared here so
+       * the renderer (desktop AND web) can compare without reading the file; a
+       * unit test asserts it matches the `.py`, so editing a driver without
+       * bumping both fails CI.
+       */
+      version: string
     }
   | {
       /** An upstream driver installed on-device via MicroPython's `mip`. */
@@ -136,7 +144,7 @@ export const MODULES: ModuleDef[] = [
     instrument: 'range',
     importName: 'hcsr04',
     // Small enough + MIT — bundled as a stub.
-    source: { kind: 'bundled', file: 'hcsr04.py' },
+    source: { kind: 'bundled', file: 'hcsr04.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -148,7 +156,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'grove_ultrasonic',
     // Not interchangeable with `hcsr04`: that driver holds trigger and echo as
     // separate fixed-direction pins, which a one-wire sensor cannot satisfy.
-    source: { kind: 'bundled', file: 'grove_ultrasonic.py' },
+    source: { kind: 'bundled', file: 'grove_ultrasonic.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -175,7 +183,7 @@ export const MODULES: ModuleDef[] = [
     description: '6-axis accelerometer + gyro over I²C (the common MPU-6050).',
     instrument: 'imu',
     importName: 'mpu6050',
-    source: { kind: 'bundled', file: 'mpu6050.py' },
+    source: { kind: 'bundled', file: 'mpu6050.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -195,7 +203,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'lsm6ds3',
     // A DIFFERENT part from the LSM6DSOX below, not a spelling of it: an LSM6DS3
     // answers WHO_AM_I 0x69, which that driver rejects.
-    source: { kind: 'bundled', file: 'lsm6ds3.py' },
+    source: { kind: 'bundled', file: 'lsm6ds3.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -219,7 +227,7 @@ export const MODULES: ModuleDef[] = [
     importName: 'neopixel_ws2812',
     // `neopixel` is a FROZEN built-in on most ports; this stub is a tiny
     // bit-banged fallback for ports that lack it. (See the file's comment.)
-    source: { kind: 'bundled', file: 'neopixel_ws2812.py' },
+    source: { kind: 'bundled', file: 'neopixel_ws2812.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -240,7 +248,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Helper for a quadrature rotary encoder (counts steps + direction).',
     instrument: 'encoder',
     importName: 'rotary',
-    source: { kind: 'bundled', file: 'rotary.py' },
+    source: { kind: 'bundled', file: 'rotary.py', version: '1.0.0' },
     license: 'MIT'
   },
 
@@ -251,7 +259,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Play tones and RTTTL melodies on a piezo buzzer via PWM.',
     instrument: 'buzzer',
     importName: 'buzzer',
-    source: { kind: 'bundled', file: 'buzzer.py' },
+    source: { kind: 'bundled', file: 'buzzer.py', version: '1.0.0' },
     license: 'MIT'
   },
 
@@ -262,7 +270,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Apply Gamepad/teleop axes from the IDE control channel to motors.',
     instrument: 'gamepad',
     importName: 'teleop',
-    source: { kind: 'bundled', file: 'teleop.py' },
+    source: { kind: 'bundled', file: 'teleop.py', version: '1.0.0' },
     license: 'MIT'
   },
   // --- Panel-less drivers --------------------------------------------------
@@ -272,7 +280,7 @@ export const MODULES: ModuleDef[] = [
     name: 'PCF8563 RTC',
     description: 'I²C real-time clock — the RTC on the XIAO Expansion Base (0x51).',
     importName: 'pcf8563',
-    source: { kind: 'bundled', file: 'pcf8563.py' },
+    source: { kind: 'bundled', file: 'pcf8563.py', version: '1.0.0' },
     license: 'MIT'
   },
   {
@@ -289,7 +297,7 @@ export const MODULES: ModuleDef[] = [
     description: 'Two DC motor channels over I²C — drives the Motor panel and teleop.',
     instrument: 'motor',
     importName: 'tb6612',
-    source: { kind: 'bundled', file: 'tb6612.py' },
+    source: { kind: 'bundled', file: 'tb6612.py', version: '1.0.0' },
     license: 'MIT'
   }
 ]
@@ -389,33 +397,56 @@ export function importProbeSnippet(importName: string): string {
 }
 
 /**
- * The Modules manager's per-module install status. `installed` ⇒ importable on
- * the board; `available` ⇒ in the catalog but not (yet) on the board; `unknown`
- * ⇒ not probed (no connection / probe not run).
+ * Extract the `__version__ = "X.Y.Z"` literal from Python driver source — a
+ * whole file, or the single line `readFileLine` returns — or `null` if absent
+ * (a legacy copy predating versioning). Anchored to the start of a LINE
+ * (allowing indentation) so a `__version__` example inside a doc comment is
+ * never matched (its line starts with `#`, which `^\s*` can't cross). The same
+ * rule `instrumentsLib.parseLibVersion` applies to the instrument library,
+ * hosted here so drivers and library share ONE parse. Pure.
  */
-export type ModuleStatus = 'installed' | 'available' | 'unknown'
+export function parseModuleVersion(source: string | null | undefined): string | null {
+  if (!source) return null
+  const m = source.match(/^\s*__version__\s*=\s*['"]([^'"]+)['"]/m)
+  return m ? m[1] : null
+}
+
+/**
+ * The Modules manager's per-module install status. `installed` ⇒ importable on
+ * the board (and, for a bundled module, its `/lib` copy matches the shipped
+ * version where that was checked); `outdated` ⇒ importable but the `/lib` copy
+ * is STALE against the version the catalog declares (#707 — offer an update,
+ * not a lie); `available` ⇒ in the catalog but not (yet) on the board;
+ * `unknown` ⇒ not probed (no connection / probe not run).
+ */
+export type ModuleStatus = 'installed' | 'outdated' | 'available' | 'unknown'
 
 /**
  * Diff the catalog against the set of import-names found present on the board.
  *
  * `installedImportNames` is the set the renderer collected by running
  * {@link importProbeSnippet} for each module (or a bulk probe) and seeing the
- * {@link MODULE_PRESENT} sentinel. When `connected` is false we don't know, so
- * every module is `'unknown'`. Pure; returns a fresh id→status map covering
- * exactly the catalog ids — the Modules manager reads it to render the
- * INSTALLED vs AVAILABLE split.
+ * {@link MODULE_PRESENT} sentinel. `outdatedImportNames` is the (possibly
+ * empty) subset whose `/lib` copy read back STALE (#707) — only ever names that
+ * also probed importable, and only bundled modules can appear in it. When
+ * `connected` is false we don't know, so every module is `'unknown'`. Pure;
+ * returns a fresh id→status map covering exactly the catalog ids — the Modules
+ * manager reads it to render the INSTALLED vs AVAILABLE split.
  */
 export function diffInstalled(
   installedImportNames: ReadonlySet<string>,
   connected: boolean,
-  defs: ModuleDef[] = MODULES
+  defs: ModuleDef[] = MODULES,
+  outdatedImportNames: ReadonlySet<string> = new Set()
 ): Record<string, ModuleStatus> {
   const out: Record<string, ModuleStatus> = {}
   for (const m of defs) {
     if (!connected) {
       out[m.id] = 'unknown'
+    } else if (!installedImportNames.has(m.importName)) {
+      out[m.id] = 'available'
     } else {
-      out[m.id] = installedImportNames.has(m.importName) ? 'installed' : 'available'
+      out[m.id] = outdatedImportNames.has(m.importName) ? 'outdated' : 'installed'
     }
   }
   return out

@@ -8,6 +8,8 @@
  * device `stat` probe, and (c) WHEN the banner is actually shown.
  */
 
+import { parseModuleVersion } from '../../../shared/modules-catalog'
+
 /**
  * The standard MicroPython import path the library installs to. A module on
  * `/lib` is importable as `import instruments` from anywhere, so this is the
@@ -60,18 +62,13 @@ export function installStateFromProbe(libFound: boolean, rootFound: boolean): In
 
 /**
  * Extract the `__version__ = "X.Y.Z"` literal from instrument-library source, or
- * `null` if absent (a legacy copy predating versioning). Pure + side-effect-free
- * so the freshness check can be unit-tested. Tolerates single or double quotes.
+ * `null` if absent (a legacy copy predating versioning). The ONE parse for
+ * versioned Python we ship lives in the shared catalog (#707 gave the bundled
+ * drivers the same convention); this re-export keeps this module's callers and
+ * tests stable.
  */
 export function parseLibVersion(source: string | null | undefined): string | null {
-  if (!source) return null
-  // Anchor to the start of a LINE (allowing indentation) so the real assignment
-  // is matched — NOT the `__version__ = "X.Y.Z"` example inside the doc comment
-  // above it, which would otherwise be the first match and make every copy read as
-  // "X.Y.Z" (equal → never outdated). The comment line starts with `#`, so `^\s*`
-  // never reaches its `__version__`.
-  const m = source.match(/^\s*__version__\s*=\s*['"]([^'"]+)['"]/m)
-  return m ? m[1] : null
+  return parseModuleVersion(source)
 }
 
 /**

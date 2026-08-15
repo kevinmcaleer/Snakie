@@ -23,6 +23,12 @@ The conversion (`echo_to_distance_mm`) is pure, so it can be unit-tested under
 CPython without hardware.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 # Speed of sound ~= 343 m/s = 0.343 mm/us. The echo covers the round trip (out
 # and back), so distance = (pulse_us * 0.343) / 2.
 _MM_PER_US = 0.343

@@ -111,3 +111,25 @@ describe('catalog wiring sanity', () => {
     }
   })
 })
+
+describe('outdated bundled copies (#707)', () => {
+  it('rowAction offers an UPDATE for an outdated row', () => {
+    expect(rowAction('outdated')).toEqual({ label: 'UPDATE', actionable: true })
+  })
+
+  it('buildRowStatuses carries the outdated probe through to the row', () => {
+    const out = buildRowStatuses(MODULES, new Set(['lsm6ds3']), true, {}, new Set(['lsm6ds3']))
+    expect(out['lsm6ds3']).toBe('outdated')
+  })
+
+  it('a just-updated module reads INSTALLED before the next probe', () => {
+    // The update went through this session — the row must not keep offering it
+    // until the re-probe lands.
+    expect(rowStatus('outdated', done)).toBe('installed')
+  })
+
+  it('an outdated module counts as ON the board in the header counts', () => {
+    const statuses = buildRowStatuses(MODULES, new Set(['lsm6ds3']), true, {}, new Set(['lsm6ds3']))
+    expect(countStatuses(MODULES, statuses).installed).toBe(1)
+  })
+})

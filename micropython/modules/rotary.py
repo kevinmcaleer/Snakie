@@ -18,6 +18,12 @@ The pure transition decode (`step_delta`) is split out so it can be unit-tested
 under CPython with no pins — the IDE drives it with synthetic state sequences.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 # Quadrature transition table: index by (prev_state << 2) | new_state, where each
 # 2-bit state is (clk << 1) | dt. +1 = clockwise step, -1 = counter-clockwise,
 # 0 = no movement / invalid (bounce) transition.

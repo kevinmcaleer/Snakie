@@ -50,6 +50,12 @@ without an I²C bus — which is where a wrong full-scale bit pattern would
 otherwise hide, silently mis-scaling every reading.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 import math
 
 # --- Register map (the subset needed for accel + gyro) -----------------------

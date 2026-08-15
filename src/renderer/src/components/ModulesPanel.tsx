@@ -13,6 +13,7 @@ import {
   rowAction,
   type ModuleInstallUiState
 } from '../lib/modulesManager'
+import { probeOutdatedModules } from '../lib/moduleFreshness'
 import type { ModuleInstallProgress } from '../../../preload/index.d'
 
 /**
@@ -59,6 +60,9 @@ export function ModulesPanel(): JSX.Element {
   // The set of import-names found present on the board (the probe result). Empty
   // until/unless a probe runs; reset on disconnect.
   const [installedNames, setInstalledNames] = useState<ReadonlySet<string>>(new Set())
+  // The subset of those whose /lib copy read back STALE against the shipped
+  // version (#707) — their rows offer UPDATE instead of the INSTALLED stamp.
+  const [outdatedNames, setOutdatedNames] = useState<ReadonlySet<string>>(new Set())
   const [probing, setProbing] = useState(false)
 
   // Per-module in-flight install transitions, keyed by catalog id.
@@ -67,26 +71,38 @@ export function ModulesPanel(): JSX.Element {
   const installDone = Object.values(installs).filter((s) => s.status === 'done').length
 
   // Probe the board for already-installed modules: on connect, and after each
-  // successful install. Tolerant of any device error (clears to empty set).
+  // successful install. A bundled module found importable is then checked for
+  // FRESHNESS against the shipped version (#707) — presence alone let a stale
+  // driver read as installed for ever. Tolerant of any device error (clears to
+  // empty sets).
   useEffect(() => {
     if (!connected) {
       setInstalledNames(new Set())
+      setOutdatedNames(new Set())
       return
     }
     let active = true
     setProbing(true)
     const names = MODULES.map((m) => m.importName)
-    window.api.modules
-      .probeInstalled(names)
-      .then((found) => {
-        if (active) setInstalledNames(new Set(found))
-      })
-      .catch(() => {
-        if (active) setInstalledNames(new Set())
-      })
-      .finally(() => {
+    void (async (): Promise<void> => {
+      try {
+        const found = new Set(await window.api.modules.probeInstalled(names))
+        const stale = await probeOutdatedModules(
+          MODULES.filter((m) => found.has(m.importName))
+        ).catch(() => new Set<string>())
+        if (active) {
+          setInstalledNames(found)
+          setOutdatedNames(stale)
+        }
+      } catch {
+        if (active) {
+          setInstalledNames(new Set())
+          setOutdatedNames(new Set())
+        }
+      } finally {
         if (active) setProbing(false)
-      })
+      }
+    })()
     return () => {
       active = false
     }
@@ -125,8 +141,8 @@ export function ModulesPanel(): JSX.Element {
 
   const groups = useMemo(() => groupByInstrument(), [])
   const statuses = useMemo(
-    () => buildRowStatuses(MODULES, installedNames, connected, installs),
-    [installedNames, connected, installs]
+    () => buildRowStatuses(MODULES, installedNames, connected, installs, outdatedNames),
+    [installedNames, connected, installs, outdatedNames]
   )
   const counts = useMemo(() => countStatuses(MODULES, statuses), [statuses])
 
@@ -142,7 +158,13 @@ export function ModulesPanel(): JSX.Element {
           type="button"
           className="mods__key"
           disabled={!connected || st === 'installing'}
-          title={connected ? `Install ${def.name}` : 'Connect a board first'}
+          title={
+            connected
+              ? st === 'outdated'
+                ? `An older copy of ${def.name} is on the board — update it`
+                : `Install ${def.name}`
+              : 'Connect a board first'
+          }
           onClick={() => void install(def)}
         >
           {actionable && !connected ? 'INSTALL' : label}

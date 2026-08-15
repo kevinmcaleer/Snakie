@@ -35,6 +35,12 @@ bytes put on the wire, so the command encoding is unit-testable under CPython
 without an I²C bus.
 """
 
+# Driver version. Bump this on ANY change to this file — the IDE compares it
+# against the copy installed on the board and offers an update when they differ
+# (#707; a legacy copy with no `__version__` reads as out-of-date). Keep the
+# `__version__ = "X.Y.Z"` literal form so the IDE can parse it without importing.
+__version__ = "1.0.0"
+
 # --- Protocol ----------------------------------------------------------------
 # Commands, verified against Seeed's Grove_Motor_Driver_TB6612FNG library.
 # Every frame is [command, arg...] written to the device address.

@@ -41,10 +41,10 @@ export type ModuleRowStatus = ModuleStatus | 'installing' | 'error'
  * the single status a row renders. Precedence (highest first):
  *   1. `installing`  — a click is in flight (spinner), regardless of the probe.
  *   2. `installed`   — the probe says it's importable, OR this session installed
- *      it successfully (`done`) — so a just-installed module reads as INSTALLED
- *      even before the next probe runs.
+ *      it successfully (`done`) — so a just-installed (or just-updated, #707)
+ *      module reads as INSTALLED even before the next probe runs.
  *   3. `error`       — the last click failed and the probe doesn't (yet) show it.
- *   4. the probe status (`available` / `unknown`).
+ *   4. the probe status (`outdated` / `available` / `unknown`).
  * Pure.
  */
 export function rowStatus(
@@ -60,17 +60,20 @@ export function rowStatus(
 /**
  * Build the full id → row-status map for the catalog from the probe set + the
  * in-flight install-UI map. `installedImportNames` is the probe result (the
- * subset of import-names found importable); `connected` gates the probe (false ⇒
- * every probe status is `unknown`). Pure; returns a fresh map over exactly the
- * catalog ids — the manager reads it to render each row + the section counts.
+ * subset of import-names found importable); `outdatedImportNames` the subset of
+ * those whose `/lib` copy read back stale (#707); `connected` gates the probe
+ * (false ⇒ every probe status is `unknown`). Pure; returns a fresh map over
+ * exactly the catalog ids — the manager reads it to render each row + the
+ * section counts.
  */
 export function buildRowStatuses(
   defs: ModuleDef[],
   installedImportNames: ReadonlySet<string>,
   connected: boolean,
-  ui: Record<string, ModuleInstallUiState>
+  ui: Record<string, ModuleInstallUiState>,
+  outdatedImportNames: ReadonlySet<string> = new Set()
 ): Record<string, ModuleRowStatus> {
-  const probe = diffInstalled(installedImportNames, connected, defs)
+  const probe = diffInstalled(installedImportNames, connected, defs, outdatedImportNames)
   const out: Record<string, ModuleRowStatus> = {}
   for (const def of defs) {
     out[def.id] = rowStatus(probe[def.id] ?? 'available', ui[def.id])
@@ -86,9 +89,10 @@ export interface ModuleCounts {
 }
 
 /**
- * Count how many catalog modules read as installed vs available (anything not
- * `installed` counts toward `available` for the header summary — `installing` /
- * `error` / `unknown` are all "not yet on the board"). Pure.
+ * Count how many catalog modules read as installed vs available. An `outdated`
+ * module IS on the board (the header counts presence), so it counts as
+ * installed; anything else — `installing` / `error` / `unknown` — is "not yet
+ * on the board" and counts toward `available`. Pure.
  */
 export function countStatuses(
   defs: ModuleDef[],
@@ -96,7 +100,8 @@ export function countStatuses(
 ): ModuleCounts {
   let installed = 0
   for (const def of defs) {
-    if (statuses[def.id] === 'installed') installed++
+    const st = statuses[def.id]
+    if (st === 'installed' || st === 'outdated') installed++
   }
   return { installed, available: defs.length - installed, total: defs.length }
 }
@@ -104,13 +109,16 @@ export function countStatuses(
 /**
  * The action a row's button should offer for a given status: the visible label
  * and whether it is actionable (a click should kick an install). `installed`
- * shows a non-actionable stamp; `installing` is disabled; `error` retries.
- * Pure — drives the row button without branching in the component.
+ * shows a non-actionable stamp; `outdated` offers an UPDATE (#707 — the install
+ * path already overwrites the `/lib` copy); `installing` is disabled; `error`
+ * retries. Pure — drives the row button without branching in the component.
  */
 export function rowAction(status: ModuleRowStatus): { label: string; actionable: boolean } {
   switch (status) {
     case 'installed':
       return { label: 'INSTALLED', actionable: false }
+    case 'outdated':
+      return { label: 'UPDATE', actionable: true }
     case 'installing':
       return { label: 'INSTALLING…', actionable: false }
     case 'error':
