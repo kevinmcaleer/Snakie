@@ -6,6 +6,42 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Author a part's drivers in the Part Editor.** (#655) A part that needs a
+  MicroPython file on the board — what makes the Driver Install prompt fire when
+  it's placed — could until now only say so via hand-edited `parts.yml`, so a
+  community part couldn't ship a driver. A new **Drivers** section adds, edits,
+  reorders and removes them, and makes the tricky rule visible: the install
+  method (catalog module / mip / copy) is detected as you type, and the target
+  field is relabelled to match — an install *folder* for mip, a full *path* for
+  copy — because typing a path where mip wants a folder installs to the wrong
+  place. Catalog modules are picked from a list so a bad id can't be authored,
+  files that ship beside the part are offered as sources, and a bundled filename
+  that isn't actually there is flagged at authoring time instead of on hardware.
+
+### Fixed
+- **Mini board hover labels no longer crop at the old frame when zoomed out.**
+  Hovering the mini board reveals the full pinout without re-framing (so the
+  board doesn't resize under the pointer), which lets labels run past the frame
+  — and the SVG was hard-cropping them at that original boundary even when
+  zooming out had opened up empty space all around the board. The labels now
+  paint into whatever room the panel actually has, clipped only at the panel
+  edge.
+- **A stale driver no longer reads as installed.** (#707) The Driver Install
+  banner and the Modules manager only checked that a driver was *present*, so a
+  board carrying an old copy of a bundled driver was never offered the newer one
+  Snakie ships — a sketch using a new driver feature failed while the app
+  insisted the driver was installed, and the only way out was deleting the file
+  by hand. Every bundled driver now declares a `__version__`; on connect the
+  `/lib` copy's version line is read back (one line over the wire, the #700
+  mechanism) and compared against the shipped version. A stale copy shows as an
+  **update** — the banner words the row and button as one, and the Modules
+  manager swaps the INSTALLED stamp for an UPDATE key. A copy that imports from
+  somewhere Snakie doesn't manage (a hand-placed root file, frozen firmware) is
+  left alone, and a unit test keeps each driver's `__version__` and the
+  catalog's declared version in lockstep so a driver edit can't ship without
+  the bump that lets boards hear about it.
+
 ## [0.43.0] - 2026-08-02
 
 ### Added
