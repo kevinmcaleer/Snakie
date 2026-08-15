@@ -154,6 +154,12 @@
 .mini-board__svg {
   display: block;
   margin: 0 auto;
+  /* A hover-revealed pinout draws labels OUTSIDE the frame (hover deliberately
+     never re-frames — see MiniBoardView.tsx). The SVG's default overflow:hidden
+     cropped them at the frame edge even when zooming out left free space all
+     around the board; paint past the box instead and let the scroll wrap's own
+     overflow be the only clip, so labels use whatever room the panel has. */
+  overflow: visible;
 }
 
 /* Zoom controls — revealed only on hover so the board stays clean. */

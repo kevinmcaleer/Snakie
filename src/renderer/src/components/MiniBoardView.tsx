@@ -458,10 +458,12 @@ export function MiniBoardView({
     if (!g) return
     // Only the TOGGLE re-frames. A hover reveal keeps the current frame so the
     // board doesn't resize under the pointer every time you pass over it — the
-    // labels may run past the edge for that moment, which is the trade. Skipping
-    // rather than measuring matters because any other dependency changing
-    // mid-hover would otherwise lock in the (larger) labelled bounds and keep
-    // them after the pointer leaves; ending the hover re-runs this and corrects.
+    // labels may run past the frame for that moment, which is the trade. The SVG
+    // is overflow:visible (see the CSS) so run-past labels still SHOW wherever
+    // the panel has room (e.g. zoomed out), clipped only by the scroll wrap.
+    // Skipping rather than measuring matters because any other dependency
+    // changing mid-hover would otherwise lock in the (larger) labelled bounds and
+    // keep them after the pointer leaves; ending the hover re-runs this and corrects.
     if (pinoutHover && !pinoutPinned) return
     try {
       const b = g.getBBox()
