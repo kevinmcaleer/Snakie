@@ -17,6 +17,7 @@
  */
 
 import type { BoardDefinition, BoardPad, BoardPadType, BoardHeader } from '../../../shared/board'
+import { installPathFor, moduleById } from '../../../shared/modules-catalog'
 import { BUILTIN_BOARDS } from './board-defs'
 import {
   STANDARD_PIN_SPACING_MM,
@@ -2556,6 +2557,134 @@ export function driverDeviceDirs(target: string): string[] {
     dirs.push(acc)
   }
   return dirs
+}
+
+/**
+ * What one install method's `target` MEANS — the label, placeholder and help the
+ * Drivers section puts on the field (#655). The meaning genuinely differs per
+ * method (an install FOLDER for `mip`, a full destination PATH for `copy`,
+ * catalog-derived for `module:`), and until the editor said so the rule lived
+ * only in {@link driverInstallMethod} and a doc comment — an author who typed a
+ * mip spec with a full path got a driver installed to the wrong place. Pure.
+ */
+export interface DriverTargetSpec {
+  label: string
+  placeholder: string
+  hint: string
+  /** false ⇒ the value is derived from the modules catalog and read-only. */
+  editable: boolean
+}
+
+export function driverTargetSpec(method: DriverInstallMethod): DriverTargetSpec {
+  switch (method) {
+    case 'module':
+      return {
+        label: 'Installs to',
+        placeholder: '',
+        hint: 'Derived from the modules catalog — the ordinary module install decides the path.',
+        editable: false
+      }
+    case 'mip':
+      return {
+        label: 'Install folder',
+        placeholder: 'lib',
+        hint: 'mip installs INTO this folder on the board — a folder, not a file path.',
+        editable: true
+      }
+    case 'copy':
+      return {
+        label: 'Path on device',
+        placeholder: 'lib/driver.py',
+        hint: 'The full destination path the file is copied to on the board.',
+        editable: true
+      }
+  }
+}
+
+/**
+ * A ready {@link DriverFile} row for a MODULES-catalog id, or `null` for an
+ * unknown id (so a bad id cannot be authored, #655). The target mirrors the
+ * house convention in the bundled parts — `lib/<file>` — so the Driver Install
+ * banner's "→ target" stays truthful for module rows too.
+ */
+export function moduleDriverRow(id: string): DriverFile | null {
+  const def = moduleById(String(id ?? '').trim())
+  if (!def) return null
+  const path = installPathFor(def)
+  const target = path ? path.replace(/^\//, '') : `lib/${def.importName}.py`
+  return { source: `module:${def.id}`, target, label: `${def.name} driver` }
+}
+
+/** Replace fields of the driver row at `i` (immutable; the Rails-helpers pattern). */
+export function updateDriver(
+  list: DriverFile[],
+  i: number,
+  patchRow: Partial<DriverFile>
+): DriverFile[] {
+  return list.map((d, idx) => (idx === i ? { ...d, ...patchRow } : d))
+}
+
+/** Remove the driver row at `i` (immutable). */
+export function removeDriver(list: DriverFile[], i: number): DriverFile[] {
+  return list.filter((_, idx) => idx !== i)
+}
+
+/** Move the driver row at `i` up (`-1`) or down (`+1`); out-of-range is a no-op. */
+export function moveDriver(list: DriverFile[], i: number, delta: -1 | 1): DriverFile[] {
+  const j = i + delta
+  if (i < 0 || i >= list.length || j < 0 || j >= list.length) return list
+  const next = [...list]
+  ;[next[i], next[j]] = [next[j], next[i]]
+  return next
+}
+
+/**
+ * Author-time problems with one driver row (#655), as short human sentences.
+ *
+ * `partFiles` is the list of `.py`/`.mpy` files that actually sit beside the
+ * part in its library folder, or `null` when that could not be determined (no
+ * folder yet, no api) — a `null` list produces NO missing-file warning, because
+ * warning from ignorance would cry wolf on every healthy part.
+ *
+ * The empty-source/empty-target warnings state the REAL consequence: those rows
+ * are dropped by `normalisePart` on save, which is otherwise invisible. Pure.
+ */
+export function driverRowWarnings(d: DriverFile, partFiles: string[] | null): string[] {
+  const warns: string[] = []
+  const src = String(d.source ?? '').trim()
+  const target = String(d.target ?? '').trim()
+  if (!src) {
+    warns.push('No source — this row is dropped on save.')
+    return warns
+  }
+  const method = driverInstallMethod(src)
+  if (!target) {
+    warns.push(
+      method === 'mip'
+        ? 'No install folder — this row is dropped on save (use lib).'
+        : 'No target path — this row is dropped on save.'
+    )
+  }
+  if (method === 'module') {
+    const id = driverModuleId(src)
+    if (!moduleById(id)) {
+      warns.push(`"${id}" is not in the modules catalog — nothing can install.`)
+    }
+  } else if (method === 'mip') {
+    if (/\.(py|mpy)$/i.test(target)) {
+      warns.push('mip treats the target as an install FOLDER — a file path here lands in the wrong place.')
+    }
+  } else {
+    // copy — a URL or a file shipped beside the part.
+    if (target && !/\.(py|mpy)$/i.test(target)) {
+      warns.push('Copy needs the full destination file path (ending .py), not a folder.')
+    }
+    const isUrl = /^https?:\/\//i.test(src)
+    if (!isUrl && partFiles !== null && !partFiles.includes(src)) {
+      warns.push(`"${src}" does not ship with this part — it would install nothing.`)
+    }
+  }
+  return warns
 }
 
 /** Every pin name declared on the part (for ledLabel / schematic pickers). */

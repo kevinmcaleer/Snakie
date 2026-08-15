@@ -33,6 +33,7 @@ import {
   promoteToStandard,
   publishStandardLibrary,
   readDriverSource,
+  listPartDriverFiles,
   readLibraries,
   resetPartToBundled,
   seedStandardLibrary,
@@ -142,6 +143,12 @@ export function registerPartsIpc(): void {
     'parts:readDriverSource',
     (_e, args: { libraryId: string; partId: string; source: string }) =>
       readDriverSource(args?.libraryId ?? '', args?.partId ?? '', args?.source ?? '')
+  )
+
+  // #655: the .py/.mpy files shipped beside a part's parts.yml, so the Part
+  // Editor's Drivers section can offer them and flag a source that isn't there.
+  ipcMain.handle('parts:listPartFiles', (_e, args: { libraryId: string; partId: string }) =>
+    listPartDriverFiles(args?.libraryId ?? '', args?.partId ?? '')
   )
 
   // #643: which bundled parts the user has edited, and which the app now ships a

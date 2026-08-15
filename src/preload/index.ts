@@ -970,6 +970,13 @@ const parts = {
   ): Promise<DriverSourceResult> =>
     ipcRenderer.invoke('parts:readDriverSource', { libraryId, partId, source }),
   /**
+   * The `.py`/`.mpy` files shipped beside a part's `parts.yml` (#655) — what the
+   * Part Editor's Drivers section offers as copy sources, and checks bundled
+   * driver filenames against. Resolves to `[]` when the folder doesn't exist.
+   */
+  listPartFiles: (libraryId: string, partId: string): Promise<string[]> =>
+    ipcRenderer.invoke('parts:listPartFiles', { libraryId, partId }),
+  /**
    * Per bundled part: has the user edited it, and does this app ship a newer
    * version than the installed copy (#643)? An edited part is never overwritten by
    * the seeder, so without this the staleness is invisible until something

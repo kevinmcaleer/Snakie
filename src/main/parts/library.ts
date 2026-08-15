@@ -751,6 +751,29 @@ export async function readDriverSource(
 }
 
 /**
+ * The driver-candidate files shipped inside a part's folder (#655): the `.py` /
+ * `.mpy` basenames beside `parts.yml`, sorted. Lets the Part Editor OFFER what
+ * actually ships instead of a free-typed filename, and warn when a bundled
+ * driver names a file that isn't there (which installs nothing, discoverable
+ * today only on hardware). Returns `[]` for an unknown part or a folder that
+ * doesn't exist yet — never throws across IPC.
+ */
+export async function listPartDriverFiles(libraryId: string, partId: string): Promise<string[]> {
+  const libId = sanitiseId(libraryId)
+  const pId = sanitiseId(partId)
+  if (!libId || !pId) return []
+  try {
+    const entries = await fsp.readdir(join(partsDir(), libId, pId), { withFileTypes: true })
+    return entries
+      .filter((e) => e.isFile() && /\.(py|mpy)$/i.test(e.name))
+      .map((e) => e.name)
+      .sort()
+  } catch {
+    return []
+  }
+}
+
+/**
  * Resolve the absolute path to a bundled file inside a part folder
  * (`<parts>/<lib>/<part>/<filename>`), path-traversal guarded like the driver/image
  * readers. Returns null for an unsafe or unknown ref. Used to copy a part's linked

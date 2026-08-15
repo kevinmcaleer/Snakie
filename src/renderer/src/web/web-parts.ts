@@ -40,6 +40,13 @@ export function createWebPartsApi(): Record<string, unknown> {
         ? { ok: true, contents }
         : { ok: false, error: `No bundled driver "${source}" for ${partId}.` }
     },
+    // #655: the files "beside the part" on the web are whatever the build
+    // inlined into driverSources for that part id.
+    listPartFiles: async (_libraryId: string, partId: string): Promise<string[]> =>
+      Object.keys(driverSources as Record<string, string>)
+        .filter((k) => k.startsWith(`${partId}/`))
+        .map((k) => k.slice(partId.length + 1))
+        .sort(),
     // Read-only on the web: no per-user library storage, nothing to update. The
     // bundled parts ARE the install here, so none can be edited or fall behind
     // (#643) and there is nothing a reset could restore.

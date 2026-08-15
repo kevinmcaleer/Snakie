@@ -2363,6 +2363,88 @@
   cursor: pointer;
 }
 
+/* ---- Drivers section (#655) ------------------------------------------------ */
+
+.pe__drvs {
+  list-style: none;
+  margin: 0.3rem 0 0.15rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.pe__drv {
+  padding: 0.3rem 0.35rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Source+method on the first line; target, label and the row ops wrap below. */
+.pe__drv-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.35rem;
+}
+
+.pe__drv-source {
+  flex: 1 1 100%;
+}
+
+.pe__drv-target,
+.pe__drv-label {
+  flex: 1 1 40%;
+  min-width: 0;
+}
+
+/* The detected install method — the "what will this do" answer, live. */
+.pe__drv-method {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.3rem;
+  border-radius: var(--radius);
+  border: var(--border-w) solid var(--border);
+  color: var(--text-muted);
+  align-self: center;
+}
+
+.pe__drv-method--module {
+  color: var(--accent);
+}
+
+/* A module row's target is derived from the catalog, not typed. */
+.pe__drv-target-ro {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  padding: 0.2rem 0;
+}
+
+.pe__drv-ops {
+  display: flex;
+  gap: 0.2rem;
+  margin-left: auto;
+  align-self: center;
+}
+
+.pe__drv-warn {
+  margin: 0.2rem 0 0;
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+/* The catalog picker doubles as the primary "add" action. */
+.pe__drv-addmod {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .pe__rail-del:hover {
   color: var(--danger);
 }

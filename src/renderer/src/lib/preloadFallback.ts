@@ -225,7 +225,8 @@ if (!w.api) {
       fetchRegistry: P({ libraries: [] }),
       installLibrary: P({ ok: false }),
       checkUpdates: P([]),
-      cachedUpdates: P([])
+      cachedUpdates: P([]),
+      listPartFiles: P([])
     },
     plugins: {
       list: P([]),

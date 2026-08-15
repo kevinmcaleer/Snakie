@@ -86,8 +86,17 @@ import {
   renameRail,
   removeRail,
   toggleRailPin,
-  railHolding
+  railHolding,
+  driverInstallMethod,
+  driverModuleId,
+  driverRowWarnings,
+  driverTargetSpec,
+  moduleDriverRow,
+  moveDriver,
+  removeDriver,
+  updateDriver
 } from './part-editor.util'
+import { MODULES, moduleById } from '../../../shared/modules-catalog'
 import {
   GROVE_VARIANTS,
   JST_FAMILIES,
@@ -103,6 +112,7 @@ import type {
   JstFamily,
   ComponentShape,
   ComponentShapeKind,
+  DriverFile,
   ElectricalModel,
   GroveVariant,
   ImageLayer,
@@ -1410,6 +1420,7 @@ export function PartEditor({
                 onSelect={setSelection}
                 footprintOps={footprintOps}
                 existingParts={existingParts}
+                libraryId={openedLibId}
               />
               {/* Board structure (mounting holes + PCB + image) sits BELOW the
                   selected-item details, so pin editing stays near the top. */}
@@ -2571,6 +2582,8 @@ interface InspectorProps {
   footprintOps: FootprintOps
   /** Other parts in the same library — for the I²C address-clash warning. */
   existingParts: PartDefinition[]
+  /** The library the part is being edited in — for listing its shipped files (#655). */
+  libraryId: string
 }
 
 /** "Add footprint…" dropdown (#166): a scrollable, fixed-positioned menu of
@@ -2775,6 +2788,9 @@ function Inspector(props: InspectorProps): JSX.Element {
 
       {/* I²C addresses — what the I²C-detect instrument matches a scan against (#653) */}
       <I2cSection part={part} patch={patch} existingParts={props.existingParts} />
+
+      {/* Drivers — what the Driver Install banner offers when the part is placed (#655) */}
+      <DriversSection part={part} patch={patch} libraryId={props.libraryId} />
     </>
   )
 }
@@ -2909,6 +2925,228 @@ function I2cSection({
           ? 'The I²C-detect instrument offers this part when a scan finds one of these addresses.'
           : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
       </p>
+    </section>
+  )
+}
+
+/** Explains each install method where the chip is hovered (#655). */
+const DRIVER_METHOD_TITLES: Record<ReturnType<typeof driverInstallMethod>, string> = {
+  module: 'A driver Snakie already ships — installed via the modules catalog',
+  mip: 'Installed on the board by mip (the MicroPython package manager)',
+  copy: 'A file copied onto the board — shipped beside this part, or fetched from a URL'
+}
+
+/**
+ * The **Drivers** inspector section (#655, epic #654) — the MicroPython file(s)
+ * a part needs on the board, i.e. what makes the Driver Install banner (#184)
+ * fire when the part is placed. Until now `drivers` could only be hand-written
+ * into `parts.yml`, so a community part could not ship one.
+ *
+ * `target` means a DIFFERENT thing per source kind — an install folder for
+ * `mip`, a full destination path for `copy`, catalog-derived for `module:` —
+ * and that rule lived only in {@link driverInstallMethod}. Here it is made
+ * visible: the detected method is shown beside the source as the author types,
+ * and the target field is relabelled to match ({@link driverTargetSpec}).
+ * `module:` sources are PICKED from the catalog so a bad id cannot be authored,
+ * and a bundled filename that doesn't ship with the part is flagged — that part
+ * installs nothing, and today the only way to find out is on hardware.
+ */
+function DriversSection({
+  part,
+  patch,
+  libraryId
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+  libraryId: string
+}): JSX.Element {
+  const drivers = part.drivers ?? []
+  // The .py/.mpy files that actually sit beside the part in its library folder —
+  // offered as copy sources and checked against. `null` ⇒ could not list (no api);
+  // that produces NO missing-file warnings, because warning from ignorance would
+  // cry wolf on every healthy part.
+  const [partFiles, setPartFiles] = useState<string[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    window.api.parts
+      .listPartFiles(libraryId, part.id)
+      .then((files) => {
+        if (alive) setPartFiles(files)
+      })
+      .catch(() => {
+        if (alive) setPartFiles(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [libraryId, part.id])
+
+  const set = (next: DriverFile[]): void => patch({ drivers: next.length ? next : undefined })
+
+  return (
+    <section className="pe__section">
+      <h3 className="pe__h">Drivers</h3>
+      <p className="pe__hint">
+        Files this part NEEDS on the board. Placing the part offers to install them —
+        nothing is copied without consent.
+      </p>
+
+      {drivers.length > 0 && (
+        <ul className="pe__drvs">
+          {drivers.map((d, i) => {
+            const method = driverInstallMethod(d.source)
+            const spec = driverTargetSpec(method)
+            const warns = driverRowWarnings(d, partFiles)
+            const modId = driverModuleId(d.source)
+            return (
+              <li key={i} className="pe__drv">
+                <div className="pe__drv-grid">
+                  {method === 'module' ? (
+                    <label className="pe__field pe__drv-source">
+                      <span>Module</span>
+                      <select
+                        value={modId}
+                        onChange={(e) => {
+                          const row = moduleDriverRow(e.target.value)
+                          if (row) {
+                            set(
+                              updateDriver(drivers, i, {
+                                source: row.source,
+                                target: row.target,
+                                label: d.label || row.label
+                              })
+                            )
+                          }
+                        }}
+                      >
+                        {/* A hand-edited yaml can carry an id the catalog doesn't
+                            know — keep it selectable so the row isn't silently
+                            rewritten, and let the warning below say why it's dead. */}
+                        {!moduleById(modId) && <option value={modId}>{modId || '(none)'} — unknown</option>}
+                        {MODULES.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} (import {m.importName})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <label className="pe__field pe__drv-source">
+                      <span>Source</span>
+                      <input
+                        type="text"
+                        value={d.source}
+                        list="pe-drv-files"
+                        placeholder="driver.py · github:user/repo/file.py · https://…"
+                        spellCheck={false}
+                        onChange={(e) => set(updateDriver(drivers, i, { source: e.target.value }))}
+                      />
+                    </label>
+                  )}
+                  <span
+                    className={`pe__drv-method pe__drv-method--${method}`}
+                    title={DRIVER_METHOD_TITLES[method]}
+                  >
+                    {method}
+                  </span>
+                  <label className="pe__field pe__drv-target" title={spec.hint}>
+                    <span>{spec.label}</span>
+                    {spec.editable ? (
+                      <input
+                        type="text"
+                        value={d.target}
+                        placeholder={spec.placeholder}
+                        spellCheck={false}
+                        onChange={(e) => set(updateDriver(drivers, i, { target: e.target.value }))}
+                      />
+                    ) : (
+                      <span className="pe__drv-target-ro">{d.target || '(catalog decides)'}</span>
+                    )}
+                  </label>
+                  <label className="pe__field pe__drv-label">
+                    <span>Label</span>
+                    <input
+                      type="text"
+                      value={d.label ?? ''}
+                      placeholder="Shown in the install prompt"
+                      onChange={(e) =>
+                        set(updateDriver(drivers, i, { label: e.target.value || undefined }))
+                      }
+                    />
+                  </label>
+                  <div className="pe__drv-ops">
+                    <button
+                      type="button"
+                      className="pe__chip"
+                      disabled={i === 0}
+                      aria-label="Move this driver up"
+                      onClick={() => set(moveDriver(drivers, i, -1))}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      className="pe__chip"
+                      disabled={i === drivers.length - 1}
+                      aria-label="Move this driver down"
+                      onClick={() => set(moveDriver(drivers, i, 1))}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="pe__chip pe__chip--del"
+                      aria-label="Remove this driver"
+                      onClick={() => set(removeDriver(drivers, i))}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                {warns.map((w) => (
+                  <p key={w} className="pe__drv-warn">
+                    {w}
+                  </p>
+                ))}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {partFiles && partFiles.length > 0 && (
+        <datalist id="pe-drv-files">
+          {partFiles.map((f) => (
+            <option key={f} value={f} />
+          ))}
+        </datalist>
+      )}
+
+      <div className="pe__row">
+        <select
+          className="pe__drv-addmod"
+          value=""
+          aria-label="Add a driver from the modules catalog"
+          onChange={(e) => {
+            const row = moduleDriverRow(e.target.value)
+            if (row) set([...drivers, row])
+          }}
+        >
+          <option value="">+ From modules catalog…</option>
+          {MODULES.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.name} (import {m.importName})
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="pe__add pe__add--inline"
+          onClick={() => set([...drivers, { source: '', target: '' }])}
+        >
+          + Custom driver
+        </button>
+      </div>
     </section>
   )
 }
