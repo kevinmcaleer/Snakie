@@ -19,7 +19,7 @@ properties:
   rtc: PCF8563, I²C 0x51, CR1220 backup
   grove: 2x I²C, 1x UART, 1x analog/digital
   storage: microSD (SPI, CS on D2)
-version: 0.1.15
+version: 0.1.18
 pcbColor: "#1b4d3e"
 aspect: 1.365
 dimensions:
@@ -111,6 +111,113 @@ headers:
         type: pwr
         x: 0.8799811808268229
         y: 0.7455997194776347
+      - name: SCL
+        type: io
+        group: grp-sr33gak
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
+        x: 0.6395083661751281
+        y: 0.11081541779548931
+      - name: SDA
+        type: io
+        group: grp-sr33gak
+        capabilities:
+          - digital
+          - i2c
+        signals:
+          i2c: SDA
+        x: 0.6713615593130969
+        y: 0.11081541779548931
+      - name: VCC
+        type: pwr
+        group: grp-sr33gak
+        x: 0.7086321043139839
+        y: 0.11081541779548931
+      - name: GND
+        type: gnd
+        group: grp-sr33gak
+        x: 0.7505139479648129
+        y: 0.11081541779548931
+      - name: GPIO0
+        type: io
+        group: grp-sr33gak-copy-3
+        gpio: 0
+        capabilities:
+          - digital
+          - pwm
+        signals:
+          i2c: SCL
+        rotation: 90
+        x: 0.5462715394157396
+        y: 0.914719370528234
+      - name: N/A
+        type: other
+        group: grp-sr33gak-copy-3
+        rotation: 90
+        x: 0.5144183462777707
+        y: 0.914719370528234
+      - name: VCC
+        type: pwr
+        group: grp-sr33gak-copy-3
+        rotation: 90
+        x: 0.4771478012768837
+        y: 0.914719370528234
+      - name: GND
+        type: gnd
+        group: grp-sr33gak-copy-3
+        rotation: 90
+        x: 0.43526595762605474
+        y: 0.914719370528234
+      - name: RX7
+        type: io
+        group: grp-sr33gak-copy-3-copy-4
+        gpio: 7
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - uart
+        signals:
+          i2c: SCL
+          uart: RX
+        buses:
+          i2c: 0
+          uart: 0
+        rotation: 90
+        x: 0.7478195658898286
+        y: 0.9147965236081677
+      - name: TX6
+        type: io
+        group: grp-sr33gak-copy-3-copy-4
+        gpio: 6
+        capabilities:
+          - digital
+          - pwm
+          - i2c
+          - uart
+        signals:
+          i2c: SDA
+          uart: TX
+        buses:
+          i2c: 0
+          uart: 0
+        rotation: 90
+        x: 0.7159663727518597
+        y: 0.9147965236081677
+      - name: VCC
+        type: pwr
+        group: grp-sr33gak-copy-3-copy-4
+        rotation: 90
+        x: 0.6786958277509727
+        y: 0.9147965236081677
+      - name: GND
+        type: gnd
+        group: grp-sr33gak-copy-3-copy-4
+        rotation: 90
+        x: 0.6368139841001437
+        y: 0.9147965236081677
   - edge: left
     pins:
       - name: D0
@@ -350,6 +457,21 @@ mountingHoles:
 groups:
   - id: grp-0f21cxf
     name: Edge connector
+  - id: grp-sr33gak
+    housing:
+      kind: grove
+      x: 0.6913569423529278
+      y: 0.20731914528300358
+  - id: grp-sr33gak-copy-3
+    housing:
+      kind: grove
+      x: 0.7313569423529278
+      y: 0.24731914528300358
+  - id: grp-sr33gak-copy-3-copy-4
+    housing:
+      kind: grove
+      x: 0.7713569423529278
+      y: 0.28731914528300356
 connectors:
   - z: 0
     kind: grove
@@ -385,8 +507,8 @@ mounts:
     rotation: 270
 image: image.png
 imageLayer:
-  x: -0.00024080912272135546
-  y: 0
+  x: -0.00009040832519531528
+  y: -0.00020834171070771568
   w: 1
   h: 1
 help: help.md
