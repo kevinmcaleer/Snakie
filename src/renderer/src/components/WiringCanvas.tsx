@@ -30,6 +30,7 @@ import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize, cablePlugStyle } from './part-body'
+import { cableRoute } from './cable-route'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
@@ -2274,6 +2275,19 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     if (e.box !== 0 && e.box * dx > 0) {
       c2x = e.bx + e.box * WIRE_CLEARANCE
       c2y -= Math.sign(dy || 1) * vbow
+    }
+    // A CABLED lead routes around the bodies rather than across them (#745):
+    // its slack falls outside the boards, the way a real lead's does. Ordinary
+    // pin-to-pin noodles keep the plain bezier — they're short hops between pads
+    // on one board, where a detour would be noise.
+    if (c.cable && !pull) {
+      const obstacles = subjects.map((s) => ({ x: s.x, y: s.y, w: s.w, h: s.h }))
+      const routed = cableRoute(
+        { x: e.ax, y: e.ay, ox: e.aox, oy: e.aoy },
+        { x: e.bx, y: e.by, ox: e.box, oy: e.boy },
+        obstacles
+      )
+      return routed
     }
     const mx = (e.ax + e.bx) / 2
     const my = (e.ay + e.by) / 2
