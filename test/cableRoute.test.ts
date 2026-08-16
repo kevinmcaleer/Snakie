@@ -128,3 +128,47 @@ describe('inBox / cubicAt', () => {
     expect(inBox(11, 5, b, 2)).toBe(true)
   })
 })
+
+describe('the detour follows the plugs, and sweeps', () => {
+  const board: RouteBox = { x: 80, y: -300, w: 160, h: 260 }
+
+  it('a lead leaving DOWNWARD sweeps down, even when over the top is nearer', () => {
+    // The screenshot case: both plugs point down, the obstacle sits above, and
+    // routing "the short way" sent the lead U-turning back across its own shell.
+    const a = end(0, 0, 0, 1)
+    const b = end(320, 0, 0, 1)
+    expect(cableRoute(a, b, [board]).my).toBeGreaterThan(0)
+  })
+
+  it('a lead leaving UPWARD sweeps up', () => {
+    const low: RouteBox = { x: 80, y: 40, w: 160, h: 260 }
+    expect(cableRoute(end(0, 0, 0, -1), end(320, 0, 0, -1), [low]).my).toBeLessThan(0)
+  })
+
+  it('still travels along the plug axis before it turns', () => {
+    // The lead-out has to be long enough that the bend doesn't collapse into an
+    // elbow at the shell — that is what makes it read as a draped cable.
+    const a = end(0, 0, 0, 1)
+    const pts = samplePath(cableRoute(a, end(320, 0, 0, 1), [board]).d)
+    // A tenth of the way along, it is still heading down and has barely turned.
+    const early = pts[Math.floor(pts.length * 0.08)]
+    expect(early.y).toBeGreaterThan(20)
+    expect(Math.abs(early.x)).toBeLessThan(Math.abs(early.y))
+  })
+
+  it('spreads the turn rather than kinking at the waypoint', () => {
+    // Sample the heading either side of the join; a corner shows up as a big
+    // jump in direction between neighbouring samples.
+    const pts = samplePath(cableRoute(end(0, 0, 0, 1), end(320, 0, 0, 1), [board]).d, 80)
+    let worst = 0
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a1 = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x)
+      const a2 = Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x)
+      let d = Math.abs(a2 - a1)
+      if (d > Math.PI) d = 2 * Math.PI - d
+      worst = Math.max(worst, d)
+    }
+    // No single step turns more than ~25°, i.e. no visible corner.
+    expect(worst).toBeLessThan(0.45)
+  })
+})

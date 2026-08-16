@@ -9,8 +9,9 @@
  *
  * A real lead leaves its socket along the socket's axis and its slack falls
  * OUTSIDE the boards. So: keep the normal-pushed cubic when it's already clear,
- * and when it isn't, bend the path around the obstacles it would cross — over
- * the top or under the bottom, whichever detour is shorter.
+ * and when it isn't, bend the path around the obstacles it would cross —
+ * following the direction the PLUGS point, so a lead leaving downward sweeps
+ * down and round instead of U-turning back over its own shell.
  *
  * Deliberately NOT a PCB router: this is a flexible lead on a breadboard, so the
  * result stays a smooth curve with believable slack rather than right-angled
@@ -44,8 +45,9 @@ export interface Cubic {
 
 /** Minimum clearance a lead keeps off its pad before it may turn. */
 export const ROUTE_CLEARANCE = 40
-/** How far outside an obstacle the detour passes. */
-export const ROUTE_MARGIN = 26
+/** How far outside an obstacle the detour passes. Generous on purpose: a lead
+ *  hugging a board edge reads as a routed trace, not a draped cable. */
+export const ROUTE_MARGIN = 46
 
 /** A point on a cubic at `t` (0..1). Pure. */
 export function cubicAt(c: Cubic, t: number): { x: number; y: number } {
@@ -105,11 +107,18 @@ function cubicPath(c: Cubic): string {
  * join is smooth rather than a kink. Each end still leaves along its own normal.
  */
 export function detourCubics(a: RouteEnd, b: RouteEnd, waypoint: { x: number; y: number }): [Cubic, Cubic] {
-  const lead = ROUTE_CLEARANCE
+  // A LONG lead-out, scaled to the run: the cable has to still be travelling
+  // along the plug's axis when it starts to turn, or the bend collapses into an
+  // elbow at the shell. This is the single biggest difference between something
+  // that reads as a draped lead and something that reads as a routed trace.
+  const span = Math.hypot(b.x - a.x, b.y - a.y)
+  const lead = Math.max(ROUTE_CLEARANCE * 1.8, span * 0.3)
   // Tangent through the waypoint points from a toward b, horizontally — the
   // detour runs along the outside of the boards, which is a horizontal sweep.
+  // Reaching well past the waypoint spreads the curvature over the whole run so
+  // the two halves read as one arc rather than two curves meeting at a corner.
   const dir = Math.sign(b.x - a.x) || 1
-  const reach = Math.max(60, Math.abs(b.x - a.x) * 0.3)
+  const reach = Math.max(110, Math.abs(b.x - a.x) * 0.55)
   const first: Cubic = {
     p0: [a.x, a.y],
     p1: [a.x + a.ox * lead, a.y + a.oy * lead],
@@ -130,8 +139,8 @@ export function detourCubics(a: RouteEnd, b: RouteEnd, waypoint: { x: number; y:
  *
  * Tries the direct cubic first — most leads are already clear, and leaving those
  * untouched keeps every existing board looking the way it did. Only a path that
- * genuinely crosses a body detours, and then it passes ABOVE or BELOW the union
- * of what it hit, whichever is the shorter way round.
+ * genuinely crosses a body detours, passing above or below the union of what it
+ * hit, on the side the plugs are already pointing.
  */
 export function cableRoute(
   a: RouteEnd,
@@ -151,11 +160,23 @@ export function cableRoute(
   const midX = (a.x + b.x) / 2
   const midY = (a.y + b.y) / 2
 
-  // Under or over? Take the shorter climb from where the lead already is; a tie
-  // goes downward, which is where slack naturally falls.
   const under = { x: midX, y: bottom + ROUTE_MARGIN }
   const over = { x: midX, y: top - ROUTE_MARGIN }
-  const waypoint = Math.abs(under.y - midY) <= Math.abs(over.y - midY) ? under : over
+
+  // Under or over? FOLLOW THE PLUGS FIRST. A lead leaving its socket downward
+  // must sweep down and round — sending it over the top makes it U-turn across
+  // its own shell, which is both ugly and wrong about how a cable behaves. Only
+  // when the two ends don't agree on a direction (or point sideways) does the
+  // shorter climb decide it; a tie goes downward, where slack naturally falls.
+  const facing = a.oy + b.oy
+  const waypoint =
+    facing > 0.25
+      ? under
+      : facing < -0.25
+        ? over
+        : Math.abs(under.y - midY) <= Math.abs(over.y - midY)
+          ? under
+          : over
 
   const [first, second] = detourCubics(a, b, waypoint)
   return { d: `${cubicPath(first)} ${cubicPath(second).replace(/^M [^C]*/, '')}`, mx: waypoint.x, my: waypoint.y }
