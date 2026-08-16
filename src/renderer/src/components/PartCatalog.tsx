@@ -95,6 +95,11 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
 
   // Group the filtered parts into shelves by category (same order as the panel).
   const shelves = useMemo(() => groupByCategory(filtered), [filtered])
+  // Shelves are for BROWSING. Once a filter is on — a facet or the search box —
+  // the result set is the answer, and re-sectioning it fights the sidebar that
+  // already breaks the same parts down by type: filtering to one tag could leave
+  // five parts across four headings, three of them holding a single card (#747).
+  const filtering = q.length > 0 || activeChips(facetSel).length > 0
 
   const toggle = (i: CatalogItem): void =>
     setSelected((prev) => {
@@ -172,8 +177,28 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
           </aside>
 
           <div className="pcat__shelves">
-            {shelves.length === 0 && <div className="pcat__empty">No parts match “{query}”.</div>}
-            {shelves.map((shelf) => (
+            {filtered.length === 0 && (
+              <div className="pcat__empty">
+                {query ? `No parts match “${query}”.` : 'No parts match these filters.'}
+              </div>
+            )}
+            {/* Filtered ⇒ ONE grid. The card carries the type the shelf heading
+                used to supply, so collapsing loses nothing. */}
+            {filtering && filtered.length > 0 && (
+              <div className="pcat__grid">
+                {filtered.map((item) => (
+                  <CatalogCard
+                    key={keyOf(item)}
+                    item={item}
+                    checked={selected.has(keyOf(item))}
+                    onToggle={() => toggle(item)}
+                    showType
+                  />
+                ))}
+              </div>
+            )}
+            {!filtering &&
+              shelves.map((shelf) => (
               <section className="pcat__shelf" key={shelf.category}>
                 <h3 className="pcat__shelf-name">
                   {shelf.category}
@@ -189,8 +214,8 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
                     />
                   ))}
                 </div>
-              </section>
-            ))}
+                </section>
+              ))}
           </div>
         </div>
       </div>
@@ -202,11 +227,15 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
 function CatalogCard({
   item,
   checked,
-  onToggle
+  onToggle,
+  showType = false
 }: {
   item: CatalogItem
   checked: boolean
   onToggle: () => void
+  /** Show the part's type on the card. Set in the FLAT (filtered) grid, where
+   *  there is no shelf heading saying it (#747). */
+  showType?: boolean
 }): JSX.Element {
   const { part } = item
   const sku = part.partNumber || part.id
@@ -248,6 +277,7 @@ function CatalogCard({
           <span className="pcat__card-name">{part.name}</span>
           <span className="pcat__card-sku">{sku}</span>
         </div>
+        {showType && part.family && <div className="pcat__card-type">{part.family}</div>}
         {part.description && <div className="pcat__card-desc">{part.description}</div>}
       </div>
       {rearImage && (

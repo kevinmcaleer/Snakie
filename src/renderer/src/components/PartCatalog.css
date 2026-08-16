@@ -421,3 +421,18 @@
     padding: 10px 20px;
   }
 }
+
+/* The type, shown on a card only in the FLAT filtered grid — it carries what
+   the shelf heading used to say, so collapsing the shelves loses nothing (#747). */
+.pcat__card-type {
+  align-self: flex-start;
+  margin-bottom: 2px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted, #9aa0a6);
+  background: var(--bg-sunken, rgba(128, 128, 128, 0.14));
+  border-radius: 999px;
+}
