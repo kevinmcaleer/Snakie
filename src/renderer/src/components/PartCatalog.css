@@ -276,6 +276,7 @@
 
 /* --- card image --- */
 .pcat__card-img {
+  position: relative; /* the hover disclosure anchors to the picture */
   flex: 0 0 auto;
   /* Full card width, a generous product-photo height. */
   width: 100%;
@@ -303,6 +304,65 @@
   font-size: 15px;
   font-weight: 800;
   color: rgba(255, 255, 255, 0.92);
+}
+
+/* --- hover disclosure → the full details view (#748) ---------------------- */
+/* Netflix-style: it appears on the picture when the card is hovered, and it is a
+   BUTTON with its own hit area, so opening the details never ticks the card. */
+.pcat__more {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #1c2621;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1.5px solid #dcdfd8;
+  border-radius: 50%;
+  box-shadow: 0 2px 8px rgba(20, 30, 25, 0.18);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(5px);
+  transition:
+    opacity 0.16s ease,
+    transform 0.16s ease,
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+.pcat__card:hover .pcat__more,
+.pcat__more:focus-visible {
+  opacity: 1;
+  transform: none;
+}
+.pcat__more:hover {
+  background: #fff;
+  border-color: #0b7a6b;
+  color: #0b7a6b;
+}
+
+.pcat__more-i {
+  width: 18px;
+  height: 18px;
+}
+
+/* Touch has no hover, so an affordance that only appears on hover is one that
+   never appears at all — show it outright there. */
+@media (hover: none) {
+  .pcat__more {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcat__more {
+    transition: opacity 0.16s ease;
+    transform: none;
+  }
 }
 
 .pcat__card-body {

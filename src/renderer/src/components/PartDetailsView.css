@@ -1,0 +1,473 @@
+/* Full-sized part details (#748) — the page behind a catalog card's disclosure.
+   Unique `pdt__` BEM prefix.
+
+   PALETTE: this lives INSIDE the full-screen catalog, whose panel is a deliberately
+   theme-independent light "shop catalog" surface over a dimmed backdrop (see the
+   head of PartCatalog.css). So it borrows that same fixed palette rather than the
+   app's theme tokens: it renders identically — and legibly — in the dark and the
+   skeuomorph skins, where a `var(--text)` here would paint near-white ink on a
+   near-white card in dark mode. Same reason the catalog's own cards do it. */
+
+.pdt {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: #f4f6f2;
+  font-family: var(--font-ui), system-ui, sans-serif;
+}
+
+/* --- header --------------------------------------------------------------- */
+.pdt__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 18px;
+  background: #fff;
+  border-bottom: 1px solid #e2e5df;
+}
+
+.pdt__titles {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pdt__title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #1c2621;
+}
+
+.pdt__sub {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: #5b665f;
+}
+
+/* Tick this part into the catalog's selection without hunting back for its card. */
+.pdt__select {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0b7a6b;
+  background: #fff;
+  border: 1.5px solid #0b7a6b;
+  border-radius: 9px;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+.pdt__select:hover {
+  background: #eaf5f2;
+}
+.pdt__select.is-on {
+  color: #fff;
+  background: #0b7a6b;
+}
+
+.pdt__close {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  color: #5b665f;
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.pdt__close:hover {
+  background: #f0f2ed;
+  border-color: #dcdfd8;
+}
+
+/* --- body ----------------------------------------------------------------- */
+.pdt__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  /* The stage takes the larger share: it is the thing the card couldn't show. */
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 20px;
+  padding: 18px;
+  align-items: start;
+}
+
+/* The picture stays put while the specs and the guide scroll past it. */
+.pdt__stage-col {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+.pdt__tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pdt__tablist {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pdt__tabs-spacer {
+  flex: 1 1 auto;
+}
+
+.pdt__tab {
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #5b665f;
+  background: #fff;
+  border: 1.5px solid #dcdfd8;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pdt__tab:hover {
+  border-color: #b9c2ba;
+}
+.pdt__tab.is-active {
+  color: #fff;
+  background: #0b7a6b;
+  border-color: #0b7a6b;
+}
+
+.pdt__flip-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
+  color: #47524b;
+  background: #fff;
+  border: 1.5px solid #dcdfd8;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pdt__flip-btn:hover:not(:disabled) {
+  border-color: #b9c2ba;
+}
+.pdt__flip-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* The mat. A DARK island in every theme, like the docked part preview, the Board
+   View and the Mini Board View (#181): the silk pin labels (`.pcv__pin-label`) and
+   the schematic symbol (`--sc-fill`) are drawn light-on-dark everywhere outside the
+   Part Editor, so a white stage would leave a part's pinout — the whole point of
+   this view — as pale grey text on white. `--bc-mat` is the board-canvas material
+   hook the rest of the app stages parts on.
+
+   Only the board turns on it — flipping the frame would spin its background and
+   border too, which reads as the viewer tipping over rather than a board being
+   turned over in your hands. */
+.pdt__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  max-height: 58vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: var(--bc-mat, #0c0f12);
+  border: 1px solid #2b3136;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+/* The schematic symbol is an <svg> straight in the stage (no wrapper of its own). */
+.pdt__stage > svg {
+  width: 100%;
+  height: 100%;
+}
+
+.pdt__flip {
+  width: 100%;
+  height: 100%;
+  transform-origin: center center;
+}
+.pdt__flip.is-flipping {
+  animation: pdt-flip 420ms ease-in-out;
+}
+
+@keyframes pdt-flip {
+  0% {
+    transform: perspective(1600px) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(1600px) rotateY(90deg);
+  }
+  100% {
+    transform: perspective(1600px) rotateY(0deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the face CHANGE — that is the information — and drop the spin. */
+  .pdt__flip.is-flipping {
+    animation: pdt-flip-fade 420ms ease-in-out;
+  }
+  @keyframes pdt-flip-fade {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.25;
+    }
+  }
+}
+
+/* On the dark mat, so light ink. */
+.pdt__stage-note {
+  font-size: 13px;
+  color: #aeb4bd;
+}
+
+/* --- info column ---------------------------------------------------------- */
+.pdt__info-col {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pdt__lede {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #38423c;
+}
+
+.pdt__panel {
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid #e2e5df;
+  border-radius: 12px;
+}
+
+.pdt__panel-head {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #7a847d;
+}
+
+/* Specs: a two-column definition list that collapses to one on a narrow page. */
+.pdt__specs {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 2px 18px;
+}
+
+.pdt__spec {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid #f0f2ed;
+}
+
+.pdt__spec dt {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #7a847d;
+}
+
+.pdt__spec dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2621;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.pdt__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pdt__tag {
+  padding: 2px 9px;
+  font-size: 11.5px;
+  color: #47524b;
+  background: #eef1eb;
+  border-radius: 999px;
+}
+
+/* Drivers: what it installs, how, and where it lands. */
+.pdt__import {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: #5b665f;
+}
+
+.pdt__code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  padding: 1px 6px;
+  color: #1c2621;
+  background: #f0f2ed;
+  border-radius: 5px;
+}
+
+.pdt__drivers,
+.pdt__works,
+.pdt__links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pdt__driver {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+}
+
+.pdt__driver-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2621;
+  overflow-wrap: anywhere;
+}
+
+/* How it gets there — the same three methods the install banner knows. */
+.pdt__driver-how {
+  justify-self: end;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #47524b;
+  background: #eef1eb;
+  border-radius: 999px;
+}
+.pdt__driver-how--mip {
+  color: #0b5f6f;
+  background: #e2f0f3;
+}
+.pdt__driver-how--module {
+  color: #0b7a6b;
+  background: #e4f2ee;
+}
+
+.pdt__driver-sum {
+  grid-column: 1 / -1;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #5b665f;
+  overflow-wrap: anywhere;
+}
+
+.pdt__work {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.pdt__work-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1c2621;
+}
+
+.pdt__work-unlocks {
+  font-size: 12px;
+  color: #5b665f;
+}
+
+.pdt__link {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0b7a6b;
+  text-decoration: none;
+  cursor: pointer;
+}
+.pdt__link:hover {
+  text-decoration: underline;
+}
+
+/* The part's own help.md, rendered. `.md` supplies the typography; this only
+   keeps it readable on the catalog's light card. */
+.pdt__panel--help {
+  padding-bottom: 16px;
+}
+
+.pdt__md {
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: #38423c;
+}
+.pdt__md h1,
+.pdt__md h2,
+.pdt__md h3,
+.pdt__md h4 {
+  color: #1c2621;
+}
+.pdt__md a {
+  color: #0b7a6b;
+}
+.pdt__md code {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  color: #1c2621;
+  background: #f0f2ed;
+}
+.pdt__md pre {
+  background: #f4f6f2;
+  border: 1px solid #e2e5df;
+  color: #1c2621;
+}
+.pdt__md img {
+  max-width: 100%;
+}
+.pdt__md table {
+  border-color: #e2e5df;
+}
+
+/* Narrow windows: the stage stops competing with the specs for width. */
+@media (max-width: 1000px) {
+  .pdt__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pdt__stage-col {
+    position: static;
+  }
+
+  .pdt__stage {
+    max-height: 46vh;
+  }
+}
