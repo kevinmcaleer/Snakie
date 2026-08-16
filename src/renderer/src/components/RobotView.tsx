@@ -5,13 +5,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { AnaglyphEffect } from 'three/examples/jsm/effects/AnaglyphEffect.js'
 import { StereoEffect } from 'three/examples/jsm/effects/StereoEffect.js'
 import { useLocalStorage } from '../hooks/useLocalStorage'
-import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
-import { ColladaLoader } from 'three/examples/jsm/loaders/ColladaLoader.js'
 import URDFLoader from 'urdf-loader'
 import type { URDFRobot } from 'urdf-loader'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
-import { baseName, dirname, meshKind } from './robot-mesh'
+import { baseName, dirname } from './robot-mesh'
+import { loadMeshObject, measureMeshFile, placeholderMesh } from './robot-mesh-load'
 import {
   type JointMeta,
   type NamedPoseLike,
@@ -61,7 +60,8 @@ import {
   type JointDef,
   type JointSpec,
   type JointType,
-  type PrimitiveGeom
+  type PrimitiveGeom,
+  meshImportScale
 } from './robot-assembly'
 import { canReRoot, reRoot } from './robot-reroot'
 import { createBoneMode, duplicateNames, type BoneModeHandle } from './robot-bone-mode'
@@ -222,16 +222,7 @@ export interface RobotViewProps {
 }
 
 /** A neutral material for a mesh (e.g. STL) that carries no URDF `<material>`. */
-function neutralMaterial(): THREE.MeshStandardMaterial {
-  return new THREE.MeshStandardMaterial({ color: 0x9aa0a6, metalness: 0.1, roughness: 0.85 })
-}
 
-/** A small wireframe cube standing in for a mesh that failed to load (#319). */
-function placeholderMesh(material: THREE.Material | null): THREE.Mesh {
-  const mat =
-    material ?? new THREE.MeshStandardMaterial({ color: 0xb4544e, wireframe: true })
-  return new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.04), mat)
-}
 
 /** The `urdfName` of the URDFLink an object belongs to, or null (#555). */
 function ownerLink(obj: THREE.Object3D | null): string | null {
@@ -2513,19 +2504,10 @@ export function RobotView({
       // Normalise scale: the URDF world is metres, but STLs are commonly authored
       // in millimetres (they'd load 1000× too big). Measure the mesh and, if its
       // largest dimension is implausibly large for a metre-scale part, scale mm→m.
-      let scale = 1
-      if (/\.stl$/i.test(res.rel)) {
-        try {
-          const bytes = await window.api.fs.readFileBytes(`${dirname(activeFile.path)}/${res.rel}`)
-          const geo = new STLLoader().parse(bytes.buffer as ArrayBuffer)
-          geo.computeBoundingBox()
-          const size = new THREE.Vector3()
-          geo.boundingBox?.getSize(size)
-          if (Math.max(size.x, size.y, size.z) > 3) scale = 0.001
-        } catch {
-          /* leave scale 1 if the mesh can't be measured */
-        }
-      }
+      // ONE measurement (#742) and ONE threshold: `meshImportScale` owns the
+      // mm→m rule the part-drop bridge already uses, so an imported mesh and a
+      // dropped library part can't disagree about the same file.
+      const scale = meshImportScale({}, await measureMeshFile(`${dirname(activeFile.path)}/${res.rel}`))
       // Add the mesh attached to the base with a movable joint, staggered so it lands
       // beside the base (not on top of it). Select it + reframe so the user can see it.
       const linkBase = res.name?.replace(/\.(stl|dae)$/i, '') ?? 'part'
@@ -3515,7 +3497,6 @@ export function RobotView({
     loader.loadMeshCb = (path, manager, material, done): void => {
       const mat = (material as THREE.Material | null) ?? null
       pending += 1
-      const kind = meshKind(path)
       const ok = (obj: THREE.Object3D): void => {
         if (disposed) return
         done(obj)
@@ -3527,28 +3508,15 @@ export function RobotView({
         done(placeholderMesh(mat))
         settle()
       }
-      if (kind === 'stl') {
-        window.api.fs
-          .readFileBytes(path)
-          .then((bytes) => {
-            if (disposed) return
-            const geo = new STLLoader(manager).parse(bytes.buffer as ArrayBuffer)
-            ok(new THREE.Mesh(geo, mat ?? neutralMaterial()))
-          })
-          .catch(fail)
-      } else if (kind === 'dae') {
-        window.api.fs
-          .readFile(path)
-          .then((text) => {
-            if (disposed) return
-            const dae = new ColladaLoader(manager).parse(text, dirname(path) + '/')
-            if (dae?.scene) ok(dae.scene)
-            else fail()
-          })
-          .catch(fail)
-      } else {
-        fail() // unsupported (.obj/.glb/…) — placeholder + note
-      }
+      // One loader for every kind (#742); `null` covers unsupported, unreadable
+      // and unparseable alike, and the placeholder + note stay this view's job.
+      void loadMeshObject(path, { manager, material: mat })
+        .then((obj) => {
+          if (disposed) return
+          if (obj) ok(obj)
+          else fail()
+        })
+        .catch(fail)
     }
 
     try {
