@@ -162,7 +162,7 @@ connectors:
     kind: qwiic
     x: 0.05540050272623698
     y: 0.5
-    rotation: 90
+    rotation: 270
     pins:
       - name: GND
         type: gnd
@@ -184,7 +184,7 @@ connectors:
     kind: qwiic
     x: 0.9453607836914063
     y: 0.5
-    rotation: 270
+    rotation: 90
     pins:
       - name: GND-B
         type: gnd

@@ -97,6 +97,26 @@ describe('Modulino parts follow the shared template (#722)', () => {
       expect(xs[1]).toBeGreaterThan(0.8)
     })
 
+    it('puts GND at the BOTTOM of the left socket, as the board does', () => {
+      // Confirmed against a real Modulino (2026-08-16). Contacts lay out as
+      // `ry = dx·sin(rotation)` with GND declared first, so rotation 270 puts it
+      // at the largest y — the bottom — and 90 puts it at the top. The two
+      // sockets are the same footprint at opposite ends, i.e. 180° apart, so the
+      // right-hand one mirrors.
+      //
+      // Four of the five parts had these the wrong way round, which is invisible
+      // on screen and shows up on real hardware as a dead bus or a reversed
+      // supply — hence pinning it.
+      const qwiic = (part.connectors ?? []).filter((c) => c.kind === 'qwiic')
+      const left = qwiic.find((c) => c.x < 0.5)
+      const right = qwiic.find((c) => c.x > 0.5)
+      expect(left?.rotation, `${dir} left socket`).toBe(270)
+      expect(right?.rotation, `${dir} right socket`).toBe(90)
+      // …and GND really is the first contact, which is what makes 270 mean
+      // "bottom" rather than the other way about.
+      expect(left?.pins[0].name).toBe('GND')
+    })
+
     it('wires both sockets to ONE bus, in parallel, via rails', () => {
       // Without the rails the two sockets are four independent nets and a
       // chained module downstream reads as unpowered.
