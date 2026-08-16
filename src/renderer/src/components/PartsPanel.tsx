@@ -441,9 +441,13 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   // there is nothing to invalidate, so the counts can't go stale.
   const [facetSel, setFacetSel] = useState(emptySelection)
   const [showAllTags, setShowAllTags] = useState(false)
-  const facets = useMemo(() => buildFacets(allParts, facetSel, q), [allParts, facetSel, q])
-  const matches = useMemo(() => applyFilters(allParts, facetSel, q), [allParts, facetSel, q])
-  const chips = activeChips(facetSel)
+  // The FILTERING is full-screen-only too, not just the panel: a selection left
+  // active behind a closed catalog would silently shorten the docked library
+  // with nothing on screen to explain it.
+  const liveSel = useMemo(() => (catalogOpen ? facetSel : emptySelection()), [catalogOpen, facetSel])
+  const facets = useMemo(() => buildFacets(allParts, liveSel, q), [allParts, liveSel, q])
+  const matches = useMemo(() => applyFilters(allParts, liveSel, q), [allParts, liveSel, q])
+  const chips = activeChips(liveSel)
 
   const selectedPart: { libraryId: string; part: PartDefinition } | null = useMemo(() => {
     if (!selected) return null
@@ -637,6 +641,10 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         />
       </div>
 
+      {/* Facets belong to the FULL-SCREEN catalog only (#740): the docked panel
+          is a narrow strip beside the canvas, where three filter groups would
+          crowd out the parts they filter. The search box serves it instead. */}
+      {catalogOpen && (
       <PartFacetPanel
         facets={facets}
         chips={chips}
@@ -646,6 +654,7 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         onClear={() => setFacetSel(emptySelection())}
         total={matches.length}
       />
+      )}
 
       {/* Panel status line (reset/promote/install/registry). It persists until the
           next action replaces it, so it needs a way out — otherwise a one-off
