@@ -7,7 +7,7 @@ import {
   rotatePart,
   rotatePoint
 } from '../src/renderer/src/components/part-rotate'
-import type { PartDefinition } from '../src/shared/part'
+import type { PartDefinition, PartEdge } from '../src/shared/part'
 
 /**
  * Rotating a part a quarter turn (#749).
@@ -107,6 +107,21 @@ describe('rotateEdge / rotateAngle', () => {
   })
 })
 
+describe('the angle convention agrees with the edge convention', () => {
+  // `pinOutwardDir` reads a pin's angle as a board edge: 0 right, 90 bottom,
+  // 180 left, 270 top. Turning the angle and turning the edge must therefore
+  // give the same answer — if they ever disagree, every pin label lands on the
+  // wrong side of a rotated board, which is exactly how this surfaced.
+  const edgeOf = (deg: number): PartEdge =>
+    deg === 0 ? 'right' : deg === 90 ? 'bottom' : deg === 180 ? 'left' : 'top'
+
+  it.each([0, 90, 180, 270])('%i° turns to the same edge either way', (deg) => {
+    for (const dir of ['cw', 'ccw'] as const) {
+      expect(edgeOf(rotateAngle(deg, dir))).toBe(rotateEdge(edgeOf(deg), dir))
+    }
+  })
+})
+
 describe('rotatePart', () => {
   it('swaps the board dimensions and inverts the aspect', () => {
     const p = rotatePart(base({ dimensions: { width: 41, height: 25.36 }, aspect: 41 / 25.36 }), 'cw')
@@ -191,6 +206,41 @@ describe('rotatePart', () => {
   it('leaves the schematic symbol alone', () => {
     const schematic = { aspect: 2, pins: [{ name: 'A', side: 'left' as const }] }
     expect(rotatePart(base({ schematic }), 'cw').schematic).toEqual(schematic)
+  })
+
+  it('leaves an UNSET pin rotation unset — it means "infer", not zero', () => {
+    // `pinOutwardDir` reads an absent rotation as "push the label to the nearest
+    // board edge". The position has just moved, so that inference re-runs and
+    // comes out right on its own; writing an angle here would nail the label to
+    // whichever edge 0° names instead. This was a real bug: labels on rotated
+    // Modulinos pointed at the wrong edge.
+    const p = rotatePart(
+      base({ headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', number: 1, x: 0.1, y: 0.5 }] }] }),
+      'cw'
+    )
+    expect(p.headers[0].pins[0].rotation).toBeUndefined()
+    // …and it really did move to the edge that now faces outward.
+    expect(p.headers[0].pins[0].x).toBeCloseTo(0.5)
+    expect(p.headers[0].pins[0].y).toBeCloseTo(0.1)
+  })
+
+  it('KEEPS an explicit pin rotation of zero, unlike every other item', () => {
+    // 0 means "label to the right"; dropping the field would hand the pin back
+    // to edge inference and move its label somewhere else entirely.
+    const p = rotatePart(
+      base({ headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', number: 1, x: 0.5, y: 0.5, rotation: 270 }] }] }),
+      'cw'
+    )
+    expect(p.headers[0].pins[0].rotation).toBe(0)
+  })
+
+  it('turns an explicit pin rotation with the board', () => {
+    const p = rotatePart(
+      base({ headers: [{ edge: 'left', pins: [{ name: 'A', type: 'io', number: 1, x: 0.5, y: 0.5, rotation: 180 }] }] }),
+      'cw'
+    )
+    // 180 = label pushed left; a clockwise turn sends it to the bottom (90).
+    expect(p.headers[0].pins[0].rotation).toBe(270)
   })
 
   it('does not invent fields that were absent', () => {

@@ -184,11 +184,17 @@ export function rotatePart(part: PartDefinition, dir: RotateDir): PartDefinition
       // own — then the edge turn above is what moves it.
       const moved: PartPin =
         p.x === undefined || p.y === undefined ? { ...p } : { ...p, ...rotatePoint(p.x, p.y, d) }
-      // ALWAYS turn the pad, even when it currently has no angle. Skipping the
-      // undefined case looked tidier but was a trap: once a turn brought the
-      // angle back to zero the field was dropped, and the pad then sat out every
-      // later rotation while the rest of the board kept moving.
-      return withAngle(moved, d)
+      // A pin's `rotation` is NOT like every other item's, and this is the trap:
+      // absent doesn't mean 0°, it means "work the label direction out from the
+      // nearest board edge" (see `pinOutwardDir`). So an unset pin needs nothing
+      // done to it — its position has just moved, and the direction follows for
+      // free. Assigning it an angle here would nail it to whichever edge 0°
+      // happens to name, which is rarely the one it was inferring.
+      if (p.rotation === undefined) return moved
+      // …and by the same rule an EXPLICIT angle keeps its zero rather than being
+      // dropped like the others: 0 means "right", not "work it out", so removing
+      // the field on a full circle would silently hand the pin back to inference.
+      return { ...moved, rotation: rotateAngle(p.rotation, d) }
     })
   }))
 

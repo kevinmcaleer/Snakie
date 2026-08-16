@@ -9,9 +9,11 @@
  * round. So the bitmap itself is re-drawn, turned, onto a canvas whose axes are
  * swapped.
  *
- * Deliberately re-encoded as PNG rather than JPEG: the background-removal tools
- * write transparency into these images, and a JPEG round-trip would flatten it.
- * This matches what `processImage` in the editor already does.
+ * The output keeps the SOURCE's format. Always writing PNG (to protect the
+ * transparency the background-removal tools paint in) turned a 127 KB board
+ * photo into a 640 KB one — five times the size, committed to the parts library
+ * and served to the web. A photo that is still a JPEG has no alpha to protect;
+ * one that has been through background removal is already a PNG and stays one.
  */
 import type { RotateDir } from './part-rotate'
 
@@ -22,6 +24,7 @@ import type { RotateDir } from './part-rotate'
  */
 export function rotateImage90(dataUrl: string, dir: RotateDir): Promise<string | null> {
   return new Promise((resolve) => {
+    const mime = /^data:(image\/[a-z+]+)[;,]/.exec(dataUrl)?.[1] ?? 'image/png'
     const img = new Image()
     img.onload = () => {
       const w = img.naturalWidth
@@ -45,7 +48,10 @@ export function rotateImage90(dataUrl: string, dir: RotateDir): Promise<string |
       }
       ctx.drawImage(img, 0, 0)
       try {
-        resolve(canvas.toDataURL('image/png'))
+        // JPEG in, JPEG out. 0.92 keeps a quarter-turn visually lossless enough
+        // that the recompression doesn't show; a part would have to be rotated
+        // many times over before it did.
+        resolve(mime === 'image/jpeg' ? canvas.toDataURL(mime, 0.92) : canvas.toDataURL('image/png'))
       } catch {
         resolve(null) // tainted canvas
       }
