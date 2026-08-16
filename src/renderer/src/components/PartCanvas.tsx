@@ -45,7 +45,15 @@ import {
   type ResolvedPin,
   type StyleTarget
 } from './part-editor.util'
-import { itemHidden, itemLocked, itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
+import {
+  cornerRadiusFraction,
+  itemHidden,
+  itemLocked,
+  itemSide,
+  mirrorRotationX,
+  mirrorX,
+  padPassesThrough
+} from '../../../shared/part'
 import { translateMount, rotateMount, removeMountImprint } from '../../../shared/footprint-imprint'
 import type {
   PartGroup,
@@ -3052,8 +3060,9 @@ export function PartCanvas({
   // --- board outline path ---------------------------------------------------
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
   // Honour an explicit 0 (square corners); only fall back when truly unset.
-  const cornerR =
-    part.shape?.cornerRadius != null ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  // mm wins over the fraction when the part knows its size (#739).
+  const cornerFrac = cornerRadiusFraction(part.shape, part.dimensions)
+  const cornerR = cornerFrac != null ? cornerFrac * Math.min(box.w, box.h) : 8
   const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
 
   /** The board outline as a shape element, with the given paint props. */

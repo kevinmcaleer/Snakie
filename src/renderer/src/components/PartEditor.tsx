@@ -134,6 +134,7 @@ import type {
   PartPinBuses,
   PartPinCapability,
   PartPinShape,
+  PartShape,
   PartPinSignals,
   PartPinType,
   TextAlign,
@@ -2748,16 +2749,7 @@ function Inspector(props: InspectorProps): JSX.Element {
             />
           </label>
         </div>
-        {part.shape?.kind !== 'polygon' && (
-          <SliderField
-            label="Corner radius"
-            value={part.shape?.cornerRadius ?? 0.04}
-            min={0}
-            max={0.5}
-            step={0.01}
-            onChange={(v) => patch({ shape: { kind: 'rect', cornerRadius: v } })}
-          />
-        )}
+        {part.shape?.kind !== 'polygon' && <CornerRadiusFields part={part} patch={patch} />}
         <label className="pe__field">
           <span>Onboard LED pin</span>
           <select value={part.ledLabel ?? ''} onChange={(e) => patch({ ledLabel: e.target.value || undefined })}>
@@ -2926,6 +2918,84 @@ function I2cSection({
           : 'This part has no I²C pin or QWIIC/Grove port yet — addresses are still saved.'}
       </p>
     </section>
+  )
+}
+
+/**
+ * The board outline's corner radius, in EITHER unit (#739).
+ *
+ * A PCB is specified in millimetres — that's the number on the drawing and on
+ * the fabricator's order — so a part that knows its physical size should be
+ * able to say "2 mm" rather than a fraction someone reverse-engineered from it.
+ * The normalised slider stays for parts with no declared dimensions (and for
+ * eyeballing), and the hint always says which of the two is actually drawing,
+ * because two fields for one visual property is otherwise a guessing game.
+ */
+function CornerRadiusFields({
+  part,
+  patch
+}: {
+  part: PartDefinition
+  patch: (p: Partial<PartDefinition>) => void
+}): JSX.Element {
+  const dims = part.dimensions
+  const minSideMm = dims ? Math.min(dims.width, dims.height) : 0
+  const mm = part.shape?.cornerRadiusMm
+  const mmSet = typeof mm === 'number' && Number.isFinite(mm)
+  const mmApplies = mmSet && minSideMm > 0
+
+  // `patch` REPLACES `shape` wholesale, so carry the other field through or
+  // editing one silently wipes the other.
+  const patchShape = (p: Partial<PartShape>): void => {
+    const next: PartShape = { ...(part.shape ?? { kind: 'rect' }), kind: 'rect', ...p }
+    // Drop rather than carry an `undefined`, so the cleared field doesn't
+    // round-trip through robot.yml/parts.yml as a null.
+    if (next.cornerRadiusMm === undefined) delete next.cornerRadiusMm
+    patch({ shape: next })
+  }
+
+  return (
+    <>
+      <SliderField
+        label="Corner radius"
+        value={part.shape?.cornerRadius ?? 0.04}
+        min={0}
+        max={0.5}
+        step={0.01}
+        onChange={(v) => patchShape({ cornerRadius: v })}
+      />
+      <label className="pe__field">
+        <span>Corner radius (mm)</span>
+        <input
+          type="number"
+          min={0}
+          step="0.1"
+          value={mmSet ? mm : ''}
+          placeholder={dims ? 'e.g. 2' : 'needs board dimensions'}
+          onChange={(e) =>
+            patchShape({
+              cornerRadiusMm:
+                e.target.value === '' ? undefined : Math.max(0, Number(e.target.value) || 0)
+            })
+          }
+        />
+      </label>
+      <p className="pe__hint pe__hint--muted">
+        {mmApplies ? (
+          <>
+            Drawing at <strong>{mm} mm</strong> — the slider above is ignored while this is
+            set. Clear it to go back to the fraction.
+          </>
+        ) : mmSet ? (
+          <span className="pe__addr-warn">
+            Set the board&rsquo;s dimensions for millimetres to apply — drawing at the slider
+            value meanwhile.
+          </span>
+        ) : (
+          <>A PCB is specified in millimetres; set that and it wins over the slider.</>
+        )}
+      </p>
+    </>
   )
 }
 

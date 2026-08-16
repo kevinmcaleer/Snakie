@@ -586,6 +586,10 @@ export function partFromYaml(text: string): PartDefinition {
     part.shape = { kind }
     const cr = num(s.cornerRadius)
     if (cr !== undefined) part.shape.cornerRadius = cr
+    // #739: the mm form. Negative is meaningless; 0 is not — it means square
+    // corners, so it must survive rather than being treated as absent.
+    const crMm = num(s.cornerRadiusMm)
+    if (crMm !== undefined && crMm >= 0) part.shape.cornerRadiusMm = crMm
   }
   if (Array.isArray(raw.mountingHoles)) {
     const holes = raw.mountingHoles

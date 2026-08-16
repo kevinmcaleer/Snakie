@@ -569,6 +569,39 @@ export interface PartShape {
   kind: BoardShapeKind
   /** Corner radius for `rect`, normalised to the smaller board side (0..0.5). */
   cornerRadius?: number
+  /**
+   * Corner radius in MILLIMETRES (#739) — how a PCB is actually specified, and
+   * the number on a mechanical drawing. Preferred over {@link cornerRadius}
+   * when the part declares {@link PartDefinition.dimensions}; without those
+   * there's no scale to convert against, so the normalised value is used
+   * instead. Resolve both through {@link cornerRadiusFraction} rather than
+   * reading either field directly.
+   */
+  cornerRadiusMm?: number
+}
+
+/**
+ * The board outline's effective corner radius as a FRACTION of the smaller
+ * board side — the unit both canvases draw with — or `undefined` when the part
+ * specifies none (callers keep their own pixel default).
+ *
+ * Millimetres win when they can be converted (#739): a real PCB is specified in
+ * mm, so that is the authoritative number when the part knows its physical
+ * size. A radius larger than half the smaller side can't be drawn, so the
+ * result is clamped. Pure.
+ */
+export function cornerRadiusFraction(
+  shape: PartShape | undefined,
+  dimensions: { width: number; height: number } | undefined
+): number | undefined {
+  if (!shape) return undefined
+  const mm = shape.cornerRadiusMm
+  const minSideMm = dimensions ? Math.min(dimensions.width, dimensions.height) : 0
+  if (typeof mm === 'number' && Number.isFinite(mm) && mm >= 0 && minSideMm > 0) {
+    return Math.min(0.5, mm / minSideMm)
+  }
+  const frac = shape.cornerRadius
+  return typeof frac === 'number' && Number.isFinite(frac) ? frac : undefined
 }
 
 /**

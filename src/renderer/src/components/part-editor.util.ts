@@ -1981,6 +1981,16 @@ export function normalisePart(part: PartDefinition): PartDefinition {
     if (typeof part.shape.cornerRadius === 'number' && Number.isFinite(part.shape.cornerRadius)) {
       out.shape.cornerRadius = clamp(part.shape.cornerRadius, 0, 0.5)
     }
+    // #739: the mm form is kept as authored — it's a physical dimension, so it
+    // is NOT clamped to the fraction's 0..0.5; `cornerRadiusFraction` clamps at
+    // the point of use, once there's a board size to clamp against.
+    if (
+      typeof part.shape.cornerRadiusMm === 'number' &&
+      Number.isFinite(part.shape.cornerRadiusMm) &&
+      part.shape.cornerRadiusMm >= 0
+    ) {
+      out.shape.cornerRadiusMm = part.shape.cornerRadiusMm
+    }
   }
   if (Array.isArray(part.mountingHoles) && part.mountingHoles.length) {
     out.mountingHoles = part.mountingHoles.map((h) => {

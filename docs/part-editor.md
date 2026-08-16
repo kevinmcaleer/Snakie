@@ -46,6 +46,13 @@ The Breadboard view is an interactive, **layered canvas**, managed from a
    **polygon**) **and the board image**, which sits on this layer and is
    **clipped to the outline**.
 
+The corner radius can be given **either way** (#739): the slider is a fraction
+of the board's shorter side, while **Corner radius (mm)** is the number an
+actual PCB is specified with. Millimetres win whenever the part declares its
+`dimensions` — without them there's no scale to convert against, so the slider
+draws and the editor says so. Anything that renders the outline resolves the two
+through `cornerRadiusFraction`, so a part never has to state the radius twice.
+
 The **Details, Layers panel + inspector sit on the right** (about a quarter of
 the width) so the canvas gets the room. **Details** (part name + catalogue
 metadata) is at the **top**. Each layer (Components / Pins / Mounting holes) is a

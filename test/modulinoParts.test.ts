@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { existsSync, readdirSync, readFileSync } from 'fs'
 import { join } from 'path'
 import { partFromYaml } from '../src/shared/part-yaml'
+import { cornerRadiusFraction } from '../src/shared/part'
 import { moduleById } from '../src/shared/modules-catalog'
 import { KNOWN_I2C_DEVICES } from '../src/renderer/src/components/i2c-known-devices'
 import type { PartDefinition } from '../src/shared/part'
@@ -29,6 +30,10 @@ const load = (dir: string): PartDefinition =>
 /** The shared board, from #721. Kept in step with scripts/modulino-mesh.mjs. */
 const BOARD = { lengthMm: 41, widthMm: 25.36 }
 const BUS_PINS = ['GND', '3V3', 'SDA', 'SCL']
+/** Read from the generator, so the 2-D parts and the 3-D mesh can't drift. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const MESH_CORNER_RADIUS_MM = ((await import('../scripts/modulino-mesh.mjs')) as any).BOARD
+  .cornerRadiusMm as number
 
 describe('Modulino parts follow the shared template (#722)', () => {
   it('there is at least one Modulino part to check', () => {
@@ -44,6 +49,17 @@ describe('Modulino parts follow the shared template (#722)', () => {
       expect(part.dimensions?.width).toBeCloseTo(BOARD.lengthMm, 2)
       expect(part.dimensions?.height).toBeCloseTo(BOARD.widthMm, 2)
       expect(part.aspect).toBeCloseTo(BOARD.lengthMm / BOARD.widthMm, 2)
+    })
+
+    it('outlines the same 2 mm corners the generated mesh has (#739)', () => {
+      // The 2-D outline and the 3-D mesh are two views of one board, so the
+      // radius is stated once in millimetres rather than eyeballed as a
+      // fraction on one side and hardcoded on the other.
+      expect(part.shape?.cornerRadiusMm).toBe(MESH_CORNER_RADIUS_MM)
+      expect(cornerRadiusFraction(part.shape, part.dimensions)).toBeCloseTo(
+        MESH_CORNER_RADIUS_MM / BOARD.widthMm,
+        6
+      )
     })
 
     it('ships the generated mesh, declared in millimetres', () => {

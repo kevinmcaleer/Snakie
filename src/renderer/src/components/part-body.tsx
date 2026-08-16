@@ -11,7 +11,7 @@ import {
 } from './part-editor.util'
 import { isPowerLed, powerLedState } from '../../../shared/power-led'
 import type { PowerLedState } from '../../../shared/power-led'
-import { itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
+import { cornerRadiusFraction, itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
@@ -1334,7 +1334,10 @@ export function PartBody({
   }
 
   const usePolygon = part.shape?.kind === 'polygon' && (part.polygon?.length ?? 0) >= 3
-  const cornerR = part.shape?.cornerRadius != null ? part.shape.cornerRadius * Math.min(box.w, box.h) : 8
+  // Honour an explicit 0 (square corners); only fall back when truly unset.
+  // mm wins over the fraction when the part knows its size (#739).
+  const cornerFrac = cornerRadiusFraction(part.shape, part.dimensions)
+  const cornerR = cornerFrac != null ? cornerFrac * Math.min(box.w, box.h) : 8
   const polyPoints = (part.polygon ?? []).map((p) => `${px(p.x)},${py(p.y)}`).join(' ')
 
   const shapeEl = (props: Record<string, unknown>): JSX.Element =>
