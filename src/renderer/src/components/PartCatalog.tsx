@@ -155,36 +155,43 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
           </button>
         </header>
 
-        <PartFacetPanel
-          facets={facets}
-          chips={activeChips(facetSel)}
-          showAllTags={showAllTags}
-          onToggleShowAll={() => setShowAllTags((v) => !v)}
-          onToggle={(axis, value) => setFacetSel((sel) => toggleFacet(sel, axis, value))}
-          onClear={() => setFacetSel(emptySelection())}
-          total={filtered.length}
-        />
+        {/* Sidebar + results, Printables-style: the filters stand in their own
+            column so the grid keeps its full width and the facet list can be as
+            long as it likes without pushing the parts down the page. */}
+        <div className="pcat__body">
+          <aside className="pcat__sidebar">
+            <PartFacetPanel
+              facets={facets}
+              chips={activeChips(facetSel)}
+              showAllTags={showAllTags}
+              onToggleShowAll={() => setShowAllTags((v) => !v)}
+              onToggle={(axis, value) => setFacetSel((sel) => toggleFacet(sel, axis, value))}
+              onClear={() => setFacetSel(emptySelection())}
+              total={filtered.length}
+            />
+          </aside>
 
-        <div className="pcat__shelves">
-          {shelves.length === 0 && <div className="pcat__empty">No parts match “{query}”.</div>}
-          {shelves.map((shelf) => (
-            <section className="pcat__shelf" key={shelf.category}>
-              <h3 className="pcat__shelf-name">
-                {shelf.category}
-                <span className="pcat__shelf-count">{shelf.items.length}</span>
-              </h3>
-              <div className="pcat__grid">
-                {shelf.items.map((item) => (
-                  <CatalogCard
-                    key={keyOf(item)}
-                    item={item}
-                    checked={selected.has(keyOf(item))}
-                    onToggle={() => toggle(item)}
-                  />
-                ))}
-              </div>
-            </section>
-          ))}
+          <div className="pcat__shelves">
+            {shelves.length === 0 && <div className="pcat__empty">No parts match “{query}”.</div>}
+            {shelves.map((shelf) => (
+              <section className="pcat__shelf" key={shelf.category}>
+                <h3 className="pcat__shelf-name">
+                  {shelf.category}
+                  <span className="pcat__shelf-count">{shelf.items.length}</span>
+                </h3>
+                <div className="pcat__grid">
+                  {shelf.items.map((item) => (
+                    <CatalogCard
+                      key={keyOf(item)}
+                      item={item}
+                      checked={selected.has(keyOf(item))}
+                      onToggle={() => toggle(item)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
       </div>
     </div>

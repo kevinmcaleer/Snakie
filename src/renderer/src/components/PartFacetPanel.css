@@ -111,3 +111,33 @@
   font-size: 0.62rem;
   color: var(--text-muted);
 }
+
+/* In the catalog's sidebar the panel is a COLUMN, so each group stacks and its
+   values run full width — a wrapped pill cloud in a 216px rail is unreadable. */
+.pcat__sidebar .pl__facets {
+  gap: 0.9rem;
+}
+
+.pcat__sidebar .pl__facet-list {
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.pcat__sidebar .pl__facet-btn {
+  width: 100%;
+  justify-content: space-between;
+  border-radius: var(--radius);
+  padding: 0.22rem 0.45rem;
+}
+
+/* Tags stay a cloud even in the rail — they are short and there are many. */
+.pcat__sidebar .pl__facet-list--tags {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.22rem;
+}
+
+.pcat__sidebar .pl__facet-list--tags .pl__facet-btn {
+  width: auto;
+  border-radius: 999px;
+}

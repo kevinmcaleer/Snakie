@@ -378,3 +378,46 @@
     }
   }
 }
+
+/* --- Sidebar + results (#740) ---------------------------------------------
+   The filters stand in their own left-hand column, so the results grid keeps
+   its full width and a long facet list scrolls on its own instead of pushing
+   the parts down the page. */
+
+.pcat__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.pcat__sidebar {
+  flex: 0 0 216px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 12px 24px 20px;
+  border-right: 1px solid var(--shellbd, #2c2e33);
+}
+
+/* The shelves already scroll; inside the row they also need to stop the flex
+   default of refusing to shrink below their content. */
+.pcat__body .pcat__shelves {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Narrow windows: the sidebar would leave the grid too little room, so stack
+   it above the results and let it scroll with the page instead. */
+@media (max-width: 900px) {
+  .pcat__body {
+    flex-direction: column;
+  }
+
+  .pcat__sidebar {
+    flex: 0 0 auto;
+    max-height: 30vh;
+    border-right: none;
+    border-bottom: 1px solid var(--shellbd, #2c2e33);
+    padding: 10px 20px;
+  }
+}
