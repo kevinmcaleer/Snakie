@@ -171,10 +171,15 @@
   color: #47524b;
   border-bottom: 1px solid #e2e5df;
 }
+/* A plain BLOCK, not a flex column. `align-items: flex-start` was added here so
+   the heading's underline would hug its text, but it also shrink-wrapped the
+   grid to its content width — so `auto-fill` never saw the shelf's full width
+   and the shelves stopped one or two columns short of the filtered grid, which
+   has no such wrapper. As a block, the grid fills the row on its own and the
+   heading hugs via its own `inline-flex` (which only survives outside a flex
+   parent — as a flex ITEM it would be blockified and stretch). */
 .pcat__shelf {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: block;
 }
 .pcat__shelf-count {
   font-size: 11px;

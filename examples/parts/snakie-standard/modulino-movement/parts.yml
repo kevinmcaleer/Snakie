@@ -21,7 +21,7 @@ properties:
   sensor: LSM6DSOXTR 6-axis IMU
   measures: linear acceleration (g) and angular velocity (dps), each on X/Y/Z
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.0
+version: 0.1.2
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -37,15 +37,15 @@ headers:
         type: gnd
         number: 1
         shape: header
-        x: 0.4061952209472656
+        x: 0.7196906951060892
         y: 0.04990509305968019
       - name: 3v3
         type: pwr
         number: 2
         shape: header
-        x: 0.46689834594726565
-        y: 0.05107317863327973
-      - name: SDA
+        x: 0.7807201038788757
+        y: 0.04990509305968019
+      - name: SDx
         type: io
         number: 3
         capabilities:
@@ -53,17 +53,15 @@ headers:
         signals:
           i2c: SDA
         shape: header
-        x: 0.5301728820800782
-        y: 0.05107317863327973
-      - name: SCL
+        x: 0.40644876191924023
+        y: 0.0495031499210843
+      - name: SCx
         type: io
         number: 4
-        capabilities:
-          - i2c
         signals:
           i2c: SCL
         shape: header
-        x: 0.592655029296875
+        x: 0.46689834594726565
         y: 0.04990509305968019
       - name: SCL
         type: io
@@ -97,8 +95,62 @@ headers:
         shape: header
         x: 0.592655029296875
         y: 0.9511122638369459
+      - name: INT
+        type: io
+        side: rear
+        gpio: 8
+        capabilities:
+          - digital
+        shape: header
+        x: 0.344926011064748
+        y: 0.04743085674683003
+      - name: INT2
+        type: io
+        side: rear
+        gpio: 9
+        capabilities:
+          - digital
+        shape: header
+        x: 0.40644876191924023
+        y: 0.04743085674683003
+      - name: SDO
+        type: io
+        side: rear
+        gpio: 10
+        capabilities:
+          - digital
+        shape: header
+        x: 0.46689834594726565
+        y: 0.04990509305968019
+      - name: CS
+        type: io
+        side: rear
+        gpio: 11
+        capabilities:
+          - digital
+        shape: header
+        x: 0.6568434050670267
+        y: 0.0495031499210843
+      - name: SD0/SA0
+        type: io
+        side: rear
+        gpio: 12
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7196906951060892
+        y: 0.05167601111058056
+      - name: OCSAUX
+        type: io
+        side: rear
+        gpio: 13
+        capabilities:
+          - digital
+        shape: header
+        x: 0.7807201038788757
+        y: 0.05167601111058056
 mountingHoles:
-  - x: 0.10976
+  - x: 0.10309460489908853
     y: 0.18454
     diameter: 1.5
   - x: 0.89024
@@ -107,20 +159,9 @@ mountingHoles:
   - x: 0.89024
     y: 0.81546
     diameter: 1.5
-  - x: 0.10976
+  - x: 0.10309460489908853
     y: 0.81546
     diameter: 1.5
-shapes:
-  - kind: rect
-    x: 0.435
-    y: 0.4
-    label: LSM6DSOX
-    fill: "#2b2f36"
-    stroke: "#14171b"
-    strokeWidth: 1
-    w: 0.13
-    h: 0.2
-    cornerRadius: 2
 rails:
   - name: GND
     pins:
@@ -183,6 +224,14 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.jpg
+rear:
+  image: rear.jpg
+  imageLayer:
+    x: -0.000248616536458357
+    y: 0.0003893618578665048
+    w: 1
+    h: 1
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
