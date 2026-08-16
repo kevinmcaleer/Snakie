@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { connectorSize } from '../src/renderer/src/components/part-body'
+import { cablePlugStyle, connectorSize } from '../src/renderer/src/components/part-body'
 import { connectorDims } from '../src/renderer/src/components/part-editor.util'
 import type { PartConnector } from '../src/shared/part'
 
@@ -125,5 +125,33 @@ describe('QWIIC / JST-SH is datasheet-accurate (#697 follow-up)', () => {
     // spellings must not drift apart again.
     const asJst = mm(conn('jst', 4, 'sh'))
     expect(asJst).toEqual(mm(conn('qwiic', 4)))
+  })
+})
+
+describe('cable plug colours (#…)', () => {
+  it('a QWIIC lead is white — the JST-SH housing it really ships with', () => {
+    // JST's SH datasheet gives the crimp housing as "PBT, natural (white)", and
+    // every QWIIC/STEMMA-QT lead you can buy is exactly that. It used to draw in
+    // the same near-black as a DuPont plug.
+    const q = cablePlugStyle('qwiic')
+    expect(q.shell.toLowerCase()).toBe('#f5f3ee')
+  })
+
+  it('keeps the edge darker than the shell, so a white plug reads on a light board', () => {
+    // Both skins matter: on the skeuomorph (parchment) breadboard a white shell
+    // with a white edge would vanish.
+    const lum = (hex: string): number => {
+      const n = parseInt(hex.slice(1), 16)
+      return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114
+    }
+    for (const kind of ['qwiic', 'grove', 'dupont', 'jst', 'terminal'] as const) {
+      const { shell, edge } = cablePlugStyle(kind)
+      expect(lum(edge), `${kind} edge is darker than its shell`).toBeLessThan(lum(shell))
+    }
+  })
+
+  it('Grove stays off-white and DuPont stays black', () => {
+    expect(cablePlugStyle('grove').shell.toLowerCase()).toBe('#e8e5da')
+    expect(cablePlugStyle('dupont').shell.toLowerCase()).toBe('#22262c')
   })
 })

@@ -983,6 +983,33 @@ function connectorStyle(kind: PartConnector['kind']): {
 }
 
 /**
+ * The palette for the housing on the END OF A LEAD — the plug drawn over the
+ * wires where a cable seats into a socket.
+ *
+ * Separate from {@link connectorStyle} because a plug and the socket it seats
+ * into are genuinely different mouldings: a QWIIC/JST-SH **lead** is white PBT
+ * (JST's SH datasheet: *"PBT, natural (white)"*) while the board header beside
+ * it is a darker moulding, and a DuPont lead is black nylon over a black header.
+ * Grove is off-white at both ends. Sizes still come from the one
+ * {@link connectorSize}, so the two can't disagree about the shape — only the
+ * colour differs, which is what the real parts do.
+ *
+ * `edge` is always darker than `shell` so a white plug still reads against the
+ * light (skeuomorph) breadboard as well as the dark one.
+ */
+export function cablePlugStyle(kind: PartConnector['kind']): { shell: string; edge: string } {
+  switch (kind) {
+    case 'grove':
+      return { shell: '#e8e5da', edge: '#9a968a' }
+    case 'qwiic':
+      // The white JST-SH housing every QWIIC / STEMMA QT lead ships with.
+      return { shell: '#f5f3ee', edge: '#8e8a80' }
+    default:
+      return { shell: '#22262c', edge: '#0b0d10' }
+  }
+}
+
+/**
  * The connector housing's drawn size (px). When `pxPerMm > 0` (the board has real
  * mm dimensions) it's the true physical footprint scaled to the board — a JST/QWIIC
  * then looks life-size next to the pins. Without dimensions it falls back to the

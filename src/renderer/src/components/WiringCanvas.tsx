@@ -29,7 +29,7 @@ import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
-import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
+import { partBodyBox, PartBody, pinOutwardDir, connectorSize, cablePlugStyle } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
 import { bomMarkdown, pinoutMarkdown } from '../../../shared/robot-docs'
 import {
@@ -2812,9 +2812,10 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // one 2.54 mm pitch apart, neighbouring plugs overlapped.
               const w = t.w
               const h = t.h
-              // Grove and its lead are both off-white; QWIIC/JST/DuPont are dark.
-              const shell = kind === 'grove' ? '#e8e5da' : '#22262c'
-              const edge = kind === 'grove' ? '#9a968a' : '#0b0d10'
+              // The lead's own housing colour (shared, so a plug can't drift
+              // from the palette the way its SIZE once did) — a QWIIC lead is
+              // white, Grove off-white, DuPont black.
+              const { shell, edge } = cablePlugStyle(kind)
               return (
                 <g key={`plug${i}`} transform={`rotate(${angle} ${t.cx} ${t.cy})`} style={{ pointerEvents: 'none' }} className="wc__cable-plug">
                   <rect x={t.cx - w / 2} y={t.cy - h / 2} width={w} height={h} rx={h * 0.18} fill={shell} stroke={edge} strokeWidth={1} />
