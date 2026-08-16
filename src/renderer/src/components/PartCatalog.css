@@ -325,6 +325,11 @@
   overflow: hidden;
   white-space: normal;
   overflow-wrap: anywhere;
+  /* ALWAYS two lines high, even for a one-line name. A card whose title wraps
+     would otherwise push its image down past its neighbours', and a grid whose
+     pictures don't share a baseline reads as broken rather than varied.
+     2.5em = 2 lines at the 1.25 line-height above. */
+  min-height: 2.5em;
 }
 .pcat__card-sku {
   flex: 0 0 auto;
