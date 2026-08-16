@@ -338,7 +338,7 @@ const PART_BODY_W = 140
 // (mm → px) relative to the board, so e.g. an HC-SR04 reads larger than a small
 // sensor. The board anchors the scale (it keeps BOARD_BODY_W and defines px/mm);
 // when its real width is unknown we fall back to a Pico-ish default (~51mm → 190px).
-const PX_PER_MM_DEFAULT = 3.7
+export const PX_PER_MM_DEFAULT = 3.7
 // Parts are rendered at a NATIVE reference size then uniformly scaled, so pads,
 // silk text and strokes shrink together (not just positions) — fixing labels that
 // looked huge on a small body. Clamp the final size so an odd dimension can't make
@@ -351,7 +351,7 @@ const PART_MAX_H = 380
 // The largest single body (board OR any placed part) is scaled to fit this px cap;
 // one px/mm is then derived from it so EVERY body — the board included — draws at
 // its real mm size, in the right relative proportion (#637).
-const BODY_CAP_PX = 380
+export const BODY_CAP_PX = 380
 // Pointer travel (screen px) below which a press counts as a click, not a drag.
 const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
@@ -1712,6 +1712,11 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // Use the source's on-screen position (a never-moved part has no x/y of its own).
     const s = subjByKey.get(key)
     const copy: RobotPart = { ...src, id, x: (src.x ?? s?.x ?? 60) + 30, y: (src.y ?? s?.y ?? 90) + 30 }
+    // The clone must NOT inherit the source's Build-body link (#716) — urdfLink
+    // is a 1:1 part↔link identity, and an aliased copy would make a deletion (or
+    // the #717 sync) target the ORIGINAL's 3-D body. The clone starts link-less;
+    // the sync offers it a body of its own.
+    delete copy.urdfLink
     persist({ ...robot, parts: [...robot.parts, copy] })
     setSelectedKey(id)
   }

@@ -134,6 +134,13 @@ export interface WorkspaceStore {
   setActive: (id: string) => void
   closeFile: (id: string) => void
   updateContent: (id: string, content: string) => void
+  /**
+   * Adopt EXTERNALLY-changed file content into a CLEAN open buffer without
+   * marking it dirty (#716: the placement bridge rewrites the project `.urdf`
+   * on disk; a stale buffer's next save would erase the appended links). A
+   * dirty buffer is the user's — the reducer refuses to touch it.
+   */
+  reloadContent: (id: string, content: string) => void
   saveFile: (id: string) => Promise<void>
   newFile: () => void
   /**
@@ -168,6 +175,7 @@ type Action =
   | { type: 'setActive'; id: string }
   | { type: 'close'; id: string }
   | { type: 'updateContent'; id: string; content: string }
+  | { type: 'reloadContent'; id: string; content: string }
   | { type: 'markSaved'; id: string; content: string }
   | { type: 'savedAs'; id: string; path: string; name: string; content: string }
   | { type: 'add'; file: OpenFile }
@@ -222,6 +230,17 @@ function reducer(state: State, action: Action): State {
         ...state,
         openFiles: state.openFiles.map((f) =>
           f.id === action.id ? { ...f, content: action.content, dirty: true } : f
+        )
+      }
+    case 'reloadContent':
+      // An external writer changed the file on disk and the buffer is CLEAN —
+      // adopt the new text, still clean. A dirty buffer is the user's and is
+      // never overwritten here (that conflict stays visible to them instead of
+      // being silently resolved either way).
+      return {
+        ...state,
+        openFiles: state.openFiles.map((f) =>
+          f.id === action.id && !f.dirty ? { ...f, content: action.content, dirty: false } : f
         )
       }
     case 'markSaved':
@@ -300,6 +319,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
 
   const updateContent = useCallback((id: string, content: string): void => {
     dispatch({ type: 'updateContent', id, content })
+  }, [])
+
+  const reloadContent = useCallback((id: string, content: string): void => {
+    dispatch({ type: 'reloadContent', id, content })
   }, [])
 
   // `saveFile` needs the current file list; read it from a ref-like closure via
@@ -508,6 +531,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       setActive,
       closeFile,
       updateContent,
+      reloadContent,
       saveFile,
       newFile,
       openBuffer,
@@ -524,6 +548,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }): JSX.El
       setActive,
       closeFile,
       updateContent,
+      reloadContent,
       saveFile,
       newFile,
       openBuffer,

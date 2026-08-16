@@ -42,6 +42,8 @@ export function RobotDockPanel({
   const [urdfPath, setUrdfPath] = useState<string | null>(null)
   // Bumped after we create/link a robot, to re-resolve the project URDF.
   const [reloadNonce, setReloadNonce] = useState(0)
+  // Bumped when another window rewrites the .urdf on disk (#716).
+  const [urdfNonce, setUrdfNonce] = useState(0)
 
   // Show a transient message in the status bar so linking/creating a robot — which
   // is otherwise invisible — is clear to the user. Auto-clears after a few seconds
@@ -90,7 +92,12 @@ export function RobotDockPanel({
     return () => {
       live = false
     }
-  }, [currentFolder, reloadNonce])
+  }, [currentFolder, reloadNonce, urdfNonce])
+
+  // Re-read the URDF when ANY window's placement bridge rewrites it on disk
+  // (#716) — without this, a part added in Electronics reached an open Build
+  // view only after a remount / workspace switch.
+  useEffect(() => window.api.robot.onUrdfChanged(() => setUrdfNonce((n) => n + 1)), [])
 
   // Pop the robot out full-screen (the Pose tool + assembly): a saved project
   // URDF opens as its file; the bundled demo arm opens as a buffer. Stay in Robot

@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Every part you place now appears in the Build workspace.** (#716, epic #720)
+  Previously only a part shipping a 3-D mesh reached the Robot View — which was
+  one part in the whole standard library — and batch-added parts never did. Now
+  a part without a mesh gets a **footprint box**: its real dimensions extruded
+  to a family-tuned height in a desaturated take on its PCB colour, so the 3-D
+  scene resembles your robot and centre-of-mass geometry stays meaningful. New
+  parts land at their breadboard position (mirrored onto the ground plane), a
+  part that declares its weight arrives with real mass in the model, and an open
+  Build view picks all this up live instead of waiting for a remount. Behind the
+  scenes each placed part now remembers which 3-D link is its (`urdfLink`) — the
+  spine the coming sync and unified-hierarchy work builds on.
+
+### Added
 - **Author a part's drivers in the Part Editor.** (#655) A part that needs a
   MicroPython file on the board — what makes the Driver Install prompt fire when
   it's placed — could until now only say so via hand-edited `parts.yml`, so a

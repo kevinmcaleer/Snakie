@@ -49,6 +49,8 @@ function coercePart(raw: unknown): RobotPart | null {
     out.mountedOn = mountedOn
     out.mount = mount
   }
+  const urdfLink = str(r.urdfLink)
+  if (urdfLink) out.urdfLink = urdfLink
   return out
 }
 
@@ -96,6 +98,7 @@ export function robotToYaml(def: RobotDefinition): string {
       o.mountedOn = p.mountedOn
       o.mount = p.mount
     }
+    if (p.urdfLink) o.urdfLink = p.urdfLink
     return o
   })
   obj.connections = (def.connections ?? []).map((c) => {

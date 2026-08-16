@@ -31,9 +31,8 @@ import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail 
 import { PartEditor } from './components/PartEditor'
 import { preloadPartImages } from './components/part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
-import { readRobotModel } from '../../shared/krf'
-import { attachPartMesh } from './components/robot-part-mesh'
-import { jointNames, jointDisplayLimits } from './components/robot-assembly'
+import { addPartsToProject, offerLibraryInstall } from './components/project-parts'
+import { movableJointNames, jointDisplayLimits } from './components/robot-assembly'
 import type {
   BoardSourcePayload,
   PartDefinition,
@@ -185,6 +184,9 @@ function BoardWindowApp(): JSX.Element {
   // scanner adding a matched part to the project (#214).
   const [robotNonce, setRobotNonce] = useState(0)
   useEffect(() => window.api.robot.onChanged(() => setRobotNonce((n) => n + 1)), [])
+  // A placement bridge rewrote the .urdf (#716) — re-read so the servo "drives
+  // joint" picker sees links/joints added from another window too.
+  useEffect(() => window.api.robot.onUrdfChanged(() => setRobotNonce((n) => n + 1)), [])
   useEffect(() => {
     let live = true
     const startSeq = saveSeqRef.current
@@ -229,7 +231,7 @@ function BoardWindowApp(): JSX.Element {
       .readFile(`${folder}/${urdfPath}`)
       .then((content) => {
         if (!live) return
-        setJoints(jointNames(content))
+        setJoints(movableJointNames(content))
         setJointLimits(jointDisplayLimits(content))
       })
       .catch(() => {
@@ -243,62 +245,17 @@ function BoardWindowApp(): JSX.Element {
     }
   }, [folder, urdfPath, robotNonce])
 
-  // Append a library part to the project (robot.yml), with a unique instance id.
+  // Append a library part to the project — the shared sequence (#716) both board
+  // hosts use: unique ids ('board' reserved), robot.yml saved synchronously,
+  // every part given its Build body (mesh or footprint box). The urdfLink
+  // record-back happens in MAIN (robot:patchPartLinks) against the file's
+  // current state, so this window holds no late-firing whole-document save.
   const addToProject = useCallback(
     (libraryId: string, part: PartDefinition, pos?: { x: number; y: number }): void => {
-      // Reserve 'board' (the MCU's subject key on the wiring canvas) so a part can
-      // never collide with it and shadow the microcontroller's endpoints.
-      const ids = new Set(['board', ...robot.parts.map((p) => p.id)])
-      let id = part.id
-      let n = 2
-      while (ids.has(id)) id = `${part.id}${n++}`
-      // A drag-drop carries a canvas position (#159); a click-add leaves x/y unset
-      // so the canvas auto-lays the part out.
-      const placed = pos ? { x: Math.round(pos.x), y: Math.round(pos.y) } : {}
-      const withPart: RobotDefinition = {
-        ...robot,
-        parts: [...robot.parts, { id, lib: libraryId, part: part.id, label: part.name, ...placed }]
-      }
-      if (part.mesh && folder) {
-        // #406: a mesh-linked part ALSO drops its STL into the project URDF (creating +
-        // linking one if absent). Save the part + link SYNCHRONOUSLY (so a rapid second
-        // drop / cross-window reload can't clobber it), THEN write the mesh into the
-        // .urdf. It shows in the Robot View the next time that URDF is loaded (e.g. on
-        // switching to Robot mode); an already-open Robot View won't refresh live.
-        const existingUrdf = readRobotModel(robot)?.urdf
-        const urdfName = existingUrdf || 'robot.urdf'
-        saveRobot(
-          existingUrdf
-            ? withPart
-            : { ...withPart, robot: { ...(withPart.robot ?? {}), version: 1, urdf: urdfName } }
-        )
-        void attachPartMesh(folder, urdfName, libraryId, part).catch(() => undefined)
-      } else {
-        saveRobot(withPart)
-      }
-      // #166: offer to install the part's linked MicroPython library via mip —
-      // but ONLY when the part ships NO bundled driver files. When it declares
-      // `drivers` (the Driver Install banner copies those to the board OFFLINE), a
-      // separate mip offer is redundant and, if the url is stale/private, fails
-      // confusingly (the SG90 part pointed `library.url` at a non-existent github
-      // repo → `OSError(-6)`). Let the banner own the install in that case.
-      const lib = part.library
-      if (lib?.url && !(part.drivers && part.drivers.length > 0)) {
-        const mod = lib.module || part.name
-        if (window.confirm(`Install the "${mod}" MicroPython library for "${part.name}" onto the connected board?`)) {
-          void window.api.packages
-            .install(lib.url)
-            .then((r) => {
-              if (!r.ok) window.alert(`Couldn't install ${mod}.\n${r.log || 'Open the Packages panel for details.'}`)
-              // Files landed on the board — the main window's Device Files tree
-              // + library banners refresh off this broadcast.
-              else window.api.modules.notifyChanged()
-            })
-            .catch(() => window.alert(`Couldn't install ${mod} — is a board connected?`))
-        }
-      }
+      addPartsToProject({ robot, folder, libraries, saveRobot }, [{ libraryId, part, pos }])
+      offerLibraryInstall(part)
     },
-    [robot, saveRobot, folder]
+    [robot, saveRobot, folder, libraries]
   )
 
   // Esc backs out one level at a time (so a stray Esc / a focused input's Esc

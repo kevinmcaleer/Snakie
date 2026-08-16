@@ -146,7 +146,15 @@ export function meshImportScale(
 
 export function addMeshLink(
   urdf: string,
-  opts: { meshRel: string; linkBase: string; scale?: number; parent?: string }
+  opts: {
+    meshRel: string
+    linkBase: string
+    scale?: number
+    parent?: string
+    /** Joint origin in metres (#716: the mirrored board position). Absent ⇒ the
+     *  legacy X-stagger, so imports still land beside the base, not on it. */
+    at?: [number, number, number]
+  }
 ): { urdf: string; link: string } {
   // Attach under the UI's chosen base if given (it can differ from the doc-first
   // root in a transitional multi-root URDF); else the sole/first root.
@@ -156,18 +164,69 @@ export function addMeshLink(
   const s = opts.scale && opts.scale !== 1 ? ` scale="${fmtNum(opts.scale)} ${fmtNum(opts.scale)} ${fmtNum(opts.scale)}"` : ''
   // Stagger each new part along X (by the current link count) so imports land beside
   // the base rather than co-located at (0,0,0) where they'd look fused.
-  const stagger = fmtNum(0.08 * parseAssembly(urdf).length)
+  const origin = opts.at ?? [0.08 * parseAssembly(urdf).length, 0, 0]
   const joint = parent
     ? `  <joint name="${name}_joint" type="fixed">\n` +
       `    <parent link="${parent}"/>\n` +
       `    <child link="${name}"/>\n` +
-      `    <origin xyz="${stagger} 0 0" rpy="0 0 0"/>\n` +
+      `    <origin xyz="${fmtVec(origin)}" rpy="0 0 0"/>\n` +
       `  </joint>\n`
     : '' // first link of an empty URDF is the root — no joint
   const block =
     `  <link name="${name}">\n` +
     `    <visual>\n` +
     `      <geometry><mesh filename="${opts.meshRel}"${s}/></geometry>\n` +
+    `    </visual>\n` +
+    `  </link>\n` +
+    joint
+  const idx = urdf.lastIndexOf('</robot>')
+  const next = idx < 0 ? `${urdf.trimEnd()}\n${block}` : urdf.slice(0, idx) + block + urdf.slice(idx)
+  return { urdf: next, link: name }
+}
+
+/**
+ * Append a FOOTPRINT-BOX link (#716, epic #720): the Build-workspace stand-in for
+ * a part with no mesh — which is most of the library (#715: 37/38). A `<box>`
+ * primitive sized from the part's real 2-D dimensions keeps CoM and
+ * support-polygon geometry meaningful; the per-visual `<material>` colour keeps
+ * the scene recognisable (a desaturated take on the part's PCB colour, so it
+ * reads as a stand-in next to a real mesh). The box visual is raised by half its
+ * height so the LINK origin sits at the part's base — a link placed at z=0 rests
+ * ON the ground plane instead of being buried waist-deep in it.
+ *
+ * Same joint rules as {@link addMeshLink}: every non-first link gets a fixed
+ * joint (rootless links fuse in urdf-loader), `at` places it, else the stagger.
+ */
+export function addBoxLink(
+  urdf: string,
+  opts: {
+    linkBase: string
+    /** Box size in METRES: [x (width), y (depth), z (height)]. */
+    size: [number, number, number]
+    /** Visual colour, 0..1 rgb. Absent ⇒ a neutral grey. */
+    rgb?: [number, number, number]
+    parent?: string
+    /** Joint origin in metres; absent ⇒ the legacy X-stagger. */
+    at?: [number, number, number]
+  }
+): { urdf: string; link: string } {
+  const parent = opts.parent ?? rootLink(urdf)
+  const name = uniqueLinkName(urdf, opts.linkBase)
+  const [r, g, b] = opts.rgb ?? [0.55, 0.55, 0.55]
+  const origin = opts.at ?? [0.08 * parseAssembly(urdf).length, 0, 0]
+  const joint = parent
+    ? `  <joint name="${name}_joint" type="fixed">\n` +
+      `    <parent link="${parent}"/>\n` +
+      `    <child link="${name}"/>\n` +
+      `    <origin xyz="${fmtVec(origin)}" rpy="0 0 0"/>\n` +
+      `  </joint>\n`
+    : ''
+  const block =
+    `  <link name="${name}">\n` +
+    `    <visual>\n` +
+    `      <origin xyz="0 0 ${fmtNum(opts.size[2] / 2)}" rpy="0 0 0"/>\n` +
+    `      <geometry><box size="${fmtVec(opts.size)}"/></geometry>\n` +
+    `      <material name="${name}_placeholder"><color rgba="${fmtNum(r)} ${fmtNum(g)} ${fmtNum(b)} 1"/></material>\n` +
     `    </visual>\n` +
     `  </link>\n` +
     joint
@@ -750,6 +809,25 @@ export function jointNames(urdf: string): string[] {
   while ((m = re.exec(urdf))) {
     const nm = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
     if (nm) out.push(nm)
+  }
+  return out
+}
+
+/**
+ * Joint names EXCLUDING `fixed` joints — the ones a servo can actually drive.
+ * Since #716 every placed part carries a fixed placement joint
+ * (`<Part>_joint`), so feeding {@link jointNames} to the servo "drives joint"
+ * picker floods it with unmovable entries — and binding one silently does
+ * nothing at runtime, because a fixed joint has no value to set. Pure.
+ */
+export function movableJointNames(urdf: string): string[] {
+  const re = /<joint\b([^>]*)>/gi
+  const out: string[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(urdf))) {
+    const nm = /\bname\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    const type = /\btype\s*=\s*"([^"]+)"/.exec(m[1])?.[1]
+    if (nm && type?.toLowerCase() !== 'fixed') out.push(nm)
   }
   return out
 }

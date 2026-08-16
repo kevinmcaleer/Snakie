@@ -1047,6 +1047,27 @@ const robot = {
     const listener = (): void => cb()
     ipcRenderer.on('robot:didChange', listener)
     return () => ipcRenderer.removeListener('robot:didChange', listener)
+  },
+  /** Record the URDF link a placement created onto its robot.yml part row
+   *  (#716) — a targeted merge done in MAIN against the file's current state,
+   *  so a slow placement can never revert another window's concurrent edits.
+   *  Resolves {ok,error}; a part deleted mid-flight is silently skipped. */
+  patchPartLinks: (
+    folder: string | undefined,
+    links: { partId: string; link: string }[]
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('robot:patchPartLinks', { folder, links }),
+  /** Announce that the project `.urdf` was rewritten on disk (#716 — the
+   *  placement bridge appending a part's Build body). Fans out to EVERY window
+   *  as `onUrdfChanged`, so an open Build view re-reads instead of showing the
+   *  new part only after a remount. */
+  notifyUrdfChanged: (): void => ipcRenderer.send('robot:urdfChanged'),
+  /** Subscribe to on-disk URDF rewrites (from any window). Returns an
+   *  unsubscribe. */
+  onUrdfChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('robot:didUrdfChange', listener)
+    return () => ipcRenderer.removeListener('robot:didUrdfChange', listener)
   }
 }
 

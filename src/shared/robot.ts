@@ -36,6 +36,21 @@ export interface RobotPart {
   /** Which mount of the carrier it's seated in (that `PartMount.id`). Only
    *  meaningful alongside {@link mountedOn}. */
   mount?: string
+  /**
+   * The URDF link this part's Build-workspace body lives in (#716, epic #720) —
+   * the explicit part↔link reference #626 asked for. Recorded by the placement
+   * bridge when it appends the link (the part's mesh, or its footprint-box
+   * stand-in); absent on legacy projects, where consumers fall back to the old
+   * sanitised-name match. The link name is the identity used by servoJointMap /
+   * linkMass / contacts, so this field is what lets a part deletion find its 3-D
+   * counterpart instead of stranding it.
+   *
+   * MAY DANGLE: a Build-side link rename doesn't cascade here (the same
+   * staleness class as servoJointMap/linkMass keys). Consumers must treat a
+   * urdfLink that names no existing link exactly like an ABSENT one — fall back
+   * to the name match, or let the #717 sync flag it — never as proof of a body.
+   */
+  urdfLink?: string
 }
 
 /** The electrical net of a wire — drives its colour. */
