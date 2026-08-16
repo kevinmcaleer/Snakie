@@ -514,3 +514,38 @@
     animation: none;
   }
 }
+
+/* --- closing: the same move, backwards -------------------------------------
+   `forwards` matters: the element stays mounted for one more frame after the
+   animation ends (the caller unmounts on `animationend`), and without it the
+   view would snap back to full size for that frame — a visible flash at the end
+   of every close. Slightly quicker than the open, as a dismissal should be. */
+.pdt.is-closing {
+  transform-origin: var(--pdt-ox, 50%) var(--pdt-oy, 50%);
+  animation: pdt-shrink 200ms cubic-bezier(0.4, 0, 0.7, 0.3) forwards;
+  pointer-events: none;
+}
+
+@keyframes pdt-shrink {
+  from {
+    transform: none;
+    opacity: 1;
+    border-radius: 0;
+  }
+  /* Hold opacity most of the way: fading early makes it dissolve rather than
+     retreat, and the eye loses where it went. */
+  55% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(0.14);
+    opacity: 0;
+    border-radius: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdt.is-closing {
+    animation: none;
+  }
+}

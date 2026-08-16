@@ -60,6 +60,11 @@ export interface PartDetailsViewProps {
    * than one that flies in from an arbitrary corner.
    */
   origin?: { x: number; y: number } | null
+  /** Play the closing animation. The caller keeps this mounted until it hears
+   *  {@link onClosed} — unmounting on the click would leave nothing to animate. */
+  closing?: boolean
+  /** The shrink has finished; safe to unmount. */
+  onClosed?: () => void
 }
 
 const PREVIEW_LABELS: Record<PartPreviewMode, string> = {
@@ -87,7 +92,9 @@ export function PartDetailsView({
   selected,
   onToggleSelected,
   onClose,
-  origin
+  origin,
+  closing,
+  onClosed
 }: PartDetailsViewProps): JSX.Element {
   // The parts folder is only knowable from the main process, and only the desktop
   // has one — the web build reports `''`, which resolves every mesh to nothing.
@@ -123,7 +130,12 @@ export function PartDetailsView({
 
   return (
     <section
-      className={`pdt${origin ? ' is-growing' : ''}`}
+      className={`pdt${closing ? ' is-closing' : origin ? ' is-growing' : ''}`}
+      // Only the ROOT's own animation counts: children animate too (the coin
+      // flip, the tabs), and their events bubble up here.
+      onAnimationEnd={(e) => {
+        if (closing && e.target === e.currentTarget) onClosed?.()
+      }}
       // The origin rides in as custom properties so the keyframes stay in CSS —
       // only the ONE number that can't be known until the click is passed in.
       style={

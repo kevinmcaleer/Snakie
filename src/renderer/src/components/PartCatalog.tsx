@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
 import { groupByCategory } from './part-categories'
 import { PartFacetPanel } from './PartFacetPanel'
 import {
@@ -55,10 +55,35 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   // relative to the panel. Kept beside `details` rather than inside it so the
   // existing reads stay put; it is presentation, not identity.
   const [detailsOrigin, setDetailsOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the view has to OUTLIVE the click that
+  // dismissed it — unmount on click and there is nothing left to animate.
+  const [closingDetails, setClosingDetails] = useState(false)
   const openDetails = (item: CatalogItem, from: { x: number; y: number } | null): void => {
+    setClosingDetails(false)
     setDetailsOrigin(from)
     setDetails(item)
   }
+  const dropDetails = useCallback((): void => {
+    setClosingDetails(false)
+    setDetails(null)
+  }, [])
+  // Insurance. The unmount hangs off `animationend`, and if that never arrives —
+  // the element hidden mid-flight, a browser quirk — the details would be stuck
+  // on screen AND unclickable (the closing state takes pointer events off). A
+  // dismissal must never be able to strand the user, so time it out regardless.
+  useEffect(() => {
+    if (!closingDetails) return
+    const t = setTimeout(dropDetails, 450)
+    return () => clearTimeout(t)
+  }, [closingDetails, dropDetails])
+
+  const closeDetails = useCallback((): void => {
+    // Nothing to shrink back INTO without an origin, and a stated preference for
+    // less motion means go straight there.
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!detailsOrigin || still) dropDetails()
+    else setClosingDetails(true)
+  }, [detailsOrigin, dropDetails])
 
   // De-dupe the libraries by id, and list LOCAL (user) libraries first so their
   // part wins a duplicate-id tie in the "All libraries" view.
@@ -74,12 +99,12 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return
-      if (details) setDetails(null)
+      if (details) closeDetails()
       else onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, details])
+  }, [onClose, details, closeDetails])
 
   // Every part across every library, flattened, carrying its library id + the
   // family/name the category grouping reads.
@@ -248,7 +273,9 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
             selected={selected.has(keyOf(details))}
             onToggleSelected={() => toggle(details)}
             origin={detailsOrigin}
-            onClose={() => setDetails(null)}
+            closing={closingDetails}
+            onClosed={dropDetails}
+            onClose={closeDetails}
           />
         )}
       </div>
