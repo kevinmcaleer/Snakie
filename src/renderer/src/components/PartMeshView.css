@@ -1,0 +1,61 @@
+/* A part's 3-D model (#748) — the small turntable inside the details view's stage.
+   Unique `pmv__` BEM prefix.
+
+   The canvas is transparent (`alpha: true`), so the stage it sits in supplies the
+   background and this reads identically wherever it is mounted — no colour of its
+   own to get a theme wrong. */
+
+.pmv {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
+.pmv__stage {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  cursor: grab;
+}
+.pmv__stage:active {
+  cursor: grabbing;
+}
+
+.pmv__stage canvas {
+  display: block;
+}
+
+/* Loading / failure note, centred over the stage. Light ink: a part is always
+   staged on the app's DARK board mat (`--bc-mat`), in both themes. */
+.pmv__note {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  text-align: center;
+  font-size: 13px;
+  color: #aeb4bd;
+  pointer-events: none;
+}
+.pmv__note--error {
+  color: #e0a19b;
+}
+
+/* How to drive it — quiet, and only once there is something to drive. */
+.pmv__hint {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  padding: 3px 10px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: #cfd6dd;
+  background: rgba(8, 11, 13, 0.62);
+  border-radius: 999px;
+  pointer-events: none;
+}

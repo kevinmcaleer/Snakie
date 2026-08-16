@@ -9,6 +9,7 @@ import {
   toggleFacet
 } from './part-facets'
 import { useCoinFlip } from '../hooks/useCoinFlip'
+import { PartDetailsView } from './PartDetailsView'
 import { partHasRearImage } from '../../../shared/part'
 import type { PartDefinition, PartSide } from '../../../shared/part'
 import type { PartLibraryWithParts } from '../../../preload/index.d'
@@ -45,6 +46,11 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   const [query, setQuery] = useState('')
   // Which library to show — 'all' (de-duped) or a single library id.
   const [libraryId, setLibraryId] = useState<string>('all')
+  // The part whose full details are open (#748), or null for the grid. A DETOUR:
+  // the details render OVER the grid, which stays mounted, so closing them
+  // restores the selection, the filters and the scroll position by never having
+  // torn them down.
+  const [details, setDetails] = useState<CatalogItem | null>(null)
 
   // De-dupe the libraries by id, and list LOCAL (user) libraries first so their
   // part wins a duplicate-id tie in the "All libraries" view.
@@ -54,14 +60,18 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
     return [...byId.values()].sort((a, b) => (a.source === 'local' ? 0 : 1) - (b.source === 'local' ? 0 : 1))
   }, [libraries])
 
-  // Esc closes the catalog.
+  // Esc backs out one step: out of a part's details first, then the catalog. Esc
+  // from the details view has to land you back in the grid you were browsing —
+  // closing both would throw away the selection you opened the details to make.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.key === 'Escape') onClose()
+      if (e.key !== 'Escape') return
+      if (details) setDetails(null)
+      else onClose()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  }, [onClose, details])
 
   // Every part across every library, flattened, carrying its library id + the
   // family/name the category grouping reads.
@@ -192,6 +202,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
                     item={item}
                     checked={selected.has(keyOf(item))}
                     onToggle={() => toggle(item)}
+                    onOpen={() => setDetails(item)}
                     showType
                   />
                 ))}
@@ -211,6 +222,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
                       item={item}
                       checked={selected.has(keyOf(item))}
                       onToggle={() => toggle(item)}
+                      onOpen={() => setDetails(item)}
                     />
                   ))}
                 </div>
@@ -218,6 +230,18 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
               ))}
           </div>
         </div>
+
+        {/* A part's full details, over the grid rather than instead of it (#748). */}
+        {details && (
+          <PartDetailsView
+            key={keyOf(details)}
+            libraryId={details.libraryId}
+            part={details.part}
+            selected={selected.has(keyOf(details))}
+            onToggleSelected={() => toggle(details)}
+            onClose={() => setDetails(null)}
+          />
+        )}
       </div>
     </div>
   )
@@ -228,11 +252,14 @@ function CatalogCard({
   item,
   checked,
   onToggle,
+  onOpen,
   showType = false
 }: {
   item: CatalogItem
   checked: boolean
   onToggle: () => void
+  /** Open this part's full details (#748) — the hover disclosure. */
+  onOpen: () => void
   /** Show the part's type on the card. Set in the FLAT (filtered) grid, where
    *  there is no shelf heading saying it (#747). */
   showType?: boolean
@@ -273,6 +300,25 @@ function CatalogCard({
             {(part.name || '?').slice(0, 2).toUpperCase()}
           </span>
         )}
+        {/* The disclosure (#748): revealed on hover, its OWN hit area. A click here
+            must open the details and NOT tick the card — it is nested in the label
+            that IS the checkbox, so it stops the event dead rather than trusting
+            the browser's "interactive descendant" rule to do it. */}
+        <button
+          type="button"
+          className="pcat__more"
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onOpen()
+          }}
+          title={`More about ${part.name}`}
+          aria-label={`More about ${part.name}`}
+        >
+          <svg viewBox="0 0 24 24" className="pcat__more-i" aria-hidden="true" focusable="false">
+            <path d="M6 9l6 7 6-7z" fill="currentColor" />
+          </svg>
+        </button>
       </div>
       <div className="pcat__card-body">
         {showType && part.family && <div className="pcat__card-type">{part.family}</div>}

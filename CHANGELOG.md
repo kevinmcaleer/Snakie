@@ -7,6 +7,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A full-sized part details view in the parts catalog.** (#748) A catalog card
+  has room for a picture, a name and one truncated line; everything else a part
+  knows was either buried in the narrow docked panel or not surfaced anywhere.
+  Hovering a card now reveals a **disclosure** on its picture, and clicking it
+  opens the part full-screen: the board drawn large with its pinout labels (and
+  the flip, for a two-sided part), its schematic, and — for a part that ships an
+  STL — a **3-D model** you can orbit. Beside it: manufacturer, part number,
+  package, voltage, real dimensions in millimetres, mass, I²C addresses and the
+  author's own spec rows; what driver it installs and from where; the modules it
+  works with; its links; and its bundled `help.md`, rendered. The disclosure has
+  its own hit area, so opening the details never ticks the card, and closing
+  (✕ or Esc) lands you back in the grid with the selection and filters exactly
+  as you left them — a part can also be ticked into the selection from the
+  details view itself. A panel with nothing to say isn't drawn at all, and the
+  3-D tab appears only when the model can actually be loaded, rather than
+  offering an empty frame.
 - **Author a part's drivers in the Part Editor.** (#655) A part that needs a
   MicroPython file on the board — what makes the Driver Install prompt fire when
   it's placed — could until now only say so via hand-edited `parts.yml`, so a
