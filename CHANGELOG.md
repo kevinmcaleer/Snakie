@@ -21,9 +21,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   into subtly different boards.
 - **The full-screen catalog, and a part's details, grow out of the control that
   opened them.** Pressing the expand button or a card's disclosure scales the new
-  view out of that button rather than replacing the screen, and closing the
-  details runs it backwards — so it reads as a detour you can back out of, with
-  your place in the grid still visible. Honours `prefers-reduced-motion`.
+  view out of that button rather than replacing the screen, and closing either
+  one runs it backwards, shrinking back into the control it came from — so both
+  read as a detour you can back out of, with your place still visible behind.
+  Honours `prefers-reduced-motion`.
 - **Rotate a part 90° in the Part Editor.** (#749) Two buttons on the canvas
   toolbar turn the whole board — pads, holes, connectors, components, labels,
   outline and both photos — so a board photographed portrait can be re-authored

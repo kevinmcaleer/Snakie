@@ -38,13 +38,18 @@ export interface PartCatalogProps {
   /** Viewport centre of the control that opened the catalog, so it can grow out
    *  of it. Absent means no animation rather than one from an arbitrary corner. */
   origin?: { x: number; y: number } | null
+  /** Play the closing animation. The caller keeps this mounted until it hears
+   *  {@link onClosed} — unmounting on the click leaves nothing to animate. */
+  closing?: boolean
+  /** The shrink has finished; safe to unmount. */
+  onClosed?: () => void
   /** Add every selected part to the project in one batch. */
   onAddMany: (items: CatalogItem[]) => void
 }
 
 const keyOf = (i: CatalogItem): string => `${i.libraryId}::${i.part.id}`
 
-export function PartCatalog({ libraries, onClose, onAddMany, origin }: PartCatalogProps): JSX.Element {
+export function PartCatalog({ libraries, onClose, onAddMany, origin, closing, onClosed }: PartCatalogProps): JSX.Element {
   // The panel is inset from the viewport, so the button's viewport position has
   // to be re-expressed in the PANEL's own box before it can be a transform-origin.
   // Measured rather than assumed: the inset is a CSS margin, and reading it back
@@ -179,7 +184,15 @@ export function PartCatalog({ libraries, onClose, onAddMany, origin }: PartCatal
   return (
     <div className="pcat" role="dialog" aria-modal="true" aria-label="Parts catalog">
       <div className="pcat__backdrop" onClick={onClose} aria-hidden />
-      <div className={`pcat__panel${origin ? ' is-growing' : ''}`} ref={panelRef}>
+      <div
+        className={`pcat__panel${closing ? ' is-closing' : origin ? ' is-growing' : ''}`}
+        ref={panelRef}
+        // Only the panel's OWN animation ends the close: the details view and
+        // the card flips animate inside it and bubble their events up here.
+        onAnimationEnd={(e) => {
+          if (closing && e.target === e.currentTarget) onClosed?.()
+        }}
+      >
         <header className="pcat__head">
           <span className="pcat__title">Parts Catalog</span>
           {libs.length > 1 && (

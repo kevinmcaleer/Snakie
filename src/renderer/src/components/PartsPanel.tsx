@@ -151,6 +151,26 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   // Viewport centre of the button that opened the catalog, so the panel can grow
   // out of it the way a part's details grow out of their disclosure (#748).
   const [catalogOrigin, setCatalogOrigin] = useState<{ x: number; y: number } | null>(null)
+  // Closing runs the grow backwards, so the catalog has to outlive the click
+  // that dismissed it.
+  const [catalogClosing, setCatalogClosing] = useState(false)
+  const dropCatalog = useCallback((): void => {
+    setCatalogClosing(false)
+    setCatalogOpen(false)
+  }, [])
+  const closeCatalog = useCallback((): void => {
+    const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (!catalogOrigin || still) dropCatalog()
+    else setCatalogClosing(true)
+  }, [catalogOrigin, dropCatalog])
+  // Insurance: the unmount hangs off an event, and a closing panel takes pointer
+  // events off. If that event never arrives the catalog would be stuck on screen
+  // AND unclickable, so time it out regardless.
+  useEffect(() => {
+    if (!catalogClosing) return
+    const t = setTimeout(dropCatalog, 450)
+    return () => clearTimeout(t)
+  }, [catalogClosing, dropCatalog])
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -509,7 +529,9 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         <PartCatalog
           libraries={libraries}
           origin={catalogOrigin}
-          onClose={() => setCatalogOpen(false)}
+          closing={catalogClosing}
+          onClosed={dropCatalog}
+          onClose={closeCatalog}
           onAddMany={onAddManyToProject}
         />
       )}
