@@ -6,16 +6,7 @@ import { partHasRear } from '../../../shared/part'
 import type { PartSide } from '../../../shared/part'
 import { PartSchematicView } from './PartSchematicView'
 import { groupByCategory } from './part-categories'
-import {
-  activeChips,
-  applyFilters,
-  buildFacets,
-  emptySelection,
-  primaryTagCount,
-  toggleFacet,
-  type FacetSelection,
-  type Facets
-} from './part-facets'
+import { applyFilters, emptySelection } from './part-facets'
 import { PartCatalog } from './PartCatalog'
 import { encodePartDrag } from './part-drag'
 import { availableToInstall } from '../../../shared/part-registry'
@@ -153,115 +144,6 @@ export interface PartsPanelProps {
   /** Batch add from the full-screen catalog (#613). When provided, the panel
    *  header shows a button that expands the library into the catalog. */
   onAddManyToProject?: (items: { libraryId: string; part: PartDefinition }[]) => void
-}
-
-/**
- * The catalog's filter panel (#740): type and manufacturer as proper facets,
- * tags as a ranked secondary layer with the long tail behind a disclosure.
- *
- * Counts are computed against the OTHER active filters, so a zero would be a
- * dead end — those values are disabled rather than offered. Active filters
- * appear as removable chips because a short grid with no visible reason is the
- * thing that makes people think the library is broken.
- */
-function PartFacetPanel({
-  facets,
-  chips,
-  showAllTags,
-  onToggleShowAll,
-  onToggle,
-  onClear,
-  total
-}: {
-  facets: Facets
-  chips: { axis: keyof FacetSelection; value: string }[]
-  showAllTags: boolean
-  onToggleShowAll: () => void
-  onToggle: (axis: keyof FacetSelection, value: string) => void
-  onClear: () => void
-  total: number
-}): JSX.Element | null {
-  const primary = primaryTagCount(facets.tags)
-  const tags = showAllTags ? facets.tags : facets.tags.slice(0, primary)
-  const axis = (
-    label: string,
-    key: keyof FacetSelection,
-    values: typeof facets.families
-  ): JSX.Element | null =>
-    values.length < 2 ? null : (
-      <div className="pl__facet">
-        <div className="pl__facet-head">{label}</div>
-        <ul className="pl__facet-list" role="list">
-          {values.map((v) => (
-            <li key={v.value}>
-              <button
-                type="button"
-                className={`pl__facet-btn${v.selected ? ' is-on' : ''}`}
-                disabled={!v.selected && v.count === 0}
-                aria-pressed={v.selected}
-                onClick={() => onToggle(key, v.value)}
-              >
-                <span className="pl__facet-name">{v.value}</span>
-                <span className="pl__facet-count">{v.count}</span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-    )
-
-  if (facets.families.length < 2 && facets.manufacturers.length < 2) return null
-  return (
-    <div className="pl__facets">
-      {chips.length > 0 && (
-        <div className="pl__facet-chips">
-          {chips.map((c) => (
-            <button
-              key={`${c.axis}:${c.value}`}
-              type="button"
-              className="pl__facet-chip"
-              title={`Remove the ${c.value} filter`}
-              onClick={() => onToggle(c.axis, c.value)}
-            >
-              {c.value} <span aria-hidden="true">×</span>
-            </button>
-          ))}
-          <button type="button" className="pl__facet-clear" onClick={onClear}>
-            Clear
-          </button>
-          <span className="pl__facet-total">{total} shown</span>
-        </div>
-      )}
-      {axis('Type', 'families', facets.families)}
-      {axis('Manufacturer', 'manufacturers', facets.manufacturers)}
-      {tags.length > 0 && (
-        <div className="pl__facet">
-          <div className="pl__facet-head">Tags</div>
-          <ul className="pl__facet-list pl__facet-list--tags" role="list">
-            {tags.map((v) => (
-              <li key={v.value}>
-                <button
-                  type="button"
-                  className={`pl__facet-btn${v.selected ? ' is-on' : ''}`}
-                  disabled={!v.selected && v.count === 0}
-                  aria-pressed={v.selected}
-                  onClick={() => onToggle('tags', v.value)}
-                >
-                  <span className="pl__facet-name">{v.value}</span>
-                  <span className="pl__facet-count">{v.count}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {facets.tags.length > primary && (
-            <button type="button" className="pl__facet-more" onClick={onToggleShowAll}>
-              {showAllTags ? 'Show fewer tags' : `Show all ${facets.tags.length} tags`}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  )
 }
 
 export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelProps = {}): JSX.Element {
@@ -439,15 +321,9 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
   // Facet filters (#740) — type / manufacturer / tag, ANDed with the text
   // search. Derived from the loaded libraries each render rather than indexed:
   // there is nothing to invalidate, so the counts can't go stale.
-  const [facetSel, setFacetSel] = useState(emptySelection)
-  const [showAllTags, setShowAllTags] = useState(false)
-  // The FILTERING is full-screen-only too, not just the panel: a selection left
-  // active behind a closed catalog would silently shorten the docked library
-  // with nothing on screen to explain it.
-  const liveSel = useMemo(() => (catalogOpen ? facetSel : emptySelection()), [catalogOpen, facetSel])
-  const facets = useMemo(() => buildFacets(allParts, liveSel, q), [allParts, liveSel, q])
-  const matches = useMemo(() => applyFilters(allParts, liveSel, q), [allParts, liveSel, q])
-  const chips = activeChips(liveSel)
+  // Facets live in the FULL-SCREEN catalog (#740), which has the room for them;
+  // this docked strip filters by the search box alone.
+  const matches = useMemo(() => applyFilters(allParts, emptySelection(), q), [allParts, q])
 
   const selectedPart: { libraryId: string; part: PartDefinition } | null = useMemo(() => {
     if (!selected) return null
@@ -641,20 +517,6 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
         />
       </div>
 
-      {/* Facets belong to the FULL-SCREEN catalog only (#740): the docked panel
-          is a narrow strip beside the canvas, where three filter groups would
-          crowd out the parts they filter. The search box serves it instead. */}
-      {catalogOpen && (
-      <PartFacetPanel
-        facets={facets}
-        chips={chips}
-        showAllTags={showAllTags}
-        onToggleShowAll={() => setShowAllTags((v) => !v)}
-        onToggle={(axis, value) => setFacetSel((sel) => toggleFacet(sel, axis, value))}
-        onClear={() => setFacetSel(emptySelection())}
-        total={matches.length}
-      />
-      )}
 
       {/* Panel status line (reset/promote/install/registry). It persists until the
           next action replaces it, so it needs a way out — otherwise a one-off

@@ -110,18 +110,18 @@ export function matchesSelection(
 }
 
 /** The parts left after every filter — what the grid renders. */
-export function applyFilters(
-  parts: CatalogPart[],
+export function applyFilters<T extends CatalogPart>(
+  parts: readonly T[],
   sel: FacetSelection,
   query = ''
-): CatalogPart[] {
+): T[] {
   return parts.filter((c) => matchesQuery(c.part, query) && matchesSelection(c.part, sel))
 }
 
 /** Count values on one axis against the OTHER filters, so the numbers say what
  *  picking each one would actually leave. */
 function countAxis(
-  parts: CatalogPart[],
+  parts: readonly CatalogPart[],
   sel: FacetSelection,
   query: string,
   axis: keyof FacetSelection,
@@ -162,7 +162,7 @@ export function isRedundantTag(tag: string, families: string[], manufacturers: s
  * hunting through the tail.
  */
 export function buildFacets(
-  parts: CatalogPart[],
+  parts: readonly CatalogPart[],
   sel: FacetSelection = emptySelection(),
   query = '',
   tagFloor = 2

@@ -1,5 +1,13 @@
 import { useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
 import { groupByCategory } from './part-categories'
+import { PartFacetPanel } from './PartFacetPanel'
+import {
+  activeChips,
+  applyFilters,
+  buildFacets,
+  emptySelection,
+  toggleFacet
+} from './part-facets'
 import { useCoinFlip } from '../hooks/useCoinFlip'
 import { partHasRearImage } from '../../../shared/part'
 import type { PartDefinition, PartSide } from '../../../shared/part'
@@ -74,16 +82,16 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   }, [allItems, libraryId])
 
   const q = query.trim().toLowerCase()
-  const filtered = useMemo(() => {
-    if (!q) return visibleItems
-    return visibleItems.filter(({ part }) => {
-      const hay = [part.name, part.description, part.family, part.partNumber, ...(part.tags ?? [])]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-      return hay.includes(q)
-    })
-  }, [visibleItems, q])
+  // Facets (#740) — type / manufacturer / tag, ANDed with the search box. This
+  // is the full-screen view, which has the room for them; the docked panel
+  // deliberately does not show them.
+  const [facetSel, setFacetSel] = useState(emptySelection)
+  const [showAllTags, setShowAllTags] = useState(false)
+  const facets = useMemo(() => buildFacets(visibleItems, facetSel, q), [visibleItems, facetSel, q])
+  const filtered = useMemo(
+    () => applyFilters(visibleItems, facetSel, q),
+    [visibleItems, facetSel, q]
+  )
 
   // Group the filtered parts into shelves by category (same order as the panel).
   const shelves = useMemo(() => groupByCategory(filtered), [filtered])
@@ -146,6 +154,16 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
             ✕
           </button>
         </header>
+
+        <PartFacetPanel
+          facets={facets}
+          chips={activeChips(facetSel)}
+          showAllTags={showAllTags}
+          onToggleShowAll={() => setShowAllTags((v) => !v)}
+          onToggle={(axis, value) => setFacetSel((sel) => toggleFacet(sel, axis, value))}
+          onClear={() => setFacetSel(emptySelection())}
+          total={filtered.length}
+        />
 
         <div className="pcat__shelves">
           {shelves.length === 0 && <div className="pcat__empty">No parts match “{query}”.</div>}

@@ -1,0 +1,113 @@
+/* --- Catalog facets (#740) -------------------------------------------------
+   Type and manufacturer as facets, tags ranked below them. Token-based so both
+   skins work; the pl__facet- prefix is unique to this panel. */
+
+.pl__facets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.pl__facet-head {
+  font-family: var(--font-ui);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.pl__facet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.pl__facet-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.16rem 0.42rem;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  color: var(--text);
+  background: var(--card);
+  border: var(--border-w) solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.pl__facet-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+/* Chosen: the accent carries it, with the count still legible. */
+.pl__facet-btn.is-on {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--card));
+  font-weight: 600;
+}
+
+/* A value that would return nothing is shown as the dead end it is, rather
+   than being offered and then disappointing. */
+.pl__facet-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pl__facet-count {
+  font-size: 0.6rem;
+  color: var(--text-muted);
+}
+
+.pl__facet-btn.is-on .pl__facet-count {
+  color: var(--text);
+}
+
+.pl__facet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pl__facet-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.14rem 0.4rem;
+  font-size: 0.66rem;
+  color: var(--panel);
+  background: var(--accent);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.pl__facet-clear,
+.pl__facet-more {
+  font-family: var(--font-ui);
+  font-size: 0.64rem;
+  color: var(--text-muted);
+  background: none;
+  border: none;
+  padding: 0.1rem 0.2rem;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pl__facet-clear:hover,
+.pl__facet-more:hover {
+  color: var(--text);
+}
+
+.pl__facet-total {
+  margin-left: auto;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
