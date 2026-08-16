@@ -22,7 +22,7 @@ properties:
   current: up to 3.8 A per channel
   supply: separate 5–24 V motor supply; logic stays 3.3 V
   sensing: per-channel current measurement
-version: 0.1.7
+version: 0.1.8
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -49,28 +49,28 @@ headers:
         y: 0.049830003612049006
       - name: A1
         type: other
-        number: 3
+        number: 9
         shape: header
         x: 0.7847155253092448
         y: 0.8633969595956251
       - name: A2
         type: other
-        number: 4
+        number: 10
         shape: header
         x: 0.7161044311523438
         y: 0.8633969595956251
       - name: B1
         type: other
-        number: 5
+        number: 11
         shape: header
         x: 0.656240234375
         y: 0.8633969595956251
       - name: B2
         type: other
-        number: 6
+        number: 12
         shape: header
         x: 0.5949855550130209
-        y: 0.8633969595956251
+        y: 0.8633842960843028
       - name: P6
         type: io
         number: 2
@@ -119,23 +119,27 @@ headers:
         y: 0.049830003612049006
       - name: VCC
         type: pwr
+        number: 16
         shape: header
-        x: 0.20976832071940102
+        x: 0.2092866516113281
         y: 0.8633842960843028
       - name: VM
         type: io
+        number: 15
         capabilities:
           - digital
         shape: header
-        x: 0.2729051038953993
+        x: 0.2727445136176215
         y: 0.8637737401727623
       - name: GND
         type: gnd
+        number: 14
         shape: header
-        x: 0.3362826707628038
-        y: 0.8633842960843028
+        x: 0.33620237562391486
+        y: 0.8637737401727623
       - name: GND
         type: gnd
+        number: 13
         shape: header
         x: 0.3996602376302083
         y: 0.8633969595956251

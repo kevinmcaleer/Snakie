@@ -547,20 +547,32 @@ export function boxedPinLabel(
   label: string,
   variable: string | undefined,
   color: string,
-  /** The body is rotated 180°, so the glyphs would read upside down. Flip each
-   *  text about its own anchor AND swap its anchor end↔start, which lands the
-   *  glyphs upright in the same span rather than throwing them across the board
-   *  (a plain counter-rotation moves the text to the other side of its anchor).
-   *  Only meaningful for left/right pins — a top/bottom pin's label ends up at
-   *  90°/270°, which reads fine on its side and is left alone. */
-  upright = false
+  /**
+   * The rotation the CALLER applied to the body, in degrees. Each text is
+   * counter-rotated by it about its own anchor, so the glyphs read upright on
+   * screen however the part is turned — the annotation itself stays laid out in
+   * the part's frame, which is what keeps it on the outward side of its pin.
+   *
+   * This used to be a boolean that fired only at exactly 180°, and only for
+   * left/right pins — so a part turned a quarter turn had its numbers and
+   * labels turn with it, and a top/bottom pin at 180° was left upside down.
+   *
+   * A HALF turn is the one case that also needs the anchor swapped: rotating a
+   * text 180° about its anchor throws the glyphs across it, so start↔end puts
+   * them back in the same span. A quarter turn doesn't mirror, so it doesn't.
+   */
+  bodyRotate = 0
 ): JSX.Element {
+  const counter = (((-bodyRotate % 360) + 360) % 360) || 0
+  const halfTurn = counter === 180
   const B = 14
   const G = 3
   const labelW = label.length * 6.2
   const shownNum = padPinNumber(num)
-  const flipAt = (x: number, y: number): string | undefined => (upright ? `rotate(180 ${x} ${y})` : undefined)
-  const anchor = (a: 'start' | 'end'): 'start' | 'end' => (upright ? (a === 'start' ? 'end' : 'start') : a)
+  const flipAt = (x: number, y: number): string | undefined =>
+    counter ? `rotate(${counter} ${x} ${y})` : undefined
+  const anchor = (a: 'start' | 'end'): 'start' | 'end' =>
+    halfTurn ? (a === 'start' ? 'end' : 'start') : a
   const numBox = (bx: number, by: number): JSX.Element => (
     <>
       {/* No number and no GPIO ⇒ no chip. An empty grey box is noise, and every
@@ -1628,7 +1640,7 @@ export function PartBody({
                     rp.pin.label || rp.pin.name,
                     pinVar,
                     pinVariables?.get(i)?.color ?? '#cfd6dd',
-                    textRot === 180 && (bdir === 'left' || bdir === 'right')
+                    textRot
                   )}
                 </g>
               ) : boxedActive ? null : (
