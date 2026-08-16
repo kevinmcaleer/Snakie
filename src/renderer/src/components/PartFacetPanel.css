@@ -141,3 +141,52 @@
   width: auto;
   border-radius: 999px;
 }
+
+/* --- The catalog sidebar is a LIGHT surface, whatever the app theme ---------
+   Everything above is token-based, which is right for a panel that sits on the
+   themed shell. This one doesn't: `.pcat__panel` is a deliberately
+   theme-independent light card (#f4f6f2), so in the DARK theme `var(--text)`
+   and `var(--text-muted)` resolved to near-white and the group headings, counts
+   and links became invisible against it.
+
+   So inside the sidebar the panel borrows the catalog's own palette — the same
+   ink (#1c2621), muted grey (#8a938c) and teal (#0b7a6b) its cards use. Scoped
+   to `.pcat__sidebar` rather than replacing the tokens outright, so the panel
+   still themes correctly if it is ever mounted on the themed shell. */
+.pcat__sidebar .pl__facet-head,
+.pcat__sidebar .pl__facet-count,
+.pcat__sidebar .pl__facet-clear,
+.pcat__sidebar .pl__facet-more,
+.pcat__sidebar .pl__facet-total {
+  color: #8a938c;
+}
+
+.pcat__sidebar .pl__facet-btn {
+  color: #1c2621;
+  background: #fff;
+  border: 1px solid #dde3dc;
+}
+
+.pcat__sidebar .pl__facet-btn:hover:not(:disabled),
+.pcat__sidebar .pl__facet-clear:hover,
+.pcat__sidebar .pl__facet-more:hover {
+  border-color: #0b7a6b;
+  color: #0b7a6b;
+}
+
+.pcat__sidebar .pl__facet-btn.is-on {
+  color: #0b7a6b;
+  border-color: #0b7a6b;
+  background: #eaf5f2;
+  font-weight: 600;
+}
+
+.pcat__sidebar .pl__facet-btn.is-on .pl__facet-count {
+  color: #0b7a6b;
+}
+
+/* Chips are the inverse: teal fill, so the ink on them has to be the light one. */
+.pcat__sidebar .pl__facet-chip {
+  color: #fff;
+  background: #0b7a6b;
+}
