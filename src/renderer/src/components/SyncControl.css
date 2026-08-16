@@ -2,8 +2,9 @@
    prefix is unique app-wide (the i2c-detect/i2c-display collision lesson). */
 
 /* Floating anchors: bottom-left over the board canvas (absolute — the host is
-   the positioned pane), bottom-right in the Build workspace (the hierarchy
-   panel docks left), and fixed in the all-board pop-out window. */
+   the positioned pane; the right edge there belongs to the parts-library dock
+   and the top to the view's header bar), TOP-right in the Build workspace, and
+   fixed in the all-board pop-out window. */
 .esync__float {
   position: absolute;
   left: 0.6rem;
@@ -11,9 +12,23 @@
   z-index: 30;
 }
 
+/* Build workspace: top-right, tucked immediately LEFT of the ViewCube nav zone —
+   `right: 10px` + its `width: 144px` + a 10px gap = 164px (see .robotview__navzone;
+   keep these in step if the cube resizes). It sat bottom-RIGHT before, on top of
+   the zoom cluster at right:16px/bottom:16px. */
 .esync__float--right {
   left: auto;
-  right: 0.6rem;
+  right: 164px;
+  top: 0.6rem;
+  bottom: auto;
+}
+
+/* The mesh-couldn't-load banner shares that row (it sits left of the cube at
+   right:216px), so shift it clear of the button — ONLY in the Build workspace,
+   since the compact mini viewer and the editor-mounted RobotView carry no Sync
+   button and their narrower stages need the space. */
+.robotdock--full .robotview__notes {
+  right: 280px;
 }
 
 .esync__float--window {
