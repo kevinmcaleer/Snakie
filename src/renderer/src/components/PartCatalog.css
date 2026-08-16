@@ -195,7 +195,8 @@
 .pcat__card {
   position: relative;
   display: flex;
-  /* Product-card layout: a big full-width image on top, text below. */
+  /* Product-card layout: the name on top so a scan reads the titles down the
+     column without hopping over each picture, then the image, then the detail. */
   flex-direction: column;
   gap: 10px;
   padding: 10px;
@@ -429,4 +430,11 @@
   color: var(--text-muted, #9aa0a6);
   background: var(--bg-sunken, rgba(128, 128, 128, 0.14));
   border-radius: 999px;
+}
+
+
+/* The title sits ABOVE the image now, so it needs room for the checkbox that
+   overlays the card's top-right corner. */
+.pcat__card-top {
+  padding-right: 24px;
 }

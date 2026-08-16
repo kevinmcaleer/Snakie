@@ -263,6 +263,10 @@ function CatalogCard({
           <path d="M5 12.5l4.2 4.2L19 7" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </span>
+      <div className="pcat__card-top">
+        <span className="pcat__card-name">{part.name}</span>
+        <span className="pcat__card-sku">{sku}</span>
+      </div>
       <div className={`pcat__card-img${flipping ? ' is-flipping' : ''}`}>
         {shown ? (
           <img src={shown} alt="" draggable={false} />
@@ -273,10 +277,6 @@ function CatalogCard({
         )}
       </div>
       <div className="pcat__card-body">
-        <div className="pcat__card-top">
-          <span className="pcat__card-name">{part.name}</span>
-          <span className="pcat__card-sku">{sku}</span>
-        </div>
         {showType && part.family && <div className="pcat__card-type">{part.family}</div>}
         {part.description && <div className="pcat__card-desc">{part.description}</div>}
       </div>
