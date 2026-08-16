@@ -5,10 +5,16 @@ you: ask for a frequency and a duration, and the board plays it.
 
 ## Address
 
-**`0x3C`**, software-configurable — there's an MCU on this one, so two Buzzers
-can share a chain. Worth knowing it collides with the default address of the very
-common **SSD1306 / SH1106 OLED**; if a scan shows `0x3C` and you have a display
-on the bus too, one of them has to move.
+**`0x1E`**, software-configurable — there's an MCU on this one, so two Buzzers
+can share a chain. Worth knowing it collides with the **HMC5883L magnetometer**
+and the mag half of an **LSM303**; if a scan shows `0x1E` and you have one of
+those on the bus too, one of them has to move.
+
+The MicroPython library lists this module as `0x3C` — that's the **8-bit**
+form. The firmware answers on `0x3C >> 1` = **`0x1E`**, which is what a bus
+scan reports. Every Modulino *with* an MCU works this way; the four bare-sensor
+ones (Distance, Thermo, Light, Movement) use their sensor's 7-bit address as-is.
+
 
 ## Wiring
 
@@ -84,19 +90,19 @@ once, however many Modulinos your design has.
 
 | Address | Module | Re-addressable? |
 |---|---|---|
-| `0x04` | Latch Relay | yes |
+| `0x02` | Latch Relay | yes |
+| `0x1E` | **Buzzer** | yes |
+| `0x24` | Motors | yes |
 | `0x29` | Distance | **no** — VL53L4CD |
-| `0x3C` | **Buzzer** | yes |
+| `0x2C` | Joystick | yes |
+| `0x36` | Pixels | yes |
+| `0x38` | Vibro | yes |
+| `0x39` | LED Matrix | yes |
+| `0x3A` / `0x3B` | Knob | yes |
+| `0x3E` | Buttons | yes |
 | `0x44` | Thermo | **no** — HS3003 |
-| `0x48` | Motors | yes |
 | `0x53` | Light | **no** — LTR-381RGB-01 |
-| `0x58` | Joystick | yes |
 | `0x6A` / `0x6B` | Movement | **no** — LSM6DSOX |
-| `0x6C` | Pixels | yes |
-| `0x70` | Vibro | yes |
-| `0x72` | LED Matrix | yes |
-| `0x74` / `0x76` | Knob | yes |
-| `0x7C` | Buttons | yes |
 
 ## Links
 

@@ -6,9 +6,15 @@ it off another Modulino.
 
 ## Address
 
-**`0x7C`.** There is an MCU on this board rather than a bare sensor chip, so the
+**`0x3E`.** There is an MCU on this board rather than a bare sensor chip, so the
 address is **re-addressable** — two Buttons modules can share one chain once
 you've moved one of them.
+
+The MicroPython library lists this module as `0x7C` — that's the **8-bit**
+form. The firmware answers on `0x7C >> 1` = **`0x3E`**, which is what a bus
+scan reports. Every Modulino *with* an MCU works this way; the four bare-sensor
+ones (Distance, Thermo, Light, Movement) use their sensor's 7-bit address as-is.
+
 
 ## Wiring
 
@@ -55,19 +61,19 @@ Every module in the range, so a scan of a chain tells you what's on it:
 
 | Address | Module | Re-addressable? |
 |---|---|---|
-| `0x04` | Latch Relay | yes |
+| `0x02` | Latch Relay | yes |
+| `0x1E` | Buzzer | yes |
+| `0x24` | Motors | yes |
 | `0x29` | Distance | **no** — VL53L4CD |
-| `0x3C` | Buzzer | yes |
+| `0x2C` | Joystick | yes |
+| `0x36` | Pixels | yes |
+| `0x38` | Vibro | yes |
+| `0x39` | LED Matrix | yes |
+| `0x3A` / `0x3B` | Knob | yes |
+| `0x3E` | **Buttons** | yes |
 | `0x44` | Thermo | **no** — HS3003 |
-| `0x48` | Motors | yes |
 | `0x53` | Light | **no** — LTR-381RGB-01 |
-| `0x58` | Joystick | yes |
 | `0x6A` / `0x6B` | Movement | **no** — LSM6DSOX |
-| `0x6C` | Pixels | yes |
-| `0x70` | Vibro | yes |
-| `0x72` | LED Matrix | yes |
-| `0x74` / `0x76` | Knob | yes |
-| `0x7C` | **Buttons** | yes |
 
 The **no** rows have no onboard MCU: the sensor chip answers directly, so its
 address is fixed in silicon and two of that module can't share a chain.

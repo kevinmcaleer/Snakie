@@ -182,3 +182,47 @@ describe('Modulino parts follow the shared template (#722)', () => {
     })
   })
 })
+
+/**
+ * THE 8-BIT/7-BIT SHIFT (found reviewing the LED Matrix).
+ *
+ * `arduino-modulino-mpy` declares each module's `default_addresses` in the
+ * EIGHT-bit form, and `Modulino.__init__` does `addr >> 1` before touching the
+ * bus — but only `if self.has_mcu`. So a module with an onboard MCU ships as
+ * 0x7C and a scan reports 0x3E, while the four bare-sensor modules answer on
+ * their sensor's own 7-bit address unshifted.
+ *
+ * Three parts had been authored with the 8-bit number, which is invisible on
+ * screen and shows up as I²C-detect never naming the module. The store's own
+ * spec for the LED Matrix (0x39 = 0x72 >> 1) confirms the derivation.
+ */
+describe('Modulino I²C addresses are the 7-bit ones a scan reports', () => {
+  // source: arduino-modulino-mpy/src/modulino/*.py — `default_addresses`, and
+  // `has_mcu` (False only on distance, light, movement, thermo, hub).
+  const LIB: Record<string, { eightBit: number[]; hasMcu: boolean }> = {
+    'modulino-buttons': { eightBit: [0x7c], hasMcu: true },
+    'modulino-buzzer': { eightBit: [0x3c], hasMcu: true },
+    'modulino-motors': { eightBit: [0x48], hasMcu: true },
+    'modulino-led-matrix': { eightBit: [0x72], hasMcu: true },
+    'modulino-distance': { eightBit: [0x29], hasMcu: false },
+    'modulino-light': { eightBit: [0x53], hasMcu: false }
+  }
+
+  it.each(MODULINO_DIRS)('%s', (dir) => {
+    const known = LIB[dir]
+    // A Modulino not yet in the table above can't be checked — say so rather
+    // than passing silently, so the next module added gets its entry.
+    expect(known, `${dir} needs an entry in the library address table`).toBeTruthy()
+    const expected = known.eightBit.map((a) => (known.hasMcu ? a >> 1 : a))
+    expect(load(dir).i2cAddresses).toEqual(expected)
+  })
+
+  it('every address is a legal 7-bit one', () => {
+    for (const dir of MODULINO_DIRS) {
+      for (const a of load(dir).i2cAddresses ?? []) {
+        expect(a, `${dir} 0x${a.toString(16)}`).toBeLessThanOrEqual(0x77)
+        expect(a).toBeGreaterThanOrEqual(0x08)
+      }
+    }
+  })
+})

@@ -215,7 +215,7 @@ mesh: modulino.stl
 meshUnits: mm
 mass_g: 4.2
 i2cAddresses:
-  - 60
+  - 30
 library:
   module: modulino
   docs: https://docs.arduino.cc/hardware/modulino-buttons/

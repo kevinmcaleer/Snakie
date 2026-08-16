@@ -226,7 +226,7 @@ mesh: modulino.stl
 meshUnits: mm
 mass_g: 4.4
 i2cAddresses:
-  - 72
+  - 36
 library:
   module: modulino
   docs: https://docs.arduino.cc/hardware/modulino-motors/
