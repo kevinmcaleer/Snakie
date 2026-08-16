@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useLayoutEffect, useCallback, useMemo, useState, useEffect, type JSX, type PointerEvent as ReactPointerEvent } from 'react'
 import { groupByCategory } from './part-categories'
 import { PartFacetPanel } from './PartFacetPanel'
 import {
@@ -35,13 +35,28 @@ export interface CatalogItem {
 export interface PartCatalogProps {
   libraries: PartLibraryWithParts[]
   onClose: () => void
+  /** Viewport centre of the control that opened the catalog, so it can grow out
+   *  of it. Absent means no animation rather than one from an arbitrary corner. */
+  origin?: { x: number; y: number } | null
   /** Add every selected part to the project in one batch. */
   onAddMany: (items: CatalogItem[]) => void
 }
 
 const keyOf = (i: CatalogItem): string => `${i.libraryId}::${i.part.id}`
 
-export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps): JSX.Element {
+export function PartCatalog({ libraries, onClose, onAddMany, origin }: PartCatalogProps): JSX.Element {
+  // The panel is inset from the viewport, so the button's viewport position has
+  // to be re-expressed in the PANEL's own box before it can be a transform-origin.
+  // Measured rather than assumed: the inset is a CSS margin, and reading it back
+  // off the element keeps the two from drifting apart.
+  const panelRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el || !origin) return
+    const r = el.getBoundingClientRect()
+    el.style.setProperty('--pcat-ox', `${origin.x - r.left}px`)
+    el.style.setProperty('--pcat-oy', `${origin.y - r.top}px`)
+  }, [origin])
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   // Which library to show — 'all' (de-duped) or a single library id.
@@ -164,7 +179,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   return (
     <div className="pcat" role="dialog" aria-modal="true" aria-label="Parts catalog">
       <div className="pcat__backdrop" onClick={onClose} aria-hidden />
-      <div className="pcat__panel">
+      <div className={`pcat__panel${origin ? ' is-growing' : ''}`} ref={panelRef}>
         <header className="pcat__head">
           <span className="pcat__title">Parts Catalog</span>
           {libs.length > 1 && (

@@ -148,6 +148,9 @@ export interface PartsPanelProps {
 
 export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelProps = {}): JSX.Element {
   const [catalogOpen, setCatalogOpen] = useState(false)
+  // Viewport centre of the button that opened the catalog, so the panel can grow
+  // out of it the way a part's details grow out of their disclosure (#748).
+  const [catalogOrigin, setCatalogOrigin] = useState<{ x: number; y: number } | null>(null)
   const [libraries, setLibraries] = useState<PartLibraryWithParts[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState('')
@@ -489,7 +492,11 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
           <button
             type="button"
             className="pl__btn pl__btn--icon"
-            onClick={() => setCatalogOpen(true)}
+            onClick={(e) => {
+              const b = e.currentTarget.getBoundingClientRect()
+              setCatalogOrigin({ x: b.left + b.width / 2, y: b.top + b.height / 2 })
+              setCatalogOpen(true)
+            }}
             title="Open the full-screen parts catalog"
             aria-label="Open the full-screen parts catalog"
           >
@@ -501,6 +508,7 @@ export function PartsPanel({ onAddToProject, onAddManyToProject }: PartsPanelPro
       {catalogOpen && onAddManyToProject && (
         <PartCatalog
           libraries={libraries}
+          origin={catalogOrigin}
           onClose={() => setCatalogOpen(false)}
           onAddMany={onAddManyToProject}
         />

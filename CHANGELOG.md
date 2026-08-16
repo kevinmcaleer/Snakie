@@ -6,7 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-16
+
 ### Added
+- **Arduino's Modulino range, as Standard library parts.** (#721, #722) The
+  Modulinos are one board with different hardware on top, so the shared half —
+  the 41 × 25.36 mm outline, both QWIIC sockets wired in parallel onto one bus,
+  the generated 3-D mesh and the driver wiring — is authored once and each module
+  fills in the rest. **Buttons, Buzzer, Distance, LED Matrix, Light, Motors** and
+  **Movement** ship in this release, each with its own `help.md`, I²C address and
+  mass. All thirteen declare the same catalog module, so a design using several
+  is offered **one** driver install rather than one per board. A conformance test
+  runs over every `modulino-*` part, so the modules still to come can't drift
+  into subtly different boards.
+- **The full-screen catalog, and a part's details, grow out of the control that
+  opened them.** Pressing the expand button or a card's disclosure scales the new
+  view out of that button rather than replacing the screen, and closing the
+  details runs it backwards — so it reads as a detour you can back out of, with
+  your place in the grid still visible. Honours `prefers-reduced-motion`.
+- **Rotate a part 90° in the Part Editor.** (#749) Two buttons on the canvas
+  toolbar turn the whole board — pads, holes, connectors, components, labels,
+  outline and both photos — so a board photographed portrait can be re-authored
+  landscape and stay that way. It's a real edit, not a view transform, and it
+  round-trips exactly: four turns restore the part unchanged.
+- **Filter the parts catalog by type, manufacturer and tag.** (#740, #747) Type
+  and manufacturer are facets — every part has exactly one, always shown, always
+  counted against the *other* active filters, so a value that would return
+  nothing reads as the dead end it is. Tags are a ranked layer beneath them, with
+  the ones that merely restate a facet dropped and the long tail behind a
+  disclosure. The facets live in a left-hand sidebar in the full-screen catalog;
+  filtering collapses the category shelves into one flat grid, with each card
+  carrying the type its shelf heading used to supply.
+- **A board's corner radius can be given in millimetres.** (#739) How a PCB is
+  actually specified, and the number on a mechanical drawing — rather than a
+  fraction of the board's smaller side.
+- **Cabled leads route around boards instead of across them.** (#745) A QWIIC
+  lead used to run diagonally over the face of the board it left, hiding the silk
+  and reading nothing like a cable. A lead now leaves along its socket's axis and
+  drapes its slack outside the bodies it would otherwise cross, following the way
+  its plugs point.
 - **A full-sized part details view in the parts catalog.** (#748) A catalog card
   has room for a picture, a name and one truncated line; everything else a part
   knows was either buried in the narrow docked panel or not surfaced anywhere.
@@ -35,7 +73,36 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   files that ship beside the part are offered as sources, and a bundled filename
   that isn't actually there is flagged at authoring time instead of on hardware.
 
+### Changed
+- **One mesh load path.** (#742) STL loading, measurement and placeholder
+  geometry were duplicated across the robot and part views; they now share one
+  module, which is also what the new 3-D part view is built on.
+
 ### Fixed
+- **QWIIC connectors are drawn life-size, and the right colour.** The socket was
+  smaller than the real part; it's now the JST-SH datasheet's 6.0 × 4.25 mm, with
+  the board socket ivory and the cable plug white, as the real housings are.
+- **Modulino I²C addresses are the ones a bus scan actually reports.** The
+  MicroPython library declares each module's address in its **8-bit** form and
+  shifts it before touching the bus — but only for modules with an onboard MCU.
+  Three parts and most of the known-devices table carried the unshifted number,
+  so I²C-detect could never name an MCU module: Buttons is `0x3E`, not `0x7C`.
+- **Pin numbers and labels read upright on a rotated part.** (#746) Boxed labels
+  on a part turned 180° were upside-down; they now counter-rotate to stay
+  readable whatever the body's angle.
+- **A part's title clears its top-edge pin labels** instead of overlapping them.
+- **The part detail view flips the board, not the mat it sits on.**
+- **Catalog cards read as a grid again.** Titles sit above the picture and always
+  reserve two lines, so every image lines up; long names wrap rather than
+  truncate; the FRONT/BACK badge and the SKU are gone; category headings hug
+  their text; and the shelves fill their width, so they show as many columns as
+  the filtered grid does.
+- **The catalog's facet sidebar is legible in the dark theme** — it was styling
+  itself from the theme tokens while sitting on a deliberately light panel, which
+  put near-white ink on a near-white background.
+- **`npm run dev` no longer trips macOS malware protection.** (#708) Apple
+  revoked the stock ad-hoc Electron signature; the dev binary is re-signed on
+  postinstall.
 - **Mini board hover labels no longer crop at the old frame when zoomed out.**
   Hovering the mini board reveals the full pinout without re-framing (so the
   board doesn't resize under the pointer), which lets labels run past the frame
@@ -3982,7 +4049,8 @@ MicroPython editor.
   network access.
 - Placeholder app icon; code signing not yet configured.
 
-[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/kevinmcaleer/Snakie/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/kevinmcaleer/Snakie/compare/v0.40.0...v0.41.0

@@ -518,3 +518,51 @@
 .pcat__card-top {
   padding-right: 24px;
 }
+
+/* --- opening: grow out of the control that was pressed ---------------------
+   The same move a part's details make out of their disclosure (#748), so the
+   catalog reads as the library EXPANDING rather than as a new screen. The
+   origin is set inline in the panel's own box, because the panel is inset from
+   the viewport and the button's position is not.
+
+   Scale and fade only, so this stays compositor-only — the grid behind it can
+   be a hundred cards and none of them are relaid out mid-flight. */
+.pcat__panel.is-growing {
+  transform-origin: var(--pcat-ox, 50%) var(--pcat-oy, 50%);
+  animation: pcat-grow 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes pcat-grow {
+  from {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  /* Opaque early, or the app showing through the growing panel for the whole
+     240ms reads as a ghost rather than something opening. */
+  45% {
+    opacity: 1;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* The backdrop dims on its own — scaling it with the panel would sweep a dark
+   wedge across the app. */
+.pcat__backdrop {
+  animation: pcat-fade 240ms ease-out;
+}
+
+@keyframes pcat-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pcat__panel.is-growing,
+  .pcat__backdrop {
+    animation: none;
+  }
+}
