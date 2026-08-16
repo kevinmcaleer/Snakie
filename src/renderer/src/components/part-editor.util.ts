@@ -806,9 +806,26 @@ export function resizeContacts(pins: PartPin[], n: number, prefix = 'P'): PartPi
   return kept
 }
 
-/** Real housing dimensions per JST family (mm): pitch, end margin, body depth. */
+/**
+ * Real housing dimensions per JST family (mm): pitch, end margin, body depth.
+ *
+ * `sideMargin` is HALF the difference between the housing's overall width and
+ * its contact span — so a socket's drawn width is `(n-1)·pitch + 2·sideMargin`,
+ * which is how the datasheets themselves tabulate it.
+ *
+ * **SH is measured, from JST's own drawing** (SH series, side-entry SMT header
+ * `SM04B-SRSS-TB` — the QWIIC/STEMMA-QT connector). Its header table gives
+ * `B = A + 3.0` for EVERY circuit count, where `A` is the contact span — hence
+ * 1.5 mm per end, and 6.0 mm overall for the 4-way. The body is **4.25 mm** deep
+ * on the board; 2.9 mm is its HEIGHT, which is what the earlier value had picked
+ * up by mistake — it drew the socket a third too narrow and too shallow (#697).
+ *
+ * The other families are NOT datasheet-verified — they follow the old
+ * ~0.75×pitch approximation. Correct them the same way when someone needs them
+ * to be right.
+ */
 export const JST_DIMS: Record<JstFamily, { pitch: number; sideMargin: number; depthMm: number }> = {
-  sh: { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 },
+  sh: { pitch: 1.0, sideMargin: 1.5, depthMm: 4.25 },
   gh: { pitch: 1.25, sideMargin: 0.9, depthMm: 3.4 },
   zh: { pitch: 1.5, sideMargin: 1.0, depthMm: 3.6 },
   ph: { pitch: 2.0, sideMargin: 1.4, depthMm: 4.5 },
@@ -835,7 +852,10 @@ export function connectorDims(conn: PartConnector): { pitch: number; sideMargin:
       // plug seating on top.
       return { pitch: 5.08, sideMargin: 2.54, depthMm: 8.5 }
     default:
-      return { pitch: 1.0, sideMargin: 0.75, depthMm: 2.9 }
+      // QWIIC / STEMMA QT IS a JST SH 4-way side-entry header — so it takes the
+      // SH figures rather than its own copy of them, which had already drifted
+      // out of step with the family table above.
+      return JST_DIMS.sh
   }
 }
 

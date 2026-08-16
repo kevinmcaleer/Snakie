@@ -56,18 +56,23 @@ export const BOARD = {
 }
 
 /**
- * The QWIIC (JST-SH 1.0 mm, 4-pin right-angle) housing at each end. #721 quotes
- * "≈ 4.5 mm wide", which matches the body's DEPTH onto the board; the width
- * across the pins and the height are the connector's usual dimensions. All
- * three are approximate — see PROVENANCE.
+ * The QWIIC housing at each end — a JST **SH** series 4-circuit side-entry SMT
+ * header, `SM04B-SRSS-TB`. Unlike the board outline, these are straight off
+ * JST's own drawing rather than a product page: the header table gives
+ * `B = A + 3.0` for every circuit count (so 3.0 mm of contact span → 6.0 mm
+ * overall), and the side-entry body is 4.25 mm deep by 2.9 mm tall.
+ *
+ * #721's "≈ 4.5 mm wide" is neither of those, and the renderer's connector
+ * table had the same trouble — it used the 2.9 mm HEIGHT as the board depth.
+ * Kept in step with `JST_DIMS.sh` in `part-editor.util.ts`.
  */
 export const CONNECTOR = {
   /** Along x, into the board from its end. */
-  depthMm: 4.5,
-  /** Along y, across the four pins. */
-  widthMm: 6.25,
+  depthMm: 4.25,
+  /** Along y, across the four contacts (the datasheet's B for 4 circuits). */
+  widthMm: 6.0,
   /** Above the PCB's top face. */
-  heightMm: 3.0
+  heightMm: 2.9
 }
 
 /**

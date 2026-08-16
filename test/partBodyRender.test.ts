@@ -151,12 +151,14 @@ describe('connectorSize (mm-accurate connector scaling)', () => {
     expect(s).toEqual({ n: 4, w: 26, h: 11 })
   })
 
-  it('scales the housing to the board when given px-per-mm (a QWIIC ≈ 4.5mm wide)', () => {
+  it('scales the housing to the board when given px-per-mm (a QWIIC is 6.0mm wide)', () => {
     const pxPerMm = 15 // e.g. the Tiny 2350 (18mm wide) drawn ~267px in the editor
     const s = connectorSize(conn4, pxPerMm)
-    // QWIIC/JST-SH: (n-1)*1.0 + 2*0.75 = 4.5mm wide, 2.9mm deep → to px.
-    expect(s.w).toBeCloseTo(4.5 * pxPerMm, 5)
-    expect(s.h).toBeCloseTo(2.9 * pxPerMm, 5)
+    // QWIIC/JST-SH, from JST's SM04B-SRSS-TB drawing: (n-1)*1.0 + 2*1.5 = 6.0mm
+    // wide, body 4.25mm deep. (This asserted 4.5 × 2.9 — a third too narrow, and
+    // the connector's HEIGHT mistaken for its board depth.)
+    expect(s.w).toBeCloseTo(6.0 * pxPerMm, 5)
+    expect(s.h).toBeCloseTo(4.25 * pxPerMm, 5)
     // Much larger than the tiny legacy size — the reported "really small" bug.
     expect(s.w).toBeGreaterThan(connectorSize(conn4, 0).w * 2)
   })
@@ -177,8 +179,10 @@ describe('connectorSize (mm-accurate connector scaling)', () => {
     // (4-1)*2.0 + 2*2.9 = 11.8mm wide, 6.6mm deep.
     expect(s.w).toBeCloseTo(11.8 * pxPerMm, 5)
     expect(s.h).toBeCloseTo(6.6 * pxPerMm, 5)
-    // A Grove shell dwarfs a QWIIC — that size difference is the visual tell.
-    expect(s.w).toBeGreaterThan(connectorSize(conn4, pxPerMm).w * 2)
+    // A Grove shell is visibly chunkier than a QWIIC — that difference is the
+    // visual tell. (It was ">2x" only because the QWIIC was drawn too narrow;
+    // the real ratio is 11.8 / 6.0, so assert the relationship, not the artefact.)
+    expect(s.w).toBeGreaterThan(connectorSize(conn4, pxPerMm).w * 1.5)
   })
 
   it('draws a 3-way DuPont header one 2.54 mm cell per pin', () => {

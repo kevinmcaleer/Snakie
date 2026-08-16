@@ -22,7 +22,7 @@ properties:
   current: up to 3.8 A per channel
   supply: separate 5–24 V motor supply; logic stays 3.3 V
   sensing: per-channel current measurement
-version: 0.1.5
+version: 0.1.6
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -31,7 +31,6 @@ dimensions:
 shape:
   kind: rect
   cornerRadius: 0.18
-  cornerRadiusMm: 2
 headers:
   - edge: top
     pins:
@@ -231,7 +230,7 @@ drivers:
     target: lib/modulino
     label: Arduino Modulino library
 layerVisibility:
-  pcb: true
+  pcb: false
   image: true
   holes: true
   pins: true

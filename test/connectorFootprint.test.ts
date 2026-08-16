@@ -65,10 +65,14 @@ describe('connector footprint (#697)', () => {
   it('keeps the other kinds at their own real sizes', () => {
     // QWIIC (JST-SH, 1 mm) is small and Grove (2 mm) is chunky — the point of
     // measuring rather than padding a span is that these differ.
+    //
+    // The QWIIC figures were 4.5 × 2.9 here, which pinned a socket a third too
+    // narrow (and used the connector's HEIGHT as its board depth). The real
+    // SM04B-SRSS-TB is 6.0 × 4.25 — see the datasheet-accuracy block below.
     const qwiic = mm(conn('qwiic', 4))
     const grove = mm(conn('grove', 4))
-    expect(qwiic.w).toBeCloseTo(4.5, 6)
-    expect(qwiic.h).toBeCloseTo(2.9, 6)
+    expect(qwiic.w).toBeCloseTo(6.0, 6)
+    expect(qwiic.h).toBeCloseTo(4.25, 6)
     expect(grove.w).toBeCloseTo(11.8, 6)
     expect(grove.h).toBeCloseTo(6.6, 6)
     expect(grove.w).toBeGreaterThan(qwiic.w)
@@ -89,5 +93,37 @@ describe('connector footprint (#697)', () => {
     const s = connectorSize(conn('dupont', 3), 0)
     expect(s.w).toBeGreaterThan(0)
     expect(s.h).toBeGreaterThan(0)
+  })
+})
+
+describe('QWIIC / JST-SH is datasheet-accurate (#697 follow-up)', () => {
+  // JST SH series, side-entry SMT header SM04B-SRSS-TB — the QWIIC connector.
+  // The datasheet's header table gives B = A + 3.0 for every circuit count,
+  // where A is the contact span: so 4 circuits → A 3.0, B 6.0, body 4.25 deep,
+  // 2.9 tall. The drawn socket was 4.5 × 2.9 — a third too narrow, and using
+  // the connector's HEIGHT as its board depth.
+  it('a 4-way QWIIC socket is the datasheet 6.0 × 4.25 mm', () => {
+    const q = mm(conn('qwiic', 4))
+    expect(q.w).toBeCloseTo(6.0, 6)
+    expect(q.h).toBeCloseTo(4.25, 6)
+  })
+
+  it('matches the datasheet across circuit counts (B = A + 3.0)', () => {
+    // Straight off JST's header table: 2 → 4.0, 4 → 6.0, 6 → 8.0, 10 → 12.0.
+    for (const [pins, b] of [
+      [2, 4.0],
+      [4, 6.0],
+      [6, 8.0],
+      [10, 12.0]
+    ] as const) {
+      expect(mm(conn('qwiic', pins)).w, `${pins}-way`).toBeCloseTo(b, 6)
+    }
+  })
+
+  it('a JST connector declared as the SH family measures the same', () => {
+    // QWIIC is not a separate connector from JST-SH — it IS one, so the two
+    // spellings must not drift apart again.
+    const asJst = mm(conn('jst', 4, 'sh'))
+    expect(asJst).toEqual(mm(conn('qwiic', 4)))
   })
 })
