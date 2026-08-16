@@ -20,7 +20,7 @@ properties:
   sensor: VL53L4CDV0DH/1 time-of-flight
   measures: distance to the nearest obstacle, in millimetres
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.10
+version: 0.1.11
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -109,17 +109,6 @@ mountingHoles:
   - x: 0.10976
     y: 0.81546
     diameter: 1.5
-shapes:
-  - kind: rect
-    x: 0.435
-    y: 0.4
-    label: VL53L4CD
-    fill: "#2b2f36"
-    stroke: "#14171b"
-    strokeWidth: 1
-    w: 0.13
-    h: 0.2
-    cornerRadius: 2
 rails:
   - name: GND
     pins:

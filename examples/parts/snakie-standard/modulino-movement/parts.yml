@@ -1,6 +1,6 @@
-id: modulino-light
-name: Modulino Light
-description: LTR-381RGB-01 ambient light, colour and IR sensor on an I²C Modulino.
+id: modulino-movement
+name: Modulino Movement
+description: LSM6DSOX 6-axis IMU — accelerometer + gyroscope — on an I²C Modulino, daisy-chainable over QWIIC.
 manufacturer: Arduino
 family: Sensor
 tags:
@@ -8,20 +8,20 @@ tags:
   - arduino
   - i2c
   - qwiic
-  - light
-  - colour
-  - ambient
-  - ltr-381rgb
+  - imu
+  - accelerometer
+  - gyroscope
+  - lsm6dsox
   - sensor
 package: SMD
 voltage: 3.3V
-partNumber: ABX00111
+partNumber: ABX00101
 properties:
-  interface: I²C (0x53, FIXED — no onboard MCU)
-  sensor: LTR-381RGB-01 ambient light + colour
-  measures: lux, red/green/blue, colour temperature (K), infrared
+  interface: I²C (0x6A or 0x6B, set by a solder jumper — no onboard MCU)
+  sensor: LSM6DSOXTR 6-axis IMU
+  measures: linear acceleration (g) and angular velocity (dps), each on X/Y/Z
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.12
+version: 0.1.0
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -31,22 +31,20 @@ shape:
   kind: rect
   cornerRadiusMm: 4.6
 headers:
-  - edge: right
+  - edge: left
     pins:
       - name: GND
         type: gnd
         number: 1
         shape: header
-        rotation: 90
-        x: 0.593804779053
-        y: 0.95009490694
+        x: 0.4061952209472656
+        y: 0.04990509305968019
       - name: 3v3
         type: pwr
         number: 2
         shape: header
-        rotation: 90
-        x: 0.533101654053
-        y: 0.948926821367
+        x: 0.46689834594726565
+        y: 0.05107317863327973
       - name: SDA
         type: io
         number: 3
@@ -55,9 +53,8 @@ headers:
         signals:
           i2c: SDA
         shape: header
-        rotation: 90
-        x: 0.46982711792
-        y: 0.948926821367
+        x: 0.5301728820800782
+        y: 0.05107317863327973
       - name: SCL
         type: io
         number: 4
@@ -66,50 +63,64 @@ headers:
         signals:
           i2c: SCL
         shape: header
-        rotation: 90
-        x: 0.407344970703
-        y: 0.95009490694
-      - name: GND
-        type: gnd
+        x: 0.592655029296875
+        y: 0.04990509305968019
+      - name: SCL
+        type: io
         number: 8
+        capabilities:
+          - i2c
+        signals:
+          i2c: SCL
         shape: header
-        rotation: 270
-        x: 0.593804779053
-        y: 0.048887736163
-      - name: GND
-        type: gnd
+        x: 0.4061952209472656
+        y: 0.9511122638369459
+      - name: SDA
+        type: io
         number: 7
+        capabilities:
+          - i2c
+        signals:
+          i2c: SDA
         shape: header
-        rotation: 270
-        x: 0.533101654053
-        y: 0.048887736163
+        x: 0.46689834594726565
+        y: 0.9511122638369459
       - name: 3v3
         type: pwr
         number: 6
         shape: header
-        rotation: 270
-        x: 0.46982711792
-        y: 0.048887736163
+        x: 0.5301728820800782
+        y: 0.9511122638369459
       - name: GND
         type: gnd
         number: 5
         shape: header
-        rotation: 270
-        x: 0.407344970703
-        y: 0.048887736163
+        x: 0.592655029296875
+        y: 0.9511122638369459
 mountingHoles:
-  - x: 0.89024
-    y: 0.81546
-    diameter: 1.5
-  - x: 0.10976
-    y: 0.81546
-    diameter: 1.5
   - x: 0.10976
     y: 0.18454
     diameter: 1.5
   - x: 0.89024
     y: 0.18454
     diameter: 1.5
+  - x: 0.89024
+    y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.81546
+    diameter: 1.5
+shapes:
+  - kind: rect
+    x: 0.435
+    y: 0.4
+    label: LSM6DSOX
+    fill: "#2b2f36"
+    stroke: "#14171b"
+    strokeWidth: 1
+    w: 0.13
+    h: 0.2
+    cornerRadius: 2
 rails:
   - name: GND
     pins:
@@ -130,9 +141,9 @@ rails:
 connectors:
   - z: 0
     kind: qwiic
-    x: 0.94512
+    x: 0.05488
     y: 0.5
-    rotation: 90
+    rotation: 270
     pins:
       - name: GND
         type: gnd
@@ -152,9 +163,9 @@ connectors:
           i2c: SCL
   - z: 0
     kind: qwiic
-    x: 0.05488
+    x: 0.94512
     y: 0.5
-    rotation: 270
+    rotation: 90
     pins:
       - name: GND-B
         type: gnd
@@ -172,15 +183,13 @@ connectors:
           - i2c
         signals:
           i2c: SCL
-image: image.png
-rear:
-  image: rear.png
 help: help.md
 mesh: modulino.stl
 meshUnits: mm
-mass_g: 4.4
+mass_g: 3.9
 i2cAddresses:
-  - 83
+  - 106
+  - 107
 library:
   module: modulino
   docs: https://docs.arduino.cc/hardware/modulino-buttons/

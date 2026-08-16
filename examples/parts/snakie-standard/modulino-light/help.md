@@ -65,19 +65,19 @@ mip fetches the deps at install time.
 
 | Address | Module | Re-addressable? |
 |---|---|---|
-| `0x02` | Latch Relay | yes |
-| `0x1E` | Buzzer | yes |
-| `0x24` | Motors | yes |
+| `0x04` | Latch Relay | yes |
 | `0x29` | Distance | **no** — VL53L4CD |
-| `0x2C` | Joystick | yes |
-| `0x36` | Pixels | yes |
-| `0x38` | Vibro | yes |
-| `0x39` | LED Matrix | yes |
-| `0x3A` / `0x3B` | Knob | yes |
-| `0x3E` | Buttons | yes |
+| `0x3C` | Buzzer | yes |
 | `0x44` | Thermo | **no** — HS3003 |
+| `0x48` | Motors | yes |
 | `0x53` | **Light** | **no** — LTR-381RGB-01 |
+| `0x58` | Joystick | yes |
 | `0x6A` / `0x6B` | Movement | **no** — LSM6DSOX |
+| `0x6C` | Pixels | yes |
+| `0x70` | Vibro | yes |
+| `0x72` | LED Matrix | yes |
+| `0x74` / `0x76` | Knob | yes |
+| `0x7C` | Buttons | yes |
 
 ## Links
 

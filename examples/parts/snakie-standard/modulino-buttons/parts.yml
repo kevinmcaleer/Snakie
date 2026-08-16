@@ -18,7 +18,7 @@ properties:
   inputs: 3 momentary buttons (A, B, C)
   outputs: 3 LEDs, one above each button
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.10
+version: 0.1.11
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -28,20 +28,22 @@ shape:
   kind: rect
   cornerRadiusMm: 4.6
 headers:
-  - edge: left
+  - edge: right
     pins:
       - name: GND
         type: gnd
         number: 1
         shape: header
-        x: 0.4082836616821902
-        y: 0.05047026392538591
+        rotation: 90
+        x: 0.591716338318
+        y: 0.949529736075
       - name: 3v3
         type: pwr
         number: 2
         shape: header
-        x: 0.47039588254082715
-        y: 0.05047026392538591
+        rotation: 90
+        x: 0.529604117459
+        y: 0.949529736075
       - name: SDA
         type: io
         number: 3
@@ -50,8 +52,9 @@ headers:
         signals:
           i2c: SDA
         shape: header
-        x: 0.5325081033994641
-        y: 0.05035385913472884
+        rotation: 90
+        x: 0.467491896601
+        y: 0.949646140865
       - name: SCL
         type: io
         number: 4
@@ -60,48 +63,55 @@ headers:
         signals:
           i2c: SCL
         shape: header
-        x: 0.5946203242581011
-        y: 0.05047026392538591
+        rotation: 90
+        x: 0.405379675742
+        y: 0.949529736075
       - name: A
         type: io
         number: 14
         capabilities:
           - digital
         shape: header
-        x: 0.2201770817957473
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.779822918204
+        y: 0.047594084474
       - name: GND
         type: gnd
         number: 13
         shape: header
-        x: 0.28204866901705516
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.717951330983
+        y: 0.047594084474
       - name: 3v3
         type: gnd
         number: 12
         shape: header
-        x: 0.3444243316186807
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.655575668381
+        y: 0.047594084474
       - name: PF2
         type: io
         number: 11
         shape: header
-        x: 0.4067999942203062
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.59320000578
+        y: 0.047594084474
       - name: SWCLK
         type: io
         number: 10
         shape: header
-        x: 0.47039588254082715
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.529604117459
+        y: 0.047594084474
       - name: SWDIO
         type: io
         number: 9
         capabilities:
           - digital
         shape: header
-        x: 0.5325081033994641
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.467491896601
+        y: 0.047594084474
       - name: TX1
         type: io
         number: 8
@@ -112,8 +122,9 @@ headers:
         buses:
           uart: 1
         shape: header
-        x: 0.5946203242581011
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.405379675742
+        y: 0.047594084474
       - name: RX1
         type: io
         number: 7
@@ -124,45 +135,48 @@ headers:
         buses:
           uart: 1
         shape: header
-        x: 0.6563026446268084
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.34345652081896355
+        y: 0.047594084474
       - name: B
         type: io
         number: 6
         shape: header
-        x: 0.7188427657294968
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.281157234271
+        y: 0.047594084474
       - name: C
         type: io
         number: 5
         capabilities:
           - digital
         shape: header
-        x: 0.7810539698300595
-        y: 0.9524059155260601
+        rotation: 270
+        x: 0.21894603017
+        y: 0.047594084474
 mountingHoles:
-  - x: 0.10976
-    y: 0.18454
-    diameter: 1.5
-  - x: 0.89024
-    y: 0.18454
-    diameter: 1.5
   - x: 0.89024
     y: 0.81546
     diameter: 1.5
   - x: 0.10976
     y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
     diameter: 1.5
 buttons:
   - label: A
-    x: 0.25115936279296874
-    y: 0.49849936500332703
+    x: 0.748840637207
+    y: 0.501500634997
   - label: B
-    x: 0.49874145507812495
-    y: 0.49849936500332703
+    x: 0.501258544922
+    y: 0.501500634997
   - label: C
-    x: 0.7514043172200521
-    y: 0.49849936500332703
+    x: 0.24859568278
+    y: 0.501500634997
 rails:
   - name: GND
     pins:
@@ -183,9 +197,9 @@ rails:
 connectors:
   - z: 0
     kind: qwiic
-    x: 0.05488
+    x: 0.94512
     y: 0.5
-    rotation: 270
+    rotation: 90
     pins:
       - name: GND
         type: gnd
@@ -205,9 +219,9 @@ connectors:
           i2c: SCL
   - z: 0
     kind: qwiic
-    x: 0.9414066210937501
-    y: 0.49456176196237717
-    rotation: 90
+    x: 0.058593378906
+    y: 0.505438238038
+    rotation: 270
     pins:
       - name: GND-B
         type: gnd
@@ -225,9 +239,9 @@ connectors:
           - i2c
         signals:
           i2c: SCL
-image: image.jpg
+image: image.png
 rear:
-  image: rear.jpg
+  image: rear.png
 help: help.md
 mesh: modulino.stl
 meshUnits: mm

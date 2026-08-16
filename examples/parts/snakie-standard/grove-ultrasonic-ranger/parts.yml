@@ -11,14 +11,14 @@ tags:
   - range
   - digital
 package: THT
-pinSpacing: 2.0
+pinSpacing: 2
 voltage: 3.2-5.2V
 partNumber: "101020010"
 properties:
   interface: single-wire digital (trigger and echo on the same pin)
   range: 2 cm – 350 cm
   angle: 15°
-version: 0.1.2
+version: 0.1.3
 pcbColor: "#1b4d3e"
 aspect: 2.15
 dimensions:
@@ -26,71 +26,85 @@ dimensions:
   height: 20
 shape:
   kind: rect
-  cornerRadius: 2
-headers: []
-# One SIG line does both trigger and echo — this is NOT an HC-SR04 (which has
-# separate TRIG/ECHO pins) and the two are not interchangeable in code.
-connectors:
-  - kind: grove
-    variant: digital
-    label: SIG
-    x: 0.15
-    y: 0.5
-    rotation: 90
+  cornerRadius: 0.5
+headers:
+  - edge: left
     pins:
-      - name: SIG
-        type: io
-        capabilities: [digital]
-      - name: NC
-        type: other
       - name: VCC
         type: pwr
+        group: grp-h1y6izd
+        x: 0.07642377217610677
+        y: 0.22590529123942055
       - name: GND
         type: gnd
+        group: grp-h1y6izd
+        x: 0.07642377217610677
+        y: 0.3696359464857313
+      - name: P2
+        type: io
+        group: grp-h1y6izd
+        gpio: 2
+        capabilities:
+          - digital
+        x: 0.07642377217610677
+        y: 0.5133666017320421
+      - name: P3
+        type: io
+        group: grp-h1y6izd
+        gpio: 3
+        capabilities:
+          - digital
+        x: 0.07642377217610677
+        y: 0.6570972569783529
 shapes:
   - kind: rect
     x: 0.02
     y: 0.04
-    w: 0.96
-    h: 0.92
+    z: 0
     fill: "#1b4d3e"
     stroke: "#0f3227"
     strokeWidth: 1
+    w: 0.96
+    h: 0.92
     cornerRadius: 3
-    z: 0
-  # The two ultrasonic transducer cans.
   - kind: circle
     x: 0.36
     y: 0.13
-    w: 0.26
-    h: 0.74
+    z: 1
     fill: "#8f9399"
     stroke: "#5c6066"
     strokeWidth: 1
-    z: 1
+    r: 0.1
   - kind: circle
     x: 0.68
     y: 0.13
-    w: 0.26
-    h: 0.74
+    z: 1
     fill: "#8f9399"
     stroke: "#5c6066"
     strokeWidth: 1
-    z: 1
+    r: 0.1
 labels:
   - text: ULTRASONIC
-    x: 0.30
+    x: 0.3
     y: 0.88
+    z: 2
     fontSize: 5
     color: "#cfe8dc"
-    z: 2
+groups:
+  - id: grp-h1y6izd
+    name: grove
+    housing:
+      kind: grove
+      x: 0.07642377217610677
+      y: 0.4415012741088867
+      rotation: 90
+help: help.md
 library:
   module: grove_ultrasonic
 drivers:
   - source: module:grove-ultrasonic
     target: lib/grove_ultrasonic.py
     label: Grove ultrasonic driver
-help: help.md
 layerVisibility:
   pcb: false
   image: false

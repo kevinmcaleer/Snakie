@@ -112,9 +112,12 @@ describe('Modulino parts follow the shared template (#722)', () => {
       const right = qwiic.find((c) => c.x > 0.5)
       expect(left?.rotation, `${dir} left socket`).toBe(270)
       expect(right?.rotation, `${dir} right socket`).toBe(90)
-      // …and GND really is the first contact, which is what makes 270 mean
-      // "bottom" rather than the other way about.
-      expect(left?.pins[0].name).toBe('GND')
+      // …and ground really is the first contact, which is what makes 270 mean
+      // "bottom" rather than the other way about. Either NAME will do: which of
+      // the two sockets carries the plain names and which carries the `-B` ones
+      // is just authoring order, and several parts list the right-hand socket
+      // first. The rails tie them into one bus regardless.
+      expect(left?.pins[0].name).toMatch(/^GND(-B)?$/)
     })
 
     it('wires both sockets to ONE bus, in parallel, via rails', () => {
@@ -205,7 +208,8 @@ describe('Modulino I²C addresses are the 7-bit ones a scan reports', () => {
     'modulino-motors': { eightBit: [0x48], hasMcu: true },
     'modulino-led-matrix': { eightBit: [0x72], hasMcu: true },
     'modulino-distance': { eightBit: [0x29], hasMcu: false },
-    'modulino-light': { eightBit: [0x53], hasMcu: false }
+    'modulino-light': { eightBit: [0x53], hasMcu: false },
+    'modulino-movement': { eightBit: [0x6a, 0x6b], hasMcu: false }
   }
 
   it.each(MODULINO_DIRS)('%s', (dir) => {

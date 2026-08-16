@@ -22,7 +22,7 @@ properties:
   current: up to 3.8 A per channel
   supply: separate 5–24 V motor supply; logic stays 3.3 V
   sensing: per-channel current measurement
-version: 0.1.8
+version: 0.1.9
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -33,52 +33,52 @@ shape:
   cornerRadius: 0.22
   cornerRadiusMm: 4.6
 headers:
-  - edge: top
+  - edge: bottom
     pins:
       - name: VIN
         type: pwr
         number: 4
         shape: header
-        x: 0.4693110148111979
-        y: 0.049830003612049006
+        x: 0.530688985189
+        y: 0.950169996388
       - name: GND
         type: gnd
         number: 3
         shape: header
-        x: 0.3996602376302083
-        y: 0.049830003612049006
+        x: 0.60033976237
+        y: 0.950169996388
       - name: A1
         type: other
         number: 9
         shape: header
-        x: 0.7847155253092448
-        y: 0.8633969595956251
+        x: 0.215284474691
+        y: 0.136603040404
       - name: A2
         type: other
         number: 10
         shape: header
-        x: 0.7161044311523438
-        y: 0.8633969595956251
+        x: 0.283895568848
+        y: 0.136603040404
       - name: B1
         type: other
         number: 11
         shape: header
-        x: 0.656240234375
-        y: 0.8633969595956251
+        x: 0.343759765625
+        y: 0.136603040404
       - name: B2
         type: other
         number: 12
         shape: header
-        x: 0.5949855550130209
-        y: 0.8633842960843028
+        x: 0.405014444987
+        y: 0.136615703916
       - name: P6
         type: io
         number: 2
         capabilities:
           - digital
         shape: header
-        x: 0.34279642740885413
-        y: 0.049830003612049006
+        x: 0.657203572591
+        y: 0.950169996388
       - name: SDA
         type: io
         number: 5
@@ -87,8 +87,8 @@ headers:
         signals:
           i2c: SDA
         shape: header
-        x: 0.529279530843099
-        y: 0.049830003612049006
+        x: 0.470720469157
+        y: 0.950169996388
       - name: SCL
         type: io
         number: 6
@@ -97,64 +97,64 @@ headers:
         signals:
           i2c: SCL
         shape: header
-        x: 0.5949855550130209
-        y: 0.049830003612049006
+        x: 0.405014444987
+        y: 0.950169996388
       - name: SWCLK
         type: io
         number: 7
         shape: header
-        x: 0.656240234375
-        y: 0.049830003612049006
+        x: 0.343759765625
+        y: 0.950169996388
       - name: SWDIO
         type: io
         number: 8
         shape: header
-        x: 0.7161044311523438
-        y: 0.049830003612049006
+        x: 0.283895568848
+        y: 0.950169996388
       - name: VM
         type: pwr
         number: 1
         shape: header
-        x: 0.2824370659722222
-        y: 0.049830003612049006
+        x: 0.717562934028
+        y: 0.950169996388
       - name: VCC
         type: pwr
         number: 16
         shape: header
-        x: 0.2092866516113281
-        y: 0.8633842960843028
+        x: 0.790713348389
+        y: 0.136615703916
       - name: VM
         type: io
         number: 15
         capabilities:
           - digital
         shape: header
-        x: 0.2727445136176215
-        y: 0.8637737401727623
+        x: 0.727255486382
+        y: 0.136226259827
       - name: GND
         type: gnd
         number: 14
         shape: header
-        x: 0.33620237562391486
-        y: 0.8637737401727623
+        x: 0.663797624376
+        y: 0.136226259827
       - name: GND
         type: gnd
         number: 13
         shape: header
-        x: 0.3996602376302083
-        y: 0.8633969595956251
+        x: 0.60033976237
+        y: 0.136603040404
 mountingHoles:
-  - x: 0.10976
-    y: 0.18454
-    diameter: 1.5
-  - x: 0.89024
-    y: 0.18454
-    diameter: 1.5
   - x: 0.89024
     y: 0.81546
     diameter: 1.5
   - x: 0.10976
     y: 0.81546
+    diameter: 1.5
+  - x: 0.10976
+    y: 0.18454
+    diameter: 1.5
+  - x: 0.89024
+    y: 0.18454
     diameter: 1.5
 rails:
   - name: GND
@@ -176,9 +176,9 @@ rails:
 connectors:
   - z: 0
     kind: qwiic
-    x: 0.05488
-    y: 0.5007409798735449
-    rotation: 270
+    x: 0.94512
+    y: 0.499259020126
+    rotation: 90
     pins:
       - name: GND
         type: gnd
@@ -198,9 +198,9 @@ connectors:
           i2c: SCL
   - z: 0
     kind: qwiic
-    x: 0.94512
+    x: 0.05488
     y: 0.5
-    rotation: 90
+    rotation: 270
     pins:
       - name: GND-B
         type: gnd
