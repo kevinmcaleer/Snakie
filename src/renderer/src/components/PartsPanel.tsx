@@ -1078,12 +1078,18 @@ function PartDetail({
           Schematic
         </button>
       </div>
-      <div className={`pl__detail-fp${previewFlipping ? ' is-flipping' : ''}`}>
-        {previewMode === 'board' ? (
-          <PartCanvas part={part} readOnly side={previewSide} />
-        ) : (
-          <PartSchematicView part={part} />
-        )}
+      {/* The mat is the STAGE and stays put; only the board turns on it (#…).
+          Flipping the outer box rotated its background and border too, which
+          read as the whole viewer tipping over rather than a part being turned
+          over in your hands. */}
+      <div className="pl__detail-fp">
+        <div className={`pl__detail-flip${previewFlipping ? ' is-flipping' : ''}`}>
+          {previewMode === 'board' ? (
+            <PartCanvas part={part} readOnly side={previewSide} />
+          ) : (
+            <PartSchematicView part={part} />
+          )}
+        </div>
       </div>
       {/* Only offered when there IS a back — a single-sided part shouldn't invite
           you to turn it over and find nothing (#636). */}
