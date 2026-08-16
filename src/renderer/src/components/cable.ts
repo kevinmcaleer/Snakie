@@ -179,7 +179,16 @@ export function connectorFit(a: PartConnector, b: PartConnector): CableFit {
  * Degrees, in PART space — the caller turns it with the placed part.
  */
 export function housingPlugAngle(conn: PartConnector): number {
+  // The lead leaves through the housing's MOUTH, which is a LONG side — the face
+  // the contacts look out of — not off one end. A QWIIC socket sitting along a
+  // board's bottom edge takes its cable downward, out of the board; it does not
+  // take it sideways out of the shell's end. (It used to do the latter, which
+  // put the boot on a short edge and made leads enter a board from the side.)
+  //
+  // So: contacts in a ROW take their lead up or down, contacts in a COLUMN take
+  // it left or right — in each case away from the middle of the part, which is
+  // where the outside is.
   const column = ((conn.rotation ?? 0) / 90) % 2 === 1
-  if (column) return conn.y < 0.5 ? -90 : 90 // off the top / bottom of the column
-  return conn.x < 0.5 ? 180 : 0 //              off the left / right end of the row
+  if (column) return conn.x < 0.5 ? 180 : 0 // column of contacts → out the side
+  return conn.y < 0.5 ? -90 : 90 //            row of contacts   → out top/bottom
 }

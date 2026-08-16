@@ -4,6 +4,7 @@ import {
   conductorColour,
   connectorFit,
   connectorKindName,
+  housingPlugAngle,
   pairContacts
 } from '../src/renderer/src/components/cable'
 import type { PartConnector, PartPin } from '../src/shared/part'
@@ -214,5 +215,35 @@ describe('connectorKindName', () => {
     expect(connectorKindName(groveUart())).toBe('Grove UART')
     expect(connectorKindName(qwiic())).toBe('QWIIC')
     expect(connectorKindName(servo())).toBe('servo header')
+  })
+})
+
+describe('the lead leaves through the mouth, not off an end', () => {
+  const c = (over: Partial<PartConnector>): PartConnector =>
+    ({ kind: 'qwiic', x: 0.5, y: 0.5, pins: [], ...over }) as PartConnector
+
+  it('a row of contacts near the BOTTOM edge takes its lead downward', () => {
+    // The reported case: a QWIIC socket along a board's bottom edge should take
+    // its cable out of the board, not sideways out of the shell's end.
+    expect(housingPlugAngle(c({ y: 0.9 }))).toBe(90)
+  })
+
+  it('a row near the TOP edge takes its lead upward', () => {
+    // …and its mate enters that board from the top, rather than the left.
+    expect(housingPlugAngle(c({ y: 0.1 }))).toBe(-90)
+  })
+
+  it('a COLUMN of contacts takes its lead out the nearer side', () => {
+    expect(housingPlugAngle(c({ rotation: 90, x: 0.1 }))).toBe(180)
+    expect(housingPlugAngle(c({ rotation: 90, x: 0.9 }))).toBe(0)
+  })
+
+  it('always points AWAY from the middle of the part', () => {
+    // Whichever axis the contacts run along, the mouth faces the outside — that
+    // is the whole rule, and it is what keeps a lead off the board's face.
+    for (const rotation of [0, 180]) {
+      expect(housingPlugAngle(c({ rotation, y: 0.2 }))).toBeLessThan(0) // upper half → up
+      expect(housingPlugAngle(c({ rotation, y: 0.8 }))).toBeGreaterThan(0) // lower → down
+    }
   })
 })

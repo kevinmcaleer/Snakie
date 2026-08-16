@@ -2824,8 +2824,13 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
               // contact-span radius, which drew a 3-way servo plug ~4 mm deep
               // against a real 2.54 mm — so on a PCA9685, whose servo headers sit
               // one 2.54 mm pitch apart, neighbouring plugs overlapped.
-              const w = t.w
-              const h = t.h
+              // The group is rotated so +x is the way the lead LEAVES, and a lead
+              // leaves through the mouth — so the contact span runs ACROSS that
+              // axis and the housing's depth along it. Drawing w along x put the
+              // shell broadside to its own cable, which is why the plug sat
+              // beside the socket instead of over it.
+              const w = t.h
+              const h = t.w
               // The lead's own housing colour (shared, so a plug can't drift
               // from the palette the way its SIZE once did) — a QWIIC lead is
               // white, Grove off-white, DuPont black.
