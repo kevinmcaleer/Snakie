@@ -358,6 +358,10 @@ const DRAG_DEADZONE_PX = 3
 // Minimum clearance a Bézier wire leaves a pin along its outward normal (#182), so
 // noodles curve cleanly out of a pad even when the other end is on the far side.
 const WIRE_CLEARANCE = 40
+/** How far above the body a part's title sits when top-edge pin labels occupy
+ *  the space immediately above it — clear of the label band rather than through
+ *  it. (No top pins ⇒ the title stays snug at 7px.) */
+const TITLE_GAP_OVER_LABELS = 30
 
 /** Snap any angle to the nearest of 0/90/180/270 (#176). */
 /**
@@ -3896,11 +3900,26 @@ function SubjectBody({
           ) : s.kind === 'board' && s.boardDef && s.box && s.pads ? (
             <Board def={s.boardDef} box={s.box} pads={s.pads} usedPadKeys={s.usedPadKeys ?? new Set()} ledLit={!!s.ledLit} rotation={0} />
           ) : null}
-          {showTitle && (
-            <text x={dx + s.w / 2} y={dy - 7} textAnchor="middle" className="wc__body-title">
-              {s.title}
-            </text>
-          )}
+          {showTitle &&
+            (() => {
+              // The title sat a flat 7px above the body, which is exactly where a
+              // TOP-edge pin's label goes — so on a part with pins along its top
+              // the two overlapped. Lift it clear of that band when there are
+              // any, leaving it snug against the body when there aren't.
+              const hasTopPins = s.pins.some(
+                (p) => (p.anchors[0]?.y ?? Infinity) < Math.max(10, s.h * 0.12)
+              )
+              return (
+                <text
+                  x={dx + s.w / 2}
+                  y={dy - (hasTopPins ? TITLE_GAP_OVER_LABELS : 7)}
+                  textAnchor="middle"
+                  className="wc__body-title"
+                >
+                  {s.title}
+                </text>
+              )
+            })()}
         </>
       )}
 
