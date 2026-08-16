@@ -238,7 +238,6 @@ function CatalogCard({
   showType?: boolean
 }): JSX.Element {
   const { part } = item
-  const sku = part.partNumber || part.id
   // Hover turns the board over — but only when there is a back to SEE. A part
   // with rear pins and no rear photo would spin to a blank face, which reads as
   // the image failing to load.
@@ -265,7 +264,6 @@ function CatalogCard({
       </span>
       <div className="pcat__card-top">
         <span className="pcat__card-name">{part.name}</span>
-        <span className="pcat__card-sku">{sku}</span>
       </div>
       <div className={`pcat__card-img${flipping ? ' is-flipping' : ''}`}>
         {shown ? (

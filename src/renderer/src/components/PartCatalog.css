@@ -141,7 +141,7 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px 20px 24px;
+  padding: 8px 16px 24px;
 }
 
 .pcat__empty {
@@ -187,8 +187,11 @@
 
 .pcat__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 14px;
+  /* 230px cards plus the 216px facet rail left only two columns in a ~1000px
+     window — the rail cost a whole column. A catalog wants many small cards
+     more than it wants a few big ones, so the floor came down to match. */
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
 }
 
 /* --- selectable item card (the whole card is a checkbox) --- */
@@ -306,7 +309,7 @@
   display: flex;
   /* The SKU rides the title's first line — `baseline` keeps it there when the
      name wraps, rather than centring it against a two-line block. */
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
 }
 .pcat__card-name {
@@ -331,12 +334,6 @@
      2.5em = 2 lines at the 1.25 line-height above. */
   min-height: 2.5em;
 }
-.pcat__card-sku {
-  flex: 0 0 auto;
-  font-family: var(--font-mono), 'JetBrains Mono', monospace;
-  font-size: 11px;
-  color: #97a09a;
-}
 .pcat__card-desc {
   margin-top: 3px;
   font-size: 12px;
@@ -353,7 +350,11 @@
 /* A part with a rear PHOTO turns over on hover and back off it, using the same
    coin spin as the Part Editor's flip button so the gesture reads as one thing.
    The face swaps at the halfway point, while the board is edge-on. */
-.pcat__card-img.is-flipping {
+/* The PART turns, not the card. Animating the frame span spun its white
+   background too, which read as the whole tile flipping rather than the board
+   being turned over inside it. */
+.pcat__card-img.is-flipping img,
+.pcat__card-img.is-flipping .pcat__card-noimg {
   animation: pcat-flip 420ms ease-in-out;
   transform-origin: center center;
 }
@@ -399,10 +400,10 @@
 }
 
 .pcat__sidebar {
-  flex: 0 0 216px;
+  flex: 0 0 196px;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 12px 24px 20px;
+  padding: 12px 10px 24px 16px;
   border-right: 1px solid var(--shellbd, #2c2e33);
 }
 

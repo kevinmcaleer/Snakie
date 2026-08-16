@@ -30,6 +30,8 @@ import {
   partsClaimingAddress
 } from './i2c-known-devices'
 import { floodFillTransparent, removeBackgroundFromEdges } from './image-bg-remove'
+import { rotateImage90 } from './image-rotate'
+import { opposite, rotateBreaksMesh, rotatePart, type RotateDir } from './part-rotate'
 import { bumpPatch } from '../../../shared/part-registry'
 import {
   CAPABILITIES,
@@ -328,6 +330,22 @@ const ICON: Record<string, JSX.Element> = {
       <g fill="none" stroke="currentColor" strokeWidth="1.4">
         <path d="M8 1.5v13M1.5 8h13" />
         <path d="M8 1.5l-2 2M8 1.5l2 2M8 14.5l-2-2M8 14.5l2-2M1.5 8l2-2M1.5 8l2 2M14.5 8l-2-2M14.5 8l-2 2" />
+      </g>
+    </svg>
+  ),
+  rotateRight: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M13 6A5.5 5.5 0 1 0 13 10" />
+        <path d="M13 2v4h-4" strokeLinejoin="round" />
+      </g>
+    </svg>
+  ),
+  rotateLeft: (
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+        <path d="M3 6A5.5 5.5 0 1 1 3 10" />
+        <path d="M3 2v4h4" strokeLinejoin="round" />
       </g>
     </svg>
   ),
@@ -682,6 +700,34 @@ export function PartEditor({
         : 0.6
 
   const patch = (p: Partial<PartDefinition>): void => setPart((d) => ({ ...d, ...p }))
+  /**
+   * Turn the whole board a quarter turn (#749) — pads, holes, connectors,
+   * components, labels, outline and both photos. The pixels are turned first so
+   * the geometry and the picture land in the SAME undo step; doing it the other
+   * way round left an undo that put the board back but not the photo.
+   */
+  const rotateBoard = async (dir: RotateDir): Promise<void> => {
+    const frontSrc = part.imageData
+    // The rear photo is stored in the rear view's own space, so it turns the
+    // other way — exactly as its image layer does.
+    const rearSrc = part.rear?.imageData
+    const [front, rear] = await Promise.all([
+      frontSrc ? rotateImage90(frontSrc, dir) : Promise.resolve(null),
+      rearSrc ? rotateImage90(rearSrc, opposite(dir)) : Promise.resolve(null)
+    ])
+    setPart((d) => {
+      const next = rotatePart(d, dir)
+      if (front) next.imageData = front
+      if (rear) next.rear = { ...(next.rear ?? {}), imageData: rear }
+      return next
+    })
+    setStatus({
+      kind: 'info',
+      text: rotateBreaksMesh(part)
+        ? `Rotated ${dir === 'cw' ? 'right' : 'left'}. The 3-D model can't be turned with it, so the mesh no longer matches the outline.`
+        : `Rotated ${dir === 'cw' ? 'right' : 'left'}.`
+    })
+  }
 
   // Layer visibility is PERSISTED on the part, so the Parts Library preview and
   // the Board View respect what the author hid (e.g. a traced PCB image stays
@@ -1293,6 +1339,13 @@ export function PartEditor({
                 </button>
                 <button type="button" className="pe__iconbtn" onClick={() => setFitSignal((n) => n + 1)} title="Fit / reset the view" aria-label="Fit">
                   {ICON.fit}
+                </button>
+                <span className="pe__divider" />
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('ccw')} title="Rotate the board 90° left" aria-label="Rotate left">
+                  {ICON.rotateLeft}
+                </button>
+                <button type="button" className="pe__iconbtn" onClick={() => void rotateBoard('cw')} title="Rotate the board 90° right" aria-label="Rotate right">
+                  {ICON.rotateRight}
                 </button>
                 <span className="pe__divider" />
                 <button type="button" className="pe__iconbtn" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" aria-label="Undo">

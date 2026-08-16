@@ -33,7 +33,10 @@ describe('PartCatalog (#613)', () => {
     expect(out).toContain('Motor')
     // A card per part with name + SKU + description.
     expect(out).toContain('LED')
-    expect(out).toContain('LED-5MM')
+    // The SKU is deliberately NOT on the card any more — it earned no room in a
+    // browsing grid. It belongs on the details view, where there's space to say
+    // what it is.
+    expect(out).not.toContain('LED-5MM')
     expect(out).toContain('A basic 5mm LED.')
     expect(out).toContain('SG90 Servo')
     expect(out).toContain('9g micro servo.')
