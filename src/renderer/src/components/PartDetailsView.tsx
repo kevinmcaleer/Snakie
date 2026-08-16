@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState, type JSX } from 'react'
+import { type CSSProperties, Suspense, lazy, useEffect, useMemo, useState, type JSX } from 'react'
 import { PartCanvas } from './PartCanvas'
 import { PartSchematicView } from './PartSchematicView'
 import { Markdown } from './Markdown'
@@ -53,6 +53,13 @@ export interface PartDetailsViewProps {
   onToggleSelected: () => void
   /** Back to the grid. */
   onClose: () => void
+  /**
+   * Where the view should appear to grow FROM: the centre of the disclosure
+   * that opened it, in pixels relative to the catalog panel. Absent (a keyboard
+   * open, or a caller that doesn't track it) simply means no animation, rather
+   * than one that flies in from an arbitrary corner.
+   */
+  origin?: { x: number; y: number } | null
 }
 
 const PREVIEW_LABELS: Record<PartPreviewMode, string> = {
@@ -79,7 +86,8 @@ export function PartDetailsView({
   part,
   selected,
   onToggleSelected,
-  onClose
+  onClose,
+  origin
 }: PartDetailsViewProps): JSX.Element {
   // The parts folder is only knowable from the main process, and only the desktop
   // has one — the web build reports `''`, which resolves every mesh to nothing.
@@ -114,7 +122,17 @@ export function PartDetailsView({
   const subtitle = [part.family, part.manufacturer, part.partNumber].filter(Boolean).join(' · ')
 
   return (
-    <section className="pdt" aria-label={`${part.name} details`}>
+    <section
+      className={`pdt${origin ? ' is-growing' : ''}`}
+      // The origin rides in as custom properties so the keyframes stay in CSS —
+      // only the ONE number that can't be known until the click is passed in.
+      style={
+        origin
+          ? ({ '--pdt-ox': `${origin.x}px`, '--pdt-oy': `${origin.y}px` } as CSSProperties)
+          : undefined
+      }
+      aria-label={`${part.name} details`}
+    >
       <header className="pdt__head">
         <div className="pdt__titles">
           <h2 className="pdt__title">{part.name}</h2>

@@ -471,3 +471,46 @@
     max-height: 46vh;
   }
 }
+
+/* --- opening: grow out of the disclosure that was pressed -------------------
+   The details are a DETOUR from the grid, and an overlay that simply replaces
+   the page doesn't say that — it reads as navigation. Growing from the control
+   that opened it keeps the grid's place in view and makes the ✕ an obvious way
+   back. `--pdt-ox/oy` are the button's centre relative to the panel, set inline
+   because they can't be known until the click.
+
+   Scale + fade only: no width/height, so this is a compositor-only animation
+   and the (three.js, markdown, canvas) contents underneath are never relaid
+   out mid-flight. */
+.pdt.is-growing {
+  transform-origin: var(--pdt-ox, 50%) var(--pdt-oy, 50%);
+  animation: pdt-grow 240ms cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes pdt-grow {
+  from {
+    transform: scale(0.14);
+    opacity: 0;
+    /* Rounded while small, square once it fills the panel — it leaves the card
+       looking like a card and arrives looking like a page. */
+    border-radius: 14px;
+  }
+  /* Opaque early: the grid showing THROUGH the growing panel for the whole
+     240ms reads as a ghost rather than a card opening. */
+  45% {
+    opacity: 1;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+    border-radius: 0;
+  }
+}
+
+/* Respect a stated preference for less motion: the view still appears, it just
+   doesn't travel. */
+@media (prefers-reduced-motion: reduce) {
+  .pdt.is-growing {
+    animation: none;
+  }
+}

@@ -51,6 +51,14 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
   // restores the selection, the filters and the scroll position by never having
   // torn them down.
   const [details, setDetails] = useState<CatalogItem | null>(null)
+  // Where the details should look like they grew from — the disclosure's centre,
+  // relative to the panel. Kept beside `details` rather than inside it so the
+  // existing reads stay put; it is presentation, not identity.
+  const [detailsOrigin, setDetailsOrigin] = useState<{ x: number; y: number } | null>(null)
+  const openDetails = (item: CatalogItem, from: { x: number; y: number } | null): void => {
+    setDetailsOrigin(from)
+    setDetails(item)
+  }
 
   // De-dupe the libraries by id, and list LOCAL (user) libraries first so their
   // part wins a duplicate-id tie in the "All libraries" view.
@@ -202,7 +210,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
                     item={item}
                     checked={selected.has(keyOf(item))}
                     onToggle={() => toggle(item)}
-                    onOpen={() => setDetails(item)}
+                    onOpen={(from) => openDetails(item, from)}
                     showType
                   />
                 ))}
@@ -222,7 +230,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
                       item={item}
                       checked={selected.has(keyOf(item))}
                       onToggle={() => toggle(item)}
-                      onOpen={() => setDetails(item)}
+                      onOpen={(from) => openDetails(item, from)}
                     />
                   ))}
                 </div>
@@ -239,6 +247,7 @@ export function PartCatalog({ libraries, onClose, onAddMany }: PartCatalogProps)
             part={details.part}
             selected={selected.has(keyOf(details))}
             onToggleSelected={() => toggle(details)}
+            origin={detailsOrigin}
             onClose={() => setDetails(null)}
           />
         )}
@@ -259,7 +268,7 @@ function CatalogCard({
   checked: boolean
   onToggle: () => void
   /** Open this part's full details (#748) — the hover disclosure. */
-  onOpen: () => void
+  onOpen: (from: { x: number; y: number } | null) => void
   /** Show the part's type on the card. Set in the FLAT (filtered) grid, where
    *  there is no shelf heading saying it (#747). */
   showType?: boolean
@@ -310,7 +319,16 @@ function CatalogCard({
           onClick={(e) => {
             e.preventDefault()
             e.stopPropagation()
-            onOpen()
+            // Measure the button against the PANEL, not the viewport: the details
+            // are absolutely positioned inside the panel, so that is the box its
+            // transform-origin is expressed in.
+            const b = e.currentTarget.getBoundingClientRect()
+            const panel = e.currentTarget.closest('.pcat__panel')?.getBoundingClientRect()
+            onOpen(
+              panel
+                ? { x: b.left + b.width / 2 - panel.left, y: b.top + b.height / 2 - panel.top }
+                : null
+            )
           }}
           title={`More about ${part.name}`}
           aria-label={`More about ${part.name}`}
