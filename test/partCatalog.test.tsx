@@ -84,12 +84,14 @@ describe('hover flip (#636)', () => {
     expect(out, 'the back is only revealed on hover').not.toContain('base64,BACK')
   })
 
-  it('marks which face is showing, but only for a part that HAS a back', () => {
-    // Without the badge, a board whose sides look alike leaves you unsure the
-    // hover did anything.
+  it('no longer labels the face — the flip itself is the feedback', () => {
+    // The FRONT/BACK badge was removed: it sat on every card with a rear photo,
+    // shouting a fact the picture already shows the moment you hover. What it
+    // guarded — that only a part with a rear PHOTO gets the flip at all — is
+    // still covered by `partHasRearImage` below and by the hover wiring above.
     const out = html(<PartCatalog libraries={withRear} onClose={() => {}} onAdd={() => {}} />)
-    expect(out).toContain('pcat__card-face')
-    expect((out.match(/pcat__card-face/g) ?? []).length, 'one badge, not two').toBe(1)
+    expect(out).not.toContain('pcat__card-face')
+    expect(out).not.toMatch(/>FRONT</)
   })
 })
 

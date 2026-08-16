@@ -156,7 +156,10 @@
 }
 
 .pcat__shelf-name {
-  display: flex;
+  /* inline-flex, so the rule under the heading is as wide as the words rather
+     than the whole shelf — a full-width border reads as a section divider, which
+     is more weight than a category name needs. */
+  display: inline-flex;
   align-items: center;
   gap: 8px;
   margin: 0 0 10px;
@@ -167,6 +170,11 @@
   text-transform: uppercase;
   color: #47524b;
   border-bottom: 1px solid #e2e5df;
+}
+.pcat__shelf {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
 }
 .pcat__shelf-count {
   font-size: 11px;
@@ -347,22 +355,6 @@
   }
 }
 
-/* Which face you are looking at — otherwise a board whose two sides look alike
-   leaves you unsure whether the hover did anything. */
-.pcat__card-face {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  padding: 0.05rem 0.3rem;
-  font-family: var(--font-mono);
-  font-size: 0.56rem;
-  letter-spacing: 0.06em;
-  color: #fff;
-  background: rgba(0, 0, 0, 0.55);
-  border-radius: 3px;
-  pointer-events: none;
-}
-
 @media (prefers-reduced-motion: reduce) {
   /* Keep the face CHANGE — that is the information — and drop the spin. */
   .pcat__card-img.is-flipping {
@@ -425,7 +417,9 @@
 /* The type, shown on a card only in the FLAT filtered grid — it carries what
    the shelf heading used to say, so collapsing the shelves loses nothing (#747). */
 .pcat__card-type {
-  align-self: flex-start;
+  /* inline-block hugs the text whatever the card body's layout is; align-self
+     only works if the parent happens to be flex, and it is not. */
+  display: inline-block;
   margin-bottom: 2px;
   padding: 1px 6px;
   font-size: 10px;

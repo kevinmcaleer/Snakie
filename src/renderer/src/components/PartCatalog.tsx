@@ -280,11 +280,6 @@ function CatalogCard({
         {showType && part.family && <div className="pcat__card-type">{part.family}</div>}
         {part.description && <div className="pcat__card-desc">{part.description}</div>}
       </div>
-      {rearImage && (
-        <span className="pcat__card-face" aria-hidden="true">
-          {face === 'rear' ? 'BACK' : 'FRONT'}
-        </span>
-      )}
     </label>
   )
 }
