@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cablePlugStyle, connectorSize } from '../src/renderer/src/components/part-body'
+import { cablePlugStyle, connectorSize, connectorStyle } from '../src/renderer/src/components/part-body'
 import { connectorDims } from '../src/renderer/src/components/part-editor.util'
 import type { PartConnector } from '../src/shared/part'
 
@@ -153,5 +153,43 @@ describe('cable plug colours (#…)', () => {
   it('Grove stays off-white and DuPont stays black', () => {
     expect(cablePlugStyle('grove').shell.toLowerCase()).toBe('#e8e5da')
     expect(cablePlugStyle('dupont').shell.toLowerCase()).toBe('#22262c')
+  })
+})
+
+describe('board socket colours', () => {
+  const lum = (hex: string): number => {
+    const n = parseInt(hex.slice(1), 16)
+    return ((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114
+  }
+
+  it('a QWIIC socket is ivory — the JST-SH header moulding', () => {
+    // JST's SH datasheet: base housing "PA (Heat resistance), natural (ivory)".
+    // It drew near-black, which is the DuPont colour.
+    const q = connectorStyle('qwiic')
+    expect(lum(q.shell)).toBeGreaterThan(180)
+    expect(lum(q.edge)).toBeLessThan(lum(q.shell)) // still reads on a light board
+  })
+
+  it('a JST declared as the SH family looks identical to a QWIIC', () => {
+    // Same moulding, so the two spellings must not diverge — their sizes were
+    // unified for exactly this reason.
+    expect(connectorStyle('jst', 'sh')).toEqual(connectorStyle('qwiic'))
+  })
+
+  it('other JST families keep the dark shell — their colours are unverified', () => {
+    expect(lum(connectorStyle('jst', 'ph').shell)).toBeLessThan(80)
+    expect(lum(connectorStyle('jst').shell)).toBeLessThan(80) // default family
+  })
+
+  it('the lead is lighter than the socket it plugs into', () => {
+    // White PBT housing into an ivory PA header — a real QWIIC pair, and the
+    // difference is what stops the plug vanishing into the port.
+    expect(lum(cablePlugStyle('qwiic').shell)).toBeGreaterThan(lum(connectorStyle('qwiic').shell))
+  })
+
+  it('DuPont stays a black header with gold pins', () => {
+    const d = connectorStyle('dupont')
+    expect(lum(d.shell)).toBeLessThan(40)
+    expect(d.male).toBe(true)
   })
 })

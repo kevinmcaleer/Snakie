@@ -11,7 +11,14 @@ import {
 } from './part-editor.util'
 import { isPowerLed, powerLedState } from '../../../shared/power-led'
 import type { PowerLedState } from '../../../shared/power-led'
-import { cornerRadiusFraction, itemSide, mirrorRotationX, mirrorX, padPassesThrough } from '../../../shared/part'
+import {
+  coerceJstFamily,
+  cornerRadiusFraction,
+  itemSide,
+  mirrorRotationX,
+  mirrorX,
+  padPassesThrough
+} from '../../../shared/part'
 import type {
   OnboardLed,
   PartConnector,
@@ -960,12 +967,20 @@ export function onboardLedLabel(led: OnboardLed): string {
  * plug INTO** (QWIIC/JST/Grove — a shell with recessed contacts), because the two
  * are drawn differently and only the socket gets a shell lip.
  */
-function connectorStyle(kind: PartConnector['kind']): {
+export function connectorStyle(
+  kind: PartConnector['kind'],
+  variant?: string
+): {
   shell: string
   edge: string
   contact: string
   male: boolean
 } {
+  // JST SH board header — "PA (Heat resistance), natural (ivory)" straight off
+  // JST's datasheet. A QWIIC port really is that pale; it drew near-black here,
+  // which is the DuPont colour. The lead that plugs into it is a shade lighter
+  // still (white PBT) — see `cablePlugStyle`.
+  const shIvory = { shell: '#efe9d8', edge: '#b3ab95', contact: '#e6c34a', male: false }
   switch (kind) {
     case 'grove':
       // Grove's instantly-recognisable off-white keyed shell.
@@ -976,9 +991,16 @@ function connectorStyle(kind: PartConnector['kind']): {
       // The colour these blocks are known by. Screws are steel, not gold — the
       // one visual cue that says "screw terminal" rather than "pin header".
       return { shell: '#1f7a3a', edge: '#0d3d1d', contact: '#c9ccd1', male: false }
+    case 'jst':
+      // A JST declared as the SH family IS a QWIIC port — same moulding, so the
+      // two spellings must not look different (their SIZES were unified for the
+      // same reason). Other families keep the dark shell: their colours aren't
+      // datasheet-checked, so this doesn't guess for them.
+      return coerceJstFamily(variant) === 'sh'
+        ? shIvory
+        : { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
     default:
-      // QWIIC / STEMMA QT and plain JST — dark JST-SH / JST-PH housings.
-      return { shell: '#1c1f24', edge: '#0b0d10', contact: '#e6c34a', male: false }
+      return shIvory // qwiic / STEMMA QT
   }
 }
 
@@ -1054,7 +1076,7 @@ export function connectorGlyph(
   bodyOnly = false
 ): JSX.Element {
   const { n, w, h } = connectorSize(conn, pxPerMm)
-  const { shell, edge, contact, male } = connectorStyle(conn.kind)
+  const { shell, edge, contact, male } = connectorStyle(conn.kind, conn.variant)
   const x0 = cx - w / 2
   const y0 = cy - h / 2
   // Contacts scale with the housing. A socket gets thin recessed blades; a male
