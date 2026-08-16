@@ -21,7 +21,7 @@ properties:
   sensor: LTR-381RGB-01 ambient light + colour
   measures: lux, red/green/blue, colour temperature (K), infrared
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.10
+version: 0.1.11
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -65,23 +65,15 @@ headers:
         shape: header
         x: 0.592655029296875
         y: 0.04990509305968019
-      - name: SCL
-        type: io
+      - name: GND
+        type: gnd
         number: 8
-        capabilities:
-          - i2c
-        signals:
-          i2c: SCL
         shape: header
         x: 0.4061952209472656
         y: 0.9511122638369459
-      - name: SDA
-        type: io
+      - name: GND
+        type: gnd
         number: 7
-        capabilities:
-          - i2c
-        signals:
-          i2c: SDA
         shape: header
         x: 0.46689834594726565
         y: 0.9511122638369459
@@ -110,17 +102,6 @@ mountingHoles:
   - x: 0.10976
     y: 0.81546
     diameter: 1.5
-shapes:
-  - kind: rect
-    x: 0.435
-    y: 0.4
-    label: LTR-381
-    fill: "#2b2f36"
-    stroke: "#14171b"
-    strokeWidth: 1
-    w: 0.13
-    h: 0.2
-    cornerRadius: 2
 rails:
   - name: GND
     pins:
@@ -183,6 +164,9 @@ connectors:
           - i2c
         signals:
           i2c: SCL
+image: image.jpg
+rear:
+  image: rear.jpg
 help: help.md
 mesh: modulino.stl
 meshUnits: mm

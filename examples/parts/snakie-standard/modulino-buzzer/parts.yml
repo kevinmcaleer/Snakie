@@ -21,7 +21,7 @@ properties:
   mcu: STM32C011
   outputs: tones by frequency + duration; a NOTES table for melodies
   chain: QWIIC socket at each end, same bus in parallel
-version: 0.1.2
+version: 0.1.10
 pcbColor: "#00979d"
 aspect: 1.617
 dimensions:
@@ -35,15 +35,13 @@ headers:
     pins:
       - name: PA0
         type: io
-        number: 8
-        capabilities:
-          - digital
+        number: 1
         shape: header
         x: 0.28147101581331124
         y: 0.0480588517855896
       - name: RX1
         type: io
-        number: 7
+        number: 2
         capabilities:
           - uart
         signals:
@@ -55,7 +53,7 @@ headers:
         y: 0.0480588517855896
       - name: TX1
         type: io
-        number: 6
+        number: 3
         capabilities:
           - uart
         signals:
@@ -67,33 +65,33 @@ headers:
         y: 0.04797094728167
       - name: P3
         type: io
-        number: 5
+        number: 4
         shape: header
         x: 0.4671391805013021
         y: 0.04797094728167
       - name: SWCLK
         type: io
-        number: 4
+        number: 5
         shape: header
         x: 0.5299398295084635
         y: 0.04797094728167
       - name: PF2
         type: io
-        number: 3
+        number: 6
         capabilities:
           - digital
         shape: header
         x: 0.5908061726888021
-        y: 0.04797094728167
+        y: 0.0480588517855896
       - name: 3v3
         type: pwr
-        number: 2
+        number: 7
         shape: header
         x: 0.657755126953125
         y: 0.04797094728167
       - name: GND
         type: gnd
-        number: 1
+        number: 8
         shape: header
         x: 0.7187506951084213
         y: 0.0480588517855896
