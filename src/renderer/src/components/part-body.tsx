@@ -538,6 +538,39 @@ export function padPinNumber(num: string): string {
   return /^\d$/.test(num) ? `0${num}` : num
 }
 
+/**
+ * Keep a pin label the right way up on a ROTATED part.
+ *
+ * A label carries its own angle from the edge it sits on — 0 for a left/right
+ * pin, ∓90 for a top/bottom one — and the body's rotation is then countered so
+ * text doesn't spin with the board. Composing those two can land in the
+ * upside-down half: a TOP-edge pin (−90) on a part rotated 90° gives −180, which
+ * is exactly the "labels along the top edge read upside down" report.
+ *
+ * So fold the result out of that half. A 180° fold also throws the glyphs across
+ * their anchor, so the anchor swaps with it — the same trick {@link boxedPinLabel}
+ * already uses for a 180° body. The result always reads left-to-right or, at
+ * worst, rotated a quarter turn — never mirrored or inverted. Pure.
+ */
+export function readablePinLabel(
+  localRotate: number,
+  bodyRotate: number,
+  anchor: 'start' | 'middle' | 'end'
+): { rotate: number; anchor: 'start' | 'middle' | 'end' } {
+  let r = (((localRotate - bodyRotate) % 360) + 360) % 360 // 0..359
+  let flipped = false
+  // EXCLUSIVE at both ends: 90 and 270 are quarter turns, which read fine on
+  // their side — folding those would spin every already-legible top/bottom
+  // label on an unrotated part. Only the genuinely inverted span folds.
+  if (r > 90 && r < 270) {
+    r -= 180
+    flipped = true
+  }
+  r = ((r + 540) % 360) - 180 // back to (-180, 180]
+  const opposite = { start: 'end', middle: 'middle', end: 'start' } as const
+  return { rotate: r, anchor: flipped ? opposite[anchor] : anchor }
+}
+
 export function boxedPinLabel(
   box: { x: number; y: number; w: number; h: number },
   cx: number,
@@ -1295,11 +1328,10 @@ export function PartBody({
     const r = localRotate - textRot
     return r ? `rotate(${r} ${x} ${y})` : undefined
   }
-  const pinLabelTransform = (x: number, y: number, localRotate: number): string | undefined => {
-    const r = localRotate - textRot
+  const pinLabelTransform = (x: number, y: number, rotate: number): string | undefined => {
     const s = bodyScale > 0 ? 1 / bodyScale : 1
-    if (!r && s === 1) return undefined
-    return `translate(${x} ${y}) rotate(${r}) scale(${s}) translate(${-x} ${-y})`
+    if (!rotate && s === 1) return undefined
+    return `translate(${x} ${y}) rotate(${rotate}) scale(${s}) translate(${-x} ${-y})`
   }
   // Honour the part's own saved layer visibility (so the Board View / library
   // preview hide what the author hid, e.g. a traced PCB image) unless the caller
@@ -1632,17 +1664,23 @@ export function PartBody({
                   )}
                 </g>
               ) : boxedActive ? null : (
-                text && (
-                  <text
-                    x={ll.lx}
-                    y={ll.ly}
-                    className="pcv__pin-label"
-                    textAnchor={ll.anchor}
-                    transform={pinLabelTransform(ll.lx, ll.ly, ll.rotate)}
-                  >
-                    {text}
-                  </text>
-                )
+                text &&
+                  (() => {
+                    // Fold the composed angle out of the upside-down half, so a
+                    // top-edge label on a rotated part still reads (#…).
+                    const lbl = readablePinLabel(ll.rotate, textRot, ll.anchor)
+                    return (
+                      <text
+                        x={ll.lx}
+                        y={ll.ly}
+                        className="pcv__pin-label"
+                        textAnchor={lbl.anchor}
+                        transform={pinLabelTransform(ll.lx, ll.ly, lbl.rotate)}
+                      >
+                        {text}
+                      </text>
+                    )
+                  })()
               )}
               {/* Capability chips (breadboard hover) — box-relative like the labels
                   so they always clear the number box + label; fade in from the board
