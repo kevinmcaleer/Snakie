@@ -29,7 +29,7 @@ dimensions:
 # parts:modulino-meshes`, never hand-edit.
 mesh: modulino.stl
 meshUnits: mm
-mass_g: 4.0
+mass_g: 4.4  # Arduino tech specs
 # 0x7C. The onboard MCU means this one CAN be re-addressed, so two Buttons
 # modules can share a chain.
 i2cAddresses: [124]

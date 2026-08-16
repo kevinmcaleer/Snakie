@@ -75,10 +75,22 @@ describe('Modulino parts follow the shared template (#722)', () => {
       // Without the rails the two sockets are four independent nets and a
       // chained module downstream reads as unpowered.
       const rails = part.rails ?? []
-      expect(rails.map((r) => r.name).sort()).toEqual([...BUS_PINS].sort())
-      for (const rail of rails) expect(rail.pins.length).toBe(2)
-      // Every rail pin is a real pin on one of the connectors.
-      const pinNames = new Set((part.connectors ?? []).flatMap((c) => c.pins.map((p) => p.name)))
+      const byName = new Map(rails.map((r) => [r.name, r]))
+      for (const net of BUS_PINS) {
+        const rail = byName.get(net)
+        expect(rail, `${dir} declares a ${net} rail`).toBeTruthy()
+        // BOTH sockets' pins for that net must be on it. A rail may carry MORE
+        // than the pair — Motors ties its screw-terminal ground here, because
+        // the motor supply's return really is the logic ground (only the
+        // positive rail is separate) — so this checks membership, not length.
+        expect(rail!.pins).toContain(net)
+        expect(rail!.pins).toContain(`${net}-B`)
+      }
+      // Every rail pin is a real pin somewhere on the part.
+      const pinNames = new Set([
+        ...(part.connectors ?? []).flatMap((c) => c.pins.map((p) => p.name)),
+        ...(part.headers ?? []).flatMap((h) => h.pins.map((p) => p.name))
+      ])
       for (const rail of rails) {
         for (const pin of rail.pins) expect(pinNames.has(pin), `${rail.name} → ${pin}`).toBe(true)
       }
