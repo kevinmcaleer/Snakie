@@ -284,6 +284,21 @@ export const MODULES: ModuleDef[] = [
     license: 'MIT'
   },
   {
+    id: 'modulino',
+    name: 'Arduino Modulino',
+    description: 'Every Modulino module — buttons, knob, pixels, distance, IMU… — in one package.',
+    // No single instrument: the range spans IMU, light, distance, LED and more,
+    // so it groups under "Other drivers" rather than claiming one panel (#721).
+    importName: 'modulino',
+    // ONE catalog entry for the whole range (#722): all thirteen parts declare
+    // `module:modulino`, so the Driver Install banner — which probes by import —
+    // collapses them into a single install offer instead of thirteen identical
+    // ones. Its package.json declares `deps` (lsm6dsox, ltr-381rgb-01, HS3003)
+    // and mip installs those transitively, which is what makes Movement, Light
+    // and Thermo work at all.
+    source: { kind: 'mip', spec: 'github:arduino/arduino-modulino-mpy' }
+  },
+  {
     id: 'sdcard',
     name: 'SD card (SPI)',
     description: 'Mount a microSD card over SPI — e.g. the XIAO Expansion Base slot.',

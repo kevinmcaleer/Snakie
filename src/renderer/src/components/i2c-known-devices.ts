@@ -13,26 +13,39 @@ export const KNOWN_I2C_DEVICES: Record<number, string[]> = {
   0x1e: ['HMC5883L magnetometer', 'LSM303 mag'],
   0x23: ['BH1750 light sensor'],
   0x27: ['PCF8574 I/O expander (LCD backpack)'],
-  0x29: ['VL53L0X / VL53L1X ToF', 'TSL2591 light', 'BNO055 IMU (alt)'],
+  0x29: ['VL53L0X / VL53L1X ToF', 'TSL2591 light', 'BNO055 IMU (alt)', 'Modulino Distance'],
   0x38: ['AHT10 / AHT20 temp+humidity', 'FT6206 touch'],
   0x39: ['APDS-9960 gesture/colour', 'TSL2561 light'],
-  0x3c: ['SSD1306 / SH1106 OLED'],
+  0x3c: ['SSD1306 / SH1106 OLED', 'Modulino Buzzer'],
   0x3d: ['SSD1306 / SH1106 OLED (alt)'],
   0x40: ['PCA9685 PWM driver', 'INA219 current', 'HTU21D / Si7021 humidity'],
-  0x48: ['ADS1115 / ADS1015 ADC', 'TMP102 temp', 'PCF8591'],
+  0x48: ['ADS1115 / ADS1015 ADC', 'TMP102 temp', 'PCF8591', 'Modulino Motors'],
   0x49: ['ADS1115 ADC (alt)', 'TSL2561 light (alt)'],
   0x4a: ['ADS1115 ADC (alt)'],
-  0x53: ['ADXL345 accelerometer (alt)'],
+  0x53: ['ADXL345 accelerometer (alt)', 'Modulino Light'],
   0x57: ['MAX30102 pulse oximeter', 'AT24C32 EEPROM'],
   0x5a: ['MLX90614 IR thermometer', 'CCS811 air quality'],
   0x5b: ['CCS811 air quality (alt)'],
   0x60: ['MPL3115A2 pressure', 'ATECC608 crypto', 'SI1145 UV'],
   0x68: ['ICM-20948 / MPU-6050 / MPU-9250 IMU', 'DS1307 / DS3231 RTC'],
   0x69: ['ICM-20948 / MPU IMU (alt)'],
-  0x70: ['TCA9548A I²C mux', 'HT16K33 LED matrix'],
-  0x76: ['BME280 / BMP280 environmental'],
+  0x70: ['TCA9548A I²C mux', 'HT16K33 LED matrix', 'Modulino Vibro'],
+  0x76: ['BME280 / BMP280 environmental', 'Modulino Knob (alt)'],
   0x77: ['BME280 / BMP280 environmental (alt)', 'BME680'],
-  0x5c: ['AM2320 temp+humidity', 'LPS25 pressure']
+  0x5c: ['AM2320 temp+humidity', 'LPS25 pressure'],
+  // Arduino Modulinos (#721) — a chained stack then names itself in a scan
+  // instead of printing bare hex. The four modules with no onboard MCU
+  // (Distance, Thermo, Light, Movement) answer on their sensor's own fixed
+  // address, so they appear beside the raw chip above.
+  0x04: ['Modulino Latch Relay'],
+  0x44: ['Modulino Thermo (HS3003)'],
+  0x58: ['Modulino Joystick'],
+  0x6a: ['Modulino Movement (LSM6DSOX)'],
+  0x6b: ['Modulino Movement (LSM6DSOX, alt)'],
+  0x6c: ['Modulino Pixels'],
+  0x72: ['Modulino LED Matrix'],
+  0x74: ['Modulino Knob'],
+  0x7c: ['Modulino Buttons']
 }
 
 /** Human names for a found address — `[]` when we don't recognise it. */
