@@ -1,22 +1,25 @@
-id: modulino-buttons
-name: Modulino Buttons
-description: Three buttons and three LEDs on an I²C Modulino, daisy-chainable over QWIIC.
+id: modulino-buzzer
+name: Modulino Buzzer
+description: Piezo buzzer driven over I²C — tones by frequency and duration.
 manufacturer: Arduino
-family: Input
+family: Output
 tags:
   - modulino
   - arduino
   - i2c
   - qwiic
-  - button
-  - led
+  - audio
+  - buzzer
+  - piezo
+  - sound
 package: SMD
 voltage: 3.3V
-partNumber: ABX00110
+partNumber: ABX00108
 properties:
-  interface: I²C (0x7C, re-addressable — onboard MCU)
-  inputs: 3 momentary buttons (A, B, C)
-  outputs: 3 LEDs, one above each button
+  interface: I²C (0x3C, re-addressable — onboard MCU)
+  buzzer: Murata PKLCS1212E4001-R1 piezo
+  mcu: STM32C011
+  outputs: tones by frequency + duration; a NOTES table for melodies
   chain: QWIIC socket at each end, same bus in parallel
 version: 0.1.0
 pcbColor: "#00979d"
@@ -25,8 +28,8 @@ aspect: 1.617
 dimensions:
   width: 41
   height: 25.36
-# The real board's 2 mm corner radius (#739), so the 2-D outline matches the
-# generated mesh instead of an eyeballed fraction.
+# The board's measured 4.6 mm corner radius (#739); the generated mesh uses the
+# same number, so the 2-D outline and the 3-D model agree.
 shape:
   kind: rect
   cornerRadiusMm: 4.6
@@ -34,49 +37,35 @@ shape:
 # parts:modulino-meshes`, never hand-edit.
 mesh: modulino.stl
 meshUnits: mm
-mass_g: 4.4  # Arduino tech specs
-# 0x7C. The onboard MCU means this one CAN be re-addressed, so two Buttons
-# modules can share a chain.
-i2cAddresses: [124]
+mass_g: 4.2  # Arduino tech specs
+# 0x3C, software-configurable via the onboard STM32C011 — so two Buzzers can
+# share a chain. Note it collides with the common SSD1306/SH1106 OLED default.
+i2cAddresses: [60]
+# The piezo can, centred — 12 mm square, the board's one raised part.
+shapes:
+  - kind: circle
+    x: 0.354
+    y: 0.264
+    w: 0.293
+    h: 0.473
+    fill: "#1c1f24"
+    stroke: "#0d0f12"
+    strokeWidth: 1
+    label: PIEZO
 mountingHoles:
   - x: 0.10976
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.10976
     y: 0.81546
-    diameter: 3.2
-buttons:
-  - x: 0.3
-    y: 0.62
-    label: A
-  - x: 0.5
-    y: 0.62
-    label: B
-  - x: 0.7
-    y: 0.62
-    label: C
-leds:
-  - x: 0.3
-    y: 0.34
-    kind: single
-    label: A
-  - x: 0.5
-    y: 0.34
-    kind: single
-    label: B
-  - x: 0.7
-    y: 0.34
-    kind: single
-    label: C
-# A QWIIC socket at each end. They are the SAME bus wired in parallel — that is
-# what makes Modulinos daisy-chainable — so the two sockets' pins are joined by
-# the rails below rather than being four independent nets.
+    diameter: 1.5
+
 connectors:
   - z: 0
     kind: qwiic

@@ -46,8 +46,10 @@ export const BOARD = {
   widthMm: 25.36,
   /** Along z (standard 1.6 mm FR-4). */
   thicknessMm: 1.6,
-  /** Outline corner radius — not published; eyeballed from the product photos. */
-  cornerRadiusMm: 2,
+  /** Outline corner radius. Measured in the Part Editor against a real board
+   *  photo (#735) — it replaced a 2 mm guess eyeballed from product shots. The
+   *  parts state the same number, and the conformance test holds them equal. */
+  cornerRadiusMm: 4.6,
   /** Ø3.2 mm mounting holes on a 16 (y) × 32 (x) mm pitch, so centres sit at
    *  (±16, ±8) — 4.5 mm from each end, 4.68 mm from each side. */
   holeDiameterMm: 3.2,

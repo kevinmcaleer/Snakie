@@ -1,22 +1,24 @@
-id: modulino-buttons
-name: Modulino Buttons
-description: Three buttons and three LEDs on an I²C Modulino, daisy-chainable over QWIIC.
+id: modulino-distance
+name: Modulino Distance
+description: VL53L4CD time-of-flight distance sensor on an I²C Modulino, daisy-chainable over QWIIC.
 manufacturer: Arduino
-family: Input
+family: Sensor
 tags:
   - modulino
   - arduino
   - i2c
   - qwiic
-  - button
-  - led
+  - distance
+  - tof
+  - vl53l4cd
+  - sensor
 package: SMD
 voltage: 3.3V
-partNumber: ABX00110
+partNumber: ABX00102
 properties:
-  interface: I²C (0x7C, re-addressable — onboard MCU)
-  inputs: 3 momentary buttons (A, B, C)
-  outputs: 3 LEDs, one above each button
+  interface: I²C (0x29, FIXED — no onboard MCU)
+  sensor: VL53L4CDV0DH/1 time-of-flight
+  measures: distance to the nearest obstacle, in millimetres
   chain: QWIIC socket at each end, same bus in parallel
 version: 0.1.0
 pcbColor: "#00979d"
@@ -25,8 +27,8 @@ aspect: 1.617
 dimensions:
   width: 41
   height: 25.36
-# The real board's 2 mm corner radius (#739), so the 2-D outline matches the
-# generated mesh instead of an eyeballed fraction.
+# The board's measured 4.6 mm corner radius (#739); the generated mesh uses the
+# same number, so the 2-D outline and the 3-D model agree.
 shape:
   kind: rect
   cornerRadiusMm: 4.6
@@ -34,49 +36,36 @@ shape:
 # parts:modulino-meshes`, never hand-edit.
 mesh: modulino.stl
 meshUnits: mm
-mass_g: 4.4  # Arduino tech specs
-# 0x7C. The onboard MCU means this one CAN be re-addressed, so two Buttons
-# modules can share a chain.
-i2cAddresses: [124]
+mass_g: 4.1  # Arduino tech specs
+# 0x29 — the VL53L4CD's OWN address. There is no onboard MCU to re-map it,
+# so two Distance modules cannot share one chain.
+i2cAddresses: [41]
+# The ToF sensor package, centred — the one piece of top-side hardware.
+shapes:
+  - kind: rect
+    x: 0.435
+    y: 0.4
+    w: 0.13
+    h: 0.2
+    fill: "#2b2f36"
+    stroke: "#14171b"
+    strokeWidth: 1
+    cornerRadius: 2
+    label: VL53L4CD
 mountingHoles:
   - x: 0.10976
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.18454
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.89024
     y: 0.81546
-    diameter: 3.2
+    diameter: 1.5
   - x: 0.10976
     y: 0.81546
-    diameter: 3.2
-buttons:
-  - x: 0.3
-    y: 0.62
-    label: A
-  - x: 0.5
-    y: 0.62
-    label: B
-  - x: 0.7
-    y: 0.62
-    label: C
-leds:
-  - x: 0.3
-    y: 0.34
-    kind: single
-    label: A
-  - x: 0.5
-    y: 0.34
-    kind: single
-    label: B
-  - x: 0.7
-    y: 0.34
-    kind: single
-    label: C
-# A QWIIC socket at each end. They are the SAME bus wired in parallel — that is
-# what makes Modulinos daisy-chainable — so the two sockets' pins are joined by
-# the rails below rather than being four independent nets.
+    diameter: 1.5
+
 connectors:
   - z: 0
     kind: qwiic
