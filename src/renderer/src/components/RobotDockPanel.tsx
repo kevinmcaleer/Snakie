@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { RobotView } from './RobotView'
+import { SyncControl } from './SyncControl'
 import { dirname } from './robot-mesh'
 import { blankUrdf } from './robot-assembly'
 import { useWorkspace, announceSaved } from '../store/workspace'
@@ -257,6 +258,13 @@ export function RobotDockPanel({
         <div className="robotdock__loading">Loading 3D…</div>
       ) : (
         <RobotView urdfContent={urdf} basePath={base} compact={!full} homeOnMount={full} />
+      )}
+      {/* Electronics ⇄ Build reconcile (#717) — Build-workspace mount. Bottom
+          right: the hierarchy panel docks left, the pop-out button sits top. */}
+      {full && (
+        <div className="esync__float esync__float--right">
+          <SyncControl folder={currentFolder} />
+        </div>
       )}
       {/* Embedded in the MiniViewer (#595) 3-D mode: a single pop-out button that
           switches to the Build workspace (mirrors the mini-board → Electronics). */}

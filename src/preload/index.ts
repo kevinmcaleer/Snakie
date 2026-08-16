@@ -80,7 +80,7 @@ import type {
   RegistryEntry
 } from '../shared/part'
 import type { BundledPartStatus } from '../shared/bundled-seed'
-import type { RobotDefinition } from '../shared/robot'
+import type { RobotDefinition, RobotPart } from '../shared/robot'
 import type { InstrumentWindowPayload } from '../shared/instrument-window'
 import type { BugReportPayload, BugReportResult } from '../main/feedback/ipc'
 
@@ -1048,6 +1048,21 @@ const robot = {
     ipcRenderer.on('robot:didChange', listener)
     return () => ipcRenderer.removeListener('robot:didChange', listener)
   },
+  /** Targeted robot.yml MODEL merges for the sync reconcile (#717) — link the
+   *  urdf if absent, record the board link / a link's mass source, clear orphan
+   *  ledger entries, append re-added part rows. Merged in MAIN against the
+   *  file's current state, like patchPartLinks below. */
+  patchModel: (
+    folder: string | undefined,
+    patch: {
+      ensureUrdf?: string
+      boardLink?: string
+      linkMass?: { link: string; source: 'measured' | 'library' | 'estimated' | 'none' }
+      clearOrphans?: string[]
+      addParts?: RobotPart[]
+    }
+  ): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke('robot:patchModel', { folder, patch }),
   /** Record the URDF link a placement created onto its robot.yml part row
    *  (#716) — a targeted merge done in MAIN against the file's current state,
    *  so a slow placement can never revert another window's concurrent edits.

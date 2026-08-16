@@ -1,0 +1,167 @@
+/* ELECTRONICS ⇄ BUILD SYNC (#717) — token-based so both skins work; the esync__
+   prefix is unique app-wide (the i2c-detect/i2c-display collision lesson). */
+
+/* Floating anchors: bottom-left over the board canvas (absolute — the host is
+   the positioned pane), bottom-right in the Build workspace (the hierarchy
+   panel docks left), and fixed in the all-board pop-out window. */
+.esync__float {
+  position: absolute;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  z-index: 30;
+}
+
+.esync__float--right {
+  left: auto;
+  right: 0.6rem;
+}
+
+.esync__float--window {
+  position: fixed;
+}
+
+.esync__button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--card);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.esync__button:hover {
+  background: var(--panel);
+}
+
+/* Out of sync — the amber accent says "look", not "broken". */
+.esync__button--due {
+  border-color: var(--accent);
+}
+
+.esync__badge {
+  min-width: 1.1em;
+  padding: 0 0.3em;
+  font-size: 0.64rem;
+  font-weight: 700;
+  text-align: center;
+  color: var(--panel);
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.esync__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.esync__dialog {
+  width: min(560px, calc(100vw - 3rem));
+  max-height: min(70vh, 560px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  color: var(--text);
+  border: var(--border-w) solid var(--border);
+  border-radius: calc(var(--radius) * 2);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4);
+}
+
+.esync__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem 0.85rem;
+  border-bottom: var(--border-w) solid var(--border);
+}
+
+.esync__title {
+  font-family: var(--font-ui);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.esync__close {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.esync__empty {
+  margin: 0;
+  padding: 1.1rem 0.85rem;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.esync__list {
+  list-style: none;
+  margin: 0;
+  padding: 0.45rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.esync__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem 0.75rem;
+  padding: 0.45rem 0.55rem;
+  background: var(--bg-sunken);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+}
+
+.esync__desc {
+  flex: 1 1 16rem;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.esync__acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.esync__acts button,
+.esync__acts select {
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.22rem 0.5rem;
+  color: var(--text);
+  background: var(--card);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  max-width: 15rem;
+}
+
+.esync__acts button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.esync__acts button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}

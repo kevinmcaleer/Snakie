@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **A Sync button keeps Electronics and Build honest with each other.** (#717,
+  epic #720) The same control in both workspaces (and the pop-out board window)
+  shows a badge when the two disagree, and opens a reconcile dialog where YOU
+  decide each difference: a part with no 3-D body can be added, a stand-in box
+  whose part now ships a real mesh can be upgraded in place, a library weight
+  can be applied to a body that lacks one (never over a mass you measured), and
+  — per the long-standing #626 design — deleting a part flags its 3-D body
+  instead of destroying it, with a three-way choice: keep it in Build, remove
+  it, or re-add the part to Electronics. Nothing destructive ever happens
+  without a click.
 - **Every part you place now appears in the Build workspace.** (#716, epic #720)
   Previously only a part shipping a 3-D mesh reached the Robot View — which was
   one part in the whole standard library — and batch-added parts never did. Now

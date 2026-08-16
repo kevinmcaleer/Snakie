@@ -5,6 +5,7 @@ import { OPEN_PART_EDITOR_EVENT, PARTS_CHANGED_EVENT, type OpenPartEditorDetail 
 import { preloadPartImages } from './part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../../shared/robot'
 import { addPartsToProject, offerLibraryInstall } from './project-parts'
+import { SyncControl } from './SyncControl'
 import { movableJointNames, jointDisplayLimits } from './robot-assembly'
 import { useWorkspace } from '../store/workspace'
 import { useWorkspaceLayout } from '../store/layout'
@@ -234,7 +235,11 @@ export function BoardPane(): JSX.Element {
 
   // Author a NEW board (a starter Microcontroller-family part in `my-parts`).
   return (
-    <section className="board-pane" aria-label="Board View" style={{ height: '100%', minWidth: 0 }}>
+    <section
+      className="board-pane"
+      aria-label="Board View"
+      style={{ height: '100%', minWidth: 0, position: 'relative' }}
+    >
       <BoardGraph
         source={source}
         fileName={fileName}
@@ -249,6 +254,11 @@ export function BoardPane(): JSX.Element {
         pendingSwapBoard={robotLoaded ? pendingBoardSwap : null}
         onSwapConsumed={clearBoardSwap}
       />
+      {/* Electronics ⇄ Build reconcile (#717) — same control as the Build
+          workspace and the pop-out window, self-contained on the folder. */}
+      <div className="esync__float">
+        <SyncControl folder={folder} />
+      </div>
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}

@@ -28,6 +28,7 @@ import { cableRole, conductorColour, connectorFit, housingPlugAngle } from './ca
 import { partSupplyVoltage } from '../../../shared/power-led'
 import type { SmokeSite } from '../../../shared/erc'
 import { BOARD_KEY, browserTree, countNodes, type BrowserNode } from './browser-tree'
+import { linkBaseName } from './sync-plan'
 import { boardBox, layoutPads, mcuSymbolLayout, padKey, padLabelPlacement, type PadPoint } from './board-layout'
 import { partBodyBox, PartBody, pinOutwardDir, connectorSize } from './part-body'
 import { serializeLiveSvg, exportSvgString, downloadBlob, type ExportFmt } from './svg-export'
@@ -1677,8 +1678,27 @@ export function WiringCanvas({ robot, onChange, joints = [], jointLimits = {}, l
     // every wire attached to the board. The MCU is changed with the picker.
     if (key === BOARD_KEY) return
     setSelectedKey((k) => (k === key ? null : k)) // drop a stale selection
+    // The part's Build body is NOT deleted with it (#626: it may be jointed into
+    // the robot by now — flag, don't auto-delete). Record the stranded link here,
+    // at the only moment anything still remembers it (the reference lives on the
+    // part being removed); the #717 sync reconcile offers keep / remove / re-add.
+    // A LEGACY row (pre-#716, no urdfLink) records the name the link mint would
+    // have used instead — the plan tolerates `_N` suffixes and drops entries
+    // that match nothing, so a guess is safe and forgetting is not.
+    const doomed = robot.parts.find((p) => p.id === key)
+    const orphan =
+      doomed &&
+      (doomed.urdfLink ||
+        linkBaseName(resolvePart(doomed.lib, doomed.part)?.name || doomed.part))
+    const model = orphan
+      ? {
+          ...(robot.robot ?? {}),
+          orphanedLinks: [...new Set([...(robot.robot?.orphanedLinks ?? []), orphan])]
+        }
+      : robot.robot
     persist({
       ...robot,
+      ...(model ? { robot: model } : {}),
       parts: robot.parts.filter((p) => p.id !== key),
       connections: robot.connections.filter(
         (c) => parseEndpoint(c.from).key !== key && parseEndpoint(c.to).key !== key

@@ -12,7 +12,7 @@ import { app, ipcMain, BrowserWindow, dialog } from 'electron'
 import { basename, dirname, extname, join } from 'path'
 import { promises as fsp } from 'fs'
 import { robotFromYaml, robotToYaml } from '../../shared/robot-yaml'
-import { blankRobot, type RobotDefinition } from '../../shared/robot'
+import { blankRobot, type RobotDefinition, type RobotPart } from '../../shared/robot'
 import { readRobotModel } from '../../shared/krf'
 import { generateSkeleton, skeletonJson } from '../../shared/skeleton'
 import { resolvePartAsset } from '../parts/library'
@@ -228,6 +228,91 @@ export function registerRobotIpc(): void {
       if (!w.isDestroyed()) w.webContents.send('robot:didUrdfChange')
     }
   })
+
+  // #717: targeted robot.yml MODEL merges for the sync reconcile — same
+  // rationale as patchPartLinks below: the dialog's actions complete seconds
+  // after their click (mesh copies, queued URDF writes), and saving the
+  // renderer's by-then-stale whole document would silently revert anything
+  // another window saved meanwhile. Each field merges against the file's
+  // CURRENT state under the per-path queue; everything is optional.
+  ipcMain.handle(
+    'robot:patchModel',
+    async (
+      _e,
+      args: {
+        folder?: string
+        patch?: {
+          /** Link the model's urdf IF ABSENT (never overwrites an existing link). */
+          ensureUrdf?: string
+          /** Record the MCU board's Build link. */
+          boardLink?: string
+          /** Record one link's mass-authoring source. */
+          linkMass?: { link: string; source: 'measured' | 'library' | 'estimated' | 'none' }
+          /** Remove entries from the orphan ledger (resolved by the user). */
+          clearOrphans?: string[]
+          /** Append part rows (a sync re-add); a row whose id already exists is
+           *  SKIPPED — the plan re-offers it rather than main guessing a rename. */
+          addParts?: RobotPart[]
+        }
+      }
+    ): Promise<{ ok: boolean; error?: string }> => {
+      try {
+        const patch = args?.patch ?? {}
+        const path = await robotPath(args?.folder)
+        await queuedUpdate(path, (raw) => {
+          if (raw == null) return null
+          let def: RobotDefinition
+          try {
+            def = robotFromYaml(raw)
+          } catch {
+            return null // malformed — never "repair" it from here (#505's lesson)
+          }
+          let touched = false
+          const model = { ...(def.robot ?? {}) }
+          if (patch.ensureUrdf && !model.urdf) {
+            model.urdf = patch.ensureUrdf
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.boardLink && model.boardLink !== patch.boardLink) {
+            model.boardLink = patch.boardLink
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.linkMass?.link) {
+            model.linkMass = { ...(model.linkMass ?? {}), [patch.linkMass.link]: { source: patch.linkMass.source } }
+            model.version = model.version ?? 1
+            touched = true
+          }
+          if (patch.clearOrphans?.length && model.orphanedLinks?.length) {
+            const rest = model.orphanedLinks.filter((l) => !patch.clearOrphans!.includes(l))
+            if (rest.length !== model.orphanedLinks.length) {
+              if (rest.length) model.orphanedLinks = rest
+              else delete model.orphanedLinks
+              touched = true
+            }
+          }
+          let parts = def.parts
+          if (patch.addParts?.length) {
+            const ids = new Set(['board', ...parts.map((p) => p.id)])
+            const fresh = patch.addParts.filter((p) => p && p.id && p.lib && p.part && !ids.has(p.id))
+            if (fresh.length) {
+              parts = [...parts, ...fresh]
+              touched = true
+            }
+          }
+          if (!touched) return null
+          return robotToYaml({ ...def, parts, robot: Object.keys(model).length ? model : undefined })
+        })
+        for (const w of BrowserWindow.getAllWindows()) {
+          if (!w.isDestroyed()) w.webContents.send('robot:didChange')
+        }
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, error: (err as Error).message }
+      }
+    }
+  )
 
   // #716: record the URDF link a placement created onto its robot.yml part row —
   // a TARGETED merge against the file's CURRENT state, under the per-path write

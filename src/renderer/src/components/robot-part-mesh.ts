@@ -126,6 +126,40 @@ export function partInertial(
 }
 
 /**
+ * Run an arbitrary URDF edit on the SAME serialisation chain the placement
+ * bridge uses (#717: the sync reconcile removes links, swaps placeholders for
+ * meshes and writes library masses — read-modify-writes that would race a
+ * concurrent drop if they went around the chain). `edit` gets the current text
+ * and returns the new text, or `null` for "leave the file alone". Resolves true
+ * when a write happened (the URDF-changed bus is notified); false otherwise.
+ */
+export async function queueUrdfEdit(
+  folder: string,
+  urdfName: string,
+  edit: (urdf: string) => string | null
+): Promise<boolean> {
+  if (!folder || !safeUrdfName(urdfName)) return false
+  let wrote = false
+  const run = chain.then(async () => {
+    const urdfPath = `${folder.replace(/[/\\]$/, '')}/${urdfName}`
+    let urdf: string
+    try {
+      urdf = await window.api.fs.readFile(urdfPath)
+    } catch {
+      return // no URDF — nothing to edit
+    }
+    const next = edit(urdf)
+    if (next == null || next === urdf) return
+    await window.api.fs.writeFile(urdfPath, next)
+    wrote = true
+    window.api.robot.notifyUrdfChanged()
+  })
+  chain = run.catch(() => undefined)
+  await run
+  return wrote
+}
+
+/**
  * Give `part` its Build-workspace body in the project URDF `urdfName`: the
  * bundled mesh when it has one, else the footprint box; at the mirrored board
  * position when the placement carries one; with `<inertial>` when the part

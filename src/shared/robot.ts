@@ -120,6 +120,21 @@ export interface RobotModel {
   controls?: PuppetControl[]
   /** Left↔right joint mirror pairs, for symmetric gaits (Phase 4). */
   mirror?: MirrorPair[]
+  /**
+   * URDF links whose Electronics part was DELETED (#717, epic #720) — recorded
+   * at delete time, because afterwards nothing else remembers the link was a
+   * part's body (the `urdfLink` reference lived on the deleted part). The sync
+   * reconcile surfaces each one (red tint + keep / remove / re-add, per #626's
+   * "flag, don't auto-delete") and removes it from this list once resolved. A
+   * name that no longer matches a link is stale and ignored.
+   */
+  orphanedLinks?: string[]
+  /**
+   * The URDF link holding the MCU board's Build body (#717) — the board is
+   * `RobotDefinition.board`, not a placed part, so its link reference can't
+   * live on a `RobotPart.urdfLink`. Same dangling rules as that field.
+   */
+  boardLink?: string
 }
 
 /** How a link's mass was authored (#555). The number itself is in the URDF. */

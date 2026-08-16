@@ -814,6 +814,52 @@ export function jointNames(urdf: string): string[] {
 }
 
 /**
+ * Swap a link's FIRST `<visual>` for a mesh visual IN PLACE (#717): the
+ * placeholder-box → real-mesh upgrade. Everything else about the link — its
+ * name, its joint (parent, origin, type), its children, its `<inertial>` — is
+ * untouched, which is the whole point: the first cut removed-and-re-added the
+ * link and thereby deleted the user's subtree, re-parented to root and dropped
+ * the inertial. Returns the unchanged text when the link/visual isn't found.
+ * Pure.
+ */
+export function swapLinkVisualToMesh(
+  urdf: string,
+  link: string,
+  meshRel: string,
+  scale?: number
+): string {
+  const span = linkSpan(urdf, link)
+  if (!span) return urdf
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vis = /<visual\b[^>]*>[\s\S]*?<\/visual>/i.exec(body)
+  if (!vis) return urdf
+  const s =
+    scale && scale !== 1 ? ` scale="${fmtNum(scale)} ${fmtNum(scale)} ${fmtNum(scale)}"` : ''
+  const replacement =
+    `<visual>\n` +
+    `      <geometry><mesh filename="${meshRel}"${s}/></geometry>\n` +
+    `    </visual>`
+  const nextBody = body.slice(0, vis.index) + replacement + body.slice(vis.index + vis[0].length)
+  return urdf.slice(0, span.bodyStart) + nextBody + urdf.slice(span.bodyEnd)
+}
+
+/**
+ * What a link's FIRST visual geometry is (#717): `box` / `mesh` / `other`, or
+ * `null` for a link with no visual (or no such link). The sync reconcile uses
+ * it to spot a footprint-box stand-in whose part now ships a real mesh. Pure.
+ */
+export function linkGeometryKind(urdf: string, link: string): 'box' | 'mesh' | 'other' | null {
+  const span = linkSpan(urdf, link)
+  if (!span) return null
+  const body = urdf.slice(span.bodyStart, span.bodyEnd)
+  const vis = /<visual\b[\s\S]*?<geometry>([\s\S]*?)<\/geometry>/i.exec(body)
+  if (!vis) return null
+  if (/<box\b/i.test(vis[1])) return 'box'
+  if (/<mesh\b/i.test(vis[1])) return 'mesh'
+  return 'other'
+}
+
+/**
  * Joint names EXCLUDING `fixed` joints — the ones a servo can actually drive.
  * Since #716 every placed part carries a fixed placement joint
  * (`<Part>_joint`), so feeding {@link jointNames} to the servo "drives joint"

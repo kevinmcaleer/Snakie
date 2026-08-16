@@ -168,6 +168,7 @@ if (!w.api) {
       save: P({ ok: false, error: 'Saving robot.yml is not available here.' }),
       importMesh: P({ cancelled: true }),
       importPartMesh: P({}),
+      patchModel: P({ ok: false }),
       patchPartLinks: P({ ok: false }),
       onChanged: unsub,
       notifyUrdfChanged: noop,

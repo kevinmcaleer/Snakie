@@ -312,6 +312,13 @@ export function sanitiseRobotModel(raw: unknown): RobotModel | undefined {
   const mirror = sanitiseMirror(r.mirror)
   if (mirror) model.mirror = mirror
 
+  // #717: links stranded by a part deletion, awaiting the sync reconcile.
+  if (Array.isArray(r.orphanedLinks)) {
+    const orphans = [...new Set(r.orphanedLinks.filter((l): l is string => isStr(l) && !!l.trim()))]
+    if (orphans.length) model.orphanedLinks = orphans.map((l) => l.trim())
+  }
+  if (isStr(r.boardLink) && r.boardLink.trim()) model.boardLink = r.boardLink.trim()
+
   // Nothing but the version stamp → treat as "no model".
   const keys = Object.keys(model)
   return keys.length === 1 && keys[0] === 'version' ? undefined : model

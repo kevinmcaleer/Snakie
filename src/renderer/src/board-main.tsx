@@ -32,6 +32,7 @@ import { PartEditor } from './components/PartEditor'
 import { preloadPartImages } from './components/part-image-preload'
 import { blankRobot, type RobotDefinition } from '../../shared/robot'
 import { addPartsToProject, offerLibraryInstall } from './components/project-parts'
+import { SyncControl } from './components/SyncControl'
 import { movableJointNames, jointDisplayLimits } from './components/robot-assembly'
 import type {
   BoardSourcePayload,
@@ -288,6 +289,11 @@ function BoardWindowApp(): JSX.Element {
         libraries={libraries}
         onAddToProject={addToProject}
       />
+      {/* Electronics ⇄ Build reconcile (#717) — the same self-contained control
+          as the in-window pane; fixed here (this window is all board). */}
+      <div className="esync__float esync__float--window">
+        <SyncControl folder={folder} />
+      </div>
       {editing && (
         <PartEditor
           libraryId={editing.libraryId}
