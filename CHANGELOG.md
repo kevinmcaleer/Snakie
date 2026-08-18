@@ -7,6 +7,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Files, drivers and libraries can be written to a CircuitPython board.**
+  (#754, epic #209) CircuitPython's filesystem is read-only *to the board* while
+  its CIRCUITPY drive is mounted, so every file operation Snakie has — the Files
+  panel, driver installs, the instrument library, the Modules manager — used to
+  fail with a bare `OSError: 30`. Those operations now go to the drive instead.
+  Reads go there too, so listing a folder no longer has to interrupt a running
+  `code.py` to do it, and a file copy replaces the hex-over-serial transfer.
+  Writes are flushed before returning, so CircuitPython's auto-reload can't catch
+  a half-written file. A board that has taken its filesystem back with
+  `storage.remount` still works exactly as before, over the REPL — and if a write
+  does hit the read-only filesystem, the error now explains it instead of naming
+  an errno. The flash gauge measures the drive, which is the number that answers
+  "will this fit".
 - **Snakie finds a CircuitPython board's drive, and says what the board is before
   you connect.** (#753, epic #209) A board running CircuitPython mounts a
   **CIRCUITPY** volume, and its `boot_out.txt` names the version and the
