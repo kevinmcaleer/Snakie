@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Run, Stop and Reset say what they actually do on a CircuitPython board, and
+  the file tree shows which file boots.** (#755, epic #209) Run stays a raw-REPL
+  execution on both runtimes — it will not overwrite your `code.py` — but it now
+  says what that costs: your `code.py` stops, and the board waits at the REPL
+  rather than going back to it. Reset is where the runtimes really differ, and it
+  says so: on CircuitPython a soft reboot runs `code.py` again from the start,
+  rather than just clearing the board. The device file tree marks the file the
+  board runs at boot — and marks one it will **ignore**, because CircuitPython
+  tries `code.py` before `main.py`, so a board carrying both runs only the first
+  and edits to the other appear to do nothing.
 - **Files, drivers and libraries can be written to a CircuitPython board.**
   (#754, epic #209) CircuitPython's filesystem is read-only *to the board* while
   its CIRCUITPY drive is mounted, so every file operation Snakie has — the Files
