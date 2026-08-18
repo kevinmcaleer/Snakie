@@ -5,6 +5,7 @@ import { useDeviceStatus } from '../hooks/useDeviceStatus'
 import { useWorkspace } from '../store/workspace'
 import { useConsole } from '../store/console'
 import { isVirtualPort } from '../../../shared/virtual-device'
+import { runTitle, stopTitle } from './run-controls'
 import './RunControls.css'
 import './Toolbar.css'
 
@@ -255,15 +256,12 @@ export function Toolbar(): JSX.Element {
           className="btn btn--primary"
           onClick={() => void handleRun()}
           disabled={!canRun}
-          title={
-            !activeFile
-              ? 'Open a file to run'
-              : connecting
-                ? 'Connecting…'
-                : !connected
-                  ? 'Run on the simulator'
-                  : `Run ${activeFile.name} on the device`
-          }
+          title={runTitle({
+            activeFileName: activeFile?.name,
+            connected,
+            connecting,
+            dialect: status.runtime?.dialect
+          })}
           aria-label="Run active file on device"
         >
           <span className="btn__glyph" aria-hidden="true">
@@ -276,13 +274,7 @@ export function Toolbar(): JSX.Element {
           className="btn btn--danger"
           onClick={handleStop}
           disabled={!connected}
-          title={
-            !connected
-              ? 'Connect to a device to stop'
-              : running
-                ? 'Interrupt the running program (Ctrl-C)'
-                : 'Reset the board (soft reboot)'
-          }
+          title={stopTitle({ connected, running, dialect: status.runtime?.dialect })}
           aria-label={running ? 'Stop / interrupt running program' : 'Reset the board'}
         >
           <span className="btn__glyph" aria-hidden="true">

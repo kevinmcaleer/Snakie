@@ -128,6 +128,35 @@
 
 /* --- File management (#219): hover delete, drop targets ------------------- */
 
+/* Boot-file marker (#755): which file the board runs when it starts. Quiet —
+   it is a fact about the file, not a warning — except when a file is SHADOWED
+   by one that comes first in the runtime's search order, where the point is
+   that editing it will appear to do nothing. */
+.tree-row__boot {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0 0.35rem;
+  font-size: 0.62rem;
+  line-height: 1.1rem;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  border: var(--border-w) solid var(--border);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+
+.tree-row__boot--shadowed {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+/* The delete button takes the end slot back on hover, so the two never stack. */
+.tree-row:hover .tree-row__boot,
+.tree-row:focus-within .tree-row__boot {
+  display: none;
+}
+
 /* The hover ✕: hidden until the row is hovered/focused; sits at the row end. */
 .tree-row__delete {
   display: none;

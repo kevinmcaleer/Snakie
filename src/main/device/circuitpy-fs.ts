@@ -150,6 +150,16 @@ export async function driveReadFileLine(
  * can be picked up half-written — the board restarts into a syntax error from a
  * file that is fine on disk a millisecond later. `fsync` before close means the
  * board never sees a partial file.
+ *
+ * **Auto-reload is deliberately NOT suppressed** for a multi-file write (#755).
+ * Suppressing it means setting `supervisor.runtime.autoreload = False` over the
+ * raw REPL, and entering the raw REPL sends Ctrl-C — so the board's program gets
+ * interrupted to spare it from being restarted, which is self-defeating.
+ * CircuitPython already waits for the filesystem to settle before reloading, and
+ * Snakie's multi-file writes are consecutive awaits against a local mount with
+ * sub-millisecond gaps, so a batch lands inside one settle window and costs one
+ * reload rather than one per file. If a real board ever shows otherwise, this is
+ * the decision to revisit — and #751 is where the evidence would come from.
  */
 export async function driveWriteFile(
   mount: string,
