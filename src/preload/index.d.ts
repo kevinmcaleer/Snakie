@@ -51,6 +51,8 @@ export type {
   ConnectionState,
   DeviceStatus,
   RuntimeInfo,
+  CircuitPyDrive,
+  PortCircuitPy,
   ExecResult,
   DirEntry,
   StatResult,

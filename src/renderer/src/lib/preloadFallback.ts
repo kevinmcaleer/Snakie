@@ -97,6 +97,10 @@ if (!w.api) {
     versions: {},
     device: {
       listPorts: P([]),
+      // A browser cannot see mass storage, so there is never a CIRCUITPY drive
+      // to find here (#753). Stated explicitly rather than left to `deepStub`,
+      // whose truthy `[]` is the trap #513 was filed about.
+      circuitpyDrives: P([]),
       connect: P(undefined),
       disconnect: P(undefined),
       getStatus: P({ state: 'disconnected' }),

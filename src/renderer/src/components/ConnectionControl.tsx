@@ -1,6 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
 import { isVirtualPort, VIRTUAL_PORT_LABEL } from '../../../shared/virtual-device'
-import type { DeviceStatus, PortInfo } from '../../../preload/index.d'
+import type { DeviceStatus, PortCircuitPy, PortInfo } from '../../../preload/index.d'
+
+/**
+ * Tooltip for a port identified from its CIRCUITPY drive (#753). Names the
+ * board id and the mount path, and is honest about HOW it was matched: a `uid`
+ * pairing is the board's own id matched against the port's USB serial number,
+ * while `sole` is only "there was one of each", which is a deduction rather
+ * than an identification.
+ */
+function circuitpyTitle(cp: PortCircuitPy): string {
+  const board = cp.boardId ? `${cp.boardId} — ` : ''
+  const how =
+    cp.confidence === 'uid'
+      ? 'matched by board id'
+      : 'the only CircuitPython drive mounted, and the only board connected'
+  return `${board}CIRCUITPY at ${cp.mountPath} (${how})`
+}
 
 interface ConnectionControlProps {
   status: DeviceStatus
@@ -96,9 +112,14 @@ export function ConnectionControl({ status }: ConnectionControlProps): JSX.Eleme
           // real device node — show just its USB name. OS serial paths (e.g.
           // /dev/ttyACM0) DO identify the port, so keep those.
           const isWebSerial = p.path.startsWith('webserial://')
-          const label = isWebSerial ? detail || 'USB board' : detail ? `${p.path} — ${detail}` : p.path
+          const base = isWebSerial ? detail || 'USB board' : detail ? `${p.path} — ${detail}` : p.path
+          // A board whose CIRCUITPY drive we found says what it's running before
+          // you connect to it (#753). Only shown when the drive was tied to THIS
+          // port, so a second board can't borrow the first one's identity.
+          const cp = p.circuitpy
+          const label = cp ? `${base} · CircuitPython${cp.version ? ` ${cp.version}` : ''}` : base
           return (
-            <option key={p.path} value={p.path}>
+            <option key={p.path} value={p.path} title={cp ? circuitpyTitle(cp) : undefined}>
               {label}
             </option>
           )

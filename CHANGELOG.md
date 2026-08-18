@@ -7,6 +7,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Snakie finds a CircuitPython board's drive, and says what the board is before
+  you connect.** (#753, epic #209) A board running CircuitPython mounts a
+  **CIRCUITPY** volume, and its `boot_out.txt` names the version and the
+  per-board build id — so the port picker can read "CircuitPython 10.2.1"
+  against a board nothing has connected to yet. A drive is tied to its port by
+  the board's own id, matched against the port's USB serial number, so two
+  boards on one desk can't swap identities; where that can't be established it
+  says nothing rather than guessing, because the next phase writes files to
+  whichever drive this picks. Renamed drives are still found — the marker file
+  decides, not the label.
 - **Snakie can tell which Python your board is running.** (#752, epic #209) The
   connect probe now reads `sys.implementation`, so the session knows whether a
   board runs **MicroPython or CircuitPython** instead of assuming — the
@@ -15,6 +25,11 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the connect greeting is rebuilt in that runtime's own wording rather than
   MicroPython's. A board that won't answer stays unidentified rather than being
   guessed at, and the previous board's runtime can't linger after you unplug it.
+
+### Changed
+- The per-platform mount-point scanning behind board detection is now in one
+  place (`fs/volumes.ts`) instead of being hand-rolled once per board type, and
+  it no longer reads every folder in your home directory looking for a board.
 
 ## [0.44.0] - 2026-08-16
 
