@@ -11,6 +11,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 ipcRenderer.setMaxListeners(40)
 import type { FlashMethod } from '../shared/board-profiles'
 import type {
+  CircuitPyDrive,
   ConnectOptions,
   DeviceStatus,
   DirEntry,
@@ -175,8 +176,12 @@ async function unwrap<T>(p: Promise<IpcResult<T>>): Promise<T> {
  * and return an unsubscribe function.
  */
 const device = {
-  /** Enumerate available serial ports. */
+  /** Enumerate available serial ports. A port whose CircuitPython board could be
+   *  identified from its mounted CIRCUITPY drive carries a `circuitpy` block (#753). */
   listPorts: (): Promise<PortInfo[]> => unwrap(ipcRenderer.invoke('device:listPorts')),
+  /** Every mounted CircuitPython filesystem, scanned fresh (#753). */
+  circuitpyDrives: (): Promise<CircuitPyDrive[]> =>
+    unwrap(ipcRenderer.invoke('device:circuitpyDrives')),
   /** Open a connection to `path` at `opts.baudRate` (default 115200). */
   connect: (path: string, opts?: ConnectOptions): Promise<void> =>
     unwrap(ipcRenderer.invoke('device:connect', path, opts)),

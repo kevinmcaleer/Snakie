@@ -6,8 +6,10 @@
  * preload typings and the renderer.
  */
 import type { RuntimeInfo } from '../../shared/dialect'
+import type { PortCircuitPy } from './circuitpy'
 
 export type { RuntimeInfo }
+export type { PortCircuitPy, CircuitPyDrive, DrivePairing, PairConfidence } from './circuitpy'
 
 /** A serial port discovered by enumeration. */
 export interface PortInfo {
@@ -21,6 +23,13 @@ export interface PortInfo {
   productId?: string
   /** Human-friendly label, when the OS provides one. */
   friendlyName?: string
+  /**
+   * The CircuitPython board behind this port, identified from its mounted
+   * CIRCUITPY drive (#753) — so the picker can name the board and its version
+   * BEFORE anything is connected. Absent unless the drive could be tied to this
+   * port specifically; see `pairDriveToPort`, which refuses to guess.
+   */
+  circuitpy?: PortCircuitPy
 }
 
 /** Options for opening a connection. */

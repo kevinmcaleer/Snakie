@@ -6,6 +6,7 @@ import { instrumentWindowWebContents } from '../instrumentWindows'
 import { consoleWindowWebContents } from '../consoleWindow'
 import { boardWindowWebContents } from '../board'
 import { broadcastToTargets } from './broadcast'
+import { annotatePortsWithDrives, findCircuitPyDrives } from './circuitpy'
 import type { ConnectOptions, DeviceStatus, IpcResult, PortInfo, SnakieDevice } from './types'
 
 /**
@@ -107,9 +108,17 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
     wrap(async () => {
       const ports = await MicroPythonDevice.listPorts()
       const virtual: PortInfo = { path: VIRTUAL_PORT_PATH, friendlyName: VIRTUAL_PORT_LABEL }
-      return [...ports, virtual]
+      // Name the CircuitPython boards among them from their mounted CIRCUITPY
+      // drives (#753), so the picker can say what a board is before you connect
+      // to it. Enrichment only — a failure here leaves the list as it was.
+      return [...(await annotatePortsWithDrives(ports)), virtual]
     })
   )
+
+  // Every mounted CircuitPython filesystem, scanned fresh on each call (#753).
+  // Uncached on purpose: a CIRCUITPY drive ejects on soft reboot and returns a
+  // moment later, so a remembered mount path is a path that may not exist.
+  ipcMain.handle('device:circuitpyDrives', () => wrap(() => findCircuitPyDrives()))
 
   ipcMain.handle('device:connect', (_e, path: string, opts?: ConnectOptions) =>
     wrap(async () => {

@@ -4,6 +4,7 @@ import {
   RUNTIME_PROBE_PY,
   dialectFromName,
   parseBootOut,
+  parseBootOutUid,
   parseRuntimeBanner,
   parseRuntimeProbe,
   runtimeGreeting,
@@ -160,6 +161,31 @@ describe('parseBootOut', () => {
 
   it('is null for a file that is neither', () => {
     expect(parseBootOut('INFO_UF2.TXT\nModel: Raspberry Pi RP2')).toBeNull()
+  })
+})
+
+describe('parseBootOutUid', () => {
+  it('reads the UID line — how a drive is tied to a port with no connection (#753)', () => {
+    const text = [
+      'Adafruit CircuitPython 10.2.1 on 2026-08-18; Adafruit Feather RP2040 with rp2040',
+      'Board ID:adafruit_feather_rp2040',
+      'UID:E661640843373E2A'
+    ].join('\r\n')
+    expect(parseBootOutUid(text)).toBe('E661640843373E2A')
+  })
+
+  it('normalises to upper case, so the comparison with a USB serial number is stable', () => {
+    expect(parseBootOutUid('UID:e661640843373e2a')).toBe('E661640843373E2A')
+    expect(parseBootOutUid('UID: E66164 ')).toBe('E66164')
+  })
+
+  it('is undefined on an older CircuitPython that writes no UID — hence the pairing fallback', () => {
+    expect(parseBootOutUid('Adafruit CircuitPython 6.3.0 on 2021-01-01; Pico\nBoard ID:pico')).toBeUndefined()
+  })
+
+  it('ignores a line that merely mentions a uid', () => {
+    expect(parseBootOutUid('the UID is somewhere else')).toBeUndefined()
+    expect(parseBootOutUid('UID:not-hex-at-all')).toBeUndefined()
   })
 })
 

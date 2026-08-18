@@ -186,6 +186,25 @@ export function parseBootOut(text: string): RuntimeInfo | null {
 }
 
 /**
+ * The `UID:` line `boot_out.txt` carries on CircuitPython 7 and later — the
+ * board's own unique id, and the same value it reports as
+ * `microcontroller.cpu.uid`.
+ *
+ * This is what lets a mounted drive be tied to a specific serial port WITHOUT
+ * connecting to it (#753): USB exposes the same id as the port's serial number
+ * on the boards that have one, so the two can be matched offline. Returns
+ * `undefined` on an older board that writes no UID line, which is why the
+ * pairing has a fallback.
+ */
+export function parseBootOutUid(text: string): string | undefined {
+  for (const line of text.split(/\r?\n/)) {
+    const m = /^UID\s*:\s*([0-9A-F]+)\s*$/i.exec(line.trim())
+    if (m) return m[1].toUpperCase()
+  }
+  return undefined
+}
+
+/**
  * Rebuild the greeting a board prints on reset, so connecting shows the same
  * line the board itself would (#612). Each runtime words its banner
  * differently — `MicroPython v1.28.0 on …` versus `Adafruit CircuitPython
