@@ -5,6 +5,9 @@
  * serialize cleanly across the Electron IPC boundary and can be re-used by the
  * preload typings and the renderer.
  */
+import type { RuntimeInfo } from '../../shared/dialect'
+
+export type { RuntimeInfo }
 
 /** A serial port discovered by enumeration. */
 export interface PortInfo {
@@ -37,6 +40,13 @@ export interface DeviceStatus {
   baudRate?: number
   /** Populated when `state === 'error'`. */
   error?: string
+  /**
+   * Which Python the connected board is running (#752). Probed just after
+   * connect, so it is ABSENT on the first `connected` status and arrives in a
+   * second one a moment later — consumers must treat "not yet known" and
+   * "board wouldn't say" alike and not assume MicroPython in either case.
+   */
+  runtime?: RuntimeInfo
 }
 
 /** Result of running code in the raw REPL. */

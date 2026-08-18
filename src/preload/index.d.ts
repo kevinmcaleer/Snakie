@@ -50,6 +50,7 @@ export type {
   ConnectOptions,
   ConnectionState,
   DeviceStatus,
+  RuntimeInfo,
   ExecResult,
   DirEntry,
   StatResult,

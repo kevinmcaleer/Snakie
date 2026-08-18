@@ -63,6 +63,25 @@ describe('SimulatedDevice lifecycle', () => {
     expect(dev.isConnected()).toBe(false)
   })
 
+  it('reports its runtime only while connected — the simulator IS MicroPython (#752)', async () => {
+    const dev = new SimulatedDevice(new FakeRuntime())
+    // Disconnected: nothing to report. A stale runtime here would let the status
+    // bar name a Python for a board that isn't there.
+    expect(dev.getStatus().runtime).toBeUndefined()
+
+    const pushed: (string | undefined)[] = []
+    dev.on('status', (st) => pushed.push(st.runtime?.dialect))
+    await dev.connect()
+
+    expect(dev.getStatus().runtime).toEqual({ dialect: 'micropython' })
+    // The pushed event and the snapshot agree, for every state.
+    expect(pushed).toEqual([undefined, 'micropython'])
+
+    await dev.disconnect()
+    expect(dev.getStatus().runtime).toBeUndefined()
+    await dev.dispose()
+  })
+
   it('emits connecting → connected status and boots the REPL on connect', async () => {
     const dev = new SimulatedDevice(new FakeRuntime())
     const states: string[] = []

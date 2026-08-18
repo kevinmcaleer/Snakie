@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { RawReplClient, pyStr, type SerialTransport } from '../src/shared/raw-repl'
+import { RUNTIME_PROBE_PY, parseRuntimeProbe, runtimeGreeting } from '../src/shared/dialect'
 
 /**
  * The transport-agnostic raw-REPL client (#465) against a MOCK board — proves the
@@ -16,6 +17,8 @@ class MockBoard implements SerialTransport {
   private raw = false
   /** stdout the next exec should return (default: empty). */
   nextStdout = ''
+  /** How many blocks the board has been asked to execute (Ctrl-D in raw mode). */
+  execCount = 0
   nextStderr = ''
   /** Deliver the Ctrl-B banner asynchronously (like real serial latency) rather
    *  than synchronously inside write() — proves the suppression handles timing. */
@@ -45,6 +48,7 @@ class MockBoard implements SerialTransport {
         else this.emit(banner)
       } else if (ch === '\x04' && this.raw) {
         // Ctrl-D in raw mode → execute the buffered code, frame the response.
+        this.execCount++
         this.buf = ''
         this.emit('OK' + this.nextStdout + '\x04' + this.nextStderr + '\x04>')
       } else if (ch !== '\x03') {
@@ -164,5 +168,54 @@ describe('RawReplClient', () => {
     expect(s.console).not.toContain('boom\n===') // not the echoed source
     expect(s.console).not.toContain('OK')
     expect(s.console).not.toContain('\x04')
+  })
+})
+
+/**
+ * The CONNECT PROBE (#752, epic #209) end to end: the Python we actually send,
+ * over the real raw-REPL framing, through the parser, back out as the greeting
+ * the terminal prints. Both desktop and web run this same chain, so a sentinel
+ * changed on one side of it and not the other fails here.
+ */
+describe('runtime probe over the raw REPL', () => {
+  const probeReply = (name: string, version: string, machine: string): string =>
+    `SNKIMPL ${name}\nSNKVER ${version}\nSNKMACH ${machine}\n`
+
+  it('identifies a MicroPython board and rebuilds its own banner', async () => {
+    const { board, client } = setup()
+    board.nextStdout = probeReply('micropython', '1.28.0 on 2026-01-01', 'Raspberry Pi Pico with RP2040')
+    const info = parseRuntimeProbe(await client.eval(RUNTIME_PROBE_PY))
+    expect(info?.dialect).toBe('micropython')
+    expect(runtimeGreeting(info)).toBe('MicroPython v1.28.0 on 2026-01-01; Raspberry Pi Pico with RP2040')
+  })
+
+  it('identifies a CircuitPython board and greets it in ITS wording, not MicroPython\'s', async () => {
+    const { board, client } = setup()
+    board.nextStdout = probeReply(
+      'circuitpython',
+      '10.2.1 on 2026-08-18',
+      'Adafruit Feather RP2040 with rp2040'
+    )
+    const info = parseRuntimeProbe(await client.eval(RUNTIME_PROBE_PY))
+    expect(info?.dialect).toBe('circuitpython')
+    const greeting = runtimeGreeting(info)
+    expect(greeting).toBe('Adafruit CircuitPython 10.2.1 on 2026-08-18; Adafruit Feather RP2040 with rp2040')
+    expect(greeting).not.toContain('MicroPython')
+  })
+
+  it('leaves a board that answers nothing unidentified, rather than assuming MicroPython', async () => {
+    const { board, client } = setup()
+    board.nextStdout = ''
+    const info = parseRuntimeProbe(await client.eval(RUNTIME_PROBE_PY))
+    expect(info).toBeNull()
+    expect(runtimeGreeting(info)).toBe('')
+  })
+
+  it('sends the probe as ONE exec — the connect path must not cost several round trips', async () => {
+    const { board, client } = setup()
+    board.nextStdout = probeReply('micropython', '1.28.0', 'Board')
+    const before = board.execCount
+    await client.eval(RUNTIME_PROBE_PY)
+    expect(board.execCount - before).toBe(1)
   })
 })

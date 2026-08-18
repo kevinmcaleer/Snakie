@@ -6,6 +6,16 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- **Snakie can tell which Python your board is running.** (#752, epic #209) The
+  connect probe now reads `sys.implementation`, so the session knows whether a
+  board runs **MicroPython or CircuitPython** instead of assuming — the
+  foundation the rest of the CircuitPython work is built on. The status bar names
+  the runtime and version beside the port, with the board string on hover, and
+  the connect greeting is rebuilt in that runtime's own wording rather than
+  MicroPython's. A board that won't answer stays unidentified rather than being
+  guessed at, and the previous board's runtime can't linger after you unplug it.
+
 ## [0.44.0] - 2026-08-16
 
 ### Added
