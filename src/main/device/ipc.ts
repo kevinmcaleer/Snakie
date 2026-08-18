@@ -164,6 +164,13 @@ export function registerDeviceIpc(getWebContents: () => WebContents | undefined)
   // can't stat (or a non-numeric reply) yields `null` so the gauge just hides.
   ipcMain.handle('device:df', () =>
     wrap<{ total: number; free: number; used: number } | null>(async () => {
+      // A CircuitPython board whose files live on a mounted drive (#754) is
+      // measured on the host instead — see `MicroPythonDevice.driveUsage`.
+      const dev = getActive()
+      if (dev === realDev) {
+        const fromDrive = await realDev.driveUsage()
+        if (fromDrive) return fromDrive
+      }
       const code = [
         'import os',
         'try:',
